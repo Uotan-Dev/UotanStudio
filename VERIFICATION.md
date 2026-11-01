@@ -2,6 +2,25 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## 十六进制对比工具栏实测（2026-11-02，Windows x64）
+
+- 二进制对比直接显示十六进制内容；工具栏没有「十六进制原始数据」切换按钮，宿主不保留该按钮的命令、可见性属性、元数据视图枚举或专用中英资源键。独立文件浏览所用的元数据解析服务保持可用。
+- 构建：`dotnet build UotanStudio.slnx -c Debug --no-restore --nologo -p:OutputPath=bin/hex-compare-check/` 成功，0 错误，仅两条既有 Rockchip 测试 CS8604。全解决方案 `dotnet format` 的 `whitespace` 与 `style` 检查、`git diff --check` 均通过。
+- 回归：`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug -p:OutputPath=bin/hex-compare-check/ --filter "FullyQualifiedName~CompareDocumentColumnsTests.Hex|FullyQualifiedName~LocaleDictionaryTests" --minimum-expected-tests 12 --timeout 2m`：12 通过、0 失败、0 跳过。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，仅有既有 Satori GC 实验提示与第三方依赖的 IL2026/IL2104/IL3053；没有本次改动新增的裁剪/AOT 警告。发布后 `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 成功。
+- 未验证边界：没有重新运行完整测试集或进行桌面窗口键鼠实测；目录测试的 UI Dispatcher 阻塞及既有架构白名单缺口见下节。
+
+## 多列文件对比的十六进制编辑实测（2026-11-01，Windows x64）
+
+- 对比两侧复用独立十六进制编辑器的 `HexViewer`，支持十六进制/文本列覆盖编辑、原有复制粘贴与偏移跳转；固定 16 字节行、差异字节高亮、同步滚动、上一处/下一处差异以及每侧保存按钮和 Ctrl+S。修改范围增量更新差异计数；二进制对比直接使用十六进制视图，不提供元数据切换入口。保存采用快照、同目录临时文件和原子替换，同时提交的两侧保存请求依次处理。
+- 内存编辑上限为两侧文件合计 256 MiB；超限保留按需读取的只读行集合，并显示中英本地化提示。编辑沿用共享控件的覆盖语义，不插入或删除字节。
+- 构建：`dotnet build UotanStudio.slnx -c Debug --no-restore --nologo -p:OutputPath=bin/hex-compare-check/` 成功；默认桌面输出目录被运行中的程序占用，验证使用各项目独立 bin 子目录。仅有 `DeviceControllerRockchipReconnectionTests.cs:150/159` 的两条既有 CS8604。
+- 格式：全解决方案 `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与 `style` 检查通过；最后调整的文件再次定向检查通过；`git diff --check` 通过。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功。仅报告已有的 Satori GC 实验提示、第三方 Ursa/Dock/DataGrid/LTRData/YamlDotNet/Common.Logging 的 IL2104/IL3053、Avalonia XAML 反射绑定与命令 trampoline 的 IL2026，以及 Makaretu.Dns 的 Linux Tmds.LibC 说明；没有指向本次新增代码的裁剪/AOT 警告。发布后已执行 `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 恢复调试所需的还原资产。
+- 最终定向回归：50 项，49 通过、1 失败、0 跳过。新增 6 项覆盖独立保存、同时保存、保存失败保留数据、单侧文件、超限只读回退与差异区间合并/拆分；这 6 项及文本编辑、本地化检查均通过。唯一失败为 `HostLayeringGuardTests.Views_DoNotImportApplicationServiceNamespacesOutsideTheFrozenAllowList`：HEAD 中 `CompareView.Transfer.cs` 已导入 `UotanStudio.Services.Devices`，冻结白名单仅列 `UotanStudio.Services.Projects`，本次未改动这两个文件。
+- 回归命令：`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug -p:OutputPath=bin/hex-compare-check/ --filter "FullyQualifiedName~CompareDocumentColumnsTests.Hex|FullyQualifiedName~CompareDocumentColumnsTests.TextComparison|FullyQualifiedName~CompareDocumentColumnsTests.BrowsingTextFile|FullyQualifiedName~ComparisonServiceTests|FullyQualifiedName~FolderCompareServiceTests|FullyQualifiedName~LocaleDictionaryTests|FullyQualifiedName~UotanStudio.Tests.Architecture" --minimum-expected-tests 20 --timeout 2m`。
+- 未验证边界：完整测试集未运行；Compare 命名空间测试在目录浏览用例等待现有 `CompareTreeNodeViewModel.EnsureChildrenLoadedAsync` 的 UI Dispatcher 时阻塞（测试宿主没有 UI 消息循环），已结束本次阻塞进程并清理对应 TEMP 夹具。未执行桌面窗口的键鼠交互、剪贴板及视觉实测。
+
 ## 设备列表 RK3588 芯片名显示修正实测（2026-11-07，Windows x64，Debug，共享工作树）
 
 - 现象对齐（IDA，RKDevTool v3.37，函数 `sub_4197E0`「读取芯片信息」）：官方工具对 `RKU_ReadChipInfo` 返回的前 4 字节只做 `Chip Tag:\t%02X %02X %02X %02X` 的逐字节十六进制打印，命中旧表才追加 `-RK27/-RK32/…` 一类家族标签，否则按线上字节序拼出四字符（`-RK`/`K` + 各字节）仅用于 `Image Chip Flag` 映像芯片比对；该路径没有把标签当型号显示的逻辑，因此 RK3588 的 `8853` 不会被 RKDevTool 当作型号。

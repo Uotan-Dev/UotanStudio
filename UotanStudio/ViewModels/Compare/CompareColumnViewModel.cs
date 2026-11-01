@@ -212,21 +212,21 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <para>是否显示空态提示（本列尚无内容：既没有行列表，也没有可编辑文本内容）。</para>
     /// </summary>
     /// <value>Whether the empty-state hint is shown. <para>是否显示空态提示。</para></value>
-    public bool ShowHint => (Rows is null || Rows.Count == 0) && !IsTextEditorVisible && !IsCompareTextEditorVisible;
+    public bool ShowHint => (Rows is null || Rows.Count == 0) && !IsTextEditorVisible && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
 
     /// <summary>
     /// Whether the left-cell row list is shown (browsing columns and the compare left column).
     /// <para>是否显示左侧单元格行列表（浏览列与对比左列）。</para>
     /// </summary>
     /// <value>Whether the left-cell row list is shown. <para>是否显示左侧单元格行列表。</para></value>
-    public bool ShowLeftCells => Rows is not null && !UsesRightCells && !IsCompareTextEditorVisible;
+    public bool ShowLeftCells => Rows is not null && !UsesRightCells && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
 
     /// <summary>
     /// Whether the right-cell row list is shown (the compare right column only).
     /// <para>是否显示右侧单元格行列表（仅对比右列）。</para>
     /// </summary>
     /// <value>Whether the right-cell row list is shown. <para>是否显示右侧单元格行列表。</para></value>
-    public bool ShowRightCells => Rows is not null && UsesRightCells && !IsCompareTextEditorVisible;
+    public bool ShowRightCells => Rows is not null && UsesRightCells && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
 
     /// <summary>
     /// Whether this column shows the comparison's per-side text diff during a text comparison (one aligned
@@ -236,13 +236,21 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <value>Whether this column shows the compare-side text diff. <para>本列是否显示对比侧的文本差异。</para></value>
     public bool IsCompareTextEditorVisible => IsCompareSide && _owner.IsTextEditorMode;
 
-    /// <summary>
-    /// Whether the raw-hex toggle is shown in compare mode (a binary comparison with a file on both sides).
-    /// <para>对比模式下是否显示十六进制原始数据切换按钮（两侧都有文件的二进制对比）。</para>
-    /// </summary>
-    /// <value>Whether the raw-hex toggle is shown. <para>是否显示十六进制原始数据切换按钮。</para></value>
-    public bool ShowHexToggle => IsCompareSide && _owner.IsBinaryMode && _owner.CanShowHexView;
-
+    /// <summary>Whether the shared hex editor is visible.<para>是否显示共享十六进制编辑器。</para></summary>
+    public bool IsCompareHexEditorVisible => IsCompareSide && _owner.IsHexEditorMode;
+
+    /// <summary>Whether the file pair exceeds the editable byte limit.<para>文件对是否超出可编辑字节上限。</para></summary>
+    public bool ShowHexReadOnlyHint => IsCompareSide && _owner.IsBinaryMode
+        && !_owner.IsHexEditorMode && Rows is CompareHexRowCollection;
+
+    /// <summary>The editable bytes for this side.<para>本侧可编辑的字节。</para></summary>
+    public byte[]? HexBytes => IsCompareSide ? _owner.GetHexBytes(Side) : null;
+
+    /// <summary>The counterpart bytes used for highlighting.<para>用于高亮的对侧字节。</para></summary>
+    public byte[]? OtherHexBytes => IsCompareSide ? _owner.GetHexBytes(UsesRightCells ? CompareColumnSide.Left : CompareColumnSide.Right) : null;
+
+    internal void HexBytesEdited(int offset, int count) => _owner.HexBytesEdited(Side, offset, count);
+
     /// <summary>
     /// Whether the previous/next-difference buttons are shown in compare mode (text and hex comparisons).
     /// <para>对比模式下是否显示上一处/下一处差异按钮（文本与十六进制对比）。</para>
@@ -256,13 +264,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// </summary>
     /// <value>The selection mode applied to this column's row list. <para>本列行列表采用的选择模式。</para></value>
     public SelectionMode RowSelectionMode => SelectionMode.Single;
-
-    /// <summary>
-    /// The raw-hex toggle command (forwarded to the document; both columns share one comparison).
-    /// <para>十六进制原始数据切换命令（转发到所属文档，两列共享同一份对比结果）。</para>
-    /// </summary>
-    /// <value>The command that toggles the raw-hex view. <para>切换十六进制原始数据视图的命令。</para></value>
-    public IRelayCommand ToggleHexViewCommand => _owner.ToggleHexViewCommand;
 
     /// <summary>
     /// The previous-difference command (forwarded to the document).
@@ -1015,6 +1016,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// </summary>
     private void NotifyContentChanged()
     {
+        OnPropertyChanged(nameof(ShowHexReadOnlyHint));
         OnPropertyChanged(nameof(ShowHint));
         OnPropertyChanged(nameof(ShowLeftCells));
         OnPropertyChanged(nameof(ShowRightCells));
@@ -1042,10 +1044,14 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// </summary>
     internal void NotifyCompareStateChanged()
     {
-        OnPropertyChanged(nameof(ShowHexToggle));
         OnPropertyChanged(nameof(ShowDiffNavigation));
         OnPropertyChanged(nameof(RowSelectionMode));
         OnPropertyChanged(nameof(IsCompareTextEditorVisible));
+        OnPropertyChanged(nameof(IsCompareHexEditorVisible));
+        OnPropertyChanged(nameof(ShowHexReadOnlyHint));
+        OnPropertyChanged(nameof(HexBytes));
+        OnPropertyChanged(nameof(OtherHexBytes));
+        OnPropertyChanged(nameof(ShowHint));
         OnPropertyChanged(nameof(ShowLeftCells));
         OnPropertyChanged(nameof(ShowRightCells));
     }

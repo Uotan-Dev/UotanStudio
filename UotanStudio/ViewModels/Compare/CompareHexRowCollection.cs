@@ -26,6 +26,33 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// </summary>
     private const int CacheCapacity = 256;
 
+    private readonly byte[]? _leftData;
+    private readonly byte[]? _rightData;
+
+    internal CompareHexRowCollection(byte[] left, byte[] right) : this(string.Empty, string.Empty, [])
+    {
+        _leftData = left;
+        _rightData = right;
+        _leftLength = left.Length;
+        _rightLength = right.Length;
+        _count = (int)((Math.Max(_leftLength, _rightLength) + BytesPerLine - 1) / BytesPerLine);
+    }
+
+    internal void InvalidateRange(int offset, int count)
+    {
+        lock (_syncRoot)
+        {
+            foreach (var slot in _cache)
+            {
+                if (slot.Index >= offset / BytesPerLine && slot.Index <= ((long)offset + count - 1) / BytesPerLine)
+                {
+                    slot.Index = -1;
+                    slot.Row = null;
+                }
+            }
+        }
+    }
+
     private readonly FileStream? _leftStream;
     private readonly FileStream? _rightStream;
     private readonly long _leftLength;
@@ -116,8 +143,8 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
                 if (slot.Index != index)
                 {
                     var offset = (long)index * BytesPerLine;
-                    slot.LeftCount = ReadLine(_leftStream, offset, _leftLength, slot.Left);
-                    slot.RightCount = ReadLine(_rightStream, offset, _rightLength, slot.Right);
+                    slot.LeftCount = ReadLine(_leftStream, _leftData, offset, _leftLength, slot.Left);
+                    slot.RightCount = ReadLine(_rightStream, _rightData, offset, _rightLength, slot.Right);
                     slot.Index = index;
                     slot.Row = BuildRow(index, slot);
                 }
@@ -230,7 +257,9 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
         var offset = (long)index * BytesPerLine;
         var leftMissing = offset >= _leftLength;
         var rightMissing = offset >= _rightLength;
-        var hasDiff = IntersectsDiff(offset);
+        var hasDiff = _leftData is not null
+            ? slot.LeftCount != slot.RightCount || !slot.Left.AsSpan(0, slot.LeftCount).SequenceEqual(slot.Right.AsSpan(0, slot.RightCount))
+            : IntersectsDiff(offset);
 
         FolderItemStatus status;
         bool isLeftDiff;
@@ -305,12 +334,19 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// 行完全超出文件长度时返回 0。</para>
     /// </summary>
     /// <param name="stream">The file stream to read from. <para>要读取的文件流。</para></param>
+    /// <param name="data">Optional editable bytes.<para>可选的可编辑字节。</para></param>
     /// <param name="offset">The row's start offset in the file. <para>该行在文件中的起始偏移。</para></param>
     /// <param name="length">The file length bounding the read. <para>限定本次读取的文件长度。</para></param>
     /// <param name="buffer">The buffer receiving the row's bytes. <para>接收该行字节的缓冲。</para></param>
     /// <returns>The number of bytes actually read. <para>实际读取到的字节数。</para></returns>
-    private static int ReadLine(FileStream? stream, long offset, long length, byte[] buffer)
+    private static int ReadLine(FileStream? stream, byte[]? data, long offset, long length, byte[] buffer)
     {
+        if (data is not null && offset < data.Length)
+        {
+            var count = (int)Math.Min(BytesPerLine, data.Length - offset);
+            data.AsSpan((int)offset, count).CopyTo(buffer);
+            return count;
+        }
         if (stream is null || offset >= length)
         {
             return 0;

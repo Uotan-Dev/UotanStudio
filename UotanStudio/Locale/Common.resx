@@ -2251,6 +2251,9 @@ Author: 暮间雾
   <data name="Compare_TextSummary" xml:space="preserve">
     <value>{0} differing lines · {1} lines total</value>
   </data>
+  <data name="Compare_HexReadOnlyLimit" xml:space="preserve">
+    <value>Read-only hex comparison: editing supports up to 256 MiB across both files.</value>
+  </data>
   <data name="Compare_HexSummary" xml:space="preserve">
     <value>{0} differing bytes · {1} ranges</value>
   </data>
@@ -2455,9 +2458,6 @@ Author: 暮间雾
   <data name="Compare_DropHint" xml:space="preserve">
     <value>Drag files or folders here; each path takes one file column.
 You can also use “Add Folder” in the toolbar or type a path in a column.</value>
-  </data>
-  <data name="Compare_HexRaw" xml:space="preserve">
-    <value>Raw Hex Data</value>
   </data>
   <data name="Compare_Metadata" xml:space="preserve">
     <value>Metadata</value>

@@ -49,8 +49,6 @@ public sealed partial class CompareViewModel : Document, ITool
     private readonly SemaphoreSlim _treeExpansionLock = new(1, 1);
     private CancellationTokenSource _loadCts = new();
     private CompareTreeNodeViewModel? _compareTreeRoot;
-    private ComparisonMetadata? _leftMetadata;
-    private ComparisonMetadata? _rightMetadata;
     private CompareHexRowCollection? _currentHexRows;
     private string _statsText = string.Empty;
     private string _folderSummaryText = string.Empty;
@@ -201,27 +199,6 @@ public sealed partial class CompareViewModel : Document, ITool
     }
 
     private CompareMode _mode;
-
-    /// <summary>
-    /// The binary mode's active view (metadata or hex).
-    /// <para>二进制模式的当前视图（元数据或十六进制）。</para>
-    /// </summary>
-    public BinaryViewKind BinaryViewKind
-    {
-        get => _binaryViewKind;
-        private set
-        {
-            if (_binaryViewKind == value)
-            {
-                return;
-            }
-
-            _binaryViewKind = value;
-            OnPropertyChanged();
-        }
-    }
-
-    private BinaryViewKind _binaryViewKind = BinaryViewKind.Metadata;
 
     /// <summary>
     /// The current comparison rows; both panes share one list (rendering the left/right cells respectively), so
@@ -565,13 +542,6 @@ public sealed partial class CompareViewModel : Document, ITool
     public bool IsBinaryMode => Mode == CompareMode.Binary;
 
     /// <summary>
-    /// Whether the hex-diff view is available: both sides must have a file (a single side has no diffable
-    /// ranges).
-    /// <para>是否具备打开十六进制差异视图的条件：两侧都有文件（单侧文件没有可比对的差异区间）。</para>
-    /// </summary>
-    public bool CanShowHexView => _fileLeftPath.Length > 0 && _fileRightPath.Length > 0;
-
-    /// <summary>
     /// The status-bar summary text (folder-status counts, or a file-diff summary).
     /// <para>状态栏汇总文本（目录对比的状态计数，或文件对比的差异汇总）。</para>
     /// </summary>
@@ -806,7 +776,7 @@ public sealed partial class CompareViewModel : Document, ITool
         for (var i = 1; i <= Rows.Count; i++)
         {
             var idx = (current + i + Rows.Count) % Rows.Count;
-            if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
+            if (IsHexEditorMode ? _hexEditSession!.IsRowDifferent(idx) : Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
                 ScrollToIndex = -1;
@@ -833,87 +803,12 @@ public sealed partial class CompareViewModel : Document, ITool
         for (var i = 1; i <= Rows.Count; i++)
         {
             var idx = ((current - i) % Rows.Count + Rows.Count) % Rows.Count;
-            if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
+            if (IsHexEditorMode ? _hexEditSession!.IsRowDifferent(idx) : Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
                 ScrollToIndex = -1;
                 ScrollToIndex = idx;
                 return;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Toggle-binary-view command: switches between the metadata and hex-diff views and rebuilds the rows; the
-    /// old hex collection is disposed first and switching back to metadata reuses the cached metadata to avoid
-    /// re-reading.
-    /// <para>切换二进制视图命令：在元数据与十六进制差异视图间切换并重建行；
-    /// 切换前释放旧十六进制集合，切回元数据时使用缓存结果避免重复读取。</para>
-    /// </summary>
-    [RelayCommand]
-    private async Task ToggleHexView()
-    {
-        if (Mode != CompareMode.Binary)
-        {
-            return;
-        }
-
-        if (BinaryViewKind == BinaryViewKind.Hex)
-        {
-            _currentHexRows?.Dispose();
-            _currentHexRows = null;
-            BinaryViewKind = BinaryViewKind.Metadata;
-            Rows = ComparisonRowBuilder.ForMetadata(_leftMetadata, _rightMetadata, LanguageService.Instance.GetString("Compare_Unrecognized"));
-            SelectedIndex = -1;
-            return;
-        }
-
-        if (!CanShowHexView)
-        {
-            return;
-        }
-
-        var ct = BeginLoad();
-        IsBusy = true;
-        HasError = false;
-        ErrorMessage = string.Empty;
-        try
-        {
-            var maxLength = Math.Max(new FileInfo(_fileLeftPath).Length, new FileInfo(_fileRightPath).Length);
-            var rowDiffBitmap = new byte[BinaryDiffService.RowBitmapLength(maxLength)];
-            var stats = await _comparison.CompareBinaryAsync(_fileLeftPath, _fileRightPath, rowDiffBitmap, ct);
-            if (ct.IsCancellationRequested)
-            {
-                return;
-            }
-
-            _currentHexRows?.Dispose();
-            var hex = new CompareHexRowCollection(_fileLeftPath, _fileRightPath, rowDiffBitmap);
-            _currentHexRows = hex;
-            Rows = hex;
-            BinaryViewKind = BinaryViewKind.Hex;
-            SelectedIndex = -1;
-            StatsText = string.Format(
-                LanguageService.Instance.GetString("Compare_HexSummary"),
-                stats.TotalDifferentBytes,
-                stats.RangeCount);
-            HasError = false;
-            ErrorMessage = string.Empty;
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            HasError = true;
-            ErrorMessage = UserError.Describe(ex);
-            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
-        }
-        finally
-        {
-            if (ct == _loadCts.Token)
-            {
-                IsBusy = false;
             }
         }
     }
@@ -1350,6 +1245,12 @@ public sealed partial class CompareViewModel : Document, ITool
             return;
         }
 
+        if (_hexEditSession is not null)
+        {
+            await SaveHexSideAsync(leftSide, path);
+            return;
+        }
+
         var lines = RealLines(leftSide);
         if (_textModel is null)
         {
@@ -1615,10 +1516,10 @@ public sealed partial class CompareViewModel : Document, ITool
         }
 
         var ct = BeginLoad();
+        _hexEditSession = null;
+        NotifyColumnsCompareState();
         _currentHexRows?.Dispose();
         _currentHexRows = null;
-        _leftMetadata = null;
-        _rightMetadata = null;
         IsBusy = true;
         HasError = false;
         ErrorMessage = string.Empty;
@@ -1696,13 +1597,16 @@ public sealed partial class CompareViewModel : Document, ITool
         else
         {
             Mode = CompareMode.Binary;
+            if (await TryLoadHexEditorAsync(ct))
+            {
+                return;
+            }
             _currentHexRows?.Dispose();
             var hex = useLeftSide
                 ? new CompareHexRowCollection(path, string.Empty, [])
                 : new CompareHexRowCollection(string.Empty, path, []);
             _currentHexRows = hex;
             Rows = hex;
-            BinaryViewKind = BinaryViewKind.Hex;
             StatsText = LanguageService.Instance.GetString("Compare_SingleSideFile");
         }
 
@@ -1734,15 +1638,17 @@ public sealed partial class CompareViewModel : Document, ITool
     }
 
     /// <summary>
-    /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata rows (diff
-    /// stats are computed only when switching to the hex-raw view).
-    /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行（差异统计仅在切换十六进制
-    /// 原始视图时计算）。</para>
+    /// Loads editable binary bytes, or streamed hex rows when the file pair exceeds the editing limit.
+    /// <para>加载可编辑的二进制字节；文件对超出编辑上限时使用流式十六进制行。</para>
     /// </summary>
     private async Task LoadBinaryBothSidesAsync(CancellationToken ct)
     {
         try
         {
+            if (await TryLoadHexEditorAsync(ct))
+            {
+                return;
+            }
             var leftLen = new FileInfo(_fileLeftPath).Length;
             var rightLen = new FileInfo(_fileRightPath).Length;
             var maxLength = Math.Max(leftLen, rightLen);
@@ -1754,7 +1660,6 @@ public sealed partial class CompareViewModel : Document, ITool
             var hex = new CompareHexRowCollection(_fileLeftPath, _fileRightPath, rowDiffBitmap);
             _currentHexRows = hex;
             Rows = hex;
-            BinaryViewKind = BinaryViewKind.Hex;
             SelectedIndex = -1;
             StatsText = string.Format(
                 LanguageService.Instance.GetString("Compare_HexSummary"),
@@ -1769,8 +1674,8 @@ public sealed partial class CompareViewModel : Document, ITool
     }
 
     /// <summary>
-    /// Clears every derived state of one comparison (paths, compare tree, metadata caches, counts and rows).
-    /// <para>清空一次对比的全部派生状态（路径、对比树、元数据缓存、计数与行）。</para>
+    /// Clears every derived state of one comparison (paths, compare tree, editable bytes, counts and rows).
+    /// <para>清空一次对比的全部派生状态（路径、对比树、可编辑字节、计数与行）。</para>
     /// </summary>
     private void ResetCompareState()
     {
@@ -1778,6 +1683,7 @@ public sealed partial class CompareViewModel : Document, ITool
         _rightPath = string.Empty;
         _fileLeftPath = string.Empty;
         _fileRightPath = string.Empty;
+        _hexEditSession = null;
         _folderSummaryText = string.Empty;
         _compareTreeRoot = null;
         _textRows = null;
@@ -1787,14 +1693,11 @@ public sealed partial class CompareViewModel : Document, ITool
         _lastTextUndoWasStructural = false;
         _currentHexRows?.Dispose();
         _currentHexRows = null;
-        _leftMetadata = null;
-        _rightMetadata = null;
         _dirtyLeft = false;
         _dirtyRight = false;
         _selectedRowIndices = [];
         Rows = null;
         Mode = CompareMode.None;
-        BinaryViewKind = BinaryViewKind.Metadata;
         SelectedIndex = -1;
         EqualCount = 0;
         DifferentCount = 0;

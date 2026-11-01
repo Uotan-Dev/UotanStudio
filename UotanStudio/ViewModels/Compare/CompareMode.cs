@@ -25,27 +25,8 @@ public enum CompareMode
     Text,
 
     /// <summary>
-    /// Binary comparison (metadata or hex-diff view).
-    /// <para>二进制比较（元数据或十六进制差异视图）。</para>
+    /// Binary comparison in the hex-diff view.
+    /// <para>十六进制差异视图中的二进制比较。</para>
     /// </summary>
     Binary,
-}
-
-/// <summary>
-/// The binary comparison's display view.
-/// <para>二进制比较的展示视图。</para>
-/// </summary>
-public enum BinaryViewKind
-{
-    /// <summary>
-    /// Metadata view (format name / summary / key-values / entries / components).
-    /// <para>元数据视图（格式名/摘要/键值对/条目/组件）。</para>
-    /// </summary>
-    Metadata,
-
-    /// <summary>
-    /// Hex-diff view.
-    /// <para>十六进制差异视图。</para>
-    /// </summary>
-    Hex,
 }

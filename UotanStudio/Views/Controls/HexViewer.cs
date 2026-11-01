@@ -54,11 +54,44 @@ public class HexViewer : Grid
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == ComparisonDataProperty)
+        {
+            _viewport.ComparisonData = change.NewValue as byte[];
+            _viewport.InvalidateMeasure();
+            _viewport.InvalidateVisual();
+        }
         if (change.Property == EncodingNameProperty)
         {
             _viewport.SetEncodingName(change.NewValue as string);
         }
     }
+
+    /// <summary>
+    /// Supplies the other side's bytes for comparison highlighting; null disables comparison.
+    /// <para>提供对侧字节以显示差异高亮；null 表示关闭对比。</para>
+    /// </summary>
+    public static readonly StyledProperty<byte[]?> ComparisonDataProperty =
+        AvaloniaProperty.Register<HexViewer, byte[]?>(nameof(ComparisonData));
+
+    /// <summary>
+    /// Gets or sets the counterpart bytes. Comparison uses fixed 16-byte rows on both sides.
+    /// <para>获取或设置对侧字节；对比时两侧固定每行 16 字节。</para>
+    /// </summary>
+    public byte[]? ComparisonData
+    {
+        get => GetValue(ComparisonDataProperty);
+        set => SetValue(ComparisonDataProperty, value);
+    }
+
+    internal event Action<HexViewer, int, int>? RangeEdited;
+    internal event Action<HexViewer>? ViewportChanged;
+    internal Vector ScrollOffset { get => _scroll.Offset; set => _scroll.Offset = value; }
+    internal void GoToOffset(long offset)
+    {
+        _viewport.Goto(offset);
+        _scroll.Offset = new Vector(_scroll.Offset.X, HexMetrics.YFromLine((int)(offset / HexMetrics.BytesPerLine)));
+    }
+    internal void RefreshComparison() => _viewport.InvalidateVisual();
 
     private byte[]? _data = [];
     private readonly ScrollViewer _scroll;
@@ -121,6 +154,8 @@ public class HexViewer : Grid
         Children.Add(_scroll);
         Children.Add(_gotoBox);
 
+        _scroll.ScrollChanged += (_, _) => ViewportChanged?.Invoke(this);
+        _viewport.RangeEdited += (offset, count) => RangeEdited?.Invoke(this, offset, count);
         _viewport.BytesEdited += (_, _) => BytesEdited?.Invoke(this, EventArgs.Empty);
         _viewport.GotoRequested += (_, _) => ShowGoto();
         _viewport.SetData(_data);
@@ -192,6 +227,16 @@ public class HexViewer : Grid
         private readonly CellGlyph[] _asciiCells = new CellGlyph[256];
         private readonly CellGlyph[] _headerCells = new CellGlyph[HexMetrics.MaximumBytesPerLine];
         private string[] _asciiByteText = AsciiDefaultText;
+        internal byte[]? ComparisonData { get; set; }
+        internal event Action<int, int>? RangeEdited;
+
+        private HexColumnLayout CreateLayout(double width)
+        {
+            var layout = HexMetrics.CreateLayout(width);
+            return ComparisonData is null ? layout : new HexColumnLayout(
+                layout.ContentWidth, layout.OffsetWidth, layout.HexWidth, layout.AsciiWidth, HexMetrics.BytesPerLine);
+        }
+
         private byte[]? _data = [];
         private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
 
@@ -359,8 +404,8 @@ public class HexViewer : Grid
             var availableWidth = double.IsFinite(availableSize.Width)
                 ? availableSize.Width
                 : _scroll.Viewport.Width;
-            var layout = HexMetrics.CreateLayout(availableWidth);
-            var totalLines = HexMetrics.TotalLines(_data?.Length ?? 0, layout.BytesPerLine);
+            var layout = CreateLayout(availableWidth);
+            var totalLines = HexMetrics.TotalLines(Math.Max(_data?.Length ?? 0, ComparisonData?.Length ?? 0), layout.BytesPerLine);
             var height = HexMetrics.HeaderHeight + ((long)totalLines * HexMetrics.LineHeight);
             return new Size(layout.ContentWidth, height);
         }
@@ -368,7 +413,7 @@ public class HexViewer : Grid
         public override void Render(DrawingContext context)
         {
             base.Render(context);
-            var layout = HexMetrics.CreateLayout(Bounds.Width);
+            var layout = CreateLayout(Bounds.Width);
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height > 0 ? _scroll.Viewport.Height : Bounds.Height;
 
@@ -408,6 +453,18 @@ public class HexViewer : Grid
                 var start = line * layout.BytesPerLine;
                 var available = Math.Min(layout.BytesPerLine, _data.Length - start);
 
+                if (ComparisonData is { } other)
+                {
+                    var differenceBrush = ResolveCachedBrush("DiffBackgroundBrush", Brushes.Transparent);
+                    for (var b = 0; b < available; b++)
+                    {
+                        if (start + b >= other.Length || _data[start + b] != other[start + b])
+                        {
+                            context.FillRectangle(differenceBrush, new Rect(layout.XFromByteIndex(b, true), y, layout.HexCellWidth, HexMetrics.LineHeight));
+                            context.FillRectangle(differenceBrush, new Rect(layout.XFromByteIndex(b, false), y, layout.AsciiCellWidth, HexMetrics.LineHeight));
+                        }
+                    }
+                }
                 DrawSelectionRects(context, line, start, available, selectionBrush, layout);
                 DrawCenteredText(
                     context,
@@ -723,7 +780,7 @@ public class HexViewer : Grid
             }
 
             var position = e.GetPosition(this);
-            var layout = HexMetrics.CreateLayout(Bounds.Width);
+            var layout = CreateLayout(Bounds.Width);
             var offset = GetByteOffsetFromPosition(position, layout);
             if (offset < 0)
             {
@@ -748,7 +805,7 @@ public class HexViewer : Grid
             }
 
             var position = e.GetPosition(this);
-            var offset = GetByteOffsetFromPosition(position, HexMetrics.CreateLayout(Bounds.Width));
+            var offset = GetByteOffsetFromPosition(position, CreateLayout(Bounds.Width));
             if (offset < 0)
             {
                 return;
@@ -816,7 +873,7 @@ public class HexViewer : Grid
             var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             var pageLines = Math.Max(1, (int)Math.Ceiling(_scroll.Viewport.Height / HexMetrics.LineHeight));
-            var bytesPerLine = HexMetrics.CreateLayout(Bounds.Width).BytesPerLine;
+            var bytesPerLine = CreateLayout(Bounds.Width).BytesPerLine;
 
             switch (e.Key)
             {
@@ -958,7 +1015,7 @@ public class HexViewer : Grid
 
         private void EnsureCaretVisible()
         {
-            var bytesPerLine = HexMetrics.CreateLayout(Bounds.Width).BytesPerLine;
+            var bytesPerLine = CreateLayout(Bounds.Width).BytesPerLine;
             var caretLine = (int)HexMetrics.LineFromOffset(_caretOffset, bytesPerLine);
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height;
@@ -1016,6 +1073,7 @@ public class HexViewer : Grid
 
             _data[_caretOffset] = value;
             _editedOffsets.Add(_caretOffset);
+            RangeEdited?.Invoke((int)_caretOffset, 1);
             BytesEdited?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
@@ -1140,6 +1198,7 @@ public class HexViewer : Grid
             {
                 _hasSelection = false;
                 _selectionAnchor = -1;
+                RangeEdited?.Invoke((int)start, (int)count);
                 BytesEdited?.Invoke(this, EventArgs.Empty);
                 SetCaret(start + count - 1);
             }

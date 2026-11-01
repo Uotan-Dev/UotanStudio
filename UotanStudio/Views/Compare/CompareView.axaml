@@ -179,11 +179,6 @@
                       AutomationProperties.Name="{DynamicResource Compare_GoUp}">
                 <avalonia:ArrowUp />
               </Button>
-              <Button Classes="Small" Command="{Binding ToggleHexViewCommand}" IsVisible="{Binding ShowHexToggle}"
-                      ToolTip.Tip="{DynamicResource Compare_HexRaw}"
-                      AutomationProperties.Name="{DynamicResource Compare_HexRaw}">
-                <avalonia:Brackets />
-              </Button>
               <Button Classes="Small" Command="{Binding PrevDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
                       ToolTip.Tip="{DynamicResource Compare_PrevDiff}"
                       AutomationProperties.Name="{DynamicResource Compare_PrevDiff}">
@@ -206,8 +201,8 @@
                       AutomationProperties.Name="{DynamicResource Compare_LoadPath}">
                 <avalonia:Check />
               </Button>
-              <!-- 文本对比编辑后出现：把本列内容写回文件（保留原编码与换行风格）。 -->
-              <!-- Appears after text-comparison edits: writes this column's content back to the file. -->
+              <!-- 修改后显示本列的保存按钮。 -->
+              <!-- Saves the edited contents of this column. -->
               <Button Classes="Small" Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"
                       ToolTip.Tip="{DynamicResource Compare_SaveFile}"
                       AutomationProperties.Name="{DynamicResource Compare_SaveFile}">
@@ -222,9 +217,16 @@
           </Grid>
         </Border>
 
+        <TextBlock DockPanel.Dock="Top" IsVisible="{Binding ShowHexReadOnlyHint}"
+                   Text="{DynamicResource Compare_HexReadOnlyLimit}" TextWrapping="Wrap" Margin="8,4" />
+
         <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
 
         <Grid>
+          <controls:HexViewer IsVisible="{Binding IsCompareHexEditorVisible}"
+                              Data="{Binding HexBytes}" ComparisonData="{Binding OtherHexBytes}"
+                              Loaded="OnHexEditorLoaded" Unloaded="OnHexEditorUnloaded"
+                              KeyDown="OnHexEditorKeyDown" />
           <!-- 文本对比：两侧各一个项目文本编辑器（行=对齐槽，填充槽显示斜杠；跨行选择、增删行、撤销/重做、多行粘贴
                都是编辑器原生行为，改动会被翻译成槽操作并同步到另一侧）。 -->
           <!-- Text comparison: one project text editor per side (one line per aligned slot, slashes for fillers). Cross-line

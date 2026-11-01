@@ -24,6 +24,154 @@ public sealed class CompareDocumentColumnsTests : IDisposable
     public CompareDocumentColumnsTests() => Directory.CreateDirectory(_root);
 
     [Fact]
+    public async Task HexComparison_EditsSaveEachSideIndependently()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var leftPath = Path.Combine(_root, "left.bin");
+        var rightPath = Path.Combine(_root, "right.bin");
+        await File.WriteAllBytesAsync(leftPath, [0, 1, 2, 3], ct);
+        await File.WriteAllBytesAsync(rightPath, [0, 9, 2, 3], ct);
+        await _document.OpenCompareFilesAsync(leftPath, rightPath);
+        var left = _document.Columns[0];
+        var right = _document.Columns[1];
+        Assert.All(_document.Columns, column => Assert.True(column.IsCompareHexEditorVisible));
+        Assert.True(_document.Rows![0].IsLeftDiff);
+        left.HexBytes![1] = 9;
+        left.HexBytesEdited(1, 1);
+        Assert.True(left.IsDirty);
+        Assert.False(right.IsDirty);
+        Assert.False(_document.Rows[0].IsLeftDiff);
+        right.HexBytes![3] = 7;
+        right.HexBytesEdited(3, 1);
+        Assert.True(right.IsDirty);
+        Assert.Equal(9, left.HexBytes[1]);
+        Assert.Equal(7, right.HexBytes[3]);
+        _document.NextDiffCommand.Execute(null);
+        Assert.Equal(0, _document.ScrollToIndex);
+        await left.SaveCommand.ExecuteAsync(null);
+        Assert.False(left.IsDirty);
+        Assert.True(right.IsDirty);
+        Assert.Equal(new byte[] { 0, 9, 2, 3 }, await File.ReadAllBytesAsync(leftPath, ct));
+        Assert.Equal(new byte[] { 0, 9, 2, 3 }, await File.ReadAllBytesAsync(rightPath, ct));
+        await right.SaveCommand.ExecuteAsync(null);
+        Assert.False(right.IsDirty);
+        Assert.Equal(new byte[] { 0, 9, 2, 7 }, await File.ReadAllBytesAsync(rightPath, ct));
+        Assert.Empty(Directory.GetFiles(_root, "*.save-*"));
+    }
+
+    [Fact]
+    public async Task HexComparison_SavingBothSidesConcurrentlyWritesBothFiles()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var leftPath = Path.Combine(_root, "concurrent-left.bin");
+        var rightPath = Path.Combine(_root, "concurrent-right.bin");
+        await File.WriteAllBytesAsync(leftPath, new byte[65536], ct);
+        await File.WriteAllBytesAsync(rightPath, new byte[65536], ct);
+        await _document.OpenCompareFilesAsync(leftPath, rightPath);
+        var left = _document.Columns[0];
+        var right = _document.Columns[1];
+        left.HexBytes![0] = 1;
+        right.HexBytes![0] = 2;
+        left.HexBytesEdited(0, 1);
+        right.HexBytesEdited(0, 1);
+        await Task.WhenAll(left.SaveCommand.ExecuteAsync(null), right.SaveCommand.ExecuteAsync(null));
+        Assert.False(left.IsDirty);
+        Assert.False(right.IsDirty);
+        Assert.Equal(1, (await File.ReadAllBytesAsync(leftPath, ct))[0]);
+        Assert.Equal(2, (await File.ReadAllBytesAsync(rightPath, ct))[0]);
+    }
+
+    [Fact]
+    public async Task HexComparison_SaveFailureKeepsOriginalBytesAndDirtyState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var directory = Path.Combine(_root, "original");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "locked.bin");
+        await File.WriteAllBytesAsync(path, [0, 1], ct);
+        await _document.OpenCompareFilesAsync(path, string.Empty);
+        var column = _document.Columns[0];
+        column.HexBytes![1] = 2;
+        column.HexBytesEdited(1, 1);
+        var movedDirectory = Path.Combine(_root, "moved");
+        Directory.Move(directory, movedDirectory);
+        await column.SaveCommand.ExecuteAsync(null);
+        Assert.True(column.IsDirty);
+        Assert.True(_document.HasError);
+        Assert.Equal(new byte[] { 0, 1 }, await File.ReadAllBytesAsync(Path.Combine(movedDirectory, "locked.bin"), ct));
+        Assert.Empty(Directory.GetFiles(_root, "*.save-*"));
+    }
+
+    [Fact]
+    public async Task HexComparison_MissingSideKeepsAlignedRowsAndLoadsNextDocumentCleanly()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_root, "single.bin");
+        await File.WriteAllBytesAsync(path, new byte[33], ct);
+        await _document.OpenCompareFilesAsync(string.Empty, path);
+        Assert.Equal(3, _document.Rows!.Count);
+        Assert.Empty(_document.Columns[0].HexBytes!);
+        var right = _document.Columns[1];
+        right.HexBytes![32] = 255;
+        right.HexBytesEdited(32, 1);
+        await right.SaveCommand.ExecuteAsync(null);
+        Assert.Equal(255, (await File.ReadAllBytesAsync(path, ct))[32]);
+        await _document.OpenCompareFilesAsync(WriteFile("text-left.txt", "one"), WriteFile("text-right.txt", "two"));
+        Assert.All(_document.Columns, column => Assert.Null(column.HexBytes));
+        Assert.All(_document.Columns, column => Assert.False(column.IsCompareHexEditorVisible));
+    }
+
+    [Fact]
+    public async Task HexComparison_OversizeFileUsesReadOnlyRowsWithoutLoadingAllBytes()
+    {
+        var path = Path.Combine(_root, "large.bin");
+        using (var stream = File.Create(path))
+        {
+            stream.SetLength(CompareHexEditSession.MaximumTotalBytes + 1);
+        }
+        await _document.OpenCompareFilesAsync(path, string.Empty);
+        var column = _document.Columns[0];
+        Assert.False(column.IsCompareHexEditorVisible);
+        Assert.True(column.ShowHexReadOnlyHint);
+        Assert.Null(column.HexBytes);
+        Assert.Equal((CompareHexEditSession.MaximumTotalBytes / 16) + 1, _document.Rows!.Count);
+        Assert.NotEmpty(_document.Rows[^1].LeftText);
+    }
+
+    [Fact]
+    public void HexDifferenceUpdates_MergingAndSplittingRangesMatchFullComparison()
+    {
+        var random = new Random(42);
+        var left = new byte[129];
+        var right = new byte[125];
+        random.NextBytes(left);
+        random.NextBytes(right);
+        var session = new CompareHexEditSession(left, right, TestContext.Current.CancellationToken);
+        for (var iteration = 0; iteration < 100; iteration++)
+        {
+            var offset = random.Next(right.Length);
+            var count = random.Next(1, right.Length - offset + 1);
+            for (var i = offset; i < offset + count; i++)
+            {
+                left[i] = iteration % 2 == 0 ? right[i] : (byte)random.Next(256);
+            }
+            session.Update(offset, count);
+            long differences = 0;
+            long ranges = 0;
+            var previous = false;
+            for (var i = 0; i < left.Length; i++)
+            {
+                var different = i >= right.Length || left[i] != right[i];
+                differences += different ? 1 : 0;
+                ranges += different && !previous ? 1 : 0;
+                previous = different;
+            }
+            Assert.Equal(differences, session.DifferentBytes);
+            Assert.Equal(ranges, session.RangeCount);
+        }
+    }
+
+    [Fact]
     public void Constructor_StartsWithTwoEmptyColumns()
     {
         Assert.Equal(2, _document.Columns.Count);
@@ -315,7 +463,6 @@ public sealed class CompareDocumentColumnsTests : IDisposable
         Assert.All(_document.Rows!, row => Assert.True(row.IsRightEmpty));
         Assert.All(_document.Rows!, row => Assert.True(row.IsLeftDiff));
         Assert.Equal("/", _document.ProjectText(leftSide: false));
-        Assert.False(_document.CanShowHexView);
 
         await _document.OpenCompareFilesAsync(string.Empty, file);
         Assert.Equal(CompareMode.Text, _document.Mode);

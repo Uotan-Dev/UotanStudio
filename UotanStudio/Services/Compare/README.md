@@ -8,7 +8,7 @@ and a warning callback. `CreateDefault` binds the desktop registry and log sink.
 The existing public algorithm `Instance` properties remain compatible; the default
 comparison backend owns separate stateless algorithm instances.
 
-`CompareViewModel` owns paths, selection, cancellation, metadata caches and lazy hex
+`CompareViewModel` owns paths, selection, cancellation, editable byte buffers and lazy hex
 rows. Its parameterless constructor preserves existing document creation; the internal
 constructor accepts an explicit backend. `ComparisonRowBuilder` belongs to the
 presentation layer and translates data into aligned display rows without file I/O.
@@ -80,8 +80,8 @@ another folder row copies it there.
   explicit inputs. The document still checks cancellation before publishing results.
 - Single-side row projection remains on background tasks. Display state and
   notifications remain on the document's existing continuation context.
-- Binary scanning remains an explicit request when opening the hex view. Existing
-  bitmap allocation and lazy hex-row ownership are unchanged.
+- Binary comparisons open directly in the shared hex editor within the 256 MiB
+  combined input limit; larger inputs use streamed scanning and lazy read-only rows.
 - Copy and delete continue to use the original safe relative-path resolver. Their
   document commands retain the original cancellation policy; changing a read request
   does not cancel an already requested file mutation.

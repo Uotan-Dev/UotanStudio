@@ -2251,6 +2251,9 @@
   <data name="Compare_TextSummary" xml:space="preserve">
     <value>差异 {0} 行 · 共 {1} 行</value>
   </data>
+  <data name="Compare_HexReadOnlyLimit" xml:space="preserve">
+    <value>十六进制只读对比：可编辑的两侧文件大小合计上限为 256 MiB。</value>
+  </data>
   <data name="Compare_HexSummary" xml:space="preserve">
     <value>差异 {0} 字节 · {1} 个区段</value>
   </data>
@@ -2455,9 +2458,6 @@
   <data name="Compare_DropHint" xml:space="preserve">
     <value>将文件或文件夹拖入此处，每个路径占用一个文件列
 也可以用顶部的「添加文件夹」，或在列内输入路径后加载。</value>
-  </data>
-  <data name="Compare_HexRaw" xml:space="preserve">
-    <value>十六进制原始数据</value>
   </data>
   <data name="Compare_Metadata" xml:space="preserve">
     <value>元数据</value>

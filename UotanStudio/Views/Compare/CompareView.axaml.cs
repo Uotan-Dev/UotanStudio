@@ -764,6 +764,15 @@ public partial class CompareView : UserControl
             return;
         }
 
+        if (vm.IsHexEditorMode)
+        {
+            foreach (var editor in HexEditors())
+            {
+                editor.GoToOffset((long)index * 16);
+            }
+            return;
+        }
+
         if (vm.IsTextEditorMode)
         {
             foreach (var (editor, _) in EnumerateCompareEditors())
