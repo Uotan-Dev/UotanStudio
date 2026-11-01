@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,6 +22,39 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     private bool _isDirty;
     private bool _hasEditableRows;
     private bool _loadingEditorText;
+    private readonly SemaphoreSlim _treeExpansionLock = new(1, 1);
+    [ObservableProperty] private int _selectedIndex = -1;
+
+    partial void OnSelectedIndexChanged(int value)
+    {
+        var max = Rows is null || Rows.Count == 0 ? -1 : Rows.Count - 1;
+        var clamped = value < -1 ? -1 : value > max ? max : value;
+        if (clamped != value)
+        {
+            SelectedIndex = clamped;
+            return;
+        }
+
+        UpdateRowIsSelected(clamped);
+
+        if (IsCompareSide && _owner.SelectedIndex != clamped)
+        {
+            _owner.SelectedIndex = clamped;
+        }
+    }
+
+    private void UpdateRowIsSelected(int targetIndex)
+    {
+        if (_rows is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            _rows[i].IsSelected = i == targetIndex;
+        }
+    }
     private CompareColumnSide _side;
 
     /// <summary>
@@ -70,6 +103,15 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
 
             _rows = value;
             OnPropertyChanged();
+            var max = value is null || value.Count == 0 ? -1 : value.Count - 1;
+            if (SelectedIndex > max)
+            {
+                SelectedIndex = max;
+            }
+            else
+            {
+                UpdateRowIsSelected(SelectedIndex);
+            }
             NotifyContentChanged();
         }
     }
@@ -606,13 +648,33 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
-        if (!node.IsExpanded)
+        await _treeExpansionLock.WaitAsync();
+        try
         {
-            await node.EnsureChildrenLoadedAsync();
-        }
+            if (!node.IsExpanded)
+            {
+                await node.EnsureChildrenLoadedAsync();
+            }
 
-        node.IsExpanded = !node.IsExpanded;
-        Rows = BuildBrowseRows();
+            node.IsExpanded = !node.IsExpanded;
+            var newRows = BuildBrowseRows();
+            var targetIndex = -1;
+            for (var i = 0; i < newRows.Count; i++)
+            {
+                if (ReferenceEquals(newRows[i].TreeNode, node))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            Rows = newRows;
+            SelectedIndex = targetIndex;
+        }
+        finally
+        {
+            _treeExpansionLock.Release();
+        }
     }
 
     /// <summary>
@@ -753,6 +815,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     {
         _loadCts.Cancel();
         _loadCts.Dispose();
+        _treeExpansionLock.Dispose();
         (_rows as IDisposable)?.Dispose();
     }
 

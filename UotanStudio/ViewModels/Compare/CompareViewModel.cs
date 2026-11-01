@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -51,8 +51,11 @@ public sealed partial class CompareViewModel : Document, ITool
         }
 
         Columns.CollectionChanged += OnColumnsChanged;
+        UpdateTitle();
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
+    private readonly SemaphoreSlim _treeExpansionLock = new(1, 1);
     private CancellationTokenSource _loadCts = new();
     private CompareTreeNodeViewModel? _compareTreeRoot;
     private ComparisonMetadata? _leftMetadata;
@@ -248,6 +251,16 @@ public sealed partial class CompareViewModel : Document, ITool
 
             _rows = value;
             OnPropertyChanged();
+            var max = value is null || value.Count == 0 ? -1 : value.Count - 1;
+            if (SelectedIndex > max)
+            {
+                SelectedIndex = max;
+            }
+            else
+            {
+                UpdateRowIsSelected(SelectedIndex);
+            }
+
             if (_leftColumn is not null)
             {
                 _leftColumn.Rows = value;
@@ -593,6 +606,32 @@ public sealed partial class CompareViewModel : Document, ITool
         if (clamped != value)
         {
             SelectedIndex = clamped;
+            return;
+        }
+
+        UpdateRowIsSelected(clamped);
+
+        if (_leftColumn is not null && _leftColumn.SelectedIndex != clamped)
+        {
+            _leftColumn.SelectedIndex = clamped;
+        }
+
+        if (_rightColumn is not null && _rightColumn.SelectedIndex != clamped)
+        {
+            _rightColumn.SelectedIndex = clamped;
+        }
+    }
+
+    private void UpdateRowIsSelected(int targetIndex)
+    {
+        if (_rows is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            _rows[i].IsSelected = i == targetIndex;
         }
     }
 
@@ -688,6 +727,7 @@ public sealed partial class CompareViewModel : Document, ITool
     /// </summary>
     public void Cleanup()
     {
+        LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         _loadCts.Cancel();
         _loadCts.Dispose();
         _loadCts = new CancellationTokenSource();
@@ -710,6 +750,12 @@ public sealed partial class CompareViewModel : Document, ITool
         ErrorMessage = string.Empty;
         NotifyColumnsChanged();
     }
+
+    partial void OnIsComparingChanged(bool value) => UpdateTitle();
+
+    private void OnLanguageChanged(object? sender, EventArgs e) => UpdateTitle();
+
+    private void UpdateTitle() => Title = LanguageService.Instance.GetString(IsComparing ? "Tab_Compare" : "Tab_MultiColumnBrowser");
 
     /// <summary>
     /// Start/stop-compare command: validates the two columns and starts the comparison while browsing, and ends
@@ -972,13 +1018,33 @@ public sealed partial class CompareViewModel : Document, ITool
             return;
         }
 
-        if (!node.IsExpanded)
+        await _treeExpansionLock.WaitAsync();
+        try
         {
-            await node.EnsureChildrenLoadedAsync();
-        }
+            if (!node.IsExpanded)
+            {
+                await node.EnsureChildrenLoadedAsync();
+            }
 
-        node.IsExpanded = !node.IsExpanded;
-        Rows = ComparisonRowBuilder.ForTree([_compareTreeRoot], compared: true);
+            node.IsExpanded = !node.IsExpanded;
+            var newRows = ComparisonRowBuilder.ForTree([_compareTreeRoot], compared: true);
+            var targetIndex = -1;
+            for (var i = 0; i < newRows.Count; i++)
+            {
+                if (ReferenceEquals(newRows[i].TreeNode, node))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            Rows = newRows;
+            SelectedIndex = targetIndex;
+        }
+        finally
+        {
+            _treeExpansionLock.Release();
+        }
     }
 
     /// <summary>

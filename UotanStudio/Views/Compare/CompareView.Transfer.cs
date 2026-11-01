@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -56,8 +56,20 @@ public partial class CompareView
             selection.Select(index);
         }
 
+        var column = FindColumnFor(source);
+        if (column is not null)
+        {
+            column.SelectedIndex = index;
+        }
+
+        if (DataContext is CompareViewModel vm && column is { IsCompareSide: true })
+        {
+            vm.SelectedIndex = index;
+        }
+
         if (e.ClickCount == 2)
         {
+            e.Handled = true;
             ActivateRow(row, list);
             return;
         }

@@ -420,6 +420,9 @@
   <data name="Tab_Compare" xml:space="preserve">
     <value>对比</value>
   </data>
+  <data name="Tab_MultiColumnBrowser" xml:space="preserve">
+    <value>多列文件浏览</value>
+  </data>
   <data name="Menu_MultiColumnFileBrowser" xml:space="preserve">
     <value>多列文件浏览器</value>
   </data>
@@ -2304,6 +2307,12 @@
   </data>
   <data name="Compare_AddFolder" xml:space="preserve">
     <value>添加文件夹</value>
+  </data>
+  <data name="Compare_DeviceFiles" xml:space="preserve">
+    <value>设备文件</value>
+  </data>
+  <data name="Compare_RemoteFiles" xml:space="preserve">
+    <value>远程文件</value>
   </data>
   <data name="Compare_PathPlaceholder" xml:space="preserve">
     <value>输入目录或文件路径</value>

@@ -68,6 +68,8 @@
                 IsVisible="{Binding LeftTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
                 IsVisible="{Binding ShowLeftDiffBackground}" />
+        <Border Grid.ColumnSpan="2" Background="{DynamicResource ListBoxItemSelectedBackground}"
+                IsVisible="{Binding IsSelected}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
@@ -128,6 +130,8 @@
                 IsVisible="{Binding RightTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
                 IsVisible="{Binding ShowRightDiffBackground}" />
+        <Border Grid.ColumnSpan="2" Background="{DynamicResource ListBoxItemSelectedBackground}"
+                IsVisible="{Binding IsSelected}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
@@ -274,6 +278,7 @@
           <ListBox x:Name="LeftCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowLeftCells}"
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
                    SelectionMode="Single"
+                   SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                    AutoScrollToSelectedItem="False" Background="Transparent"
                    KeyDown="OnRowListKeyDown"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -285,6 +290,7 @@
           <ListBox x:Name="RightCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowRightCells}"
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
                    SelectionMode="Single"
+                   SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                    AutoScrollToSelectedItem="False" Background="Transparent"
                    KeyDown="OnRowListKeyDown"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -365,6 +371,16 @@
       <Setter Property="Margin" Value="0" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.compare-rows > ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.compare-rows > ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.compare-rows > ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
   </UserControl.Styles>
 
@@ -410,9 +426,24 @@
                 <avalonia:CloseCircle IsVisible="{Binding IsComparing}" />
               </Panel>
             </Button>
-            <Button Classes="Small" Click="OnAddFoldersClick"
+            <Button Classes="Small"
+                    PointerEntered="OnAddButtonPointerEntered"
                     ToolTip.Tip="{DynamicResource Compare_AddFolder}"
                     AutomationProperties.Name="{DynamicResource Compare_AddFolder}">
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="{DynamicResource Compare_DeviceFiles}" Click="OnDeviceFilesClick">
+                    <MenuItem.Icon>
+                      <avalonia:Mobile Width="16" Height="16" />
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="{DynamicResource Compare_RemoteFiles}" Click="OnRemoteFilesClick">
+                    <MenuItem.Icon>
+                      <avalonia:Internet Width="16" Height="16" />
+                    </MenuItem.Icon>
+                  </MenuItem>
+                </MenuFlyout>
+              </Button.Flyout>
               <avalonia:FolderAdd />
             </Button>
           </StackPanel>
