@@ -7,7 +7,6 @@ using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Services.Ui.Workspace.Documents;
 
