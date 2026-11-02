@@ -91,15 +91,6 @@ public partial class FlashView : UserControl
         PageScroll.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
     }
 
-    private void OnDeviceStatusGridSizeChanged(object? sender, SizeChangedEventArgs e)
-    {
-        if (e.WidthChanged && double.IsFinite(e.NewSize.Width) && e.NewSize.Width > 0 &&
-            sender is DataGrid { Columns.Count: > 0 } grid)
-        {
-            grid.Columns[0].MaxWidth = Math.Max(1, e.NewSize.Width / 2);
-        }
-    }
-
     private void UpdateResponsiveLayout()
     {
         if (Bounds.Width <= 0)
@@ -335,7 +326,12 @@ public partial class FlashView : UserControl
     private void OnRkGetStorageClick(object? sender, RoutedEventArgs e) => _model.OnRkGetStorageClick(sender, e);
     private void OnRkSwitchStorageClick(object? sender, RoutedEventArgs e) => _model.OnRkSwitchStorageClick(sender, e);
     private void OnRkEraseFlashClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseFlashClick(sender, e);
+    private void OnRkEraseSystemClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseSystemClick(sender, e);
+    private void OnRkLowerFormatClick(object? sender, RoutedEventArgs e) => _model.OnRkLowerFormatClick(sender, e);
+    private void OnRkEraseUserDataClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseUserDataClick(sender, e);
+    private void OnRkUserSectorMapClick(object? sender, RoutedEventArgs e) => _model.OnRkUserSectorMapClick(sender, e);
     private void OnRkLbaReadClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaReadClick(sender, e);
     private void OnRkLbaWriteClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaWriteClick(sender, e);
     private void OnRkEraseSectorsClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseSectorsClick(sender, e);
+    private void OnRkReadPartitionsClick(object? sender, RoutedEventArgs e) => _model.OnRkReadPartitionsClick(sender, e);
 }

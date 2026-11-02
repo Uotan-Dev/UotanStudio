@@ -429,15 +429,14 @@
                                 <TextBlock Text="{DynamicResource Flash_DeviceStatusEmpty}" FontSize="12" Opacity="0.6"
                                            Margin="6,3" IsVisible="{Binding !DeviceStatus.Count}" />
                                 <DataGrid Name="DeviceStatusGrid" ItemsSource="{Binding DeviceStatus}"
-                                          IsVisible="{Binding !!DeviceStatus.Count}" MaxHeight="168"
+                                          IsVisible="{Binding !!DeviceStatus.Count}" MaxHeight="260"
                                           AutoGenerateColumns="False" IsReadOnly="True"
-                                          HeadersVisibility="None" GridLinesVisibility="Horizontal"
+                                          HeadersVisibility="None" GridLinesVisibility="None"
                                           CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="False"
-                                          MinColumnWidth="0" RowHeight="28"
+                                          MinColumnWidth="0"
                                           HorizontalAlignment="Stretch" HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto"
                                           Background="Transparent" BorderThickness="0" Margin="0" Padding="0"
-                                          SizeChanged="OnDeviceStatusGridSizeChanged"
                                           AutomationProperties.Name="{DynamicResource Flash_DeviceStatus}">
                                     <DataGrid.Styles>
                                         <Style Selector="DataGridCell">
@@ -445,14 +444,17 @@
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                             <Setter Property="VerticalContentAlignment" Value="Stretch" />
                                         </Style>
+                                        <Style Selector="DataGridRow">
+                                            <Setter Property="MinHeight" Value="0" />
+                                        </Style>
                                     </DataGrid.Styles>
                                     <DataGrid.Columns>
-                                        <DataGridTemplateColumn Width="Auto" MaxWidth="10000">
+                                        <DataGridTemplateColumn Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate x:DataType="vm:FlashDeviceStatusEntry">
                                                     <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
-                                                               Margin="6,3" Opacity="0.75" VerticalAlignment="Center"
-                                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+                                                               Margin="6,2" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                               IsVisible="{Binding Name, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                                         <ToolTip.Tip>
                                                             <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxWidth="480" />
                                                         </ToolTip.Tip>
@@ -460,12 +462,11 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTemplateColumn Width="*">
+                                        <DataGridTemplateColumn Width="3*">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate x:DataType="vm:FlashDeviceStatusEntry">
-                                                    <TextBlock Text="{Binding Value}" FontSize="13" Margin="6,3"
-                                                               VerticalAlignment="Center" TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis" MaxLines="1">
+                                                    <TextBlock Text="{Binding Value}" FontSize="13" Margin="6,2"
+                                                               VerticalAlignment="Center" TextWrapping="Wrap">
                                                         <ToolTip.Tip>
                                                             <ScrollViewer MaxWidth="480" MaxHeight="320"
                                                                           HorizontalScrollBarVisibility="Disabled"
@@ -800,6 +801,22 @@
                                         Click="OnRkEraseFlashClick"
                                         Content="{DynamicResource Flash_RkEraseFlash}"
                                         AutomationProperties.Name="{DynamicResource Flash_RkEraseFlash}" />
+                                <Button Name="RkEraseSystemButton" Classes="pane-action"
+                                        Click="OnRkEraseSystemClick"
+                                        Content="{DynamicResource Flash_RkEraseSystem}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseSystem}" />
+                                <Button Name="RkLowerFormatButton" Classes="pane-action"
+                                        Click="OnRkLowerFormatClick"
+                                        Content="{DynamicResource Flash_RkLowerFormat}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkLowerFormat}" />
+                                <Button Name="RkEraseUserDataButton" Classes="pane-action"
+                                        Click="OnRkEraseUserDataClick"
+                                        Content="{DynamicResource Flash_RkEraseUserData}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseUserData}" />
+                                <Button Name="RkUserSectorMapButton" Classes="pane-action"
+                                        Click="OnRkUserSectorMapClick"
+                                        Content="{DynamicResource Flash_RkUserSectorMap}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkUserSectorMap}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,2">
@@ -841,6 +858,10 @@
                                         Click="OnRkExportConfigClick"
                                         Content="{DynamicResource Flash_RkExportConfig}"
                                         AutomationProperties.Name="{DynamicResource Flash_RkExportConfig}" />
+                                <Button Name="RkReadPartitionsButton" Classes="pane-action"
+                                        Click="OnRkReadPartitionsClick"
+                                        Content="{DynamicResource Flash_RkReadPartitions}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkReadPartitions}" />
                             </StackPanel>
                         </Expander>
                         <!-- 镜像操作分类 -->
