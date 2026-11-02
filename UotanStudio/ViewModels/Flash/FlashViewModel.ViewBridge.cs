@@ -35,6 +35,7 @@ public sealed partial class FlashViewModel
         CaptureControlIntent();
         InitializeSurface();
         RefreshDeviceUiGate();
+        RefreshAdbSuGate();
     }
 
     /// <summary>
@@ -99,6 +100,7 @@ public sealed partial class FlashViewModel
         ApplyDeviceProtocolExpansion(SelectedDevice?.Protocol);
         UpdateObservedDeviceInfo();
         UpdateEdlButton();
+        RefreshAdbSuGate();
     }
 
     /// <summary>
