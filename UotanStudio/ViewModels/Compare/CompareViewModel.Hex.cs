@@ -1,4 +1,5 @@
 using UotanStudio.Services;
+using UotanStudio.Services.Compare;
 
 namespace UotanStudio.ViewModels.Compare;
 
@@ -20,8 +21,8 @@ public partial class CompareViewModel
             {
                 return false;
             }
-            var left = await ReadHexBytesAsync(_fileLeftPath, leftLength, ct);
-            var right = await ReadHexBytesAsync(_fileRightPath, rightLength, ct);
+            var left = await HexFileEditService.ReadAsync(_fileLeftPath, leftLength, ct);
+            var right = await HexFileEditService.ReadAsync(_fileRightPath, rightLength, ct);
             var session = await Task.Run(() => new CompareHexEditSession(left, right, ct), ct);
             ct.ThrowIfCancellationRequested();
             _hexEditSession = session;
@@ -33,23 +34,6 @@ public partial class CompareViewModel
         UpdateHexSummary();
         NotifyColumnsCompareState();
         return true;
-    }
-
-    private static async Task<byte[]> ReadHexBytesAsync(string path, long expectedLength, CancellationToken ct)
-    {
-        if (path.Length == 0)
-        {
-            return [];
-        }
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
-            64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        if (stream.Length != expectedLength || stream.Length > CompareHexEditSession.MaximumTotalBytes)
-        {
-            throw new IOException("The file length changed while loading the comparison.");
-        }
-        var bytes = new byte[(int)stream.Length];
-        await stream.ReadExactlyAsync(bytes, ct);
-        return bytes;
     }
 
     internal void HexBytesEdited(CompareColumnSide side, int offset, int count)
@@ -106,11 +90,9 @@ public partial class CompareViewModel
     {
         var revision = leftSide ? session.LeftRevision : session.RightRevision;
         var bytes = (byte[])(leftSide ? session.Left : session.Right).Clone();
-        var temporary = path + ".save-" + Guid.NewGuid().ToString("N");
         try
         {
-            await File.WriteAllBytesAsync(temporary, bytes);
-            File.Move(temporary, path, overwrite: true);
+            await HexFileEditService.SaveAsync(path, bytes, CancellationToken.None);
             if (ReferenceEquals(session, _hexEditSession))
             {
                 if (revision == (leftSide ? session.LeftRevision : session.RightRevision))
@@ -124,13 +106,6 @@ public partial class CompareViewModel
         {
             ReportError(UserError.Describe(ex));
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
-        }
-        finally
-        {
-            if (File.Exists(temporary))
-            {
-                File.Delete(temporary);
-            }
         }
     }
 }

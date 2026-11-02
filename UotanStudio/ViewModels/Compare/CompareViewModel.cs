@@ -217,6 +217,7 @@ public sealed partial class CompareViewModel : Document, ITool
                 return;
             }
 
+            _hexNavigationOffset = -1;
             _rows = value;
             OnPropertyChanged();
             var max = value is null || value.Count == 0 ? -1 : value.Count - 1;
@@ -583,16 +584,25 @@ public sealed partial class CompareViewModel : Document, ITool
         }
     }
 
+    private CompareRowViewModel? _selectedRow;
+
     private void UpdateRowIsSelected(int targetIndex)
     {
-        if (_rows is null)
+        if (_selectedRow is not null)
         {
-            return;
+            _selectedRow.IsSelected = false;
         }
-
-        for (var i = 0; i < _rows.Count; i++)
+        if (_rows is CompareHexRowCollection hexRows)
+        {
+            _selectedRow = null;
+            hexRows.SetSelectedIndex(targetIndex);
+            return;
+        }
+        _selectedRow = _rows is not null && targetIndex >= 0 && targetIndex < _rows.Count
+            ? _rows[targetIndex] : null;
+        if (_selectedRow is not null)
         {
-            _rows[i].IsSelected = i == targetIndex;
+            _selectedRow.IsSelected = true;
         }
     }
 
@@ -757,60 +767,6 @@ public sealed partial class CompareViewModel : Document, ITool
         }
 
         await StartCompareAsync(allowSingleSide: false);
-    }
-
-    /// <summary>
-    /// Next-diff command: in text/hex mode finds the next diff row after the selected one and selects it,
-    /// wrapping around.
-    /// <para>下一处差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
-    /// </summary>
-    [RelayCommand]
-    private void NextDiff()
-    {
-        if (Mode is not (CompareMode.Text or CompareMode.Binary) || Rows is null || Rows.Count == 0)
-        {
-            return;
-        }
-
-        var current = SelectedIndex >= 0 ? SelectedIndex : -1;
-        for (var i = 1; i <= Rows.Count; i++)
-        {
-            var idx = (current + i + Rows.Count) % Rows.Count;
-            if (IsHexEditorMode ? _hexEditSession!.IsRowDifferent(idx) : Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
-            {
-                SelectedIndex = idx;
-                ScrollToIndex = -1;
-                ScrollToIndex = idx;
-                return;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Previous-diff command: in text/hex mode finds the previous diff row before the selected one and selects
-    /// it, wrapping around.
-    /// <para>上一处差异命令：在文本/十六进制模式下从选中行之前查找差异行并选中，绕回循环。</para>
-    /// </summary>
-    [RelayCommand]
-    private void PrevDiff()
-    {
-        if (Mode is not (CompareMode.Text or CompareMode.Binary) || Rows is null || Rows.Count == 0)
-        {
-            return;
-        }
-
-        var current = SelectedIndex >= 0 ? SelectedIndex : Rows.Count;
-        for (var i = 1; i <= Rows.Count; i++)
-        {
-            var idx = ((current - i) % Rows.Count + Rows.Count) % Rows.Count;
-            if (IsHexEditorMode ? _hexEditSession!.IsRowDifferent(idx) : Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
-            {
-                SelectedIndex = idx;
-                ScrollToIndex = -1;
-                ScrollToIndex = idx;
-                return;
-            }
-        }
     }
 
     /// <summary>

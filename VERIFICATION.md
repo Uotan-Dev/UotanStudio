@@ -2,6 +2,27 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## 差异导航与边界提示实测（2026-11-02，Windows x64）
+
+- 上一差异/下一差异使用上/下双折线图标，与返回上级目录及复制到左侧区分。导航不循环；到首尾后继续点击分别弹出本地化的“已经是第一个差异。”/“已经是最后一个差异。”，没有差异时提示“没有差异。”。
+- 文本及只读十六进制按连续差异行区段跳转；可编辑十六进制定位到连续差异字节区段的首字节，同一行内分开的差异可分别跳转。手动移动编辑光标会更新导航位置，程序定位期间抑制两侧光标回写。
+- 选中行更新仅处理旧/新选中行或固定容量的十六进制行缓存，不遍历并物化整个懒加载集合；只读十六进制导航直接查询差异位图，不为查找读取文件行。
+- 构建：`dotnet build UotanStudio.slnx -c Debug --no-restore --nologo -clp:ErrorsOnly -p:OutputPath=bin/hex-compare-check/` 成功，0 错误、2 条既有测试警告。全解决方案 whitespace/style 格式检查及 `git diff --check` 通过。
+- 定向回归：37 通过、0 失败、0 跳过；其中新增 14 项导航用例覆盖同一行多处差异、跨行连续差异、首尾重复点击、单侧尾部、无差异、光标移动、编辑后差异更新、文本差异区段、位图导航和行缓存淘汰。
+- 测试命令：`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug -p:OutputPath=bin/hex-compare-check/ --filter "FullyQualifiedName~DifferenceNavigationTests|FullyQualifiedName~BrowseHexEditorTests|FullyQualifiedName~CompareDocumentColumnsTests.Hex|FullyQualifiedName~CompareDocumentColumnsTests.TextComparison|FullyQualifiedName~CompareDocumentColumnsTests.BrowsingTextFile|FullyQualifiedName~LocaleDictionaryTests" --minimum-expected-tests 37 --timeout 3m`。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained --nologo -v:quiet` 成功；仅有既有 Satori GC 实验提示、第三方依赖及 Avalonia/Dock 生成绑定的 IL2026/IL2104/IL3053，没有指向本次导航改动的裁剪/AOT 警告。发布后 `dotnet restore UotanStudio.slnx -p:Configuration=Debug --nologo -v:quiet` 成功。
+- 未验证边界：完整测试集未运行；桌面键鼠交互、弹出提示的实际呈现及视觉布局未做人工实测。目录测试 UI Dispatcher 阻塞与既有架构白名单问题见后文。
+
+## 多列十六进制独立浏览编辑实测（2026-11-02，Windows x64）
+
+- 未开启对比的二进制列复用 `HexViewer`，每列持有独立字节缓冲，不传入对侧字节、不计算差异、不与其他列同步滚动；列头保存按钮及 Ctrl+S 保存该列已加载的文件。地址框尚未确认的新路径不会改变保存目标。
+- 浏览与对比共用 `HexFileEditService` 的有界读取和快照原子保存。浏览列单文件编辑上限为 256 MiB，超限保持按需读取的只读行和提示；新加载、清空、关闭列时释放编辑缓冲，读取和浏览保存贯穿取消令牌，保存失败保留修改以便重试。
+- 构建：`dotnet build UotanStudio.slnx -c Debug --no-restore --nologo -p:OutputPath=bin/hex-compare-check/` 成功，0 错误、2 条既有测试警告。全解决方案 `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与 `style` 检查均通过。
+- 定向回归：23 通过、0 失败、0 跳过；包括新增 7 项浏览编辑测试，以及十六进制对比、文本编辑和本地化回归。新增覆盖多列与同文件重复列的缓冲隔离、保存路径绑定、失败重试、切换文本与清空、已保存文件的浏览/对比切换、取消写入清理、文件长度变化拒绝。
+- 测试命令：`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug -p:OutputPath=bin/hex-compare-check/ --filter "FullyQualifiedName~BrowseHexEditorTests|FullyQualifiedName~CompareDocumentColumnsTests.Hex|FullyQualifiedName~CompareDocumentColumnsTests.TextComparison|FullyQualifiedName~CompareDocumentColumnsTests.BrowsingTextFile|FullyQualifiedName~LocaleDictionaryTests" --minimum-expected-tests 23 --timeout 3m`。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，仅有既有 Satori GC 实验提示与第三方依赖的 IL2026/IL2104/IL3053；没有指向本次新增代码的裁剪/AOT 警告。发布后 `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 成功。
+- 未验证边界：未重新运行完整测试集，未执行桌面窗口的键鼠、剪贴板与视觉实测；目录测试 UI Dispatcher 阻塞与既有架构白名单问题见后文。
+
 ## 十六进制对比工具栏实测（2026-11-02，Windows x64）
 
 - 二进制对比直接显示十六进制内容；工具栏没有「十六进制原始数据」切换按钮，宿主不保留该按钮的命令、可见性属性、元数据视图枚举或专用中英资源键。独立文件浏览所用的元数据解析服务保持可用。

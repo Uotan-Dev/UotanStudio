@@ -182,12 +182,12 @@
               <Button Classes="Small" Command="{Binding PrevDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
                       ToolTip.Tip="{DynamicResource Compare_PrevDiff}"
                       AutomationProperties.Name="{DynamicResource Compare_PrevDiff}">
-                <avalonia:ArrowUp />
+                <avalonia:ChevronUpDouble />
               </Button>
               <Button Classes="Small" Command="{Binding NextDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
                       ToolTip.Tip="{DynamicResource Compare_NextDiff}"
                       AutomationProperties.Name="{DynamicResource Compare_NextDiff}">
-                <avalonia:ArrowDown />
+                <avalonia:ChevronDownDouble />
               </Button>
             </StackPanel>
             <TextBox Grid.Column="1" Classes="Small" Height="22" MinHeight="0" FontSize="11" Padding="4,0"
@@ -223,7 +223,7 @@
         <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
 
         <Grid>
-          <controls:HexViewer IsVisible="{Binding IsCompareHexEditorVisible}"
+          <controls:HexViewer IsVisible="{Binding IsHexEditorVisible}"
                               Data="{Binding HexBytes}" ComparisonData="{Binding OtherHexBytes}"
                               Loaded="OnHexEditorLoaded" Unloaded="OnHexEditorUnloaded"
                               KeyDown="OnHexEditorKeyDown" />

@@ -1,6 +1,7 @@
 # Comparison services
 
-`IComparisonService` is the document's file-operation boundary. `ComparisonService`
+`IComparisonService` handles directory, text, metadata and comparison operations.
+`ComparisonService`
 returns plain directory items, text lines, differences and `ComparisonMetadata`;
 it does not reference ViewModels, controls, localization or document state.
 Its constructor receives algorithm instances, format detection, the format catalog
@@ -24,6 +25,20 @@ resolves its icons. Starting a comparison (`ToggleCompareCommand`) requires exac
 two columns with content, assigns them the `Left`/`Right` side and shares one row
 list with both; ending the comparison releases the result and returns both columns
 to browsing. Only the two compared columns share scrolling and selection.
+
+Difference navigation moves between contiguous changed ranges without wrapping. Editable
+hex comparisons locate the exact first byte of each range, including separate ranges
+within one row; text and read-only hex comparisons navigate changed row ranges.
+Navigation follows the current editor caret and reports first/last/no-difference states
+through a view-scoped toast. Selection updates only the previous and new row, or the
+bounded hex row cache, without materializing the entire lazy collection. Read-only hex
+navigation reads the existing difference bitmap without loading file rows.
+
+Binary browsing columns use the same hex editor with independent byte buffers,
+without comparison data or synchronized scrolling. Each column edits up to 256 MiB;
+larger files retain lazy read-only rows. Saves target the loaded file even when the
+path input has been changed but not loaded. Browsing and comparison share bounded
+reads and atomic snapshot writes through `HexFileEditService`.
 
 A folder comparison keeps the browsing look instead of flattening the tree: both
 columns show the same collapsed, lazily expanded trees with the explorer glyphs. The
@@ -90,4 +105,6 @@ another folder row copies it there.
 format priority, input limits, BOM handling, resource release, asynchronous metadata,
 failure policy, concurrent requests and cancellation. Existing text, binary and
 folder comparison tests continue to cover the underlying algorithms. These tests
-do not validate display bindings, navigation or rendered layout.
+do not validate display bindings or rendered layout. `DifferenceNavigationTests`
+covers navigation commands, byte and row ranges, caret positions, boundary notices,
+editing changes, bitmap-only navigation and selection after cache eviction.

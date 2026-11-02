@@ -39,16 +39,25 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
     }
 
+    private CompareRowViewModel? _selectedRow;
+
     private void UpdateRowIsSelected(int targetIndex)
     {
-        if (_rows is null)
+        if (_selectedRow is not null)
         {
-            return;
+            _selectedRow.IsSelected = false;
         }
-
-        for (var i = 0; i < _rows.Count; i++)
+        if (_rows is CompareHexRowCollection hexRows)
+        {
+            _selectedRow = null;
+            hexRows.SetSelectedIndex(targetIndex);
+            return;
+        }
+        _selectedRow = _rows is not null && targetIndex >= 0 && targetIndex < _rows.Count
+            ? _rows[targetIndex] : null;
+        if (_selectedRow is not null)
         {
-            _rows[i].IsSelected = i == targetIndex;
+            _selectedRow.IsSelected = true;
         }
     }
     private CompareColumnSide _side;
@@ -172,6 +181,8 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
 
             if (value != CompareColumnSide.Browse)
             {
+                _loadCts.Cancel();
+                ClearBrowseHex();
                 IsTextEditorVisible = false;
             }
         }
@@ -212,21 +223,21 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <para>是否显示空态提示（本列尚无内容：既没有行列表，也没有可编辑文本内容）。</para>
     /// </summary>
     /// <value>Whether the empty-state hint is shown. <para>是否显示空态提示。</para></value>
-    public bool ShowHint => (Rows is null || Rows.Count == 0) && !IsTextEditorVisible && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
+    public bool ShowHint => (Rows is null || Rows.Count == 0) && !IsTextEditorVisible && !IsCompareTextEditorVisible && !IsHexEditorVisible;
 
     /// <summary>
     /// Whether the left-cell row list is shown (browsing columns and the compare left column).
     /// <para>是否显示左侧单元格行列表（浏览列与对比左列）。</para>
     /// </summary>
     /// <value>Whether the left-cell row list is shown. <para>是否显示左侧单元格行列表。</para></value>
-    public bool ShowLeftCells => Rows is not null && !UsesRightCells && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
+    public bool ShowLeftCells => Rows is not null && !UsesRightCells && !IsCompareTextEditorVisible && !IsHexEditorVisible;
 
     /// <summary>
     /// Whether the right-cell row list is shown (the compare right column only).
     /// <para>是否显示右侧单元格行列表（仅对比右列）。</para>
     /// </summary>
     /// <value>Whether the right-cell row list is shown. <para>是否显示右侧单元格行列表。</para></value>
-    public bool ShowRightCells => Rows is not null && UsesRightCells && !IsCompareTextEditorVisible && !IsCompareHexEditorVisible;
+    public bool ShowRightCells => Rows is not null && UsesRightCells && !IsCompareTextEditorVisible && !IsHexEditorVisible;
 
     /// <summary>
     /// Whether this column shows the comparison's per-side text diff during a text comparison (one aligned
@@ -236,21 +247,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <value>Whether this column shows the compare-side text diff. <para>本列是否显示对比侧的文本差异。</para></value>
     public bool IsCompareTextEditorVisible => IsCompareSide && _owner.IsTextEditorMode;
 
-    /// <summary>Whether the shared hex editor is visible.<para>是否显示共享十六进制编辑器。</para></summary>
-    public bool IsCompareHexEditorVisible => IsCompareSide && _owner.IsHexEditorMode;
-
-    /// <summary>Whether the file pair exceeds the editable byte limit.<para>文件对是否超出可编辑字节上限。</para></summary>
-    public bool ShowHexReadOnlyHint => IsCompareSide && _owner.IsBinaryMode
-        && !_owner.IsHexEditorMode && Rows is CompareHexRowCollection;
-
-    /// <summary>The editable bytes for this side.<para>本侧可编辑的字节。</para></summary>
-    public byte[]? HexBytes => IsCompareSide ? _owner.GetHexBytes(Side) : null;
-
-    /// <summary>The counterpart bytes used for highlighting.<para>用于高亮的对侧字节。</para></summary>
-    public byte[]? OtherHexBytes => IsCompareSide ? _owner.GetHexBytes(UsesRightCells ? CompareColumnSide.Left : CompareColumnSide.Right) : null;
-
-    internal void HexBytesEdited(int offset, int count) => _owner.HexBytesEdited(Side, offset, count);
-
     /// <summary>
     /// Whether the previous/next-difference buttons are shown in compare mode (text and hex comparisons).
     /// <para>对比模式下是否显示上一处/下一处差异按钮（文本与十六进制对比）。</para>
@@ -427,6 +423,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        if (IsBrowsingHexEditor)
+        {
+            await SaveBrowseHexAsync();
+            return;
+        }
+
         if (IsTextEditorVisible)
         {
             var editorPath = (Path ?? string.Empty).Trim();
@@ -481,8 +483,8 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
-    /// Marks this column's own text file as modified while browsing.
-    /// <para>浏览状态下把本列自己的文本文件标记为已修改。</para>
+    /// Marks this column's file as modified while browsing.
+    /// <para>浏览状态下把本列文件标记为已修改。</para>
     /// </summary>
     internal void MarkDirty()
     {
@@ -890,7 +892,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
                 _ownRows = null;
                 _isDirty = false;
                 _hasEditableRows = false;
-                Rows = new CompareHexRowCollection(path, string.Empty, []);
+                await LoadBrowseHexAsync(path, ct);
             }
 
             NotifyContentChanged();
@@ -967,6 +969,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         _loadCts.Dispose();
         _treeExpansionLock.Dispose();
         (_rows as IDisposable)?.Dispose();
+        ClearBrowseHex();
     }
 
     /// <summary>
@@ -1007,6 +1010,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         _loadCts.Cancel();
         _loadCts.Dispose();
         _loadCts = new CancellationTokenSource();
+        ClearBrowseHex();
         return _loadCts.Token;
     }
 
@@ -1047,12 +1051,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         OnPropertyChanged(nameof(ShowDiffNavigation));
         OnPropertyChanged(nameof(RowSelectionMode));
         OnPropertyChanged(nameof(IsCompareTextEditorVisible));
-        OnPropertyChanged(nameof(IsCompareHexEditorVisible));
-        OnPropertyChanged(nameof(ShowHexReadOnlyHint));
-        OnPropertyChanged(nameof(HexBytes));
-        OnPropertyChanged(nameof(OtherHexBytes));
-        OnPropertyChanged(nameof(ShowHint));
-        OnPropertyChanged(nameof(ShowLeftCells));
-        OnPropertyChanged(nameof(ShowRightCells));
+        NotifyHexStateChanged();
     }
 }

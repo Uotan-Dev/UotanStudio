@@ -2245,6 +2245,15 @@ Author: 暮间雾
   <data name="Compare_NextDiff" xml:space="preserve">
     <value>Next Difference</value>
   </data>
+  <data name="Compare_FirstDifference" xml:space="preserve">
+    <value>Already at the first difference.</value>
+  </data>
+  <data name="Compare_LastDifference" xml:space="preserve">
+    <value>Already at the last difference.</value>
+  </data>
+  <data name="Compare_NoDifferences" xml:space="preserve">
+    <value>No differences found.</value>
+  </data>
   <data name="Compare_PrevDiff" xml:space="preserve">
     <value>Previous Difference</value>
   </data>
@@ -2252,7 +2261,7 @@ Author: 暮间雾
     <value>{0} differing lines · {1} lines total</value>
   </data>
   <data name="Compare_HexReadOnlyLimit" xml:space="preserve">
-    <value>Read-only hex comparison: editing supports up to 256 MiB across both files.</value>
+    <value>Read-only hex view: content exceeds the 256 MiB editing limit.</value>
   </data>
   <data name="Compare_HexSummary" xml:space="preserve">
     <value>{0} differing bytes · {1} ranges</value>

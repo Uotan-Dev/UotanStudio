@@ -385,6 +385,7 @@ public partial class CompareView
             editor.TextArea.TextView.BackgroundRenderers.Add(highlighter);
             editor.Document.Changed += OnCompareEditorChanged;
             editor.TextArea.SelectionChanged += OnCompareEditorSelectionChanged;
+            editor.TextArea.Caret.PositionChanged += OnCompareEditorCaretChanged;
             editor.AddHandler(ContextRequestedEvent, OnEditorContextRequested, RoutingStrategies.Tunnel);
             editor.AddHandler(KeyDownEvent, OnCompareEditorKeyDown, RoutingStrategies.Tunnel);
             if (ResolveEditorScrollViewer(editor) is { } scrollViewer)
@@ -527,8 +528,26 @@ public partial class CompareView
         editor.ScrollToLine(number);
     }
 
-    /// <summary>编辑器选区变化 → 同步成行选择，顶部复制按钮据此复制到另一侧。</summary>
-    /// Selection changes mirror into the row selection so the toolbar's copy buttons know which lines to copy.
+    /// <summary>Tracks the active caret row for difference navigation.
+    /// <para>跟踪活动光标所在行，供差异导航使用。</para></summary>
+    private void OnCompareEditorCaretChanged(object? sender, EventArgs e)
+    {
+        if (_syncingEditors || DataContext is not CompareViewModel { IsTextEditorMode: true } vm)
+        {
+            return;
+        }
+        foreach (var (editor, _) in EnumerateCompareEditors())
+        {
+            if (ReferenceEquals(editor.TextArea.Caret, sender))
+            {
+                vm.SelectedIndex = editor.TextArea.Caret.Line - 1;
+                return;
+            }
+        }
+    }
+
+    /// <summary>Mirrors selected lines for copying to the other side.
+    /// <para>同步选中的行，供复制到另一侧使用。</para></summary>
     private void OnCompareEditorSelectionChanged(object? sender, EventArgs e)
     {
         if (_syncingEditors || DataContext is not CompareViewModel vm || !vm.IsTextEditorMode

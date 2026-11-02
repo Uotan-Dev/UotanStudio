@@ -10,6 +10,7 @@ namespace UotanStudio.Views.Compare;
 public partial class CompareView
 {
     private bool _syncingHexScroll;
+    private bool _navigatingHex;
 
     private IEnumerable<HexViewer> HexEditors() => this.GetVisualDescendants().OfType<HexViewer>()
         .Where(viewer => viewer.IsVisible && viewer.DataContext is CompareColumnViewModel { IsCompareHexEditorVisible: true });
@@ -18,6 +19,7 @@ public partial class CompareView
     {
         if (sender is HexViewer viewer)
         {
+            viewer.CaretMoved += OnHexCaretMoved;
             viewer.RangeEdited += OnHexRangeEdited;
             viewer.ViewportChanged += OnHexViewportChanged;
         }
@@ -27,8 +29,37 @@ public partial class CompareView
     {
         if (sender is HexViewer viewer)
         {
+            viewer.CaretMoved -= OnHexCaretMoved;
             viewer.RangeEdited -= OnHexRangeEdited;
             viewer.ViewportChanged -= OnHexViewportChanged;
+        }
+    }
+
+    private void OnHexCaretMoved(HexViewer viewer, int offset)
+    {
+        if (!_navigatingHex && viewer.DataContext is CompareColumnViewModel { IsCompareHexEditorVisible: true }
+            && DataContext is CompareViewModel vm)
+        {
+            vm.SetHexNavigationPosition(offset);
+        }
+    }
+
+    private void NavigateHexEditors(CompareViewModel vm, int index)
+    {
+        _navigatingHex = true;
+        _syncingHexScroll = true;
+        try
+        {
+            var offset = vm.HexNavigationOffset >= 0 ? vm.HexNavigationOffset : (long)index * 16;
+            foreach (var editor in HexEditors())
+            {
+                editor.GoToOffset(offset);
+            }
+        }
+        finally
+        {
+            _syncingHexScroll = false;
+            _navigatingHex = false;
         }
     }
 
@@ -37,16 +68,20 @@ public partial class CompareView
         if (viewer.DataContext is CompareColumnViewModel column)
         {
             column.HexBytesEdited(offset, count);
-            foreach (var editor in HexEditors())
+            if (column.IsCompareHexEditorVisible)
             {
-                editor.RefreshComparison();
+                foreach (var editor in HexEditors())
+                {
+                    editor.RefreshComparison();
+                }
             }
         }
     }
 
     private void OnHexViewportChanged(HexViewer source)
     {
-        if (_syncingHexScroll || !source.IsVisible)
+        if (_syncingHexScroll || !source.IsVisible
+            || source.DataContext is not CompareColumnViewModel { IsCompareHexEditorVisible: true })
         {
             return;
         }

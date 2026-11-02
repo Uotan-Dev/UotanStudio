@@ -766,28 +766,34 @@ public partial class CompareView : UserControl
 
         if (vm.IsHexEditorMode)
         {
-            foreach (var editor in HexEditors())
-            {
-                editor.GoToOffset((long)index * 16);
-            }
+            NavigateHexEditors(vm, index);
             return;
         }
 
         if (vm.IsTextEditorMode)
         {
-            foreach (var (editor, _) in EnumerateCompareEditors())
+            _syncingEditors = true;
+            try
             {
-                var doc = editor.Document;
-                if (doc is null || doc.LineCount == 0)
+                foreach (var (editor, _) in EnumerateCompareEditors())
                 {
-                    continue;
+                    var doc = editor.Document;
+                    if (doc is null || doc.LineCount == 0)
+                    {
+                        continue;
+                    }
+                    var lineNumber = Math.Clamp(index + 1, 1, doc.LineCount);
+                    var docLine = doc.GetLineByNumber(lineNumber);
+                    editor.Select(docLine.Offset, docLine.Length);
+                    editor.CaretOffset = docLine.Offset;
+                    editor.ScrollToLine(lineNumber);
                 }
-
-                var lineNumber = Math.Clamp(index + 1, 1, doc.LineCount);
-                var docLine = doc.GetLineByNumber(lineNumber);
-                editor.CaretOffset = docLine.Offset;
-                editor.ScrollToLine(lineNumber);
+                vm.UpdateRowSelection([index]);
             }
+            finally
+            {
+                _syncingEditors = false;
+            }
             return;
         }
 
