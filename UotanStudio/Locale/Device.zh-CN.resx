@@ -75,6 +75,9 @@
   <data name="Device_RemoteAddress" xml:space="preserve">
     <value>IP:端口(默认5555)</value>
   </data>
+  <data name="Device_RemotePairingCode" xml:space="preserve">
+    <value>配对码</value>
+  </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>连接远程设备</value>
   </data>

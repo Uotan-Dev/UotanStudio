@@ -25,8 +25,10 @@ public partial class DeviceView : UserControl
 
     private void OnToolbarLayoutUpdated(object? sender, EventArgs e)
     {
-        const double minimumRemoteWidth = 312;
-        const double preferredRemoteWidth = 400;
+        var pairingWidth = RemotePairingCodeBox.IsVisible ? 100 : 0;
+        var qrWidth = QrPairingButton.IsVisible ? 36 : 0;
+        var minimumRemoteWidth = 276 + pairingWidth + qrWidth;
+        var preferredRemoteWidth = 364 + pairingWidth + qrWidth;
         const double spacing = 16;
         var available = DeviceToolbarScrollViewer.Bounds.Width;
         if (available <= 0)

@@ -3241,6 +3241,7 @@ internal static class LocaleKeySets
         "Device_RemoteConnection",
         "Device_RemoteProtocol",
         "Device_RemoteAddress",
+        "Device_RemotePairingCode",
         "Device_RemoteConnect",
         "Device_RemoteCancel",
         "Device_RemoteInvalidAddress",

@@ -75,6 +75,9 @@
   <data name="Device_RemoteAddress" xml:space="preserve">
     <value>IP:port (default 5555)</value>
   </data>
+  <data name="Device_RemotePairingCode" xml:space="preserve">
+    <value>Pairing code</value>
+  </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>Connect remote device</value>
   </data>

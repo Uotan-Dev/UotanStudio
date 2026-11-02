@@ -29,6 +29,22 @@ public partial class DeviceViewModel
         }
     } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the manually entered ADB pairing code.
+    /// <para>获取或设置手动输入的 ADB 配对码。</para>
+    /// </summary>
+    public string RemotePairingCode
+    {
+        get;
+        set => SetProperty(ref field, value);
+    } = string.Empty;
+
+    /// <summary>
+    /// Gets whether the selected remote protocol supports ADB pairing controls.
+    /// <para>获取当前远程协议是否支持 ADB 配对控件。</para>
+    /// </summary>
+    public bool IsRemoteAdb => RemoteProtocolIndex == 0;
+
     public int RemoteProtocolIndex
     {
         get;
@@ -37,6 +53,8 @@ public partial class DeviceViewModel
             if (SetProperty(ref field, value))
             {
                 NotifyRemoteAddressChanged();
+                OnPropertyChanged(nameof(IsRemoteAdb));
+                OpenQrPairingCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -117,7 +135,7 @@ public partial class DeviceViewModel
     [RelayCommand(CanExecute = nameof(CanOpenQrPairing))]
     private async Task OpenQrPairingAsync()
     {
-        if (IsConnectionBusy)
+        if (!CanOpenQrPairing())
         {
             return;
         }
@@ -136,7 +154,7 @@ public partial class DeviceViewModel
         }
     }
 
-    private bool CanOpenQrPairing() => !IsConnectionBusy;
+    private bool CanOpenQrPairing() => IsRemoteAdb && !IsConnectionBusy;
 
     [RelayCommand(CanExecute = nameof(CanManageSelectedConnection))]
     private async Task ConnectAsync()
