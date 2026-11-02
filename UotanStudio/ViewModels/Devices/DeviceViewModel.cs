@@ -24,6 +24,19 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private const long EnrichmentRefreshMilliseconds = 30_000;
 
     /// <summary>
+    /// Window in milliseconds during which a selected endpoint a scan no longer reports keeps the selection instead of
+    /// handing it to another device; it covers the gap a mode switch opens between the node that leaves and the node
+    /// that replaces it.
+    /// <para>扫描不再报告的选中端点在这段毫秒窗口内保持选中，而不是把它交给其他设备；该窗口覆盖模式切换在
+    /// 离开的节点与替代节点之间留下的空档。</para>
+    /// </summary>
+    private const int SelectionHoldMilliseconds = 30_000;
+
+    private readonly TimeProvider _clock;
+    private DateTimeOffset _selectionHoldUntil;
+    private HashSet<string>? _selectionHoldBaseline;
+
+    /// <summary>
     /// Gets the active device panel singleton, shared by the main window and the
     /// workspace dock so no duplicate instance subscribes to device changes twice.
     /// <para>获取当前激活的设备面板单例，供主窗口与工作区停靠面板共享同一实例
@@ -198,7 +211,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// selection state with the device panel).
     /// <para>选中指定设备（顶栏选择器点选入口，与设备面板共享同一选择状态）。</para>
     /// </summary>
-    internal void SelectDevice(DeviceInfo? device) => SelectedDevice = device;
+    internal void SelectDevice(DeviceInfo? device)
+    {
+        ClearSelectionHold();
+        SelectedDevice = device;
+    }
 
     /// <summary>
     /// Gets the detail text of the selected device.
@@ -235,12 +252,14 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     internal DeviceViewModel(bool monitorDevices,
         Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task>? changeNetworkConnection = null,
         ILocalizer? localizer = null,
-        IUnifiedLog? log = null)
+        IUnifiedLog? log = null,
+        TimeProvider? clock = null)
     {
         _monitorDevices = monitorDevices;
         _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
         _localizer = localizer ?? LanguageService.Instance;
         _log = log ?? LogService.Instance;
+        _clock = clock ?? TimeProvider.System;
         Devices.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasDevices));
@@ -389,15 +408,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 }
             }
 
-            if (selectedKey is not null)
-            {
-                SelectedDevice = Devices.FirstOrDefault(x => x.Key == selectedKey);
-            }
-
-            if (SelectedDevice is null && Devices.Count > 0)
-            {
-                SelectedDevice = Devices[0];
-            }
+            ApplySelectionAfterScan(selectedKey);
 
             StatusText = Devices.Count == 0
                 ? _localizer.GetString("Device_NoDevices")
@@ -432,6 +443,104 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             IsRefreshing = false;
             OnPropertyChanged(nameof(HasNoDevices));
         }
+    }
+
+    /// <summary>
+    /// Arms the static wait a scan must respect while a device leaves the bus and comes back in another mode, so the
+    /// selection neither jumps to an unrelated device during the gap nor has to be restored by hand afterwards.
+    /// <para>开启扫描必须遵守的静态等待：设备离开总线并以另一种模式回来期间，选择既不会在空档跳到无关设备，
+    /// 也不需要在之后手工恢复。</para>
+    /// </summary>
+    /// <remarks>
+    /// Call this right after sending a stage-changing payload, such as a Rockchip maskrom loader: the maskrom node
+    /// disappears before the usbplug node enumerates, and both carry a different key because the switch rewrites the
+    /// serial and the OS container identity. The wait remembers which endpoints were known at that moment, so the one
+    /// endpoint that appears afterwards is recognised as the replacement rather than as an unrelated device.
+    /// <para>在发送会改变阶段的负载之后立刻调用（例如瑞芯微 maskrom 的 loader）：maskrom 节点先消失，之后
+    /// usbplug 节点才枚举出来，而切换会改写序列号与操作系统容器身份，使两者的键不同。该等待记录当时已知的端点，
+    /// 因此之后出现的那个端点会被认作替代节点，而不是无关设备。</para>
+    /// </remarks>
+    internal void BeginSelectionHold()
+    {
+        _selectionHoldBaseline = [.. Devices.Select(device => device.Key)];
+        _selectionHoldUntil = _clock.GetUtcNow() + TimeSpan.FromMilliseconds(SelectionHoldMilliseconds);
+    }
+
+    /// <summary>
+    /// Restores the selection after a scan: the entry with the captured key wins, an armed hold keeps the selection
+    /// across a mode switch, and only a settled disappearance hands the selection to another device.
+    /// <para>扫描后恢复选择：键匹配的条目优先；已开启的保持让选择跨越模式切换，只有确定消失后才把选择交给
+    /// 其他设备。</para>
+    /// </summary>
+    /// <param name="selectedKey">The key captured before the scan, or <see langword="null"/> when nothing was selected.
+    /// <para>扫描前捕获的键；没有选中项时为 <see langword="null"/>。</para></param>
+    internal void ApplySelectionAfterScan(string? selectedKey)
+    {
+        if (selectedKey is not null && Devices.FirstOrDefault(device => device.Key == selectedKey) is { } match)
+        {
+            SelectedDevice = match;
+            return;
+        }
+
+        if (selectedKey is not null && HoldSelectionAcrossModeSwitch())
+        {
+            return;
+        }
+
+        if (selectedKey is not null)
+        {
+            SelectedDevice = null;
+        }
+
+        if (SelectedDevice is null && Devices.Count > 0)
+        {
+            SelectedDevice = Devices[0];
+        }
+    }
+
+    /// <summary>
+    /// Keeps the current selection while an armed hold is still waiting for the device to come back, and adopts the
+    /// single endpoint that appeared since the hold was armed as its replacement.
+    /// <para>在已开启的保持仍等待设备回来期间保留当前选择，并把保持开启后出现的唯一端点认作它的替代节点。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the selection was settled by the hold; otherwise <see langword="false"/>.
+    /// <para>选择已由保持处理完毕时为 <see langword="true"/>；否则为 <see langword="false"/>。</para></returns>
+    private bool HoldSelectionAcrossModeSwitch()
+    {
+        if (_selectionHoldBaseline is not { } baseline)
+        {
+            return false;
+        }
+
+        if (_clock.GetUtcNow() >= _selectionHoldUntil)
+        {
+            _selectionHoldBaseline = null;
+            return false;
+        }
+
+        var appeared = Devices.Where(device => !baseline.Contains(device.Key)).Take(2).ToArray();
+        if (appeared.Length == 1)
+        {
+            _selectionHoldBaseline = null;
+            SelectedDevice = appeared[0];
+            _log.Write(LogLevel.Info, "DeviceManager",
+                $"Selected the device {appeared[0].Key} that came back after the mode switch.");
+            return true;
+        }
+
+        _log.Write(LogLevel.Info, "DeviceManager",
+            "Kept the selected device while it comes back in the switched mode.");
+        return true;
+    }
+
+    /// <summary>
+    /// Ends the selection hold; called whenever a selection is committed, because that commit already settled it.
+    /// <para>结束选择保持；每次提交选择时调用，因为那次提交已经确定了选择。</para>
+    /// </summary>
+    private void ClearSelectionHold()
+    {
+        _selectionHoldUntil = default;
+        _selectionHoldBaseline = null;
     }
 
     /// <summary>
