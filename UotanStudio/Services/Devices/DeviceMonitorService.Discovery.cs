@@ -122,6 +122,7 @@ public sealed partial class DeviceMonitorService
                     DeviceProtocolKind.Rkdl => RkdlState(info),
                     DeviceProtocolKind.Mtk => MtkState(info),
                     DeviceProtocolKind.Hdc => "device",
+                    DeviceProtocolKind.Diagnostic => "diag",
                     _ => string.Empty,
                 },
                 VendorId = info.VendorId,
@@ -459,6 +460,7 @@ public sealed partial class DeviceMonitorService
             "rkdl" => DeviceProtocolKind.Rkdl,
             "mtk" => DeviceProtocolKind.Mtk,
             "apple" => DeviceProtocolKind.Ios,
+            "diag" => DeviceProtocolKind.Diagnostic,
             _ => null
         };
 

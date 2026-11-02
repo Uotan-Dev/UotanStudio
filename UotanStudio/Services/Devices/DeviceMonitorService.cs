@@ -41,6 +41,8 @@ public enum DeviceProtocolKind
     Hdc,
     /// <summary>Apple iPhone/iPad over usbmuxd or the direct USB multiplexer.<para>经 usbmuxd 或直连 USB 复用接口的 Apple iPhone/iPad。</para></summary>
     Ios,
+    /// <summary>Qualcomm DIAG baseband diagnostic port (for example PID 901D), not a download port.<para>高通 DIAG 基带诊断端口（例如 PID 901D），不是下载端口。</para></summary>
+    Diagnostic,
 }
 
 /// <summary>
@@ -126,6 +128,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Rkdl => "RKDL",
         DeviceProtocolKind.Mtk => "MTK",
         DeviceProtocolKind.Ios => "iOS",
+        DeviceProtocolKind.Diagnostic => "DIAG",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }
