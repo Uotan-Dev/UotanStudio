@@ -3,6 +3,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Apple;
 using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Comm.Protocols.Diag;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
@@ -25,7 +26,8 @@ internal static class DefaultDeviceSessionFactories
         new EdlDeviceSessionFactory(),
         new BootromDeviceSessionFactory(),
         new MtkDeviceSessionFactory(),
-        new AppleDeviceSessionFactory()
+        new AppleDeviceSessionFactory(),
+        new DiagnosticDeviceSessionFactory()
     ];
 }
 
@@ -177,6 +179,29 @@ internal sealed class AppleDeviceSessionFactory : IDeviceSessionFactory
         }
 
         return Task.FromResult<object>(AppleSession.ForDirectUsb(usb, endpoint.Serial));
+    }
+}
+
+/// <summary>
+/// Builds a DIAG session over the leased USB diagnostic interface or serial port.
+/// <para>在已租用的 USB 诊断接口或串口之上构建 DIAG 会话。</para>
+/// </summary>
+internal sealed class DiagnosticDeviceSessionFactory : IDeviceSessionFactory
+{
+    public DeviceSessionKind Kind => DeviceSessionKind.Diagnostic;
+
+    public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LeasedTransport.RequireProtocol(endpoint, "diag");
+        if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
+        {
+            return Task.FromResult<object>(new DiagSession(serial));
+        }
+
+        var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
+        return Task.FromResult<object>(new DiagSession(new UsbDeviceTransport(usb)));
     }
 }
 

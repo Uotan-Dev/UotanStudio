@@ -17,6 +17,7 @@ public static class UsbProtocolClassifier
     private const ushort SierraVid = 0x1199;
     private const ushort NetgearVid = 0x0846;
     private const ushort ZteVid = 0x19D2;
+    private const ushort QuectelVid = 0x2C7C;
 
     /// <summary>
     /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair,
@@ -97,6 +98,18 @@ public static class UsbProtocolClassifier
     /// The bootrom protocol name, or <see langword="null"/> when the pair is not in any of the tables.
     /// <para>bootrom 协议名；该组合不在任何表内时返回 <see langword="null"/>。</para>
     /// </returns>
+    private static bool IsDiagPort(ushort vendorId, ushort productId)
+        => (vendorId, productId) switch
+        {
+            (QualcommVid, 0x901D) => true,
+            (SierraVid, 0x9071) => true,
+            (SierraVid, 0x9091) => true,
+            (QuectelVid, 0x0125) => true,
+            (NetgearVid, 0x68E2) => true,
+            (ZteVid, 0x0016) => true,
+            _ => false
+        };
+
     private static string? ClassifyBootrom(ushort vendorId, ushort? productId)
     {
         if (productId is ushort presentProduct && RkdlConstants.IsMscExcluded(vendorId, presentProduct))
@@ -106,9 +119,14 @@ public static class UsbProtocolClassifier
 
         var product = productId ?? 0;
         if (vendorId == QualcommVid &&
-            product is 0x9006 or 0x9008 or 0x900E or 0x901D or 0x9025 or 0x9307)
+            product is 0x9006 or 0x9008 or 0x900E or 0x9025 or 0x9307)
         {
             return "edl";
+        }
+
+        if (IsDiagPort(vendorId, product))
+        {
+            return "diag";
         }
 
         if (vendorId == SonyVid && product is 0x9DDE or 0xADE3 or 0xADE5 or 0xADED)

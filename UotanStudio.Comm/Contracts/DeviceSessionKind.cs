@@ -43,5 +43,10 @@ public enum DeviceSessionKind
     /// Apple (usbmuxd/lockdown) session over the usbmuxd daemon or a direct USB multiplexer interface.
     /// <para>经 usbmuxd 守护进程或直连 USB 复用接口的 Apple（usbmuxd/lockdown）会话。</para>
     /// </summary>
-    Apple
+    Apple,
+    /// <summary>
+    /// Qualcomm DIAG session on a direct USB diagnostic interface or a serial port.
+    /// <para>运行在直连 USB 诊断接口或串口上的高通 DIAG 会话。</para>
+    /// </summary>
+    Diagnostic
 }
