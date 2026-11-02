@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Contracts;
@@ -5,6 +7,7 @@ using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
 
@@ -925,6 +928,14 @@ public sealed class FlashService : IFlashService
             var partitions = RockchipParameterParser.Parse(parameterPath);
             var imageName = Path.GetFileName(imagePath);
             var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
+            if (IsParameterTarget(partition, imageName, imageNameWithoutExt))
+            {
+                Report(progress, partition, 15,
+                    $"Writing the partition table wrapped in the vendor PARM container at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X}... 正在把 PARM 容器封装的分区表写入固定地址...");
+                return await Task.Run(
+                    () => FlashRkdlParameter(rkdl, imagePath, progress, token), token).ConfigureAwait(false);
+            }
+
             var target = partitions.FirstOrDefault(p =>
                 string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p.Name, imageName, StringComparison.OrdinalIgnoreCase) ||
@@ -1009,14 +1020,30 @@ public sealed class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(parameterPath);
         var partitions = RockchipParameterParser.Parse(parameterPath);
         var target = partitions.FirstOrDefault(p =>
-            string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException(
-            $"Partition '{partition}' not found in the Rockchip partition table. Available: {string.Join(", ", partitions.Select(p => p.Name))} 分区不在 Rockchip 分区表中。");
+            string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.BareName, partition, StringComparison.OrdinalIgnoreCase));
+        if (target is null && !IsParameterTarget(partition, partition, partition))
+        {
+            throw new InvalidOperationException(
+                $"Partition '{partition}' not found in the Rockchip partition table. Available: {string.Join(", ", partitions.Select(p => p.Name))} 分区不在 Rockchip 分区表中。");
+        }
         return await App.DeviceMonitor.RunRkdlAsync(device.Endpoint, rkdl =>
         {
             if (!rkdl.IsRockusbMode)
             {
                 throw new InvalidOperationException(
                     "The Rockchip device is still in maskrom mode; use the shared load-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用通用的发送引导程序动作启动 loader。");
+            }
+
+            if (target is null)
+            {
+                rkdl.EraseLbaRange(RockchipParmContainer.FirmwareParameterStartLba,
+                    RockchipParmContainer.MaxParameterSectors, null, ct);
+                return Task.FromResult(new FlashResult
+                {
+                    Success = true,
+                    Summary = $"Erased the parameter window at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X} ({RockchipParmContainer.MaxParameterSectors} sectors). 已擦除 parameter 固定窗口。"
+                });
             }
 
             rkdl.EraseLbaRange(target.OffsetSectors, target.SizeSectors, null, ct);
@@ -1402,6 +1429,380 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
+    /// Whether the requested target names the partition table itself: the exact name
+    /// <c>parameter</c> or a file named <c>parameter</c>/<c>parameter.txt</c>, the way the vendor tools
+    /// treat a <c>parameter</c> download entry.
+    /// <para>请求的目标是否指向分区表本身：名称恰为 <c>parameter</c>，或文件名为
+    /// <c>parameter</c>/<c>parameter.txt</c>，与厂商工具对 <c>parameter</c> 下载条目的处理一致。</para>
+    /// </summary>
+    /// <param name="partition">The requested target name.<para>请求的目标名。</para></param>
+    /// <param name="imageName">The image file name.<para>镜像文件名。</para></param>
+    /// <param name="imageNameWithoutExt">The image file name without its extension.
+    /// <para>不含扩展名的镜像文件名。</para></param>
+    /// <returns><see langword="true"/> when the target is the partition table.
+    /// <para>目标是分区表时为 <see langword="true"/>。</para></returns>
+    internal static bool IsParameterTarget(string partition, string imageName, string imageNameWithoutExt)
+        => string.Equals(partition, "parameter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(imageName, "parameter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(imageNameWithoutExt, "parameter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(imageName, "parameter.txt", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Writes the partition table image to the fixed parameter flash address wrapped in the vendor
+    /// <c>PARM</c> container, the way the vendor <c>PRM</c> command persists it.
+    /// <para>把分区表镜像以厂商 <c>PARM</c> 容器封装后写入固定 parameter 闪存地址，与厂商 <c>PRM</c>
+    /// 命令的持久化方式一致。</para>
+    /// </summary>
+    /// <param name="session">An open RKDL session. <para>已打开的 RKDL 会话。</para></param>
+    /// <param name="imagePath">Full path of the parameter text file. <para>parameter 文本文件完整路径。</para></param>
+    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The flash result. <para>刷写结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The wrapped table exceeds the vendor
+    /// <see cref="RockchipParmContainer.MaxParameterSectors"/> sector cap, so nothing is written.
+    /// <para>封装后的分区表超过厂商 <see cref="RockchipParmContainer.MaxParameterSectors"/> 扇区上限，
+    /// 因此不写入任何数据。</para></exception>
+    public static FlashResult FlashRkdlParameter(
+        RkdlSession session, string imagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"Parameter file not found: {imagePath} parameter 文件不存在。", imagePath);
+        }
+
+        using var stream = File.OpenRead(imagePath);
+        var payloadLength = (int)Math.Min(stream.Length, RockchipParmContainer.MaxParameterSectors * RkdlConstants.SectorSize);
+        var payload = new byte[payloadLength];
+        Span<byte> payloadSpan = payload;
+        var read = 0;
+        while (read < payloadLength)
+        {
+            var chunk = stream.Read(payload, read, payloadLength - read);
+            if (chunk == 0)
+            {
+                break;
+            }
+
+            read += chunk;
+        }
+
+        var wrapped = RockchipParmContainer.Wrap(payloadSpan[..read]);
+        Report(progress, "parameter", 40, "Writing the PARM-wrapped partition table via RKDL WRITE_LBA... 正在通过 RKDL 写入 PARM 分区表...");
+        using var wrappedStream = new MemoryStream(wrapped, writable: false);
+        session.WriteLBA(RockchipParmContainer.FirmwareParameterStartLba, wrappedStream, wrapped.Length, null, ct);
+        Report(progress, "parameter", 100, $"PARM parameter written at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X}. PARM parameter 已写入固定地址。");
+        return new FlashResult
+        {
+            Success = true,
+            Summary = $"Wrote {wrapped.Length} bytes of PARM-wrapped parameter to LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X} via RKDL."
+        };
+    }
+
+    /// <summary>
+    /// Reads the partition table the device currently answers from, probing the layouts the vendor tools
+    /// accept in order: a GPT at LBA 0, the private <c>RKFP</c> GPT variant at LBA 0, the PARM-wrapped
+    /// parameter at the fixed address <see cref="RockchipParmContainer.FirmwareParameterStartLba"/> and the
+    /// legacy raw parameter at <see cref="RockchipParmContainer.LegacyParameterStartLba"/>.
+    /// <para>读取设备当前应答的分区表，按厂商工具接受的顺序探测：LBA 0 的 GPT、LBA 0 的私有 <c>RKFP</c>
+    /// GPT 变体、固定地址 <see cref="RockchipParmContainer.FirmwareParameterStartLba"/> 的 PARM 封装
+    /// parameter，以及 <see cref="RockchipParmContainer.LegacyParameterStartLba"/> 的旧式裸 parameter。</para>
+    /// </summary>
+    /// <param name="session">An open RKDL session. <para>已打开的 RKDL 会话。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The probed layout: which source matched and its partitions.
+    /// <para>探测结果：命中的来源及其分区。</para></returns>
+    /// <exception cref="InvalidOperationException">None of the four layouts matched.
+    /// <para>四种布局都不匹配。</para></exception>
+    public static RkdlDeviceTable ReadRkdlDeviceTable(RkdlSession session, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var failures = new List<string>();
+        try
+        {
+            var gpt = session.ReadGpt(ct);
+            var gptPartitions = gpt.Partitions
+                .Select(p => new RockchipPartition(p.Name, unchecked((long)Math.Min(p.SectorCount, int.MaxValue)),
+                    unchecked((long)Math.Min(p.FirstLba, int.MaxValue)),
+                    p.UniqueGuid == Guid.Empty ? null : p.UniqueGuid))
+                .ToList();
+            if (gptPartitions.Count > 0)
+            {
+                return new RkdlDeviceTable(RkdlDeviceTableSource.Gpt, gptPartitions);
+            }
+
+            failures.Add("GPT: header present but no populated entries");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            failures.Add($"GPT: {ex.Message}");
+        }
+
+        try
+        {
+            var rkfpPartitions = ParseRkfpTable(session.ReadLbaSectors(0, RkfpHeaderSectors, ct));
+            if (rkfpPartitions.Count > 0)
+            {
+                return new RkdlDeviceTable(RkdlDeviceTableSource.Rkfp, rkfpPartitions);
+            }
+
+            failures.Add("RKFP: header present but no populated entries");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            failures.Add($"RKFP: {ex.Message}");
+        }
+
+        foreach (var (source, startLba, sectorCount, requireMagic) in new[]
+                 {
+                     (RkdlDeviceTableSource.Parameter, RockchipParmContainer.FirmwareParameterStartLba,
+                         RockchipParmContainer.FirmwareParameterReadSectors, true),
+                     (RkdlDeviceTableSource.LegacyParameter, RockchipParmContainer.LegacyParameterStartLba,
+                         RockchipParmContainer.LegacyParameterReadSectors, false)
+                 })
+        {
+            try
+            {
+                var raw = session.ReadLbaSectors(startLba, sectorCount, ct);
+                if (requireMagic && !RockchipParmContainer.HasMagic(raw))
+                {
+                    failures.Add($"PARM@0x{startLba:X}: no PARM magic");
+                    continue;
+                }
+
+                var partitions = RockchipParameterParser.ParseBytes(raw);
+                if (partitions.Count > 0)
+                {
+                    return new RkdlDeviceTable(source, partitions);
+                }
+
+                failures.Add($"{source}@0x{startLba:X}: parsed zero partitions");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                failures.Add($"{source}@0x{startLba:X}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"No GPT or Rockchip parameter partition table found on the device: {string.Join("; ", failures)} 设备上未找到 GPT 或 Rockchip parameter 分区表。");
+    }
+
+    /// <summary>
+    /// Decodes the vendor private <c>RKFP</c> GPT variant the official tool lists as <c>rk_gpt</c>: the header
+    /// begins with the little-endian magic and declares the entry-array start sector, entry size and entry
+    /// count; each entry carries a UTF-16 name, a start sector and a sector count.
+    /// <para>解码官方工具以 <c>rk_gpt</c> 列出的厂商私有 <c>RKFP</c> GPT 变体：头部以小端魔数开始，声明条目
+    /// 数组起始扇区、条目大小与条目数量；每个条目携带 UTF-16 名称、起始扇区与扇区数。</para>
+    /// </summary>
+    /// <param name="block">The leading sectors read from LBA 0, large enough to cover the header and the entry
+    /// array.<para>从 LBA 0 读出的前几个扇区，须覆盖头部与条目数组。</para></param>
+    /// <returns>The decoded partitions; empty when the block does not carry the magic.
+    /// <para>解码出的分区列表；数据块没有魔数时为空。</para></returns>
+    /// <exception cref="InvalidDataException">The header or the entry array is truncated or declares values
+    /// outside the supported bounds.
+    /// <para>头部或条目数组被截断，或声明的值超出受支持边界。</para></exception>
+    public static IReadOnlyList<RockchipPartition> ParseRkfpTable(ReadOnlySpan<byte> block)
+    {
+        if (block.Length < 4 || BinaryPrimitives.ReadUInt32LittleEndian(block) != RkfpMagic)
+        {
+            return [];
+        }
+
+        if (block.Length < RkfpHeaderLength)
+        {
+            throw new InvalidDataException("The RKFP header is truncated before its entry layout fields. RKFP 头部在布局字段之前被截断。");
+        }
+
+        var entryArraySector = BinaryPrimitives.ReadUInt32LittleEndian(block[20..]);
+        var entrySize = BinaryPrimitives.ReadUInt32LittleEndian(block[28..]);
+        var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(block[32..]);
+        if (entryCount == 0)
+        {
+            return [];
+        }
+
+        if (entrySize < RkfpEntryNameBytes + 12 || entrySize > RkdlConstants.SectorSize)
+        {
+            throw new InvalidDataException(
+                $"The RKFP entry size {entrySize} is outside the supported {RkfpEntryNameBytes + 12}..{RkdlConstants.SectorSize} range. RKFP 条目大小超出受支持范围。");
+        }
+
+        if (entryCount > MaxRkfpEntries)
+        {
+            throw new InvalidDataException($"The RKFP entry count {entryCount} exceeds the {MaxRkfpEntries} bound. RKFP 条目数量超出上限。");
+        }
+
+        var partitions = new List<RockchipPartition>();
+        for (var i = 0; i < entryCount; i++)
+        {
+            var entryOffset = (long)entryArraySector * RkdlConstants.SectorSize + (long)i * entrySize;
+            if (entryOffset + entrySize > block.Length)
+            {
+                throw new InvalidDataException(
+                    $"The RKFP entry array needs {entryOffset + entrySize} bytes, more than the {block.Length} bytes read. RKFP 条目数组超出已读取的数据块。");
+            }
+
+            var entry = block.Slice((int)entryOffset, (int)entrySize);
+            var name = DecodeRkfpName(entry[..RkfpEntryNameBytes]);
+            if (IsZeroSpan(entry[..RkfpEntryNameBytes]))
+            {
+                break;
+            }
+
+            var startSector = BinaryPrimitives.ReadUInt32LittleEndian(entry[36..]);
+            var sectorCount = BinaryPrimitives.ReadUInt32LittleEndian(entry[40..]);
+            partitions.Add(new RockchipPartition(name, sectorCount, startSector));
+        }
+
+        return partitions;
+    }
+
+    /// <summary>Decodes a UTF-16LE entry name, stopping at the terminator or the field end.
+    /// <para>解码 UTF-16LE 条目名，遇终止符或字段末尾停止。</para></summary>
+    private static string DecodeRkfpName(ReadOnlySpan<byte> field)
+    {
+        var chars = new char[field.Length / 2];
+        var count = 0;
+        for (var offset = 0; offset + 1 < field.Length; offset += 2)
+        {
+            var value = BinaryPrimitives.ReadUInt16LittleEndian(field[offset..]);
+            if (value == 0)
+            {
+                break;
+            }
+
+            chars[count++] = (char)value;
+        }
+
+        return new string(chars, 0, count);
+    }
+
+    private static bool IsZeroSpan(ReadOnlySpan<byte> span)
+    {
+        foreach (var value in span)
+        {
+            if (value != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Builds the 34-sector master GPT image from a parsed Rockchip parameter table the way the vendor
+    /// <c>gpt</c> command converts a parameter: a protective MBR, a GPT header over a 128-entry array, entries
+    /// named with the bare partition name, grow entries ending at the last usable sector and unique GUIDs taken
+    /// from the table's <c>uuid:</c> records.
+    /// <para>按厂商 <c>gpt</c> 命令转换 parameter 的方式，从解析出的 Rockchip parameter 表构建 34 扇区的
+    /// 主 GPT 镜像：保护性 MBR、覆盖 128 条目数组与 GPT 头，条目以裸分区名命名，grow 条目结束于最后一个
+    /// 可用扇区，唯一 GUID 取自表内的 <c>uuid:</c> 记录。</para>
+    /// </summary>
+    /// <param name="partitions">The parsed parameter table. <para>解析出的 parameter 表。</para></param>
+    /// <param name="totalSectors">The target media size in 512-byte sectors.
+    /// <para>目标介质大小（512 字节扇区）。</para></param>
+    /// <returns>The 34-sector master GPT image, ready for
+    /// <see cref="RkdlSession.WriteGPT(byte[], System.IProgress{long}?, System.Threading.CancellationToken)"/>.
+    /// <para>34 扇区的主 GPT 镜像，可直接交给
+    /// <see cref="RkdlSession.WriteGPT(byte[], System.IProgress{long}?, System.Threading.CancellationToken)"/>。</para></returns>
+    /// <exception cref="ArgumentException">The table is empty, the media cannot hold a GPT, or an entry's
+    /// range falls outside the usable area.
+    /// <para>表为空、介质容纳不下 GPT，或某个条目的范围落在可用区域之外。</para></exception>
+    public static byte[] BuildGptFromParameter(IReadOnlyList<RockchipPartition> partitions, long totalSectors)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        if (partitions.Count == 0)
+        {
+            throw new ArgumentException("The parameter table declares no partitions.", nameof(partitions));
+        }
+
+        if (totalSectors <= GptBackupSectors + 1)
+        {
+            throw new ArgumentException($"The media size {totalSectors} sectors cannot hold a GPT.", nameof(totalSectors));
+        }
+
+        var image = new byte[GptPrimarySectors * RkdlConstants.SectorSize];
+        var headerOffset = RkdlConstants.SectorSize;
+        var entriesOffset = 2 * RkdlConstants.SectorSize;
+
+        image[510] = 0x55;
+        image[511] = 0xAA;
+
+        "EFI PART"u8.CopyTo(image.AsSpan(headerOffset));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 12), 92);
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 24), 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 32), (ulong)totalSectors - 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 40), 2 * (ulong)GptPrimarySectors - 1);
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 48), (ulong)totalSectors - 34);
+        RandomNumberGenerator.Fill(image.AsSpan(headerOffset + 56, 16));
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 72), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 80), 128);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 84), 128);
+
+        var lastUsableLba = (ulong)totalSectors - 34;
+        for (var i = 0; i < Math.Min(partitions.Count, 128); i++)
+        {
+            var partition = partitions[i];
+            var entry = image.AsSpan(entriesOffset + i * 128, 128);
+            RkdlBasicDataPartitionTypeBytes.CopyTo(entry);
+            if (partition.UniqueGuid is { } guid)
+            {
+                guid.ToByteArray().CopyTo(entry[16..]);
+            }
+            else
+            {
+                RandomNumberGenerator.Fill(entry.Slice(16, 16));
+            }
+
+            var firstLba = (ulong)partition.OffsetSectors;
+            var lastLba = partition.IsGrow ? lastUsableLba : (ulong)(partition.OffsetSectors + partition.SizeSectors - 1);
+            if (partition.OffsetSectors < 0 || lastLba < firstLba || lastLba > lastUsableLba)
+            {
+                throw new ArgumentException(
+                    $"Partition '{partition.Name}' spans [{partition.OffsetSectors}, {lastLba}] outside the usable area [{2 * GptPrimarySectors}, {lastUsableLba}].",
+                    nameof(partitions));
+            }
+
+            if (partition.Name.Contains("bootable", StringComparison.OrdinalIgnoreCase))
+            {
+                BinaryPrimitives.WriteUInt64LittleEndian(entry[48..], 1UL << 2);
+            }
+
+            BinaryPrimitives.WriteUInt64LittleEndian(entry[32..], firstLba);
+            BinaryPrimitives.WriteUInt64LittleEndian(entry[40..], lastLba);
+            Encoding.Unicode.GetBytes(partition.BareName, entry[56..]);
+        }
+
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 88),
+            Crc32Ieee.Compute(image.AsSpan(entriesOffset, 128 * 128)));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 16),
+            Crc32Ieee.Compute(image.AsSpan(headerOffset, 92)));
+        return image;
+    }
+
+    /// <summary>
+    /// Writes a GPT built from a Rockchip parameter file to the device, the way the vendor <c>gpt</c> command
+    /// converts a parameter file into a partition table; the session builds and writes the backup GPT.
+    /// <para>把由 Rockchip parameter 文件构建的 GPT 写入设备，与厂商 <c>gpt</c> 命令把 parameter 文件转换为
+    /// 分区表的方式一致；备份 GPT 由会话构建并写入。</para>
+    /// </summary>
+    /// <param name="session">An open RKDL session. <para>已打开的 RKDL 会话。</para></param>
+    /// <param name="parameterPath">The parameter file to convert. <para>待转换的 parameter 文件。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The written byte count. <para>写入的字节数。</para></returns>
+    public static long WriteRkdlGptFromParameter(RkdlSession session, string parameterPath, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var partitions = RockchipParameterParser.Parse(parameterPath);
+        var totalSectors = session.ReadFlashInfo().SectorCount;
+        var gpt = BuildGptFromParameter(partitions, totalSectors);
+        session.WriteGPT(gpt, null, ct);
+        return gpt.Length;
+    }
+
+    /// <summary>
     /// Locates a Rockchip parameter file (parameter / parameter.txt) in the image directory.
     /// <para>在镜像目录中查找 Rockchip parameter 文件（parameter / parameter.txt）。</para>
     /// </summary>
@@ -1487,6 +1888,42 @@ public sealed class FlashService : IFlashService
 
         return true;
     }
+
+    /// <summary>Little-endian <c>RKFP</c> magic the vendor private GPT variant starts with.
+    /// <para>厂商私有 GPT 变体以小端 <c>RKFP</c> 魔数开始。</para></summary>
+    private const uint RkfpMagic = 0x50464B52;
+
+    /// <summary>RKFP header bytes up to and including the entry count field.
+    /// <para>RKFP 头部到条目数量字段为止的字节数。</para></summary>
+    private const int RkfpHeaderLength = 36;
+
+    /// <summary>RKFP per-entry UTF-16 name bytes.
+    /// <para>RKFP 每条目的 UTF-16 名称字节数。</para></summary>
+    private const int RkfpEntryNameBytes = 32;
+
+    /// <summary>Upper bound on RKFP entries accepted from untrusted device data.
+    /// <para>从不可信设备数据接受的 RKFP 条目数量上限。</para></summary>
+    private const int MaxRkfpEntries = 128;
+
+    /// <summary>Sectors read from LBA 0 to cover the RKFP header and its entry array.
+    /// <para>从 LBA 0 读取以覆盖 RKFP 头部与条目数组的扇区数。</para></summary>
+    private const int RkfpHeaderSectors = 36;
+
+    /// <summary>Primary GPT area size in sectors: protective MBR, header and the 128-entry array.
+    /// <para>主 GPT 区域的扇区数：保护性 MBR、头部与 128 条目的数组。</para></summary>
+    private const int GptPrimarySectors = 34;
+
+    /// <summary>Backup GPT area size in sectors: header and entry array.
+    /// <para>备份 GPT 区域的扇区数：头部与条目数组。</para></summary>
+    private const int GptBackupSectors = 33;
+
+    /// <summary>
+    /// Microsoft basic data partition type GUID in GPT mixed-endian byte form, the type every parameter entry
+    /// receives in the vendor conversion.
+    /// <para>GPT 混端字节序的 Microsoft basic data 分区类型 GUID，厂商转换给每个 parameter 条目都使用该类型。</para>
+    /// </summary>
+    private static readonly byte[] RkdlBasicDataPartitionTypeBytes =
+        new Guid("EBD0A0A2-B9E5-4433-87C0-68B6B72699C7").ToByteArray();
 
     /// <summary>
     /// Remote push target in sideload mode.
@@ -1665,3 +2102,31 @@ public sealed class FlashProgress(string? partition, int percent, string status)
     /// <value>The status text describing the current phase. <para>描述当前阶段的状态文本。</para></value>
     public string Status { get; } = status;
 }
+
+/// <summary>Identifies which on-device layout a partition-table probe matched.
+/// <para>标识分区表探测命中的设备端布局。</para></summary>
+public enum RkdlDeviceTableSource
+{
+    /// <summary>A GPT header at LBA 0. <para>LBA 0 处的 GPT 头。</para></summary>
+    Gpt,
+
+    /// <summary>The vendor private <c>RKFP</c> GPT variant at LBA 0.
+    /// <para>LBA 0 处的厂商私有 <c>RKFP</c> GPT 变体。</para></summary>
+    Rkfp,
+
+    /// <summary>The PARM-wrapped parameter at the fixed vendor address.
+    /// <para>固定厂商地址处 PARM 封装的 parameter。</para></summary>
+    Parameter,
+
+    /// <summary>The legacy raw parameter at the old loader address.
+    /// <para>旧 loader 地址处的旧式裸 parameter。</para></summary>
+    LegacyParameter
+}
+
+/// <summary>
+/// The partition layout probed from the storage an RKDL device currently answers from.
+/// <para>从 RKDL 设备当前应答的存储上探测到的分区布局。</para>
+/// </summary>
+/// <param name="Source">The layout that matched. <para>命中的布局。</para></param>
+/// <param name="Partitions">The decoded partitions in table order. <para>按表内顺序解码出的分区。</para></param>
+public sealed record RkdlDeviceTable(RkdlDeviceTableSource Source, IReadOnlyList<RockchipPartition> Partitions);

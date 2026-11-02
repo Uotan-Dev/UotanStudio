@@ -123,6 +123,7 @@ public sealed partial class FlashViewModel
     /// </summary>
     /// <param name="path">Candidate loader image; the file is opened read-only.
     /// <para>候选 loader 镜像；文件以只读方式打开。</para></param>
+    /// <param name="cancellationToken">Token cancelling the whole-image read. <para>取消整幅镜像读取的令牌。</para></param>
     /// <returns><see langword="true"/> when the loader handler reads the whole image and its trailing checksum matches;
     /// <see langword="false"/> when the file is missing, another format, structurally invalid or has a damaged checksum.
     /// <para>当 loader 处理器读取整幅镜像且末尾校验和相符时为 <see langword="true"/>；文件缺失、属于其它格式、结构非法或
@@ -134,7 +135,7 @@ public sealed partial class FlashViewModel
     /// <para>这里只写日志；行状态由掌握该行的调用方更新。仅以 loader 标签开头并不够：条目表与末尾校验和也会被读取，
     /// 因为刷写路径在启动镜像前解析的正是这些内容。</para>
     /// </remarks>
-    private async Task<bool> ValidateRkLoaderFileAsync(string path)
+    private async Task<bool> ValidateRkLoaderFileAsync(string path, CancellationToken cancellationToken)
     {
         var language = _localizer;
         var display = Path.GetFileName(path);
@@ -145,7 +146,7 @@ public sealed partial class FlashViewModel
             return false;
         }
 
-        var outcome = await Task.Run(() => InspectRkLoader(path)).ConfigureAwait(true);
+        var outcome = await Task.Run(() => InspectRkLoader(path), cancellationToken).ConfigureAwait(true);
         if (outcome.ProblemKey is { } problem)
         {
             AppendLog(string.Format(CultureInfo.InvariantCulture,
@@ -232,7 +233,7 @@ public sealed partial class FlashViewModel
         row.StatusText = language.GetString("Flash_RkLoaderChecking");
         try
         {
-            PublishRkLoaderStatus(row, await ValidateRkLoaderFileAsync(row.FilePath).ConfigureAwait(true));
+            PublishRkLoaderStatus(row, await ValidateRkLoaderFileAsync(row.FilePath, CancellationToken.None).ConfigureAwait(true));
         }
         catch (Exception ex)
         {
@@ -290,7 +291,8 @@ public sealed partial class FlashViewModel
     /// 显示的正是该介质，使通用的读取设备信息动作填好的是设备实际继续应答的存储。</para>
     /// </summary>
     /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
-    private async Task RunRkReadInfoAsync(DetectedDevice device)
+    /// <param name="cancellationToken">Token cancelling the session commands. <para>取消会话命令的令牌。</para></param>
+    private async Task RunRkReadInfoAsync(DetectedDevice device, CancellationToken cancellationToken)
     {
         var language = _localizer;
         AppendLog($"{language.GetString("Flash_ReadInfo")}: {device.DisplayName}");
@@ -313,7 +315,7 @@ public sealed partial class FlashViewModel
             }
 
             return Task.FromResult(true);
-        }, CancellationToken.None).ConfigureAwait(true);
+        }, cancellationToken).ConfigureAwait(true);
 
         foreach (var line in lines)
         {
@@ -321,19 +323,21 @@ public sealed partial class FlashViewModel
         }
 
         ApplyReportedRkStorage(storageLabel);
+        RefreshRkdlDeviceStatus();
     }
 
     /// <summary>
     /// Switches the running loader through every storage medium in the vendor table, reports each present
-    /// medium's flash geometry and ends by switching the device back to the medium
-    /// <paramref name="initialMask"/> names; a medium whose read-back mask does not name it, whose switch or
-    /// geometry read fails, is reported and skipped instead of ending the probe. The device acknowledges
-    /// CHANGE_STORAGE even when it cannot serve the medium, so only the read-back mask proves the switch,
-    /// matching the switch action's verification.
-    /// <para>让运行中的 loader 依次切换厂商表的每个存储介质，报告每个存在的介质的闪存几何，最后把设备切回
-    /// <paramref name="initialMask"/> 命名的介质；读回掩码不指向该介质、切换或几何读取失败的介质只记录并
-    /// 跳过，不终止探测。设备对无法服务的介质也会应答 CHANGE_STORAGE 成功，因此只有读回掩码能证明切换，
-    /// 与切换存储动作的校验一致。</para>
+    /// medium's flash geometry one value per line under a medium line, and ends by switching the device back
+    /// to the medium <paramref name="initialMask"/> names; a medium the read-back mask does not name is
+    /// skipped silently instead of reported as absent, and one whose switch or geometry read fails is
+    /// reported and skipped instead of ending the probe. The device acknowledges CHANGE_STORAGE even when it
+    /// cannot serve the medium, so only the read-back mask proves the switch, matching the switch action's
+    /// verification.
+    /// <para>让运行中的 loader 依次切换厂商表的每个存储介质，在介质行下按一项一行报告每个存在的介质的闪存
+    /// 几何，最后把设备切回 <paramref name="initialMask"/> 命名的介质；读回掩码不指向的介质静默跳过而不报告
+    /// 为不存在，切换或几何读取失败的介质只记录并跳过，不终止探测。设备对无法服务的介质也会应答
+    /// CHANGE_STORAGE 成功，因此只有读回掩码能证明切换，与切换存储动作的校验一致。</para>
     /// </summary>
     /// <param name="session">Open RKDL session on the target device. <para>目标设备上已打开的 RKDL 会话。</para></param>
     /// <param name="language">Localized string lookup for the report labels.
@@ -351,20 +355,21 @@ public sealed partial class FlashViewModel
             try
             {
                 session.ChangeStorage(RkdlStorage.WireBits[index]);
-                var mask = session.ReadStorageMask();
-                if (mask != 1u << RkdlStorage.WireBits[index])
+                if (session.ReadStorageMask() != 1u << RkdlStorage.WireBits[index])
                 {
-                    lines.Add(string.Format(CultureInfo.InvariantCulture,
-                        language.GetString("Flash_RkStorageProbeAbsent"), label,
-                        DescribeRkStorage(mask)));
                     continue;
                 }
 
                 var geometry = DescribeRkFlashGeometry(session.ReadFlashInfo(), language);
-                lines.Add(geometry.Count > 0
-                    ? $"{language.GetString("Flash_RkStorage")}: {label}, {string.Join(", ", geometry)}"
-                    : string.Format(CultureInfo.InvariantCulture, language.GetString("Flash_RkStorageProbeMedium"),
-                        label));
+                if (geometry.Count == 0)
+                {
+                    lines.Add(string.Format(CultureInfo.InvariantCulture,
+                        language.GetString("Flash_RkStorageProbeMedium"), label));
+                    continue;
+                }
+
+                lines.Add($"{language.GetString("Flash_RkStorage")}: {label}");
+                lines.AddRange(geometry);
             }
             catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
                 or InvalidOperationException or ObjectDisposedException)
@@ -401,7 +406,8 @@ public sealed partial class FlashViewModel
     /// 官方工具的下载 Boot 步骤一样真正传输镜像。</para>
     /// </summary>
     /// <param name="device">Target RKDL endpoint. <para>目标 RKDL 端点。</para></param>
-    private async Task DownloadRkLoaderAsync(DetectedDevice device)
+    /// <param name="cancellationToken">Token cancelling the download and the wait. <para>取消下载与等待的令牌。</para></param>
+    private async Task DownloadRkLoaderAsync(DetectedDevice device, CancellationToken cancellationToken)
     {
         var language = _localizer;
         var loader = EffectiveRkLoaderPath;
@@ -410,7 +416,12 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var loaderBytes = await File.ReadAllBytesAsync(loader).ConfigureAwait(true);
+        var loaderBytes = await File.ReadAllBytesAsync(loader, cancellationToken).ConfigureAwait(true);
+        // Sending the loader drops the maskrom node before the usbplug node enumerates, and the two carry different
+        // keys, so the device panel is told to hold the selection before the transfer starts instead of letting the
+        // next scan move it to whatever enumerates first. <para>发送 loader 会先让 maskrom 节点消失、之后 usbplug
+        // 节点才枚举，且两者键不同，因此在传输开始前让设备面板保持选择，而不是让下一次扫描把它移到最先枚举出的设备上。</para>
+        _deviceViewModel?.BeginSelectionHold();
         await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(device,
             async (session, token) =>
             {
@@ -429,7 +440,7 @@ public sealed partial class FlashViewModel
                 AppendLog(language.GetString("Flash_LoadBootRkDone"));
                 return Task.FromResult(true);
             },
-            CancellationToken.None).ConfigureAwait(true);
+            cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -534,18 +545,22 @@ public sealed partial class FlashViewModel
         }
 
         var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
             AppendLog(language.GetString("Flash_RkTestDevice"));
             var ready = await App.DeviceMonitor.RunRkdlAsync(device,
-                session => session.TestDeviceAsync(CancellationToken.None), CancellationToken.None).ConfigureAwait(true);
+                session => session.TestDeviceAsync(cancellation.Token), cancellation.Token).ConfigureAwait(true);
             AppendLog(language.GetString(ready ? "Flash_Done" : "Flash_Failed"));
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -565,6 +580,8 @@ public sealed partial class FlashViewModel
         }
 
         var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
@@ -588,44 +605,255 @@ public sealed partial class FlashViewModel
 
             ApplyReportedRkStorage(label);
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
 
     /// <summary>
-    /// Formats one medium's flash geometry: the capacity line when the device declared sectors and the
-    /// erase-block line when it declared blocks, so every storage report shows the same shape.
-    /// <para>把某个介质的闪存几何格式化：设备声明了扇区时给出容量行，声明了块时给出擦除块行，使每份存储报告
-    /// 形状一致。</para>
+    /// Reads the partition layout of every storage medium the loader can reach and backfills the partition
+    /// grid with one row per partition: the loader walks the official storage table, switches to each medium
+    /// the read-back mask proves present, decodes its GPT or vendor parameter blob, and names the medium on
+    /// every row, so the grid shows the device's real layout instead of package guesses. The device ends on
+    /// the medium it started on.
+    /// <para>读取 loader 能到达的每个存储介质的分区布局，并把每个分区一行回填到分区列表：loader 按官方存储表
+    /// 遍历，切换到读回掩码证明存在的每个介质，解码其 GPT 或厂商 parameter 块，并在每一行标注介质，使列表呈现
+    /// 设备的真实布局而不是刷机包的猜测。结束时设备回到出发时的介质。</para>
+    /// </summary>
+    /// <remarks>
+    /// A failed medium is reported in the log and skipped instead of ending the sweep, because the device
+    /// acknowledges CHANGE_STORAGE even for media it cannot serve and only the read-back mask proves the
+    /// switch — the same verification the storage probe and the switch action use. Rows from one read never
+    /// stack onto earlier rows: the grid is replaced on every run.
+    /// <para>某个介质失败只记录并跳过，不终止遍历，因为设备对无法服务的介质也会应答 CHANGE_STORAGE 成功，
+    /// 只有读回掩码能证明切换——与存储探测和切换动作使用的校验一致。一次读取的行不会叠加到之前的行上：
+    /// 每次运行都整体替换列表。</para>
+    /// </remarks>
+    internal async void OnRkReadPartitionsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
+        {
+            AppendLog(_localizer.GetString("Flash_DeviceNotConnected"));
+            return;
+        }
+
+        var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var sweep = await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            {
+                var report = new List<string>();
+                var rows = new List<FlashPartitionEntry>();
+                var initialMask = session.ReadStorageMask();
+                report.Add($"{language.GetString("Flash_RkStorage")}: {DescribeRkStorage(initialMask)}");
+                var visited = new HashSet<uint>();
+                for (var index = 0; index < RkdlStorage.Names.Length; index++)
+                {
+                    var wireBit = RkdlStorage.WireBits[index];
+                    if (!visited.Add(1u << wireBit))
+                    {
+                        continue;
+                    }
+
+                    session.ChangeStorage((byte)wireBit);
+                    var mask = session.ReadStorageMask();
+                    if (mask != 1u << wireBit)
+                    {
+                        continue;
+                    }
+
+                    var label = RkdlStorage.Names[index];
+                    try
+                    {
+                        var mediumRows = ReadRkMediumPartitions(session, label, language, report);
+                        rows.AddRange(mediumRows);
+                    }
+                    catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
+                        or InvalidOperationException or ObjectDisposedException)
+                    {
+                        // A medium the loader cannot serve is skipped silently: the sweep reports only the
+                        // media it actually read, so a failed medium never appears in the log or the grid.
+                        // 无法服务的介质静默跳过：遍历只报告真正读到的介质，失败的介质不会出现在日志或列表中。
+                        _ = exception;
+                    }
+                }
+
+                var initialIndex = RkdlStorage.IndexOfMask(initialMask);
+                if (initialIndex >= 0)
+                {
+                    session.ChangeStorage(RkdlStorage.WireBits[initialIndex]);
+                }
+
+                return Task.FromResult((report, rows));
+            }, cancellation.Token).ConfigureAwait(true);
+            foreach (var line in sweep.report)
+            {
+                AppendLog(line);
+            }
+
+            Partitions.Replace(sweep.rows);
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                language.GetString("Flash_RkPartitionsImported"), sweep.rows.Count));
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendError(ex); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Reads one medium's partition table and returns one grid row per partition: the GPT at LBA 0 is decoded
+    /// when present, and otherwise the vendor parameter blob at LBA 0x2000 is parsed. The medium reports
+    /// itself as one <c>name=value</c> line per fact in the device-capability style, and a medium that
+    /// declares no table at all reports nothing and yields no rows.
+    /// <para>读取一个介质的分区表并为每个分区返回一行：LBA 0 处存在 GPT 就解码 GPT，否则解析 LBA 0x2000 处的
+    /// 厂商 parameter 块。介质按设备能力样式以每个事实一行 <c>名称=值</c> 报告自己，完全没有分区表的介质
+    /// 不输出任何内容也不产生任何行。</para>
+    /// </summary>
+    /// <param name="session">Open RKDL session positioned on the medium.<para>已定位到该介质的 RKDL 会话。</para></param>
+    /// <param name="medium">The medium label written onto every row, for example <c>EMMC</c>.
+    /// <para>写到每一行的介质名，例如 <c>EMMC</c>。</para></param>
+    /// <param name="language">Localized string lookup for the report labels.
+    /// <para>报告标签使用的本地化字符串查询。</para></param>
+    /// <param name="report">The log lines the read produces.<para>读取过程产生的日志行。</para></param>
+    /// <returns>The grid rows in table order.<para>按表内顺序排列的表格行。</para></returns>
+    private static List<FlashPartitionEntry> ReadRkMediumPartitions(RkdlSession session, string medium,
+        ILocalizer language, List<string> report)
+    {
+        var lines = new List<string>();
+        var storage = language.GetString("Flash_RkStorage");
+        var geometry = session.ReadFlashInfo();
+        if (geometry.SectorCount > 0)
+        {
+            lines.Add($"{storage}[{medium}]={geometry.Size / (1024 * 1024)} MiB ({geometry.SectorCount} × {geometry.SectorSize} B)");
+        }
+
+        List<(string Name, long OffsetSectors, long SizeSectors)> partitions;
+        string source;
+        try
+        {
+            var table = session.ReadGpt(CancellationToken.None);
+            var crcNotes = new List<string>(2);
+            if (!table.HeaderCrcValid)
+            {
+                crcNotes.Add(language.GetString("Flash_RkGptHeaderCrcMismatch"));
+            }
+
+            if (!table.EntriesCrcValid)
+            {
+                crcNotes.Add(language.GetString("Flash_RkGptEntriesCrcMismatch"));
+            }
+
+            var crcNote = crcNotes.Count > 0 ? $", {string.Join("; ", crcNotes)}" : string.Empty;
+            lines.Add($"{storage}[{medium}]=GPT, {table.TotalSectors} sectors{crcNote}");
+            partitions = table.Partitions.Select(entry =>
+                (entry.Name, (long)entry.FirstLba, (long)entry.SectorCount)).ToList();
+            source = "GPT";
+        }
+        catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
+            or InvalidOperationException or ObjectDisposedException)
+        {
+            var parameter = ParseDeviceParameterBlob(session);
+            if (parameter is not { Count: > 0 })
+            {
+                // Neither table exists on this medium: report nothing, as the medium holds no partitions.
+                // 该介质上两种表都不存在：不报告任何内容，因为它没有承载分区。
+                return [];
+            }
+
+            partitions = parameter.Select(entry => (entry.Name, entry.OffsetSectors, entry.SizeSectors)).ToList();
+            source = language.GetString("Flash_RkPartitionSourceParameter");
+            lines.Add($"{storage}[{medium}]={source}, {partitions.Count} partitions");
+        }
+
+        report.AddRange(lines);
+        return partitions.Select(entry => new FlashPartitionEntry
+        {
+            Name = entry.Name,
+            Command = "flash",
+            StorageMedium = medium,
+            Offset = $"0x{entry.OffsetSectors:X8}",
+            Size = FormatByteSize(entry.SizeSectors * RkdlConstants.SectorSize),
+            StatusText = source,
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Reads and parses the vendor parameter blob the loader stores at LBA 0x2000 ("PARA" + length + CMDLINE
+    /// text), giving the parameter-file fallback the vendor tool's <c>ppt</c> uses when no GPT is present.
+    /// <para>读取并解析 loader 存放在 LBA 0x2000 的厂商 parameter 块（"PARA" + 长度 + CMDLINE 文本），提供
+    /// 厂商工具 <c>ppt</c> 在没有 GPT 时使用的 parameter 回退。</para>
+    /// </summary>
+    /// <param name="session">Open RKDL session.<para>已打开的 RKDL 会话。</para></param>
+    /// <returns>The parsed partitions, or <see langword="null"/> when the medium carries no parameter blob.
+    /// <para>解析出的分区；介质上没有 parameter 块时为 <see langword="null"/>。</para></returns>
+    private static IReadOnlyList<RockchipPartition>? ParseDeviceParameterBlob(RkdlSession session)
+    {
+        const int blobSectors = 512;
+        const int commandLineLimit = 64 * 1024;
+        var blob = session.ReadLbaSectors(0x2000, blobSectors, CancellationToken.None);
+        if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(blob) != 0x4D524150)
+        {
+            return null;
+        }
+
+        var size = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(blob.AsSpan(4));
+        if (size == 0 || size > commandLineLimit)
+        {
+            return null;
+        }
+
+        var end = 8 + (int)size;
+        if (end > blob.Length)
+        {
+            return null;
+        }
+
+        var text = System.Text.Encoding.ASCII.GetString(blob, 8, end - 8);
+        var line = text.Split('\n').Select(part => part.Trim())
+            .FirstOrDefault(part => part.StartsWith("CMDLINE:", StringComparison.OrdinalIgnoreCase));
+        return line is null
+            ? null
+            : RockchipParameterParser.ParseCommandLine(line["CMDLINE:".Length..].Trim());
+    }
+
+    /// <summary>
+    /// Formats one medium's flash geometry as one line per value: the capacity when the device declared
+    /// sectors, then the erase block, the page size and the flash manufacturer it declared with the block
+    /// geometry, so no value shares a line with another one and every storage report shows the same shape.
+    /// <para>把某个介质的闪存几何格式化为一项一行：设备声明了扇区时给出容量，随后是它随块几何一并声明的擦除
+    /// 块、页大小与闪存厂商，使任何两个取值都不共行，且每份存储报告形状一致。</para>
     /// </summary>
     /// <param name="info">Flash geometry the device reported.<para>设备上报的闪存几何。</para></param>
     /// <param name="language">Localized string lookup for the labels.<para>标签使用的本地化字符串查询。</para></param>
     /// <returns>The geometry lines, possibly empty.<para>几何报告行；可能为空。</para></returns>
-    private static List<string> DescribeRkFlashGeometry(RkFlashInfo info, ILocalizer language)
+    internal static List<string> DescribeRkFlashGeometry(RkFlashInfo info, ILocalizer language)
     {
-        var lines = new List<string>(2);
+        var lines = new List<string>(4);
         if (info.SectorCount > 0)
         {
-            lines.Add(string.Format(CultureInfo.InvariantCulture,
-                "{0}: {1} MiB ({2} sectors × {3} B)",
-                language.GetString("Flash_RkStorageSize"),
-                info.Size / (1024 * 1024), info.SectorCount, info.SectorSize));
+            lines.Add(language.GetString("Flash_RkStorageSize", info.Size / (1024 * 1024), info.SectorCount,
+                info.SectorSize));
         }
 
         if (info.BlockSizeSectors > 0)
         {
-            lines.Add(string.Format(CultureInfo.InvariantCulture,
-                "{0}: {1} KiB, {2}: {3} B, {4}: {5}",
-                language.GetString("Flash_RkEraseBlock"),
-                info.BlockSizeBytes / 1024,
-                language.GetString("Flash_RkPageSize"),
-                info.PageSizeSectors * info.SectorSize,
-                language.GetString("Flash_RkFlashManufacturer"),
-                info.ManufacturerName));
+            lines.Add(language.GetString("Flash_RkEraseBlockSize", info.BlockSizeBytes / 1024));
+            lines.Add(language.GetString("Flash_RkPageSizeBytes", info.PageSizeSectors * info.SectorSize));
+            lines.Add(language.GetString("Flash_RkFlashVendor", info.ManufacturerName));
         }
 
         return lines;
@@ -651,6 +879,8 @@ public sealed partial class FlashViewModel
 
         var target = RkdlStorage.WireBits[index];
         var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
@@ -658,7 +888,7 @@ public sealed partial class FlashViewModel
             {
                 session.ChangeStorage(target);
                 return Task.FromResult(session.ReadStorageMask());
-            }, CancellationToken.None).ConfigureAwait(true);
+            }, cancellation.Token).ConfigureAwait(true);
             AppendLog($"{language.GetString("Flash_RkSwitchStorage")}: {RkStorageTypes[index]}");
             var actualIndex = RkdlStorage.IndexOfMask(reported);
             if (actualIndex == index)
@@ -673,10 +903,12 @@ public sealed partial class FlashViewModel
                     actualIndex >= 0 ? RkStorageTypes[actualIndex] : $"0x{reported:X8}"));
             }
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -703,9 +935,9 @@ public sealed partial class FlashViewModel
         }
 
         if (!confirmed) return;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         try
         {
             var erased = await App.DeviceMonitor.RunRkdlAsync(device,
@@ -744,9 +976,9 @@ public sealed partial class FlashViewModel
         var length = checked(sectors * RkdlConstants.SectorSize);
         var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? string.Empty;
         var temporary = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         try
         {
             var written = await App.DeviceMonitor.RunRkdlAsync(device, async session =>
@@ -807,9 +1039,9 @@ public sealed partial class FlashViewModel
         }
 
         if (!RkLbaRangeAllowed(address, fileSectors)) return;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         try
         {
             var written = await App.DeviceMonitor.RunRkdlAsync(device, async session =>
@@ -856,9 +1088,9 @@ public sealed partial class FlashViewModel
         }
 
         if (!confirmed) return;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         try
         {
             await App.DeviceMonitor.RunRkdlAsync(device, session =>
@@ -975,6 +1207,8 @@ public sealed partial class FlashViewModel
     {
         ArgumentNullException.ThrowIfNull(partitions);
         if (address < 0 || sectors <= 0) return false;
+        if (address == RockchipParmContainer.FirmwareParameterStartLba &&
+            sectors <= RockchipParmContainer.MaxParameterSectors) return true;
         var end = address + sectors;
         foreach (var partition in partitions)
         {
