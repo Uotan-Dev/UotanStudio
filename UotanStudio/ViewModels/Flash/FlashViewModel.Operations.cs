@@ -249,6 +249,8 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         _loadedPath = path;
         _requiredCodeName = null;
@@ -285,7 +287,7 @@ public sealed partial class FlashViewModel
             if (remotePayload)
             {
                 var partitions = await new FlashRemotePayloadService(RemoteHttpClient)
-                    .ListAsync(path, CancellationToken.None);
+                    .ListAsync(path, cancellation.Token);
                 if (path != _loadedPath) return;
                 _remotePayloadUrl = path;
                 var remoteRows = new List<FlashPartitionEntry>(partitions.Count);
@@ -330,7 +332,7 @@ public sealed partial class FlashViewModel
                         return Firmware.Core.FormatDetector.Detect(path) is Firmware.BlockImage.Lp.LpFormatHandler;
                     }))
                 {
-                    var partitions = await FlashSuperService.ListAsync(path, CancellationToken.None);
+                    var partitions = await FlashSuperService.ListAsync(path, cancellation.Token);
                     _superPath = path;
                     var superRows = new List<FlashPartitionEntry>(partitions.Count);
                     foreach (var (partitionName, size) in partitions)
@@ -368,7 +370,7 @@ public sealed partial class FlashViewModel
             var extension = Path.GetExtension(path).ToLowerInvariant();
             if (File.Exists(path) && extension is ".ofp" or ".ops" or ".ozip")
             {
-                var entries = await FlashOppoContainerService.ListAsync(path, CancellationToken.None);
+                var entries = await FlashOppoContainerService.ListAsync(path, cancellation.Token);
                 _oppoPath = path;
                 var oppoRows = new List<FlashPartitionEntry>(entries.Count);
                 foreach (var (name, archiveEntry, outputName, size) in entries)
@@ -388,7 +390,7 @@ public sealed partial class FlashViewModel
 
             if (File.Exists(path) && extension is ".nb0" or ".ntpi")
             {
-                var entries = await FlashVendorContainerService.ListAsync(path, CancellationToken.None);
+                var entries = await FlashVendorContainerService.ListAsync(path, cancellation.Token);
                 _vendorPath = path;
                 var vendorRows = new List<FlashPartitionEntry>(entries.Count);
                 foreach (var (name, archiveEntry, size) in entries)
@@ -476,7 +478,7 @@ public sealed partial class FlashViewModel
 
             if (File.Exists(path) && FlashPayloadService.LooksLikePayload(path))
             {
-                var partitions = await FlashPayloadService.ListAsync(path, CancellationToken.None);
+                var partitions = await FlashPayloadService.ListAsync(path, cancellation.Token);
                 if (path != _loadedPath) return;
                 _payloadPath = path;
                 var payloadRows = new List<FlashPartitionEntry>(partitions.Count);
@@ -566,6 +568,21 @@ public sealed partial class FlashViewModel
                     _localizer.GetString("Flash_UnsupportedPackage"), Path.GetFileName(path)));
                 _loadedPath = string.Empty;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(_localizer.GetString("Flash_Canceled"));
+            _loadedPath = string.Empty;
+            _flatBinPackage = false;
+            _edlBundleReady = false;
+            _edlEntries.Clear();
+            ResetEdlProgrammer();
+            _edlProgrammerOverride = null;
+            _mtkResolution = null;
+            _mtkRows.Clear();
+            _mtkPartitions.Clear();
+            Partitions.Clear();
+            UpdateEdlButton();
         }
         catch (Exception ex)
         {
@@ -658,23 +675,25 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal) ||
             selected.Any(entry => !entry.IsSelected || !Partitions.Contains(entry)) ||
             folders.Count != 1 || folders[0].TryGetLocalPath() is not { } parent) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         SetControlEnabled("ExtractSelectedButton", false);
         try
         {
             var names = selected.Select(entry => entry.Name).ToArray();
             var output = _payloadPath is { } payload
-                ? await FlashPayloadService.ExtractAsync(payload, names, parent, CancellationToken.None)
+                ? await FlashPayloadService.ExtractAsync(payload, names, parent, cancellation.Token)
                 : _remotePayloadUrl is { } remote
                     ? await new FlashRemotePayloadService(RemoteHttpClient)
-                        .ExtractAsync(remote, names, parent, CancellationToken.None)
+                        .ExtractAsync(remote, names, parent, cancellation.Token)
                 : _superPath is { } super
-                    ? await FlashSuperService.ExtractAsync(super, names, parent, CancellationToken.None)
+                    ? await FlashSuperService.ExtractAsync(super, names, parent, cancellation.Token)
                     : _vendorPath is { } vendor
                         ? await FlashVendorContainerService.ExtractAsync(vendor,
-                            [.. names.Select(name => _vendorEntries[name])], parent, CancellationToken.None)
+                            [.. names.Select(name => _vendorEntries[name])], parent, cancellation.Token)
                         : await FlashOppoContainerService.ExtractAsync(_oppoPath!,
-                            [.. names.Select(name => _oppoEntries[name].Entry)], parent, CancellationToken.None);
+                            [.. names.Select(name => _oppoEntries[name].Entry)], parent, cancellation.Token);
             foreach (var entry in selected)
             {
                 var filename = _vendorPath is not null ? _vendorEntries[entry.Name]
@@ -687,10 +706,12 @@ public sealed partial class FlashViewModel
             }
             AppendLog(output);
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             SetControlEnabled("ExtractSelectedButton", true);
         }
     }
@@ -705,18 +726,22 @@ public sealed partial class FlashViewModel
         });
         if (_busy || _confirming || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal) ||
             _payloadPath != payload || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } parent) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         SetControlEnabled("BuildWiredPackageButton", false);
         try
         {
             var output = await FlashPayloadService.BuildPackageAsync(payload,
-                [.. Partitions.Select(entry => entry.Name)], parent, CancellationToken.None);
+                [.. Partitions.Select(entry => entry.Name)], parent, cancellation.Token);
             AppendLog(output);
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             SetControlEnabled("BuildWiredPackageButton", _payloadPath is not null);
         }
     }
@@ -805,6 +830,8 @@ public sealed partial class FlashViewModel
         }
 
         if (!confirmed) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
@@ -812,13 +839,15 @@ public sealed partial class FlashViewModel
             {
                 session.ResetDevice();
                 return Task.FromResult(0);
-            }, CancellationToken.None).ConfigureAwait(true);
+            }, cancellation.Token).ConfigureAwait(true);
             AppendLog(string.Format(language.GetString("Flash_OkResult"), "reboot"));
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -881,10 +910,12 @@ public sealed partial class FlashViewModel
 
         AppendLog(string.Format(CultureInfo.InvariantCulture,
             _localizer.GetString("Flash_LoadBootRkApplying"), loaderRow.FilePath));
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
-            var valid = await ValidateRkLoaderFileAsync(loaderRow.FilePath).ConfigureAwait(true);
+            var valid = await ValidateRkLoaderFileAsync(loaderRow.FilePath, cancellation.Token).ConfigureAwait(true);
             UpdateSpecialFileRowStatus(loaderRow, valid);
             if (!valid)
             {
@@ -892,12 +923,14 @@ public sealed partial class FlashViewModel
             }
 
             ApplyRkLoaderPath(loaderRow.FilePath);
-            await DownloadRkLoaderAsync(device).ConfigureAwait(true);
+            await DownloadRkLoaderAsync(device, cancellation.Token).ConfigureAwait(true);
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -912,11 +945,13 @@ public sealed partial class FlashViewModel
             FileTypeFilter = [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         _rootPackagePath = null;
         try
         {
-            var validation = await RootPatchPackageService.Shared.ValidateAsync(path);
+            var validation = await RootPatchPackageService.Shared.ValidateAsync(path, cancellationToken: cancellation.Token);
             if (!validation.IsSupported || validation.Detection is null ||
                 !FlashRootImage.IsSupportedPackage(validation.Detection))
             {
@@ -931,8 +966,9 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<Button>("ChooseRootPackageButton"), path);
             AppendLog(Path.GetFileName(path));
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
-        finally { SetBusy(false); UpdateRootControlsState(); }
+        finally { SetBusy(false); _flashCancellation = null; UpdateRootControlsState(); }
     }
 
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
@@ -988,7 +1024,7 @@ public sealed partial class FlashViewModel
         entry.StatusText = _localizer.GetString("Flash_RkLoaderChecking");
         try
         {
-            var valid = await ValidateRkLoaderFileAsync(path).ConfigureAwait(true);
+            var valid = await ValidateRkLoaderFileAsync(path, CancellationToken.None).ConfigureAwait(true);
             PublishRkLoaderStatus(entry, valid);
             if (valid)
             {
@@ -1078,6 +1114,7 @@ public sealed partial class FlashViewModel
 
             UpdateObservedDeviceInfo();
             UpdateEdlButton();
+            RefreshAdbSuGate();
         }
     }
 
@@ -1282,6 +1319,8 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
@@ -1290,9 +1329,10 @@ public sealed partial class FlashViewModel
             {
                 session.RebootMaskRom();
                 return Task.FromResult(true);
-            }, CancellationToken.None).ConfigureAwait(true);
+            }, cancellation.Token).ConfigureAwait(true);
             AppendLog(_localizer.GetString("Flash_OperationSucceeded"));
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex)
         {
             AppendError(ex);
@@ -1300,6 +1340,7 @@ public sealed partial class FlashViewModel
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -1467,18 +1508,25 @@ public sealed partial class FlashViewModel
     {
         _busy = value;
         IsBusy = value;
-        SetControlEnabled("DisableVbmetaBox", !value);
-        SetControlEnabled("AddRootBox", !value);
-        SetControlEnabled("EraseDataBox", !value);
-        SetControlEnabled("RebootAfterBox", !value);
-        SetControlEnabled("ShowAllPartitionsBox", !value);
-        SetControlEnabled("DeleteCowBox", !value);
-        SetControlEnabled("RootOptionsPanel", !value);
-        SetControlEnabled("EdlPane", !value);
-        SetControlEnabled("MtkPane", !value);
-        SetControlEnabled("RkPane", !value);
+        // 忙碌期间只关闭侧边操作区的通用动作与其二级分类；页面滚动、刷机包栏、分区表与日志保持可用。
+        // While busy only the side action pane's shared actions and its secondary sections are turned off;
+        // page scrolling, the package bar, the partition table and the log stay usable.
+        foreach (var name in FlashDeviceUiPolicy.BusyDisabledControls)
+        {
+            SetControlEnabled(name, !value);
+        }
+
+        // 取消按钮不在常启用集合内，其状态完全由这条写入决定：忙碌且已登记取消源时才可用。
+        // The cancel button's enabled state tracks the main entry area's busy state: it is usable
+        // only while busy with a registered cancellation source.
+        SetControlEnabled("CancelFlashButton", value && _flashCancellation is not null);
         if (!value)
         {
+            // 退出忙碌后按当前页面状态重算派生启用值（加载引导、回读、选项与 Root 面板），
+            // 使本次运行期间改变的包与选中状态立即反映到界面上。
+            // After the run the state-derived enables are recomputed so a package or selection that
+            // changed during the run is reflected immediately.
+            UpdateModeVisibility();
             FlushPendingLog();
         }
     }
@@ -1630,15 +1678,19 @@ public sealed partial class FlashViewModel
 
         if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdl && !_busy && !_confirming)
         {
+            using var rkCancellation = new CancellationTokenSource();
+            _flashCancellation = rkCancellation;
             SetBusy(true);
             try
             {
-                await RunRkReadInfoAsync(rkdl);
+                await RunRkReadInfoAsync(rkdl, rkCancellation.Token);
             }
+            catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
             catch (Exception ex) { AppendError(ex); }
             finally
             {
                 SetBusy(false);
+                _flashCancellation = null;
                 UpdateEdlButton();
             }
 
@@ -1658,11 +1710,13 @@ public sealed partial class FlashViewModel
                 : "Flash_ProtocolMismatch"));
             return;
         }
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
             var partitions = await FastbootPartitionReader.ReadAsync(device,
-                Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, CancellationToken.None);
+                Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, cancellation.Token);
             Partitions.Clear();
             _loadedPath = string.Empty;
             _requiredCodeName = null;
@@ -1693,8 +1747,13 @@ public sealed partial class FlashViewModel
             Partitions.Apply(0, deviceRows);
             AppendLog($"{partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
-        finally { SetBusy(false); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+        }
     }
 
     private async Task RunMtkDeviceInfoAsync()
@@ -1845,10 +1904,9 @@ public sealed partial class FlashViewModel
 
         if (!TryReadEdlBundleTuning(out var bundleTuning)) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         SetControlEnabled("FlashSelectedButton", false);
         SetControlEnabled("PackagePathBox", false);
         FlashPartitionEntry? bundleActiveRow = null;
@@ -1935,6 +1993,17 @@ public sealed partial class FlashViewModel
                 AppendLog($"{_localizer.GetString("Flash_WarningPrefix")}: {warning}");
             }
         }
+        catch (OperationCanceledException)
+        {
+            if (bundleActiveRow is { State: FlashRowState.Running })
+            {
+                SetRowFinished(bundleActiveRow, success: false);
+            }
+
+            MarkUnfinishedSkipped();
+            UpdateOverall();
+            AppendLog(_localizer.GetString("Flash_Canceled"));
+        }
         catch (Exception ex)
         {
             if (bundleActiveRow is { State: FlashRowState.Running })
@@ -1950,7 +2019,6 @@ public sealed partial class FlashViewModel
         {
             _flashCancellation = null;
             SetBusy(false);
-            SetControlEnabled("CancelFlashButton", false);
             SetControlEnabled("FlashSelectedButton", true);
             UpdateEdlButton();
             SetControlEnabled("PackagePathBox", true);
@@ -2180,9 +2248,9 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         SetControlEnabled("EraseSelectedButton", false);
         var target = new DeviceInfo(device);
         try
@@ -2248,23 +2316,27 @@ public sealed partial class FlashViewModel
                 AppendLog(language.GetString("Flash_DeviceChanged"));
                 return;
             }
+            using var cancellation = new CancellationTokenSource();
+            _flashCancellation = cancellation;
             SetBusy(true);
             SetControlEnabled("SwitchSlotButton", false);
             try
             {
                 var slot = action switch
                 {
-                    SlotAction.ResetCurrent => await FastbootSlotService.ResetCurrentAsync(device, CancellationToken.None),
-                    SlotAction.SetA => await FastbootSlotService.SetActiveSlotAsync(device, "a", CancellationToken.None),
-                    SlotAction.SetB => await FastbootSlotService.SetActiveSlotAsync(device, "b", CancellationToken.None),
-                    _ => await FastbootSlotService.SetOtherAsync(device, CancellationToken.None)
+                    SlotAction.ResetCurrent => await FastbootSlotService.ResetCurrentAsync(device, cancellation.Token),
+                    SlotAction.SetA => await FastbootSlotService.SetActiveSlotAsync(device, "a", cancellation.Token),
+                    SlotAction.SetB => await FastbootSlotService.SetActiveSlotAsync(device, "b", cancellation.Token),
+                    _ => await FastbootSlotService.SetOtherAsync(device, cancellation.Token)
                 };
                 AppendLog($"{language.GetString("Flash_ActiveSlot")}: {slot}");
             }
+            catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
             catch (Exception ex) { AppendError(ex); }
             finally
             {
                 SetBusy(false);
+                _flashCancellation = null;
                 SetControlEnabled("SwitchSlotButton", true);
             }
         }
@@ -2286,7 +2358,42 @@ public sealed partial class FlashViewModel
         }
     }
 
-    internal void OnCancelFlashClick(object? sender, RoutedEventArgs e) => _flashCancellation?.Cancel();
+    /// <summary>
+    /// Asks for confirmation and then cancels the running flash operation; the dialog opens only while an
+    /// operation with a registered cancellation source is still running, and the token source is cancelled
+    /// only when it is still the one the dialog was opened against.
+    /// <para>先请求确认再取消正在执行的烧录操作；只有仍存在已登记取消源的操作才会弹出对话框，且确认后
+    /// 仍指向同一取消源时才真正取消。</para>
+    /// </summary>
+    /// <param name="sender">Event source. <para>事件来源。</para></param>
+    /// <param name="e">Event arguments. <para>事件参数。</para></param>
+    internal async void OnCancelFlashClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || _flashCancellation is not { } cancellation ||
+            TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner,
+                language.GetString("Flash_Cancel"),
+                language.GetString("Flash_CancelConfirm")).ConfigureAwait(true);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (confirmed && ReferenceEquals(_flashCancellation, cancellation))
+        {
+            await cancellation.CancelAsync().ConfigureAwait(true);
+        }
+    }
 
     private async Task RunSelectedAsync(bool erase)
     {
@@ -2397,13 +2504,12 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        SetBusy(true);
         SetControlEnabled("FlashSelectedButton", false);
         SetControlEnabled("EraseSelectedButton", false);
         SetControlEnabled("SwitchSlotButton", false);
-        SetControlEnabled("CancelFlashButton", true);
         SetControlEnabled("PackagePathBox", false);
         SetControlEnabled("ChooseFileButton", false);
         SetControlEnabled("ChooseFolderButton", false);
@@ -2682,6 +2788,7 @@ public sealed partial class FlashViewModel
                     language.GetString("Flash_RebootAfter")));
             }
         }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
@@ -2697,7 +2804,6 @@ public sealed partial class FlashViewModel
             UpdateOverall();
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetControlEnabled("FlashSelectedButton", true);
             SetControlEnabled("EraseSelectedButton", true);
             SetControlEnabled("SwitchSlotButton", true);
@@ -2731,6 +2837,8 @@ public sealed partial class FlashViewModel
             FileTypeFilter = [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         Field<ComboBox>("MtkEntryIndexBox").ItemsSource = null;
         Field<ComboBox>("MtkEntryIndexBox").SelectedIndex = -1;
@@ -2738,7 +2846,7 @@ public sealed partial class FlashViewModel
         _mtkLoaderPath = null;
         try
         {
-            var entries = await MtkScatterPackage.ListUsableLoaderEntriesAsync(path, CancellationToken.None);
+            var entries = await MtkScatterPackage.ListUsableLoaderEntriesAsync(path, cancellation.Token);
             if (entries.Count == 0)
             {
                 throw new InvalidDataException(
@@ -2756,10 +2864,12 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<TextBlock>("MtkDaPathText"), path);
             AppendLog(Path.GetFileName(path));
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
+            _flashCancellation = null;
             UpdateEdlButton();
         }
     }
@@ -2775,6 +2885,8 @@ public sealed partial class FlashViewModel
             FileTypeFilter = [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
         SetBusy(true);
         _mtkEmi = null;
         try
@@ -2784,8 +2896,9 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<TextBlock>("MtkEmiPathText"), path);
             AppendLog(Path.GetFileName(path));
         }
+        catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
-        finally { SetBusy(false); }
+        finally { SetBusy(false); _flashCancellation = null; }
     }
 
     /// <summary>
@@ -2878,10 +2991,9 @@ public sealed partial class FlashViewModel
         finally { _confirming = false; }
         if (!confirmed || selected.Any(row => !row.IsSelected || !Partitions.Contains(row))) return;
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         SetRowsQueued(selected);
         try
         {
@@ -2938,7 +3050,6 @@ public sealed partial class FlashViewModel
             UpdateOverall();
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             UpdateEdlButton();
         }
     }
@@ -2989,10 +3100,9 @@ public sealed partial class FlashViewModel
         }
 
         var language = _localizer;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
@@ -3008,7 +3118,6 @@ public sealed partial class FlashViewModel
         finally
         {
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -3055,10 +3164,9 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming) return;
         var language = _localizer;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             AppendLog(await body(cancellation.Token).ConfigureAwait(true));
@@ -3068,7 +3176,6 @@ public sealed partial class FlashViewModel
         finally
         {
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -3192,10 +3299,9 @@ public sealed partial class FlashViewModel
         if (!confirmed || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } current) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             await App.DeviceMonitor.RunEdlAsync(current, async edl =>
@@ -3218,7 +3324,6 @@ public sealed partial class FlashViewModel
         finally
         {
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -3253,7 +3358,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         SetBusy(true);
-        SetControlEnabled("CancelFlashButton", true);
         try
         {
             List<EdlReadbackManifestEntry> manifest = [];
@@ -3332,7 +3436,6 @@ public sealed partial class FlashViewModel
         {
             _flashCancellation = null;
             SetBusy(false);
-            SetControlEnabled("CancelFlashButton", false);
             UpdateOverall();
             UpdateEdlButton();
         }
@@ -3458,10 +3561,9 @@ public sealed partial class FlashViewModel
             selected.Any(row => !row.IsSelected || !Partitions.Contains(row)) ||
             !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         SetControlEnabled("FlashSelectedButton", false);
         SetControlEnabled("PartitionGrid", false);
         SetControlEnabled("PackagePathBox", false);
@@ -3512,7 +3614,6 @@ public sealed partial class FlashViewModel
             UpdateOverall();
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetControlEnabled("FlashSelectedButton", true);
             SetControlEnabled("PartitionGrid", true);
             SetControlEnabled("PackagePathBox", true);
@@ -3561,10 +3662,9 @@ public sealed partial class FlashViewModel
             selected.Any(row => !row.IsSelected || !Partitions.Contains(row)) ||
             !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         SetControlEnabled("FlashSelectedButton", false);
         SetControlEnabled("PartitionGrid", false);
         SetControlEnabled("PackagePathBox", false);
@@ -3616,7 +3716,6 @@ public sealed partial class FlashViewModel
             UpdateOverall();
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetControlEnabled("FlashSelectedButton", true);
             SetControlEnabled("PartitionGrid", true);
             SetControlEnabled("PackagePathBox", true);
@@ -4010,10 +4109,9 @@ public sealed partial class FlashViewModel
 
         var kind = SelectedMtkStorageKind;
         var physicalPartition = MtkScatterPackage.GetPhysicalPartition(kind);
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         SetControlEnabled("PartitionGrid", false);
         SetControlEnabled("PackagePathBox", false);
         SetRowsQueued(selected);
@@ -4090,7 +4188,6 @@ public sealed partial class FlashViewModel
             UpdateOverall();
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetControlEnabled("FlashSelectedButton", true);
             SetControlEnabled("PartitionGrid", true);
             SetControlEnabled("PackagePathBox", true);
@@ -4261,10 +4358,9 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
         var language = _localizer;
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
@@ -4274,7 +4370,6 @@ public sealed partial class FlashViewModel
         finally
         {
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -4313,10 +4408,9 @@ public sealed partial class FlashViewModel
             if (!confirmed) return;
         }
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
@@ -4326,7 +4420,6 @@ public sealed partial class FlashViewModel
         finally
         {
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             SetBusy(false);
             UpdateEdlButton();
         }
@@ -4401,10 +4494,9 @@ public sealed partial class FlashViewModel
         finally { _confirming = false; }
         if (!confirmed) return;
 
-        SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
+        SetBusy(true);
         try
         {
             async Task FinishAsync(MtkSession session, CancellationToken token)
@@ -4454,7 +4546,6 @@ public sealed partial class FlashViewModel
         {
             SetBusy(false);
             _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
             UpdateEdlButton();
         }
     }
