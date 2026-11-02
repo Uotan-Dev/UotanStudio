@@ -31,13 +31,39 @@ internal enum FlashDeviceMode
 }
 
 /// <summary>
+/// The protocol families the page treats with a narrower shared-action set than the mode table alone:
+/// ADB and fastboot endpoints answer only the shared flash action, while every other protocol keeps
+/// the full table behavior.
+/// <para>页面以比模式表更窄的通用动作集合对待的协议族：ADB 与 fastboot 端点只保留通用烧录动作，
+/// 其余协议维持完整的表行为。</para>
+/// </summary>
+internal enum FlashDeviceKind
+{
+    /// <summary>The protocol has no additional restriction: the mode table alone decides.
+    /// <para>该协议没有额外限制：仅由模式表决定。</para></summary>
+    Unknown,
+
+    /// <summary>An ADB endpoint; the page offers only the shared flash action, and the view model keeps
+    /// it disabled until a noninteractive root shell is confirmed.
+    /// <para>ADB 端点；页面只提供通用烧录动作，且视图模型在确认非交互 root shell 之前保持其禁用。</para>
+    /// </summary>
+    Adb,
+
+    /// <summary>A fastboot endpoint; the page offers only the shared flash action.
+    /// <para>fastboot 端点；页面只提供通用烧录动作。</para></summary>
+    Fastboot
+}
+
+/// <summary>
 /// The single source of truth for which flash-page controls are usable and which device mode each of them needs.
 /// <para>烧录页面哪些控件可用、以及每个控件需要哪种设备模式的唯一来源。</para>
 /// </summary>
 /// <remarks>
 /// The page applies this table only to device operations in the right action pane. Shared operations require a
-/// selected device; protocol-specific sections are additionally limited to their matching device mode.
-/// <para>页面只对右侧操作区中的设备操作应用这张表。通用操作需要选中设备；协议专属分类还会进一步限制为匹配的设备模式。</para>
+/// selected device; protocol-specific sections are additionally limited to their matching device mode, and ADB and
+/// fastboot endpoints narrow the shared set to the flash action alone through the kind dimension.
+/// <para>页面只对右侧操作区中的设备操作应用这张表。通用操作需要选中设备；协议专属分类还会进一步限制为匹配的设备模式，
+/// 而 ADB 与 fastboot 端点经种类维度把通用集合收窄为仅烧录动作。</para>
 /// </remarks>
 internal static class FlashDeviceUiPolicy
 {
@@ -60,9 +86,12 @@ internal static class FlashDeviceUiPolicy
 
     /// <summary>
     /// Every device-gated control with the modes it is limited to; <see langword="null"/> marks an action shared by
-    /// every selected device. Entries follow the page layout so the table reads like the page.
+    /// every selected device. Entries follow the page layout so the table reads like the page; each protocol section
+    /// lists its expander and its pane, so disabling a section also closes its header instead of leaving a menu the
+    /// page cannot serve.
     /// <para>每个受设备门控的控件及其限定的模式；<see langword="null"/> 表示所有已选设备共用的动作。条目顺序与
-    /// 页面布局一致，使这张表可以按页面顺序阅读。</para>
+    /// 页面布局一致，使这张表可以按页面顺序阅读；每个协议分类同时列出其展开器与面板，使关闭分类时连表头一起关闭，
+    /// 不再留下页面无法服务的菜单。</para>
     /// </summary>
     private static readonly (string Name, FlashDeviceMode[]? Modes)[] Entries =
     [
@@ -72,13 +101,16 @@ internal static class FlashDeviceUiPolicy
         ("ReadbackSelectedButton", null),
         ("FlashSelectedButton", null),
         ("EraseSelectedButton", null),
-        ("CancelFlashButton", null),
         ("SwitchSlotButton", null),
         // 协议分类 / protocol sections
+        ("EdlExpander", EdlOnly),
+        ("MtkExpander", MtkOnly),
+        ("RkExpander", RkdlOnly),
+        // 镜像操作分类 / image operations section
+        ("ImageExpander", null),
         ("EdlPane", EdlOnly),
         ("MtkPane", MtkOnly),
         ("RkPane", RkdlOnly),
-        // 镜像操作分类 / image operations section
         ("ImagePane", null)
     ];
 
@@ -87,6 +119,53 @@ internal static class FlashDeviceUiPolicy
 
     /// <summary>The gated controls in presentation order. <para>按界面顺序排列的受控控件。</para></summary>
     internal static IReadOnlyList<string> GatedControls { get; } = [.. Entries.Select(entry => entry.Name)];
+
+    /// <summary>
+    /// Controls turned off while a page operation runs: the shared actions of the side action pane, its flash and
+    /// AVB options, and the panes of its protocol sections. Everything else on the page keeps its own state, so the
+    /// page stays scrollable and the package bar, the partition table and the log stay usable during a run.
+    /// <para>页面操作运行期间关闭的控件：侧边操作区的通用动作、其刷写与 AVB 选项，以及各协议分类的面板。
+    /// 页面其余部分保持自身状态，因此运行期间页面仍可滚动，刷机包栏、分区表与日志仍可操作。</para>
+    /// </summary>
+    internal static IReadOnlyList<string> BusyDisabledControls { get; } =
+    [
+        // 通用动作 / shared actions
+        "LoadBootButton",
+        "ReadInfoButton",
+        "ReadbackSelectedButton",
+        "FlashSelectedButton",
+        "EraseSelectedButton",
+        "SwitchSlotButton",
+        // 刷写选项 / flash options
+        "DisableVbmetaBox",
+        "AddRootBox",
+        "EraseDataBox",
+        "RebootAfterBox",
+        "ShowAllPartitionsBox",
+        "DeleteCowBox",
+        "AvbOptionsPanel",
+        "RootOptionsPanel",
+        // 协议分类面板 / protocol section panes
+        "EdlPane",
+        "MtkPane",
+        "RkPane",
+        "ImagePane"
+    ];
+
+    /// <summary>The busy-state lookup of <see cref="BusyDisabledControls"/>.
+    /// <para><see cref="BusyDisabledControls"/> 的忙碌状态查找表。</para>
+    /// </summary>
+    private static readonly HashSet<string> BusyDisabledIndex =
+        new(BusyDisabledControls, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Returns whether the control is turned off while an operation runs.
+    /// <para>返回该控件是否在操作运行期间被关闭。</para>
+    /// </summary>
+    /// <param name="name">Name of the XAML control. <para>XAML 控件名称。</para></param>
+    /// <returns><see langword="true"/> for a control owned by the busy state.
+    /// <para>属于忙碌状态的控件返回 <see langword="true"/>。</para></returns>
+    internal static bool IsBusyDisabled(string name) => BusyDisabledIndex.Contains(name);
 
     /// <summary>
     /// Controls a Rockchip device offers only after the loader took over: the shared flash actions and the Rockchip
@@ -136,6 +215,46 @@ internal static class FlashDeviceUiPolicy
     };
 
     /// <summary>
+    /// Maps the selected device's protocol to the restricted-kind dimension: only ADB and fastboot get the
+    /// narrowed shared-action set, every other protocol stays unrestricted.
+    /// <para>把所选设备协议映射到受限种类维度：只有 ADB 与 fastboot 收窄通用动作集合，其余协议不受限。</para>
+    /// </summary>
+    /// <param name="protocol">Protocol of the selected device; <see langword="null"/> means nothing is selected.
+    /// <para>所选设备的协议；<see langword="null"/> 表示未选中设备。</para>
+    /// </param>
+    /// <returns>The restricted kind of the protocol. <para>该协议对应的受限种类。</para></returns>
+    internal static FlashDeviceKind KindOf(DeviceProtocolKind? protocol) => protocol switch
+    {
+        DeviceProtocolKind.Adb => FlashDeviceKind.Adb,
+        DeviceProtocolKind.Fastboot => FlashDeviceKind.Fastboot,
+        _ => FlashDeviceKind.Unknown,
+    };
+
+    /// <summary>
+    /// The controls an ADB endpoint offers: only the shared flash action; the view model additionally keeps
+    /// it disabled until its root-shell probe confirms a noninteractive su.
+    /// <para>ADB 端点可用的控件：仅通用烧录动作；视图模型在其 root shell 探测确认非交互 su 之前额外保持禁用。</para>
+    /// </summary>
+    internal static IReadOnlyList<string> AdbPermittedControls { get; } = ["FlashSelectedButton"];
+
+    /// <summary>
+    /// The controls a fastboot endpoint offers: only the shared flash action.
+    /// <para>fastboot 端点可用的控件：仅通用烧录动作。</para>
+    /// </summary>
+    internal static IReadOnlyList<string> FastbootPermittedControls { get; } = ["FlashSelectedButton"];
+
+    /// <summary>
+    /// Reports whether the named control additionally waits for the view model's ADB root-shell verdict
+    /// before it may become enabled on an ADB device.
+    /// <para>判断该控件在 ADB 设备上是否还需等待视图模型的 root shell 探测结论才能启用。</para>
+    /// </summary>
+    /// <param name="controlName">Name of the XAML control. <para>XAML 控件名称。</para></param>
+    /// <returns><see langword="true"/> when the control needs the confirmed root shell.
+    /// <para>控件需要已确认的 root shell 时为 <see langword="true"/>。</para></returns>
+    internal static bool RequiresAdbSu(string controlName)
+        => string.Equals(controlName, "FlashSelectedButton", StringComparison.Ordinal);
+
+    /// <summary>
     /// Reports whether a control may be used in the given mode; controls outside the table are always allowed.
     /// <para>判断控件在给定模式下是否可用；表中没有的控件始终允许。</para>
     /// </summary>
@@ -166,13 +285,26 @@ internal static class FlashDeviceUiPolicy
     /// <param name="isRockchipLoaderStage">Whether the selected Rockchip device reports the loader stage
     /// (serial rewritten to <c>ROCKCHIP</c>). <para>所选瑞芯微设备是否处于 loader 阶段（序列号已改写为
     /// <c>ROCKCHIP</c>）。</para></param>
-    /// <returns><see langword="true"/> when the mode offers the control and the device's stage offers it too.
-    /// <para>模式提供该控件且设备阶段也提供它时为 <see langword="true"/>。</para></returns>
-    internal static bool IsAvailable(string controlName, FlashDeviceMode mode, bool isRockchipLoaderStage)
+    /// <param name="kind">The restricted protocol kind of the selected device; ADB and fastboot narrow the shared
+    /// set to the flash action. <para>所选设备的受限协议种类；ADB 与 fastboot 把通用集合收窄为烧录动作。</para></param>
+    /// <returns><see langword="true"/> when the mode, the device's stage and the kind all offer the control.
+    /// <para>模式、设备阶段与种类都提供该控件时为 <see langword="true"/>。</para></returns>
+    internal static bool IsAvailable(string controlName, FlashDeviceMode mode, bool isRockchipLoaderStage,
+        FlashDeviceKind kind = FlashDeviceKind.Unknown)
     {
         if (!IsAvailable(controlName, mode))
         {
             return false;
+        }
+
+        if (kind == FlashDeviceKind.Adb)
+        {
+            return AdbPermittedControls.Contains(controlName, StringComparer.Ordinal);
+        }
+
+        if (kind == FlashDeviceKind.Fastboot)
+        {
+            return FastbootPermittedControls.Contains(controlName, StringComparer.Ordinal);
         }
 
         if (mode != FlashDeviceMode.Rkdl)
