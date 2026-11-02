@@ -85,6 +85,7 @@ public class HexViewer : Grid
 
     internal event Action<HexViewer, int, int>? RangeEdited;
     internal event Action<HexViewer>? ViewportChanged;
+    internal event Action<HexViewer, int>? CaretMoved;
     internal Vector ScrollOffset { get => _scroll.Offset; set => _scroll.Offset = value; }
     internal void GoToOffset(long offset)
     {
@@ -155,6 +156,7 @@ public class HexViewer : Grid
         Children.Add(_gotoBox);
 
         _scroll.ScrollChanged += (_, _) => ViewportChanged?.Invoke(this);
+        _viewport.CaretMoved += offset => CaretMoved?.Invoke(this, (int)offset);
         _viewport.RangeEdited += (offset, count) => RangeEdited?.Invoke(this, offset, count);
         _viewport.BytesEdited += (_, _) => BytesEdited?.Invoke(this, EventArgs.Empty);
         _viewport.GotoRequested += (_, _) => ShowGoto();
@@ -229,6 +231,7 @@ public class HexViewer : Grid
         private string[] _asciiByteText = AsciiDefaultText;
         internal byte[]? ComparisonData { get; set; }
         internal event Action<int, int>? RangeEdited;
+        internal event Action<long>? CaretMoved;
 
         private HexColumnLayout CreateLayout(double width)
         {
@@ -1001,6 +1004,7 @@ public class HexViewer : Grid
             }
 
             offset = Math.Clamp(offset, 0, Math.Max(0, _data.Length - 1));
+            CaretMoved?.Invoke(offset);
             if (_caretOffset == offset)
             {
                 InvalidateVisual();

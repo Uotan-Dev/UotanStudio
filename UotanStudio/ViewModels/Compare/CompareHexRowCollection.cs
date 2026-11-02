@@ -26,6 +26,36 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// </summary>
     private const int CacheCapacity = 256;
 
+    private int _selectedIndex = -1;
+
+    internal bool IsRowDifferent(int index)
+    {
+        if (_leftData is null || _rightData is null)
+        {
+            return IntersectsDiff((long)index * BytesPerLine);
+        }
+        var offset = index * BytesPerLine;
+        var leftCount = Math.Clamp(_leftData.Length - offset, 0, BytesPerLine);
+        var rightCount = Math.Clamp(_rightData.Length - offset, 0, BytesPerLine);
+        return leftCount != rightCount || !_leftData.AsSpan(Math.Min(offset, _leftData.Length), leftCount)
+            .SequenceEqual(_rightData.AsSpan(Math.Min(offset, _rightData.Length), rightCount));
+    }
+
+    internal void SetSelectedIndex(int index)
+    {
+        lock (_syncRoot)
+        {
+            _selectedIndex = index;
+            foreach (var slot in _cache)
+            {
+                if (slot.Row is { } row)
+                {
+                    row.IsSelected = slot.Index == index;
+                }
+            }
+        }
+    }
+
     private readonly byte[]? _leftData;
     private readonly byte[]? _rightData;
 
@@ -302,7 +332,8 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
             rightSub: FormatAscii(slot.Right, slot.RightCount),
             isRightDiff,
             hasLeftLine: !leftMissing,
-            hasRightLine: !rightMissing);
+            hasRightLine: !rightMissing)
+        { IsSelected = index == _selectedIndex };
     }
 
     /// <summary>

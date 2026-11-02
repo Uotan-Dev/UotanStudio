@@ -1,4 +1,5 @@
 using System.Collections;
+using UotanStudio.Services.Compare;
 
 namespace UotanStudio.ViewModels.Compare;
 
@@ -8,7 +9,7 @@ namespace UotanStudio.ViewModels.Compare;
 /// </summary>
 internal sealed class CompareHexEditSession
 {
-    internal const long MaximumTotalBytes = 256L * 1024 * 1024;
+    internal const long MaximumTotalBytes = HexFileEditService.MaximumBytes;
     private readonly BitArray _differences;
     internal byte[] Left { get; }
     internal byte[] Right { get; }
@@ -41,19 +42,8 @@ internal sealed class CompareHexEditSession
         }
     }
 
-    internal bool IsRowDifferent(int row)
-    {
-        var start = row * 16;
-        var end = Math.Min(start + 16, _differences.Length);
-        for (var i = start; i < end; i++)
-        {
-            if (_differences[i])
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    internal int Length => _differences.Length;
+    internal bool IsDifferent(int offset) => _differences[offset];
 
     internal void Update(int start, int count)
     {

@@ -2248,6 +2248,15 @@
   <data name="Compare_NextDiff" xml:space="preserve">
     <value>下一差异</value>
   </data>
+  <data name="Compare_FirstDifference" xml:space="preserve">
+    <value>已经是第一个差异。</value>
+  </data>
+  <data name="Compare_LastDifference" xml:space="preserve">
+    <value>已经是最后一个差异。</value>
+  </data>
+  <data name="Compare_NoDifferences" xml:space="preserve">
+    <value>没有差异。</value>
+  </data>
   <data name="Compare_PrevDiff" xml:space="preserve">
     <value>上一差异</value>
   </data>
@@ -2255,7 +2264,7 @@
     <value>差异 {0} 行 · 共 {1} 行</value>
   </data>
   <data name="Compare_HexReadOnlyLimit" xml:space="preserve">
-    <value>十六进制只读对比：可编辑的两侧文件大小合计上限为 256 MiB。</value>
+    <value>内容超出 256 MiB 编辑上限，当前为十六进制只读视图。</value>
   </data>
   <data name="Compare_HexSummary" xml:space="preserve">
     <value>差异 {0} 字节 · {1} 个区段</value>
