@@ -29,6 +29,12 @@ public enum FirehoseStorageType
     Nand,
 
     /// <summary>
+    /// NVMe storage.
+    /// <para>NVMe 存储。</para>
+    /// </summary>
+    Nvme,
+
+    /// <summary>
     /// SPI NOR storage.
     /// <para>SPI NOR 存储。</para>
     /// </summary>
@@ -283,6 +289,7 @@ public class FirehoseConfiguration
         FirehoseStorageType.Nand => "nand",
         FirehoseStorageType.Spinor => "spinor",
         FirehoseStorageType.Emmc => "eMMC",
+        FirehoseStorageType.Nvme => "NVMe",
         FirehoseStorageType.Unknown => string.Empty,
         _ => "eMMC"
     };
@@ -607,6 +614,12 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             return true;
         }
 
+        if (string.Equals(value, "nvme", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Nvme;
+            return true;
+        }
+
         storageType = FirehoseStorageType.Unknown;
         return false;
     }
@@ -623,6 +636,12 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         if (text.Contains("ufs", StringComparison.OrdinalIgnoreCase))
         {
             storageType = FirehoseStorageType.Ufs;
+            return true;
+        }
+
+        if (text.Contains("nvme", StringComparison.OrdinalIgnoreCase))
+        {
+            storageType = FirehoseStorageType.Nvme;
             return true;
         }
 
