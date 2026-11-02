@@ -552,11 +552,11 @@
                         </Border>
 
                         <!-- 资源使用（电池/内存/存储） -->
-                        <Border Classes="InfoCard" IsVisible="{Binding HasResourceInfo}">
+                        <Border Classes="InfoCard" IsVisible="{Binding HasSystemInfo}">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_ResourceOverview}" />
                                 <StackPanel Spacing="14">
-                                    <StackPanel IsVisible="{Binding HasBattery}" Spacing="4">
+                                    <StackPanel Spacing="4">
                                         <Grid ColumnDefinitions="150,*">
                                             <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Battery}" />
                                             <TextBlock Grid.Column="1" Classes="CardValue"
@@ -564,7 +564,7 @@
                                         </Grid>
                                         <ProgressBar Classes="ResourceBar" Value="{Binding BatteryLevel}" />
                                     </StackPanel>
-                                    <StackPanel IsVisible="{Binding HasMem}" Spacing="4">
+                                    <StackPanel Spacing="4">
                                         <Grid ColumnDefinitions="150,*">
                                             <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Memory}" />
                                             <TextBlock Grid.Column="1" Classes="CardValue"
@@ -572,7 +572,7 @@
                                         </Grid>
                                         <ProgressBar Classes="ResourceBar" Value="{Binding MemLevel}" />
                                     </StackPanel>
-                                    <StackPanel IsVisible="{Binding HasDisk}" Spacing="4">
+                                    <StackPanel Spacing="4">
                                         <Grid ColumnDefinitions="150,*">
                                             <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Storage}" />
                                             <TextBlock Grid.Column="1" Classes="CardValue"

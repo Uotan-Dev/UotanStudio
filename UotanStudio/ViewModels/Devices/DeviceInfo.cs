@@ -999,92 +999,62 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     } = string.Empty;
 
     /// <summary>
-    /// Battery level percent (-1 = unavailable).
-    /// <para>电池电量百分比，-1 表示不可用。</para>
+    /// Battery level percent, clamped to 0–100; unavailable values display as zero.
+    /// <para>电池电量百分比，限制在 0–100；不可用时显示为零。</para>
     /// </summary>
     public int BatteryLevel
     {
         get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(HasBattery));
-            }
-        }
-    } = -1;
+        set => SetProperty(ref field, Math.Clamp(value, 0, 100));
+    }
 
     /// <summary>
-    /// Whether battery info is available.
-    /// <para>电池信息是否可用。</para>
+    /// Battery status text (voltage/temperature), or <c>--</c> when unavailable.
+    /// <para>电池状态文本（电压/温度），不可用时为 <c>--</c>。</para>
     /// </summary>
-    public bool HasBattery => BatteryLevel >= 0;
+    public string BatteryText
+    {
+        get;
+        set => SetProperty(ref field, string.IsNullOrWhiteSpace(value) ? "--" : value);
+    } = "--";
 
     /// <summary>
-    /// Battery status text (voltage/temperature).
-    /// <para>电池状态文本（电压/温度）。</para>
-    /// </summary>
-    public string BatteryText { get; set => SetProperty(ref field, value); } = string.Empty;
-
-    /// <summary>
-    /// Memory usage percent (-1 = unavailable).
-    /// <para>内存占用百分比，-1 表示不可用。</para>
+    /// Memory usage percent, clamped to 0–100; unavailable values display as zero.
+    /// <para>内存占用百分比，限制在 0–100；不可用时显示为零。</para>
     /// </summary>
     public int MemLevel
     {
         get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(HasMem));
-            }
-        }
-    } = -1;
+        set => SetProperty(ref field, Math.Clamp(value, 0, 100));
+    }
 
     /// <summary>
-    /// Whether memory info is available.
-    /// <para>内存信息是否可用。</para>
+    /// Memory usage text (used/total), or <c>--</c> when unavailable.
+    /// <para>内存使用文本（已用/总量），不可用时为 <c>--</c>。</para>
     /// </summary>
-    public bool HasMem => MemLevel >= 0;
+    public string MemText
+    {
+        get;
+        set => SetProperty(ref field, string.IsNullOrWhiteSpace(value) ? "--" : value);
+    } = "--";
 
     /// <summary>
-    /// Memory usage text (used/total).
-    /// <para>内存使用文本（已用/总量）。</para>
-    /// </summary>
-    public string MemText { get; set => SetProperty(ref field, value); } = string.Empty;
-
-    /// <summary>
-    /// Disk usage percent (-1 = unavailable).
-    /// <para>磁盘占用百分比，-1 表示不可用。</para>
+    /// Disk usage percent, clamped to 0–100; unavailable values display as zero.
+    /// <para>磁盘占用百分比，限制在 0–100；不可用时显示为零。</para>
     /// </summary>
     public int DiskLevel
     {
         get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                OnPropertyChanged(nameof(HasDisk));
-            }
-        }
-    } = -1;
+        set => SetProperty(ref field, Math.Clamp(value, 0, 100));
+    }
 
     /// <summary>
-    /// Whether disk info is available.
-    /// <para>磁盘信息是否可用。</para>
+    /// Disk usage text (used/total), or <c>--</c> when unavailable.
+    /// <para>磁盘占用文本（已用/总量），不可用时为 <c>--</c>。</para>
     /// </summary>
-    public bool HasDisk => DiskLevel >= 0;
-
-    /// <summary>
-    /// Whether at least one of battery/memory/storage resource metrics is available.
-    /// <para>资源使用信息（电池/内存/存储）是否至少一项可用。</para>
-    /// </summary>
-    public bool HasResourceInfo => HasSystemInfo && (HasBattery || HasMem || HasDisk);
-
-    /// <summary>
-    /// Disk usage text (used/total).
-    /// <para>磁盘占用文本（已用/总量）。</para>
-    /// </summary>
-    public string DiskText { get; set => SetProperty(ref field, value); } = string.Empty;
+    public string DiskText
+    {
+        get;
+        set => SetProperty(ref field, string.IsNullOrWhiteSpace(value) ? "--" : value);
+    } = "--";
 }
