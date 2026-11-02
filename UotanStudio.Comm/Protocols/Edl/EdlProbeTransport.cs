@@ -91,8 +91,8 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         var foundLog = false;
         while (!bytes.IsEmpty)
         {
-            var padding = bytes.IndexOfAnyExcept(EdlConstants.DocumentLeadingPadding);
-            bytes = padding >= 0 ? bytes[padding..] : default;
+            var pointer = EdlConstants.MeasureDocumentPrefix(bytes);
+            bytes = pointer < bytes.Length ? bytes[pointer..] : default;
             if (bytes.IsEmpty)
             {
                 break;
@@ -187,8 +187,8 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
 
         while (!bytes.IsEmpty)
         {
-            var padding = bytes.IndexOfAnyExcept(EdlConstants.DocumentLeadingPadding);
-            bytes = padding >= 0 ? bytes[padding..] : default;
+            var pointer = EdlConstants.MeasureDocumentPrefix(bytes);
+            bytes = pointer < bytes.Length ? bytes[pointer..] : default;
             var end = bytes.IndexOf("</data>"u8);
             if (end < 0)
             {

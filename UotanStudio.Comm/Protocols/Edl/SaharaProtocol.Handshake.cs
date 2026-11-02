@@ -380,6 +380,7 @@ public sealed partial class SaharaProtocol
             var document = new byte[64 * 1024];
             var length = 0;
             var total = 0;
+            var prefixPending = true;
             var start = Environment.TickCount64;
             var budget = Math.Max(_timeoutMs, EdlConstants.ProbeReadBudgetMs);
             while ((Environment.TickCount64 - start) < budget)
@@ -398,19 +399,23 @@ public sealed partial class SaharaProtocol
                     {
                         throw new SaharaException("Firehose probe exceeds its response limit.");
                     }
-                    if (length == 0 && EdlConstants.DocumentLeadingPadding.Contains(value))
+                    if (length == 0 && prefixPending && EdlConstants.DocumentLeadingPadding.Contains(value))
                     {
                         continue;
                     }
+                    prefixPending = false;
                     document[length++] = value;
                     if (document.AsSpan(0, length).EndsWith("</data>"u8))
                     {
-                        var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length));
+                        var skip = EdlConstants.MeasureDocumentPrefix(document.AsSpan(0, length));
+                        var block = FirehoseResponseParser.ParseDataBlock(
+                            Encoding.UTF8.GetString(document, skip, length - skip));
                         if (block.Response is { } response)
                         {
                             return response.IsAck && !response.IsRawMode;
                         }
                         length = 0;
+                        prefixPending = true;
                     }
                 }
             }
@@ -440,12 +445,7 @@ public sealed partial class SaharaProtocol
             return false;
         }
 
-        var start = 0;
-        while (start < d.Length && EdlConstants.DocumentLeadingPadding.Contains(d[start]))
-        {
-            start++;
-        }
-
+        var start = EdlConstants.MeasureDocumentPrefix(d);
         return d.AsSpan(start).StartsWith("<?xml"u8);
     }
 }

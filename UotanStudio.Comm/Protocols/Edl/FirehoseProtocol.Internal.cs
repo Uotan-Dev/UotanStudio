@@ -26,6 +26,7 @@ public sealed partial class FirehoseProtocol
         var start = Environment.TickCount64;
         var document = _responseDocument;
         var length = 0;
+        var prefixPending = true;
 
         while (Environment.TickCount64 - start < budget)
         {
@@ -60,11 +61,12 @@ public sealed partial class FirehoseProtocol
             while (consumed < _rxBufferBytes)
             {
                 var value = _rxBuffer[consumed++];
-                if (length == 0 && EdlConstants.DocumentLeadingPadding.Contains(value))
+                if (length == 0 && prefixPending && EdlConstants.DocumentLeadingPadding.Contains(value))
                 {
                     continue;
                 }
 
+                prefixPending = false;
                 if (length == document.Length)
                 {
                     throw new FirehoseException("Firehose XML exceeds the 64 KiB response limit.");
@@ -79,7 +81,9 @@ public sealed partial class FirehoseProtocol
                 }
 
                 ShiftRxBufferLeft(consumed);
-                var block = FirehoseResponseParser.ParseDataBlock(Encoding.UTF8.GetString(document, 0, length),
+                var skip = EdlConstants.MeasureDocumentPrefix(document.AsSpan(0, length));
+                var block = FirehoseResponseParser.ParseDataBlock(
+                    Encoding.UTF8.GetString(document, skip, length - skip),
                     capturePayloads: blockObserver is not null);
                 blockObserver?.Invoke(block);
                 foreach (var log in block.Logs)
@@ -96,6 +100,7 @@ public sealed partial class FirehoseProtocol
 
                 length = 0;
                 consumed = 0;
+                prefixPending = true;
             }
 
             ShiftRxBufferLeft(consumed);

@@ -274,6 +274,39 @@ internal static class EdlConstants
         SearchValues.Create([(byte)'\0', (byte)' ', (byte)'\t', (byte)'\r', (byte)'\n']);
 
     /// <summary>
+    /// Byte-order mark that some targets emit before their first Firehose document.
+    /// <para>部分设备在首个 Firehose 文档前输出的字节序标记。</para>
+    /// </summary>
+    public static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
+
+    /// <summary>
+    /// Returns how many leading bytes of <paramref name="data"/> are packet padding, an optional
+    /// UTF-8 BOM, or further padding after that BOM.
+    /// <para>返回 <paramref name="data"/> 开头属于包填充、可选 UTF-8 BOM，以及该 BOM 之后继续填充的字节数。</para>
+    /// </summary>
+    /// <param name="data">The received prefix to measure.<para>待测量的已接收前缀。</para></param>
+    /// <returns>The count of bytes to skip before the document.<para>文档之前需要跳过的字节数。</para></returns>
+    public static int MeasureDocumentPrefix(ReadOnlySpan<byte> data)
+    {
+        var start = 0;
+        while (start < data.Length && DocumentLeadingPadding.Contains(data[start]))
+        {
+            start++;
+        }
+
+        if (data[start..].StartsWith(Utf8Bom))
+        {
+            start += Utf8Bom.Length;
+            while (start < data.Length && DocumentLeadingPadding.Contains(data[start]))
+            {
+                start++;
+            }
+        }
+
+        return start;
+    }
+
+    /// <summary>
     /// Default command timeout in milliseconds.
     /// <para>默认命令超时（毫秒）。</para>
     /// </summary>
