@@ -678,6 +678,9 @@
   <data name="Flash_Cancel" xml:space="preserve">
     <value>取消操作</value>
   </data>
+  <data name="Flash_CancelConfirm" xml:space="preserve">
+    <value>确定取消正在执行的操作吗？进行中的设备传输将被中止，目标端可能停留在部分写入的状态。</value>
+  </data>
   <data name="Flash_Decompressing" xml:space="preserve">
     <value>正在解压镜像</value>
   </data>
@@ -3880,22 +3883,52 @@
     <value>芯片名称</value>
   </data>
   <data name="Flash_RkStorageSize" xml:space="preserve">
-    <value>存储容量</value>
+    <value>存储容量：{0} MiB（{1} 个扇区 × {2} B）</value>
   </data>
-  <data name="Flash_RkEraseBlock" xml:space="preserve">
-    <value>擦除块</value>
+  <data name="Flash_RkEraseBlockSize" xml:space="preserve">
+    <value>擦除块：{0} KiB</value>
   </data>
-  <data name="Flash_RkPageSize" xml:space="preserve">
-    <value>页大小</value>
+  <data name="Flash_RkPageSizeBytes" xml:space="preserve">
+    <value>页大小：{0} B</value>
   </data>
-  <data name="Flash_RkFlashManufacturer" xml:space="preserve">
-    <value>闪存厂商</value>
+  <data name="Flash_RkFlashVendor" xml:space="preserve">
+    <value>闪存厂商：{0}</value>
+  </data>
+  <data name="Flash_RkStorageNoGeometry" xml:space="preserve">
+    <value>未上报闪存几何</value>
   </data>
   <data name="Flash_RkSwitchStorage" xml:space="preserve">
     <value>切换存储</value>
   </data>
   <data name="Flash_RkEraseFlash" xml:space="preserve">
     <value>擦除 Flash</value>
+  </data>
+  <data name="Flash_RkEraseSystem" xml:space="preserve">
+    <value>擦除系统盘</value>
+  </data>
+  <data name="Flash_RkEraseSystemConfirm" xml:space="preserve">
+    <value>通过设备固件擦除系统区？系统盘上的分区都会被破坏。</value>
+  </data>
+  <data name="Flash_RkLowerFormat" xml:space="preserve">
+    <value>低级格式化</value>
+  </data>
+  <data name="Flash_RkLowerFormatConfirm" xml:space="preserve">
+    <value>通过设备固件对存储执行低级格式化？介质上的所有分区与数据都会被破坏。</value>
+  </data>
+  <data name="Flash_RkEraseUserData" xml:space="preserve">
+    <value>擦除用户数据</value>
+  </data>
+  <data name="Flash_RkEraseUserDataConfirm" xml:space="preserve">
+    <value>通过设备固件擦除用户数据区？设备上的用户数据都会被破坏。</value>
+  </data>
+  <data name="Flash_RkUserSectorMap" xml:space="preserve">
+    <value>用户扇区映射</value>
+  </data>
+  <data name="Flash_RkUserSectorMapPresent" xml:space="preserve">
+    <value>固件报告存在可寻址的用户数据区</value>
+  </data>
+  <data name="Flash_RkUserSectorMapAbsent" xml:space="preserve">
+    <value>固件报告不存在可寻址的用户数据区</value>
   </data>
   <data name="Flash_RkEraseFlashConfirm" xml:space="preserve">
     <value>擦除整块 Flash？设备上的所有分区都会被破坏。</value>
@@ -3921,6 +3954,24 @@
   <data name="Flash_RkForceAddress" xml:space="preserve">
     <value>强制按地址写</value>
   </data>
+  <data name="Flash_RkReadPartitions" xml:space="preserve">
+    <value>读取设备分区表</value>
+  </data>
+  <data name="Flash_RkPartitionHeader" xml:space="preserve">
+    <value>设备分区</value>
+  </data>
+  <data name="Flash_RkGptHeaderCrcMismatch" xml:space="preserve">
+    <value>GPT 头 CRC 不相符</value>
+  </data>
+  <data name="Flash_RkGptEntriesCrcMismatch" xml:space="preserve">
+    <value>警告：GPT 条目数组 CRC 不相符，分区表可能已损坏。</value>
+  </data>
+  <data name="Flash_RkPartitionSourceParameter" xml:space="preserve">
+    <value>parameter 分区表（LBA 0x2000）</value>
+  </data>
+  <data name="Flash_RkPartitionsImported" xml:space="preserve">
+    <value>已从设备导入 {0} 行分区到列表。</value>
+  </data>
   <data name="Flash_RkLbaNotDeclared" xml:space="preserve">
     <value>该扇区范围不在已加载 Rockchip parameter 分区表的任何分区内；确需写入时请勾选“强制按地址写”。</value>
   </data>
@@ -3938,6 +3989,21 @@
   </data>
   <data name="Flash_RkCapability" xml:space="preserve">
     <value>读取能力</value>
+  </data>
+  <data name="Flash_RkStatusWaitingLoader" xml:space="preserve">
+    <value>等待加载 loader</value>
+  </data>
+  <data name="Flash_RkStatusLoaderReady" xml:space="preserve">
+    <value>loader 已就绪</value>
+  </data>
+  <data name="Flash_RkStatusQueryFailed" xml:space="preserve">
+    <value>设备信息查询失败</value>
+  </data>
+  <data name="Flash_RkStatus" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="Flash_RkFlashId" xml:space="preserve">
+    <value>Flash ID</value>
   </data>
   <data name="Flash_RkStorage" xml:space="preserve">
     <value>存储</value>

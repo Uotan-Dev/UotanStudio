@@ -678,6 +678,9 @@ Author: 暮间雾
   <data name="Flash_Cancel" xml:space="preserve">
     <value>Cancel operation</value>
   </data>
+  <data name="Flash_CancelConfirm" xml:space="preserve">
+    <value>Cancel the running operation? In-flight device transfers are aborted; the target may keep a partially written state.</value>
+  </data>
   <data name="Flash_Decompressing" xml:space="preserve">
     <value>Decompressing image</value>
   </data>
@@ -3880,22 +3883,52 @@ Continue?</value>
     <value>Chip Name</value>
   </data>
   <data name="Flash_RkStorageSize" xml:space="preserve">
-    <value>Storage Size</value>
+    <value>Storage Size: {0} MiB ({1} sectors × {2} B)</value>
   </data>
-  <data name="Flash_RkEraseBlock" xml:space="preserve">
-    <value>Erase Block</value>
+  <data name="Flash_RkEraseBlockSize" xml:space="preserve">
+    <value>Erase Block: {0} KiB</value>
   </data>
-  <data name="Flash_RkPageSize" xml:space="preserve">
-    <value>Page Size</value>
+  <data name="Flash_RkPageSizeBytes" xml:space="preserve">
+    <value>Page Size: {0} B</value>
   </data>
-  <data name="Flash_RkFlashManufacturer" xml:space="preserve">
-    <value>Flash Manufacturer</value>
+  <data name="Flash_RkFlashVendor" xml:space="preserve">
+    <value>Flash Manufacturer: {0}</value>
+  </data>
+  <data name="Flash_RkStorageNoGeometry" xml:space="preserve">
+    <value>No flash geometry reported</value>
   </data>
   <data name="Flash_RkSwitchStorage" xml:space="preserve">
     <value>Switch Storage</value>
   </data>
   <data name="Flash_RkEraseFlash" xml:space="preserve">
     <value>Erase Flash</value>
+  </data>
+  <data name="Flash_RkEraseSystem" xml:space="preserve">
+    <value>Erase System Disk</value>
+  </data>
+  <data name="Flash_RkEraseSystemConfirm" xml:space="preserve">
+    <value>Erase the system area through the device firmware? Partitions on the system disk will be destroyed.</value>
+  </data>
+  <data name="Flash_RkLowerFormat" xml:space="preserve">
+    <value>Lower Format</value>
+  </data>
+  <data name="Flash_RkLowerFormatConfirm" xml:space="preserve">
+    <value>Lower-format the storage through the device firmware? This destroys every partition and all data on the medium.</value>
+  </data>
+  <data name="Flash_RkEraseUserData" xml:space="preserve">
+    <value>Erase User Data</value>
+  </data>
+  <data name="Flash_RkEraseUserDataConfirm" xml:space="preserve">
+    <value>Erase the user-data area through the device firmware? User data on the device will be destroyed.</value>
+  </data>
+  <data name="Flash_RkUserSectorMap" xml:space="preserve">
+    <value>User Sector Map</value>
+  </data>
+  <data name="Flash_RkUserSectorMapPresent" xml:space="preserve">
+    <value>the firmware reports an addressable user-data area</value>
+  </data>
+  <data name="Flash_RkUserSectorMapAbsent" xml:space="preserve">
+    <value>the firmware reports no addressable user-data area</value>
   </data>
   <data name="Flash_RkEraseFlashConfirm" xml:space="preserve">
     <value>Erase the whole flash? Every partition on the device is destroyed.</value>
@@ -3921,6 +3954,24 @@ Continue?</value>
   <data name="Flash_RkForceAddress" xml:space="preserve">
     <value>Force Address Write</value>
   </data>
+  <data name="Flash_RkReadPartitions" xml:space="preserve">
+    <value>Read Device Partition Table</value>
+  </data>
+  <data name="Flash_RkPartitionHeader" xml:space="preserve">
+    <value>Partitions on device</value>
+  </data>
+  <data name="Flash_RkGptHeaderCrcMismatch" xml:space="preserve">
+    <value>GPT header CRC mismatch</value>
+  </data>
+  <data name="Flash_RkGptEntriesCrcMismatch" xml:space="preserve">
+    <value>Warning: the GPT entry array CRC does not match; the table may be damaged.</value>
+  </data>
+  <data name="Flash_RkPartitionSourceParameter" xml:space="preserve">
+    <value>parameter table (LBA 0x2000)</value>
+  </data>
+  <data name="Flash_RkPartitionsImported" xml:space="preserve">
+    <value>Imported {0} partition rows from the device into the list.</value>
+  </data>
   <data name="Flash_RkLbaNotDeclared" xml:space="preserve">
     <value>The sector range is not inside any partition of the loaded Rockchip parameter table; enable Force Address Write to use it anyway.</value>
   </data>
@@ -3938,6 +3989,21 @@ Continue?</value>
   </data>
   <data name="Flash_RkCapability" xml:space="preserve">
     <value>Capability</value>
+  </data>
+  <data name="Flash_RkStatusWaitingLoader" xml:space="preserve">
+    <value>Waiting for loader download</value>
+  </data>
+  <data name="Flash_RkStatusLoaderReady" xml:space="preserve">
+    <value>Loader ready</value>
+  </data>
+  <data name="Flash_RkStatusQueryFailed" xml:space="preserve">
+    <value>Device info query failed</value>
+  </data>
+  <data name="Flash_RkStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Flash_RkFlashId" xml:space="preserve">
+    <value>Flash ID</value>
   </data>
   <data name="Flash_RkStorage" xml:space="preserve">
     <value>Storage</value>
