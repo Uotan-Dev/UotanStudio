@@ -638,4 +638,117 @@ public sealed partial class RkdlSession
         return read == cswBuffer.Length && RkdlCsw.TryParse(cswBuffer, cbw.Tag, out var csw) && csw!.IsSuccess;
     }
 
+    /// <summary>
+    /// Reads whole sectors at a logical block address into a byte array using the vendor LBA addressing
+    /// method, so a caller without access to the wire sub codes still reads raw media.
+    /// <para>以厂商 LBA 寻址方式把逻辑块地址处的若干完整扇区读入字节数组，使接触不到线上子码的调用方仍能
+    /// 读取原始介质。</para>
+    /// </summary>
+    /// <param name="address">Start LBA in 512-byte sectors.<para>起始 LBA（512 字节扇区）。</para></param>
+    /// <param name="sectorCount">Sector count to read; positive.<para>读取的扇区数；必须为正。</para></param>
+    /// <param name="cancellationToken">A cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The sector bytes.<para>扇区字节。</para></returns>
+    /// <exception cref="RkdlException">The device refused the READ_LBA transaction or returned fewer bytes
+    /// than requested.<para>设备拒绝 READ_LBA 事务或返回的字节少于请求数。</para></exception>
+    public byte[] ReadLbaSectors(long address, int sectorCount, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(address);
+        ArgumentOutOfRangeException.ThrowIfLessThan(sectorCount, 1);
+        var buffer = new byte[sectorCount * RkdlConstants.SectorSize];
+        using var stream = new MemoryStream(buffer, writable: true);
+        var read = ReadLBA(address, stream, buffer.Length, null, cancellationToken, RkdlRwMethod.Lba);
+        if (read < buffer.Length)
+        {
+            throw new RkdlException(RkdlError.ReadFailed, $"Short LBA read at {address}: {read}/{buffer.Length} bytes.");
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// Reads the device's current GPT partition table through READ_LBA: the 34 primary sectors are
+    /// addressed at LBA 0, the header signature is verified and every non-empty entry is decoded, so the
+    /// caller receives the layout of the storage the device currently answers from.
+    /// <para>经 READ_LBA 读取设备当前存储的 GPT 分区表：从 LBA 0 寻址 34 个主表扇区，校验头签名并解码全部
+    /// 非空条目，使调用方拿到设备当前应答的存储介质上的布局。</para>
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The decoded table: total sectors from <c>READ_FLASH_INFO</c> and the header, header/entry CRC
+    /// verdicts and one record per non-empty entry in table order.<para>解码后的分区表：取自
+    /// <c>READ_FLASH_INFO</c> 与表头的总扇区数、头与条目的 CRC 校验结论，以及按表内顺序排列的每个非空条目。</para></returns>
+    /// <exception cref="RkdlException">The device refused a READ_LBA transaction, returned fewer bytes than
+    /// the 34 primary sectors, or the storage carries no GPT header at LBA 1.<para>设备拒绝 READ_LBA 事务、
+    /// 返回的字节少于 34 个主表扇区，或介质在 LBA 1 处没有 GPT 头。</para></exception>
+    /// <remarks>
+    /// Mirrors the vendor rkdeveloptool <c>ppt</c> path (<c>print_gpt</c>): read LBA 0..33 and validate the
+    /// "EFI PART" signature. Only the primary table is read, so a truncated backup table still yields the
+    /// live layout. CRC values are computed with <see cref="RkdlCrc.Crc32"/> and reported instead of enforced.
+    /// <para>与厂商 rkdeveloptool 的 <c>ppt</c> 路径（<c>print_gpt</c>）一致：读取 LBA 0..33 并校验
+    /// "EFI PART" 签名。这里只读主表，因此备份表损坏仍能得到当前布局。CRC 以 <see cref="RkdlCrc.Crc32"/>
+    /// 计算并作为结论报告，而不作为强制门。</para>
+    /// </remarks>
+    public RkdlGptTable ReadGpt(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        var master = new byte[RkdlGpt.PrimarySectors * RkdlConstants.SectorSize];
+        using var stream = new MemoryStream(master, writable: true);
+        var read = ReadLBA(0, stream, master.Length, null, cancellationToken, RkdlRwMethod.Lba);
+        if (read < master.Length)
+        {
+            throw new RkdlException(RkdlError.ReadFailed, $"Short GPT read: {read}/{master.Length} bytes.");
+        }
+
+        if (BinaryPrimitives.ReadUInt64LittleEndian(master.AsSpan(RkdlConstants.SectorSize)) != RkdlGpt.HeaderSignature)
+        {
+            throw new RkdlException(RkdlError.ReadFailed, "No GPT header found at LBA 1; the storage carries no GPT table.");
+        }
+
+        var headerOffset = RkdlConstants.SectorSize;
+        var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(master.AsSpan(headerOffset + 12));
+        var storedHeaderCrc = BinaryPrimitives.ReadUInt32LittleEndian(master.AsSpan(headerOffset + 16));
+        var entryLba = BinaryPrimitives.ReadUInt64LittleEndian(master.AsSpan(headerOffset + 72));
+        var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(master.AsSpan(headerOffset + 80));
+        var entrySize = BinaryPrimitives.ReadUInt32LittleEndian(master.AsSpan(headerOffset + 84));
+        var storedEntriesCrc = BinaryPrimitives.ReadUInt32LittleEndian(master.AsSpan(headerOffset + 88));
+
+        BinaryPrimitives.WriteUInt32LittleEndian(master.AsSpan(headerOffset + 16), 0);
+        var computedHeaderCrc = RkdlCrc.Crc32(master.AsSpan(headerOffset, Math.Clamp((int)headerSize, 0, RkdlConstants.SectorSize)));
+        BinaryPrimitives.WriteUInt32LittleEndian(master.AsSpan(headerOffset + 16), storedHeaderCrc);
+
+        // The geometry must describe the medium that just answered READ_LBA, so it is read uncached:
+        // CHANGE_STORAGE switches media whose sector counts differ and a cached total would misreport
+        // every table but the first.
+        // 几何必须描述刚应答 READ_LBA 的介质，因此现读而不读缓存：CHANGE_STORAGE 切换的介质扇区数各不相同，
+        // 缓存的总扇区数会让除第一个介质外的所有表都报告错误容量。
+        var totalSectors = ReadFlashInfo().SectorCount;
+        var entries = new List<RkdlGptPartition>();
+        var boundedEntrySize = entrySize is >= 16 and <= 512 ? (int)entrySize : 128;
+        var boundedEntryCount = Math.Min(entryCount, 128u);
+        var computedEntriesCrc = storedEntriesCrc;
+        if (entryLba > 0 && entryLba < uint.MaxValue && boundedEntryCount > 0)
+        {
+            var arraySectors = (int)Math.Min((boundedEntryCount * (ulong)boundedEntrySize + RkdlConstants.SectorSize - 1) / RkdlConstants.SectorSize + 1,
+                RkdlGpt.PrimarySectors);
+            var entryBytes = new byte[arraySectors * RkdlConstants.SectorSize];
+            using var entryStream = new MemoryStream(entryBytes, writable: true);
+            var entryRead = ReadLBA((long)entryLba, entryStream, entryBytes.Length, null, cancellationToken, RkdlRwMethod.Lba);
+            if (entryRead == entryBytes.Length)
+            {
+                computedEntriesCrc = RkdlCrc.Crc32(entryBytes.AsSpan(0, (int)(boundedEntryCount * (ulong)boundedEntrySize)));
+                for (var i = 0; i < boundedEntryCount; i++)
+                {
+                    var entry = RkdlGptTable.DecodeEntry(entryBytes, i * boundedEntrySize, boundedEntrySize);
+                    if (entry is null)
+                    {
+                        break;
+                    }
+
+                    entries.Add(entry);
+                }
+            }
+        }
+
+        return new RkdlGptTable(totalSectors, computedHeaderCrc == storedHeaderCrc, computedEntriesCrc == storedEntriesCrc, entries);
+    }
+
 }

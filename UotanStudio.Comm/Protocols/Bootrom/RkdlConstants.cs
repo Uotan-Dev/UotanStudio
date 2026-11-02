@@ -118,6 +118,30 @@ public static class RkdlConstants
     public const int EraseSectorChunk = 1024 * 32;
 
     /// <summary>
+    /// Maximum blocks one TEST_BAD_BLOCK command tests (MAX_TEST_BLOCKS).
+    /// <para>一条 TEST_BAD_BLOCK 命令测试的最大块数（MAX_TEST_BLOCKS）。</para>
+    /// </summary>
+    public const int MaxTestBlocksPerCommand = 512;
+
+    /// <summary>
+    /// Response payload length of TEST_BAD_BLOCK, which the official tool requests as its 64-byte transfer length.
+    /// <para>TEST_BAD_BLOCK 的响应负载长度；官方工具按 64 字节传输长度请求。</para>
+    /// </summary>
+    public const int TestBadBlockResultLength = 64;
+
+    /// <summary>
+    /// Maximum sectors one READ_SECTOR command carries; the official tool refuses more than 0x14.
+    /// <para>一条 READ_SECTOR 命令携带的最大扇区数；官方工具拒绝超过 0x14 的取值。</para>
+    /// </summary>
+    public const int MaxReadSectorsPerCommand = 0x14;
+
+    /// <summary>
+    /// Vendor sub code the official tool always places in WRITE_SDRAM and EXECUTE_SDRAM.
+    /// <para>官方工具在 WRITE_SDRAM 与 EXECUTE_SDRAM 中始终使用的厂商子码。</para>
+    /// </summary>
+    public const byte SdramVendorSubCode = 0xAA;
+
+    /// <summary>
     /// Upper bound on the chunk records a sparse image may declare when it is replayed to flash, matching the
     /// reader's default cap so a crafted image cannot pin the pass in chunk bookkeeping.
     /// <para>稀疏镜像回放到 flash 时允许声明的数据块记录上限，与读取器的默认上限一致，使伪造镜像无法靠数据块记账
@@ -341,6 +365,12 @@ internal static class RkdlRwMethod
 internal enum RkdlCommand : byte
 {
     /// <summary>
+    /// Test Bad Block: 3.
+    /// <para>坏块检测：3。</para>
+    /// </summary>
+    TestBadBlock = 0x03,
+
+    /// <summary>
     /// Test Unit Ready: 0.
     /// <para>就绪检测：0。</para>
     /// </summary>
@@ -453,6 +483,18 @@ internal enum RkdlCommand : byte
     /// <para>写入 SPI Flash：0x22。</para>
     /// </summary>
     WriteSpiFlash = 0x22,
+
+    /// <summary>
+    /// Write New Efuse: 0x23, addressing the efuse by index.
+    /// <para>写入新 Efuse：0x23，按索引寻址 efuse。</para>
+    /// </summary>
+    WriteNewEfuse = 0x23,
+
+    /// <summary>
+    /// Read New Efuse: 0x24, addressing the efuse by index.
+    /// <para>读取新 Efuse：0x24，按索引寻址 efuse。</para>
+    /// </summary>
+    ReadNewEfuse = 0x24,
 
     /// <summary>
     /// Erase LBA: 0x25.
@@ -1041,6 +1083,12 @@ public enum RkdlError
     /// <para>读取操作失败。</para>
     /// </summary>
     ReadFailed = 11,
+
+    /// <summary>
+    /// A device-side asynchronous operation did not report completion within its wait budget.
+    /// <para>设备侧异步操作未在其等待预算内报告完成。</para>
+    /// </summary>
+    DeviceUnready = 12,
 }
 
 /// <summary>

@@ -453,3 +453,89 @@ internal static class RkdlGpt
         return true;
     }
 }
+
+/// <summary>
+/// A decoded GPT partition entry read from the device.
+/// <para>从设备读取并解码的一个 GPT 分区条目。</para>
+/// </summary>
+/// <param name="Index">Zero-based entry index in the table.<para>表内从零开始的条目序号。</para></param>
+/// <param name="Name">UTF-16LE partition name.<para>UTF-16LE 分区名。</para></param>
+/// <param name="TypeGuid">Partition type GUID.<para>分区类型 GUID。</para></param>
+/// <param name="UniqueGuid">Unique partition GUID.<para>分区唯一 GUID。</para></param>
+/// <param name="FirstLba">First sector of the partition.<para>分区起始扇区。</para></param>
+/// <param name="LastLba">Last sector of the partition, inclusive.<para>分区结束扇区（含）。</para></param>
+/// <param name="Attributes">Raw 64-bit attributes.<para>原始 64 位属性值。</para></param>
+public sealed record RkdlGptPartition(
+    int Index,
+    string Name,
+    Guid TypeGuid,
+    Guid UniqueGuid,
+    ulong FirstLba,
+    ulong LastLba,
+    ulong Attributes)
+{
+    /// <summary>Partition size in sectors. <para>分区扇区数。</para></summary>
+    public ulong SectorCount => FirstLba <= LastLba ? LastLba - FirstLba + 1 : 0;
+
+    /// <summary>
+    /// Renders the entry the way the vendor tool lists partitions: index, start LBA, size and name.
+    /// <para>按厂商工具的分区列表样式渲染条目：序号、起始 LBA、大小与名称。</para>
+    /// </summary>
+    /// <returns>The formatted line.<para>格式化后的行文本。</para></returns>
+    public override string ToString() =>
+        string.Create(null, stackalloc char[128], $"{Index,2}  LBA 0x{FirstLba:X8}  {SectorCount,10} sectors  {Name}");
+}
+
+/// <summary>
+/// The decoded GPT table of the storage the device currently answers from.
+/// <para>设备当前应答的存储介质上解码出的 GPT 表。</para>
+/// </summary>
+/// <param name="TotalSectors">Media sector count reported by <c>READ_FLASH_INFO</c>.
+/// <para><c>READ_FLASH_INFO</c> 报告的介质总扇区数。</para></param>
+/// <param name="HeaderCrcValid">Whether the primary header CRC32 matches its stored value.
+/// <para>主表头 CRC32 是否与存储值相符。</para></param>
+/// <param name="EntriesCrcValid">Whether the entry-array CRC32 matches its stored value.
+/// <para>条目数组 CRC32 是否与存储值相符。</para></param>
+/// <param name="Partitions">Non-empty entries in table order.<para>按表内顺序排列的非空条目。</para></param>
+public sealed record RkdlGptTable(
+    long TotalSectors,
+    bool HeaderCrcValid,
+    bool EntriesCrcValid,
+    IReadOnlyList<RkdlGptPartition> Partitions)
+{
+    private const int NameBytes = 72;
+
+    /// <summary>
+    /// Decodes one GPT entry at the given offset; a zeroed entry yields <see langword="null"/>, which marks
+    /// the end of the table the way the vendor tool stops at the first empty slot.
+    /// <para>解码给定偏移处的一个 GPT 条目；全零条目得到 <see langword="null"/>，与厂商工具在第一个空槽位
+    /// 停下的行为一致。</para>
+    /// </summary>
+    /// <param name="entryArray">Raw entry-array bytes.<para>条目数组的原始字节。</para></param>
+    /// <param name="offset">Byte offset of the entry.<para>条目的字节偏移。</para></param>
+    /// <param name="entrySize">Declared entry size in bytes, used for stride validation.
+    /// <para>声明的条目字节数，用于步进校验。</para></param>
+    /// <returns>The decoded entry, or <see langword="null"/> for a zeroed slot.
+    /// <para>解码出的条目；全零槽位为 <see langword="null"/>。</para></returns>
+    internal static RkdlGptPartition? DecodeEntry(byte[] entryArray, int offset, int entrySize)
+    {
+        if (offset < 0 || entrySize < 56 || offset + entrySize > entryArray.Length)
+        {
+            return null;
+        }
+
+        if (entryArray.AsSpan(offset, entrySize).IndexOfAnyExcept((byte)0) < 0)
+        {
+            return null;
+        }
+
+        var typeGuid = new Guid(entryArray.AsSpan(offset, 16));
+        var uniqueGuid = new Guid(entryArray.AsSpan(offset + 16, 16));
+        var firstLba = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(entryArray.AsSpan(offset + 32));
+        var lastLba = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(entryArray.AsSpan(offset + 40));
+        var attributes = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(entryArray.AsSpan(offset + 48));
+        var name = System.Text.Encoding.Unicode.GetString(entryArray, offset + 56, Math.Min(NameBytes, entrySize - 56));
+        name = name.TrimEnd('\0');
+        return new RkdlGptPartition(0, name, typeGuid, uniqueGuid, firstLba, lastLba, attributes);
+    }
+}
