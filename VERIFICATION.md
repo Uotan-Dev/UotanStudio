@@ -2,6 +2,105 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## RKDL 存储回填过滤与选择框实测（2026-11-03，Windows x64，Debug，共享工作树）
+
+- 侧栏存储分组：`AppendRkFlashRows` 改为先探测再按"报告了闪存几何"过滤——读回掩码不指向的介质、以及应答了切换但 `DescribeRkFlashGeometry` 为空的介质都不产生行，"未上报闪存几何"占位行不再出现。每个有效介质以纯介质名（`RkdlStorage.Names`，无 `2. ` / `5. ` 数字标号）作为组首行写在标签列并顶格，容量、擦除块、页大小、闪存厂商逐行写在取值列；当前介质仍排在最前，"存储"不再作为标签前缀。掩码无法命名单一介质时仍以 `0x........` 作为标签行。
+- 选择框：`RkStorageTypeBox` 的选项由 `SetRkStorageOptions` 重建；读取设备信息成功时只填入实际报告了几何的介质（`FlashViewModel.AppendRkStorageRows` 返回的序号集合）并选中当前介质，未列出的介质无法被切换动作发送（`OnRkSwitchStorageClick` 经 `_rkStorageSelectorOrdinals` 反查介质序号）。所选设备变化时选择框恢复为完整厂商表并清空选择。
+- 标签：宿主的 `RkStorageTypes`（`1. FLASH` 至 `12. RVD` 的编号列表）删除，状态表、选择框与 RKDL 日志统一使用 `RkdlStorage.Names` 的纯介质名。
+- 定向测试：新增 `FlashDeviceStatusGeometryTests.AppendRkStorageRows_MediaWithoutGeometry_AreLeftOutOfTheTableAndSelector`（空几何介质既不产生行也不进入选择框序号集合、标签为纯名）；`UotanStudio.Tests.Flash` 99 通过/0 失败；全量 8448 总计/8434 通过/14 跳过/0 失败（57 s）。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 对本次触碰的 5 个文件 `--verify-no-changes` 零报告；`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 172,323,840 B，IL 警告 38 条全部来自 Avalonia/Dock、YamlDotNet、Common.Logging 等既有第三方，没有一条指向 `FlashViewModel` 或宿主闪存页面。
+- 环境边界：共享工作树的 `obj`/`bin` 被既有宿主占用，构建、测试与全量单轮使用 `-p:OutputPath=bin/rkstorage-check/ -p:IntermediateOutputPath=obj/rkstorage-check/` 的私有目录，验证后已删除。
+- 未验证：真机 usbplug 载入 loader 后点击获取设备信息的表格观感与下拉框内容没有目视确认（本机未接瑞芯微板、未启动 GUI）；存储介质的真实几何与过滤结果未上板核对。
+
+## 全局日志保留、全量导出与默认落盘实测（2026-11-03，Windows x64，Debug，共享工作树）
+
+- 保留策略：`LogService` 的定容环形缓冲由队列加双预算替代——`MaxQueueCharacters` 默认 64 Mi 字符、`MaxQueueSize` 默认 250,000 条，任一超限即从队首淘汰最旧条目；`MaxQueueCharacters`/`MaxQueueSize` 调小时立即裁剪既有条目，`Clear` 同时归零字符计数。`LogViewModel` 在构造时读取同一对预算，对原始列表与展示列表执行同样的头部裁剪，不再单独截到 5000 条；调试模式开启期间窗口跳过这对预算，收到的条目全部保留。
+- 全量导出：导出按钮遍历 `LogViewModel.AllEntries` 的快照，不受级别、通道、来源与搜索筛选影响；`LogEntryViewModel` 新增 `WrittenAt`，导出行写完整 `yyyy-MM-dd HH:mm:ss.fff` 本地时间。
+- 默认落盘：`Program.Main` 在桌面与无头分支之前调用 `ConfigureFileLogging`，默认写 `%AppData%/UotanStudio/logs/UotanStudio-<时间>-<PID>-<会话>.log`；每个进程一个 JSON Lines 会话文件，不滚动、不清理旧文件。文件接收端与调试模式、存储最低级别相互独立：低于存储最低级别的条目仍写入文件；`ConfigureFileLogging(null)` 才会停用。`OnDesktopExit`、`OnProcessExit` 与 `Program` 的进程退出钩子冲刷缓冲。
+- 依赖：移除仅为旧环形缓冲引入的 `ObservableCollections`（`Directory.Packages.props` 版本与宿主 `PackageReference` 一并删除），restore 后全解决方案构建与 AOT 发布均通过。
+- 门禁：`dotnet restore UotanStudio.slnx -p:Configuration=Debug`；`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 零报告（EXIT=0）。
+- 定向测试：`LogServiceRetentionTests` 5/5、`LogViewModelRetentionTests` 6/6、`LogFileSinkTests` 3/3、`LogServiceFileLoggingTests` 3/3；`UotanStudio.Tests.Services` 1972 总计/1971 通过/1 跳过（跳过项为未随包的 scrcpy jar）；既有 `UnifiedLogLoggerBridgeTests` 13/13、`FlashGlobalLogRoutingTests` 5/5、`McpToolCallLogTests` 3/3、`FirstChanceExceptionLoggerTests` 6/6。
+- NativeAOT：共享工作树的 `obj/Release/net10.0/win-x64/UotanStudio.pdb` 被并行会话占用时，标准路径发布以 CS2012 失败；改用 `--no-restore -p:IntermediateOutputPath=obj/aot-check/ -p:OutputPath=bin/aot-check/` 的私有目录发布成功，产物 `UotanStudio.Desktop.exe` 172,342,272 B，验证后已删除临时目录。ILC 警告 39 条仍只来自 Avalonia/Dock、YamlDotNet、Common.Logging 等既有第三方，没有一条指向 `LogService`、`LogFileSink`、`LogViewModel`、`LogFileService` 或 `Program`。
+- 未验证边界：日志窗口的观感、滚动与导出保存对话框没有目视或自动化验证；64 Mi 字符预算与调试模式无限保留在真实长会话下的内存占用没有压测；单文件不滚动的磁盘占用、磁盘写满后的停用路径，以及运行中直接从日志查看器打开活动文件（读取器与写入器的共享模式冲突）没有验证；默认落盘只在 `%TEMP%` 临时目录的单元测试中验证，未在真实 `%AppData%/UotanStudio/logs` 下跑完整会话。定向重跑中既有 `FlashGlobalLogRoutingTests.ImportRkConfigAsync_ConfigurationRowPointingAtAnotherConfiguration_StaysOutOfTheGrid` 曾因清理时 `MiniLoaderAll.bin` 仍被占用失败一次，单独重跑与整类重跑均 5/5 通过，属该用例既有的时序问题。
+
+## USB 后端缺陷修复实测（2026-11-03，Windows x64，Debug，共享工作树，Qualcomm ADB 真机）
+
+- Linux：URB 完成改为按指针路由（`_urbWaiters`/`_urbCompletions`），读线程回收写线程的 URB 时不再丢弃；discard 循环同样路由外来完成；poll 切片 30 s → 100 ms，取消与路由完成最迟一个切片内被观察；非断连、非 STALL 的内核状态映射为 `Error` 而非"空闲读取"；`SetInterfaceAltSetting`/`SetConfiguration` 走 `USBDEVFS_SETINTERFACE`/`USBDEVFS_SETCONFIGURATION`；`USBDEVFS_RESET` 后重新申请接口，复位后同一会话可重试。
+- libusb：`ResetDevice` 后重新申请接口；`Dispose` 在分块闸仍被持有超过 5 s 时不再关闭设备（避免 libusb 写已释放内存）；`WriteZlp` 取写闸；无 bulk IN/OUT 对的设备改为仅元数据上报；alt setting 走 `libusb_set_interface_alt_setting`。
+- macOS：`NSMutableData` 改用 `alloc`+`initWithLength:`（+1、无 autorelease，消除每块泄漏）；两个 finder 对 `IOIteratorNext` 的结果补 `IOObjectRelease`；IOKit 回退属性名改为 `idVendor`/`idProduct`/`bInterfaceClass` 等真实键并拒绝 0 值设备；IOKit 尽力 `USBDeviceOpen`（失败只记录）并在 Dispose 只关闭真正打开过的客户端；控制传输失败不再吞成 0；`WriteChunk` 上报真实字节数；UsbHost 补 `selectAlternateSetting:error:` 切换并重开管道、补齐接口类与端点元数据；UsbHost 枚举为空时回退 IOKit。
+- HarmonyOS：finder 与拓扑 provider 改走 `HarmonyOsDdkLifetime` 引用计数，枚举不再拆掉已打开会话的 DDK；provider 增加 `IsHarmonyOSPlatform` 平台门；`Reset` 失败上报而不是留下半开会话；alt setting 走 `OH_Usb_SelectInterfaceSetting`。
+- 跨层：`IUsbDeviceSession.ResetReenumeratesDevice` 暴露给协议层，ADB 只在会话复位后仍可用时重试同一会话；`SetInterfaceAltSetting`/`SetConfiguration` 在会话层先取得读、写、控制三把门闩，切换不会与在途传输交错。
+- Windows：`Interfaces[0].InterfaceNumber` 改取描述符 `bInterfaceNumber`；热插拔窗口改为真正的 message-only（`HWND_MESSAGE`），通知过滤器 `dbcc_size` 使用 `sizeof(struct)`；`fireInitialSnapshot` 在 Windows/Linux/libusb 原生监视器上兑现；WinUSB alt setting 走 `WinUsb_SetCurrentAlternateSetting` 并重新绑定管道与策略，`SetConfiguration` 明确抛 `NotSupportedException`；Legacy 把驱动超时错误映射为 Timeout 并在类型注释中写明同步句柄无法执行每次调用超时。
+- 能力与文档：`UsbApiCapabilities.ResetReenumeratesDevice` 的语义说明改为"false=会话可重试"，并同步各 provider 的逐后端表（linux-usbfs/harmony-ddk=false，macos-iokit=true）；README 的热插拔矩阵补 HarmonyOS 行、更正 HarmonyOS 开启方式（`FIRMWAREKIT_USB_ENABLE_HARMONY`）与属性缓存的"显式刷新不清空"事实；`UsbApiKind`/`UsbDevice`/provider Notes 不再把 DDK 描述成 USBManager IPC 桥；libusb 路径参数说明改为"相对路径按当前目录解析"。
+- 真机（Qualcomm ADB，接口 MI_05）：`interfaceNumber=5`、class FF/42/01、`resetReenumerates=False`；ADB 握手后 `echo` 返回 `__PROBE_OK__`；`WatchUsb(fireInitialSnapshot: true)` 5 s 内投递 48 条初始 Added。探针位于 `%TEMP%` 并在测量后删除。
+- 门禁：`dotnet restore UotanStudio.slnx -p:Configuration=Debug` 后 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 零报告；全量单轮 `8444 总计/8430 通过/14 跳过/0 失败`（65 s）。
+- 未验证边界：Linux、libusb、macOS、HarmonyOS 没有运行环境，只做了编译与静态核对；Linux 的并发 URB 路由、`USBDEVFS_RESET` 后重新申请、macOS 的 ObjC 选择器与 IOKit vtable 偏移都需要对应平台真机确认；Windows 真机验证覆盖枚举、WinUSB 打开、ADB 与初始快照，未覆盖 alt setting 切换与 Legacy/Rockusb 分支。
+
+## 设备发现增量枚举、详情合并与静态属性复用实测（2026-11-03，Windows x64，Debug，共享工作树，Qualcomm ADB 与 HarmonyOS HDC 真机）
+
+- Windows 枚举：`WinUsbInventoryCache` 按 PnP 实例缓存 VID/PID、接口三元组、容器 ID、后端名与接口 GUID；`ScanPass` 让首次扫描走全量、此后只重读在位节点并用 `PruneUnobserved` 淘汰消失项，手动刷新经 `ForceFullRefreshAsync` 重置缓存后再全量。节点遍历保持全 USB 节点而不收窄到 `USB` 枚举器：在位 281 个节点里只有 47 个来自 `USB` 枚举器，收窄会让厂商改名的实例连同缓存一起被淘汰。热插拔到 `WM_DEVICECHANGE` 只做单实例失效。实测全量扫描 32–34 ms、增量扫描 13–18 ms，端点数 48 且两次增量之间集合逐项相同；`WinUSBFinder.TryOpenSingleDevice` 让按路径开会话先走精确路径，失败才回退整树枚举。fastboot 序列号在扫描内只探测一次，行内不再二次占用同一接口。
+- 路由归属：`DebugBridgeRoute` 的 loopback 监听表只用于证明"不在监听"。僵尸监听行（`OwningProcess 0`）存在时，`IsListening` 首次 20xx ms 判定 False、之后 0–1 ms，`AdbServerOwns` 0–1 ms 返回 False，不再为一段已死端口付 2 s 连接等待再抛 `SocketException`。`AdbServerServices` 的 `host:version` 在 60 s 内复用，一次目标枚举只连一次 server。
+- HDC 详情：11 条查询跑在同一个直连会话里（`HdcDeviceService.ShellOnSessionAsync`），日志为 `HDC detail ... over one shared direct session`；同一 HDC 真机上逐条建会话合计 8106 ms 降到约 1215 ms。
+- ADB 详情：9 条查询合并为一次带标记的 shell 调用（`TryReadBundle`，标记必须独占整行，八段齐全才采信，否则回退逐条），`getprop` 仍是一次无参整表读取。真机（Qualcomm sdm6150，Android 9，kernel 4.14.83）实测：`getprop` 2770 ms / 13,616 B，8 段合并 1047 ms；按稳定键开租约 51 ms，CNXN 握手 39 ms。
+- 静态属性复用：首次详情把 brand/model/android/sdk/codename/cpuabi/cpucode/kernel/boardid/slot/compile/vndk/bl 写入 `DeviceController.Properties`（键为物理身份），`SelectStaticProperties` 只在 brand/model/codename/kernel/bl 都已取得真实值时才接受这一批，避免把尚未就绪设备的占位符固化。后续刷新命中齐全缓存时跳过 `getprop` 与 K/B 段，只跑 6 段实时查询（R/D/P/Y/M/F；分辨率与密度会随 `wm size` 改变，刻意不缓存）。真机复测：完整一次 3829 ms / 2 条命令 → 命中缓存一次 650 ms / 1 条命令（-83%），13 个静态键与完整读取逐字相同，动态字段齐全。HDC 侧用 `hdc:` 前缀逐键缓存静态参数，值为 "--" 的键不写入以便下轮重试。
+- 缓存生命周期：`DeviceController` 在端点移除时按键失效，元数据变化（模式切换）保留，因此同一物理设备跨 adb/fastboot 模式共享稳定属性；手动刷新只重置 USB 枚举缓存，不清属性缓存。
+- 设备提前断开：`DeviceViewModel` 的刷新在未完成时排队重跑一次，服务端在端点移除/变化时取消该设备的详情查询与 root 探测，未取得完整信息就拔出的设备不会留下长期条目。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 零报告。
+- 定向测试：`DevicePropertyReaderTests` 57/57（含完整缓存只发一条动态命令、缓存缺键回退全量、核心占位不写缓存、静态键筛选）；`UotanStudio.Tests.Devices` 429 总计/426 通过/3 跳过（跳过项由 `UOTAN_DEVICE_SHELL_TARGET` 等环境门控）；`UotanStudio.Tests.Views` 11/11；`UotanStudio.Tests.Services` 1955 总计/1953 通过/1 跳过/1 失败——失败项是并行会话新增的 `UnifiedLogLoggerBridgeTests.Log_EachProducerLevel_MapsOntoTheUnifiedLevel`（单独跑 13/13 通过），属于该测试与同命名空间其他用例的全局状态耦合，不属本节改动。
+- 未验证边界：HDC 的缓存复用分支只经编译与 ADB 同构路径核对，未在 HarmonyOS 真机上跑第二轮（首轮行为与命令集未变）；"拿到完整信息前拔出"只在代码路径和既有取消机制上闭合，未做真机拔插实测；未重跑 NativeAOT 发布；未跑全量单轮测试；界面观感未目视。真机探针放在 `%TEMP%` 并在测量后删除。
+
+## Cysharp 依赖落地实测（2026-11-02，Windows x64，Debug，共享工作树）
+
+- 依赖：`ObservableCollections` 3.3.4（仅宿主）、`Utf8StringInterpolation` 1.3.2（仅 Comm）、`ZLinq` 1.6.1（Firmware 与 Benchmarks）。三者 net8.0 资产直接用于 net10.0，无反射路径；发布产物中无指向这三个包的裁剪/AOT 警告。
+- `LogService` 有界缓冲：`ConcurrentQueue` 加 `while (Count > max) TryDequeue` 换成 `ObservableFixedSizeRingBuffer<LogEntry>`，写入即淘汰最旧条目、`Count` 不再每次遍历段；`MaxQueueSize` 变更在锁内重建并把既有条目截到新容量，字段访问一律 `Volatile.Read/Write`（字段本身不加 `volatile`，否则触发 CS0420）。逐条推送语义与 `Entries` 快照契约不变。
+- `CommTrace` 零分配格式化：新增 `CommTraceMessage` 插值处理器，`Write(level, ...)` 在 `IsEnabled` 为 false 时既不格式化也不分配；`Debug`/`Trace`/`State`/`Error` 的 `FormattableString` 重载删除，调用点由"FormattableString + 参数数组 + 装箱 + 结果串"三次分配降为一次（`Write` 在关闭时为零次）。插值字符串参数下处理器重载优先于 `string` 重载，普通字符串仍走 `string` 重载，调用点无需改动。
+- 协议帧：`HdcSyncClient.BuildFileInitPayload`（`RecvStream` 与 `RecvDirectory` 共用）、`HdcForwardManager` 反向转发端点、`AdbMessage.BuildOpen` 改用 `Utf8String.Format`，省掉中间字符串。
+- ZLinq：`SmaliAssembler.Ordering.cs` 的 DEX 规范化逐类查询已全部走值枚举；`UotanStudio.Firmware.csproj` 补上此前缺失的 `ZLinq` 引用（该文件在缺引用时无法编译）。
+- 反向结论（同一文件内已回退）：`ErofsBuilder.Layout.cs` 的 metabox 常驻集合改用 ZLinq 后镜像的 inode 格式字与 `AdviseBitNlinkOneOrDotOmitted` 计数变化（`ErofsCaptureFidelityTests.Capture_SingleLinkedFiles_RecordTheirOwnFormatWord` 期望 2 实得 0），根因未查明前该文件保留 System.Linq，也不引入 `using ZLinq;`。
+- 门禁：`dotnet restore UotanStudio.slnx -p:Configuration=Debug`；`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误，另有 2 条与本节改动无关的 CS8604（测试夹具 `DeviceControllerRockchipReconnectionTests.LoaderPort` 的 `serial` 参数不可空）；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 零报告（`ZLinqAdoptionBenchmarks.cs` 的末尾换行已按 `insert_final_newline = false` 修正）。
+- 定向测试：`UotanStudio.Tests.Firmware` 4497 总计/4484 通过/13 跳过；`UotanStudio.Tests.Services` 1940/1939 通过/1 跳过；`Architecture|Assets|Compare|Compress|Delivery|Devices|Diagnostics|Editors` 与 `Flash|Media|Mirroring|Net|Projects|Protocols|Shell|Usb|Views` 两组合计 2406 项、其中 `Architecture` 2 项失败；`DexSmali*` 238/238（覆盖全部 ZLinq 转换）；`Erofs|HdcSync|AdbMessage|CommTrace` 493 项中 491 通过/2 跳过。
+- 全量单轮未完成：`UotanStudio.Tests.Compare` 命名空间在 39 项通过后挂起，超出 15 分钟上限。以 `git stash` 移除本轮全部改动后同一命名空间复现同样挂起，因此该挂起与本轮改动无关。
+- 分层与格式探针门的当前结果见 2026-11-03 一节。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 `UotanStudio.Desktop.exe` 172,563,968 B。ILC 分析只报既有第三方的 IL2026（Avalonia XAML trampoline）、IL2104（Common.Logging 等）、IL3053（YamlDotNet）与 Makaretu.Dns 的 Tmds.LibC 提示。在同一 shell 里未设置 `LIB` 时原生链接会以 `LNK1181: 无法打开输入文件"Synchronization.lib"` 失败，补上 MSVC 与 Windows SDK 的 `lib\x64` 路径后链接通过——这不是代码或裁剪问题。
+- 未验证边界：没有用真实设备跑过 HDC 文件收发、ADB 通道打开与调试模式下的逐帧 trace，这部分只验证了字节等价与日志分派；日志窗口的观感与滚动未目视；`CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
+
+## 宿主分层、格式探针与编译警告门实测（2026-11-03，Windows x64，Debug，共享工作树）
+
+- 宿主分层：`Views/Compare/CompareView.Transfer.cs` 不再导入 `UotanStudio.Services.Devices`。设备列的删除、重命名、新建目录、推送、拉取下沉到 `ViewModels/Compare/CompareColumnViewModel.Device.cs`，远程路径拼接（`GetParentPath`/`CombinePath`）随操作一起进入 ViewModel；View 只保留确认框、输入框、条目变更后的刷新与失败上报，调用顺序与异常语义不变。
+- 格式探针：`FlashService.BuildGptFromParameter` 的头部签名改用 `UotanStudio.Firmware.BlockImage.Gpt.GptLayout.Signature`，宿主源码不再自带 `EFI PART` 字面量；`RockchipUuidRkfpGptTests` 11/11 通过，生成的 34 扇区 GPT 字节由该门约束。
+- 编译警告：`UotanStudio.Tests/Devices/DeviceControllerRockchipReconnectionTests.cs` 的 `LoaderPort` 形参改为 `string? serial = "ROCKCHIP"`，因为 `UsbDeviceInfo.SerialNumber` 可空且用例需要把前一次观测的序列号原样传入（含 null）；全解决方案 Debug 构建 0 错误 0 警告。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 零报告；`UotanStudio.Tests.Architecture` 16/16；`DeviceControllerRockchipReconnectionTests` 17/17；`RockchipUuidRkfpGptTests` 11/11；`UotanStudio.Tests.Views` 11/11；`UotanStudio.Tests.Services` 1940 总计/1939 通过/1 跳过。
+- 行的可见性：`HostLayeringGuardTests` 当时按行首匹配 using，同一行里的多个指令看不见；该匹配已收紧，见下一节。
+- 仍未闭合：比较窗设备列的删除/重命名/新建目录与拖拽推拉没有真实设备实测，只有编译与设备文件系统层的既有测试覆盖。
+
+## 全套时长、调度挂起与分层门收紧实测（2026-11-03，Windows x64，Release，detached worktree 隔离验证）
+
+- 挂起根因：`CompareTreeNodeViewModel.EnsureChildrenLoadedAsync` 用 `await Dispatcher.UIThread.InvokeAsync(...)` 把子集合改动投递到 UI 线程。测试宿主从不创建 Avalonia 应用，UI 线程归属取决于哪个线程最先访问 `Dispatcher.UIThread`；单独跑 `UotanStudio.Tests.Compare` 时改动排进无人驱动的队列，`ComparisonRows_MissingSide_CarrySlashFiller` 永久阻塞（CPU 增量为 0，`-longRunning 10` 每 10 秒复报同一用例）。整套并行运行只是碰巧把 UI 线程定在了同一线程上，所以 CI 日志里的 15m02s 是 Test 步骤在 `timeout-minutes: 15` 处中止的一次未完成运行，不是跑完一套所需的时间。
+- 现在的做法：`Application.Current` 为 null 时集合改动就地执行，存在应用时仍经 `Dispatcher.UIThread.InvokeAsync`，与宿主「容器优先、测试回退」的既有做法一致。
+- 单轮时长（同一 worktree 直接执行测试宿主；机器上另有并行会话，故给重复值）：8402 总计/14 跳过，两次分别 105.2s 与 103.3s。分组实测：`UotanStudio.Tests.Firmware*` 4595 项 35.2–38.0s（三次全绿），`UotanStudio.Tests.Services*` 1972 项 52.1–81.5s（缓存前的一次测得 130.8s），`UotanStudio.Tests.Protocols*` 291 项 3.3s（`FirehoseResponseBomTests` 未压缩时该类合计 94.1s），`UotanStudio.Tests.Architecture*` 18 项 1.3s，`UotanStudio.Tests.Compare*` 63 项 0.6s。
+- 慢点（JUnit 逐用例耗时按类聚合）：`FirehoseResponseBomTests` 三个 `PowerOff_*` 各 30.0s——`ScriptedFirehoseTransport.IsConnected` 恒为 true，ACK 之后的断开观察循环把 `PowerResetVerifyTimeoutMs` 的 30s 预算整段等满；5 个 `Configure_*` theory 用例各等 1s 的 `ConfigureRetryIntervalMs`。脚本配置把这两个界限压到 50ms 与 0，响应序列与断言不变。
+- 冗余构建：MCP 目录形态用例每次重建整张工具表（协议层逐工具生成输入架构，一次约 4.1s），三个类共 10 次，而它们只读取名称、描述与架构。`McpToolCatalogCache` 按刷写门控各构建一次，顺带删掉三处只为给 `PathSandbox` 提供根目录而存在的临时目录脚手架（目录构建不碰磁盘）。方法体重复扫描（5521 个用例，去空白并把字符串字面量归一后比较）没有逐字相同或同类近重复的用例——重复的是构建，不是用例。
+- 着色：`ComparisonRowBuilder` 的条目行原先写 `tintSingleSide: false`，而 `CompareRowViewModel` 的两个着色属性还要求 `!IsTreeRow`，目录对比的每一行都带 TreeNode，于是 `CompareView.axaml` 左右两处淡色覆盖层绑定永不生效。现在条目行请求着色、属性只按侧与状态判断，`ToggleCompare_TwoFolders_AlignsRowsAndColoursDifferences` 的着色断言成立；界面观感未目视。
+- 竞争：`FlashGlobalLogRoutingTests.ImportRkConfigAsync_LoaderRow_IsEffectiveOnlyWhileItsFileExists` 在三次整套运行里失败两次，`File.Delete(loader)` 抛 IOException「正由另一进程使用」——`ImportRkConfigAsync` 把 loader 校验作为未等待的任务挂在 `SpecialFileRowCheck` 上，校验以 `FileShare.Read` 打开文件、不允许删除。用例改为删除前后各 `await model.SpecialFileRowCheck`；「校验期间用户删不掉镜像」的生产侧风险未改。
+- 分层门收紧：`RepositoryLayout.SourceFiles` 先把 `\r\n`、孤立 `\r`、`U+0085`、`U+2028`、`U+2029` 统一成 `\n`（`Views/Compare/CompareView.axaml.cs` 的整块 using 用孤立回车分隔，行首锚定从未看见它们）；`ImportedNamespaces` 以 `(?:^|;)` 锚定并识别 `using static`、`using X = NS;` 别名与 `global using`；`ForbiddenImports` 上报命中的根命名空间，冻结清单的粒度不变。`NamespaceOwnershipGuardTests` 由只查首个命名空间改为逐个声明校验（当前没有文件声明第二个命名空间，收紧不新增红灯）。三条合成控制分别证明：合并/static/别名/global 会被抓，`using (var ...)` 与 `using var x = ...` 不误报，`UotanStudio.Services.DevicesExtra` 不算 `UotanStudio.Services.Devices`。收紧新暴露的 `CompareView.axaml.cs` 设备导入已下沉为 `CompareColumnViewModel.PullDeviceEntryToTempAsync`。
+- 同类门控不严（本轮未改）：`FormatProbeBoundaryGuardTests` 只匹配字面拼写，`FlashService` 里 `image[510] = 0x55; image[511] = 0xAA;` 的保护性 MBR 签名以及十进制、下划线写法都能绕过；它与 `ContainerBoundaryGuardTests` 的 `AllowedPaths` 集合恒为空，是死代码；两个 boundary 门的扫描项目清单手写，未与 `NamespaceOwnershipGuardTests.AssemblyRoots` 或解决方案清单互相校验；分层门只覆盖应用服务命名空间，`Views/Editors/ScreenMirrorPixelBuffer.cs` 直接导入 `UotanStudio.Media.Decoding` 不在射程内；`ProjectReferenceDirectionGuardTests` 整体跳过 `UotanStudio.Tests`。
+- 未闭合：第二次整套运行出现 `ErofsCaptureFidelityTests.Capture_SingleLinkedFiles_RecordTheirOwnFormatWord`（期望 2 实得 1）与 `PackingOptionPropagationTests.Pack_PreservedErofsWithDotOmittedEnabledKey_Succeeds` 失败；同一批二进制单独跑 `ErofsCaptureFidelityTests` 2/2 绿、跑 `UotanStudio.Tests.Firmware*` 3/3 绿，因此是跨命名空间的全局状态耦合，耦合方尚未定位。Avalonia 界面观感（单侧淡色背景、目录树展开、比较窗设备列）未目视；全部时长来自本机 Release 单进程运行，CI 的 `dotnet test --solution` 路径与 Runner 机器未实测；win-x64 NativeAOT 发布本轮未重跑。
+
+## 测试套随机失败根因与修复实测（2026-11-03，Windows x64，Release，detached worktree 隔离验证）
+
+- 根因：`ErofsBuilder.Layout.cs` 把超级块纪元默认取作当前墙钟秒（`options.BuildTime ?? now`），而 `NeedsExtendedInodeTime` 把 `timestamp < epoch` 的源 mtime 判成必须写扩展 inode；扩展记录不再写 nlink-one/dot-omitted advise 位。用例都是先写临时文件再构建，只要这段间隔跨过一个整秒（整套并行、机器有其它负载时就会），同一份源码就换成另一种布局。表现有 `ErofsCaptureFidelityTests.Capture_SingleLinkedFiles_RecordTheirOwnFormatWord` 期望 2 个文件带该位、实际 0 或 1，以及 `PackingOptionPropagationTests.Pack_PreservedErofsWithDotOmittedEnabledKey_Succeeds` 的保留重建因该位无法复现而失败。
+- 确定性对照（临时探针，已删除）：两个源文件固定到 1_700_000_000 秒，`BuildTime = pinned` 时两个 inode 都带该位；`BuildTime = pinned + 1` 时两个都写成扩展记录（`IFormat = 0x0005`）且计数为 0，不再依赖碰运气。把 `RepackMetadataContextTests`/`RepackMetadataProviderTests` 与目标类并行跑只是提供负载：这两个类与其余写 `RepackMetadata.DefaultMetadataRoot` 的类同属 `[Collection("Workspace state")]`（`DisableParallelization = true`），进程内静态本身已被串行化。
+- 修复：给断言 inode 形态、advise 位或镜像长度的用例显式固定构建纪元——`ErofsCaptureFidelityTests` 1 处、`PackingOptionPropagationTests` 1 处（新增常量）、`ErofsRebuildFeatureReplayTests` 的夹具与用例各 1 处、`ErofsInodeAdviseAcceptanceRegressionTests` 3 处、`ErofsCompacted2BTests` 的 2 个构建辅助；常量沿用仓库已有的 `1_700_000_000UL`。`ErofsTests` 只断言该位不存在、`ErofsMetadataRoundTripTests` 断言的是元数据记录值，两者对纪元不敏感，未改。
+- 门禁：`dotnet build UotanStudio.slnx -c Release` 0 错误；`dotnet format` 的 `whitespace` 与 `style` 全解 `--verify-no-changes` 0 报告；整套连跑 3 轮，8401 总计/14 跳过/0 失败，103.2s、102.2s、102.4s。
+- 定向压测：修复前把 `ErofsCaptureFidelityTests` 与两个 `RepackMetadata*` 类并行跑 10 轮，失败 2 轮（Actual 0 与 1 各一次）；修复后同负载 25 轮 0 失败；再把 5 个受修类与 4 个 CPU 占用进程叠加跑 40 轮，0 失败。
+- 复核过但未改的时序类测试：`AdbRemoteProtocolTests` 的 `stopwatch.Elapsed < 5s`、`FifoGateTests` 与 `PayloadStreamingTests` 的 5–10 秒同步上限、`UsbmuxdClientTests` 的 2 秒 accept 等待——都是宽松上界且在压测里没有失败，保留原值。
+- 规则：`UotanStudio.Tests/AGENTS.md` 增加一条，要求断言 inode 形态/advise 位/镜像字节的用例固定 `BuildTime`（源时间更早时同时固定源时间），并写明上面的机制，避免新用例再依赖墙钟。
+- EXT4/F2FS 时间来源：`UotanStudio.Firmware/FileSystem` 全树只有两处墙钟读取——EROFS 的 `options.BuildTime ?? UtcNow`（已由上节固定）与 `FatBuilder.LastWriteTimeUtc` 的初始化器。EXT4 超级块时间字段写常量 `FixedTimestamp = 1_700_000_000`，inode 的 atime/ctime/mtime/crtime 取自源 stat 与保留元数据，0 时回落到同一常量；F2FS checkpoint 的 `ElapsedTime` 写 0，inode 时间来自源元数据，nsec 由同一文件 stat 的 100 ns tick 推出。两者都没有纪元与源时间的比较，也没有紧凑/扩展记录宽度开关，同一源树重复构建字节相同，不存在 EROFS 那种随秒翻转的布局。
+- FAT：`FatBuilder.LastWriteTimeUtc` 的默认值是 `DateTime.UtcNow`，但 `Build` 对根目录用源目录时间、对子条目用源文件时间覆盖，写入路径没有未赋值的使用点；DOS 时间 2 秒粒度只影响两棵不同源树之间的比较。未改。
+- 测试侧复核：EXT4/F2FS 用例没有整镜像硬编码哈希，也没有跨两棵源树的字节相等断言，`F2fsTimestampPreservationTests` 显式设定源时间。文件系统之外的墙钟写入者是 `ApkSigningKeyGenerator`（证书有效期 `notBefore = UtcNow - 1d`，用例只断言年份差 5）、`JksKeyStore`（创建时间回退 `UtcNow`）与 `OnePlusLogger`（日志时间戳），都不参与镜像布局断言。
+- 运行时对照（临时探针，仓库外运行后已删除）：同一源树按 1.1 秒间隔连续构建三次，EXT4（固定 UUID、关闭日志）三次输出逐字节相同（163,840 B），F2FS（固定 UUID）同样逐字节相同（41,943,040 B），确认两者的时间字段不来自墙钟。EXT4 默认开启日志，日志超级块的 UUID 每构建随机（`JournalSuperblock.cs:116`），默认参数下两次构建不会逐字节相同——那是随机 UUID，不是时间，且没有用例做这种比较。
+- 未闭合：结论覆盖 EROFS/EXT4/F2FS/FAT 的构建路径与用例检索；界面观感与真实设备路径仍未验证。
+
 ## RKDL 下载模式补全实测（P1/P2，2026-11-02，Windows x64，Debug，共享工作树）
 
 - P1 高级维护（Comm）：新增 `RkdlSession.Maintenance.cs`，把 TEST_UNIT_READY 子码做成高层调用——`EraseSystemDiskBySubCode`（0xFE）、`LowerFormatBySubCode`（0xFD）、`EraseUserDataBySubCode`（0xFB）、`GetUserSectorMap`（0xF9）。前三个统一走 `WaitForMaintenanceSubCode`：按时长大端解码 CSW 数据余量（低 16 位总量、高 16 位当前），每秒轮询一次直至就绪，超时抛 `RkdlError.DeviceUnready`（新增 `RkdlError.DeviceUnready = 12`），进度越界（current > total）同样拒绝。三个擦除入口要求精确确认短语 `"WIPE"`，在任何一个字节上线之前以 `UnauthorizedAccessException` 拒绝。
