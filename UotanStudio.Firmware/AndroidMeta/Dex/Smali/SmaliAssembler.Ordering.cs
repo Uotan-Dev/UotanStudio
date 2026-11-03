@@ -1,4 +1,5 @@
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
+using ZLinq;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 
@@ -18,7 +19,7 @@ public static partial class SmaliAssembler
             {
                 proto.ShortyIndex = strings[proto.ShortyIndex];
                 proto.ReturnTypeIndex = types[proto.ReturnTypeIndex];
-                proto.ParameterTypeIndices = [.. proto.ParameterTypeIndices.Select(index => types[index])];
+                proto.ParameterTypeIndices = proto.ParameterTypeIndices.AsValueEnumerable().Select(index => types[index]).ToArray();
             }
             var protos = Reorder(Protos, CompareProtos);
             foreach (var field in Fields)
@@ -60,12 +61,12 @@ public static partial class SmaliAssembler
                 {
                     cls.SourceFileIndex = strings[cls.SourceFileIndex];
                 }
-                cls.InterfaceTypeIndices = [.. state.Interfaces.Select(index => types[index]).Distinct().Order()];
+                cls.InterfaceTypeIndices = state.Interfaces.AsValueEnumerable().Select(index => types[index]).Distinct().Order().ToArray();
                 foreach (var field in cls.AllFields)
                 {
                     field.FieldIndex = fields[field.FieldIndex];
                 }
-                if (cls.AllFields.Select(field => field.FieldIndex).Distinct().Count() != cls.AllFields.Count())
+                if (cls.AllFields.AsValueEnumerable().Select(field => field.FieldIndex).Distinct().Count() != cls.AllFields.AsValueEnumerable().Count())
                 {
                     throw new FormatException("A class declares the same field more than once.");
                 }
@@ -86,7 +87,7 @@ public static partial class SmaliAssembler
                 {
                     method.MethodIndex = methods[method.MethodIndex];
                 }
-                if (cls.AllMethods.Select(method => method.MethodIndex).Distinct().Count() != cls.AllMethods.Count())
+                if (cls.AllMethods.AsValueEnumerable().Select(method => method.MethodIndex).Distinct().Count() != cls.AllMethods.AsValueEnumerable().Count())
                 {
                     throw new FormatException("A class declares the same method more than once.");
                 }
@@ -153,7 +154,7 @@ public static partial class SmaliAssembler
                 EncodedValueType.Method => EncodedValue.Method(methods[value.AsIndex()]),
                 EncodedValueType.MethodType => new(value.Type, protos[value.AsIndex()]),
                 EncodedValueType.MethodHandle => new(value.Type, handles[value.AsIndex()]),
-                EncodedValueType.Array => EncodedValue.Array([.. value.AsArray()!.Select(item => RelocateValue(item, strings, types, fields, methods, protos, handles))]),
+                EncodedValueType.Array => EncodedValue.Array(value.AsArray()!.AsValueEnumerable().Select(item => RelocateValue(item, strings, types, fields, methods, protos, handles)).ToArray()),
                 EncodedValueType.Annotation => EncodedValue.Annotation(RelocateAnnotation((AnnotationItem)value.Value!, strings, types, fields, methods, protos, handles)),
                 _ => value
             };
