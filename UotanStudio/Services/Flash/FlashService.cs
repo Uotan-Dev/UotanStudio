@@ -7,6 +7,7 @@ using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
@@ -1730,7 +1731,7 @@ public sealed class FlashService : IFlashService
         image[510] = 0x55;
         image[511] = 0xAA;
 
-        "EFI PART"u8.CopyTo(image.AsSpan(headerOffset));
+        GptLayout.Signature.CopyTo(image.AsSpan(headerOffset));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(headerOffset + 12), 92);
         BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 24), 1);
         BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(headerOffset + 32), (ulong)totalSectors - 1);
