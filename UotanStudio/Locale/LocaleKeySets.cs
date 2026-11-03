@@ -172,10 +172,10 @@ internal static class LocaleKeySets
         "Flash_ReadInfo",
         "Flash_LoadBoot",
         "Flash_LoadBootNoDevice",
-        "Flash_LoadBootUnsupported",
         "Flash_LoadBootNoLoaderRow",
         "Flash_LoadBootRkApplying",
         "Flash_LoadBootRkDone",
+        "Flash_LoadBootUnsupported",
         "Flash_ShowAllPartitions",
         "Flash_FlashSelected",
         "Flash_EraseSelected",
@@ -201,6 +201,8 @@ internal static class LocaleKeySets
         "Flash_ImagesLoaded",
         "Flash_AfterSalesPackage",
         "Flash_AfterSalesMerged",
+        "Flash_RkConfigFileType",
+        "Flash_UnsupportedPackage",
         "Flash_DeviceChanged",
         "Flash_Busy",
         "Flash_FileMissing",
@@ -1249,8 +1251,8 @@ internal static class LocaleKeySets
         "Flash_RebootEdl",
         "Flash_ReadbackSelected",
         "Flash_RootPackageHint",
-        "Flash_EdlProgrammerPathHint",
         "Flash_EdlProgrammerTooLarge",
+        "Flash_EdlProgrammerPathHint",
         "Flash_EdlProgrammerDirHint",
         "Flash_EdlRegionDirHint",
         "Flash_EdlUfsProfileHint",
@@ -1270,11 +1272,8 @@ internal static class LocaleKeySets
         "Flash_RkConfigPathHint",
         "Flash_RkChooseCustomConfig",
         "Flash_RkExportConfig",
+        "Flash_Offset",
         "Flash_RkTestDevice",
-        "Flash_RkStorageProbeHeader",
-        "Flash_RkStorageProbeMedium",
-        "Flash_RkStorageProbeFailed",
-        "Flash_RkStorageProbeAbsent",
         "Flash_RkGetStorage",
         "Flash_RkChipName",
         "Flash_RkStorageSize",
@@ -1301,19 +1300,17 @@ internal static class LocaleKeySets
         "Flash_RkLbaRead",
         "Flash_RkLbaWrite",
         "Flash_RkForceAddress",
-        "Flash_RkLbaNotDeclared",
-        "Flash_RkLbaCountTooSmall",
-        "Flash_RkParameterMissing",
         "Flash_RkReadPartitions",
         "Flash_RkPartitionHeader",
         "Flash_RkGptHeaderCrcMismatch",
         "Flash_RkGptEntriesCrcMismatch",
         "Flash_RkPartitionSourceParameter",
         "Flash_RkPartitionsImported",
+        "Flash_RkLbaNotDeclared",
+        "Flash_RkLbaCountTooSmall",
+        "Flash_RkParameterMissing",
         "Flash_RkStorageSwitched",
         "Flash_RkConfigImported",
-        "Flash_RkConfigFileType",
-        "Flash_UnsupportedPackage",
         "Flash_RkCapability",
         "Flash_RkStatusWaitingLoader",
         "Flash_RkStatusLoaderReady",
@@ -1333,14 +1330,13 @@ internal static class LocaleKeySets
         "Dock_RkConfig_Empty",
         "Dock_RkConfig_Summary",
         "UserError_RkConfigLoadFailed",
-        "Flash_Offset",
         "Flash_RootPartitionNotSelected",
         "Flash_RootPackageMissing",
         "Flash_StorageMedium",
         "Flash_RkConfigNoImages",
+        "Flash_RkStorageNotSelected",
         "Flash_RkLoaderDeclared",
         "Flash_RkLoaderMissing",
-        "Flash_RkStorageNotSelected",
         "Flash_RkStorageNeedsLoader",
         "Flash_RkLoaderChecking",
         "Flash_RkLoaderValid",
@@ -1354,6 +1350,22 @@ internal static class LocaleKeySets
         "Flash_RkParameterChecked",
         "Flash_RkParameterInvalid",
         "Flash_CommandNotRunnable",
+        "Flash_RkStorageProbeHeader",
+        "Flash_RkStorageProbeMedium",
+        "Flash_RkStorageProbeFailed",
+        "Flash_RkStorageProbeAbsent",
+        "RegexGenerator_Title",
+        "RegexGenerator_SourceData",
+        "RegexGenerator_FindContent",
+        "RegexGenerator_Generate",
+        "RegexGenerator_Pattern",
+        "RegexGenerator_Copy",
+        "RegexGenerator_Copied",
+        "RegexGenerator_EmptyInput",
+        "RegexGenerator_NoMatchFallback",
+        "RegexGenerator_SourceDataPlaceholder",
+        "RegexGenerator_FindContentPlaceholder",
+        "RegexGenerator_PatternPlaceholder",
     ];
 
     internal static readonly string[] Menu =
@@ -1679,7 +1691,9 @@ internal static class LocaleKeySets
         "About_Project_AndroidUpdateBinary",
         "About_Project_Xunit",
         "About_Project_BenchmarkDotNet",
-        "Menu_AvbTool"];
+        "Menu_AvbTool",
+        "Menu_RegexGenerator",
+    ];
 
     internal static readonly string[] Dock =
     [
@@ -2319,7 +2333,10 @@ internal static class LocaleKeySets
         "Dock_Properties_Type_PartitionDocument",
         "Dock_Properties_Unknown",
         "Dock_Properties_Unavailable",
-        "Terminal_DeviceShell"];
+        "Terminal_DeviceShell",
+        "Log_RegexGenerator",
+        "FindReplace_RegexGenerator",
+    ];
 
     internal static readonly string[] Node =
     [
@@ -2390,10 +2407,10 @@ internal static class LocaleKeySets
         "Node_Device_Power_Reboot",
         "Node_Device_Table_Read",
         "Node_Device_Partition_Read",
+        "Node_Device_Shell_Command",
         "Node_Device_Partition_Erase",
         "Node_Device_Slot_Query",
         "Node_Device_Slot_Switch",
-        "Node_Device_Shell_Command",
         "Node_Device_Edl_Flash",
         "Node_Device_Edl_Erase",
         "Node_Device_Edl_Backup",
@@ -2423,6 +2440,10 @@ internal static class LocaleKeySets
         "Node_Device_Hdc_Disconnect",
         "Node_File_Binary_Read",
         "Node_File_Bytes_Write",
+        "Node_Data_List_FromText",
+        "Node_Data_List_ElementAt",
+        "Node_Data_List_Count",
+        "Node_Data_List_Map",
         "Node_Resource_Project_Image",
         "Node_Data_Cipher_Decrypt",
         "Node_Data_Compression_Decompress",
@@ -2434,10 +2455,6 @@ internal static class LocaleKeySets
         "Node_Data_Cipher_Encrypt",
         "Node_Data_Compression_Compress",
         "Node_Data_Bytes_Swap",
-        "Node_Data_List_FromText",
-        "Node_Data_List_ElementAt",
-        "Node_Data_List_Count",
-        "Node_Data_List_Map",
         "Node_Network_File_Download",
         "Node_Flow_Condition_Branch",
         "Node_Flow_Collection_Loop",
@@ -3055,7 +3072,8 @@ internal static class LocaleKeySets
         "Node_Document_TextRequired",
         "Node_Load_RetiredType",
         "Node_UI_Dialog",
-        "Node_UI_Progress"];
+        "Node_UI_Progress",
+    ];
 
     internal static readonly string[] Settings =
     [
@@ -3469,7 +3487,8 @@ internal static class LocaleKeySets
         "UsbTree_TakeoverDisabled",
         "UsbTree_TakeoverElevationRequired",
         "UsbTree_TakeoverFailed",
-        "UsbTree_DriverStateRefreshFailed"];
+        "UsbTree_DriverStateRefreshFailed",
+    ];
 
     internal static readonly string[] Interaction =
     [
@@ -3521,6 +3540,7 @@ internal static class LocaleKeySets
         "Node_UI_Content_Create",
         "Node_UI_Field_Create",
         "Node_UI_Layout_Create",
-        "Node_Conn_Kind"];
+        "Node_Conn_Kind",
+    ];
 
 }

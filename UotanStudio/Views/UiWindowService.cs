@@ -28,6 +28,7 @@ public sealed class UiWindowService : IWindowService
     private Window? _apkSigningWindow;
     private Window? _bootPatchWindow;
     private Window? _avbToolWindow;
+    private Window? _regexGeneratorWindow;
     private ChecksumWindow? _checksumWindow;
 
     private UiWindowService()
@@ -81,6 +82,9 @@ public sealed class UiWindowService : IWindowService
             case HostWindowKind.AvbTool:
                 ShowToolWindow(ref _avbToolWindow, static () => new AvbToolWindow());
                 break;
+            case HostWindowKind.RegexGenerator:
+                ShowRegexGeneratorWindow();
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown host window kind.");
         }
@@ -103,6 +107,26 @@ public sealed class UiWindowService : IWindowService
 
         var window = new ChecksumWindow(filePath);
         _checksumWindow = window;
+        window.Show();
+    }
+
+    /// <inheritdoc />
+    public void ShowRegexGeneratorWindow(string? sourceText = null, string? findText = null)
+    {
+        if (_regexGeneratorWindow is { IsVisible: true } existing)
+        {
+            if (existing is RegexGeneratorWindow regWin)
+            {
+                regWin.SetInitialData(sourceText, findText);
+            }
+
+            existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return;
+        }
+
+        var window = new RegexGeneratorWindow(sourceText, findText);
+        _regexGeneratorWindow = window;
         window.Show();
     }
 

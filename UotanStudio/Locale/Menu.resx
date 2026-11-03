@@ -1029,4 +1029,7 @@ Continue creating the project?</value>
   <data name="Menu_AvbTool" xml:space="preserve">
     <value>AVB tool</value>
   </data>
+  <data name="Menu_RegexGenerator" xml:space="preserve">
+    <value>Regex Generator</value>
+  </data>
 </root>

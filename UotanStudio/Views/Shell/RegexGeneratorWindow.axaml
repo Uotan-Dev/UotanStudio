@@ -1,0 +1,99 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
+        x:Class="UotanStudio.Views.Shell.RegexGeneratorWindow"
+        x:DataType="vm:RegexGeneratorViewModel"
+        Title="{DynamicResource RegexGenerator_Title}"
+        Width="680" Height="480" MinWidth="540" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background">
+        <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+      </Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,136,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Margin="20,44,20,16" RowDefinitions="*,Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto" RowSpacing="12" ColumnSpacing="10">
+    <!-- 第一行：原始数据 加 TextBox（支持多行），上下居中，靠右对齐 -->
+    <TextBlock Grid.Row="0" Grid.Column="0"
+               Text="{DynamicResource RegexGenerator_SourceData}"
+               HorizontalAlignment="Right"
+               VerticalAlignment="Center" FontWeight="Medium" />
+    <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+             Name="SourceTextBox"
+             AcceptsReturn="True" AcceptsTab="True"
+             TextWrapping="Wrap"
+             VerticalAlignment="Stretch"
+             ScrollViewer.VerticalScrollBarVisibility="Auto"
+             Text="{Binding SourceText, Mode=TwoWay}"
+             PlaceholderText="{DynamicResource RegexGenerator_SourceDataPlaceholder}" />
+
+    <!-- 第二行：查找内容 加 TextBox 加 生成正则表达式 按钮，靠右对齐 -->
+    <TextBlock Grid.Row="1" Grid.Column="0"
+               Text="{DynamicResource RegexGenerator_FindContent}"
+               HorizontalAlignment="Right"
+               VerticalAlignment="Center" FontWeight="Medium" />
+    <TextBox Grid.Row="1" Grid.Column="1"
+             Name="FindTextBox"
+             Height="32"
+             VerticalAlignment="Center"
+             VerticalContentAlignment="Center"
+             Text="{Binding FindContent, Mode=TwoWay}"
+             PlaceholderText="{DynamicResource RegexGenerator_FindContentPlaceholder}" />
+    <Button Grid.Row="1" Grid.Column="2"
+            Name="GenerateButton"
+            Classes="Primary"
+            MinWidth="110" Height="32"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+            VerticalAlignment="Center"
+            Content="{DynamicResource RegexGenerator_Generate}"
+            Command="{Binding GenerateCommand}" />
+
+    <!-- 第三行：正则表达式 加 TextBox 加 复制 按钮，靠右对齐 -->
+    <TextBlock Grid.Row="2" Grid.Column="0"
+               Text="{DynamicResource RegexGenerator_Pattern}"
+               HorizontalAlignment="Right"
+               VerticalAlignment="Center" FontWeight="Medium" />
+    <TextBox Grid.Row="2" Grid.Column="1"
+             Name="PatternTextBox"
+             Height="32"
+             VerticalAlignment="Center"
+             VerticalContentAlignment="Center"
+             FontFamily="Consolas,monospace"
+             Text="{Binding Pattern, Mode=TwoWay}"
+             PlaceholderText="{DynamicResource RegexGenerator_PatternPlaceholder}" />
+    <Button Grid.Row="2" Grid.Column="2"
+            Name="CopyButton"
+            MinWidth="110" Height="32"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+            VerticalAlignment="Center"
+            Content="{DynamicResource RegexGenerator_Copy}"
+            Click="OnCopyClick" />
+
+    <!-- 底部状态提示 -->
+    <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+               Text="{Binding StatusMessage}"
+               Opacity="0.75" FontSize="12" Margin="2,0,0,0"
+               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </Grid>
+</Window>

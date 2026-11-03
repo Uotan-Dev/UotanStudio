@@ -28,7 +28,10 @@ public enum HostWindowKind
     BootPatch,
 
     /// <summary>The AVB footer and A/B OTA tool window. <para>AVB 尾部与 A/B OTA 工具窗口。</para></summary>
-    AvbTool
+    AvbTool,
+
+    /// <summary>The regular expression generator window. <para>正则表达式生成器窗口。</para></summary>
+    RegexGenerator
 }
 
 /// <summary>
@@ -123,6 +126,14 @@ public interface IWindowService
     void ShowChecksumWindow(string? filePath = null);
 
     /// <summary>
+    /// Shows or focuses the regular expression generator window, optionally populating initial data.
+    /// <para>显示或聚焦正则表达式生成器窗口，可选填入初始数据。</para>
+    /// </summary>
+    /// <param name="sourceText">The initial source text, or null to keep the current state. <para>初始原始数据；为 null 时保留当前状态。</para></param>
+    /// <param name="findText">The initial find text, or null to keep the current state. <para>初始查找内容；为 null 时保留当前状态。</para></param>
+    void ShowRegexGeneratorWindow(string? sourceText = null, string? findText = null);
+
+    /// <summary>
     /// Shows the About dialog against the main window.
     /// <para>相对主窗口显示关于对话框。</para>
     /// </summary>
@@ -153,6 +164,10 @@ internal sealed class NullWindowService : IWindowService
     }
 
     public void ShowChecksumWindow(string? filePath = null)
+    {
+    }
+
+    public void ShowRegexGeneratorWindow(string? sourceText = null, string? findText = null)
     {
     }
 

@@ -4125,4 +4125,40 @@
   <data name="Flash_RkStorageProbeAbsent" xml:space="preserve">
     <value>{0}：不存在；设备仍按 {1} 应答</value>
   </data>
+  <data name="RegexGenerator_Title" xml:space="preserve">
+    <value>正则表达式生成器</value>
+  </data>
+  <data name="RegexGenerator_SourceData" xml:space="preserve">
+    <value>原始数据</value>
+  </data>
+  <data name="RegexGenerator_FindContent" xml:space="preserve">
+    <value>查找内容</value>
+  </data>
+  <data name="RegexGenerator_Generate" xml:space="preserve">
+    <value>生成正则表达式</value>
+  </data>
+  <data name="RegexGenerator_Pattern" xml:space="preserve">
+    <value>正则表达式</value>
+  </data>
+  <data name="RegexGenerator_Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="RegexGenerator_Copied" xml:space="preserve">
+    <value>已复制到剪贴板</value>
+  </data>
+  <data name="RegexGenerator_EmptyInput" xml:space="preserve">
+    <value>请输入原始数据和查找内容</value>
+  </data>
+  <data name="RegexGenerator_NoMatchFallback" xml:space="preserve">
+    <value>查找内容未在原始数据中找到，已生成精确转义正则</value>
+  </data>
+  <data name="RegexGenerator_SourceDataPlaceholder" xml:space="preserve">
+    <value>在此粘贴或输入原始数据...</value>
+  </data>
+  <data name="RegexGenerator_FindContentPlaceholder" xml:space="preserve">
+    <value>输入需要提取或匹配的目标内容...</value>
+  </data>
+  <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
+    <value>生成的正则表达式将在此显示</value>
+  </data>
 </root>

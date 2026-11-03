@@ -111,6 +111,11 @@
                         AutomationProperties.Name="{DynamicResource FindReplace_Regex}">
             <TextBlock Text=".*" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </ToggleButton>
+          <Button Name="RegexGeneratorButton" Classes="find-tool" Click="OnRegexGeneratorClick"
+                  ToolTip.Tip="{DynamicResource FindReplace_RegexGenerator}"
+                  AutomationProperties.Name="{DynamicResource FindReplace_RegexGenerator}">
+            <icons:Formula />
+          </Button>
           <ToggleButton Name="PreserveCaseToggle" Classes="find-tool" IsVisible="{Binding #ReplaceToggle.IsChecked}" ToolTip.Tip="{DynamicResource FindReplace_PreserveCase}"
                         AutomationProperties.Name="{DynamicResource FindReplace_PreserveCase}">
             <TextBlock Text="AB" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />

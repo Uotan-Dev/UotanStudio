@@ -262,6 +262,15 @@ public partial class AdbLogView : UserControl
     private void OnCopySelectionClick(object? sender, RoutedEventArgs e) => LogEditor.Copy();
     private void OnSelectAllClick(object? sender, RoutedEventArgs e) => LogEditor.SelectAll();
 
+    private void OnRegexGeneratorClick(object? sender, RoutedEventArgs e)
+    {
+        var initialSource = LogEditor.SelectedText;
+        var initialTarget = _model?.SearchText;
+        UiWindowService.Shared.ShowRegexGeneratorWindow(
+            string.IsNullOrEmpty(initialSource) ? null : initialSource,
+            string.IsNullOrEmpty(initialTarget) ? null : initialTarget);
+    }
+
     private async void OnExportClick(object? sender, RoutedEventArgs e)
     {
         if (_model is not AdbLogViewModel { Lines.Count: > 0 } model || TopLevel.GetTopLevel(this) is not { } topLevel) return;

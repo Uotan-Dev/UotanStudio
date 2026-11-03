@@ -1387,6 +1387,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenAvbTool() => _windows.ShowHostWindow(HostWindowKind.AvbTool);
 
+    /// <summary>Opens or activates the regular expression generator tool.
+    /// <para>打开或聚焦正则表达式生成器工具。</para></summary>
+    [RelayCommand]
+    private void OpenRegexGenerator() => _windows.ShowHostWindow(HostWindowKind.RegexGenerator);
+
     /// <summary>打开文件校验器窗口；窗口已打开时前置聚焦。</summary>
     [RelayCommand]
     private void OpenFileChecksum() => _windows.ShowChecksumWindow();

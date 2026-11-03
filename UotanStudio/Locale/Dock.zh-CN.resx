@@ -1968,4 +1968,10 @@
   <data name="Terminal_DeviceShell" xml:space="preserve">
     <value>设备 Shell</value>
   </data>
+  <data name="Log_RegexGenerator" xml:space="preserve">
+    <value>正则表达式生成器</value>
+  </data>
+  <data name="FindReplace_RegexGenerator" xml:space="preserve">
+    <value>正则表达式生成器</value>
+  </data>
 </root>

@@ -1968,4 +1968,10 @@
   <data name="Terminal_DeviceShell" xml:space="preserve">
     <value>Device shell</value>
   </data>
+  <data name="Log_RegexGenerator" xml:space="preserve">
+    <value>Regex Generator</value>
+  </data>
+  <data name="FindReplace_RegexGenerator" xml:space="preserve">
+    <value>Regex Generator</value>
+  </data>
 </root>

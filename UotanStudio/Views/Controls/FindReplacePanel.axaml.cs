@@ -72,6 +72,12 @@ public partial class FindReplacePanel : UserControl
     private void OnNextClick(object? sender, RoutedEventArgs e) => ActionRequested?.Invoke(SearchAction.Next);
     private void OnReplaceClick(object? sender, RoutedEventArgs e) => ActionRequested?.Invoke(SearchAction.Replace);
     private void OnReplaceAllClick(object? sender, RoutedEventArgs e) => ActionRequested?.Invoke(SearchAction.ReplaceAll);
+    private void OnRegexGeneratorClick(object? sender, RoutedEventArgs e)
+    {
+        UiWindowService.Shared.ShowRegexGeneratorWindow(
+            sourceText: null,
+            findText: string.IsNullOrEmpty(FindBox.Text) ? null : FindBox.Text);
+    }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
     {

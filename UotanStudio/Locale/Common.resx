@@ -4125,4 +4125,40 @@ Continue?</value>
   <data name="Flash_RkStorageProbeAbsent" xml:space="preserve">
     <value>{0}: not present; the device still answers as {1}</value>
   </data>
+  <data name="RegexGenerator_Title" xml:space="preserve">
+    <value>Regular Expression Generator</value>
+  </data>
+  <data name="RegexGenerator_SourceData" xml:space="preserve">
+    <value>Source Data</value>
+  </data>
+  <data name="RegexGenerator_FindContent" xml:space="preserve">
+    <value>Find Content</value>
+  </data>
+  <data name="RegexGenerator_Generate" xml:space="preserve">
+    <value>Generate Regex</value>
+  </data>
+  <data name="RegexGenerator_Pattern" xml:space="preserve">
+    <value>Regular Expression</value>
+  </data>
+  <data name="RegexGenerator_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="RegexGenerator_Copied" xml:space="preserve">
+    <value>Copied to clipboard</value>
+  </data>
+  <data name="RegexGenerator_EmptyInput" xml:space="preserve">
+    <value>Please enter source data and find content</value>
+  </data>
+  <data name="RegexGenerator_NoMatchFallback" xml:space="preserve">
+    <value>Find content not found in source data; generated escaped literal pattern</value>
+  </data>
+  <data name="RegexGenerator_SourceDataPlaceholder" xml:space="preserve">
+    <value>Paste or enter the source text here...</value>
+  </data>
+  <data name="RegexGenerator_FindContentPlaceholder" xml:space="preserve">
+    <value>Enter the target text to extract or match...</value>
+  </data>
+  <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
+    <value>Generated regular expression will appear here</value>
+  </data>
 </root>
