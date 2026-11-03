@@ -30,6 +30,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
     private readonly Thread? _thread;
+    private readonly bool _fireInitialSnapshot;
     private readonly ManualResetEventSlim _ready = new(initialState: false);
     private Exception? _startupError;
     private IntPtr _hwnd;
@@ -54,13 +55,15 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     public UsbWindowsHotplugMonitor(
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
-        Action<Exception>? onError)
+        Action<Exception>? onError,
+        bool fireInitialSnapshot = false)
     {
         _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
 
         _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
+        _fireInitialSnapshot = fireInitialSnapshot;
 
         _thread = new Thread(MessagePump)
         {
@@ -83,6 +86,34 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 "The Windows USB hotplug message window could not be created; falling back to polling.",
                 startupError);
         }
+
+        RaiseInitialSnapshot();
+    }
+
+    /// <summary>
+    /// Reports the baseline inventory as additions, once the window and every notification registration are
+    /// live so an arrival that lands after the caller starts monitoring is never lost.
+    /// <para>在窗口与全部通知注册均已生效后，把基线清单作为新增上报一次，使调用方开始监视之后到达的设备不会丢失。</para>
+    /// </summary>
+    private void RaiseInitialSnapshot()
+    {
+        if (!_fireInitialSnapshot || _lastSnapshot.Count == 0)
+        {
+            return;
+        }
+
+        var changes = _lastSnapshot.Values
+            .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
+            .ToList();
+        try
+        {
+            _onChanged(changes);
+        }
+        catch (Exception ex)
+        {
+            _onError?.Invoke(ex);
+            UsbTrace.Log($"UsbWindowsHotplugMonitor initial snapshot callback failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void MessagePump()
@@ -104,7 +135,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 throw new InvalidOperationException($"RegisterClassW failed: {Marshal.GetLastWin32Error()}");
             }
 
-            var hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.HInstance, IntPtr.Zero);
+            var hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, Win32API.HWND_MESSAGE, IntPtr.Zero, wc.HInstance, IntPtr.Zero);
             if (hwnd == IntPtr.Zero)
             {
                 throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastWin32Error()}");
@@ -128,7 +159,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             {
                 var filter = new Win32API.DEV_BROADCAST_DEVICEINTERFACE_W
                 {
-                    Dbcc_size = (uint)Marshal.OffsetOf<Win32API.DEV_BROADCAST_DEVICEINTERFACE_W>("Dbcc_name"),
+                    Dbcc_size = (uint)Marshal.SizeOf<Win32API.DEV_BROADCAST_DEVICEINTERFACE_W>(),
                     Dbcc_devicetype = Win32API.DBT_DEVTYP_DEVICEINTERFACE,
                     Dbcc_classguid = guid
                 };
@@ -202,10 +233,34 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL || wParam == (IntPtr)Win32API.DBT_DEVICEREMOVECOMPLETE) &&
             Windows.TryGetValue(hWnd, out var monitor))
         {
+            // The event names the interface that arrived or left, so the inventory can forget exactly that
+            // instance instead of re-reading every interface on the bus.
+            WinUSBFinder.InvalidateInventoryForPath(ReadBroadcastInterfacePath(lParam));
             monitor.TriggerPoll();
         }
 
         return Win32API.DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+
+    /// <summary>
+    /// Reads the variable-length <c>Dbcc_name</c> out of a <c>DEV_BROADCAST_DEVICEINTERFACE_W</c> header, or
+    /// returns <see langword="null"/> when the payload is not an interface broadcast or carries no name.
+    /// <para>从 <c>DEV_BROADCAST_DEVICEINTERFACE_W</c> 头部读出变长 <c>Dbcc_name</c>；负载不是接口广播或不含名称时
+    /// 返回 <see langword="null"/>。</para>
+    /// </summary>
+    private static string? ReadBroadcastInterfacePath(IntPtr lParam)
+    {
+        if (lParam == IntPtr.Zero ||
+            (uint)Marshal.ReadInt32(lParam, sizeof(uint)) != Win32API.DBT_DEVTYP_DEVICEINTERFACE)
+        {
+            return null;
+        }
+
+        // The header is size, devicetype, reserved, classguid and then the variable-length wide name;
+        // OffsetOf keeps this in step with the structure the registration filter already uses.
+        var nameOffset = (int)Marshal.OffsetOf<Win32API.DEV_BROADCAST_DEVICEINTERFACE_W>(
+            nameof(Win32API.DEV_BROADCAST_DEVICEINTERFACE_W.Dbcc_name));
+        return Marshal.PtrToStringUni(IntPtr.Add(lParam, nameOffset));
     }
 
     private void TriggerPoll()

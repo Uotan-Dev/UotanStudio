@@ -69,14 +69,15 @@ internal sealed class UsbApiCapabilities
     public bool SupportsNativeHotPlugMonitoring { get; set; }
 
     /// <summary>
-    /// Gets or sets whether <see cref="IUsbDeviceSession.Reset"/> causes the device to
-    /// re-enumerate, invalidating the session (the caller must re-open it).
+    /// Gets or sets whether <see cref="IUsbDeviceSession.Reset"/> causes the device to re-enumerate and
+    /// invalidate the session (the caller must reopen it).
     /// <para>获取或设置 <see cref="IUsbDeviceSession.Reset"/> 是否会导致设备重新枚举并使会话失效
     /// （调用方必须重新打开会话）。</para>
-    /// <c>false</c> means a pipe-level reset that keeps the session usable (WinUSB, macOS,
-    /// legacy); <c>true</c> means a device-level reset (Linux usbfs, libusb, HarmonyOS DDK).
-    /// <para><c>false</c> 表示管道级复位，会话保持可用（WinUSB、macOS、legacy）；
-    /// <c>true</c> 表示设备级复位（Linux usbfs、libusb、HarmonyOS DDK）。</para>
+    /// <c>false</c> means the session stays usable for a retry (pipe-level reset, or a device-level reset
+    /// after which the backend re-claims its interfaces); <c>true</c> means the device is re-enumerated or
+    /// its pipes are torn down. Per-backend values are listed in <see cref="Backends"/>.
+    /// <para><c>false</c> 表示会话保持可用、可直接重试（管道级复位，或设备级复位后后端重新申请接口）；
+    /// <c>true</c> 表示设备重新枚举或管道被拆除。逐后端取值见 <see cref="Backends"/>。</para>
     /// </summary>
     public bool ResetReenumeratesDevice { get; set; }
 

@@ -109,8 +109,9 @@ internal static partial class LibUsbNativeLoader
     /// 文件。校验文件存在；不存在时抛 <see cref="FileNotFoundException"/>。新路径会递增
     /// <see cref="Revision"/>，使可用性探测重新执行。</para>
     /// </summary>
-    /// <param name="libraryPath">Absolute path to <c>libusb-1.0.dylib</c>/<c>.so</c>/<c>.dll</c>.
-    /// <para><c>libusb-1.0.dylib</c>/<c>.so</c>/<c>.dll</c> 的绝对路径。</para></param>
+    /// <param name="libraryPath">Path to <c>libusb-1.0.dylib</c>/<c>.so</c>/<c>.dll</c>; a relative path is
+    /// resolved against the current directory before loading.
+    /// <para><c>libusb-1.0.dylib</c>/<c>.so</c>/<c>.dll</c> 的路径；相对路径会先按当前目录解析再加载。</para></param>
     public static void SetLibraryPath(string libraryPath)
     {
         if (string.IsNullOrWhiteSpace(libraryPath))

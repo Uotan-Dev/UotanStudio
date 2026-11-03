@@ -210,7 +210,7 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             try
             {
-                return new UsbLibUsbHotplugMonitor(Enumerator, onChanged, onError, filter);
+                return new UsbLibUsbHotplugMonitor(Enumerator, onChanged, onError, filter, fireInitialSnapshot);
             }
             catch (PlatformNotSupportedException)
             {
@@ -235,7 +235,7 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             try
             {
-                return new UsbWindowsHotplugMonitor(Enumerator, onChanged, onError);
+                return new UsbWindowsHotplugMonitor(Enumerator, onChanged, onError, fireInitialSnapshot);
             }
             catch (Exception ex)
             {
@@ -248,7 +248,7 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             try
             {
-                return new UdevHotplugMonitor(Enumerator, onChanged, onError);
+                return new UdevHotplugMonitor(Enumerator, onChanged, onError, fireInitialSnapshot);
             }
             catch (Exception ex)
             {
@@ -531,6 +531,19 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
                 continue;
             }
 
+            // A backend that already classified this exact path opens it directly; a null answer (unknown
+            // path, or the recorded backend no longer opens) falls through to the enumeration below.
+            var exact = provider.TryOpenExactSession(keyFilter);
+            if (exact is not null)
+            {
+                if (UsbDeviceIdentity.MatchesOpenedKey(deviceKey, exact.DeviceInfo.DeviceKey))
+                {
+                    return exact;
+                }
+
+                exact.Dispose();
+            }
+
             var sessions = provider.EnumerateDeviceSessions(keyFilter);
             IUsbDeviceSession? selected = null;
             try
@@ -547,6 +560,15 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
 
         return null;
     }
+
+    /// <summary>
+    /// Drops the Windows enumeration inventory so the next pass reads the registry and descriptors for every
+    /// interface again. An explicit user refresh calls this; device arrivals and removals invalidate only the
+    /// instances they touch.
+    /// <para>丢弃 Windows 枚举清单，使下一轮为每个接口重新读取注册表与描述符。用户显式刷新会调用本方法；
+    /// 设备插入与移除只使受影响实例失效。</para>
+    /// </summary>
+    public static void ResetUsbEnumerationInventory() => WinUsbInventoryCache.Reset();
 
     /// <summary>
     /// Registers a custom USB API provider.

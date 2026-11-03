@@ -243,11 +243,8 @@ internal static partial class LibUsbFinder
             out var interfaceProtocol,
             out var interfaces))
         {
-            if (!descriptorReadFailed)
-            {
-                return null;
-            }
-
+            // The node is present whether or not it exposes a bulk pair; report it metadata-only so the
+            // libusb inventory matches what the native backends see. Opening it later simply fails.
             var degradedBus = libUsbDevice.BusNumber;
             var degradedAddress = libUsbDevice.Address;
             var degraded = new LibUsbDevice
@@ -263,7 +260,9 @@ internal static partial class LibUsbFinder
                 UsbDeviceType = UsbDeviceType.LibUSB
             };
 
-            UsbTrace.Log($"LibUsbFinder: device {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4} descriptor read failed - reported with metadata only.");
+            UsbTrace.Log(descriptorReadFailed
+                ? $"LibUsbFinder: device {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4} descriptor read failed - reported with metadata only."
+                : $"LibUsbFinder: device {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4} exposes no bulk IN/OUT pair - reported with metadata only.");
             return degraded;
         }
 

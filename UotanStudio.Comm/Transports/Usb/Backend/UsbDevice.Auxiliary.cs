@@ -167,6 +167,17 @@ internal abstract partial class UsbDevice
     public abstract void Reset();
 
     /// <summary>
+    /// Gets whether <see cref="Reset"/> re-enumerates the device and invalidates this handle. Backends whose
+    /// reset is pipe-level, or that re-claim their interfaces after a device-level reset, keep the handle
+    /// usable and leave this <see langword="false"/>.
+    /// <para>获取 <see cref="Reset"/> 是否重新枚举设备并使本句柄失效。复位为管道级、或在设备级复位后重新申请
+    /// 接口的后端保持句柄可用，此属性保持 <see langword="false"/>。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the session must be reopened after a reset.
+    /// <para>复位后必须重新打开会话时为 <see langword="true"/>。</para></value>
+    public virtual bool ResetReenumeratesDevice => false;
+
+    /// <summary>
     /// Asynchronously resets the USB device.
     /// <para>异步重置 USB 设备。</para>
     /// </summary>

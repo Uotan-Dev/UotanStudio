@@ -12,7 +12,7 @@ internal sealed class HarmonyOSUsbApiProvider : UsbApiProviderBase
     private static readonly Lazy<bool> DdkAvailable =
         new(() =>
         {
-            if (!IsExplicitlyEnabled())
+            if (!IsExplicitlyEnabled() || !HarmonyOSUsbDDK.IsHarmonyOSPlatform())
             {
                 return false;
             }
@@ -65,7 +65,7 @@ internal sealed class HarmonyOSUsbApiProvider : UsbApiProviderBase
             SupportsNativeAsyncIo = false,
             SupportsNativeHotPlugMonitoring = false,
             RequiresExternalRuntime = false,
-            ResetReenumeratesDevice = true,
+            ResetReenumeratesDevice = false,
             Notes = "HarmonyOS USB DDK backend via libusb_ndk.z.so P/Invoke; pure C# implementation with no external bridge required. Opt-in: set FIRMWAREKIT_USB_ENABLE_HARMONY=1 to enable; must run within DriverExtensionAbility lifecycle with ohos.permission.ACCESS_DDK_USB."
         };
     }

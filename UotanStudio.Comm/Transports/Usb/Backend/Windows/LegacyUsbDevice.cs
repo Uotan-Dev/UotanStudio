@@ -7,9 +7,22 @@ using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
+/// <summary>
+/// Drives the vendor bulkusb-style driver interface through its private IOCTLs and plain ReadFile/WriteFile.
+/// <para>通过私有 IOCTL 与普通 ReadFile/WriteFile 驱动厂商 bulkusb 风格驱动接口。</para>
+/// </summary>
+/// <remarks>
+/// The handle is opened for synchronous I/O, so the per-call <c>timeoutMs</c> a chunk method receives cannot
+/// be enforced by the OS; a stuck driver blocks the caller until the I/O completes or the device disappears,
+/// and only the driver's own timeout errors surface as <c>UsbChunkStatus.Timeout</c>.
+/// <para>句柄以同步 I/O 打开，因此分块方法收到的每次调用超时无法由操作系统强制；驱动卡住时调用方会阻塞到
+/// I/O 完成或设备消失，只有驱动自身返回的超时错误才会表现为 <c>UsbChunkStatus.Timeout</c>。</para>
+/// </remarks>
 internal class LegacyUsbDevice : UsbDevice
 {
     private const int IoTimeoutMs = 30000;
+    private const int ERROR_SEM_TIMEOUT = 121;
+    private const int ERROR_TIMEOUT = 146;
     private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
     private const int ERROR_NO_SUCH_DEVICE = 433;
     private const int ERROR_DEVICE_REMOVED = 1617;
@@ -150,16 +163,28 @@ internal class LegacyUsbDevice : UsbDevice
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        return !ReadFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var bytesRead, IntPtr.Zero)
-            ? UsbChunkResult.Fatal(Marshal.GetLastWin32Error())
-            : UsbChunkResult.Success((int)bytesRead);
+        if (ReadFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var bytesRead, IntPtr.Zero))
+        {
+            return UsbChunkResult.Success((int)bytesRead);
+        }
+
+        var error = Marshal.GetLastWin32Error();
+        return error is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT
+            ? UsbChunkResult.Timeout(error)
+            : UsbChunkResult.Fatal(error);
     }
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        return !WriteFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var written, IntPtr.Zero)
-            ? UsbChunkResult.Fatal(Marshal.GetLastWin32Error())
-            : UsbChunkResult.Success((int)written);
+        if (WriteFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var written, IntPtr.Zero))
+        {
+            return UsbChunkResult.Success((int)written);
+        }
+
+        var error = Marshal.GetLastWin32Error();
+        return error is ERROR_SEM_TIMEOUT or ERROR_TIMEOUT
+            ? UsbChunkResult.Timeout(error)
+            : UsbChunkResult.Fatal(error);
     }
 
     protected override bool IsDisconnectionError(int nativeError)

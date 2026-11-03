@@ -25,6 +25,9 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
 
     public int DefaultTimeoutMs => _device.DefaultTimeoutMs;
 
+    /// <inheritdoc/>
+    public bool ResetReenumeratesDevice => _device.ResetReenumeratesDevice;
+
     public UsbDeviceInfo DeviceInfo { get; } = UsbDeviceInfoFactory.FromBackendDevice(apiName, kind, device);
 
     public byte EndpointIn => _device.EndpointIn;
@@ -328,8 +331,15 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
         }
     }
 
+    /// <summary>
+    /// Switches the interface alternate setting after every direction gate is quiet, because the switch may
+    /// re-bind or replace the pipes a transfer would still be using.
+    /// <para>在所有方向门闩都空闲后切换接口备用设置，因为该切换可能重新绑定或替换传输仍在使用的管道。</para>
+    /// </summary>
     public void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
     {
+        _readGate.Wait();
+        _writeGate.Wait();
         _controlGate.Wait();
         try
         {
@@ -338,24 +348,51 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
         finally
         {
             _controlGate.Release();
+            _writeGate.Release();
+            _readGate.Release();
         }
     }
 
+    /// <summary>Asynchronous <see cref="SetInterfaceAltSetting"/> with the same gate ordering.
+    /// <para>与 <see cref="SetInterfaceAltSetting"/> 具有相同门闩顺序的异步版本。</para></summary>
     public async Task SetInterfaceAltSettingAsync(byte interfaceNumber, byte altSetting, CancellationToken cancellationToken = default)
     {
-        await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _readGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _device.SetInterfaceAltSetting(interfaceNumber, altSetting);
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    _device.SetInterfaceAltSetting(interfaceNumber, altSetting);
+                }
+                finally
+                {
+                    _controlGate.Release();
+                }
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         finally
         {
-            _controlGate.Release();
+            _readGate.Release();
         }
     }
 
+    /// <summary>
+    /// Switches the device configuration after every direction gate is quiet, because a new configuration
+    /// invalidates the interfaces and pipes the session was bound to.
+    /// <para>在所有方向门闩都空闲后切换设备配置，因为新配置会使会话绑定的接口与管道失效。</para>
+    /// </summary>
     public void SetConfiguration(byte configuration)
     {
+        _readGate.Wait();
+        _writeGate.Wait();
         _controlGate.Wait();
         try
         {
@@ -364,19 +401,39 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
         finally
         {
             _controlGate.Release();
+            _writeGate.Release();
+            _readGate.Release();
         }
     }
 
+    /// <summary>Asynchronous <see cref="SetConfiguration"/> with the same gate ordering.
+    /// <para>与 <see cref="SetConfiguration"/> 具有相同门闩顺序的异步版本。</para></summary>
     public async Task SetConfigurationAsync(byte configuration, CancellationToken cancellationToken = default)
     {
-        await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _readGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _device.SetConfiguration(configuration);
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    _device.SetConfiguration(configuration);
+                }
+                finally
+                {
+                    _controlGate.Release();
+                }
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         finally
         {
-            _controlGate.Release();
+            _readGate.Release();
         }
     }
 

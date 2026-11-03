@@ -86,6 +86,43 @@ internal abstract class UsbApiProviderBase : IUsbApiProvider
     }
 
     /// <inheritdoc/>
+    public IUsbDeviceSession? TryOpenExactSession(UsbDeviceFilter filter)
+    {
+        if (!IsSupportedOnCurrentPlatform || string.IsNullOrEmpty(filter.DevicePathEquals))
+        {
+            return null;
+        }
+
+        var device = TryOpenExactBackendDevice(filter.DevicePathEquals);
+        if (device is null)
+        {
+            return null;
+        }
+
+        var sessions = UsbProviderProjection.ToSessions(ApiName, ApiKind, [device], filter);
+        var selected = sessions.FirstOrDefault();
+        foreach (var session in sessions)
+        {
+            if (!ReferenceEquals(session, selected))
+            {
+                session.Dispose();
+            }
+        }
+
+        return selected;
+    }
+
+    /// <summary>
+    /// Opens the backend device for one exact interface path, or returns <see langword="null"/> when this
+    /// backend cannot answer without enumerating.
+    /// <para>为某条精确接口路径打开后端设备；无法在不枚举的情况下作答时返回 <see langword="null"/>。</para>
+    /// </summary>
+    /// <param name="devicePath">The exact interface path. <para>精确接口路径。</para></param>
+    /// <returns>The opened backend device, or <see langword="null"/>.
+    /// <para>已打开的后端设备，或 <see langword="null"/>。</para></returns>
+    protected virtual UsbDevice? TryOpenExactBackendDevice(string devicePath) => null;
+
+    /// <inheritdoc/>
     public abstract UsbApiCapabilities GetCapabilities();
 
     /// <summary>

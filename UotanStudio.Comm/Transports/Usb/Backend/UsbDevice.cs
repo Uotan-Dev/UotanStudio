@@ -427,8 +427,8 @@ internal enum UsbDeviceType
     MacOS = 4,
 
     /// <summary>
-    /// HarmonyOS USBManager backend (via IPC bridge).
-    /// <para>HarmonyOS USBManager 后端（通过 IPC 桥接）。</para>
+    /// HarmonyOS USB DDK backend.
+    /// <para>HarmonyOS USB DDK 后端。</para>
     /// </summary>
     HarmonyOS = 5,
 

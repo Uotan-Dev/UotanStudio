@@ -53,6 +53,18 @@ internal static partial class WinUSBAPI
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool WinUsb_GetCurrentAlternateSetting(IntPtr InterfaceHandle, out byte SettingNumber);
 
+    /// <summary>
+    /// Selects an alternate setting on the bound interface. WinUSB only knows the pipes of the new
+    /// setting after this call returns, so the caller must re-query them.
+    /// <para>为已绑定接口选择备用设置。只有该调用返回后 WinUSB 才知道新设置的管道，调用方必须重新查询。</para>
+    /// </summary>
+    /// <param name="InterfaceHandle">The WinUSB interface handle. <para>WinUSB 接口句柄。</para></param>
+    /// <param name="SettingNumber">The alternate setting number to activate. <para>要激活的备用设置号。</para></param>
+    /// <returns><see langword="true"/> on success. <para>成功时为 <see langword="true"/>。</para></returns>
+    [LibraryImport("Winusb.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WinUsb_SetCurrentAlternateSetting(IntPtr InterfaceHandle, byte SettingNumber);
+
     [LibraryImport("Winusb.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool WinUsb_GetDescriptor(IntPtr InterfaceHandle, byte DescriptorType, byte Index, ushort LangID,

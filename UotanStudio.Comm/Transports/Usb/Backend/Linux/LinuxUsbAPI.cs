@@ -37,6 +37,30 @@ internal static partial class LinuxUsbAPI
     public static uint USBDEVFS_RESET = 0x5514;
 
     /// <summary>
+    /// <c>_IOR('U', 20, struct usbdevfs_setinterface)</c>: activates an interface alternate setting through
+    /// the kernel instead of a bare control request.
+    /// <para><c>_IOR('U', 20, struct usbdevfs_setinterface)</c>：经内核激活接口备用设置，而不是裸控制请求。</para>
+    /// </summary>
+    public const uint USBDEVFS_SETINTERFACE = 0x80085514;
+
+    /// <summary>
+    /// <c>_IOR('U', 3, unsigned int)</c>: activates a device configuration. The kernel rejects it while any
+    /// interface of the descriptor is still claimed.
+    /// <para><c>_IOR('U', 3, unsigned int)</c>：激活设备配置。描述符仍有接口被申请时内核会拒绝。</para>
+    /// </summary>
+    public const uint USBDEVFS_SETCONFIGURATION = 0x80045503;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Usbdevfs_setinterface
+    {
+        public uint Interface;
+        public uint Altsetting;
+    }
+
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_setinterface arg);
+
+    /// <summary>
     /// Ioctl request code for USBDEVFS_CLEAR_HALT, encoded as <c>_IOR('U', 21, unsigned int)</c> per
     /// <c>linux/usbdevice_fs.h</c>; the argument is the endpoint address passed as an unsigned int,
     /// which reuses the existing <c>ioctl(int, UIntPtr, ref int)</c> declaration.

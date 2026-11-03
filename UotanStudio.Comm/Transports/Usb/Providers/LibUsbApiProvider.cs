@@ -65,8 +65,8 @@ internal sealed class LibUsbApiProvider : UsbApiProviderBase
             SupportsNativeAsyncIo = true,
             SupportsNativeHotPlugMonitoring = supportsNativeHotPlug,
             RequiresExternalRuntime = true,
-            ResetReenumeratesDevice = true,
-            Notes = "The backend is enabled only when the platform libusb file is present next to the application or an explicit path is registered via UsbCommunicationLayer.SetLibusbLibraryPath; a libusb installed elsewhere on the system does not enable it. Bulk, interrupt and control transfers use the libusb async transfer API. Hot-plug callbacks are used on Linux and macOS; Windows falls back to polling."
+            ResetReenumeratesDevice = false,
+            Notes = "The backend is enabled only when the platform libusb file is present next to the application or an explicit path is registered via UsbCommunicationLayer.SetLibusbLibraryPath; a libusb installed elsewhere on the system does not enable it. Bulk reads and writes use the libusb bulk API (synchronous chunk path) with an async transfer path for the async entry points; interrupt and control transfers use the libusb async transfer API. Hot-plug callbacks are used on Linux and macOS; Windows falls back to polling. Reset re-claims the interface so the session stays usable."
         };
     }
 }

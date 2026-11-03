@@ -49,7 +49,7 @@ internal static partial class UsbHostAPI
     public const string SelReset = "resetWithError:";
     public const string SelAbort = "abortWithError:";
     public const string SelEndpointAddress = "endpointAddress";
-    public const string SelDataWithLength = "dataWithLength:";
+    public const string SelInitWithLength = "initWithLength:";
     public const string SelMutableBytes = "mutableBytes";
     public const string SelLength = "length";
     public const string SelErrorCode = "code";
@@ -75,9 +75,8 @@ internal static partial class UsbHostAPI
     private static readonly Lazy<IntPtr> DeviceClass = new(() => LoadClass(DeviceClassName), isThreadSafe: true);
     private static readonly Lazy<IntPtr> InterfaceClass = new(() => LoadClass(InterfaceClassName), isThreadSafe: true);
     private static readonly Lazy<IntPtr> NSMutableDataClass = new(() => LoadClass(NSMutableDataClassName), isThreadSafe: true);
-    private static readonly Lazy<IntPtr> NSMutableDataAllocSel = new(() => sel_registerName(SelAlloc), isThreadSafe: true);
     private static readonly Lazy<IntPtr> AllocSel = new(() => sel_registerName(SelAlloc), isThreadSafe: true);
-    private static readonly Lazy<IntPtr> DataWithLengthSel = new(() => sel_registerName(SelDataWithLength), isThreadSafe: true);
+    private static readonly Lazy<IntPtr> InitWithLengthSel = new(() => sel_registerName(SelInitWithLength), isThreadSafe: true);
     private static readonly Lazy<IntPtr> MutableBytesSel = new(() => sel_registerName(SelMutableBytes), isThreadSafe: true);
     private static readonly Lazy<IntPtr> LengthSel = new(() => sel_registerName(SelLength), isThreadSafe: true);
     private static readonly Lazy<IntPtr> ErrorCodeSel = new(() => sel_registerName(SelErrorCode), isThreadSafe: true);
@@ -451,11 +450,34 @@ internal static partial class UsbHostAPI
     public static IntPtr GetConfigurationDescriptor(IntPtr receiver) =>
         MsgSendObject(receiver, ConfigDescriptorSel.Value);
 
-    /// <summary>Creates an NSMutableData of the given length (+1 retained). <para>创建指定长度的 NSMutableData（+1 持有）。</para></summary>
+    /// <summary>
+    /// Creates an owned NSMutableData of the given length (+1 retained, no autorelease). The transfer paths
+    /// release it exactly once when the request returns; using <c>dataWithLength:</c> would leave an
+    /// autoreleased reference no pool on a .NET thread ever drains.
+    /// <para>创建指定长度、由调用方持有的 NSMutableData（+1，不带 autorelease）。传输路径在请求返回后恰好释放
+    /// 一次；使用 <c>dataWithLength:</c> 会留下一个 .NET 线程上永不被回收池排空的 autorelease 引用。</para>
+    /// </summary>
     public static IntPtr CreateMutableData(int length)
     {
-        var autoreleased = MsgSendObject_Ulong(NSMutableDataClass.Value, DataWithLengthSel.Value, (ulong)length);
-        return autoreleased == IntPtr.Zero ? IntPtr.Zero : objc_retain(autoreleased);
+        var allocated = MsgSendObject(NSMutableDataClass.Value, AllocSel.Value);
+        if (allocated == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        var data = MsgSendObject_Ulong(allocated, InitWithLengthSel.Value, (ulong)length);
+        if (data == IntPtr.Zero)
+        {
+            objc_release(allocated);
+            return IntPtr.Zero;
+        }
+
+        if (data != allocated)
+        {
+            objc_release(allocated);
+        }
+
+        return data;
     }
 
     private static IntPtr CreateMutableData(byte[] source)

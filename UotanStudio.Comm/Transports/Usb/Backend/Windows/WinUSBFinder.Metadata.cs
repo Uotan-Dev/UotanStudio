@@ -35,22 +35,54 @@ internal static partial class WinUSBFinder
     /// Reads the DeviceInterfaceGUIDs (REG_MULTI_SZ) registered for a device node under
     /// HKLM\SYSTEM\CurrentControlSet\Enum\&lt;instance&gt;\Device Parameters, falling back
     /// to the DeviceClasses reverse map when the node-level value is absent (winusb-driven
-    /// interfaces such as ADB often register their interface GUID only there).
+    /// interfaces such as ADB often register their interface GUID only there). A warm pass answers
+    /// from the GUIDs an earlier pass read for this same instance, because that value only changes
+    /// when the node is reinstalled or its driver is rebound — both of which report a device
+    /// interface change that invalidates the record.
     /// <para>读取设备节点在 HKLM\SYSTEM\CurrentControlSet\Enum\&lt;instance&gt;\Device Parameters
     /// 下注册的 DeviceInterfaceGUIDs（REG_MULTI_SZ）；节点级值缺失时回退到 DeviceClasses
-    /// 反向映射（winusb 驱动的接口如 ADB 通常只在那里注册接口 GUID）。</para>
-    /// The fallback map is shared only within one enumeration, so hotplug changes are visible on the next scan.
-    /// <para>回退映射仅在单轮枚举内共享，后续扫描仍能观察到热插拔变化。</para>
+    /// 反向映射（winusb 驱动的接口如 ADB 通常只在那里注册接口 GUID）。变暖后的一轮直接由更早一轮
+    /// 为该实例读到的 GUID 作答，因为该值只在节点重装或驱动重绑时变化——两者都会上报设备接口变化
+    /// 并使该记录失效。</para>
+    /// The fallback map is shared across passes and invalidated by device interface changes.
+    /// <para>回退映射跨轮共享，并由设备接口变化事件失效。</para>
     /// </summary>
     internal static IEnumerable<Guid> ReadDeviceInterfaceGuids(
         string instanceId,
-        Lazy<Dictionary<string, List<Guid>>> deviceClassGuids)
+        Lazy<Dictionary<string, List<Guid>>> deviceClassGuids,
+        ScanPass pass)
+    {
+        if (pass.Incremental && WinUsbInventoryCache.TryGet(instanceId, out var remembered) &&
+            remembered.InterfaceGuids is { } cachedGuids)
+        {
+            pass.Observe(instanceId);
+            return cachedGuids;
+        }
+
+        var result = ReadRegisteredInterfaceGuids(instanceId);
+        if (result.Count == 0)
+        {
+            FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids);
+        }
+
+        pass.Observe(instanceId);
+        var (vid, pid) = TryParseVidPid(instanceId);
+        WinUsbInventoryCache.RememberInterfaceGuids(instanceId, vid ?? 0, pid ?? 0, result);
+        return result;
+    }
+
+    /// <summary>
+    /// Reads the node-level <c>DeviceInterfaceGUIDs</c> value, returning an empty list when the node keeps
+    /// its interface GUIDs only in the <c>DeviceClasses</c> tree.
+    /// <para>读取节点级的 <c>DeviceInterfaceGUIDs</c> 值；接口 GUID 只登记在 <c>DeviceClasses</c> 树中时返回空列表。</para>
+    /// </summary>
+    private static List<Guid> ReadRegisteredInterfaceGuids(string instanceId)
     {
         var result = new List<Guid>();
         var subKey = @"SYSTEM\CurrentControlSet\Enum\" + instanceId + @"\Device Parameters";
         if (Win32API.RegOpenKeyExW(Win32API.HKEY_LOCAL_MACHINE, subKey, 0, Win32API.KEY_READ, out var key) != 0)
         {
-            return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids);
+            return result;
         }
 
         try
@@ -59,7 +91,7 @@ internal static partial class WinUSBFinder
             if (Win32API.RegQueryValueExW(key, "DeviceInterfaceGUIDs", IntPtr.Zero, out var type, IntPtr.Zero, ref size) != 0 ||
                 size == 0)
             {
-                return FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids);
+                return result;
             }
 
             var buffer = Marshal.AllocHGlobal((int)size);
@@ -88,7 +120,26 @@ internal static partial class WinUSBFinder
             Win32API.RegCloseKey(key);
         }
 
-        return result.Count == 0 ? FallbackToDeviceClassGuids(result, instanceId, deviceClassGuids) : (IEnumerable<Guid>)result;
+        return result;
+    }
+
+    /// <summary>
+    /// Answers the <c>Control\DeviceClasses</c> reverse map from the inventory cache when a recent pass
+    /// already built it, because that tree only changes when a device interface is added or removed and the
+    /// hotplug monitor invalidates the cached map on exactly those events.
+    /// <para>更早一轮已构建出 <c>Control\DeviceClasses</c> 反向映射时直接由清单缓存作答，因为该树只在设备接口
+    /// 增删时变化，而热插拔监视正是在这些事件上使缓存映射失效。</para>
+    /// </summary>
+    private static Dictionary<string, List<Guid>> CachedDeviceClassGuidMap()
+    {
+        if (WinUsbInventoryCache.GetDeviceClassGuidMap() is { } remembered)
+        {
+            return remembered;
+        }
+
+        var built = BuildDeviceClassGuidMap();
+        WinUsbInventoryCache.RememberDeviceClassGuidMap(built);
+        return built;
     }
 
     /// <summary>
@@ -342,6 +393,60 @@ internal static partial class WinUSBFinder
     }
 
     /// <summary>
+    /// Forgets what the inventory learned about the interface a device-change event touched, and drops the
+    /// remembered <c>DeviceClasses</c> map because an arrival or removal changes exactly that tree. The next
+    /// pass re-reads the affected instance and rebuilds the map on demand; every other interface keeps its
+    /// cached answer.
+    /// <para>遗忘清单对设备变化事件所触及接口的已知内容，并丢弃记住的 <c>DeviceClasses</c> 映射——插入或移除
+    /// 改变的正是这棵树。下一轮重读受影响实例并按需重建映射，其余接口保留缓存结果。</para>
+    /// </summary>
+    /// <param name="deviceInterfacePath">The interface path carried by the broadcast event; blank events
+    /// invalidate nothing.
+    /// <para>广播事件携带的接口路径；空白事件不使任何记录失效。</para></param>
+    internal static void InvalidateInventoryForPath(string? deviceInterfacePath)
+    {
+        if (string.IsNullOrWhiteSpace(deviceInterfacePath))
+        {
+            return;
+        }
+
+        WinUsbInventoryCache.InvalidateDeviceClassGuidMap();
+        WinUsbInventoryCache.InvalidateInstance(TryDeriveInstanceId(deviceInterfacePath));
+    }
+
+    /// <summary>
+    /// Derives the PnP instance id from a device interface path without touching SetupDi or the registry:
+    /// the path embeds <c>\\?\USB#&lt;hardware ids&gt;#&lt;instance tail&gt;#{guid}</c>, so cutting the leading
+    /// prefix and the trailing GUID brace and swapping <c>#</c> for <c>\</c> reproduces the instance id the
+    /// setup API reports. A warm pass uses it as the inventory cache key, which is why the walk can answer for
+    /// a known interface without asking the device node at all.
+    /// <para>从设备接口路径推导 PnP 实例 ID，不触及 SetupDi 或注册表：路径内嵌
+    /// <c>\\?\USB#&lt;硬件 ID&gt;#&lt;实例尾部&gt;#{guid}</c>，因此去掉前缀与结尾 GUID 花括号、并把 <c>#</c>
+    /// 换成 <c>\</c> 即可还原 setup API 报告的实例 ID。变暖后的一轮用它作为清单缓存键，这正是遍历能在不询问设备节点
+    /// 的情况下答复已知接口的原因。</para>
+    /// </summary>
+    /// <param name="path">Device interface path. <para>设备接口路径。</para></param>
+    /// <returns>The derived instance id, or <see langword="null"/> when the path carries no hardware ids.
+    /// <para>推导出的实例 ID；路径不含硬件 ID 时为 <see langword="null"/>。</para></returns>
+    private static string? TryDeriveInstanceId(string path)
+    {
+        const string prefix = @"\\?\usb#";
+        var rest = path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? path[prefix.Length..] : path;
+        var guidBrace = rest.IndexOf("#{", StringComparison.Ordinal);
+        if (guidBrace >= 0)
+        {
+            rest = rest[..guidBrace];
+        }
+
+        if (string.IsNullOrWhiteSpace(rest) || rest.IndexOf("VID_", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return null;
+        }
+
+        return @"USB\" + rest.Replace('#', '\\');
+    }
+
+    /// <summary>
     /// Recovers the interface class/subclass/protocol of a winusb interface from its
     /// device node's CompatibleIDs (REG_MULTI_SZ) when the interface cannot be opened to
     /// read the configuration descriptor directly. CompatibleIDs entries carry the
@@ -356,20 +461,12 @@ internal static partial class WinUSBFinder
         interfaceSubClass = 0;
         interfaceProtocol = 0;
 
-        const string prefix = @"\\?\usb#";
-        var rest = path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? path[prefix.Length..] : path;
-        var guidBrace = rest.IndexOf("#{", StringComparison.Ordinal);
-        if (guidBrace >= 0)
-        {
-            rest = rest[..guidBrace];
-        }
-
-        if (string.IsNullOrWhiteSpace(rest) || rest.IndexOf("VID_", StringComparison.OrdinalIgnoreCase) < 0)
+        var instanceId = TryDeriveInstanceId(path);
+        if (instanceId is null)
         {
             return false;
         }
 
-        var instanceId = @"USB\" + rest.Replace('#', '\\');
         var subKey = @"SYSTEM\CurrentControlSet\Enum\" + instanceId;
         if (Win32API.RegOpenKeyExW(Win32API.HKEY_LOCAL_MACHINE, subKey, 0, Win32API.KEY_READ, out var key) != 0)
         {
@@ -451,9 +548,9 @@ internal static partial class WinUSBFinder
     private static string AttachedBackendName(UsbDevice device)
         => device switch
         {
-            RockusbDevice => "Rockusb",
-            WinUSBDevice => "WinUSB",
-            _ => "Legacy"
+            RockusbDevice => BackendRockusb,
+            WinUSBDevice => BackendWinUsb,
+            _ => BackendLegacy
         };
 
     /// <summary>Serializes descriptor probes so one scan never opens the same interface twice at once.
@@ -621,6 +718,50 @@ internal static partial class WinUSBFinder
             device.BcdUsb = hubBcdUsb;
             UsbSerialCache.RememberDescriptors(path, instanceId, serial: null, hubBcdUsb, nowTicks);
         }
+    }
+
+    /// <summary>
+    /// Rebuilds a metadata-only device from what an earlier pass learned for the same instance, so a warm
+    /// pass reports the identical interface triple without reading <c>CompatibleIDs</c> again. Only evidence a
+    /// previous pass actually read is replayed; an instance whose triple was never recovered keeps reporting
+    /// none, exactly as the uncached path would.
+    /// <para>由更早一轮对同一实例所学到的内容重建仅元数据设备，使变暖后的一轮无需重读 <c>CompatibleIDs</c>
+    /// 即可报告相同的接口三元组。只重放上一轮真正读到的证据；从未恢复出三元组的实例仍然报告缺失，与未走缓存的
+    /// 路径完全一致。</para>
+    /// </summary>
+    private static WinUSBDevice? CreateCachedMetadataDevice(
+        ushort vid,
+        ushort pid,
+        WinUsbInventoryCache.Record? cached)
+    {
+        if (cached is null || cached.MetadataObserved != true ||
+            cached.InterfaceClass is not { } cls ||
+            cached.InterfaceSubClass is not { } sub ||
+            cached.InterfaceProtocol is not { } proto)
+        {
+            return null;
+        }
+
+        return new WinUSBDevice
+        {
+            VendorId = vid,
+            ProductId = pid,
+            InterfaceClass = cls,
+            InterfaceSubClass = sub,
+            InterfaceProtocol = proto,
+            InterfaceMetadataObserved = true,
+            Interfaces =
+            [
+                new UsbInterfaceInfo
+                {
+                    InterfaceNumber = 0,
+                    Class = cls,
+                    SubClass = sub,
+                    Protocol = proto,
+                    Endpoints = []
+                }
+            ]
+        };
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Diagnostics;
@@ -148,63 +149,13 @@ internal partial class WinUSBDevice : UsbDevice
             return Fail(Marshal.GetLastWin32Error());
         }
 
-        InterfaceClass = _usbDeviceInterfaceDescriptor.BInterfaceClass;
-        InterfaceSubClass = _usbDeviceInterfaceDescriptor.BInterfaceSubClass;
-        InterfaceProtocol = _usbDeviceInterfaceDescriptor.BInterfaceProtocol;
-        InterfaceMetadataObserved = true;
-
-        var endpoints = new List<UsbEndpointInfo>();
-        for (byte endpoint = 0; endpoint < _usbDeviceInterfaceDescriptor.BNumEndpoints; endpoint++)
+        var bindError = BindInterface(_interfaceNum);
+        if (bindError != 0)
         {
-            if (!WinUsb_QueryPipe(_winUsbHandle.DangerousGetHandle(), _interfaceNum, endpoint, out var pipeInfo))
-            {
-                return Fail(Marshal.GetLastWin32Error());
-            }
-
-            endpoints.Add(new UsbEndpointInfo
-            {
-                EndpointAddress = pipeInfo.PipeID,
-                Attributes = (byte)pipeInfo.PipeType,
-                MaxPacketSize = pipeInfo.MaximumPacketSize,
-                Interval = pipeInfo.Interval
-            });
-            if (pipeInfo.PipeType == WinUSBPipeType.UsbdPipeTypeBulk)
-            {
-                if ((pipeInfo.PipeID & USB_ENDPOINT_DIRECTION_MASK) != 0)
-                {
-                    if (_readBulkID == 0)
-                    {
-                        _readBulkID = pipeInfo.PipeID;
-                        ReadPipeMaxPacketSize = pipeInfo.MaximumPacketSize;
-                    }
-                }
-                else
-                {
-                    if (_writeBulkID == 0)
-                    {
-                        _writeBulkID = pipeInfo.PipeID;
-                    }
-                }
-            }
+            return Fail(bindError);
         }
 
-        Interfaces =
-        [
-            new UsbInterfaceInfo
-            {
-                InterfaceNumber = _interfaceNum,
-                Class = _usbDeviceInterfaceDescriptor.BInterfaceClass,
-                SubClass = _usbDeviceInterfaceDescriptor.BInterfaceSubClass,
-                Protocol = _usbDeviceInterfaceDescriptor.BInterfaceProtocol,
-                Endpoints = endpoints
-            }
-        ];
         EnumeratedInterfaces = parsedInterfaces;
-
-        if (_readBulkID == 0 || _writeBulkID == 0)
-        {
-            return Fail(-1);
-        }
 
         if (CommTrace.IsEnabled(CommLogLevel.Debug))
         {
@@ -229,7 +180,97 @@ internal partial class WinUSBDevice : UsbDevice
         }
 
         GetSerialNumber();
+        ApplyPipePolicies();
+        return 0;
+    }
 
+    /// <summary>
+    /// Binds the WinUSB interface handle to one alternate setting: reads the interface descriptor and every
+    /// pipe of that setting, records the first bulk IN/OUT pair, and reports the interface number from the
+    /// descriptor (not the setting number).
+    /// <para>把 WinUSB 接口句柄绑定到一个备用设置：读取该设置的接口描述符与全部管道，记录首对批量 IN/OUT，
+    /// 并报告描述符里的接口号（而不是设置号）。</para>
+    /// </summary>
+    /// <param name="alternateSetting">The setting to bind; must be the one the device currently has active.
+    /// <para>要绑定的设置；必须是设备当前激活的那个。</para></param>
+    /// <returns>Zero on success, otherwise the native error or -1 when the setting has no bulk pair.
+    /// <para>成功返回 0；否则返回原生错误，设置没有批量端点对时返回 -1。</para></returns>
+    private int BindInterface(byte alternateSetting)
+    {
+        if (!WinUsb_QueryInterfaceSettings(_winUsbHandle.DangerousGetHandle(), alternateSetting, out _usbDeviceInterfaceDescriptor))
+        {
+            return Marshal.GetLastWin32Error();
+        }
+
+        _interfaceNum = alternateSetting;
+        InterfaceClass = _usbDeviceInterfaceDescriptor.BInterfaceClass;
+        InterfaceSubClass = _usbDeviceInterfaceDescriptor.BInterfaceSubClass;
+        InterfaceProtocol = _usbDeviceInterfaceDescriptor.BInterfaceProtocol;
+        InterfaceMetadataObserved = true;
+
+        _readBulkID = 0;
+        _writeBulkID = 0;
+        ReadPipeMaxPacketSize = 0;
+        var endpoints = new List<UsbEndpointInfo>();
+        for (byte endpoint = 0; endpoint < _usbDeviceInterfaceDescriptor.BNumEndpoints; endpoint++)
+        {
+            if (!WinUsb_QueryPipe(_winUsbHandle.DangerousGetHandle(), alternateSetting, endpoint, out var pipeInfo))
+            {
+                return Marshal.GetLastWin32Error();
+            }
+
+            endpoints.Add(new UsbEndpointInfo
+            {
+                EndpointAddress = pipeInfo.PipeID,
+                Attributes = (byte)pipeInfo.PipeType,
+                MaxPacketSize = pipeInfo.MaximumPacketSize,
+                Interval = pipeInfo.Interval
+            });
+            if (pipeInfo.PipeType != WinUSBPipeType.UsbdPipeTypeBulk)
+            {
+                continue;
+            }
+
+            if ((pipeInfo.PipeID & USB_ENDPOINT_DIRECTION_MASK) != 0)
+            {
+                if (_readBulkID == 0)
+                {
+                    _readBulkID = pipeInfo.PipeID;
+                    ReadPipeMaxPacketSize = pipeInfo.MaximumPacketSize;
+                }
+            }
+            else if (_writeBulkID == 0)
+            {
+                _writeBulkID = pipeInfo.PipeID;
+            }
+        }
+
+        Interfaces =
+        [
+            new UsbInterfaceInfo
+            {
+                InterfaceNumber = _usbDeviceInterfaceDescriptor.BInterfaceNumber,
+                Class = _usbDeviceInterfaceDescriptor.BInterfaceClass,
+                SubClass = _usbDeviceInterfaceDescriptor.BInterfaceSubClass,
+                Protocol = _usbDeviceInterfaceDescriptor.BInterfaceProtocol,
+                Endpoints = endpoints
+            }
+        ];
+
+        return _readBulkID == 0 || _writeBulkID == 0 ? -1 : 0;
+    }
+
+    /// <summary>
+    /// Writes the per-pipe policies shared by handle creation and an alternate-setting switch. Pipe policies
+    /// belong to the pipe, and WinUSB forgets them when the binding changes, so the timeout caches are
+    /// dropped first and every policy is written again.
+    /// <para>写入句柄创建与备用设置切换共用的逐管道策略。管道策略属于管道，WinUSB 在绑定变化后会忘记它们，
+    /// 因此先丢弃超时缓存再重新写入全部策略。</para>
+    /// </summary>
+    private void ApplyPipePolicies()
+    {
+        _configuredReadPipeTimeoutMs = -1;
+        _configuredWritePipeTimeoutMs = -1;
         byte bTrue = 1;
         byte bFalse = 0;
 
@@ -256,9 +297,62 @@ internal partial class WinUSBDevice : UsbDevice
         {
             UsbTrace.LogFormatted($"WinUSB: SHORT_PACKET_TERMINATE policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
         }
-
-        return 0;
     }
+
+    /// <summary>
+    /// Switches the bound interface to another alternate setting through WinUSB's own API, then re-reads the
+    /// pipes because the previous setting's pipe information no longer applies.
+    /// <para>经 WinUSB 自身的 API 把已绑定接口切换到另一个备用设置，然后重新读取管道，因为旧设置的管道信息不再适用。</para>
+    /// </summary>
+    /// <param name="interfaceNumber">The interface number requested by the caller; must be the one this handle binds.
+    /// <para>调用方请求的接口号；必须是本句柄绑定的那个。</para></param>
+    /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle has been closed. <para>句柄已关闭。</para></exception>
+    /// <exception cref="NotSupportedException">The interface number is not the one this session binds.
+    /// <para>接口号不是本会话绑定的那个。</para></exception>
+    /// <exception cref="Win32Exception">WinUSB rejected the setting change. <para>WinUSB 拒绝了该设置切换。</para></exception>
+    /// <exception cref="IOException">The new setting does not expose a bulk IN/OUT pair. <para>新设置没有批量 IN/OUT 端点对。</para></exception>
+    public override void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
+    {
+        if (!_winUsbHandle.IsInvalid && interfaceNumber != _usbDeviceInterfaceDescriptor.BInterfaceNumber)
+        {
+            throw new NotSupportedException(
+                $"WinUSB binds interface {_usbDeviceInterfaceDescriptor.BInterfaceNumber}; interface {interfaceNumber} is not open in this session.");
+        }
+
+        var usb = AcquireWinUsbHandle();
+        try
+        {
+            if (!WinUsb_SetCurrentAlternateSetting(usb, altSetting))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+        }
+        finally
+        {
+            ReleaseWinUsbHandle();
+        }
+
+        var bindError = BindInterface(altSetting);
+        if (bindError != 0)
+        {
+            throw new IOException(
+                $"WinUSB alternate setting {altSetting} could not be bound (native error {bindError}); the setting must expose one bulk IN and one bulk OUT pipe.");
+        }
+
+        ApplyPipePolicies();
+    }
+
+    /// <summary>
+    /// WinUSB cannot change the device configuration on an interface handle that is already initialized;
+    /// selecting another configuration requires closing and reopening the device.
+    /// <para>WinUSB 无法在已初始化的接口句柄上切换设备配置；选择其它配置必须先关闭再重新打开设备。</para>
+    /// </summary>
+    /// <param name="configuration">The configuration value the caller asked for. <para>调用方请求的配置值。</para></param>
+    /// <exception cref="NotSupportedException">Always; reopen the device instead. <para>总是抛出；应改为重新打开设备。</para></exception>
+    public override void SetConfiguration(byte configuration)
+        => throw new NotSupportedException(
+            "WinUSB cannot change the device configuration on an open interface handle; reopen the device with the target configuration instead.");
 
     /// <summary>
     /// Adds an explicit reference to the WinUSB interface handle and reports the raw pointer,

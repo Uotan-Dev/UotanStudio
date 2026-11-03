@@ -23,13 +23,34 @@ internal class LinuxUsbDevice : UsbDevice
     private const int UrbDiscardConfirmTimeoutMs = 5000;
 
     /// <summary>
-    /// Maximum duration of one poll slice, bounding how long an infinite-timeout wait blocks
-    /// without a chance to observe cancellation or a finite deadline.
-    /// <para>单个 poll 切片的最大时长，限制无限超时等待在不观察取消或有限期限的情况下阻塞多久。</para>
+    /// Maximum duration of one poll slice, bounding how long a wait can block before it observes its own
+    /// completion (which another thread may have reaped and routed), a finite deadline, or cancellation.
+    /// <para>单个 poll 切片的最大时长，限制一次等待在观察自身完成（可能已被另一线程回收并路由）、有限期限或
+    /// 取消之前可以阻塞多久。</para>
     /// </summary>
-    private const int UrbPollSliceMs = 30000;
+    private const int UrbPollSliceMs = 100;
 
     private readonly LinuxUsbFd _fd = new();
+
+    /// <summary>
+    /// Kernel completion of one URB: the status the kernel wrote back (0 = success, otherwise -errno) and the
+    /// number of bytes it transferred.
+    /// <para>单个 URB 的内核完成结果：内核写回的状态（0 表示成功，否则为 -errno）与其传输的字节数。</para>
+    /// </summary>
+    private readonly record struct UrbOutcome(int Status, int ActualLength);
+
+    /// <summary>
+    /// Serializes the shared completion table. usbfs hands out whatever URB has completed on the file
+    /// descriptor, so a reader and a writer can each reap the other's URB; every completed URB is routed to
+    /// the transfer that submitted it instead of belonging to whichever thread reaped it.
+    /// <para>串行化共享的完成表。usbfs 会把该文件描述符上任意已完成的 URB 交出，因此读线程与写线程可能各自
+    /// 回收对方的 URB；每个完成的 URB 都按其提交者路由，而不是归回收它的线程所有。</para>
+    /// </summary>
+    private readonly Lock _urbSync = new();
+
+    private readonly Dictionary<IntPtr, UrbOutcome> _urbCompletions = [];
+
+    private readonly Dictionary<IntPtr, TaskCompletionSource> _urbWaiters = [];
 
     private int Fd => (int)_fd.DangerousGetHandle();
 
@@ -144,9 +165,15 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Issues USBDEVFS_RESET and, only when the ioctl succeeds, drops the recorded interface claims: the kernel revokes every claim held by this descriptor across a reset. A failed reset leaves both the handle and the claim records untouched.
-    /// <para>发起 USBDEVFS_RESET，且仅在该 ioctl 成功时清除已记录的接口申请——内核会在复位时撤销本描述符持有的全部申请。复位失败时句柄与申请记录均保持不变。</para>
+    /// Issues USBDEVFS_RESET and then re-claims every interface this descriptor had claimed. usbfs may drop
+    /// the claims across a reset; re-claiming is idempotent for claims the kernel kept and restores the ones
+    /// it dropped, so the same session remains usable for the caller's retry after a device-level reset.
+    /// <para>发起 USBDEVFS_RESET，然后重新申请本描述符曾申请的全部接口。usbfs 可能在复位时丢弃申请；重新申请
+    /// 对内核保留的申请是幂等的，对被丢弃的则恢复它们，使同一会话在设备级复位后仍可供调用方重试。</para>
     /// </summary>
+    /// <exception cref="IOException">An interface could not be re-claimed after a successful reset; the session
+    /// is no longer usable.
+    /// <para>复位成功后某个接口无法重新申请；会话已不可用。</para></exception>
     public override void Reset()
     {
         if (_fd.IsInvalid)
@@ -157,11 +184,73 @@ internal class LinuxUsbDevice : UsbDevice
         if (ioctl(Fd, USBDEVFS_RESET, IntPtr.Zero) != 0)
         {
             var err = Marshal.GetLastWin32Error();
-            UsbTrace.Log($"LinuxUsbDevice: USBDEVFS_RESET failed on '{DevicePath}' (errno {err}); claimed interfaces are retained.");
+            UsbTrace.Log($"LinuxUsbDevice: USBDEVFS_RESET failed on '{DevicePath}' (errno {err}); the session is unchanged.");
             return;
         }
 
-        _claimedInterfaces.Clear();
+        foreach (var interfaceId in _claimedInterfaces.ToArray())
+        {
+            int ifc = interfaceId;
+            if (ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc) != 0)
+            {
+                var err = Marshal.GetLastWin32Error();
+                UsbTrace.LogError($"LinuxUsbDevice: re-claim of interface {interfaceId} after USBDEVFS_RESET failed (errno {err}); the session is no longer usable.");
+                throw new IOException($"USB interface {interfaceId} could not be re-claimed after reset (errno {err}).");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Selects an interface alternate setting through USBDEVFS_SETINTERFACE so the kernel's interface state
+    /// matches what the device was told.
+    /// <para>经 USBDEVFS_SETINTERFACE 选择接口备用设置，使内核的接口状态与设备收到的一致。</para>
+    /// </summary>
+    /// <param name="interfaceNumber">The interface number to reconfigure. <para>要重配置的接口号。</para></param>
+    /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle has been closed. <para>句柄已关闭。</para></exception>
+    /// <exception cref="UsbDeviceDisconnectedException">The device disappeared. <para>设备已消失。</para></exception>
+    /// <exception cref="IOException">The kernel rejected the request. <para>内核拒绝了该请求。</para></exception>
+    public override void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
+    {
+        if (_fd.IsInvalid)
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        var request = new Usbdevfs_setinterface { Interface = interfaceNumber, Altsetting = altSetting };
+        if (ioctl(Fd, USBDEVFS_SETINTERFACE, ref request) != 0)
+        {
+            var err = Marshal.GetLastWin32Error();
+            throw err is ENODEV or ESHUTDOWN or EPROTO
+                ? new UsbDeviceDisconnectedException($"USB SET_INTERFACE failed: device disconnected (error: {err}).", err)
+                : new IOException($"USB SET_INTERFACE failed with errno {err}.");
+        }
+    }
+
+    /// <summary>
+    /// Activates a device configuration through USBDEVFS_SETCONFIGURATION. The kernel refuses the request
+    /// while interfaces of this descriptor are still claimed, so release them first.
+    /// <para>经 USBDEVFS_SETCONFIGURATION 激活设备配置。本描述符仍申请着接口时内核会拒绝，必须先释放。</para>
+    /// </summary>
+    /// <param name="configuration">The configuration value to activate. <para>要激活的配置值。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle has been closed. <para>句柄已关闭。</para></exception>
+    /// <exception cref="UsbDeviceDisconnectedException">The device disappeared. <para>设备已消失。</para></exception>
+    /// <exception cref="IOException">The kernel rejected the request. <para>内核拒绝了该请求。</para></exception>
+    public override void SetConfiguration(byte configuration)
+    {
+        if (_fd.IsInvalid)
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        int value = configuration;
+        if (ioctl(Fd, USBDEVFS_SETCONFIGURATION, ref value) != 0)
+        {
+            var err = Marshal.GetLastWin32Error();
+            throw err is ENODEV or ESHUTDOWN or EPROTO
+                ? new UsbDeviceDisconnectedException($"USB SET_CONFIGURATION failed: device disconnected (error: {err}).", err)
+                : new IOException($"USB SET_CONFIGURATION failed with errno {err}.");
+        }
     }
 
     /// <summary>Executes a control transfer through the usbfs control ioctl, validating the length before any handle inspection because <c>WLength</c> is a 16-bit field that would otherwise truncate silently. The managed infinite-timeout sentinel is mapped to the kernel's zero "wait forever" encoding.
@@ -571,41 +660,10 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     public override UsbReadResult ReadInterrupt(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs)
-    {
-        if (_fd.IsInvalid)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-        if (length <= 0)
-        {
-            return new UsbReadResult(0, false, false);
-        }
-
-        ValidateBufferRange(buffer, offset, length);
-
-        var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var transferred = SubmitUrbAsync(endpointAddress, buffer, offset, length, effectiveTimeoutMs, CancellationToken.None, USBDEVFS_URB_TYPE_INTERRUPT).GetAwaiter().GetResult();
-        return transferred == 0
-            ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
-            : new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
-    }
+        => ReadInterruptAsync(endpointAddress, buffer, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
-    {
-        if (_fd.IsInvalid)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-        ValidateWriteData(data, offset, length);
-        if (length == 0)
-        {
-            return 0;
-        }
-
-        var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var transferred = SubmitUrbAsync(endpointAddress, data, offset, length, effectiveTimeoutMs, CancellationToken.None, USBDEVFS_URB_TYPE_INTERRUPT).GetAwaiter().GetResult();
-        return transferred;
-    }
+        => WriteInterruptAsync(endpointAddress, data, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
@@ -615,10 +673,8 @@ internal class LinuxUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var transferred = await SubmitUrbAsync(Ep_in, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
-        return transferred > 0
-            ? UsbChunkResult.Success((int)transferred)
-            : UsbChunkResult.Timeout(ETIMEDOUT);
+        var outcome = await SubmitUrbAsync(Ep_in, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
+        return MapOutcome(outcome);
     }
 
     protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
@@ -629,10 +685,34 @@ internal class LinuxUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var transferred = await SubmitUrbAsync(Ep_out, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
-        return transferred > 0
-            ? UsbChunkResult.Success((int)transferred)
-            : UsbChunkResult.Timeout(ETIMEDOUT);
+        var outcome = await SubmitUrbAsync(Ep_out, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
+        return MapOutcome(outcome);
+    }
+
+    /// <summary>
+    /// Maps one URB completion to the chunk protocol. A success with no bytes means the wait ended without a
+    /// payload (deadline or an idle device); a non-zero kernel status other than a disconnection becomes
+    /// <c>Error</c> so a STALL or protocol failure is not reported as an idle read.
+    /// <para>把一次 URB 完成映射为分块协议结果。成功但零字节表示等待结束而没有负载（到期或设备空闲）；除断连
+    /// 以外的非零内核状态映射为 <c>Error</c>，使 STALL 或协议错误不会被当作空闲读取上报。</para>
+    /// </summary>
+    /// <param name="outcome">The routed URB outcome. <para>已路由的 URB 结果。</para></param>
+    /// <returns>The chunk result. <para>分块结果。</para></returns>
+    /// <exception cref="UsbDeviceDisconnectedException">The kernel reported a disconnection-class status.
+    /// <para>内核报告了断连类状态。</para></exception>
+    private static UsbChunkResult MapOutcome(UrbOutcome outcome)
+    {
+        if (outcome.Status == 0)
+        {
+            return outcome.ActualLength > 0
+                ? UsbChunkResult.Success(outcome.ActualLength)
+                : UsbChunkResult.Timeout(ETIMEDOUT);
+        }
+
+        var err = -outcome.Status;
+        return err is ENODEV or ESHUTDOWN or EPROTO
+            ? throw new UsbDeviceDisconnectedException($"USB async transfer failed: device disconnected (error: {err}).", err)
+            : UsbChunkResult.Error(err);
     }
 
     public override async Task<UsbReadResult> ReadInterruptAsync(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
@@ -651,10 +731,19 @@ internal class LinuxUsbDevice : UsbDevice
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
         var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset);
-        var transferred = await SubmitUrbAsync(endpointAddress, ptr, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_INTERRUPT, handle).ConfigureAwait(false);
-        return transferred == 0
+        var outcome = await SubmitUrbAsync(endpointAddress, ptr, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_INTERRUPT, handle).ConfigureAwait(false);
+        if (outcome.Status != 0)
+        {
+            var err = -outcome.Status;
+            if (err is ENODEV or ESHUTDOWN or EPROTO)
+            {
+                throw new UsbDeviceDisconnectedException($"USB async interrupt read failed: device disconnected (error: {err}).", err);
+            }
+        }
+
+        return outcome.ActualLength == 0
             ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
-            : new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
+            : new UsbReadResult(outcome.ActualLength, isTimeout: false, isShortPacket: outcome.ActualLength < length);
     }
 
     public override async Task<long> WriteInterruptAsync(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
@@ -672,11 +761,20 @@ internal class LinuxUsbDevice : UsbDevice
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
         var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset);
-        var transferred = await SubmitUrbAsync(endpointAddress, ptr, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_INTERRUPT, handle).ConfigureAwait(false);
-        return transferred;
+        var outcome = await SubmitUrbAsync(endpointAddress, ptr, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_INTERRUPT, handle).ConfigureAwait(false);
+        if (outcome.Status != 0)
+        {
+            var err = -outcome.Status;
+            if (err is ENODEV or ESHUTDOWN or EPROTO)
+            {
+                throw new UsbDeviceDisconnectedException($"USB async interrupt write failed: device disconnected (error: {err}).", err);
+            }
+        }
+
+        return outcome.ActualLength;
     }
 
-    private async Task<uint> SubmitUrbAsync(byte endpoint, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType)
+    private async Task<UrbOutcome> SubmitUrbAsync(byte endpoint, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType)
     {
         var bufferHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
         var ptr = new IntPtr(bufferHandle.AddrOfPinnedObject().ToInt64() + offset);
@@ -684,19 +782,16 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Submits a URB against an already-pinned buffer pointer, waits in bounded poll slices and reaps its completion.
-    /// <para>针对已固定的缓冲区指针提交 URB，以有界的 poll 切片等待并回收其完成结果。</para>
-    /// Used by the byte[] entry points and the chunk-level async overrides; the byte[] and
-    /// interrupt entry points hand over the pinned-buffer handle they own, while the chunk-level
-    /// overrides keep base-class ownership of their buffer. The pinned URB structure and any
-    /// handed-over buffer handle are freed only once the kernel has provably released the URB
-    /// (confirmed reap or device disappearance); any other exit deliberately leaks them, because
-    /// freeing memory the kernel may still write to corrupts the heap while one leaked pinned
-    /// block per stuck discard is bounded and safe.
-    /// <para>供 byte[] 入口与分块级异步覆盖共用；byte[] 与中断入口移交其拥有的固定缓冲区句柄，
-    /// 分块级覆盖的缓冲区仍归基类所有。只有在内核可证明已释放 URB（确认 reap 或设备消失）后才
-    /// 释放固定的 URB 结构与移交的缓冲区句柄；其余退出路径有意泄漏它们——释放内核仍可能写入的
-    /// 内存会破坏堆，而每个卡住的 discard 只泄漏一个固定块，是有界且安全的。</para>
+    /// Submits a URB against an already-pinned buffer pointer, waits in bounded poll slices and routes its
+    /// completion back to this call. usbfs hands a completed URB to whichever thread reaps first, so a reader
+    /// can reap the writer's completion; every reaped URB is filed by pointer and the owning transfer picks it
+    /// up instead of discarding it. The pinned URB structure and any handed-over buffer handle are freed only
+    /// once the kernel has provably released the URB (routed completion or device disappearance); any other
+    /// exit deliberately leaks them, because freeing memory the kernel may still write to corrupts the heap.
+    /// <para>针对已固定的缓冲区指针提交 URB，以有界的 poll 切片等待并把完成结果路由回本次调用。usbfs 会把完成
+    /// 的 URB 交给先回收的线程，读线程可能回收写线程的完成；每个被回收的 URB 都按指针归档并由所属传输自行取走，
+    /// 而不是被丢弃。只有在内核可证明已释放 URB（完成已路由或设备消失）后才释放固定的 URB 结构与移交的缓冲区
+    /// 句柄；其余退出路径有意泄漏它们——释放内核仍可能写入的内存会破坏堆。</para>
     /// </summary>
     /// <param name="endpoint">The endpoint address for the URB. <para>URB 的端点地址。</para></param>
     /// <param name="buffer">Pointer into pinned memory that must stay valid until the URB is released.
@@ -709,13 +804,13 @@ internal class LinuxUsbDevice : UsbDevice
     /// <param name="urbType">The usbfs URB type (bulk or interrupt). <para>usbfs URB 类型（bulk 或 interrupt）。</para></param>
     /// <param name="pinnedBuffer">An optional pinned-buffer handle whose ownership moves to this method.
     /// <para>可选的固定缓冲区句柄，其所有权移交本方法。</para></param>
-    /// <returns>The number of bytes transferred, or 0 on timeout or a non-fatal completion status.
-    /// <para>已传输字节数；超时或非致命完成状态返回 0。</para></returns>
-    /// <exception cref="UsbDeviceDisconnectedException">The device disconnected or the kernel reported a disconnection-class error.
-    /// <para>设备断开，或内核报告断连类错误。</para></exception>
-    /// <exception cref="IOException">The submit, poll, reap or discard step failed; on an unconfirmed discard the pinned handles are leaked.
-    /// <para>提交、poll、reap 或 discard 步骤失败；discard 未获确认时固定句柄被泄漏。</para></exception>
-    private async Task<uint> SubmitUrbAsync(byte endpoint, IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType, GCHandle? pinnedBuffer = null)
+    /// <returns>The kernel completion; a zero status with zero bytes means the wait ended without a payload.
+    /// <para>内核完成结果；状态为零且字节数为零表示等待结束但没有负载。</para></returns>
+    /// <exception cref="UsbDeviceDisconnectedException">The device disconnected while the URB was in flight.
+    /// <para>URB 在途时设备断开。</para></exception>
+    /// <exception cref="IOException">The submit, poll or discard step failed; on an unconfirmed discard the pinned handles are leaked.
+    /// <para>提交、poll 或 discard 步骤失败；discard 未获确认时固定句柄被泄漏。</para></exception>
+    private async Task<UrbOutcome> SubmitUrbAsync(byte endpoint, IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType, GCHandle? pinnedBuffer = null)
     {
         var urb = new Usbdevfs_urb
         {
@@ -728,17 +823,22 @@ internal class LinuxUsbDevice : UsbDevice
         };
 
         var urbHandle = GCHandle.Alloc(urb, GCHandleType.Pinned);
+        var urbPointer = urbHandle.AddrOfPinnedObject();
         var kernelReferencesUrb = true;
+        lock (_urbSync)
+        {
+            _urbWaiters[urbPointer] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
         try
         {
             var submitCode = (IntPtr.Size == 8) ? USBDEVFS_SUBMITURB_X86_64 : USBDEVFS_SUBMITURB_X86;
-            if (ioctl(Fd, submitCode, urbHandle.AddrOfPinnedObject()) < 0)
+            if (ioctl(Fd, submitCode, urbPointer) < 0)
             {
                 kernelReferencesUrb = false;
                 throw new IOException($"USB async submit failed: {Marshal.GetLastWin32Error()}");
             }
 
-            var urbPointer = urbHandle.AddrOfPinnedObject();
             var infiniteWait = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs;
             var waitDeadlineTicks = infiniteWait ? long.MaxValue : Environment.TickCount64 + timeoutMs;
 
@@ -746,12 +846,18 @@ internal class LinuxUsbDevice : UsbDevice
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                if (TryTakeCompletion(urbPointer, out var completed))
+                {
+                    kernelReferencesUrb = false;
+                    return InterpretCompletion(completed, endpoint);
+                }
+
                 var remainingMs = waitDeadlineTicks - Environment.TickCount64;
                 if (remainingMs <= 0)
                 {
-                    DiscardPendingUrb(urbHandle);
+                    DiscardPendingUrb(urbPointer);
                     kernelReferencesUrb = false;
-                    return 0;
+                    return default;
                 }
 
                 var sliceMs = (int)Math.Min(UrbPollSliceMs, remainingMs);
@@ -766,86 +872,54 @@ internal class LinuxUsbDevice : UsbDevice
                     return result;
                 }, cancellationToken).ConfigureAwait(false);
 
-                if (pollResult > 0)
+                if (pollResult < 0)
                 {
-                    if ((revents & (POLLERR | POLLHUP)) != 0)
+                    if (pollErrno == EINTR)
                     {
-                        DiscardPendingUrb(urbHandle);
-                        kernelReferencesUrb = false;
-                        throw new UsbDeviceDisconnectedException(
-                            $"USB async poll reported POLLERR/POLLHUP (revents 0x{revents:X}); the device is gone or unusable.", ENODEV);
+                        continue;
                     }
 
-                    break;
-                }
-
-                if (pollResult == 0)
-                {
-                    continue;
-                }
-
-                if (pollErrno == EINTR)
-                {
-                    continue;
-                }
-
-                DiscardPendingUrb(urbHandle);
-                kernelReferencesUrb = false;
-                throw new IOException($"USB async poll failed: {pollErrno}");
-            }
-
-            var reapCode = (IntPtr.Size == 8) ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
-            var reaped = IntPtr.Zero;
-            if (ioctl(Fd, reapCode, ref reaped) == 0)
-            {
-                if (reaped != urbPointer)
-                {
-                    UsbTrace.Log($"LinuxUsbDevice: reaped foreign URB 0x{reaped.ToInt64():X} while waiting for 0x{urbPointer.ToInt64():X}; draining our URB and reporting a timeout.");
-                    DiscardPendingUrb(urbHandle);
+                    DiscardPendingUrb(urbPointer);
                     kernelReferencesUrb = false;
-                    return 0;
+                    throw new IOException($"USB async poll failed: {pollErrno}");
                 }
 
-                kernelReferencesUrb = false;
-                var completed = Marshal.PtrToStructure<Usbdevfs_urb>(reaped);
-                if (completed.Status != 0)
+                if (pollResult > 0 && (revents & (POLLERR | POLLHUP)) != 0)
                 {
-                    var err = -completed.Status;
-                    if (err == EPIPE)
-                    {
-                        ClearHalt(endpoint);
-                        return 0;
-                    }
-
-                    return err is ENODEV or ESHUTDOWN or EPROTO
-                        ? throw new UsbDeviceDisconnectedException($"USB async transfer failed: device disconnected (error: {err}).", err)
-                        : (uint)0;
+                    DiscardPendingUrb(urbPointer);
+                    kernelReferencesUrb = false;
+                    throw new UsbDeviceDisconnectedException(
+                        $"USB async poll reported POLLERR/POLLHUP (revents 0x{revents:X}); the device is gone or unusable.", ENODEV);
                 }
 
-                return (uint)Math.Max(0, completed.Actual_length);
+                // The wake-up may belong to the other direction on this descriptor; file every completed URB
+                // and keep waiting for our own completion.
+                DrainCompletedUrbs();
             }
-
-            var reapErrno = Marshal.GetLastWin32Error();
-            if (reapErrno is ENODEV or ESHUTDOWN)
-            {
-                kernelReferencesUrb = false;
-                throw new UsbDeviceDisconnectedException($"USB async reap failed: device disconnected (error: {reapErrno}).", reapErrno);
-            }
-
-            DiscardPendingUrb(urbHandle);
-            kernelReferencesUrb = false;
-            throw reapErrno == EPROTO
-                ? new UsbDeviceDisconnectedException($"USB async reap failed: device disconnected (error: {reapErrno}).", reapErrno)
-                : new IOException($"USB async reap failed: {reapErrno}");
         }
         catch (OperationCanceledException)
         {
-            DiscardPendingUrb(urbHandle);
-            kernelReferencesUrb = false;
+            try
+            {
+                DiscardPendingUrb(urbPointer);
+                kernelReferencesUrb = false;
+            }
+            catch (Exception discardError)
+            {
+                UsbTrace.LogError(
+                    $"LinuxUsbDevice: cancelling URB 0x{urbPointer.ToInt64():X} did not complete ({discardError.GetType().Name}: {discardError.Message}); the pinned URB is kept so the kernel never writes freed memory.");
+            }
+
             throw;
         }
         finally
         {
+            lock (_urbSync)
+            {
+                _urbWaiters.Remove(urbPointer);
+                _urbCompletions.Remove(urbPointer);
+            }
+
             if (!kernelReferencesUrb)
             {
                 urbHandle.Free();
@@ -855,56 +929,134 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Discards a pending (not yet completed) URB and blocks until the kernel provably stops referencing it.
-    /// <para>丢弃一个尚未完成的 URB，并阻塞到内核可证明不再引用它为止。</para>
-    /// DISCARDURB is an asynchronous unlink: until REAPURBNDELAY hands the URB back, or the device
-    /// disappears and the kernel abandons it, the kernel still owns the pinned URB structure and
-    /// the user buffer it points at. Freeing that memory earlier would let the kernel write into
-    /// released managed memory and corrupt the heap, while leaking one pinned block per stuck
-    /// discard is bounded and safe; therefore the reap is confirmed in a retry loop, and when the
-    /// budget is exhausted (or an unexpected errno arrives) the pinned handles are intentionally
-    /// left allocated and a disconnection-class exception is raised.
-    /// <para>DISCARDURB 是异步 unlink：在 REAPURBNDELAY 取回 URB（或设备消失、内核放弃该 URB）之前，
-    /// 内核仍持有固定的 URB 结构及其指向的用户缓冲区。提前释放这些内存会让内核写入已释放的托管内存、
-    /// 破坏堆；而每个卡住的 discard 只泄漏一个固定块，是有界且安全的。因此通过重试循环确认 reap，
-    /// 预算耗尽（或出现意外 errno）时有意保留固定句柄并抛出断连类异常。</para>
+    /// Reaps every URB the kernel has completed on this descriptor and files each completion under its URB
+    /// pointer, so a reader that reaps the writer's completion does not lose it.
+    /// <para>回收内核在该描述符上已完成的全部 URB，并按 URB 指针归档每个完成结果，使回收了写方向完成结果的
+    /// 读线程不会把它丢掉。</para>
     /// </summary>
-    /// <param name="urbHandle">The pinned handle of the submitted URB structure.
-    /// <para>已提交的 URB 结构的固定句柄。</para></param>
-    /// <exception cref="UsbDeviceDisconnectedException">The device disappeared during the discard.
-    /// <para>discard 过程中设备消失。</para></exception>
-    /// <exception cref="IOException">The kernel did not release the URB before the retry budget was exhausted; the pinned handle is deliberately leaked.
-    /// <para>重试预算耗尽时内核仍未释放该 URB；固定句柄被有意泄漏。</para></exception>
-    private void DiscardPendingUrb(GCHandle urbHandle)
+    private void DrainCompletedUrbs()
     {
-        var discardCode = (IntPtr.Size == 8) ? USBDEVFS_DISCARDURB_X86_64 : USBDEVFS_DISCARDURB_X86;
-        var reapCode = (IntPtr.Size == 8) ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
-        _ = ioctl(Fd, discardCode, urbHandle.AddrOfPinnedObject());
-
-        var urbPointer = urbHandle.AddrOfPinnedObject();
-        var deadlineTicks = Environment.TickCount64 + UrbDiscardConfirmTimeoutMs;
         while (true)
         {
-            var drained = IntPtr.Zero;
-            var reapResult = ioctl(Fd, reapCode, ref drained);
-            var reapErrno = reapResult == 0 ? 0 : Marshal.GetLastWin32Error();
-            if (reapResult == 0 && drained == urbPointer)
+            var reaped = IntPtr.Zero;
+            if (ioctl(Fd, ReapUrbNoDelayCode, ref reaped) != 0 || reaped == IntPtr.Zero)
             {
                 return;
             }
 
+            RouteCompletion(reaped);
+        }
+    }
+
+    private void RouteCompletion(IntPtr urbPointer)
+    {
+        var completed = Marshal.PtrToStructure<Usbdevfs_urb>(urbPointer);
+        var outcome = new UrbOutcome(completed.Status, completed.Actual_length);
+        TaskCompletionSource? waiter;
+        lock (_urbSync)
+        {
+            // Only file the completion while a submitting call still waits for it. A late completion whose
+            // owner already walked away (quarantined handles) is dropped instead of growing the table forever.
+            if (_urbWaiters.TryGetValue(urbPointer, out waiter))
+            {
+                _urbCompletions[urbPointer] = outcome;
+            }
+        }
+
+        waiter?.TrySetResult();
+    }
+
+    private bool TryTakeCompletion(IntPtr urbPointer, out UrbOutcome outcome)
+    {
+        lock (_urbSync)
+        {
+            return _urbCompletions.Remove(urbPointer, out outcome);
+        }
+    }
+
+    private static uint ReapUrbNoDelayCode => IntPtr.Size == 8 ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
+
+    private static uint DiscardUrbCode => IntPtr.Size == 8 ? USBDEVFS_DISCARDURB_X86_64 : USBDEVFS_DISCARDURB_X86;
+
+    /// <summary>
+    /// Clears a halted endpoint after the kernel reported a stall and turns the stall into an empty read,
+    /// matching the synchronous bulk path.
+    /// <para>在内核报告 STALL 后清除端点停住状态并把该 STALL 转为空读取，与同步批量路径一致。</para>
+    /// </summary>
+    private UrbOutcome InterpretCompletion(UrbOutcome completed, byte endpoint)
+    {
+        if (completed.Status == 0)
+        {
+            return new UrbOutcome(0, Math.Max(0, completed.ActualLength));
+        }
+
+        if (-completed.Status == EPIPE)
+        {
+            ClearHalt(endpoint);
+            return default;
+        }
+
+        return completed;
+    }
+
+    /// <summary>
+    /// Discards a pending (not yet completed) URB and blocks until the kernel provably stops referencing it.
+    /// <para>丢弃一个尚未完成的 URB，并阻塞到内核可证明不再引用它为止。</para>
+    /// DISCARDURB is an asynchronous unlink: until REAPURBNDELAY hands the URB back, or the device disappears
+    /// and the kernel abandons it, the kernel still owns the pinned URB structure and the user buffer it points
+    /// at. Completions reaped here for other in-flight URBs are routed to their owners instead of being
+    /// dropped. When the budget is exhausted (or an unexpected errno arrives) the pinned handles are
+    /// intentionally left allocated and an exception is raised.
+    /// <para>DISCARDURB 是异步 unlink：在 REAPURBNDELAY 取回 URB（或设备消失、内核放弃该 URB）之前，内核仍
+    /// 持有固定的 URB 结构及其指向的用户缓冲区。此处回收到的其它在途 URB 完成会路由给其所属传输而不是被丢弃。
+    /// 预算耗尽（或出现意外 errno）时有意保留固定句柄并抛出异常。</para>
+    /// </summary>
+    /// <param name="urbPointer">The pinned URB structure pointer that was submitted.
+    /// <para>已提交的 URB 结构固定指针。</para></param>
+    /// <exception cref="UsbDeviceDisconnectedException">The device disappeared during the discard.
+    /// <para>discard 过程中设备消失。</para></exception>
+    /// <exception cref="IOException">The kernel did not release the URB before the retry budget was exhausted; the pinned handle is deliberately leaked.
+    /// <para>重试预算耗尽时内核仍未释放该 URB；固定句柄被有意泄漏。</para></exception>
+    private void DiscardPendingUrb(IntPtr urbPointer)
+    {
+        _ = ioctl(Fd, DiscardUrbCode, urbPointer);
+
+        var deadlineTicks = Environment.TickCount64 + UrbDiscardConfirmTimeoutMs;
+        while (true)
+        {
+            if (TryTakeCompletion(urbPointer, out _))
+            {
+                return;
+            }
+
+            var drained = IntPtr.Zero;
+            if (ioctl(Fd, ReapUrbNoDelayCode, ref drained) == 0)
+            {
+                if (drained != IntPtr.Zero)
+                {
+                    RouteCompletion(drained);
+                }
+
+                continue;
+            }
+
+            var reapErrno = Marshal.GetLastWin32Error();
             if (reapErrno is ENODEV or ESHUTDOWN)
             {
                 return;
             }
 
-            var stalled = reapResult == 0
-                || reapErrno == EAGAIN;
-            if (!stalled || Environment.TickCount64 >= deadlineTicks)
+            if (reapErrno != EAGAIN)
             {
-                throw reapErrno is ENODEV or ESHUTDOWN or EPROTO
+                throw reapErrno == EPROTO
                     ? new UsbDeviceDisconnectedException($"USB async discard did not complete: device disconnected (errno {reapErrno}).", reapErrno)
                     : new IOException($"USB async discard did not complete: errno {reapErrno}");
+            }
+
+            if (Environment.TickCount64 >= deadlineTicks)
+            {
+                throw new IOException(
+                    "USB async discard did not complete before the confirmation budget expired; the pinned URB is kept so the kernel never writes freed memory.");
             }
 
             Thread.Sleep(UrbDiscardConfirmIntervalMs);

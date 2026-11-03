@@ -40,6 +40,8 @@ public sealed class FirehoseProgramZlpTests
 
         public int DefaultTimeoutMs => 5000;
 
+        public bool ResetReenumeratesDevice => false;
+
         public UsbDeviceInfo DeviceInfo => new();
 
         public byte EndpointIn => 0x81;

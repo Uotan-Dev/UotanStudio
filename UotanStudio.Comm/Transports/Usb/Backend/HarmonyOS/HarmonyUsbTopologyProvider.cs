@@ -51,10 +51,10 @@ internal sealed class HarmonyUsbTopologyProvider : IUsbTopologyProvider
 
         try
         {
-            var ret = OH_Usb_Init();
+            var ret = HarmonyOsDdkLifetime.Acquire();
             if (ret == USB_DDK_NO_ERROR)
             {
-                OH_Usb_Release();
+                HarmonyOsDdkLifetime.Release();
                 return true;
             }
 
@@ -90,7 +90,7 @@ internal sealed class HarmonyUsbTopologyProvider : IUsbTopologyProvider
         }
 
         var descriptors = new List<HarmonyTopologyDescriptor>();
-        var ret = OH_Usb_Init();
+        var ret = HarmonyOsDdkLifetime.Acquire();
         if (ret != USB_DDK_NO_ERROR)
         {
             UsbTrace.Log($"HarmonyUsbTopologyProvider: OH_Usb_Init failed: {GetErrorMessage(ret)}.");
@@ -111,7 +111,7 @@ internal sealed class HarmonyUsbTopologyProvider : IUsbTopologyProvider
         }
         finally
         {
-            OH_Usb_Release();
+            HarmonyOsDdkLifetime.Release();
         }
 
         return HarmonyTopologyGraph.Shape(descriptors);

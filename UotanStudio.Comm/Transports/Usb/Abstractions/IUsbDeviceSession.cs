@@ -176,13 +176,22 @@ internal interface IUsbDeviceSession : IDisposable
     /// </summary>
     /// <param name="interfaceNumber">The interface number. <para>接口编号。</para></param>
     /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="NotSupportedException">The backend cannot switch alternate settings (or does not hold the named interface), or its new setting cannot rebind the open endpoints.
+    /// <para>后端无法切换备用设置（或未持有指定接口），或新设置无法重新绑定已打开的端点。</para></exception>
     void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting);
 
     /// <summary>
     /// Sets the active device configuration (standard SET_CONFIGURATION request).
     /// <para>设置设备的活动配置（标准 SET_CONFIGURATION 请求）。</para>
+    /// A new configuration invalidates the interfaces and endpoints the session was bound to; backends that
+    /// cannot safely rebind them on an open handle throw <see cref="NotSupportedException"/> instead of
+    /// silently doing nothing.
+    /// <para>新配置会使会话绑定的接口与端点失效；无法在已打开句柄上安全重新绑定的后端会抛出
+    /// <see cref="NotSupportedException"/>，而不是静默地什么都不做。</para>
     /// </summary>
     /// <param name="configuration">The configuration value to activate. <para>要激活的配置值。</para></param>
+    /// <exception cref="NotSupportedException">The backend cannot switch configuration on an open session.
+    /// <para>后端无法在已打开会话上切换配置。</para></exception>
     void SetConfiguration(byte configuration);
 
     /// <summary>
@@ -218,10 +227,21 @@ internal interface IUsbDeviceSession : IDisposable
     /// Resets the device or backend transport.
     /// <para>重置设备或后端传输层。</para>
     /// Whether the session remains usable afterwards is exposed by
-    /// <see cref="UsbApiCapabilities.ResetReenumeratesDevice"/>.
-    /// <para>复位后会话是否仍可用由 <see cref="UsbApiCapabilities.ResetReenumeratesDevice"/> 指示。</para>
+    /// <see cref="ResetReenumeratesDevice"/>.
+    /// <para>复位后会话是否仍可用由 <see cref="ResetReenumeratesDevice"/> 指示。</para>
     /// </summary>
     void Reset();
+
+    /// <summary>
+    /// Gets whether <see cref="Reset"/> invalidates this session because the device is re-enumerated or its
+    /// pipes are torn down. When <see langword="true"/> the caller must release the session and reopen the
+    /// device instead of retrying on it; when <see langword="false"/> the session remains usable.
+    /// <para>获取 <see cref="Reset"/> 是否因设备重新枚举或管道被拆除而使本会话失效。为 <see langword="true"/>
+    /// 时调用方必须释放会话并重新打开设备，而不是在原会话上重试；为 <see langword="false"/> 时会话保持可用。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the session cannot be reused after a reset.
+    /// <para>复位后会话不可复用时为 <see langword="true"/>。</para></value>
+    bool ResetReenumeratesDevice { get; }
 
     #endregion
 

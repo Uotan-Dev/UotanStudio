@@ -264,6 +264,13 @@ internal static partial class Win32API
     public const uint DBT_DEVTYP_DEVICEINTERFACE = 0x00000005;
     public const uint DEVICE_NOTIFY_WINDOW_HANDLE = 0x00000000;
 
+    /// <summary>
+    /// Parent handle that creates a message-only window; registered device notifications are delivered to it
+    /// and it never appears in the desktop window lists.
+    /// <para>创建消息窗口的父句柄；已注册的设备通知会投递给它，且它不会出现在桌面窗口列表中。</para>
+    /// </summary>
+    public static readonly IntPtr HWND_MESSAGE = new(-3);
+
     public delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

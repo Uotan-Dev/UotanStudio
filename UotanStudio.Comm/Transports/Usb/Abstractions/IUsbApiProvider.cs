@@ -37,6 +37,18 @@ internal interface IUsbApiProvider
     IReadOnlyList<UsbDeviceInfo> EnumerateDeviceInfos(UsbDeviceFilter? filter = null);
 
     /// <summary>
+    /// Opens only the interface an exact-path filter names, skipping the device-tree walk a full
+    /// session enumeration performs. Backends that cannot resolve a single path return
+    /// <see langword="null"/>, and the caller then enumerates as before.
+    /// <para>只打开精确路径过滤器所指的接口，跳过完整会话枚举所需的企业树遍历。无法解析单一路径的后端返回
+    /// <see langword="null"/>，调用方随后照旧执行完整枚举。</para>
+    /// </summary>
+    /// <param name="filter">A filter carrying an exact device path. <para>携带精确设备路径的过滤器。</para></param>
+    /// <returns>The opened session, or <see langword="null"/> when the backend has no single-path answer.
+    /// <para>已打开的会话；后端无法按单一路径作答时为 <see langword="null"/>。</para></returns>
+    IUsbDeviceSession? TryOpenExactSession(UsbDeviceFilter filter) => null;
+
+    /// <summary>
     /// Enumerates device sessions using the optional filter.
     /// <para>使用可选过滤器枚举设备会话。</para>
     /// </summary>

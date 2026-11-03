@@ -152,6 +152,7 @@ internal static partial class IOKitUsbFinder
                 }
                 finally
                 {
+                    IOKitUsbAPI.IOObjectRelease(service);
                     next = IOKitUsbAPI.IOIteratorNext(iterator);
                 }
             }
@@ -216,10 +217,15 @@ internal static partial class IOKitUsbFinder
         UsbTrace.Log($"IOKitUsbFinder: TryReadDeviceMetadata entry, service={service}");
         registryEntryId = (uint)service.ToInt64();
 
-        vid = ReadCFNumberUshort(service, "IdVendor");
-        pid = ReadCFNumberUshort(service, "IdProduct");
+        vid = ReadCFNumberUshort(service, "idVendor");
+        pid = ReadCFNumberUshort(service, "idProduct");
 
         serial = ReadCFString(service, "USB Serial Number") ?? ReadCFString(service, "serial number");
+
+        if (vid == 0 && pid == 0)
+        {
+            return false;
+        }
 
         if (interfaceTable.TryGetValue((vid, pid), out var pairedInterfaces) && pairedInterfaces.Count > 0)
         {
@@ -407,8 +413,8 @@ internal static partial class IOKitUsbFinder
                 var ifaceService = new IntPtr(next);
                 try
                 {
-                    var vid = ReadCFNumberUshort(ifaceService, "IdVendor");
-                    var pid = ReadCFNumberUshort(ifaceService, "IdProduct");
+                    var vid = ReadCFNumberUshort(ifaceService, "idVendor");
+                    var pid = ReadCFNumberUshort(ifaceService, "idProduct");
                     if (vid == 0 || pid == 0)
                     {
                         continue;
@@ -416,9 +422,9 @@ internal static partial class IOKitUsbFinder
 
                     var info = new UsbInterfaceInfo
                     {
-                        Class = ReadCFNumberByte(ifaceService, "BInterfaceClass") ?? 0,
-                        SubClass = ReadCFNumberByte(ifaceService, "BInterfaceSubClass") ?? 0,
-                        Protocol = ReadCFNumberByte(ifaceService, "BInterfaceProtocol") ?? 0,
+                        Class = ReadCFNumberByte(ifaceService, "bInterfaceClass") ?? 0,
+                        SubClass = ReadCFNumberByte(ifaceService, "bInterfaceSubClass") ?? 0,
+                        Protocol = ReadCFNumberByte(ifaceService, "bInterfaceProtocol") ?? 0,
                     };
 
                     var key = (vid, pid);
@@ -431,6 +437,7 @@ internal static partial class IOKitUsbFinder
                 }
                 finally
                 {
+                    IOKitUsbAPI.IOObjectRelease(ifaceService);
                 }
 
                 next = IOKitUsbAPI.IOIteratorNext(iterator);

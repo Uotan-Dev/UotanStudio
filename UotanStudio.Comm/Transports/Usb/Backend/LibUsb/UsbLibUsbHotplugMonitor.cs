@@ -31,7 +31,8 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
         Action<Exception>? onError,
-        UsbDeviceFilter? filter)
+        UsbDeviceFilter? filter,
+        bool fireInitialSnapshot = false)
     {
         _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
@@ -54,6 +55,33 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
         {
             context.Dispose();
             throw;
+        }
+
+        RaiseInitialSnapshot(fireInitialSnapshot);
+    }
+
+    /// <summary>
+    /// Reports the baseline inventory as additions once hot-plug registration is live.
+    /// <para>在热插拔注册生效后把基线清单作为新增上报一次。</para>
+    /// </summary>
+    private void RaiseInitialSnapshot(bool fireInitialSnapshot)
+    {
+        if (!fireInitialSnapshot || _lastSnapshot.Count == 0)
+        {
+            return;
+        }
+
+        var changes = _lastSnapshot.Values
+            .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
+            .ToList();
+        try
+        {
+            _onChanged(changes);
+        }
+        catch (Exception ex)
+        {
+            _onError?.Invoke(ex);
+            UsbTrace.Log($"UsbLibUsbHotplugMonitor initial snapshot callback failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

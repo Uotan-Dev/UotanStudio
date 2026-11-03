@@ -18,7 +18,7 @@ internal static class HarmonyOSUsbFinder
     {
         var devices = new List<UsbDevice>();
 
-        var ret = OH_Usb_Init();
+        var ret = HarmonyOsDdkLifetime.Acquire();
         if (ret != USB_DDK_NO_ERROR)
         {
             UsbTrace.Log($"HarmonyOSUsbFinder: OH_Usb_Init failed: {GetErrorMessage(ret)}");
@@ -35,7 +35,7 @@ internal static class HarmonyOSUsbFinder
         }
         finally
         {
-            OH_Usb_Release();
+            HarmonyOsDdkLifetime.Release();
         }
 
         return devices;

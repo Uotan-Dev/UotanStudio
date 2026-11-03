@@ -38,7 +38,8 @@ internal sealed class UdevHotplugMonitor : IDisposable
     public UdevHotplugMonitor(
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
-        Action<Exception>? onError)
+        Action<Exception>? onError,
+        bool fireInitialSnapshot = false)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -73,6 +74,34 @@ internal sealed class UdevHotplugMonitor : IDisposable
         _receiveLoop = new CancellationTokenSource();
         _token = _receiveLoop.Token;
         _receiveTask = Task.Run(() => ReceiveLoop(_token));
+        RaiseInitialSnapshot(fireInitialSnapshot);
+    }
+
+    /// <summary>
+    /// Reports the baseline inventory as additions once the uevent loop is running, so a caller that asks
+    /// for the initial snapshot does not depend on a device event to learn what is already present.
+    /// <para>在 uevent 循环启动后把基线清单作为新增上报一次，使请求初始快照的调用方无需等待设备事件就能知道
+    /// 当前已在位的设备。</para>
+    /// </summary>
+    private void RaiseInitialSnapshot(bool fireInitialSnapshot)
+    {
+        if (!fireInitialSnapshot || _lastSnapshot.Count == 0)
+        {
+            return;
+        }
+
+        var changes = _lastSnapshot.Values
+            .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
+            .ToList();
+        try
+        {
+            _onChanged(changes);
+        }
+        catch (Exception ex)
+        {
+            _onError?.Invoke(ex);
+            UsbTrace.Log($"UdevHotplugMonitor initial snapshot callback failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void ReceiveLoop(CancellationToken cancellationToken)

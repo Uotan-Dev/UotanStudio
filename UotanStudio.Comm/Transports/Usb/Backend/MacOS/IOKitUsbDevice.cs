@@ -40,6 +40,7 @@ internal class IOKitUsbDevice : UsbDevice
 
     private IntPtr _pluginInterface = IntPtr.Zero;
     private IntPtr _deviceInterface = IntPtr.Zero;
+    private bool _deviceOpened;
     private IntPtr _interfaceInterface = IntPtr.Zero;
 
     private byte _bulkIn;
@@ -259,11 +260,14 @@ internal class IOKitUsbDevice : UsbDevice
             };
 
             var kr = devRequest(_deviceInterface, ref request);
-            return kr != IOKitUsbAPI.KIOReturnSuccess
-                ? kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
-                    ? throw new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr)
-                    : 0
-                : (int)request.WLenDone;
+            if (kr != IOKitUsbAPI.KIOReturnSuccess)
+            {
+                throw kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
+                    ? new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr)
+                    : new IOException($"USB control transfer failed with IOReturn 0x{kr:X}.");
+            }
+
+            return (int)request.WLenDone;
         }
         finally
         {
@@ -318,6 +322,19 @@ internal class IOKitUsbDevice : UsbDevice
 
                 _pluginInterface = plugin;
 
+                // Device-level user-client calls (GetConfiguration/SetConfiguration, USBDeviceReset) need an
+                // open client. Open it best-effort: the system driver usually owns the device on modern macOS,
+                // and the interface path still works when this open is refused.
+                try
+                {
+                    var openDevice = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceOpenDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceOpen);
+                    _deviceOpened = openDevice(_deviceInterface) == IOKitUsbAPI.Ok;
+                }
+                catch (Exception ex)
+                {
+                    UsbTrace.Log($"IOKitUsbDevice.CreateHandle: USBDeviceOpen ignored: {ex.GetType().Name}: {ex.Message}");
+                }
+
                 var physicalPortPath = MacUsbPortIdentity.Observe(service);
                 if (!MacUsbPortIdentity.Matches(PhysicalPortPath, physicalPortPath))
                 {
@@ -329,9 +346,18 @@ internal class IOKitUsbDevice : UsbDevice
                 {
                     var getConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBGetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBGetConfiguration);
                     var setConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBSetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBSetConfiguration);
-                    if (getConf(_deviceInterface, out var currentConf) == IOKitUsbAPI.Ok && currentConf != 1)
+                    var getResult = getConf(_deviceInterface, out var currentConf);
+                    if (getResult != IOKitUsbAPI.Ok)
                     {
-                        _ = setConf(_deviceInterface, 1);
+                        UsbTrace.Log($"IOKitUsbDevice.CreateHandle: GetConfiguration failed with IOReturn 0x{getResult:X} (device open: {_deviceOpened}); the current configuration is left unchanged.");
+                    }
+                    else if (currentConf != 1)
+                    {
+                        var setResult = setConf(_deviceInterface, 1);
+                        if (setResult != IOKitUsbAPI.Ok)
+                        {
+                            UsbTrace.Log($"IOKitUsbDevice.CreateHandle: SetConfiguration(1) failed with IOReturn 0x{setResult:X}.");
+                        }
                     }
                 }
                 catch
@@ -507,6 +533,14 @@ internal class IOKitUsbDevice : UsbDevice
         }
     }
 
+    /// <summary>
+    /// <c>USBDeviceReset</c> is a device-level reset that re-enumerates the device, so the caller must
+    /// reopen the session instead of retrying on the same interface.
+    /// <para><c>USBDeviceReset</c> 是会使设备重新枚举的设备级复位，因此调用方必须重新打开会话，而不能在同一
+    /// 接口上重试。</para>
+    /// </summary>
+    public override bool ResetReenumeratesDevice => true;
+
     /// <inheritdoc/>
     public override void Reset()
     {
@@ -629,7 +663,12 @@ internal class IOKitUsbDevice : UsbDevice
             try
             {
                 var devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
-                _ = devClose(_deviceInterface);
+                if (_deviceOpened)
+                {
+                    _ = devClose(_deviceInterface);
+                    _deviceOpened = false;
+                }
+
                 var devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
                 _ = devRelease(_deviceInterface);
             }

@@ -159,6 +159,10 @@ internal static partial class UsbHostFinder
                 {
                     UsbTrace.Log($"UsbHostFinder: device read failed: {ex.GetType().Name}: {ex.Message}");
                 }
+                finally
+                {
+                    IOKitUsbAPI.IOObjectRelease(service);
+                }
             }
         }
         catch (Exception ex)

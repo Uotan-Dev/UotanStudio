@@ -21,6 +21,20 @@ internal partial class LibUsbDevice : UsbDevice
     private static partial int libusb_clear_halt(IntPtr devHandle, byte endpoint);
 
     /// <summary>
+    /// Selects an interface alternate setting through libusb (<c>libusb_set_interface_alt_setting</c>), which
+    /// issues the request and updates the library's endpoint bookkeeping for the new setting.
+    /// <para>经 libusb 选择接口备用设置（<c>libusb_set_interface_alt_setting</c>），由库发出请求并更新新设置的
+    /// 端点记录。</para>
+    /// </summary>
+    /// <param name="devHandle">The libusb device handle. <para>libusb 设备句柄。</para></param>
+    /// <param name="interfaceNumber">The interface number. <para>接口号。</para></param>
+    /// <param name="alternateSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <returns><c>0</c> (LIBUSB_SUCCESS) on success, otherwise a LIBUSB_ERROR code.
+    /// <para>成功返回 <c>0</c>（LIBUSB_SUCCESS），否则返回 LIBUSB_ERROR 码。</para></returns>
+    [LibraryImport("libusb-1.0")]
+    private static partial int libusb_set_interface_alt_setting(IntPtr devHandle, int interfaceNumber, int alternateSetting);
+
+    /// <summary>
     /// Enables or disables libusb's automatic kernel-driver detach/reattach around interface claims
     /// (<c>libusb_set_auto_detach_kernel_driver</c>).
     /// <para>启用或禁用 libusb 在接口声明前后的内核驱动自动分离/重新附着
@@ -292,8 +306,11 @@ internal partial class LibUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Releases the device after bounded ownership of both chunk gates, waiting a finite time for a gate still held by an in-flight transfer instead of blocking forever.
-    /// <para>在有限取得两个分块闸后释放设备；对仍被在途传输持有的闸只等待固定时长，不会永久阻塞。</para>
+    /// Releases the device after bounded ownership of both chunk gates. When a transfer still holds a gate
+    /// after the wait, the device and its context are intentionally left open: closing the handle would free
+    /// memory libusb is still writing to, so the handles leak instead of becoming a use-after-free.
+    /// <para>在有限取得两个分块闸后释放设备。等待结束后仍有传输持有闸时，设备与其上下文被有意保留：关闭句柄
+    /// 会释放 libusb 仍在写入的内存，因此宁可泄漏句柄也不造成释放后使用。</para>
     /// </summary>
     public override void Dispose()
     {
@@ -301,7 +318,9 @@ internal partial class LibUsbDevice : UsbDevice
         var writeGateAcquired = TryEnterChunkGate(_writeChunkGate);
         if (!readGateAcquired || !writeGateAcquired)
         {
-            UsbTrace.Log($"LibUsbDevice.Dispose proceeded without {(readGateAcquired ? "the write" : "the read")} chunk gate after {DisposalGateTimeoutMs} ms because a transfer still holds it.");
+            UsbTrace.LogError(
+                $"LibUsbDevice.Dispose skipped: a chunk transfer still holds the {(readGateAcquired ? "write" : "read")} gate after {DisposalGateTimeoutMs} ms; the device handle and context are intentionally kept so libusb never touches freed memory.");
+            return;
         }
 
         try
@@ -417,18 +436,69 @@ internal partial class LibUsbDevice : UsbDevice
         return -1;
     }
 
+    /// <summary>
+    /// Resets the device through libusb and then re-claims the interface. <c>libusb_reset_device</c>
+    /// re-enumerates the device and drops interface claims; without the re-claim the same session could not be
+    /// retried, which is what callers expect from a reset on this backend.
+    /// <para>经 libusb 复位设备后重新申请接口。<c>libusb_reset_device</c> 会重新枚举设备并丢弃接口申请；缺少
+    /// 重新申请时同一会话无法重试，而调用方期望本后端复位后会话仍可用。</para>
+    /// </summary>
+    /// <exception cref="IOException">The interface could not be re-claimed after a successful reset.
+    /// <para>复位成功后接口无法重新申请。</para></exception>
     public override void Reset()
     {
-        if (_usbDevice != null)
+        if (_usbDevice is null)
         {
-            try
-            {
-                _usbDevice.ResetDevice();
-            }
-            catch (Exception ex)
-            {
-                UsbTrace.LogFormatted($"LibUsbDevice.Reset failed: {ex.GetType().Name}: {ex.Message}");
-            }
+            return;
+        }
+
+        try
+        {
+            _usbDevice.ResetDevice();
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.LogFormatted($"LibUsbDevice.Reset failed: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        if (!_interfaceClaimed)
+        {
+            return;
+        }
+
+        var reclaimed = LibUsbInterfaceClaim.TryClaim(
+            () => _usbDevice.ClaimInterface(InterfaceId), detach: null, out var claimError);
+        if (reclaimed)
+        {
+            return;
+        }
+
+        _interfaceClaimed = false;
+        UsbTrace.LogError($"LibUsbDevice.Reset could not re-claim interface {InterfaceId}: {claimError?.Message}");
+        throw new IOException($"USB interface {InterfaceId} could not be re-claimed after reset.", claimError);
+    }
+
+    /// <summary>
+    /// Selects an interface alternate setting through libusb so the library and the device agree on the
+    /// active setting before the next transfer.
+    /// <para>经 libusb 选择接口备用设置，使库与设备在下一次传输前对活动设置达成一致。</para>
+    /// </summary>
+    /// <param name="interfaceNumber">The interface number. <para>接口号。</para></param>
+    /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The device handle is not open. <para>设备句柄未打开。</para></exception>
+    /// <exception cref="IOException">libusb rejected the request. <para>libusb 拒绝了该请求。</para></exception>
+    public override void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
+    {
+        if (_usbDevice is not LibUsbDotNet.LibUsb.UsbDevice { DeviceHandle: { IsInvalid: false } handle })
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        var result = libusb_set_interface_alt_setting(handle.DangerousGetHandle(), interfaceNumber, altSetting);
+        if (result != 0)
+        {
+            throw new IOException($"libusb set_interface_alt_setting({interfaceNumber}, {altSetting}) failed with error {result}.");
         }
     }
 
@@ -576,21 +646,29 @@ internal partial class LibUsbDevice : UsbDevice
 
     public override void WriteZlp(int timeoutMs)
     {
-        if (_writer == null)
+        _writeChunkGate.Wait();
+        try
         {
-            throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
-        }
+            if (_writer == null)
+            {
+                throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
+            }
 
-        var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var zero = Array.Empty<byte>();
-        var errorCode = _writer.Write(zero, 0, 0, ToLibusbTimeout(effectiveTimeoutMs), out _);
-        if (errorCode == Error.NoDevice)
-        {
-            throw new UsbDeviceDisconnectedException("USB write failed: device disconnected (Error.NoDevice).", (int)errorCode);
+            var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
+            var zero = Array.Empty<byte>();
+            var errorCode = _writer.Write(zero, 0, 0, ToLibusbTimeout(effectiveTimeoutMs), out _);
+            if (errorCode == Error.NoDevice)
+            {
+                throw new UsbDeviceDisconnectedException("USB write failed: device disconnected (Error.NoDevice).", (int)errorCode);
+            }
+            if (errorCode != 0)
+            {
+                throw new IOException($"USB zero-length write failed with libusb error: {errorCode}");
+            }
         }
-        if (errorCode != 0)
+        finally
         {
-            throw new IOException($"USB zero-length write failed with libusb error: {errorCode}");
+            _writeChunkGate.Release();
         }
     }
 

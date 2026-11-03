@@ -39,6 +39,7 @@ internal class UsbHostDevice : UsbDevice
 
     private byte _bulkIn;
     private byte _bulkOut;
+    private byte _interfaceNumber;
 
     /// <inheritdoc/>
     internal override bool IsHandleOpen => _device != IntPtr.Zero;
@@ -97,7 +98,7 @@ internal class UsbHostDevice : UsbDevice
         try
         {
             var kr = UsbHostAPI.SendIoRequestRaw(_pipeOut, buffer, length, isWrite: true, timeoutMs, out var transferred);
-            return ChunkResult(kr, length);
+            return ChunkResult(kr, transferred);
         }
         finally
         {
@@ -272,9 +273,9 @@ internal class UsbHostDevice : UsbDevice
             var kr = UsbHostAPI.SendDeviceRequest(_device, request, staged, effectiveTimeoutMs, out var transferred);
             if (kr != IOKitUsbAPI.Ok)
             {
-                return IsDisconnection(kr)
-                    ? throw new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr)
-                    : 0;
+                throw IsDisconnection(kr)
+                    ? new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr)
+                    : new IOException($"USB control transfer failed with IOReturn 0x{kr:X}.");
             }
 
             if (transferred > 0 && staged != null && (setupPacket.RequestType & 0x80) != 0)
@@ -383,10 +384,16 @@ internal class UsbHostDevice : UsbDevice
             var descriptor = UsbHostAPI.GetInterfaceDescriptor(usbInterface);
             byte interfaceNumber = 0;
             byte numEndpoints = 0;
+            byte interfaceClass = 0;
+            byte interfaceSubClass = 0;
+            byte interfaceProtocol = 0;
             if (descriptor != IntPtr.Zero)
             {
                 interfaceNumber = Marshal.ReadByte(descriptor, 2);
                 numEndpoints = Marshal.ReadByte(descriptor, 4);
+                interfaceClass = Marshal.ReadByte(descriptor, 5);
+                interfaceSubClass = Marshal.ReadByte(descriptor, 6);
+                interfaceProtocol = Marshal.ReadByte(descriptor, 7);
             }
             UsbTrace.Log($"TryOpenInterface: ifc#{interfaceNumber} endpoints={numEndpoints} desc={descriptor}");
 
@@ -449,6 +456,30 @@ internal class UsbHostDevice : UsbDevice
             _pipeOut = outPipe;
             _interface = usbInterface;
             usbInterface = IntPtr.Zero;
+
+            // Publish the claimed interface's own class triple and endpoints; the finder could not read them
+            // before the interface was opened, and post-open filter matching depends on them.
+            _interfaceNumber = interfaceNumber;
+            InterfaceClass = interfaceClass;
+            InterfaceSubClass = interfaceSubClass;
+            InterfaceProtocol = interfaceProtocol;
+            InterfaceMetadataObserved = true;
+            Interfaces =
+            [
+                new UsbInterfaceInfo
+                {
+                    InterfaceNumber = interfaceNumber,
+                    Class = interfaceClass,
+                    SubClass = interfaceSubClass,
+                    Protocol = interfaceProtocol,
+                    Endpoints = [.. endpoints.Select(endpoint => new UsbEndpointInfo
+                    {
+                        EndpointAddress = endpoint.Address,
+                        Attributes = endpoint.Type,
+                        MaxPacketSize = 0
+                    })]
+                }
+            ];
             return true;
         }
         finally
@@ -529,6 +560,13 @@ internal class UsbHostDevice : UsbDevice
         return endpoints;
     }
 
+    /// <summary>
+    /// A device reset tears down every pipe of the IOUSBHost objects, so the session cannot be reused and
+    /// the caller must reopen the device.
+    /// <para>设备复位会拆除 IOUSBHost 对象的所有管道，因此会话不能复用，调用方必须重新打开设备。</para>
+    /// </summary>
+    public override bool ResetReenumeratesDevice => true;
+
     /// <inheritdoc/>
     public override void Reset()
     {
@@ -544,6 +582,67 @@ internal class UsbHostDevice : UsbDevice
         catch
         {
         }
+    }
+
+    /// <summary>
+    /// Switches the claimed IOUSBHostInterface to another alternate setting through
+    /// <c>selectAlternateSetting:error:</c> and re-opens its pipes, because the previous pipe objects belong to
+    /// the old setting. A setting that no longer exposes the bound endpoint addresses makes the switch fail,
+    /// and the caller must reopen the device.
+    /// <para>经 <c>selectAlternateSetting:error:</c> 把已申请的 IOUSBHostInterface 切到另一个备用设置并重新打开
+    /// 管道，因为旧管道对象属于旧设置。新设置不再提供已绑定的端点地址时切换会失败，调用方必须重新打开设备。</para>
+    /// </summary>
+    /// <param name="interfaceNumber">The interface number; must be the one this session claimed.
+    /// <para>接口号；必须是本会话已申请的那个。</para></param>
+    /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle is not open. <para>句柄未打开。</para></exception>
+    /// <exception cref="NotSupportedException">The interface number is not the one this session holds.
+    /// <para>接口号不是本会话持有的那个。</para></exception>
+    /// <exception cref="UsbDeviceDisconnectedException">The device disappeared. <para>设备已消失。</para></exception>
+    /// <exception cref="IOException">The setting was rejected or its pipes cannot be bound.
+    /// <para>设置被拒绝，或其管道无法绑定。</para></exception>
+    public override void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
+    {
+        if (_interface == IntPtr.Zero)
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        if (interfaceNumber != _interfaceNumber)
+        {
+            throw new NotSupportedException($"This session holds interface {_interfaceNumber}; interface {interfaceNumber} is not open.");
+        }
+
+        var kr = UsbHostAPI.SelectAlternateSetting(_interface, altSetting);
+        if (kr != IOKitUsbAPI.Ok)
+        {
+            throw IsDisconnection(kr)
+                ? new UsbDeviceDisconnectedException($"USB device disconnected while selecting alternate setting {altSetting} (error: 0x{kr:X}).", kr)
+                : new IOException($"selectAlternateSetting({altSetting}) failed with IOReturn 0x{kr:X}.");
+        }
+
+        RebindPipes();
+    }
+
+    private void RebindPipes()
+    {
+        var inPipe = UsbHostAPI.CopyPipe(_interface, _bulkIn);
+        if (inPipe == IntPtr.Zero)
+        {
+            throw new IOException($"USB endpoint 0x{_bulkIn:X2} is not available in the selected alternate setting; reopen the device.");
+        }
+
+        var outPipe = _bulkOut == 0 ? IntPtr.Zero : UsbHostAPI.CopyPipe(_interface, _bulkOut);
+        if (_bulkOut != 0 && outPipe == IntPtr.Zero)
+        {
+            UsbHostAPI.ReleasePipe(inPipe);
+            throw new IOException($"USB endpoint 0x{_bulkOut:X2} is not available in the selected alternate setting; reopen the device.");
+        }
+
+        UsbHostAPI.ReleasePipe(_pipeIn);
+        UsbHostAPI.ReleasePipe(_pipeOut);
+        _pipeIn = inPipe;
+        _pipeOut = outPipe;
     }
 
     /// <inheritdoc/>

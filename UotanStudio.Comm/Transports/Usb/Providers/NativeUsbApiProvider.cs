@@ -33,7 +33,7 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
 
         if (isHarmonyOS)
         {
-            notes = "HarmonyOS detected; use the dedicated 'harmony' provider for USBManager IPC bridge, or this native provider for direct usbfs access.";
+            notes = "HarmonyOS detected; use the dedicated 'harmony' provider for the USB DDK (libusb_ndk.z.so), or this native provider for direct usbfs access.";
         }
 
         return new UsbApiCapabilities
@@ -55,13 +55,28 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
                 new UsbBackendCapability { BackendName = "winusb", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "rockusb", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "winusb-legacy", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
-                new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = true },
+                new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "macos-usbhost", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },
-                new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
-                new UsbBackendCapability { BackendName = "harmony-ddk", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true }
+                new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },
+                new UsbBackendCapability { BackendName = "harmony-ddk", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false }
             ],
         };
     }
+
+    /// <summary>
+    /// Opens one exact interface path on Windows through the recorded backend, so a reopen-by-key of a device
+    /// the inventory already classified skips the whole device-tree walk. Other platforms have no single-path
+    /// open and fall through to enumeration.
+    /// <para>在 Windows 上按已记录的后端打开单条精确接口路径，使重开一个清单已分类的设备跳过整棵设备树遍历。
+    /// 其他平台没有单路径打开能力，回退到枚举。</para>
+    /// </summary>
+    /// <param name="devicePath">The exact interface path. <para>精确接口路径。</para></param>
+    /// <returns>The opened backend device, or <see langword="null"/>.
+    /// <para>已打开的后端设备，或 <see langword="null"/>。</para></returns>
+    protected override UsbDevice? TryOpenExactBackendDevice(string devicePath)
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? WinUSBFinder.TryOpenSingleDevice(devicePath)
+            : null;
 
     protected override List<UsbDevice> EnumerateBackendDevices(UsbDeviceFilter? filter)
     {
@@ -78,12 +93,20 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             var usbHostDevices = UsbHostFinder.FindDevice(filter);
-            if (UsbHostFinder.LastUsbHostAvailable)
+            if (!UsbHostFinder.LastUsbHostAvailable)
+            {
+                return IOKitUsbFinder.FindDevice(filter);
+            }
+
+            if (usbHostDevices.Count > 0)
             {
                 return usbHostDevices;
             }
 
-            return IOKitUsbFinder.FindDevice(filter);
+            // IOUSBHost loaded but described nothing. The classic IOKit path may still enumerate the device,
+            // so try it instead of reporting an empty macOS inventory; if both are empty the result is empty.
+            var iokitDevices = IOKitUsbFinder.FindDevice(filter);
+            return iokitDevices.Count > 0 ? iokitDevices : usbHostDevices;
         }
 
         return [];

@@ -175,6 +175,15 @@ internal class HarmonyOSUsbDevice : UsbDevice
         return (legacyRet, legacyRet == USB_DDK_NO_ERROR ? (int)legacy.Length : 0);
     }
 
+    /// <summary>
+    /// Re-claims the interface and rebuilds the memory map so the session stays usable after the reset.
+    /// Failures are reported instead of leaving a half-open session, because callers retry on the same
+    /// session when <see cref="UsbDevice.ResetReenumeratesDevice"/> is <see langword="false"/>.
+    /// <para>重新申请接口并重建内存映射，使会话在复位后仍可用。失败会直接上报，而不是留下半开会话，
+    /// 因为 <see cref="UsbDevice.ResetReenumeratesDevice"/> 为 <see langword="false"/> 时调用方会在同一会话上重试。</para>
+    /// </summary>
+    /// <exception cref="IOException">The interface could not be re-claimed or the memory map could not be rebuilt.
+    /// <para>无法重新申请接口或无法重建内存映射。</para></exception>
     public override void Reset()
     {
         if (_disposed || !_ddkInitialized)
@@ -191,17 +200,18 @@ internal class HarmonyOSUsbDevice : UsbDevice
         var ret = OH_Usb_ClaimInterface(_deviceId, _interfaceIndex, ref _interfaceHandle);
         if (ret != USB_DDK_NO_ERROR)
         {
-            UsbTrace.Log($"HarmonyOSUsbDevice: OH_Usb_ClaimInterface after reset failed: {GetErrorMessage(ret)}");
+            UsbTrace.LogError($"HarmonyOSUsbDevice: OH_Usb_ClaimInterface after reset failed: {GetErrorMessage(ret)}");
             _ddkInitialized = false;
-            return;
+            throw new IOException($"OH_Usb_ClaimInterface after reset failed: {GetErrorMessage(ret)}.");
         }
 
         var devMmapPtr = IntPtr.Zero;
         ret = OH_Usb_CreateDeviceMemMap(_deviceId, UsbTransferPolicies.LinuxUsbFsMaxBulkSize, ref devMmapPtr);
         if (ret != USB_DDK_NO_ERROR)
         {
-            UsbTrace.Log($"HarmonyOSUsbDevice: OH_Usb_CreateDeviceMemMap after reset failed: {GetErrorMessage(ret)}");
-            return;
+            UsbTrace.LogError($"HarmonyOSUsbDevice: OH_Usb_CreateDeviceMemMap after reset failed: {GetErrorMessage(ret)}");
+            _ddkInitialized = false;
+            throw new IOException($"OH_Usb_CreateDeviceMemMap after reset failed: {GetErrorMessage(ret)}.");
         }
 
         if (_devMmap != IntPtr.Zero)
@@ -212,6 +222,44 @@ internal class HarmonyOSUsbDevice : UsbDevice
         _devMmap = devMmapPtr;
         (_devMmapBuffer, _devMmapSize) = ReadMemMapBuffer(_devMmap);
     }
+
+    /// <summary>
+    /// Selects an interface alternate setting through <c>OH_Usb_SelectInterfaceSetting</c> on the claimed
+    /// interface handle; a bare control request would not update the DDK's notion of the active setting.
+    /// The DDK always applies the setting to the claimed interface, so <paramref name="interfaceNumber"/> is
+    /// accepted for contract symmetry and not forwarded.
+    /// <para>在已申请的接口句柄上经 <c>OH_Usb_SelectInterfaceSetting</c> 选择备用设置；仅发裸控制请求不会更新
+    /// DDK 对活动设置的认知。DDK 总是把设置应用到已申请的接口，因此 <paramref name="interfaceNumber"/> 只为
+    /// 契约对称而接收，不会转发。</para>
+    /// </summary>
+    /// <param name="interfaceNumber">The interface number named by the caller. <para>调用方指定的接口号。</para></param>
+    /// <param name="altSetting">The alternate setting to activate. <para>要激活的备用设置。</para></param>
+    /// <exception cref="UsbDeviceHandleClosedException">The handle is not open. <para>句柄未打开。</para></exception>
+    /// <exception cref="IOException">The DDK rejected the request. <para>DDK 拒绝了该请求。</para></exception>
+    public override void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
+    {
+        if (_disposed || _interfaceHandle == 0)
+        {
+            throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        }
+
+        var ret = OH_Usb_SelectInterfaceSetting(_interfaceHandle, altSetting);
+        if (ret != USB_DDK_NO_ERROR)
+        {
+            throw new IOException($"OH_Usb_SelectInterfaceSetting({altSetting}) failed: {GetErrorMessage(ret)}.");
+        }
+    }
+
+    /// <summary>
+    /// The DDK surface used here has no configuration switch; changing it would leave the claimed interface
+    /// and the memory map inconsistent, so the caller must reopen the device instead.
+    /// <para>这里使用的 DDK 接口没有配置切换能力；切换会让已申请接口与内存映射不一致，调用方应重新打开设备。</para>
+    /// </summary>
+    /// <param name="configuration">The configuration value the caller asked for. <para>调用方请求的配置值。</para></param>
+    /// <exception cref="NotSupportedException">Always; reopen the device instead. <para>总是抛出；应改为重新打开设备。</para></exception>
+    public override void SetConfiguration(byte configuration)
+        => throw new NotSupportedException(
+            "The HarmonyOS DDK backend cannot switch device configurations; reopen the device with the target configuration.");
 
     public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
