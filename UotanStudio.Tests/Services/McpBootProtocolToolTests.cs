@@ -10,14 +10,13 @@ using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
 [Collection("MCP tool generation")]
-public sealed class McpBootProtocolToolTests : IDisposable
+public sealed class McpBootProtocolToolTests
 {
     private static readonly string[] BootToolNames =
     [
@@ -66,19 +65,6 @@ public sealed class McpBootProtocolToolTests : IDisposable
             SerialNumber = "mtk-serial"
         }
     };
-
-    private readonly string _root;
-
-    public McpBootProtocolToolTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), "uotanstudio-mcp-boot-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
-    }
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); } catch { }
-    }
 
     [Fact]
     public void BuildTools_DefaultConfig_RegistersEveryBootProtocolTool()
@@ -227,11 +213,9 @@ public sealed class McpBootProtocolToolTests : IDisposable
         Assert.Equal(payload, restored);
     }
 
-    private List<string> ToolNames(bool allowFlash) =>
-        ToolList(allowFlash).Select(tool => tool.ProtocolTool.Name).ToList();
+    private static IReadOnlyList<string> ToolNames(bool allowFlash) => McpToolCatalogCache.Names(allowFlash);
 
-    private IReadOnlyList<McpServerTool> ToolList(bool allowFlash) =>
-        new McpServerHost(new PathSandbox(_root), allowFlash).BuildTools();
+    private static IReadOnlyList<McpServerTool> ToolList(bool allowFlash) => McpToolCatalogCache.Tools(allowFlash);
 
     private static string Text(CallToolResult result) =>
         Assert.IsType<TextContentBlock>(result.Content[0]).Text ?? string.Empty;

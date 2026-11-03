@@ -1,6 +1,5 @@
 using System.Text.Json;
 using ModelContextProtocol.Server;
-using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using Xunit;
 
@@ -13,7 +12,7 @@ namespace UotanStudio.Tests.Services;
 /// 且不得包含由 SDK 自行绑定的环境参数。</para>
 /// </summary>
 [Collection("MCP tool generation")]
-public sealed class McpToolCatalogTests : IDisposable
+public sealed class McpToolCatalogTests
 {
     private static readonly HashSet<string> AmbientParameterNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -24,19 +23,6 @@ public sealed class McpToolCatalogTests : IDisposable
         "context",
         "sessionId"
     };
-
-    private readonly string _root;
-
-    public McpToolCatalogTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), "uotanstudio-mcp-catalog-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
-    }
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); } catch { }
-    }
 
     private static readonly string[] BaseToolNames =
     [
@@ -191,12 +177,9 @@ public sealed class McpToolCatalogTests : IDisposable
         }
     }
 
-    private List<string> ToolNames(bool allowFlash) =>
-        BuildHost(allowFlash).BuildTools().Select(tool => tool.ProtocolTool.Name).ToList();
+    private static IReadOnlyList<string> ToolNames(bool allowFlash) => McpToolCatalogCache.Names(allowFlash);
 
-    private McpServerHost BuildHost(bool allowFlash) => new(new PathSandbox(_root), allowFlash);
-
-    private IReadOnlyList<McpServerTool> AllTools() => BuildHost(allowFlash: true).BuildTools();
+    private static IReadOnlyList<McpServerTool> AllTools() => McpToolCatalogCache.Tools(allowFlash: true);
 
     private static void AssertNoAmbientNames(IEnumerable<string> candidateNames, string toolName, string section)
     {

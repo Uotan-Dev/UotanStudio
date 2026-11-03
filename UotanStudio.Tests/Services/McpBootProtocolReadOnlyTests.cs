@@ -6,7 +6,6 @@ using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using UotanStudio.Tests.Firmware.Architecture;
 using UotanStudio.Tests.TestInfrastructure;
@@ -15,7 +14,7 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 [Collection("MCP tool generation")]
-public sealed class McpBootProtocolReadOnlyTests : IDisposable
+public sealed class McpBootProtocolReadOnlyTests
 {
     private static readonly string[] BootToolNames =
     [
@@ -40,20 +39,6 @@ public sealed class McpBootProtocolReadOnlyTests : IDisposable
 
     private static readonly IReadOnlySet<byte> ReadOnlyMtkBootCommands =
         new HashSet<byte>([0xA0, 0x0A, 0x50, 0x05, 0xD0, 0xD1, 0xD8, 0xE1, 0xE7, 0xFC, 0xFD, 0xFE, 0xFF]);
-
-    private readonly string _root;
-
-    public McpBootProtocolReadOnlyTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), "uotanstudio-mcp-boot-readonly-tests",
-            Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
-    }
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); } catch { }
-    }
 
     [Fact]
     public void BootProtocolFactorySource_EveryAwaitedCallIsOnTheReadOnlyAllowList()
@@ -186,12 +171,10 @@ public sealed class McpBootProtocolReadOnlyTests : IDisposable
     private static string EmittedName(McpServerTool tool) => tool.ProtocolTool.Name
         ?? throw new InvalidOperationException("A boot-protocol tool was emitted without a protocol name.");
 
-    private IReadOnlyList<string> ToolNames(bool allowFlash) =>
-        [.. new McpServerHost(new PathSandbox(_root), allowFlash).BuildTools()
-            .Select(tool => tool.ProtocolTool.Name ?? string.Empty)];
+    private IReadOnlyList<string> ToolNames(bool allowFlash) => McpToolCatalogCache.Names(allowFlash);
 
     private string DescriptionOf(string name) =>
-        new McpServerHost(new PathSandbox(_root), allowFlash: true).BuildTools()
+        McpToolCatalogCache.Tools(allowFlash: true)
             .Single(tool => tool.ProtocolTool.Name == name).ProtocolTool.Description
         ?? throw new InvalidOperationException($"{name} is registered without a description.");
 
