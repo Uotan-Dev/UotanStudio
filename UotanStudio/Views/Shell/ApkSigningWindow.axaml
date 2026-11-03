@@ -43,25 +43,47 @@
         <DataTemplate><TextBlock Text="{DynamicResource ApkSign_Title}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" /></DataTemplate>
       </ursa:LoadingContainer.LoadingMessageTemplate>
       <ScrollViewer HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
-        <StackPanel Margin="20" Spacing="10" HorizontalAlignment="Stretch">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBox Name="ApkPathBox" IsReadOnly="True" PlaceholderText="{DynamicResource ApkSign_SelectApk}" />
-            <Button Grid.Column="1" Content="{DynamicResource ApkSign_Browse}" Click="OnBrowseApk" Margin="8,0,0,0" />
+        <StackPanel Margin="20" Spacing="10" HorizontalAlignment="Stretch" Grid.IsSharedSizeScope="True">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="ApkSignLabel" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_FileLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Name="ApkPathBox" IsReadOnly="True" />
+            <Button Grid.Column="2" Content="{DynamicResource ApkSign_Browse}" Click="OnBrowseApk" />
           </Grid>
           <StackPanel Spacing="8" IsEnabled="{Binding !SignApkCommand.IsRunning}">
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" HorizontalAlignment="Stretch">
-              <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_KeyLabel}" VerticalAlignment="Center" />
+            <Grid ColumnSpacing="8" HorizontalAlignment="Stretch">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ApkSignLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_KeyLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" />
               <ComboBox Name="SigningKeyBox" Grid.Column="1" ItemTemplate="{StaticResource ManagedKeyTemplate}" SelectionChanged="OnSigningKeyChanged" MinWidth="0" HorizontalAlignment="Stretch" />
               <TextBox Grid.Column="2" Width="180" MinWidth="180" MaxWidth="180" HorizontalAlignment="Stretch" Text="{Binding SigningKeyPassword}" PasswordChar="●" PlaceholderText="{DynamicResource ApkSign_KeyPassword}" />
             </Grid>
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" HorizontalAlignment="Stretch">
-              <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_CertificateLabel}" VerticalAlignment="Center" />
+            <Grid ColumnSpacing="8" HorizontalAlignment="Stretch">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ApkSignLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_CertificateLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" />
               <ComboBox Name="SigningCertificateBox" Grid.Column="1" ItemTemplate="{StaticResource ManagedKeyTemplate}" SelectionChanged="OnSigningCertificateChanged" MinWidth="0" HorizontalAlignment="Stretch" />
               <TextBox Grid.Column="2" Width="180" MinWidth="180" MaxWidth="180" HorizontalAlignment="Stretch" Text="{Binding SigningCertificatePassword}" PasswordChar="●" PlaceholderText="{DynamicResource ApkSign_CertificatePassword}" />
             </Grid>
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <TextBox Text="{Binding SigningOutputPath}" PlaceholderText="{DynamicResource ApkSign_Output}" />
-              <Button Grid.Column="1" Content="{DynamicResource ApkSign_SelectDirectory}" Click="OnBrowseOutputDirectory" />
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="ApkSignLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="{DynamicResource ApkSign_OutputLabel}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" Text="{Binding SigningOutputPath}" />
+              <Button Grid.Column="2" Content="{DynamicResource ApkSign_SelectDirectory}" Click="OnBrowseOutputDirectory" />
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="16"><CheckBox Content="v1 (JAR)" IsChecked="{Binding SigningV1}" /><CheckBox Content="v2" IsChecked="{Binding SigningV2}" /><CheckBox Content="v3" IsChecked="{Binding SigningV3}" /></StackPanel>
           </StackPanel>

@@ -2093,6 +2093,8 @@ internal static class LocaleKeySets
         "ApkSign_SelectApk",
         "ApkSign_KeyLabel",
         "ApkSign_CertificateLabel",
+        "ApkSign_FileLabel",
+        "ApkSign_OutputLabel",
         "ApkSign_SelectDirectory",
         "Apk_SizeFormat",
         "Apk_Extract",

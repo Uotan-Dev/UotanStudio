@@ -1245,6 +1245,12 @@
   <data name="ApkSign_CertificateLabel" xml:space="preserve">
     <value>Certificate</value>
   </data>
+  <data name="ApkSign_FileLabel" xml:space="preserve">
+    <value>Select file</value>
+  </data>
+  <data name="ApkSign_OutputLabel" xml:space="preserve">
+    <value>Output directory</value>
+  </data>
   <data name="ApkSign_SelectDirectory" xml:space="preserve">
     <value>Select folder</value>
   </data>
