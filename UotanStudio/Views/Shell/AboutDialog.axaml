@@ -102,8 +102,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="models:OpenSourceProject">
                             <Border Padding="0,6" CornerRadius="6" Margin="0,2"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
                                     BorderThickness="1">
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                     <!-- 名称 / 协议 / 描述：与上方说明文字左对齐（头像不能放在文本左侧） -->
@@ -111,8 +111,8 @@
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" />
                                             <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
-                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                    Background="{DynamicResource CardBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource CardBorderBrush}"
                                                     BorderThickness="1">
                                                 <TextBlock Text="{Binding LicenseName}" FontSize="10"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -125,7 +125,7 @@
                                     <!-- 作者头像 -->
                                     <Border Grid.Column="1" Width="36" Height="36" CornerRadius="18"
                                             ClipToBounds="True" VerticalAlignment="Center"
-                                            Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                            Background="{DynamicResource CardBackgroundBrush}">
                                         <Image Source="{Binding AuthorAvatarUrl}" Width="36" Height="36"
                                                Stretch="UniformToFill" />
                                     </Border>

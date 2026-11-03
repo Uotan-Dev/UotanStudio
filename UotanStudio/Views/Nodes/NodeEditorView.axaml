@@ -680,8 +680,8 @@
                                 <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
                                            FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" />
                                 <Border Grid.Column="1" CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        Background="{DynamicResource CardBackgroundBrush}"
+                                        BorderBrush="{DynamicResource CardBorderBrush}"
                                         BorderThickness="1">
                                     <TextBlock Text="{Binding SelectedNode.ExecutionStageBadge}" FontSize="10"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

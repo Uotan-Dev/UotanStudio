@@ -53,8 +53,8 @@
                 IsVisible="False"
                 Margin="0,0,0,16"
                 Padding="10,8" CornerRadius="6"
-                Background="{DynamicResource ControlFillColorDefaultBrush}"
-                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}"
                 BorderThickness="1">
             <StackPanel Spacing="4">
                 <TextBlock x:Name="DeviceIdentifierText"

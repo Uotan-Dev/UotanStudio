@@ -43,7 +43,7 @@
 
     <Border Grid.Row="2"
             Padding="6"
-            Background="{DynamicResource ControlFillColorDefaultBrush}"
+            Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
       <controls:JustifiedWrapPanel MinItemWidth="80" ItemSpacing="6" LineSpacing="6">

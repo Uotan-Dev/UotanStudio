@@ -220,7 +220,7 @@
         </ursa:LoadingContainer>
 
         <!-- 底部按钮区 -->
-        <Border Grid.Row="1" Name="ImageOperationFooter" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Grid.Row="1" Name="ImageOperationFooter" Padding="6" Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <StackPanel>
                 <StackPanel Spacing="5">

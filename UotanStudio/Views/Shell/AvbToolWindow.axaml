@@ -134,7 +134,7 @@
                         </WrapPanel>
 
                         <Border Classes="result-card" HorizontalAlignment="Left"
-                                BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource CardBackgroundBrush}">
                             <TextBlock Text="{DynamicResource Avb_DisableAvbHint}"
                                        TextWrapping="Wrap"
                                        LineHeight="20"

@@ -135,7 +135,7 @@
                                                IsVisible="{Binding !!Description}"
                                                ToolTip.Tip="{Binding Description}" />
                                     <TextBlock Text="{Binding DisplayErrorText}" FontSize="12" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                               Foreground="{DynamicResource LogErrorBrush}"
                                                IsVisible="{Binding !!ErrorText}" />
                                 </StackPanel>
                             </Border>
@@ -172,7 +172,7 @@
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedPlugin.Capabilities}" TextWrapping="Wrap" />
                         <TextBlock Grid.Row="5" Text="{DynamicResource Plugin_Diagnostics}" Opacity="0.65" />
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedPlugin.DisplayErrorText}"
-                                   TextWrapping="Wrap" Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
+                                   TextWrapping="Wrap" Foreground="{DynamicResource LogErrorBrush}" />
                         <TextBlock Grid.Row="6" Text="{DynamicResource Plugin_Dependencies}" Opacity="0.65"
                                    IsVisible="{Binding !!SelectedPlugin.Dependencies}" />
                         <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedPlugin.Dependencies}"

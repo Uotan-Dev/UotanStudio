@@ -330,14 +330,14 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="models:DevelopmentMember">
                                 <Border Padding="0,10" CornerRadius="6" Margin="0,3,6,3"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        Background="{DynamicResource CardBackgroundBrush}"
+                                        BorderBrush="{DynamicResource CardBorderBrush}"
                                         BorderThickness="1">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                         <!-- 头像 -->
                                         <Border Grid.Column="0" Width="56" Height="56" CornerRadius="28"
                                                 ClipToBounds="True" VerticalAlignment="Center"
-                                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                                Background="{DynamicResource CardBackgroundBrush}">
                                             <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
                                                    Width="56" Height="56" Stretch="UniformToFill" />
                                         </Border>

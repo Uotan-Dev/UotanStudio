@@ -107,7 +107,7 @@ public sealed class InteractionFormView : UserControl
             }
             container.Children.Add(BuildField(element));
             var error = new TextBlock { TextWrapping = TextWrapping.Wrap };
-            error.Bind(TextBlock.ForegroundProperty, new DynamicResourceExtension("SystemControlErrorTextForegroundBrush"));
+            error.Bind(TextBlock.ForegroundProperty, new DynamicResourceExtension("LogErrorBrush"));
             _errors[element.Id] = error;
             container.Children.Add(error);
             control = container;

@@ -16,7 +16,7 @@
     <ScrollViewer>
       <StackPanel Margin="16" Spacing="16">
         <Grid ColumnDefinitions="96,*" Margin="0,8,0,0">
-          <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource ControlFillColorDefaultBrush}" VerticalAlignment="Top">
+          <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}" VerticalAlignment="Top">
             <Grid>
               <Image Source="{Binding IconBitmap}" Stretch="Uniform" IsVisible="{Binding HasIcon}" />
               <TextBlock Text="APK" FontSize="28" FontWeight="Bold" Opacity="0.35" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -30,7 +30,7 @@
           </StackPanel>
         </Grid>
 
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}">
           <StackPanel Spacing="10">
             <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_Size}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" TextWrapping="Wrap" /></Grid>
             <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_TargetSystem}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding TargetSystemDisplay}" /></Grid>
@@ -49,7 +49,7 @@
           <Button Content="{DynamicResource Apk_Sign}" MinWidth="88" Click="OnSignClick" HorizontalContentAlignment="Center" />
         </StackPanel>
 
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}">
           <StackPanel Spacing="8"><TextBlock Text="Permissions" FontWeight="SemiBold" FontSize="13" /><TextBlock Text="{Binding PermissionsDisplay}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" /></StackPanel>
         </Border>
       </StackPanel>

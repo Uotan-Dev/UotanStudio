@@ -31,7 +31,7 @@
                    FontSize="20" FontWeight="SemiBold" />
 
         <!-- 格式名 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
                 IsVisible="{Binding IsRecognized}">
           <StackPanel Spacing="8">
             <TextBlock Text="{DynamicResource FirmwareInfo_FormatName}"
@@ -41,7 +41,7 @@
         </Border>
 
         <!-- 元数据键值对 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
                 IsVisible="{Binding HasMetadata}">
           <StackPanel Spacing="8">
             <TextBlock Text="{DynamicResource FirmwareInfo_Metadata}"
@@ -72,7 +72,7 @@
         </Border>
 
         <!-- 组件列表（名称 + 大小） -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
                 IsVisible="{Binding HasComponents}">
           <StackPanel Spacing="8">
             <TextBlock Text="{DynamicResource FirmwareInfo_Components}"
@@ -93,7 +93,7 @@
         </Border>
 
         <!-- 条目列表 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
                 IsVisible="{Binding HasEntries}">
           <StackPanel Spacing="8">
             <TextBlock Text="{DynamicResource FirmwareInfo_Entries}"
