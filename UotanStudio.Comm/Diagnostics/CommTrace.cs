@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace UotanStudio.Comm.Diagnostics;
 
 /// <summary>
@@ -111,20 +113,22 @@ public static class CommTrace
     /// <para>该级别启用时为 <see langword="true"/>。</para></returns>
     public static bool IsEnabled(CommLogLevel level) => level != CommLogLevel.Off && level <= _level;
 
-    /// <summary>Writes one message, deferred until the level is confirmed enabled.
-    /// <para>写入一条消息，只有确认级别启用后才执行格式化。</para>
+    /// <summary>Writes one message, formatting it only when the level is enabled.
+    /// <para>写入一条消息，仅在级别启用时才执行格式化。</para>
     /// </summary>
     /// <param name="level">Message severity. <para>消息严重级别。</para></param>
     /// <param name="category">Stable category. <para>稳定分类。</para></param>
-    /// <param name="message">Interpolated message. <para>插值消息。</para></param>
-    public static void Write(CommLogLevel level, string category, FormattableString message)
+    /// <param name="message">Interpolated message; no text is built when the level is off.
+    /// <para>插值消息；级别关闭时不构建任何文本。</para></param>
+    public static void Write(CommLogLevel level, string category,
+        [InterpolatedStringHandlerArgument("level")] ref CommTraceMessage message)
     {
-        if (message is null)
+        if (!message.IsEnabled)
         {
             return;
         }
 
-        Write(level, category, message.ToString());
+        Logger.Log(level, category, message.ToStringAndClear());
     }
 
     /// <summary>Writes one already-rendered message, skipped unless the level is enabled.
@@ -143,19 +147,6 @@ public static class CommTrace
         Logger.Log(level, category, message);
     }
 
-    /// <summary>Writes an error that no level switch can silence. <para>写入任何级别开关都无法屏蔽的错误。</para></summary>
-    /// <param name="category">Stable category. <para>稳定分类。</para></param>
-    /// <param name="message">Interpolated message. <para>插值消息。</para></param>
-    public static void Error(string category, FormattableString message)
-    {
-        if (message is null)
-        {
-            return;
-        }
-
-        Error(category, message.ToString());
-    }
-
     /// <summary>Writes an already-rendered error that no level switch can silence.
     /// <para>写入一条已渲染的错误，任何级别开关都无法屏蔽。</para>
     /// </summary>
@@ -171,14 +162,6 @@ public static class CommTrace
         Logger.Log(CommLogLevel.Error, category, message);
     }
 
-    /// <summary>Writes a command-pool or protocol step at debug level.
-    /// <para>在 debug 级别写入指令池或协议步骤。</para>
-    /// </summary>
-    /// <param name="category">Stable category. <para>稳定分类。</para></param>
-    /// <param name="message">Interpolated message. <para>插值消息。</para></param>
-    public static void Debug(string category, FormattableString message)
-        => Write(CommLogLevel.Debug, category, message);
-
     /// <summary>Writes an already-rendered debug message. <para>写入一条已渲染的 debug 消息。</para></summary>
     /// <param name="category">Stable category. <para>稳定分类。</para></param>
     /// <param name="message">Rendered message text. <para>已渲染的消息文本。</para></param>
@@ -186,22 +169,10 @@ public static class CommTrace
 
     /// <summary>Writes per-chunk detail at trace level. <para>在 trace 级别写入逐块细节。</para></summary>
     /// <param name="category">Stable category. <para>稳定分类。</para></param>
-    /// <param name="message">Interpolated message. <para>插值消息。</para></param>
-    public static void Trace(string category, FormattableString message)
-        => Write(CommLogLevel.Trace, category, message);
-
-    /// <summary>Writes an already-rendered trace message. <para>写入一条已渲染的 trace 消息。</para></summary>
-    /// <param name="category">Stable category. <para>稳定分类。</para></param>
     /// <param name="message">Rendered message text. <para>已渲染的消息文本。</para></param>
     public static void Trace(string category, string message) => Write(CommLogLevel.Trace, category, message);
 
     /// <summary>Writes a link state change. <para>写入链路状态变化。</para></summary>
-    /// <param name="category">Stable category. <para>稳定分类。</para></param>
-    /// <param name="message">Interpolated message. <para>插值消息。</para></param>
-    public static void State(string category, FormattableString message)
-        => Write(CommLogLevel.Info, category, message);
-
-    /// <summary>Writes an already-rendered link state message. <para>写入一条已渲染的链路状态消息。</para></summary>
     /// <param name="category">Stable category. <para>稳定分类。</para></param>
     /// <param name="message">Rendered message text. <para>已渲染的消息文本。</para></param>
     public static void State(string category, string message) => Write(CommLogLevel.Info, category, message);
@@ -223,4 +194,163 @@ public static class CommTrace
         Logger.Log(CommLogLevel.Trace, category,
             $"{label}: {PayloadPreview.Format(payload, MaxRawPayloadBytes)}");
     }
+}
+
+/// <summary>
+/// Formats an interpolated diagnostic message only when its level is enabled, so a silenced trace performs no
+/// formatting and allocates nothing.
+/// <para>仅在级别启用时才格式化插值诊断消息，使被关闭的 trace 不执行格式化也不产生分配。</para>
+/// </summary>
+[InterpolatedStringHandler]
+public ref struct CommTraceMessage
+{
+    private DefaultInterpolatedStringHandler _builder;
+    private readonly bool _enabled;
+
+    /// <summary>
+    /// Creates an always-enabled handler for messages that no level switch can silence.
+    /// <para>创建始终启用的处理器，用于任何级别开关都无法屏蔽的消息。</para>
+    /// </summary>
+    /// <param name="literalLength">Literal character count supplied by the compiler.
+    /// <para>编译器提供的字面量字符数。</para></param>
+    /// <param name="formattedCount">Placeholder count supplied by the compiler.
+    /// <para>编译器提供的占位符数量。</para></param>
+    public CommTraceMessage(int literalLength, int formattedCount)
+    {
+        _enabled = true;
+        _builder = new DefaultInterpolatedStringHandler(literalLength, formattedCount);
+    }
+
+    /// <summary>
+    /// Creates a handler that formats only when <paramref name="level"/> is currently emitted.
+    /// <para>创建仅在 <paramref name="level"/> 当前会输出时才格式化的处理器。</para>
+    /// </summary>
+    /// <param name="literalLength">Literal character count supplied by the compiler.
+    /// <para>编译器提供的字面量字符数。</para></param>
+    /// <param name="formattedCount">Placeholder count supplied by the compiler.
+    /// <para>编译器提供的占位符数量。</para></param>
+    /// <param name="level">Level the message will be written at. <para>消息将要写入的级别。</para></param>
+    /// <param name="isEnabled">Receives whether appends run. <para>接收是否执行追加的标志。</para></param>
+    public CommTraceMessage(int literalLength, int formattedCount, CommLogLevel level, out bool isEnabled)
+    {
+        isEnabled = CommTrace.IsEnabled(level);
+        _enabled = isEnabled;
+        _builder = isEnabled ? new DefaultInterpolatedStringHandler(literalLength, formattedCount) : default;
+    }
+
+    /// <summary>
+    /// Gets whether the handler produced text.
+    /// <para>获取处理器是否产生了文本。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when appends were enabled. <para>追加启用时为 <see langword="true"/>。</para></value>
+    internal readonly bool IsEnabled => _enabled;
+
+    /// <summary>
+    /// Appends a literal run.
+    /// <para>追加一段字面量。</para>
+    /// </summary>
+    /// <param name="value">Literal text. <para>字面量文本。</para></param>
+    public void AppendLiteral(string value)
+    {
+        if (_enabled)
+        {
+            _builder.AppendLiteral(value);
+        }
+    }
+
+    /// <summary>
+    /// Appends one placeholder value.
+    /// <para>追加一个占位符取值。</para>
+    /// </summary>
+    /// <typeparam name="T">Value type. <para>取值类型。</para></typeparam>
+    /// <param name="value">Value to format. <para>待格式化的取值。</para></param>
+    public void AppendFormatted<T>(T value)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value);
+        }
+    }
+
+    /// <summary>
+    /// Appends one placeholder value with an alignment.
+    /// <para>带对齐地追加一个占位符取值。</para>
+    /// </summary>
+    /// <typeparam name="T">Value type. <para>取值类型。</para></typeparam>
+    /// <param name="value">Value to format. <para>待格式化的取值。</para></param>
+    /// <param name="alignment">Field width; negative means left-aligned. <para>字段宽度；负值表示左对齐。</para></param>
+    public void AppendFormatted<T>(T value, int alignment)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value, alignment);
+        }
+    }
+
+    /// <summary>
+    /// Appends one placeholder value with a format specifier.
+    /// <para>带格式说明符地追加一个占位符取值。</para>
+    /// </summary>
+    /// <typeparam name="T">Value type. <para>取值类型。</para></typeparam>
+    /// <param name="value">Value to format. <para>待格式化的取值。</para></param>
+    /// <param name="format">Format specifier, or null for the default. <para>格式说明符；null 表示默认格式。</para></param>
+    public void AppendFormatted<T>(T value, string? format)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value, format);
+        }
+    }
+
+    /// <summary>
+    /// Appends one placeholder value with an alignment and a format specifier.
+    /// <para>带对齐与格式说明符地追加一个占位符取值。</para>
+    /// </summary>
+    /// <typeparam name="T">Value type. <para>取值类型。</para></typeparam>
+    /// <param name="value">Value to format. <para>待格式化的取值。</para></param>
+    /// <param name="alignment">Field width; negative means left-aligned. <para>字段宽度；负值表示左对齐。</para></param>
+    /// <param name="format">Format specifier, or null for the default. <para>格式说明符；null 表示默认格式。</para></param>
+    public void AppendFormatted<T>(T value, int alignment, string? format)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value, alignment, format);
+        }
+    }
+
+    /// <summary>
+    /// Appends one string value.
+    /// <para>追加一个字符串取值。</para>
+    /// </summary>
+    /// <param name="value">String to append, or null for no text. <para>要追加的字符串；null 表示不追加文本。</para></param>
+    public void AppendFormatted(string? value)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value);
+        }
+    }
+
+    /// <summary>
+    /// Appends one pre-boxed value, matching the compiler fallback for object-typed holes.
+    /// <para>追加一个已装箱取值，对应 object 类型占位符的编译器回退路径。</para>
+    /// </summary>
+    /// <param name="value">Value to format. <para>待格式化的取值。</para></param>
+    /// <param name="alignment">Field width; negative means left-aligned. <para>字段宽度；负值表示左对齐。</para></param>
+    /// <param name="format">Format specifier, or null for the default. <para>格式说明符；null 表示默认格式。</para></param>
+    public void AppendFormatted(object? value, int alignment = 0, string? format = null)
+    {
+        if (_enabled)
+        {
+            _builder.AppendFormatted(value, alignment, format);
+        }
+    }
+
+    /// <summary>
+    /// Returns the rendered text and releases the builder buffer.
+    /// <para>返回渲染后的文本并释放构建缓冲。</para>
+    /// </summary>
+    /// <returns>The formatted message, or an empty string when formatting was suppressed.
+    /// <para>格式化后的消息；格式化被抑制时为空字符串。</para></returns>
+    internal string ToStringAndClear() => _enabled ? _builder.ToStringAndClear() : string.Empty;
 }
