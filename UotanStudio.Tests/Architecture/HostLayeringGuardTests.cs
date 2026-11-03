@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Xunit;
 
 namespace UotanStudio.Tests.Architecture;
@@ -24,6 +23,12 @@ public partial class HostLayeringGuardTests
         "UotanStudio.Services.Keys",
         "UotanStudio.Services.NativeBin",
         "UotanStudio.Services.Mcp",
+    ];
+
+    private static readonly string[] PresentationNamespaces =
+    [
+        "UotanStudio.ViewModels",
+        "UotanStudio.Views",
     ];
 
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> FrozenViewExceptions =
@@ -68,7 +73,10 @@ public partial class HostLayeringGuardTests
                 continue;
             }
 
-            offenders.AddRange(RepositoryLayout.Matches(path, content, ServicesToPresentationPattern()));
+            foreach (var name in RepositoryLayout.ForbiddenImports(content, PresentationNamespaces))
+            {
+                offenders.Add($"{path}: imports {name}");
+            }
         }
 
         Assert.True(offenders.Count == 0, "Services except Services/Ui must not reference ViewModels or Views:\n" + string.Join("\n", offenders));
@@ -85,7 +93,10 @@ public partial class HostLayeringGuardTests
                 continue;
             }
 
-            offenders.AddRange(RepositoryLayout.Matches(path, content, ViewsUsingPattern()));
+            foreach (var name in RepositoryLayout.ForbiddenImports(content, ["UotanStudio.Views"]))
+            {
+                offenders.Add($"{path}: imports {name}");
+            }
         }
 
         Assert.True(offenders.Count == 0, "ViewModels must not reference Views:\n" + string.Join("\n", offenders));
@@ -103,11 +114,8 @@ public partial class HostLayeringGuardTests
                 continue;
             }
 
-            var imported = ApplicationServiceNamespaces
-                .Where(ns => Regex.IsMatch(content, "^\\s*using\\s+" + Regex.Escape(ns) + @"(?:\.|;)",
-                    RegexOptions.CultureInvariant | RegexOptions.Multiline))
-                .ToArray();
-            if (imported.Length == 0)
+            var imported = RepositoryLayout.ForbiddenImports(content, ApplicationServiceNamespaces);
+            if (imported.Count == 0)
             {
                 continue;
             }
@@ -138,15 +146,35 @@ public partial class HostLayeringGuardTests
     }
 
     [Fact]
-    public void ServicesToPresentationPattern_Synthetic_ReportsBothNamespaces()
+    public void ImportedNamespaces_Synthetic_ReportsMergedStaticAliasedAndGlobalDirectives()
     {
-        const string content = "using UotanStudio.ViewModels.Nodes;\nusing UotanStudio.Views.Controls;";
-        Assert.Equal(2, RepositoryLayout.Matches("sample.cs", content, ServicesToPresentationPattern()).Count);
+        const string content = "using System;\n"
+            + "using UotanStudio.Services.Devices;\n"
+            + "using System.Text;using UotanStudio.ViewModels.Nodes;\rusing UotanStudio.Views.Shell;\n"
+            + "using static UotanStudio.Services.Keys.KeyLibraryService;\n"
+            + "using Keys = UotanStudio.Services.Keys;\n"
+            + "global using UotanStudio.Services.Workspace;\n";
+        Assert.Equal(
+            ["System", "UotanStudio.Services.Devices", "System.Text", "UotanStudio.ViewModels.Nodes", "UotanStudio.Views.Shell",
+                "UotanStudio.Services.Keys.KeyLibraryService", "UotanStudio.Services.Keys", "UotanStudio.Services.Workspace"],
+            RepositoryLayout.ImportedNamespaces(content));
     }
 
-    [GeneratedRegex(@"^\s*using\s+UotanStudio\.(?:ViewModels|Views)(?:\.|;)", RegexOptions.CultureInvariant | RegexOptions.Multiline)]
-    private static partial Regex ServicesToPresentationPattern();
+    [Fact]
+    public void ImportedNamespaces_Synthetic_LeavesStatementsAndLookalikeRootsUnreported()
+    {
+        const string content = "using var stream = File.OpenRead(path);\n"
+            + "using (var reader = new StreamReader(stream))\n"
+            + "using UotanStudio.Services.DevicesExtra;\n";
+        Assert.Empty(RepositoryLayout.ForbiddenImports(content, ["UotanStudio.Services.Devices"]));
+    }
 
-    [GeneratedRegex(@"^\s*using\s+UotanStudio\.Views(?:\.|;)", RegexOptions.CultureInvariant | RegexOptions.Multiline)]
-    private static partial Regex ViewsUsingPattern();
+    [Fact]
+    public void ForbiddenImports_Synthetic_ReportsTheForbiddenRootBeneathItsNamespace()
+    {
+        var offenders = RepositoryLayout.ForbiddenImports(
+            "using UotanStudio.ViewModels;\nusing UotanStudio.Views.Controls;\nusing UotanStudio.Services.Devices;\n",
+            PresentationNamespaces);
+        Assert.Equal(["UotanStudio.ViewModels", "UotanStudio.Views"], offenders);
+    }
 }

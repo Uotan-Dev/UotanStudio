@@ -1,4 +1,4 @@
-using System.Collections.Specialized;using System.ComponentModel;using System.Globalization;using Avalonia;using Avalonia.Controls;using Avalonia.Data.Converters;using Avalonia.Input;using Avalonia.Interactivity;using Avalonia.Markup.Xaml.Templates;using Avalonia.Platform.Storage;using Avalonia.Threading;using Avalonia.VisualTree;using AvaloniaEdit;using CommunityToolkit.Mvvm.Messaging;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Devices;using UotanStudio.Services.Ui;using UotanStudio.ViewModels.Compare;using UotanStudio.ViewModels.Devices;
+using System.Collections.Specialized;using System.ComponentModel;using System.Globalization;using Avalonia;using Avalonia.Controls;using Avalonia.Data.Converters;using Avalonia.Input;using Avalonia.Interactivity;using Avalonia.Markup.Xaml.Templates;using Avalonia.Platform.Storage;using Avalonia.Threading;using Avalonia.VisualTree;using AvaloniaEdit;using CommunityToolkit.Mvvm.Messaging;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Ui;using UotanStudio.ViewModels.Compare;using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Views.Compare;
 
@@ -1018,14 +1018,14 @@ public partial class CompareView : UserControl
             return;
         }
 
-        if (FindColumnFor(list) is { IsDeviceColumn: true, DeviceTarget: { } device })
+        if (FindColumnFor(list) is { IsDeviceColumn: true, DeviceTarget: { } device } remoteColumn)
         {
             var remotePath = node.FullPath;
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var tempLocal = await DeviceFileSystemService.Instance.PullToTempAsync(device, remotePath).ConfigureAwait(false);
+                    var tempLocal = await remoteColumn.PullDeviceEntryToTempAsync(device, remotePath).ConfigureAwait(false);
                     Dispatcher.UIThread.Post(() =>
                     {
                         WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(tempLocal));

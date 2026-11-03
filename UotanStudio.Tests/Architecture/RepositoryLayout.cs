@@ -25,9 +25,69 @@ internal static partial class RepositoryLayout
         }
 
         return FirmwareContextDependencyScanner.ReadSourceFiles(directory)
-            .Select(entry => (Path.GetRelativePath(root, entry.Path).Replace('\\', '/'), entry.Content))
+            .Select(entry => (Path.GetRelativePath(root, entry.Path).Replace('\\', '/'), NormalizeLineBreaks(entry.Content)))
             .OrderBy(entry => entry.Item1, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Collapses every C# new-line character onto <c>\n</c> so a directive written after a lone <c>\r</c>,
+    /// <c>U+0085</c>, <c>U+2028</c> or <c>U+2029</c> still starts a line for the anchored patterns.
+    /// <para>把 C# 的所有换行字符统一成 <c>\n</c>，使写在孤立 <c>\r</c>、<c>U+0085</c>、<c>U+2028</c> 或
+    /// <c>U+2029</c> 之后的指令在行首锚定模式下仍然是一行的开始。</para>
+    /// </summary>
+    /// <param name="content">Raw file content.<para>原始文件内容。</para></param>
+    /// <returns>Content with <c>\n</c> line breaks only.<para>仅以 <c>\n</c> 换行的内容。</para></returns>
+    internal static string NormalizeLineBreaks(string content) =>
+        content.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Replace('\u0085', '\n')
+            .Replace('\u2028', '\n')
+            .Replace('\u2029', '\n');
+
+    /// <summary>
+    /// Returns every namespace name the file declares, in source order, including block-scoped ones that
+    /// follow the file-scoped header.
+    /// <para>按源码顺序返回文件声明的全部命名空间名，包含跟在文件头之后的块级声明。</para>
+    /// </summary>
+    /// <param name="content">Normalized file content.<para>已规范换行的文件内容。</para></param>
+    /// <returns>Declared namespace names; empty when the file declares none.<para>声明的命名空间名；无声明时为空。</para></returns>
+    internal static IReadOnlyList<string> Namespaces(string content) =>
+        NamespacePattern().Matches(content).Select(match => match.Groups["name"].Value).ToArray();
+
+    /// <summary>
+    /// Returns the namespace each <c>using</c> directive points at, whatever separates the directives on the
+    /// line and whether the directive is <c>static</c>, aliased or <c>global</c>.
+    /// <para>返回每个 <c>using</c> 指令指向的命名空间，无论这些指令在同一行如何排布，也无论它是
+    /// <c>static</c>、别名形式还是 <c>global</c> 形式。</para>
+    /// </summary>
+    /// <param name="content">File content, in any line-break convention.<para>任意换行风格的文件内容。</para></param>
+    /// <returns>Imported namespace or type names in source order.<para>按源码顺序返回导入的命名空间或类型名。</para></returns>
+    internal static IReadOnlyList<string> ImportedNamespaces(string content) =>
+        UsingDirectivePattern().Matches(NormalizeLineBreaks(content)).Select(match => match.Groups["ns"].Value).ToArray();
+
+    /// <summary>
+    /// Reports the imported names that are the given root or live beneath it.
+    /// <para>上报等于给定根命名空间或位于其下的导入名。</para>
+    /// </summary>
+    /// <param name="content">Normalized file content.<para>已规范换行的文件内容。</para></param>
+    /// <param name="forbiddenRoots">Root namespaces that must not be imported.
+    /// <para>不得导入的根命名空间。</para></param>
+    /// <returns>Distinct forbidden roots an import falls under.<para>被导入命中的根命名空间（去重）。</para></returns>
+    internal static IReadOnlyList<string> ForbiddenImports(string content, IReadOnlyList<string> forbiddenRoots)
+    {
+        var imported = ImportedNamespaces(content);
+        var offenders = new List<string>();
+        foreach (var root in forbiddenRoots)
+        {
+            if (imported.Any(name => string.Equals(name, root, StringComparison.Ordinal)
+                || name.StartsWith(root + ".", StringComparison.Ordinal)))
+            {
+                offenders.Add(root);
+            }
+        }
+
+        return offenders;
     }
 
     internal static IReadOnlyList<string> SolutionProjectPaths()
@@ -102,4 +162,8 @@ internal static partial class RepositoryLayout
 
     [GeneratedRegex(@"^\s*namespace\s+(?<name>[A-Za-z_][A-Za-z0-9_.]*)", RegexOptions.CultureInvariant | RegexOptions.Multiline)]
     internal static partial Regex NamespacePattern();
+
+    [GeneratedRegex(@"(?:^|;)[ \t]*(?:global[ \t]+)?using[ \t]+(?:static[ \t]+)?(?:[A-Za-z_]\w*[ \t]*=[ \t]*)?(?<ns>[A-Za-z_][\w.]*)",
+        RegexOptions.CultureInvariant | RegexOptions.Multiline)]
+    internal static partial Regex UsingDirectivePattern();
 }

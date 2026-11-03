@@ -6,7 +6,6 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Services;
-using UotanStudio.Services.Devices;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Compare;
@@ -497,7 +496,7 @@ public partial class CompareView
 
             {
 
-                await DeviceFileSystemService.Instance.DeleteAsync(device, path, isDirectory);
+                await column.DeleteDeviceEntryAsync(device, path, isDirectory);
 
                 await ReloadAfterEntryChangeAsync(column);
 
@@ -607,15 +606,11 @@ public partial class CompareView
 
         {
 
-            var parentDir = DeviceFileSystemService.GetParentPath(path);
-
-            var deviceTarget = DeviceFileSystemService.CombinePath(parentDir, newName);
-
             try
 
             {
 
-                await DeviceFileSystemService.Instance.RenameAsync(device, path, deviceTarget);
+                await column.RenameDeviceEntryAsync(device, path, newName);
 
                 await ReloadAfterEntryChangeAsync(column);
 
@@ -723,8 +718,6 @@ public partial class CompareView
 
         {
 
-            var parentDir = isDirectory ? path : DeviceFileSystemService.GetParentPath(path);
-
             var folderName = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Explorer_NewFolder"), string.Empty);
 
             if (string.IsNullOrWhiteSpace(folderName))
@@ -737,13 +730,11 @@ public partial class CompareView
 
 
 
-            var target = DeviceFileSystemService.CombinePath(parentDir, folderName);
-
             try
 
             {
 
-                await DeviceFileSystemService.Instance.CreateDirectoryAsync(device, target);
+                await column.CreateDeviceDirectoryAsync(device, path, isDirectory, folderName);
 
                 await ReloadAfterEntryChangeAsync(column);
 
@@ -1395,7 +1386,7 @@ public partial class CompareView
 
                 {
 
-                    await DeviceFileSystemService.Instance.PushAsync(dev, path, dropTargetDevice);
+                    await targetCol.PushToDeviceAsync(dev, path, dropTargetDevice);
 
                 }
 
@@ -1439,7 +1430,7 @@ public partial class CompareView
 
                 {
 
-                    await DeviceFileSystemService.Instance.PullAsync(srcDev, path, dropTarget);
+                    await _dragSourceColumn.PullFromDeviceAsync(srcDev, path, dropTarget);
 
                     copied = true;
 

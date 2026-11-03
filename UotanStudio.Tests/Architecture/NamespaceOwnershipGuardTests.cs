@@ -50,27 +50,24 @@ public class NamespaceOwnershipGuardTests
         {
             foreach (var (path, content) in RepositoryLayout.SourceFiles(projectDirectory))
             {
-                var name = RepositoryLayout.FirstNamespace(content);
-                if (name.Length == 0)
+                foreach (var name in RepositoryLayout.Namespaces(content))
                 {
-                    continue;
-                }
-
-                if (string.Equals(projectDirectory, "UotanStudio", StringComparison.Ordinal))
-                {
-                    if (!name.StartsWith("UotanStudio", StringComparison.Ordinal)
-                        || HostForbiddenRoots.Any(forbidden => name.Equals(forbidden, StringComparison.Ordinal)
-                            || name.StartsWith(forbidden + ".", StringComparison.Ordinal)))
+                    if (string.Equals(projectDirectory, "UotanStudio", StringComparison.Ordinal))
                     {
-                        offenders.Add($"{path}: declares {name}");
+                        if (!name.StartsWith("UotanStudio", StringComparison.Ordinal)
+                            || HostForbiddenRoots.Any(forbidden => name.Equals(forbidden, StringComparison.Ordinal)
+                                || name.StartsWith(forbidden + ".", StringComparison.Ordinal)))
+                        {
+                            offenders.Add($"{path}: declares {name}");
+                        }
+
+                        continue;
                     }
 
-                    continue;
-                }
-
-                if (!name.Equals(root, StringComparison.Ordinal) && !name.StartsWith(root + ".", StringComparison.Ordinal))
-                {
-                    offenders.Add($"{path}: declares {name}, assembly root is {root}");
+                    if (!name.Equals(root, StringComparison.Ordinal) && !name.StartsWith(root + ".", StringComparison.Ordinal))
+                    {
+                        offenders.Add($"{path}: declares {name}, assembly root is {root}");
+                    }
                 }
             }
         }
@@ -79,10 +76,12 @@ public class NamespaceOwnershipGuardTests
     }
 
     [Fact]
-    public void NamespacePattern_SyntheticSource_ReturnsFirstNamespace()
+    public void Namespaces_SyntheticSource_ReturnsEveryDeclaredNamespace()
     {
-        Assert.Equal("UotanStudio.Projects.Schemes", RepositoryLayout.FirstNamespace("using X;\nnamespace UotanStudio.Projects.Schemes;\n"));
-        Assert.Equal(string.Empty, RepositoryLayout.FirstNamespace("using X;\n"));
+        Assert.Equal(
+            ["UotanStudio.Projects.Schemes", "UotanStudio.Projects.Legacy"],
+            RepositoryLayout.Namespaces("using X;\nnamespace UotanStudio.Projects.Schemes;\r\nnamespace UotanStudio.Projects.Legacy\n{\n}\n"));
+        Assert.Empty(RepositoryLayout.Namespaces("using X;\n"));
     }
 
     [Fact]
