@@ -1,10 +1,11 @@
 ---
 name: gki-filesystem-fixture
 description: >-
-  Run and accept UotanStudio's GKI filesystem round-trip fixture on WSL2 Alpine,
-  wslc and QEMU. Use when validating managed EXT4, EROFS or F2FS unpack/cache/repack
-  output against Google GKI kernels 5.10, 6.6 or 6.18, including mount, fsck,
-  write-back (except EROFS) and cleanup evidence.
+  Run and accept UotanStudio's GKI filesystem round-trip fixture on an x86_64
+  QEMU guest under WSL2 Alpine and wslc. Use when validating managed EXT4, EROFS
+  or F2FS unpack/cache/repack output against Google GKI kernels 5.10, 6.6 or 6.18,
+  including mount, fsck, write-back (except EROFS) and cleanup evidence. KVM
+  acceleration is optional.
 license: MIT
 ---
 
@@ -42,7 +43,7 @@ artifacts/gki-fs-lab/<run-id>/            仅日志与报告
 
 - 修改了 EXT4、EROFS 或 F2FS 的 writer，需要证明内核仍能挂载、读取与 fsck。
 - 需要验证 `FileSystemPreservation.TryRestore` 的保留式重建在真实内核中成立。
-- 需要 5.10、6.6、6.18 多内核版本的兼容性矩阵。
+- 需要 x86_64 客户机上的 5.10、6.6、6.18 多内核版本兼容性矩阵。
 - 需要一份可复现的 WSL2 Alpine + wslc + QEMU 工装说明与验收报告。
 
 ## 何时不要使用
@@ -58,12 +59,12 @@ artifacts/gki-fs-lab/<run-id>/            仅日志与报告
 | --- | --- |
 | 宿主 | Windows x64，WSL2，`wslc` 可运行 |
 | WSL 发行版 | Alpine；`wslc` 容器为 Alpine 3.20 或更新的工具镜像 |
-| 虚拟化 | 优先 `/dev/kvm`；没有时允许 TCG，但报告必须写明 `acceleration=tcg` |
+| 虚拟化 | KVM 可选；`wslc` 容器内通常没有 `/dev/kvm`，默认 TCG，报告必须写明 `acceleration=tcg` |
 | 磁盘 | 至少 80 GB 临时空间；内核源码、对象文件和镜像都在 Linux 卷 |
 | 网络 | AOSP 源码走 TUNA → USTC → BFSU；Docker 基础镜像走 daocloud 缓存；不要依赖 AOSP 主站 |
 | 仓库 | 当前 `UotanStudio` 工作树；不得改动无关文件 |
 
-KVM 需要 Windows 嵌套虚拟化。没有 `/dev/kvm` 时不要修改系统配置后不验证；按“KVM 不可用”降级并在报告中标注。WSL 重启会中断正在运行的容器，执行前确认没有其他重要任务。
+客户机固定 x86_64，不接受 arm64 客户机或 TCG 转译 arm 指令的验收结果。KVM 加速可选：容器内没有 `/dev/kvm` 时按 TCG 运行并在报告中标注，不要修改系统配置后不验证。WSL 重启会中断正在运行的容器，执行前确认没有其他重要任务。
 
 ## 夹具组成
 
@@ -71,7 +72,7 @@ KVM 需要 Windows 嵌套虚拟化。没有 `/dev/kvm` 时不要修改系统配�
 | --- | --- |
 | Windows/PowerShell | 编排、参数、退出码、报告汇总 |
 | `wslc` 容器 | 主线 mkfs/fsck、内核编译、initramfs、QEMU |
-| QEMU 客户机 | 唯一执行真实 mount/fsck/写回的位置 |
+| QEMU 客户机（x86_64） | 唯一执行真实 mount/fsck/写回的位置 |
 | `UotanStudio.FilesystemFixture` | 托管解包、preservation metadata 缓存、`TryRestore`、清单比对 |
 | 内核 | `android13-5.10`、`android15-6.6`、`android17-6.18` 的 x86_64 GKI 配置派生内核 |
 
@@ -121,7 +122,7 @@ pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -PruneCache
 检查并写入 `environment.json`：
 
 - `wslc` 版本、WSL 内核、Alpine 版本。
-- QEMU 版本、`/dev/kvm` 是否存在、最终 `acceleration`。
+- x86_64 QEMU 版本、`/dev/kvm`（可选）是否存在、最终 `acceleration`。
 - 容器镜像 ID、命名卷、仓库绑定路径。
 - CPU 核数、内存、可用磁盘。
 
@@ -205,7 +206,7 @@ artifacts/gki-fs-lab/<run-id>/
 
 | 验收项 | 必须为真 |
 | --- | --- |
-| 内核版本 | 5.10、6.6、6.18 各至少一次客户机启动 |
+| 内核版本 | x86_64 客户机上 5.10、6.6、6.18 各至少一次启动 |
 | 内核配置 | 三格式与 virtio-blk 为内建 |
 | 原始镜像 | 主线 mkfs + 基线 fsck 通过 |
 | 托管重建 | `TryRestore == true` 且结构/内容等价 |
@@ -264,7 +265,7 @@ artifacts/gki-fs-lab/<run-id>/
 | `gki_defconfig` 不存在 | 停止并报告分支差异；不得用普通 `x86_64_defconfig` 冒充 GKI |
 | 5.10 编译失败 | 检查 gcc 兼容 wrapper 与 `-std` 问题；保留 build log |
 | 6.6/6.18 编译失败 | 检查 clang/lld 版本、关闭 BTF/DEBUG_INFO 的片段是否生效；不要用 `NoWarn` 式掩盖 |
-| 没有 `/dev/kvm` | 启用嵌套虚拟化后重启 WSL 验证；否则 TCG 并在报告注明 |
+| 没有 `/dev/kvm` | KVM 可选；容器内默认 TCG 并在报告注明 `acceleration=tcg` |
 | 容器无法 mount | 预期行为；mount 只能在 QEMU 客户机执行 |
 | `TryRestore` 返回 false | 保留原始/重打包镜像与 metadata；检查 preservation payload；不得静默接受全新构建 |
 | fsck 失败 | 保留镜像与 fsck 日志；区分退出码 1（已修正）与真实损坏 |
@@ -279,7 +280,7 @@ artifacts/gki-fs-lab/<run-id>/
 
 ## 边界
 
-- 本夹具只验证 x86_64 QEMU 客户机中的文件系统内核路径，不证明真实 Android 设备、厂商内核、AVB 或分区表。
+- 本夹具只验证 x86_64 QEMU 客户机中的文件系统内核路径；arm64 客户机不属于验收路径，不证明真实 Android 设备、厂商内核、AVB 或分区表。
 - GKI 配置片段会关闭 DEBUG_INFO/BTF 并开启 virtio；这些是测试环境改动，需在报告中与 stock GKI 区分。
 - 容器无 `CAP_SYS_ADMIN` 是设计边界；不要把容器内“无法挂载”误判为镜像损坏。
 - 当前项目规则要求测试与诊断临时文件落到主机 `%TEMP%`；生产代码的原子替换临时文件仍留在目标同目录/同卷，不适用本夹具的临时文件迁移。

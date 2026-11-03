@@ -7,7 +7,7 @@
 ```text
 Windows PowerShell
   └─ wslc 容器（Alpine + QEMU + mkfs/fsck + 内核编译）
-       └─ QEMU 客户机（GKI 内核，唯一执行 mount/fsck 的位置）
+       └─ QEMU 客户机（x86_64 GKI 内核，唯一执行 mount/fsck 的位置）
             └─ 重打包镜像
 ```
 
@@ -23,7 +23,7 @@ Windows PowerShell
 | 6.6 | `android15-6.6` |
 | 6.18 | `android17-6.18` |
 
-以 `arch/x86/configs/gki_defconfig` 为基线，合并 `configs/gki-lab.fragment`。增量打开 virtio-blk、loop、devtmpfs、串口和三种文件系统，关闭 DEBUG_INFO/BTF。5.10 用 gcc，6.6/6.18 用 clang/lld。编译结果放在 `/lab/cache/kernels/<version>-<commit>-<fragment-hash>/`，源码和构建目录在成功后删除。
+以 `arch/x86/configs/gki_defconfig` 为基线，合并 `configs/gki-lab.fragment`。增量打开 virtio-blk、loop、devtmpfs、串口和三种文件系统，关闭 DEBUG_INFO/BTF。5.10 用 gcc，6.6/6.18 用 clang/lld。客户机固定 x86_64；KVM 加速可选，容器内默认 TCG。编译结果放在 `/lab/cache/kernels/<version>-<commit>-<fragment-hash>/`，源码和构建目录在成功后删除。
 
 内核可以单独构建，避免一次命令超时：
 
@@ -81,6 +81,6 @@ pwsh -NoProfile -File tools/gki-fs-lab/aggregate.ps1 -RunId matrix
 ## 边界
 
 - 只验证 x86_64 QEMU 客户机，不证明真实 Android 设备或厂商内核。
-- 没有 KVM 时用 TCG，结果仍有效，但不能写成硬件加速。
+- KVM 加速可选；容器内默认 TCG，结果仍有效，但不能写成硬件加速。
 - GKI 配置片段关闭调试信息并打开 virtio，与 stock GKI 有差异。
 - EXT4 写入探针前扩容，容量结论以扩容后的副本为准；EROFS 只验证只读拒绝。

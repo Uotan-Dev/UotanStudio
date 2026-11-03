@@ -155,6 +155,8 @@ EROFS 不记录 LZ4 是否使用 HC 编码器，因此两行 LZ4 的磁盘特性
 
 ### Gate 3：QEMU GKI 5.10 / 6.1 / 6.6
 
+- 客户机固定 x86_64；KVM 加速可选，`wslc` 容器内默认 TCG。
+
 ```powershell
 pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Kernels 5.10,6.1,6.6 -Formats EROFS -Stage All
 ```
@@ -195,5 +197,5 @@ pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Kernels 6.6  -Formats EROFS -Sta
 
 - 本文只记录基线与门禁，不证明任何新优化已通过；基准耗时不能替代 Gate 0–3。
 - `tools/gki-fs-lab` 只验证 x86_64 QEMU GKI 内核路径，不证明真实 Android 设备、厂商内核、AVB 或分区表。
-- 没有 KVM 时使用 TCG，报告必须标注 `acceleration=tcg`，不能写成硬件加速。
+- KVM 加速可选；容器内默认 TCG，报告必须标注 `acceleration=tcg`，不能写成硬件加速。
 - 新增 Zstd 基准只测构建；对话没有给出 Zstd 的实测基线，因此本文不为 Zstd 编造数字。
