@@ -112,7 +112,7 @@ internal static class ComparisonRowBuilder
             rightText: node.RightName,
             rightSub: SizeText(node.RightSize, node.IsDirectory),
             isRightDiff: isDifferent,
-            tintSingleSide: false,
+            tintSingleSide: true,
             treeNode: node,
             leftIcon: leftIcon,
             rightIcon: rightIcon,
