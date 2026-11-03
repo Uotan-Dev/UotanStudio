@@ -148,15 +148,18 @@ check. Without a configured policy, ADB/HDC debug interfaces fail closed.
 ## USB backend defaults and hotplug matrix
 
 `UsbApiKind.Auto` resolves to the platform-native backend everywhere: Windows → WinUSB,
-Linux → usbfs, macOS → IOKit/IOUSBHost. libusb (and the HarmonyOS DDK) are explicit
-opt-ins via `DeviceCommunicationConfiguration.UsbBackend`.
+Linux → usbfs, macOS → IOKit/IOUSBHost. libusb is an explicit opt-in through
+`DeviceCommunicationConfiguration.UsbBackend = UsbApiKind.LibUsbDotNet`; the HarmonyOS DDK is
+an explicit opt-in through `FIRMWAREKIT_USB_ENABLE_HARMONY=1` (that value normalizes to `Auto`
+in `DeviceCommunicationConfiguration`).
 
 | Platform (native backend) | Change-event source | Fallback |
 | --- | --- | --- |
 | Windows (WinUSB) | `WM_DEVICECHANGE` message-only window | polling |
 | Linux (usbfs) | uevent netlink socket (`NETLINK_KOBJECT_UEVENT`) | polling |
 | macOS (IOKit/IOUSBHost) | not implemented yet | polling |
-| libusb (opt-in) | libusb hotplug callbacks (Linux/macOS; unavailable on Windows) | polling |
+| libusb (opt-in) | libusb hotplug callbacks (Linux/macOS; the monitor falls back to polling when libusb reports no hotplug support) | polling |
+| HarmonyOS DDK (opt-in) | not implemented (the provider reports no native monitoring) | polling |
 
 ## Lifecycle services
 
@@ -176,7 +179,8 @@ opt-ins via `DeviceCommunicationConfiguration.UsbBackend`.
   work (logcat, shell streaming, mirroring) must not go through the pool.
 - **Property cache** (`DeviceController.Properties`): per-identity cache for parameters
   that cannot change while a physical device exists; keyed by the normalized device
-  identity, invalidated on removal or explicit refresh, retained across mode switches.
+  identity, invalidated on removal and retained across mode switches. An explicit refresh
+  does not clear it; callers that want a clean slate use `DeviceController.Properties.Clear()`.
 - **Serial consistency**: when the USB descriptor carries no serial, the protocol readback
   (fastboot `getvar serialno`) is authoritative; server serial ↔ USB node matching in
   `UsbPhysicalIdentity` uses exact, instance-id-tail, or case-only comparison with a

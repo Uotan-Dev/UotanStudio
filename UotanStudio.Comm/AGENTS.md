@@ -13,10 +13,10 @@
 ## USB 与生命周期
 
 - `CommKit` 静态构造把 `UsbAccessPolicy` 配到 `DebugBridgeSessionOpener.RequireDirectUsb`。策略未配置时，debug 接口（class `0xff`、protocol `1`、subclass `0x42`/`0x50`）必须 fail-closed，不得先开句柄再检查。
-- `UsbApiKind.Auto` 解析为平台原生后端（Windows WinUSB、Linux usbfs、macOS IOKit）；libusb 与 HarmonyOS DDK 是显式 opt-in。原生 USB 会话按物理路径精确筛选接口，接口申请失败要立即释放本会话已申请的资源。
+- `UsbApiKind.Auto` 解析为平台原生后端（Windows WinUSB、Linux usbfs、macOS IOKit）；libusb 是 `DeviceCommunicationConfiguration.UsbBackend` 的显式 opt-in，HarmonyOS DDK 由 `FIRMWAREKIT_USB_ENABLE_HARMONY=1` 显式开启。原生 USB 会话按精确设备/接口路径打开，Linux 在打开后额外核对物理端口链；接口申请失败要立即释放本会话已申请的资源。
 - 每设备 `DeviceCommandDispatcher` 是 FIFO、严格串行；结果与异常通过提交的 `Task` 返回。流式工作（logcat、shell streaming、投屏）不得走命令池。`DeviceLease` 按命令池 → 会话 → 传输 → 端点占用的顺序释放且只释放一次。
 - 取消只影响该次提交；Dispose 取消队列并等待正在执行的命令真正结束。取消原生传输时不得提前复用缓冲区。
-- `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
+- `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册；相对路径按当前目录解析为绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
 - Comm 不启动或调用 adb/hdc 可执行文件；server 存活只做 TCP 探测。HDC 关闭优先走 `HdcServerClient.KillAsync` 的 host-channel `kill`；仅当 greeting 未宣告 `CMD_SERVER_KILL` 时，允许读取 pid 文件并在校验进程名与可执行路径后终止该单个进程。
 
 ## Windows 驱动与 WinUSB 接管
