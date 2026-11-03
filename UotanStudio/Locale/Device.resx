@@ -78,6 +78,9 @@
   <data name="Device_RemotePairingCode" xml:space="preserve">
     <value>Pairing code</value>
   </data>
+  <data name="Device_RemotePairingCodeHint" xml:space="preserve">
+    <value>Enter the IP:port shown in the phone's pairing dialog above, then click Connect to pair and connect automatically.</value>
+  </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>Connect remote device</value>
   </data>
@@ -85,7 +88,7 @@
     <value>Cancel connection operation</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes. Fastboot accepts a bare host (default port 5554) or host:port; fastboot over UDP requires an IP-literal host.</value>
+    <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes. Fastboot accepts a bare host (default port 5554) or host:port; fastboot over UDP requires an IP-literal host. With a pairing code, enter the explicit IP:port shown in the phone's pairing dialog.</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>Connecting to {0}...</value>
@@ -104,6 +107,18 @@
   </data>
   <data name="Device_RemoteFailed" xml:space="preserve">
     <value>Connection operation for {0} failed. Check the log.</value>
+  </data>
+  <data name="Device_RemotePairing" xml:space="preserve">
+    <value>Pairing with {0}...</value>
+  </data>
+  <data name="Device_RemotePairingConnecting" xml:space="preserve">
+    <value>Paired. Connecting to {0}...</value>
+  </data>
+  <data name="Device_RemotePairingFailed" xml:space="preserve">
+    <value>Pairing with {0} failed: {1}</value>
+  </data>
+  <data name="Device_RemotePairingPortNeeded" xml:space="preserve">
+    <value>Paired with {0}, but its connect port was not found. Enter the IP:port shown under Wireless debugging and connect without a pairing code.</value>
   </data>
   <data name="Device_QrPair" xml:space="preserve">
     <value>Pair wireless debugging via QR code</value>

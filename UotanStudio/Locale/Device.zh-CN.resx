@@ -78,6 +78,9 @@
   <data name="Device_RemotePairingCode" xml:space="preserve">
     <value>配对码</value>
   </data>
+  <data name="Device_RemotePairingCodeHint" xml:space="preserve">
+    <value>上方填写手机配对对话框显示的 IP:端口，点击连接即可完成配对并自动连接。</value>
+  </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>连接远程设备</value>
   </data>
@@ -85,7 +88,7 @@
     <value>取消连接操作</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>ADB 可只写主机（默认端口 5555）或写主机:端口；HDC 守护进程端口是动态的，必须显式写主机:端口，且 HDC 地址须少于 32 字节；Fastboot 可只写主机（默认端口 5554）或写主机:端口，fastboot over UDP 的主机必须是 IP 字面量。</value>
+    <value>ADB 可只写主机（默认端口 5555）或写主机:端口；HDC 守护进程端口是动态的，必须显式写主机:端口，且 HDC 地址须少于 32 字节；Fastboot 可只写主机（默认端口 5554）或写主机:端口，fastboot over UDP 的主机必须是 IP 字面量。填写配对码时，请输入手机配对对话框显示的显式 IP:端口。</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>正在连接 {0}...</value>
@@ -104,6 +107,18 @@
   </data>
   <data name="Device_RemoteFailed" xml:space="preserve">
     <value>无法完成 {0} 的连接操作，请查看日志。</value>
+  </data>
+  <data name="Device_RemotePairing" xml:space="preserve">
+    <value>正在与 {0} 配对...</value>
+  </data>
+  <data name="Device_RemotePairingConnecting" xml:space="preserve">
+    <value>配对成功，正在连接 {0}...</value>
+  </data>
+  <data name="Device_RemotePairingFailed" xml:space="preserve">
+    <value>与 {0} 配对失败：{1}</value>
+  </data>
+  <data name="Device_RemotePairingPortNeeded" xml:space="preserve">
+    <value>已与 {0} 配对，但未找到连接端口。请填写“无线调试”页面显示的 IP:端口，并去掉配对码后连接。</value>
   </data>
   <data name="Device_QrPair" xml:space="preserve">
     <value>扫码配对无线调试</value>
