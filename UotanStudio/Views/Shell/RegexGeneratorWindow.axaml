@@ -31,14 +31,17 @@
     </Style>
   </Window.Styles>
 
-  <Grid Margin="20,44,20,16" RowDefinitions="*,Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto" RowSpacing="12" ColumnSpacing="10">
-    <!-- 第一行：原始数据 加 TextBox（支持多行），上下居中，靠右对齐 -->
-    <TextBlock Grid.Row="0" Grid.Column="0"
+  <Grid Margin="20,44,20,16"
+        RowDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+        ColumnDefinitions="*,Auto"
+        RowSpacing="6" ColumnSpacing="10">
+    <!-- 原始数据 -->
+    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
                Text="{DynamicResource RegexGenerator_SourceData}"
-               HorizontalAlignment="Right"
-               VerticalAlignment="Center" FontWeight="Medium" />
-    <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+               FontWeight="Medium" />
+    <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
              Name="SourceTextBox"
+             Margin="0,0,0,8"
              AcceptsReturn="True" AcceptsTab="True"
              TextWrapping="Wrap"
              VerticalAlignment="Stretch"
@@ -46,21 +49,22 @@
              Text="{Binding SourceText, Mode=TwoWay}"
              PlaceholderText="{DynamicResource RegexGenerator_SourceDataPlaceholder}" />
 
-    <!-- 第二行：查找内容 加 TextBox 加 生成正则表达式 按钮，靠右对齐 -->
-    <TextBlock Grid.Row="1" Grid.Column="0"
+    <!-- 查找内容 -->
+    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
                Text="{DynamicResource RegexGenerator_FindContent}"
-               HorizontalAlignment="Right"
-               VerticalAlignment="Center" FontWeight="Medium" />
-    <TextBox Grid.Row="1" Grid.Column="1"
+               FontWeight="Medium" />
+    <TextBox Grid.Row="3" Grid.Column="0"
              Name="FindTextBox"
+             Margin="0,0,0,8"
              Height="32"
              VerticalAlignment="Center"
              VerticalContentAlignment="Center"
              Text="{Binding FindContent, Mode=TwoWay}"
              PlaceholderText="{DynamicResource RegexGenerator_FindContentPlaceholder}" />
-    <Button Grid.Row="1" Grid.Column="2"
+    <Button Grid.Row="3" Grid.Column="1"
             Name="GenerateButton"
             Classes="Primary"
+            Margin="0,0,0,8"
             MinWidth="110" Height="32"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Center"
@@ -68,12 +72,11 @@
             Content="{DynamicResource RegexGenerator_Generate}"
             Command="{Binding GenerateCommand}" />
 
-    <!-- 第三行：正则表达式 加 TextBox 加 复制 按钮，靠右对齐 -->
-    <TextBlock Grid.Row="2" Grid.Column="0"
+    <!-- 正则表达式 -->
+    <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
                Text="{DynamicResource RegexGenerator_Pattern}"
-               HorizontalAlignment="Right"
-               VerticalAlignment="Center" FontWeight="Medium" />
-    <TextBox Grid.Row="2" Grid.Column="1"
+               FontWeight="Medium" />
+    <TextBox Grid.Row="5" Grid.Column="0"
              Name="PatternTextBox"
              Height="32"
              VerticalAlignment="Center"
@@ -81,7 +84,7 @@
              FontFamily="Consolas,monospace"
              Text="{Binding Pattern, Mode=TwoWay}"
              PlaceholderText="{DynamicResource RegexGenerator_PatternPlaceholder}" />
-    <Button Grid.Row="2" Grid.Column="2"
+    <Button Grid.Row="5" Grid.Column="1"
             Name="CopyButton"
             MinWidth="110" Height="32"
             HorizontalAlignment="Stretch"
@@ -91,9 +94,9 @@
             Click="OnCopyClick" />
 
     <!-- 底部状态提示 -->
-    <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+    <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
                Text="{Binding StatusMessage}"
-               Opacity="0.75" FontSize="12" Margin="2,0,0,0"
+               Opacity="0.75" FontSize="12" Margin="2,4,0,0"
                IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
   </Grid>
 </Window>
