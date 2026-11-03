@@ -1131,6 +1131,7 @@ internal static class LocaleKeySets
         "Avb_TabOta",
         "Avb_TabDisableAvb",
         "Avb_SelectDirectory",
+        "Avb_DisableAvbHintTitle",
         "Avb_DisableAvbHint",
         "Avb_DisableSelectFile",
         "Avb_DisableCommandTitle",

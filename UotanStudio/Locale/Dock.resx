@@ -1219,10 +1219,10 @@
     <value>Signed APK output path</value>
   </data>
   <data name="ApkSign_KeyPassword" xml:space="preserve">
-    <value>Private key password (optional)</value>
+    <value>Password (optional)</value>
   </data>
   <data name="ApkSign_CertificatePassword" xml:space="preserve">
-    <value>Certificate password (optional)</value>
+    <value>Password (optional)</value>
   </data>
   <data name="ApkSign_Browse" xml:space="preserve">
     <value>Select file</value>
@@ -1249,7 +1249,7 @@
     <value>Select file</value>
   </data>
   <data name="ApkSign_OutputLabel" xml:space="preserve">
-    <value>Output directory</value>
+    <value>Output</value>
   </data>
   <data name="ApkSign_SelectDirectory" xml:space="preserve">
     <value>Select folder</value>

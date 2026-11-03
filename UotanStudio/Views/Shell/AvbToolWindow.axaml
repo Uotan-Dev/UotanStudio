@@ -133,14 +133,17 @@
                                     Click="OnExecuteDisableClick" />
                         </WrapPanel>
 
-                        <Border Classes="result-card" HorizontalAlignment="Left"
-                                BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel Spacing="4" HorizontalAlignment="Left">
+                            <TextBlock Text="{DynamicResource Avb_DisableAvbHintTitle}"
+                                       FontSize="12"
+                                       LineHeight="20"
+                                       Opacity="0.85" />
                             <TextBlock Text="{DynamicResource Avb_DisableAvbHint}"
                                        TextWrapping="Wrap"
                                        LineHeight="20"
                                        FontSize="12"
                                        Opacity="0.85" />
-                        </Border>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

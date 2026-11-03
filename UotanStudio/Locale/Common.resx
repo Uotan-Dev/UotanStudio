@@ -3453,6 +3453,9 @@ Continue?</value>
   <data name="Avb_SelectDirectory" xml:space="preserve">
     <value>Select directory</value>
   </data>
+  <data name="Avb_DisableAvbHintTitle" xml:space="preserve">
+    <value>Hint:</value>
+  </data>
   <data name="Avb_DisableAvbHint" xml:space="preserve">
     <value>--disable-verity --disable-verification (03): Most devices&#10;--disable-verity (01): Newer Xiaomi devices (8E and later)&#10;--disable-verification (02)</value>
   </data>

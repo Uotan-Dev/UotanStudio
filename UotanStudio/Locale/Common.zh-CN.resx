@@ -3453,6 +3453,9 @@
   <data name="Avb_SelectDirectory" xml:space="preserve">
     <value>选择目录</value>
   </data>
+  <data name="Avb_DisableAvbHintTitle" xml:space="preserve">
+    <value>提示：</value>
+  </data>
   <data name="Avb_DisableAvbHint" xml:space="preserve">
     <value>--disable-verity --disable-verification (03): 绝大多数设备&#10;--disable-verity (01): 小米新设备(8E及以后)&#10;--disable-verification (02)</value>
   </data>
