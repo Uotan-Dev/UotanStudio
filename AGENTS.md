@@ -89,6 +89,8 @@ Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug
 
 测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained`，且不得出现新的裁剪/AOT 警告；`PublishAot` 由 `UotanStudio.Desktop.csproj` 声明，Release 默认 `DebugType=none`，发布的原生镜像不产 PDB；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
+文件系统内核验收只使用 `tools/gki-fs-lab` 的 x86_64 GKI 客户机；arm64 客户机不再作为验收路径。KVM 加速可选，未启用时使用 TCG 并在报告中标注 `acceleration=tcg`。
+
 所有内嵌二进制资源集中在 `UotanStudio.Assets/Assets/<bundle>/` 下（bundle 为 `fonts`、`ohos/device`、`drivers/rockusb`、`drivers/mediatek-vcom`、`drivers/mediatek-full`、`drivers/google-usb`、`drivers/rockchip-adb`、`drivers/qualcomm-qud`、`drivers/silabs-cp210x`、`drivers/ftdi-cdm`、`delivery`、`firmware/magic`，另有可选 `scrcpy`），每个负载是同目录的压缩帧 `<path>.zst`，唯一清单是 `UotanStudio.Assets/Assets/manifest.tsv`（`bundle`/`path`/长度/SHA-256/编码/来源六列）。改原始负载后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单（`dotnet run tools/compress-embedded-assets.cs -- --check` 只校验），生成物与代码一起提交。`firmware/magic` 的帧由 `UotanStudio.Firmware.MagicGen` 生成，该脚本只负责索引。驱动包与字体的原始负载留在 `reference/` 下，脚本按 `specs` 的显式文件表（可直接从 zip 读取）生成帧，`Assets/drivers/<packageId>/` 只提交帧。消费方一律经 `UotanStudio.Assets` 的 `AssetCatalog`/`AssetStore` 准备与抽取，不得再各自读取程序集资源。
 
 ## Git 与工作区
