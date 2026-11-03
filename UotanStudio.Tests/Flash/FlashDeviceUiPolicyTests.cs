@@ -144,9 +144,6 @@ public sealed class FlashDeviceUiPolicyTests
     {
         var sections = new (string Name, FlashDeviceMode Owner)[]
         {
-            ("EdlExpander", FlashDeviceMode.Edl),
-            ("MtkExpander", FlashDeviceMode.Mtk),
-            ("RkExpander", FlashDeviceMode.Rkdl),
             ("EdlPane", FlashDeviceMode.Edl),
             ("MtkPane", FlashDeviceMode.Mtk),
             ("RkPane", FlashDeviceMode.Rkdl)
@@ -160,6 +157,20 @@ public sealed class FlashDeviceUiPolicyTests
             }
 
             Assert.False(FlashDeviceUiPolicy.IsAvailable(name, FlashDeviceMode.None));
+        }
+    }
+
+    [Fact]
+    public void IsAvailable_SectionExpanders_AreNotGated()
+    {
+        foreach (var section in new[] { "EdlExpander", "MtkExpander", "RkExpander", "ImageExpander" })
+        {
+            Assert.DoesNotContain(section, FlashDeviceUiPolicy.GatedControls);
+            Assert.True(FlashDeviceUiPolicy.IsAvailable(section, FlashDeviceMode.None));
+            foreach (var mode in SelectedModes)
+            {
+                Assert.True(FlashDeviceUiPolicy.IsAvailable(section, mode));
+            }
         }
     }
 
@@ -263,7 +274,7 @@ public sealed class FlashDeviceUiPolicyTests
         Assert.False(FlashDeviceUiPolicy.IsAvailable("SwitchSlotButton", FlashDeviceMode.Shared,
             isRockchipLoaderStage: false, FlashDeviceKind.Fastboot));
 
-        foreach (var section in new[] { "EdlExpander", "MtkExpander", "RkExpander", "ImageExpander" })
+        foreach (var section in new[] { "EdlPane", "MtkPane", "RkPane", "ImagePane" })
         {
             Assert.False(FlashDeviceUiPolicy.IsAvailable(section, FlashDeviceMode.Shared,
                 isRockchipLoaderStage: false, FlashDeviceKind.Fastboot), section);
@@ -311,13 +322,13 @@ public sealed class FlashDeviceUiPolicyTests
     {
         Assert.True(FlashDeviceUiPolicy.RequiresAdbSu("FlashSelectedButton"));
         Assert.False(FlashDeviceUiPolicy.RequiresAdbSu("ReadInfoButton"));
-        Assert.False(FlashDeviceUiPolicy.RequiresAdbSu("EdlExpander"));
+        Assert.False(FlashDeviceUiPolicy.RequiresAdbSu("EdlPane"));
     }
 
     [Fact]
-    public void GatedControls_ListEverySectionExpanderOnce()
+    public void GatedControls_ListEverySectionPaneOnce()
     {
-        foreach (var section in new[] { "EdlExpander", "MtkExpander", "RkExpander", "ImageExpander" })
+        foreach (var section in new[] { "EdlPane", "MtkPane", "RkPane", "ImagePane" })
         {
             Assert.Single(FlashDeviceUiPolicy.GatedControls, name => name == section);
         }

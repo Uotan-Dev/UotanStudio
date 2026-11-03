@@ -92,12 +92,10 @@ internal static class FlashDeviceUiPolicy
 
     /// <summary>
     /// Every device-gated control with the modes it is limited to; <see langword="null"/> marks an action shared by
-    /// every selected device. Entries follow the page layout so the table reads like the page; each protocol section
-    /// lists its expander and its pane, so disabling a section also closes its header instead of leaving a menu the
-    /// page cannot serve.
+    /// every selected device. Entries follow the page layout so the table reads like the page; protocol sections keep
+    /// their expander headers usable while restricting the inner panes to the matching device mode.
     /// <para>每个受设备门控的控件及其限定的模式；<see langword="null"/> 表示所有已选设备共用的动作。条目顺序与
-    /// 页面布局一致，使这张表可以按页面顺序阅读；每个协议分类同时列出其展开器与面板，使关闭分类时连表头一起关闭，
-    /// 不再留下页面无法服务的菜单。</para>
+    /// 页面布局一致，使这张表可以按页面顺序阅读；各协议分类的展开器表头保持可用，仅将内部面板限制为匹配的设备模式。</para>
     /// </summary>
     private static readonly (string Name, FlashDeviceMode[]? Modes)[] Entries =
     [
@@ -108,15 +106,11 @@ internal static class FlashDeviceUiPolicy
         ("FlashSelectedButton", null),
         ("EraseSelectedButton", null),
         ("SwitchSlotButton", null),
-        // 协议分类 / protocol sections
-        ("EdlExpander", EdlOnly),
-        ("MtkExpander", MtkOnly),
-        ("RkExpander", RkdlOnly),
-        // 镜像操作分类 / image operations section
-        ("ImageExpander", null),
+        // 协议分类面板 / protocol section panes
         ("EdlPane", EdlOnly),
         ("MtkPane", MtkOnly),
         ("RkPane", RkdlOnly),
+        // 镜像操作分类面板 / image operations section pane
         ("ImagePane", null)
     ];
 
