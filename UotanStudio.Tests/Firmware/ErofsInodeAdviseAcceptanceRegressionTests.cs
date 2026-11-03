@@ -28,6 +28,8 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public sealed class ErofsInodeAdviseAcceptanceRegressionTests
 {
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
+
     private const int BlockSize = 4096;
 
     private const ushort KernelInodeFormatAll = 0x1F;
@@ -48,6 +50,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
             NlinkOneAdviseSupported = true,
             Compress = false,
             BlockSize = BlockSize,
+            BuildTime = PinnedBuildTime,
         });
 
         using var parser = new ErofsParser(image);
@@ -71,6 +74,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
             NlinkOneAdviseSupported = true,
             Compress = false,
             BlockSize = BlockSize,
+            BuildTime = PinnedBuildTime,
         });
 
         using var parser = new ErofsParser(image);

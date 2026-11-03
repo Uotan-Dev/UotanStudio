@@ -26,6 +26,8 @@ namespace UotanStudio.Tests.Firmware;
 public sealed class ErofsRebuildFeatureReplayTests
 {
     private const int BlockSize = 4096;
+
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
     private const uint ModernIncompat = ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster;
     private const uint FragmentedLegacyIncompat =
         ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatFragments;
@@ -234,6 +236,7 @@ public sealed class ErofsRebuildFeatureReplayTests
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = 4 * BlockSize,
             NlinkOneAdviseSupported = true,
+            BuildTime = PinnedBuildTime,
         });
 
         var census = AdviceBitCensus(image, allowUnreadableFormat: true);
@@ -553,6 +556,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = legacy ? BlockSize : 4 * BlockSize,
+            BuildTime = PinnedBuildTime,
         });
         return source;
     }

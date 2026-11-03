@@ -170,6 +170,10 @@ internal static class ProfileRunner
         File.WriteAllBytes(large, BenchCorpus.Bytes(PayloadKind.Executable, megabytes).ToArray());
         File.SetLastWriteTimeUtc(large, NewYearUtc);
         File.SetCreationTimeUtc(large, NewYearUtc);
+
+        // The EROFS walk records the source directory's own last-write time into the root inode, so an
+        // unpinned directory puts the wall clock, at one-second granularity, into the image bytes.
+        Directory.SetLastWriteTimeUtc(root, NewYearUtc);
         return root;
     }
 

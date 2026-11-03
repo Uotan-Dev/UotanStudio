@@ -133,6 +133,7 @@ public sealed class ErofsCaptureFidelityTests
             NlinkOneAdviseSupported = true,
             Compress = false,
             BlockSize = BlockSize,
+            BuildTime = PinnedBuildTime,
         });
 
         using var parser = new ErofsParser(image);

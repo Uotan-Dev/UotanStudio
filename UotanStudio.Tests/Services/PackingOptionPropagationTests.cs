@@ -19,6 +19,8 @@ namespace UotanStudio.Tests.Services;
 
 public sealed class PackingOptionPropagationTests
 {
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
+
     [Fact]
     public async Task ProjectSettings_DefaultSaveAndReopen_PreservesInheritedExt4Policy()
     {
@@ -317,6 +319,7 @@ public sealed class PackingOptionPropagationTests
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
+            BuildTime = PinnedBuildTime,
             CancellationToken = TestContext.Current.CancellationToken
         });
         Assert.True((await new ErofsFormatHandler().UnpackAsync(image, extracted,

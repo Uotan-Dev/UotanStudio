@@ -115,13 +115,21 @@ public class FirehoseResponseBomTests
         Assert.Equal(0, EdlConstants.MeasureDocumentPrefix(prefix));
     }
 
+    /// <summary>
+    /// The configuration the scripted transports use: the fake transport never drops the connection, so the
+    /// real 30-second disconnection window would only ever be waited out in full.
+    /// <para>脚本传输用法的配置：假传输不会断开连接，因此真实的 30 秒断开观察窗口在这里只会被整段白等。</para>
+    /// </summary>
+    /// <returns>A configuration with a shortened disconnection-observation budget. <para>断开观察预算被缩短的配置。</para></returns>
+    private static FirehoseConfiguration ScriptedPowerConfiguration() => new() { PowerResetVerifyTimeoutMs = 50 };
+
     [Fact]
     public async Task PowerOff_BomPrefixedAckResponse_IsAcknowledged()
     {
         var transport = new ScriptedFirehoseTransport();
         transport.EnqueueRead([0xEF, 0xBB, 0xBF], Ack());
 
-        var firehose = new FirehoseProtocol(transport);
+        var firehose = new FirehoseProtocol(transport, ScriptedPowerConfiguration());
         try
         {
             var response = await firehose.PowerOffAsync(TestContext.Current.CancellationToken);
@@ -141,7 +149,7 @@ public class FirehoseResponseBomTests
         var transport = new ScriptedFirehoseTransport();
         transport.EnqueueRead([0x00, 0x00, 0x00], Ack());
 
-        var firehose = new FirehoseProtocol(transport);
+        var firehose = new FirehoseProtocol(transport, ScriptedPowerConfiguration());
         try
         {
             var response = await firehose.PowerOffAsync(TestContext.Current.CancellationToken);
@@ -161,7 +169,7 @@ public class FirehoseResponseBomTests
         var log = Encoding.UTF8.GetBytes("<?xml version=\"1.0\" ?>\n<data>\n<log value=\"hello\" />\n</data>\n");
         transport.EnqueueRead(log, [0xEF, 0xBB, 0xBF], Ack());
 
-        var firehose = new FirehoseProtocol(transport);
+        var firehose = new FirehoseProtocol(transport, ScriptedPowerConfiguration());
         var logs = new List<string>();
         firehose.LogMessage += (_, message) => logs.Add(message);
         try
@@ -193,7 +201,7 @@ public class FirehoseResponseBomTests
         transport.EnqueueRead(Ack("ACK"), Ack("ACK"));
 
         var firehose = new FirehoseProtocol(transport,
-            new FirehoseConfiguration { StorageType = FirehoseStorageType.Emmc });
+            new FirehoseConfiguration { StorageType = FirehoseStorageType.Emmc, ConfigureRetryIntervalMs = 0 });
         try
         {
             var response = await firehose.ConfigureAsync(2, TestContext.Current.CancellationToken);

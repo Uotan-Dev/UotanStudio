@@ -19,6 +19,8 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public sealed class ErofsCompacted2BTests
 {
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
+
     private const int BlockSize = 1024;
 
     private const int Clusters = 1500;
@@ -164,6 +166,7 @@ public sealed class ErofsCompacted2BTests
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             UseCompactedIndexes = useCompactedIndexes,
             UseCompacted2BIndexes = useCompacted2B,
+            BuildTime = PinnedBuildTime,
         });
 
     private static byte[] BuildBigPcluster(string sourcePath)
@@ -175,6 +178,7 @@ public sealed class ErofsCompacted2BTests
             UseCompactedIndexes = true,
             UseCompacted2BIndexes = true,
             MaxPclusterSize = 16384,
+            BuildTime = PinnedBuildTime,
         });
 
     private static byte[] BuildSmallPclusterLimit(string sourcePath)
