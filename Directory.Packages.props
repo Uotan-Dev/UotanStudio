@@ -43,6 +43,8 @@
     <!-- QR code generation for the wireless-debugging pairing popup (pure managed PNG writer). -->
     <PackageVersion Include="QRCoder" Version="1.8.1" />
     <!-- UotanStudio.Firmware third-party dependencies -->
+    <!-- UTF-8 string interpolation handler for protocol frames that are encoded straight to bytes. -->
+    <PackageVersion Include="Utf8StringInterpolation" Version="1.3.2" />
     <PackageVersion Include="BsDiff" Version="1.1.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />

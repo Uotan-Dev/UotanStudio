@@ -49,6 +49,8 @@
     <PackageReference Include="Makaretu.Dns.Multicast" />
     <PackageReference Include="System.IO.Ports" />
     <PackageReference Include="ZstdSharp.Port" />
+    <!-- UTF-8 interpolation handler: protocol frames are encoded to bytes without an intermediate string. -->
+    <PackageReference Include="Utf8StringInterpolation" />
   </ItemGroup>
 
   <ItemGroup>

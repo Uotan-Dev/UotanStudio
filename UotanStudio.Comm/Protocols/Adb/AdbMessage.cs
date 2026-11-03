@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Hash.Sums;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -198,7 +199,7 @@ internal static class AdbMessaging
     /// <param name="destination">The service destination. <para>服务目标。</para></param>
     /// <returns>The constructed OPEN message. <para>构建出的 OPEN 消息。</para></returns>
     public static AdbMessage BuildOpen(uint localId, string destination) =>
-        new(AdbCommand.Open, localId, 0, System.Text.Encoding.UTF8.GetBytes($"{destination}\0"));
+        new(AdbCommand.Open, localId, 0, Utf8String.Format($"{destination}\0"));
 
     /// <summary>
     /// Builds a WRTE message.
