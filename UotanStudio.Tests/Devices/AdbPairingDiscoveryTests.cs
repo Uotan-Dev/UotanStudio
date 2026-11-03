@@ -359,6 +359,17 @@ public sealed class AdbQrPairingRouteTests : IDisposable
             cancellationToken: TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task PairWithCodeAsync_ServerOnlyWithoutServer_RejectsBeforeConnecting()
+    {
+        DebugBridgeRoute.ConfigureMode(DebugBridgeRouteMode.ServerOnly);
+        DebugBridgeRoute.SetAvailabilityForTests(adbAvailable: false, hdcAvailable: false);
+
+        await Assert.ThrowsAsync<IOException>(() => AdbQrPairingService.PairWithCodeAsync(
+            "192.0.2.7", 45678, "123456",
+            cancellationToken: TestContext.Current.CancellationToken));
+    }
+
     [Theory]
     [InlineData(DebugBridgeRouteMode.Auto, true)]
     [InlineData(DebugBridgeRouteMode.ServerOnly, false)]

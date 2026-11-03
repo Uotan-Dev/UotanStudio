@@ -22,7 +22,7 @@ public sealed class DeviceControllerRockchipReconnectionTests
         ContainerId = Guid.NewGuid(),
     };
 
-    private static UsbDeviceInfo LoaderPort(string serial = "ROCKCHIP", Guid? containerId = null) => new()
+    private static UsbDeviceInfo LoaderPort(string? serial = "ROCKCHIP", Guid? containerId = null) => new()
     {
         VendorId = 0x2207,
         ProductId = 0x350B,

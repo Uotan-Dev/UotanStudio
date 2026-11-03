@@ -94,7 +94,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             EdlMaxPayload = string.Empty;
             foreach (var property in new[]
             {
-                nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(State), nameof(StateLabel),
+                nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(SerialDisplay), nameof(State), nameof(StateLabel),
                 nameof(Mode), nameof(Protocol), nameof(Transport), nameof(DisplayName),
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
@@ -175,6 +175,13 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>设备序列号。</para>
     /// </summary>
     public string Serial => Device.Serial;
+
+    /// <summary>
+    /// Serial formatted for display; hardware serials are upper-cased while an mDNS instance name keeps its
+    /// original case because the instance is a resolvable identifier, not a hardware serial.
+    /// <para>用于显示的序列号；硬件序列号转为大写，mDNS 实例名保持原大小写，因为它是可解析标识而非硬件序列号。</para>
+    /// </summary>
+    public string SerialDisplay => AdbTargetInfo.IsMdnsInstanceName(Serial) ? Serial : Serial.ToUpperInvariant();
 
     /// <summary>
     /// Device state.
@@ -277,7 +284,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         {
             if (!AdbTargetInfo.IsMdnsInstanceName(Serial))
             {
-                return string.IsNullOrEmpty(Model) ? Serial : $"{Serial} - {Model}";
+                return string.IsNullOrEmpty(Model) ? SerialDisplay : $"{SerialDisplay} - {Model}";
             }
 
             if (!string.IsNullOrEmpty(Model))
@@ -342,13 +349,13 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// Device list entry title: the model when known, otherwise the serial.
     /// <para>设备列表条目标题：优先型号，型号未知时回退序列号。</para>
     /// </summary>
-    public string ListTitle => string.IsNullOrEmpty(Model) ? Serial : Model;
+    public string ListTitle => string.IsNullOrEmpty(Model) ? SerialDisplay : Model;
 
     /// <summary>
     /// Device list entry subtitle: serial plus state for the entry's second row.
     /// <para>设备列表条目副标题：序列号与状态的组合，供条目第二行显示。</para>
     /// </summary>
-    public string ListSubtitle => string.IsNullOrEmpty(State) ? Serial : $"{Serial} · {State}";
+    public string ListSubtitle => string.IsNullOrEmpty(State) ? SerialDisplay : $"{SerialDisplay} · {State}";
 
     /// <summary>
     /// Link/port info; a TCP or UDP endpoint reports the dialable network alias when the server resolved

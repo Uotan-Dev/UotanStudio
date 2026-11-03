@@ -214,12 +214,38 @@ public class DeviceLinkDisplayTests
     }
 
     [Fact]
-    public void DisplayName_HardwareSerialWithModel_KeepsSerialAndModel()
+    public void DisplayName_HardwareSerialWithModel_UppercasesSerialAndKeepsModel()
     {
         var device = Create(DeviceProtocolKind.Adb, DeviceTransportKind.Usb, "device");
         device.Model = "SM_G9730";
 
-        Assert.Equal("test - SM_G9730 (Android)", device.DisplayName);
+        Assert.Equal("TEST - SM_G9730 (Android)", device.DisplayName);
+    }
+
+    [Fact]
+    public void SerialDisplay_HardwareSerial_UppercasesOnlyTheDisplayValue()
+    {
+        var device = Create(DeviceProtocolKind.Hdc, DeviceTransportKind.Usb, "device", "5xm0225c18001159");
+
+        Assert.Equal("5xm0225c18001159", device.Serial);
+        Assert.Equal("5XM0225C18001159", device.SerialDisplay);
+        Assert.Equal("5XM0225C18001159 · device", device.ListSubtitle);
+        Assert.Equal("5XM0225C18001159", device.ListTitle);
+    }
+
+    [Fact]
+    public void SerialDisplay_MdnsInstance_KeepsOriginalCase()
+    {
+        var device = new DeviceInfo(new DetectedDevice
+        {
+            Key = "adb:adb-6a082bda-lZgxIP._adb-tls-connect._tcp",
+            Serial = "adb-6a082bda-lZgxIP._adb-tls-connect._tcp",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp,
+            State = "device"
+        });
+
+        Assert.Equal("adb-6a082bda-lZgxIP._adb-tls-connect._tcp", device.SerialDisplay);
     }
 
     [Fact]

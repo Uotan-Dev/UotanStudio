@@ -1,4 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.Adb.Pairing;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Ui;
@@ -30,14 +32,29 @@ public partial class DeviceViewModel
     } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the manually entered ADB pairing code.
-    /// <para>获取或设置手动输入的 ADB 配对码。</para>
+    /// Gets or sets the manually entered ADB pairing code; when it is present, the remote address is the
+    /// pairing <c>ip:port</c> shown by the phone and the connect command pairs before connecting.
+    /// <para>获取或设置手动输入的 ADB 配对码；填写后，远程地址即手机显示的配对 <c>ip:port</c>，
+    /// 连接命令会先完成配对再连接。</para>
     /// </summary>
     public string RemotePairingCode
     {
         get;
-        set => SetProperty(ref field, value);
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasPairingCode));
+                NotifyRemoteAddressChanged();
+            }
+        }
     } = string.Empty;
+
+    /// <summary>
+    /// Gets whether the remote panel will pair with the entered code before connecting.
+    /// <para>获取远程面板是否会在连接前使用已输入的配对码完成配对。</para>
+    /// </summary>
+    public bool HasPairingCode => IsRemoteAdb && !string.IsNullOrWhiteSpace(RemotePairingCode);
 
     /// <summary>
     /// Gets whether the selected remote protocol supports ADB pairing controls.
@@ -54,6 +71,7 @@ public partial class DeviceViewModel
             {
                 NotifyRemoteAddressChanged();
                 OnPropertyChanged(nameof(IsRemoteAdb));
+                OnPropertyChanged(nameof(HasPairingCode));
                 OpenQrPairingCommand.NotifyCanExecuteChanged();
             }
         }
@@ -73,8 +91,9 @@ public partial class DeviceViewModel
         : DeviceTransportKind.Tcp;
 
     public bool HasInvalidRemoteAddress => !string.IsNullOrEmpty(RemoteAddress) &&
-        !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
-            RemoteProtocolTransport);
+        (!DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
+             RemoteProtocolTransport) ||
+         (HasPairingCode && !DeviceMonitorService.TryNormalizePairingEndpoint(RemoteAddress, out _, out _)));
 
     public bool IsConnectionBusy
     {
@@ -107,7 +126,8 @@ public partial class DeviceViewModel
 
     private bool CanConnectRemote() => !IsConnectionBusy &&
         DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
-            RemoteProtocolTransport);
+            RemoteProtocolTransport) &&
+        (!HasPairingCode || DeviceMonitorService.TryNormalizePairingEndpoint(RemoteAddress, out _, out _));
 
     private void NotifyRemoteAddressChanged()
     {
@@ -124,7 +144,8 @@ public partial class DeviceViewModel
         {
             return;
         }
-        await ChangeNetworkConnectionAsync(RemoteProtocol, address, null, RemoteProtocolTransport);
+        await ChangeNetworkConnectionAsync(RemoteProtocol, address, null, RemoteProtocolTransport,
+            RemotePairingCode);
     }
 
     /// <summary>
@@ -201,17 +222,33 @@ public partial class DeviceViewModel
     }
 
     private async Task ChangeNetworkConnectionAsync(DeviceProtocolKind protocol, string address,
-        DetectedDevice? disconnect, DeviceTransportKind transport = DeviceTransportKind.Tcp)
+        DetectedDevice? disconnect, DeviceTransportKind transport = DeviceTransportKind.Tcp,
+        string? pairingCode = null)
     {
+        var pairing = disconnect is null && protocol == DeviceProtocolKind.Adb &&
+            !string.IsNullOrWhiteSpace(pairingCode);
         using var cancellation = new CancellationTokenSource();
         _connectionCancellation = cancellation;
         IsConnectionBusy = true;
-        var operation = disconnect is null ? "Connect" : "Disconnect";
+        var operation = pairing ? "Pair" : disconnect is null ? "Connect" : "Disconnect";
         ConnectionStatusText = string.Format(_localizer.GetString(
-            disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
+            pairing ? "Device_RemotePairing"
+                : disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
         try
         {
-            await _changeNetworkConnection(protocol, address, disconnect, transport, cancellation.Token);
+            var connectedAddress = address;
+            if (pairing)
+            {
+                var progress = new Progress<WirelessPairingProgress>(ReportPairingProgress);
+                connectedAddress = await _pairWithCode(address, pairingCode!, progress, cancellation.Token)
+                    .ConfigureAwait(true);
+                RemoteAddress = connectedAddress;
+                RemotePairingCode = string.Empty;
+            }
+            else
+            {
+                await _changeNetworkConnection(protocol, address, disconnect, transport, cancellation.Token);
+            }
             if (_monitorDevices)
             {
                 if (_refreshTask is { IsCompleted: false })
@@ -224,27 +261,40 @@ public partial class DeviceViewModel
             if (disconnect is null)
             {
                 var connected = Devices.FirstOrDefault(entry => entry.Connections.Any(
-                    endpoint => endpoint.Protocol == protocol && endpoint.Serial == address &&
+                    endpoint => endpoint.Protocol == protocol && endpoint.Serial == connectedAddress &&
                         endpoint.Transport == transport));
                 if (connected is not null)
                 {
                     connected.SelectedConnection = connected.Connections.First(
-                        endpoint => endpoint.Protocol == protocol && endpoint.Serial == address &&
+                        endpoint => endpoint.Protocol == protocol && endpoint.Serial == connectedAddress &&
                             endpoint.Transport == transport);
                     SelectedDevice = connected;
                 }
             }
             ConnectionStatusText = string.Format(_localizer.GetString(
-                disconnect is null ? "Device_RemoteConnected" : "Device_RemoteDisconnected"), address);
-            _log.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {address}: OK");
+                disconnect is null ? "Device_RemoteConnected" : "Device_RemoteDisconnected"), connectedAddress);
+            _log.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {connectedAddress}: OK");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
             ConnectionStatusText = _localizer.GetString("Device_RemoteCanceled");
         }
+        catch (AdbQrPairingConnectPortException ex) when (pairing)
+        {
+            RemotePairingCode = string.Empty;
+            if (ex.SuggestedPort != 0)
+            {
+                RemoteAddress = DebugBridgeNetworkAddress.FormatEndpoint(ex.Host, ex.SuggestedPort);
+            }
+            ConnectionStatusText = string.Format(_localizer.GetString("Device_RemotePairingPortNeeded"), address);
+            _log.Write(LogLevel.Warn, "DeviceManager",
+                $"{operation} {protocol} {address}: paired, but no secure connect port was confirmed: {ex.Message}");
+        }
         catch (Exception ex)
         {
-            ConnectionStatusText = string.Format(_localizer.GetString("Device_RemoteFailed"), address);
+            ConnectionStatusText = pairing
+                ? string.Format(_localizer.GetString("Device_RemotePairingFailed"), address, UserError.Describe(ex))
+                : string.Format(_localizer.GetString("Device_RemoteFailed"), address);
             _log.Write(LogLevel.Error, "DeviceManager", $"{operation} {protocol} {address}: {ex.Message}");
         }
         finally
@@ -257,6 +307,31 @@ public partial class DeviceViewModel
             }
         }
     }
+
+    private void ReportPairingProgress(WirelessPairingProgress progress)
+    {
+        if (!IsConnectionBusy)
+        {
+            return;
+        }
+        ConnectionStatusText = progress.Stage switch
+        {
+            WirelessPairingStage.Pairing => string.Format(
+                _localizer.GetString("Device_RemotePairing"), progress.Detail ?? RemoteAddress),
+            WirelessPairingStage.Connecting => string.Format(
+                _localizer.GetString("Device_RemotePairingConnecting"), progress.Detail ?? RemoteAddress),
+            _ => ConnectionStatusText,
+        };
+    }
+
+    private static async Task<string> DefaultPairWithCodeAsync(string address, string pairingCode,
+        IProgress<WirelessPairingProgress>? progress, CancellationToken cancellationToken)
+    {
+        var outcome = await App.DeviceMonitor.PairWithCodeAsync(address, pairingCode, progress, cancellationToken)
+            .ConfigureAwait(true);
+        return outcome.Address;
+    }
+
     /// <summary>
     /// Whether the selected device can reboot into fastbootd: ADB uses <c>reboot fastboot</c>,
     /// Fastboot uses <c>reboot-fastboot</c>, while EDL/RKDL/HDC have no such mode.

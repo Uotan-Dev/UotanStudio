@@ -32,9 +32,8 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
     {
         ValidateDevice(device);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
-        var marker = "__UOTAN_HDC_" + Guid.NewGuid().ToString("N") + "__";
-        var wrapped = "shell sh -c " + HdcDeviceServices.QuoteShellArgument(command)
-            + "; printf '\\n" + marker + "%s\\n' \"$?\"";
+        var marker = NewStatusMarker();
+        var wrapped = WrapWithStatus(command, marker);
         string text;
         if (IsDirect(device))
         {
@@ -43,16 +42,7 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
                 ct.ThrowIfCancellationRequested();
                 var opened = HdcDirectConnection.Open(App.DeviceMonitor, device);
                 using var lease = opened.Lease;
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                using var output = new MemoryStream();
-                opened.Session.CreateShellClient(wrapped[6..]).ExecuteStreaming(bytes =>
-                {
-                    if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
-                        throw new InvalidDataException("HDC shell output limit exceeded.");
-                    output.Write(bytes);
-                }, null, timeout.Token);
-                return Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, checked((int)output.Length)));
+                return ReadShellChannel(opened.Session, wrapped, ct);
             }, ct).ConfigureAwait(false);
         }
         else
@@ -60,13 +50,76 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             using var client = new HdcServerClient(host, _port);
             text = Encoding.UTF8.GetString(await client.ExecuteAsync(device.Serial, wrapped, cancellationToken: ct).ConfigureAwait(false));
         }
+
+        return RequireRemoteSuccess(text, marker);
+    }
+
+    /// <summary>Runs one shell command on a session the caller already holds, verifying its remote exit status.
+    /// Detail enrichment opens one direct session and issues every query through it, because each additional
+    /// session costs a USB interface open plus a fresh daemon handshake.
+    /// <para>在调用方已持有的会话上执行一条 Shell 命令并校验远端退出码。详情补全只打开一条直连会话并让全部查询
+    /// 经由它执行，因为每新建一条会话都要付出一次 USB 接口打开加一轮守护进程握手。</para></summary>
+    /// <param name="session">An open direct HDC session.<para>已打开的直连 HDC 会话。</para></param>
+    /// <param name="command">Shell command text.<para>Shell 命令文本。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The command output.<para>命令输出。</para></returns>
+    internal static async Task<string> ShellOnSessionAsync(HdcSession session, string command, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        var marker = NewStatusMarker();
+        var wrapped = WrapWithStatus(command, marker);
+        var text = await Task.Run(() => ReadShellChannel(session, wrapped, ct), ct).ConfigureAwait(false);
+        return RequireRemoteSuccess(text, marker);
+    }
+
+    /// <summary>Reads one shell channel to completion on an already open session.
+    /// <para>在已打开的会话上读取一条 Shell 通道直至结束。</para></summary>
+    private static string ReadShellChannel(HdcSession session, string wrapped, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var output = new MemoryStream();
+        session.CreateShellClient(wrapped[6..]).ExecuteStreaming(bytes =>
+        {
+            if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
+            {
+                throw new InvalidDataException("HDC shell output limit exceeded.");
+            }
+
+            output.Write(bytes);
+        }, null, timeout.Token);
+        return Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, checked((int)output.Length)));
+    }
+
+    /// <summary>Builds the per-command marker that carries the remote exit status.
+    /// <para>构造携带远端退出码的单命令标记。</para></summary>
+    private static string NewStatusMarker() => "__UOTAN_HDC_" + Guid.NewGuid().ToString("N") + "__";
+
+    /// <summary>Wraps a command so the device prints its exit status after the output.
+    /// <para>包装命令，使设备在输出之后打印退出码。</para></summary>
+    private static string WrapWithStatus(string command, string marker)
+        => "shell sh -c " + HdcDeviceServices.QuoteShellArgument(command)
+            + "; printf '\\n" + marker + "%s\\n' \"$?\"";
+
+    /// <summary>Cuts the output at the marker and rejects a non-zero remote exit status.
+    /// <para>按标记截断输出，并拒绝非零的远端退出码。</para></summary>
+    private static string RequireRemoteSuccess(string text, string marker)
+    {
         HdcServerClient.ThrowOnFailure(text);
         var index = text.LastIndexOf(marker, StringComparison.Ordinal);
         if (index < 0 || !int.TryParse(text.AsSpan(index + marker.Length).Trim(), NumberStyles.Integer,
             CultureInfo.InvariantCulture, out var status))
+        {
             throw new IOException("HDC shell ended without a remote exit status.");
+        }
+
         var output = text[..index].TrimEnd('\r', '\n');
-        if (status != 0) throw new IOException($"HDC shell exited with code {status}: {output}");
+        if (status != 0)
+        {
+            throw new IOException($"HDC shell exited with code {status}: {output}");
+        }
+
         return output;
     }
 

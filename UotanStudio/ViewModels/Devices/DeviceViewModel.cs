@@ -19,7 +19,14 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
 {
     private readonly bool _monitorDevices;
     private readonly Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task> _changeNetworkConnection;
+    private readonly Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>> _pairWithCode;
     private Task? _refreshTask;
+
+    /// <summary>Non-zero when a refresh request arrived during a running pass; written and read across the
+    /// UI thread and the posted change handler, so it is touched only through <see cref="System.Threading.Volatile"/>.
+    /// <para>遍历运行期间收到过刷新请求时为非零；它在 UI 线程与被投递的变更处理之间共享，因此只经
+    /// <see cref="System.Threading.Volatile"/> 读写。</para></summary>
+    private int _refreshQueued;
     private readonly Dictionary<string, (string Signature, long Ticks)> _enrichedDevices = new(StringComparer.Ordinal);
     private const long EnrichmentRefreshMilliseconds = 30_000;
 
@@ -223,7 +230,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string DeviceDetail => SelectedDevice is null
         ? string.Empty
-        : $"Serial: {SelectedDevice.Serial}\nMode: {SelectedDevice.Mode}\nState: {SelectedDevice.State}\nTransport: {SelectedDevice.Transport}\nModel: {SelectedDevice.Model}\nAndroid: {SelectedDevice.AndroidVersion}";
+        : $"Serial: {SelectedDevice.SerialDisplay}\nMode: {SelectedDevice.Mode}\nState: {SelectedDevice.State}\nTransport: {SelectedDevice.Transport}\nModel: {SelectedDevice.Model}\nAndroid: {SelectedDevice.AndroidVersion}";
 
     /// <summary>
     /// Last backup/restore progress percent forwarded to the unified log per partition,
@@ -253,10 +260,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task>? changeNetworkConnection = null,
         ILocalizer? localizer = null,
         IUnifiedLog? log = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>>? pairWithCode = null)
     {
         _monitorDevices = monitorDevices;
         _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
+        _pairWithCode = pairWithCode ?? DefaultPairWithCodeAsync;
         _localizer = localizer ?? LanguageService.Instance;
         _log = log ?? LogService.Instance;
         _clock = clock ?? TimeProvider.System;
@@ -306,7 +315,41 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// 随后并发拉取 ADB 设备属性丰富详情。</para>
     /// </summary>
     private Task RefreshDevicesAsync() => _refreshTask is { IsCompleted: false }
-        ? _refreshTask : _refreshTask = RefreshDevicesCoreAsync();
+        ? QueueBehind(_refreshTask)
+        : _refreshTask = RefreshUntilSettledAsync();
+
+    /// <summary>
+    /// Records a refresh request that arrived while a pass was already running. That pass sampled the device
+    /// list before the request, so its result is already stale — and because a device query can hold the pass
+    /// open for seconds, a device unplugged during it would otherwise keep its row until some unrelated event
+    /// happened to start a new pass. The running pass therefore sweeps once more after finishing.
+    /// <para>记录一次在已有遍历运行期间到达的刷新请求。该遍历在请求之前就已采样设备列表，结果对本请求而言是旧的——
+    /// 而一次设备查询会让该遍历持续数秒，因此其间被拔掉的设备会一直保留条目，直到某个无关事件恰好启动新一轮。
+    /// 所以运行中的遍历结束后必须再扫一次。</para>
+    /// </summary>
+    /// <param name="running">The in-flight refresh the caller awaits.
+    /// <para>调用方等待的那次进行中的刷新。</para></param>
+    /// <returns>The in-flight task, now guaranteed to be followed by another pass.
+    /// <para>进行中的任务；它现在保证会被追加一轮。</para></returns>
+    private Task QueueBehind(Task running)
+    {
+        Volatile.Write(ref _refreshQueued, 1);
+        return running;
+    }
+
+    /// <summary>
+    /// Runs refresh passes until no request arrived during the most recent one.
+    /// <para>反复执行刷新遍历，直到最近一轮期间不再有新的请求到达。</para>
+    /// </summary>
+    private async Task RefreshUntilSettledAsync()
+    {
+        do
+        {
+            Volatile.Write(ref _refreshQueued, 0);
+            await RefreshDevicesCoreAsync().ConfigureAwait(true);
+        }
+        while (Volatile.Read(ref _refreshQueued) != 0);
+    }
 
     private bool ShouldEnrich(DeviceInfo device)
     {
@@ -544,13 +587,15 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Manual force refresh: forces a rescan (bypassing the hotplug debounce).
-    /// <para>手动强制刷新：强制重新扫描（绕过热插拔去抖）。</para>
+    /// Manual force refresh: forces a rescan that re-reads the whole USB inventory, bypassing both the
+    /// hotplug debounce and the incremental cache. Automatic passes stay incremental.
+    /// <para>手动强制刷新：强制一次重新读取完整 USB 清单的扫描，同时绕过热插拔去抖与增量缓存。
+    /// 自动触发的遍历仍保持增量。</para>
     /// </summary>
     [RelayCommand]
     private async Task ForceRefreshAsync()
     {
-        await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
+        await App.DeviceMonitor.ForceFullRefreshAsync().ConfigureAwait(true);
         await RefreshDevicesAsync().ConfigureAwait(true);
     }
 

@@ -60,19 +60,191 @@ public sealed class DevicePropertyReaderTests
         Assert.Equal("--", properties["brand"]);
         Assert.Equal(1, commands.Count(command => command == "getprop"));
         Assert.DoesNotContain(commands, command => command.StartsWith("getprop ", StringComparison.Ordinal));
+        Assert.Equal(1, commands.Count(command => command.Contains("@K", StringComparison.Ordinal)));
         string[] expectedCommands =
         [
             "getprop",
             "uname -r",
+            "cat /sys/devices/soc0/serial_number",
             "wm size",
             "wm density",
-            "cat /sys/devices/soc0/serial_number",
             "cat /proc/uptime",
             "dumpsys battery",
             "cat /proc/meminfo",
             "df -k /storage/emulated 2>/dev/null || df -k /data 2>/dev/null || df -k /sdcard 2>/dev/null",
         ];
-        Assert.Equal(expectedCommands, commands);
+        Assert.Equal(expectedCommands,
+            commands.Where(command => !command.Contains("@K", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact]
+    public void AdbProperties_BundledSectionsComeBack_RunsEveryDetailQueryInOneShell()
+    {
+        var commands = new List<string>();
+        string Run(string command)
+        {
+            commands.Add(command);
+            if (command == "getprop")
+            {
+                return "[ro.product.model]: [Example phone]\n";
+            }
+
+            if (command.Contains("@K", StringComparison.Ordinal))
+            {
+                return "@K\n5.10.43\n@R\nPhysical size: 1080x2400\nOverride size: 720x1600\n"
+                    + "@D\nPhysical density: 420\n@B\n1234567890\n@P\n90061.0 123.0\n"
+                    + "@Y\nlevel: 75\nvoltage: 4000\ntemperature: 250\n"
+                    + "@M\nMemTotal: 8000000 kB\nMemAvailable: 4000000 kB\n@F\nFs 1024-blocks Used Available Capacity Mounted on\n"
+                    + "/dev/block/dm-60 100000 50000 50000  50% /data\n@Z\n";
+            }
+
+            return "";
+        }
+
+        var properties = DevicePropertyReader.ReadAdbProperties(Run, LocalizeCompact);
+
+        Assert.Equal("Example phone", properties["model"]);
+        Assert.Equal("5.10.43", properties["kernel"]);
+        Assert.Equal("720x1600", properties["resolution"]);
+        Assert.Equal("420", properties["density"]);
+        Assert.Equal("1234567890", properties["boardid"]);
+        Assert.Equal("1d1h1m1s", properties["uptime"]);
+        Assert.Equal("75", properties["batteryLevel"]);
+        Assert.Equal("50", properties["diskLevel"]);
+        Assert.Equal(2, commands.Count);
+        Assert.Equal("getprop", commands[0]);
+    }
+
+    [Fact]
+    public void AdbProperties_BundleTruncatedBeforeEveryMarker_FallsBackToPerCommandQueries()
+    {
+        var commands = new List<string>();
+        string Run(string command)
+        {
+            commands.Add(command);
+            if (command == "getprop")
+            {
+                return "[ro.product.model]: [Example phone]\n";
+            }
+
+            if (command.Contains("@K", StringComparison.Ordinal))
+            {
+                return "@K\n5.10.43\n@R\nPhysical size: 1080x2400\n";
+            }
+
+            return command == "uname -r" ? "5.10.43" : "";
+        }
+
+        var properties = DevicePropertyReader.ReadAdbProperties(Run, LocalizeCompact);
+
+        Assert.Equal("5.10.43", properties["kernel"]);
+        Assert.Equal("--", properties["density"]);
+        Assert.Contains("wm size", commands);
+        Assert.True(commands.Count(command => !command.Contains("@K", StringComparison.Ordinal)) >= 8);
+    }
+
+    private static Dictionary<string, string> CompleteStaticCache() => new(StringComparer.Ordinal)
+    {
+        ["brand"] = "CachedBrand",
+        ["model"] = "CachedPhone",
+        ["android"] = "15",
+        ["sdk"] = "35",
+        ["codename"] = "cacheddevice",
+        ["cpuabi"] = "arm64-v8a",
+        ["cpucode"] = "cachedsoc",
+        ["kernel"] = "cached-kernel",
+        ["boardid"] = "cached-board",
+        ["slot"] = "_a",
+        ["compile"] = "cached-build",
+        ["vndk"] = "35",
+        ["bl"] = "unlocked",
+    };
+
+    private const string DynamicBundleReply =
+        "@R\nPhysical size: 1080x2400\nOverride size: 720x1600\n"
+        + "@D\nPhysical density: 420\n@P\n90061.0 123.0\n"
+        + "@Y\nlevel: 75\nvoltage: 4000\ntemperature: 250\n"
+        + "@M\nMemTotal: 8000000 kB\nMemAvailable: 4000000 kB\n@F\nFs 1024-blocks Used Available Capacity Mounted on\n"
+        + "/dev/block/dm-60 100000 50000 50000  50% /data\n@Z\n";
+
+    [Fact]
+    public void AdbProperties_CompleteStaticCache_SkipsGetpropAndStaticSections()
+    {
+        var commands = new List<string>();
+        var properties = DevicePropertyReader.ReadAdbProperties(command =>
+        {
+            commands.Add(command);
+            return command.Contains("@R", StringComparison.Ordinal) && !command.Contains("@K", StringComparison.Ordinal)
+                ? DynamicBundleReply
+                : "";
+        }, LocalizeCompact, CompleteStaticCache());
+
+        Assert.Equal("CachedPhone", properties["model"]);
+        Assert.Equal("cached-kernel", properties["kernel"]);
+        Assert.Equal("cached-board", properties["boardid"]);
+        Assert.Equal("unlocked", properties["bl"]);
+        Assert.Equal("720x1600", properties["resolution"]);
+        Assert.Equal("420", properties["density"]);
+        Assert.Equal("1d1h1m1s", properties["uptime"]);
+        Assert.Equal("75", properties["batteryLevel"]);
+        Assert.Equal("50", properties["diskLevel"]);
+        var command = Assert.Single(commands);
+        Assert.Contains("@R", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("@K", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("@B", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AdbProperties_IncompleteStaticCache_QueriesEveryPropertyAndSection()
+    {
+        var commands = new List<string>();
+        var cached = CompleteStaticCache();
+        cached.Remove("bl");
+        var properties = DevicePropertyReader.ReadAdbProperties(command =>
+        {
+            commands.Add(command);
+            return command switch
+            {
+                "getprop" => "[ro.product.model]: [Example phone]\n[ro.secureboot.lockstate]: [locked]\n",
+                var bundle when bundle.Contains("@K", StringComparison.Ordinal) =>
+                    "@K\n5.10.43\n@R\nPhysical size: 1080x2400\n@D\nPhysical density: 420\n@B\n1234567890\n"
+                    + "@P\n90061.0 123.0\n@Y\nlevel: 75\n@M\nMemTotal: 8000000 kB\n"
+                    + "@F\n/dev/block/dm-60 100000 50000 50000  50% /data\n@Z\n",
+                _ => "",
+            };
+        }, LocalizeCompact, cached);
+
+        Assert.Equal("Example phone", properties["model"]);
+        Assert.Equal("locked", properties["bl"]);
+        Assert.Equal(2, commands.Count);
+        Assert.Equal("getprop", commands[0]);
+        Assert.Contains("@K", commands[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectStaticProperties_RejectsAPassWhoseCorePropertyIsAPlaceholder()
+    {
+        var complete = CompleteStaticCache();
+        Assert.NotNull(DevicePropertyReader.SelectStaticProperties(complete));
+
+        var incomplete = CompleteStaticCache();
+        incomplete["model"] = "--";
+        Assert.Null(DevicePropertyReader.SelectStaticProperties(incomplete));
+    }
+
+    [Fact]
+    public void SelectStaticProperties_KeepsOnlyStableKeys()
+    {
+        var properties = CompleteStaticCache();
+        properties["uptime"] = "1d";
+        properties["batteryLevel"] = "75";
+
+        var statics = DevicePropertyReader.SelectStaticProperties(properties);
+
+        Assert.NotNull(statics);
+        Assert.Equal(DevicePropertyReader.StaticKeys.Length, statics.Count);
+        Assert.DoesNotContain("uptime", statics.Keys);
+        Assert.DoesNotContain("batteryLevel", statics.Keys);
     }
 
     [Theory]
@@ -362,6 +534,7 @@ public sealed class DevicePropertyReaderTests
     [Theory]
     [InlineData(" 02:51:44 up 7 days,  2:01,  0 users,  load average: 14.22, 14.35, 14.72", "7d2h1m0s")]
     [InlineData(" 02:51:48 up  2:31,  0 users,  load average: 0.30, 0.19, 0.17", "0d2h31m0s")]
+    [InlineData(" 07:06:43 up 1 day, 16:11,  0 users,  load average: 14.47, 14.30, 14.34", "1d16h11m0s")]
     [InlineData("9017.51 70122.81", "0d2h30m17s")]
     public void FormatUptime_HarmonyAndProcOutputs_ProduceLocalizedDuration(string output, string expected) =>
         Assert.Equal(expected, DevicePropertyReader.FormatUptime(output, LocalizeCompact));

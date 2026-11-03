@@ -38,7 +38,7 @@ public partial class QrPairingWindow : Window
         var credentials = AdbQrPairing.GenerateCredentials();
         ShowQrCode(AdbQrPairing.BuildPayload(credentials));
         SetStatus("Device_QrPairWaiting");
-        var progress = new Progress<QrPairingProgress>(Report);
+        var progress = new Progress<WirelessPairingProgress>(Report);
         try
         {
             var outcome = await App.DeviceMonitor.RunQrPairingAsync(credentials, progress, _cancellation.Token)
@@ -70,14 +70,14 @@ public partial class QrPairingWindow : Window
         }
     }
 
-    private void Report(QrPairingProgress progress)
+    private void Report(WirelessPairingProgress progress)
     {
         switch (progress.Stage)
         {
-            case QrPairingStage.Pairing:
+            case WirelessPairingStage.Pairing:
                 SetStatus("Device_QrPairPairing", progress.Detail ?? string.Empty);
                 break;
-            case QrPairingStage.Connecting:
+            case WirelessPairingStage.Connecting:
                 SetStatus("Device_QrPairConnecting", progress.Detail ?? string.Empty);
                 break;
             default:

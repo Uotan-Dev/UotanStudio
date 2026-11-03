@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -100,6 +101,25 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// Returns the stable properties cached for an endpoint, or null when this endpoint has none yet.
+    /// <para>返回某端点缓存的稳定属性；该端点尚无缓存时返回 null。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint to look up.<para>要查询的端点。</para></param>
+    /// <returns>The cached properties, or <see langword="null"/> when nothing is cached.
+    /// <para>缓存的属性；没有缓存时为 <see langword="null"/>。</para></returns>
+    internal IReadOnlyDictionary<string, string>? CachedDeviceProperties(DeviceEndpoint endpoint)
+        => _controller.GetCachedProperties(endpoint);
+
+    /// <summary>
+    /// Caches properties that stay stable while the device stays connected; existing keys keep their values.
+    /// <para>缓存设备连接期间保持稳定的属性；已有键保留原值。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint the properties belong to.<para>属性所属的端点。</para></param>
+    /// <param name="properties">Properties to add for keys not cached yet.<para>为尚未缓存的键新增的属性。</para></param>
+    internal void CacheDeviceProperties(DeviceEndpoint endpoint, IEnumerable<KeyValuePair<string, string>> properties)
+        => _controller.CacheProperties(endpoint, properties);
+
+    /// <summary>
     /// Starts the service: performs one full scan immediately and begins monitoring USB
     /// hotplug and adb-server device changes. Idempotent.
     /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。
@@ -130,16 +150,37 @@ public sealed partial class DeviceMonitorService
             }
         };
         _controller.UsbTopologyChanged += handler;
+        // A vanished endpoint also has to let go of anything still querying it, and it has to force a rescan:
+        // the topology diff only reports devices it could classify, so an endpoint whose descriptors were
+        // already half gone would otherwise leave its row on screen indefinitely.
+        _controller.DeviceRemoved += OnEndpointGone;
+        _controller.DeviceChanged += OnEndpointGone;
         lock (_sync)
         {
             if (_disposed)
             {
                 _controller.UsbTopologyChanged -= handler;
+                _controller.DeviceRemoved -= OnEndpointGone;
+                _controller.DeviceChanged -= OnEndpointGone;
                 return;
             }
 
             _usbTopologyHandler = handler;
         }
+    }
+
+    /// <summary>
+    /// Handles one endpoint that disappeared or changed identity: cancels the detail queries still waiting on
+    /// it and schedules a rescan so its row is dropped in the next pass.
+    /// <para>处理某个已消失或身份已变化的端点：取消仍在等它的详情查询，并调度一次重扫以便下一轮丢弃其条目。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint reported by the controller.
+    /// <para>控制器上报的端点。</para></param>
+    private void OnEndpointGone(DeviceEndpoint endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        CancelBackgroundEndpointWork(endpoint);
+        ScheduleChange();
     }
 
     /// <summary>
@@ -278,6 +319,9 @@ public sealed partial class DeviceMonitorService
                 _controller.UsbTopologyChanged -= _usbTopologyHandler;
                 _usbTopologyHandler = null;
             }
+
+            _controller.DeviceRemoved -= OnEndpointGone;
+            _controller.DeviceChanged -= OnEndpointGone;
 
             _debounce?.Dispose();
             _debounce = null;

@@ -4,12 +4,13 @@ using UotanStudio.Comm.Routing;
 namespace UotanStudio.Services.Devices;
 
 /// <summary>
-/// QR pairing progress stages.
-/// <para>扫码配对进度阶段。</para>
+/// Wireless pairing progress stages.
+/// <para>无线配对进度阶段。</para>
 /// </summary>
-public enum QrPairingStage
+public enum WirelessPairingStage
 {
-    /// <summary>Waiting for the phone to scan the QR code.<para>等待手机扫描二维码。</para></summary>
+    /// <summary>Waiting for the phone to scan the QR code; pairing-code pairing skips this stage.
+    /// <para>等待手机扫描二维码；配对码配对不会经过该阶段。</para></summary>
     WaitingForScan,
     /// <summary>Pairing service found, pairing in progress.<para>已发现配对服务，正在配对。</para></summary>
     Pairing,
@@ -18,12 +19,12 @@ public enum QrPairingStage
 }
 
 /// <summary>
-/// QR pairing progress; Detail carries the stage-specific address text.
-/// <para>扫码配对进度。Detail 为阶段相关的地址文本。</para>
+/// Wireless pairing progress; Detail carries the stage-specific address text.
+/// <para>无线配对进度。Detail 为阶段相关的地址文本。</para>
 /// </summary>
 /// <param name="Stage">The current pairing stage.<para>当前配对阶段。</para></param>
 /// <param name="Detail">Stage-specific address text, when any.<para>阶段相关的地址文本，可为空。</para></param>
-public sealed record QrPairingProgress(QrPairingStage Stage, string? Detail = null);
+public sealed record WirelessPairingProgress(WirelessPairingStage Stage, string? Detail = null);
 
 public sealed partial class DeviceMonitorService
 {
@@ -42,22 +43,10 @@ public sealed partial class DeviceMonitorService
     /// <returns>The pairing outcome (route and connected address).
     /// <para>配对结果（路径与已连接地址）。</para></returns>
     public async Task<AdbQrPairingOutcome> RunQrPairingAsync(AdbQrPairingCredentials credentials,
-        IProgress<QrPairingProgress>? progress, CancellationToken cancellationToken = default,
+        IProgress<WirelessPairingProgress>? progress, CancellationToken cancellationToken = default,
         TimeSpan? discoveryTimeout = null)
     {
-        var reporter = progress is null
-            ? null
-            : new Progress<AdbQrPairingProgress>(p =>
-            {
-                var mapped = p.Stage switch
-                {
-                    AdbQrPairingStage.DeviceFound => QrPairingStage.Pairing,
-                    AdbQrPairingStage.Pairing => QrPairingStage.Pairing,
-                    AdbQrPairingStage.Connecting => QrPairingStage.Connecting,
-                    _ => QrPairingStage.WaitingForScan,
-                };
-                progress.Report(new QrPairingProgress(mapped, p.Detail));
-            });
+        var reporter = MapPairingProgress(progress);
 
         AdbQrPairingOutcome outcome;
         try
@@ -74,12 +63,118 @@ public sealed partial class DeviceMonitorService
 
         if (outcome.Route == AdbQrPairingRoute.Direct)
         {
-            await AttachSecureDirectNetworkTargetAsync(outcome.Address, cancellationToken).ConfigureAwait(false);
+            var verified = await AttachSecureDirectNetworkTargetAsync(outcome.Address, cancellationToken)
+                .ConfigureAwait(false);
+            if (!string.Equals(verified, outcome.Address, StringComparison.Ordinal))
+            {
+                outcome = outcome with { Address = verified };
+            }
         }
         LogService.Instance.Write(LogLevel.Info, "DevicePairing",
             $"QR pairing connected {outcome.Address} through the {outcome.Route} route.");
         await ForceRefreshAsync().ConfigureAwait(false);
         return outcome;
+    }
+
+    /// <summary>
+    /// Pairs with the IP address and one-time code shown by the phone's wireless-debugging dialog, then
+    /// connects and registers the resulting secure endpoint when the toolbox paired directly.
+    /// <para>使用手机无线调试对话框显示的 IP 地址与一次性配对码完成配对，随后连接；由工具箱直连配对时登记
+    /// 得到的安全端点。</para>
+    /// </summary>
+    /// <param name="pairingAddress">The pairing <c>ip:port</c> shown by the phone; the port is required.
+    /// <para>手机显示的配对 <c>ip:port</c>；端口必填。</para></param>
+    /// <param name="pairingCode">The one-time pairing code. <para>一次性配对码。</para></param>
+    /// <param name="progress">Optional progress reporter. <para>可选的进度回调。</para></param>
+    /// <param name="cancellationToken">Cancels pairing and connecting. <para>取消配对与连接。</para></param>
+    /// <returns>The connected address and the pairing route. <para>已连接地址与配对路径。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="pairingAddress"/> is not an explicit
+    /// <c>host:port</c>, or <paramref name="pairingCode"/> is blank.
+    /// <para><paramref name="pairingAddress"/> 不是显式 <c>host:port</c>，或 <paramref name="pairingCode"/> 为空。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    public async Task<AdbQrPairingOutcome> PairWithCodeAsync(string pairingAddress, string pairingCode,
+        IProgress<WirelessPairingProgress>? progress, CancellationToken cancellationToken = default)
+    {
+        if (!TryNormalizePairingEndpoint(pairingAddress, out var host, out var pairingPort))
+        {
+            throw new ArgumentException("A pairing address requires an explicit host:port.",
+                nameof(pairingAddress));
+        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(pairingCode);
+
+        AdbQrPairingOutcome outcome;
+        try
+        {
+            outcome = await AdbQrPairingService.PairWithCodeAsync(host, pairingPort, pairingCode,
+                MapPairingProgress(progress), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DevicePairing",
+                $"Pairing-code pairing failed: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
+
+        if (outcome.Route == AdbQrPairingRoute.Direct)
+        {
+            try
+            {
+                var verified = await AttachSecureDirectNetworkTargetAsync(outcome.Address, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!string.Equals(verified, outcome.Address, StringComparison.Ordinal))
+                {
+                    outcome = outcome with { Address = verified };
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                var suggestion = DebugBridgeNetworkAddress.TrySplitEndpoint(outcome.Address, out _, out var port)
+                    ? port
+                    : 0;
+                throw new AdbQrPairingConnectPortException(AdbQrPairingRoute.Direct, host,
+                    $"Pairing succeeded, but the secure connect endpoint {outcome.Address} could not be verified: " +
+                    ex.Message, suggestion);
+            }
+        }
+        LogService.Instance.Write(LogLevel.Info, "DevicePairing",
+            $"Pairing code connected {outcome.Address} through the {outcome.Route} route.");
+        await ForceRefreshAsync().ConfigureAwait(false);
+        return outcome;
+    }
+
+    /// <summary>
+    /// Normalizes an explicit ADB pairing endpoint; the port is mandatory because the phone allocates its
+    /// pairing port dynamically.
+    /// <para>规范化显式 ADB 配对端点；端口必填，因为手机动态分配配对端口。</para>
+    /// </summary>
+    /// <param name="input">The <c>host:port</c> text shown by the phone. <para>手机显示的 <c>host:port</c> 文本。</para></param>
+    /// <param name="host">The bare host on success. <para>成功时的裸主机。</para></param>
+    /// <param name="port">The pairing port on success. <para>成功时的配对端口。</para></param>
+    /// <returns>Whether the text is one explicit endpoint. <para>文本是否为单个显式端点。</para></returns>
+    internal static bool TryNormalizePairingEndpoint(string? input, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        return DebugBridgeNetworkAddress.TryNormalize(input, out var address) &&
+               DebugBridgeNetworkAddress.TrySplitEndpoint(address, out host, out port);
+    }
+
+    private static IProgress<AdbQrPairingProgress>? MapPairingProgress(
+        IProgress<WirelessPairingProgress>? progress)
+    {
+        if (progress is null)
+        {
+            return null;
+        }
+
+        return new Progress<AdbQrPairingProgress>(p => progress.Report(new WirelessPairingProgress(
+            p.Stage switch
+            {
+                AdbQrPairingStage.DeviceFound or AdbQrPairingStage.Pairing => WirelessPairingStage.Pairing,
+                AdbQrPairingStage.Connecting => WirelessPairingStage.Connecting,
+                _ => WirelessPairingStage.WaitingForScan,
+            },
+            p.Detail)));
     }
 
     /// <summary>
@@ -101,18 +196,18 @@ public sealed partial class DeviceMonitorService
             .ConfigureAwait(false);
         if (route == AdbQrPairingRoute.Direct)
         {
-            await AttachSecureDirectNetworkTargetAsync(address, cancellationToken).ConfigureAwait(false);
+            address = await AttachSecureDirectNetworkTargetAsync(address, cancellationToken).ConfigureAwait(false);
         }
         await ForceRefreshAsync().ConfigureAwait(false);
         return address;
     }
 
     /// <summary>
-    /// After a successful direct QR pairing, validates the secure network target with one asynchronous TLS
+    /// After a successful direct pairing, validates the secure network target with one asynchronous TLS
     /// handshake and registers it as a manual network endpoint requiring TLS. When the handshake fails on an
     /// advertised port that the device has already replaced, the current port is browsed once and the target is
     /// registered under that address instead; the original failure is rethrown when no replacement answers.
-    /// <para>扫码直连配对成功后，对安全网络目标完成一次异步 TLS 握手验证，成功后登记为需要 TLS 的手动网络端点。
+    /// <para>直连配对成功后，对安全网络目标完成一次异步 TLS 握手验证，成功后登记为需要 TLS 的手动网络端点。
     /// 广播端口已被设备替换导致握手失败时，按 IP 重新浏览一次当前端口并以该地址登记；没有可用的替代端口时重新抛出
     /// 原始失败。</para>
     /// </summary>
@@ -121,11 +216,13 @@ public sealed partial class DeviceMonitorService
     /// <param name="cancellationToken">Cancels the connect and the peer handshake wait; registration is
     /// skipped after cancellation.
     /// <para>取消连接与对端握手等待；取消后跳过登记。</para></param>
+    /// <returns>The endpoint that answered, which differs from <paramref name="target"/> when the advertised
+    /// port was stale. <para>实际应答的端点；广播端口过期时与 <paramref name="target"/> 不同。</para></returns>
     /// <exception cref="IOException">The target is not a <c>host:port</c> endpoint or the handshake failed.
     /// <para>目标不是 <c>host:port</c> 端点或握手失败。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
-    private async Task AttachSecureDirectNetworkTargetAsync(string target, CancellationToken cancellationToken)
+    private async Task<string> AttachSecureDirectNetworkTargetAsync(string target, CancellationToken cancellationToken)
     {
         var verified = await VerifySecureNetworkTargetAsync(target, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -140,6 +237,7 @@ public sealed partial class DeviceMonitorService
         }
 
         SavePairedNetworkTargets();
+        return verified;
     }
 
     /// <summary>

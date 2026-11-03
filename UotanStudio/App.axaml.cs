@@ -241,6 +241,8 @@ public partial class App : Application
             LogService.Instance.Write(LogLevel.Error, "Lifecycle",
                 $"Device occupancy release during process exit failed: {ex.GetType().Name}: {ex.Message}");
         }
+
+        LogService.Instance.FlushFileLog();
     }
 
     /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.<para>仅在桌面关闭已被接受后释放应用级监视资源。</para></summary>
@@ -260,6 +262,7 @@ public partial class App : Application
             _macApplicationMenu = null;
             _desktopServices = null;
             WeakReferenceMessenger.Default.UnregisterAll(this);
+            LogService.Instance.FlushFileLog();
         }
     }
 

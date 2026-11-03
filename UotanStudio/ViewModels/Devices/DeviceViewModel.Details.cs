@@ -165,6 +165,8 @@ public partial class DeviceViewModel
         var endpoint = device.Device;
         Dictionary<string, string>? info = null;
         var hasSu = false;
+        var cacheEndpoint = endpoint.Endpoint;
+        var cachedProperties = cacheEndpoint is null ? null : App.DeviceMonitor.CachedDeviceProperties(cacheEndpoint);
         using var background = App.DeviceMonitor.BeginBackgroundEndpointWork(endpoint);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(background.Token);
         budget.CancelAfter(AdbDetailTimeoutMs);
@@ -173,15 +175,23 @@ public partial class DeviceViewModel
         {
             (info, hasSu) = await Task.Run(async () =>
             {
+                // Staged timing: the detail query covers the endpoint open, the CNXN handshake and every
+                // shell command, so reporting it separately from the root probe is what makes a slow stage
+                // visible in the log without a debugger attached.
+                var queryWatch = System.Diagnostics.Stopwatch.StartNew();
                 var queried = await Task.Factory.StartNew(
-                    () => QueryViaAdbServer(device) ?? QueryViaAdbSession(device, token),
+                    () => QueryViaAdbServer(device, cachedProperties) ?? QueryViaAdbSession(device, token, cachedProperties),
                     token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+                queryWatch.Stop();
                 if (queried is null)
                 {
+                    _log.Write(LogLevel.Info, "DeviceManager",
+                        $"ADB detail for {endpoint.Key} produced nothing after {queryWatch.ElapsedMilliseconds} ms.");
                     return ((Dictionary<string, string>?)null, false);
                 }
 
                 var rootAvailable = false;
+                var rootWatch = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     rootAvailable = await FlashSuService.HasSuAsync(device.Device, token).ConfigureAwait(false);
@@ -192,6 +202,10 @@ public partial class DeviceViewModel
                         $"Root probe for {endpoint.Key} stopped: {error.GetType().Name}: {error.Message}");
                 }
 
+                rootWatch.Stop();
+                _log.Write(LogLevel.Info, "DeviceManager",
+                    $"ADB detail for {endpoint.Key}: session and property query {queryWatch.ElapsedMilliseconds} ms, "
+                    + $"root probe {rootWatch.ElapsedMilliseconds} ms.");
                 return (queried, rootAvailable);
             }, token).ConfigureAwait(true);
         }
@@ -207,6 +221,11 @@ public partial class DeviceViewModel
         }
 
         ApplyAdbProperties(device, info);
+        if (cacheEndpoint is not null && DevicePropertyReader.SelectStaticProperties(info) is { } staticProperties)
+        {
+            App.DeviceMonitor.CacheDeviceProperties(cacheEndpoint, staticProperties);
+        }
+
         device.HasSu = hasSu;
         if (SelectedDevice == device)
         {
@@ -217,10 +236,17 @@ public partial class DeviceViewModel
     /// <summary>
     /// Queries device properties via Comm's adb server service against the official adb server
     /// (127.0.0.1:5037), matching the device by serial; returns null only when the server connection is refused.
+    /// Stable properties cached from an earlier pass replace the <c>getprop</c> query and the static bundle
+    /// sections, so a repeat pass only runs the live queries.
     /// <para>经 Comm 的 adb server 服务通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
-    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。</para>
+    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。较早一次拉取缓存下来的稳定属性会替代
+    /// <c>getprop</c> 查询与静态批量段，使重复拉取只执行实时查询。</para>
     /// </summary>
-    private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device)
+    /// <param name="device">The device entry being enriched.<para>待丰富的设备条目。</para></param>
+    /// <param name="cachedProperties">Stable properties from an earlier pass, or <see langword="null"/>.
+    /// <para>较早一次拉取得到的稳定属性；可为 <see langword="null"/>。</para></param>
+    private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device,
+        IReadOnlyDictionary<string, string>? cachedProperties)
     {
         var monitor = App.DeviceMonitor;
         if (!monitor.HasAdbServer ||
@@ -243,7 +269,7 @@ public partial class DeviceViewModel
                     $"ADB server shell for {device.Device.Key} failed on '{cmd}': {ex.GetType().Name}: {ex.Message}");
                 return string.Empty;
             }
-        }, LanguageService.Instance.GetString);
+        }, LanguageService.Instance.GetString, cachedProperties);
     }
 
     /// <summary>
@@ -255,13 +281,18 @@ public partial class DeviceViewModel
     /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
     /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
     /// </summary>
-    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device, CancellationToken token)
+    /// <param name="device">The device entry being enriched.<para>待丰富的设备条目。</para></param>
+    /// <param name="token">Cancels the endpoint open and every shell command.<para>取消端点打开与全部 shell 命令。</para></param>
+    /// <param name="cachedProperties">Stable properties from an earlier pass, or <see langword="null"/>.
+    /// <para>较早一次拉取得到的稳定属性；可为 <see langword="null"/>。</para></param>
+    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device, CancellationToken token,
+        IReadOnlyDictionary<string, string>? cachedProperties)
     {
         try
         {
             return App.DeviceMonitor.RunAdb(device.Device,
                 session => DevicePropertyReader.ReadAdbProperties(
-                    cmd => RunShell(session, cmd, token), LanguageService.Instance.GetString), token);
+                    cmd => RunShell(session, cmd, token), LanguageService.Instance.GetString, cachedProperties), token);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException)
         {

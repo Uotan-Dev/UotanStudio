@@ -208,7 +208,7 @@
                                          IsVisible="{Binding IsRemoteAdb}"
                                          IsEnabled="{Binding !IsConnectionBusy}"
                                          PlaceholderText="{DynamicResource Device_RemotePairingCode}"
-                                         ToolTip.Tip="{DynamicResource Device_RemotePairingCode}" />
+                                         ToolTip.Tip="{DynamicResource Device_RemotePairingCodeHint}" />
                                 <Button x:Name="ConnectRemoteButton" Grid.Column="3" Classes="DeviceIconButton" Margin="4,0,0,0"
                                         Command="{Binding ConnectRemoteCommand}"
                                         ToolTip.Tip="{DynamicResource Device_RemoteConnect}">
@@ -439,7 +439,7 @@
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Serial}" />
                                     <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
-                                                         Text="{Binding Serial}" />
+                                                         Text="{Binding SerialDisplay}" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Brand}" />

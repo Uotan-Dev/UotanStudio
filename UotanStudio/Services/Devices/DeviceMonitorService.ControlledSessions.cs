@@ -206,16 +206,28 @@ public sealed partial class DeviceMonitorService
     /// <para>要取消后台工作的设备。</para></param>
     /// <returns>The number of cancelled registrations. <para>被取消的登记数量。</para></returns>
     internal int CancelBackgroundEndpointWork(DetectedDevice device)
-    {
-        if (device is null)
-        {
-            return 0;
-        }
+        => device is null ? 0 : CancelEndpointHolders(device.Serial, device.Key, device.PhysicalId);
 
+    /// <summary>
+    /// Cancels the background endpoint work registered for the device one vanished endpoint belongs to. A
+    /// disconnected endpoint cannot answer, so an in-flight detail query would otherwise keep its row on screen
+    /// until the query's own budget expired while also holding the endpoint lease.
+    /// <para>取消为某个已消失端点所属设备登记的后台端点工作。已断开的端点无法应答，否则进行中的详情查询会让该设备
+    /// 条目一直留在界面上，直到查询自身的时限耗尽，同时还占着端点租约。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint reported gone by the controller.
+    /// <para>控制器上报已消失的端点。</para></param>
+    /// <returns>The number of cancelled registrations. <para>被取消的登记数量。</para></returns>
+    internal int CancelBackgroundEndpointWork(DeviceEndpoint endpoint)
+        => CancelEndpointHolders(endpoint.Serial, endpoint.Address,
+            endpoint.UsbInfo is { } info ? PhysicalUsbId(info, info.SerialNumber) : null);
+
+    private int CancelEndpointHolders(string? serial, string? key, string? physicalId)
+    {
         var cancelled = 0;
         foreach (var entry in _backgroundEndpointWork)
         {
-            if (!IsSamePhysicalTarget(entry.Value.Device, device) ||
+            if (!MatchesIdentity(serial, key, physicalId, entry.Value.Device) ||
                 !_backgroundEndpointWork.TryRemove(entry.Key, out var work))
             {
                 continue;
@@ -227,9 +239,9 @@ public sealed partial class DeviceMonitorService
 
         if (cancelled > 0)
         {
-            LogService.Instance.Write(LogLevel.Info, "ScreenMirror",
-                $"Cancelled {cancelled} background endpoint operation(s) for {device.Serial} so the mirror start can "
-                + $"lease the device endpoint. 已取消 {device.Serial} 的 {cancelled} 项后台端点操作，使投屏启动可以租用该设备端点。");
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                $"Cancelled {cancelled} background endpoint operation(s) for {serial ?? key} because its endpoint "
+                + $"went away. 端点已消失，取消 {serial ?? key} 的 {cancelled} 项后台端点操作。");
         }
 
         return cancelled;

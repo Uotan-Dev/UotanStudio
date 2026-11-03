@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Edl;
 
@@ -66,6 +67,13 @@ public sealed class DetectedDevice
     /// <summary>Verified physical identity shared by protocol endpoints, or <c>null</c> when unavailable.<para>已核实的物理身份，由多个协议端点共享；不可得时为 <c>null</c>。</para></summary>
     /// <value>The shared physical device identity, or <c>null</c>.<para>共享的物理设备身份，或为 <c>null</c>。</para></value>
     public string? PhysicalId { get; init; }
+    /// <summary>
+    /// Controller endpoint this row was projected from; <c>null</c> for remembered manual targets that were
+    /// never enumerated.
+    /// <para>本行所投影的控制器端点；从未被枚举、仅由记忆保存的手动目标为 <c>null</c>。</para>
+    /// </summary>
+    /// <value>The exact route of this row, or <c>null</c>.<para>该行的精确路由；没有时为 <c>null</c>。</para></value>
+    public DeviceEndpoint? Endpoint { get; init; }
     /// <summary>
     /// Network endpoint the server resolved for this endpoint, written on every transport that shares
     /// it so several routes to one device merge into one group; never inferred from address shape.

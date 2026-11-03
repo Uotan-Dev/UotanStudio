@@ -11,7 +11,7 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    private const int SlowScanMilliseconds = 400;
+    private const int SlowScanMilliseconds = 120;
     private static readonly TimeSpan ScanLockWait = TimeSpan.FromMilliseconds(250);
     private readonly Lock _scanLock = new();
     private volatile IReadOnlyList<DetectedDevice>? _lastScan;
@@ -86,32 +86,33 @@ public sealed partial class DeviceMonitorService
             LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
                 $"Controller refresh took {refreshWatch.ElapsedMilliseconds} ms for {endpoints.Length} endpoint(s).");
         }
-        var usbInfos = endpoints.Where(endpoint => endpoint.UsbInfo is not null)
-            .Select(endpoint => endpoint.UsbInfo!).ToArray();
+        var usbEndpoints = endpoints.Where(endpoint => endpoint.UsbInfo is not null).ToArray();
+        var usbInfos = usbEndpoints.Select(endpoint => endpoint.UsbInfo!).ToArray();
         var adbDevices = endpoints.Where(endpoint => endpoint.Protocol == "adb" &&
             endpoint.Route == "server").ToArray();
         var hdcTargets = endpoints.Where(endpoint => endpoint.Protocol == "hdc" &&
             endpoint.Route == "server").ToArray();
         ReconcileManualNetworkTargets(adbDevices);
-        foreach (var info in usbInfos)
+        foreach (var usbEndpoint in usbEndpoints)
         {
+            var info = usbEndpoint.UsbInfo!;
             var protocol = Classify(info);
             if (protocol is null)
             {
                 continue;
             }
 
-            var serial = info.SerialNumber;
-            if (protocol == DeviceProtocolKind.Fastboot && string.IsNullOrWhiteSpace(serial))
-                serial = ReadFastbootSerial(info);
-            if (protocol == DeviceProtocolKind.Rkdl && string.IsNullOrWhiteSpace(serial))
+            // Discovery already resolved the endpoint serial, including the memoized fastboot getvar probe,
+            // so the row takes that value instead of claiming the same interface a second time in one pass.
+            var serial = IsUsableSerial(info.SerialNumber) ? info.SerialNumber : UsbSerialOf(usbEndpoint);
+            if (protocol == DeviceProtocolKind.Rkdl && !IsUsableSerial(serial))
                 serial = ReadRkdlSerial(info);
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
                 Serial = serial ?? $"{info.VendorId:X4}:{info.ProductId:X4}",
-                PhysicalId = PhysicalUsbId(info,
-                    !string.IsNullOrWhiteSpace(info.SerialNumber) ? info.SerialNumber : serial),
+                PhysicalId = PhysicalUsbId(info, IsUsableSerial(info.SerialNumber) ? info.SerialNumber : serial),
+                Endpoint = usbEndpoint,
                 Protocol = protocol.Value,
                 Transport = DeviceTransportKind.Usb,
                 State = protocol.Value switch
@@ -142,6 +143,7 @@ public sealed partial class DeviceMonitorService
                 Serial = target.Address,
                 PhysicalId = hdcTransport == DeviceTransportKind.Usb
                     ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Hdc) : null,
+                Endpoint = target,
                 Protocol = DeviceProtocolKind.Hdc,
                 Transport = hdcTransport,
                 State = target.State?.Equals("Connected", StringComparison.OrdinalIgnoreCase) == true ? "device"
@@ -264,6 +266,7 @@ public sealed partial class DeviceMonitorService
             PhysicalId = transport == DeviceTransportKind.Usb
                 ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Adb) : null,
             NetworkAlias = networkAlias,
+            Endpoint = target,
             Protocol = DeviceProtocolKind.Adb,
             Transport = transport,
             State = target.State?.ToLowerInvariant() ?? "offline",
@@ -391,16 +394,26 @@ public sealed partial class DeviceMonitorService
         _ => 0
     };
 
-    private string? ReadFastbootSerial(UsbDeviceInfo info)
-    {
-        var serial = _controller.ReadFastbootSerial(info);
-        if (serial is null)
-        {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
-                $"Fastboot serial unavailable for {info.DeviceKey}.");
-        }
-        return serial;
-    }
+    /// <summary>
+    /// Whether a descriptor serial is usable as a device identity: present and not the placeholder some
+    /// backends report for a device that exposes no iSerial.
+    /// <para>描述符序列号是否可用作设备身份：存在且不是某些后端为未暴露 iSerial 的设备所报的占位值。</para>
+    /// </summary>
+    /// <param name="serial">The reported serial. <para>上报的序列号。</para></param>
+    /// <returns><see langword="true"/> when the serial can identify the device.
+    /// <para>该序列号足以标识设备时为 <see langword="true"/>。</para></returns>
+    private static bool IsUsableSerial(string? serial) => !string.IsNullOrWhiteSpace(serial) && serial != "UNKNOWN";
+
+    /// <summary>
+    /// Reads the serial discovery resolved for an endpoint, rejecting the descriptor placeholder so a probe
+    /// that failed is not mistaken for a real identity.
+    /// <para>读取发现层为该端点解析出的序列号，并拒绝描述符占位值，使失败的探测不会被误认为真实身份。</para>
+    /// </summary>
+    /// <param name="endpoint">The discovered endpoint. <para>已发现的端点。</para></param>
+    /// <returns>The usable serial, or <see langword="null"/>.
+    /// <para>可用的序列号，或 <see langword="null"/>。</para></returns>
+    private static string? UsbSerialOf(DeviceEndpoint endpoint)
+        => IsUsableSerial(endpoint.Serial) ? endpoint.Serial : null;
 
     /// <summary>
     /// Probes the RKDevTool-aligned display identity for one Rockchip bootrom/loader node.
@@ -421,12 +434,34 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// Manual force refresh: reruns the full scan and broadcasts the change.
-    /// <para>手动强制刷新：重新执行全量扫描并广播变更。</para>
+    /// Requests an incremental refresh: the next scan re-observes the bus but answers every interface the
+    /// Windows inventory already classified from its cached evidence.
+    /// <para>请求一次增量刷新：下一轮重新观察总线，但清单已经分类过的接口一律由缓存证据作答。</para>
     /// </summary>
+    /// <returns>A completed task; the scan itself is driven by the change notification.
+    /// <para>已完成的任务；实际扫描由变更通知驱动。</para></returns>
     public Task ForceRefreshAsync()
     {
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Manual device refresh requested.");
+        ScheduleChange();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Requests the refresh the user asked for by pressing refresh: the Windows enumeration inventory is
+    /// dropped, so the next pass re-reads every interface's registry evidence instead of trusting what an
+    /// earlier pass learned. Every automatic pass stays incremental.
+    /// <para>请求用户按下刷新按钮所要求的那次刷新：丢弃 Windows 枚举清单，使下一轮重读每个接口的注册表证据，
+    /// 而不再信任更早一轮的已知结果。所有自动触发的遍历仍保持增量。</para>
+    /// </summary>
+    /// <returns>A completed task; the scan itself is driven by the change notification.
+    /// <para>已完成的任务；实际扫描由变更通知驱动。</para></returns>
+    public Task ForceFullRefreshAsync()
+    {
+        LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+            "Manual device refresh requested with a full USB inventory re-read.");
+        _controller.ResetUsbEnumerationCache();
+        InvalidateUsbInventoryCache();
         ScheduleChange();
         return Task.CompletedTask;
     }

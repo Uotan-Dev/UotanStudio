@@ -28,10 +28,9 @@
     <SolidColorBrush x:Key="DiffBackgroundBrush" Color="#5A3A00" />
     <SolidColorBrush x:Key="DiffForegroundBrush" Color="#FFE1A8" />
 
-    <!-- Fluent 兼容键：次要文本画刷（Semi 主题未提供，视图多处 DynamicResource 引用；
-         缺失时解析回退默认色导致不随主题切换）。取 SecondaryTextForeground 颜色。 -->
-    <!-- Fluent-compatible key: secondary text brush (not provided by the Semi theme, yet
-         referenced via DynamicResource in several views; when missing, resolution falls
-         back to the default color and ignores theme switching). Uses SecondaryTextForeground. -->
+    <!-- 卡片/面板表面与描边画刷：视图通过 DynamicResource 引用，随浅色/深色主题切换。 -->
+    <!-- Card/panel surface and outline brushes referenced by views; they follow the light/dark theme. -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackground}" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="{StaticResource BorderForegroundColor}" />
     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource SecondaryTextForeground}" />
 </ResourceDictionary>
