@@ -44,6 +44,7 @@ public sealed partial class MtkSession
     private const byte PreloaderJumpToPartitionCommand = 0x71;
     private const byte PreloaderSendPartitionDataCommand = 0x70;
     private const byte PreloaderReadA2Command = 0xA2;
+    private const byte PreloaderCapabilityCommand = 0xFB;
     private const int PreloaderPartitionChunkBytes = 0x200;
     private const byte PreloaderCacheControlOperand = 0xB1;
     private const int PreloaderPartitionNameBytes = 64;
@@ -557,6 +558,7 @@ public sealed partial class MtkSession
         BinaryPrimitives.WriteUInt32BigEndian(lengthField, (uint)data.Length);
         await WriteAsync(lengthField, _timeoutMs, cancellationToken).ConfigureAwait(false);
         await ReadStatusAsync("preloader partition data request", cancellationToken).ConfigureAwait(false);
+        var checksum = WordSum32LittleEndian.Compute(data.Span);
         var payload = System.Buffers.ArrayPool<byte>.Shared.Rent(data.Length);
         try
         {
@@ -574,7 +576,7 @@ public sealed partial class MtkSession
         }
 
         var checksumField = new byte[sizeof(uint)];
-        BinaryPrimitives.WriteUInt32BigEndian(checksumField, WordSum32LittleEndian.Compute(payload.AsSpan(0, data.Length)));
+        BinaryPrimitives.WriteUInt32BigEndian(checksumField, checksum);
         await WriteAsync(checksumField, _timeoutMs, cancellationToken).ConfigureAwait(false);
     }
 
@@ -1023,4 +1025,52 @@ public sealed partial class MtkSession
         return register;
     }
 
+    /// <summary>
+    /// Reads the preloader capability word pair through command <c>0xFB</c>.
+    /// <para>通过命令 <c>0xFB</c> 读取 preloader 能力字对。</para>
+    /// </summary>
+    /// <remarks>
+    /// The preloader echoes the opcode and returns two big-endian 32-bit words. They are reported verbatim:
+    /// no bit is interpreted here, because the capability layout is not part of the documented surface.
+    /// <para>preloader 回显操作码并返回两个大端 32 位字。此处按原值上报，不解释任何位，因为能力布局不属于已记载的公开面。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>The two reported words, high word first.
+    /// <para>上报的两个字，高字在前。</para></returns>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
+    /// <para>会话不处于 preloader 命令阶段。</para></exception>
+    /// <exception cref="MtkProtocolException">The echo was refused or the reply was short; the session faults.
+    /// <para>回显被拒绝或应答过短；会话进入 fault 状态。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task<(uint High, uint Low)> ReadPreloaderCapabilitiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequirePreloaderCommandStage();
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                await EchoAsync([PreloaderCapabilityCommand], cancellationToken).ConfigureAwait(false);
+                var reply = await ReadAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                var high = BinaryPrimitives.ReadUInt32BigEndian(reply);
+                var low = BinaryPrimitives.ReadUInt32BigEndian(reply.AsSpan(4));
+                RecordSecurityEvidence("preloader-command", CommandOutcomeKind.Completed,
+                    $"preloader capability words 0x{high:X8}/0x{low:X8}.");
+                return (high, low);
+            }
+            catch
+            {
+                FaultPreloaderCommands();
+                throw;
+            }
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
 }

@@ -12,15 +12,24 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// The first differing byte relative to the requested range, or null if identical.
 /// <para>相对于请求范围第一个不一致字节的位置；完全一致时为 null。</para>
 /// </param>
-public sealed record MtkStorageVerificationResult(long ComparedBytes, long? FirstMismatchOffset)
+/// <param name="ExpectedBytes">
+/// The requested range length, or null when the caller did not supply one.
+/// <para>请求的范围长度；调用方未提供时为 null。</para>
+/// </param>
+public sealed record MtkStorageVerificationResult(long ComparedBytes, long? FirstMismatchOffset, long? ExpectedBytes = null)
 {
     /// <summary>
-    /// Gets whether all bytes in the requested range matched the source.
-    /// <para>获取请求范围内的所有字节是否都与源数据一致。</para>
+    /// Gets whether the whole requested range was compared and matched.
+    /// <para>获取请求范围是否已全部比对且一致。</para>
     /// </summary>
     /// <value>
-    /// <see langword="true"/> when no mismatch was observed; <see langword="false"/> when <c>FirstMismatchOffset</c> carries an offset.
-    /// <para>未观察到差异时为 <see langword="true"/>；<c>FirstMismatchOffset</c> 携带偏移量时为 <see langword="false"/>。</para>
+    /// <see langword="true"/> only when no mismatch was observed, at least one byte was compared, and the
+    /// compared count equals <see cref="ExpectedBytes"/> whenever that bound is known; a short read that
+    /// reports no mismatch is therefore not a match.
+    /// <para>仅在未观察到差异、至少比对了一个字节，且在已知 <see cref="ExpectedBytes"/> 时比对字节数与之一致时
+    /// 返回 <see langword="true"/>；因此"读取不足但无差异"不构成匹配。</para>
     /// </value>
-    public bool Matches => FirstMismatchOffset is null;
+    public bool Matches => FirstMismatchOffset is null
+        && ComparedBytes > 0
+        && (ExpectedBytes is not { } expected || ComparedBytes == expected);
 }

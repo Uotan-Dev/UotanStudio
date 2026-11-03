@@ -70,7 +70,7 @@ public sealed partial class MtkSession
         }
         using var comparison = new StorageComparisonStream(expected);
         await ReadXFlashStorageAsync(partitionId, offset, length, comparison, progress, cancellationToken).ConfigureAwait(false);
-        return new MtkStorageVerificationResult(comparison.ComparedBytes, comparison.FirstMismatchOffset);
+        return new MtkStorageVerificationResult(comparison.ComparedBytes, comparison.FirstMismatchOffset, length);
     }
 
     private sealed class StorageComparisonStream(Stream expected) : Stream

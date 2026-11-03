@@ -75,6 +75,9 @@ public enum MtkSessionState
     /// <summary>An interrupted or invalid exchange requires a new transport session.
     /// <para>被中断或无效的交互需要新的传输会话。</para></summary>
     Faulted,
+    /// <summary>A faulted session is reopening its transport; no protocol byte is accepted in this stage.
+    /// <para>已故障的会话正在重新打开其传输；本阶段不接受任何协议字节。</para></summary>
+    Reconnecting,
     /// <summary>The session has released its owned transport.
     /// <para>会话已释放其所持有的传输。</para></summary>
     Disposed,

@@ -36,7 +36,9 @@ public enum MtkXFlashNandStorageType : uint
     /// <summary>AMLC NAND. <para>AMLC NAND。</para></summary>
     Amlc = 0x14,
     /// <summary>SPI NAND. <para>SPI NAND。</para></summary>
-    Spi = 0x15
+    Spi = 0x15,
+    /// <summary>3D MLC NAND. <para>3D MLC NAND。</para></summary>
+    ThreeDimensionalMlc = 0x16
 }
 
 /// <summary>Selects a NAND transfer mode with a defined page/spare stream layout.

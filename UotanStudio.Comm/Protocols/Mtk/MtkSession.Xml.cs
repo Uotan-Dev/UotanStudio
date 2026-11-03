@@ -226,7 +226,8 @@ public sealed partial class MtkSession
                 continue;
             }
 
-            throw new MtkProtocolException("The XML DA did not accept the control command.");
+            throw new MtkProtocolException(
+                $"The XML DA did not accept the control command (result: {reply}).");
         }
 
         await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
@@ -244,7 +245,8 @@ public sealed partial class MtkSession
         RequireXmlCommand(end, "CMD:END");
         if (end.Result != "OK")
         {
-            throw new MtkProtocolException("The XML DA control command failed.");
+            throw new MtkProtocolException(
+                $"The XML DA control command failed (result: {end.Result}); command {end.Command}.");
         }
         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
     }

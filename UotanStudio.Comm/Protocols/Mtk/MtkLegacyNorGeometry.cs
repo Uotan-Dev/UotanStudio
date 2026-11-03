@@ -6,6 +6,19 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>包含非 IoT Legacy NOR 清单，不将 OTP 作为普通存储。</para></summary>
 public sealed class MtkLegacyNorGeometry
 {
+    /// <summary>
+    /// The write alignment the Legacy NOR inventory is assumed to require.
+    /// <para>Legacy NOR 清单被假定要求的写对齐。</para>
+    /// </summary>
+    /// <remarks>
+    /// The 28-byte Legacy NOR reply carries status, flash id and capacity only; unlike the 16-byte XFlash
+    /// NOR structure it exposes no page-size field that this inventory can be proven to carry, so writes
+    /// stay at the 512-byte sector size. XFlash NOR takes an explicit erase block size instead.
+    /// <para>28 字节 Legacy NOR 应答只有状态、闪存标识与容量；与 16 字节 XFlash NOR 结构不同，它没有可证实的
+    /// 页大小字段，因此写入仍按 512 字节扇区对齐。XFlash NOR 则显式接收擦除块大小。</para>
+    /// </remarks>
+    private const int WriteAlignment = 512;
+
     private MtkLegacyNorGeometry(ReadOnlySpan<byte> bytes)
     {
         CapacityBytes = BinaryPrimitives.ReadUInt32BigEndian(bytes[8..]);
@@ -36,10 +49,10 @@ public sealed class MtkLegacyNorGeometry
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
         if (offset > CapacityBytes || length > CapacityBytes - offset
-            || (write && (offset % 512 != 0 || length % 512 != 0)))
+            || (write && (offset % WriteAlignment != 0 || length % WriteAlignment != 0)))
         {
             throw new ArgumentOutOfRangeException(nameof(length),
-                "The NOR range exceeds capacity or the write range is not aligned to 512 bytes.");
+                $"The NOR range exceeds capacity or the write range is not aligned to {WriteAlignment} bytes.");
         }
     }
 

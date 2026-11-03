@@ -75,6 +75,13 @@ public sealed partial class MtkSession
             }
             catch (Exception error)
             {
+                if (refusalRecorded && IsSecurityPolicyRefusal(error))
+                {
+                    // The refusal is decided before any response byte is written, so the DA2 channel is
+                    // still in the state the caller expects and must stay usable.
+                    throw;
+                }
+
                 if (!refusalRecorded)
                 {
                     var (stage, classification) = MtkSlaEvidence.ClassifyFailure(error, deadlineExpired: false);

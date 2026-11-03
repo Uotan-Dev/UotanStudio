@@ -83,6 +83,6 @@ public sealed partial class MtkSession
         }
         using var comparison = new StorageComparisonStream(expected);
         await ReadXmlStorageAsync(regionName, offset, length, comparison, timeoutMs, progress, cancellationToken).ConfigureAwait(false);
-        return new MtkStorageVerificationResult(comparison.ComparedBytes, comparison.FirstMismatchOffset);
+        return new MtkStorageVerificationResult(comparison.ComparedBytes, comparison.FirstMismatchOffset, length);
     }
 }

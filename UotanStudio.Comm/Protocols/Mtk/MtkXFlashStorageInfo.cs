@@ -233,7 +233,7 @@ public sealed class MtkXFlashStorageInfo
         var minimumLength = kind switch
         {
             MtkXFlashStorageKind.Emmc => 96,
-            MtkXFlashStorageKind.Ufs => 48,
+            MtkXFlashStorageKind.Ufs => 50,
             MtkXFlashStorageKind.Nor => 16,
             MtkXFlashStorageKind.Nand => 45,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
@@ -283,8 +283,12 @@ public sealed class MtkXFlashStorageInfo
         var regions = new MtkXFlashStorageRegion[count];
         for (var index = 0; index < count; index++)
         {
-            var wireIndex = kind == MtkXFlashStorageKind.Emmc ? index : index switch { 0 => 1, 1 => 0, 2 => 2, _ => -1 };
-            var size = wireIndex < 0 ? 0UL : BinaryPrimitives.ReadUInt64LittleEndian(geometry[(8 + wireIndex * 8)..]);
+            // eMMC reports eight sections starting at offset 8; UFS reports lu0/lu1/lu2 at the same
+            // offsets and has no fourth load unit, so index 3 stays empty rather than borrowing a size.
+            var sizeOffset = 8 + (index * 8);
+            var size = kind == MtkXFlashStorageKind.Ufs && index == 3
+                ? 0UL
+                : BinaryPrimitives.ReadUInt64LittleEndian(geometry[sizeOffset..]);
             if (size > long.MaxValue || size % blockSize != 0)
             {
                 throw new MtkProtocolException("The reported physical capacity overflows or is not block-aligned.");
@@ -296,7 +300,10 @@ public sealed class MtkXFlashStorageInfo
         {
             throw new MtkProtocolException("The selected storage has no ordinary addressable region.");
         }
-        var cidOffset = kind == MtkXFlashStorageKind.Emmc ? 72 : 32;
+
+        // ufs_info_struct places a 16-bit vendor_id at offset 32 and the 20-byte cid at 34;
+        // mmc_info_struct places the 16-byte cid at 72.
+        var cidOffset = kind == MtkXFlashStorageKind.Emmc ? 72 : 34;
         return new MtkXFlashStorageInfo(kind, BinaryPrimitives.ReadUInt32LittleEndian(geometry), (int)blockSize,
             regions, Convert.ToHexString(geometry.Slice(cidOffset, 16)), (int)writeLength, (int)readLength);
     }

@@ -101,6 +101,7 @@ public sealed partial class MtkFlashPlan : IDisposable
 {
     private readonly List<Stream> _sources = [];
     private readonly List<PreparedOperation> _prepared = [];
+    private readonly Dictionary<uint, List<(long Start, long End)>> _occupied = [];
     private bool _disposed;
     private int _sparseChunkCount;
     private readonly Lock _lifecycleGate = new();
@@ -309,9 +310,65 @@ public sealed partial class MtkFlashPlan : IDisposable
             throw new InvalidDataException("The plan exceeds the aggregate executable-extent limit.");
         }
         Storage.ValidateRange(step.PartitionId, offset, length);
+        ReserveExtent(step.PartitionId, offset, length);
         TotalBytes = checked(TotalBytes + length);
         _prepared.Add(new PreparedOperation(new MtkFlashOperation(index, step.PartitionId, offset, length,
             step.Kind == MtkFlashStepKind.Erase, step.Verify), source, sourceOffset));
+    }
+
+    /// <summary>
+    /// Claims one byte range on a partition and rejects a range that another step already covers.
+    /// <para>在某分区上占用一段字节范围，并拒绝已被其他步骤覆盖的范围。</para>
+    /// </summary>
+    /// <param name="partitionId">The target partition. 目标分区。</param>
+    /// <param name="offset">The range start. 范围起点。</param>
+    /// <param name="length">The positive range length. 正数范围长度。</param>
+    /// <remarks>Extents are kept sorted per partition, so a duplicate or partially overlapping write is
+    /// detected in logarithmic time instead of being executed twice on the device.
+    /// <para>每个分区的范围按序保存，因此重复或部分重叠的写入能在对数时间内被发现，而不是在设备上执行两次。</para>
+    /// </remarks>
+    /// <exception cref="InvalidDataException">The range overlaps an extent already claimed by this plan.
+    /// <para>该范围与本计划已占用的范围重叠。</para></exception>
+    private void ReserveExtent(uint partitionId, long offset, long length)
+    {
+        if (!_occupied.TryGetValue(partitionId, out var extents))
+        {
+            extents = [];
+            _occupied[partitionId] = extents;
+        }
+
+        var start = offset;
+        var end = checked(offset + length);
+        var low = 0;
+        var high = extents.Count;
+        while (low < high)
+        {
+            var middle = low + ((high - low) / 2);
+            if (extents[middle].Start < start)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        if (low > 0 && extents[low - 1].End > start)
+        {
+            throw new InvalidDataException(
+                $"Partition {partitionId} is already written at 0x{extents[low - 1].Start:X}-" +
+                $"0x{extents[low - 1].End:X}; the new range 0x{start:X}-0x{end:X} overlaps it.");
+        }
+
+        if (low < extents.Count && end > extents[low].Start)
+        {
+            throw new InvalidDataException(
+                $"Partition {partitionId} is already written at 0x{extents[low].Start:X}-" +
+                $"0x{extents[low].End:X}; the new range 0x{start:X}-0x{end:X} overlaps it.");
+        }
+
+        extents.Insert(low, (start, end));
     }
 
     /// <summary>

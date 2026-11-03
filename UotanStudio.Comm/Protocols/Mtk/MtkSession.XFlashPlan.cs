@@ -77,7 +77,8 @@ public sealed partial class MtkSession
                     if (operation.IsErase)
                     {
                         await EraseXFlashStorageOwnedAsync(operation.PartitionId, operation.Offset, operation.Length,
-                            eraseTimeoutMs, cancellationToken).ConfigureAwait(false);
+                            MtkTimeoutPolicy.ComputeEraseTimeout(operation.Length, eraseTimeoutMs), cancellationToken)
+                            .ConfigureAwait(false);
                         erased = checked(erased + operation.Length);
                     }
                     else

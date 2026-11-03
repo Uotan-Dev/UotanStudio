@@ -84,7 +84,8 @@ public sealed partial class MtkSession
                     if (operation.IsErase)
                     {
                         await EraseLegacyStorageOwnedAsync(operation.PartitionId, operation.Offset, operation.Length,
-                            eraseTimeoutMs, null, cancellationToken).ConfigureAwait(false);
+                            MtkTimeoutPolicy.ComputeEraseTimeout(operation.Length, eraseTimeoutMs), null,
+                            cancellationToken).ConfigureAwait(false);
                         erased = checked(erased + operation.Length);
                     }
                     else

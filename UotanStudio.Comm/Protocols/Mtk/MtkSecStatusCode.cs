@@ -8,6 +8,11 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// the client never infers a meaning for a status it cannot point at.
 /// <para>此处只命名本实现已编目的状态码，每个名称都注明其来源表项。
 /// 未命名的状态码按原始值上报，客户端绝不为无法指认的状态码推断含义。</para>
+/// Values in the <c>0xC0020055</c>–<c>0xC002005E</c> range were previously named here without a
+/// source entry; the catalogue used for this build ends at <c>0xC0020054</c>, so they are left
+/// unnamed rather than carrying an unverified meaning.
+/// <para>本文件早先曾为 <c>0xC0020055</c>–<c>0xC002005E</c> 区间命名但无来源条目；本构建所用的
+/// 表项止于 <c>0xC0020054</c>，因此这些取值保持未命名，而不携带未经证实的含义。</para>
 /// </remarks>
 public static class MtkSecStatusCode
 {
@@ -37,13 +42,6 @@ public static class MtkSecStatusCode
         0xc0020049 => "Remote Security policy disabled",
         0xc002004d => "Get OTP value fail",
         0xc0020051 => "Otp table not initialized",
-        0xc0020055 => "Security level unsupported",
-        0xc0020056 => "Security level mismatch",
-        0xc002005a => "Security config is formatted",
-        0xc002005b => "Security config unknown error",
-        0xc002005c => "Lockstate seccfg fail",
-        0xc002005d => "Lockstate custom fail",
-        0xc002005e => "Lockstate inconsistent",
         _ => null
     };
 

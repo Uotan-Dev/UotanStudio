@@ -20,10 +20,25 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public sealed partial class MtkSession : IProtocolSession
 {
     private const int MaximumAgentLength = 64 * 1024 * 1024;
-    private const int AgentChunkLength = 1024;
+
+    /// <summary>
+    /// The chunk size used while the Boot ROM receives the first download agent through <c>0xD7</c>.
+    /// <para>Boot ROM 通过 <c>0xD7</c> 接收首个下载代理时使用的分块大小。</para>
+    /// </summary>
+    /// <remarks>
+    /// The Boot ROM path takes no endpoint-size negotiation, so it keeps the conservative 1024-byte
+    /// fallback. The legacy DA2 upload negotiates its own packet length through
+    /// <see cref="MtkLegacyOptions.AgentPacketLength"/> and is not governed by this constant.
+    /// <para>Boot ROM 路径不做端点大小协商，因此沿用保守的 1024 字节回退值。Legacy DA2 上传通过
+    /// <see cref="MtkLegacyOptions.AgentPacketLength"/> 协商自己的包长，不受本常量约束。</para>
+    /// </remarks>
+    private const int BootAgentDownloadChunkLength = 1024;
     internal const int MaximumBootReadLength = 1024 * 1024;
     private const int MaximumXmlSourcePackets = 65536;
     private const int BootHandshakeAttempts = 5;
+    private const int HandshakeRetryBackoffMs = 10;
+    private const int JumpSettleDelayMs = 100;
+    private const int UploadSettleDelayMs = 120;
     private const int HandshakeDrainTimeoutMs = 50;
     private const int HandshakeDrainLength = 0x100;
     private static readonly byte[] BootHandshakeCommand = [0xA0, 0x0A, 0x50, 0x05];
@@ -38,6 +53,7 @@ public sealed partial class MtkSession : IProtocolSession
     private PhysicalDeviceIdentity? _physicalIdentity;
     private ushort? _usbVendorId;
     private ushort? _usbProductId;
+    private IMtkTransportReopener? _reopener;
     private volatile bool _disposed;
 
     /// <summary>Creates a session which takes ownership of the selected transport.</summary>
@@ -65,14 +81,15 @@ public sealed partial class MtkSession : IProtocolSession
     public string ProtocolName => "mtk";
 
     /// <summary>
-    /// The transport this session took ownership of at construction.
-    /// <para>本会话在构造时接管的传输。</para>
+    /// The transport this session currently owns; it is replaced by <see cref="TryReconnectAsync"/> after a fault.
+    /// <para>本会话当前持有的传输；发生故障后由 <see cref="TryReconnectAsync"/> 替换。</para>
     /// </summary>
     /// <value>
-    /// The open transport used for every boot-protocol read and write; it is disposed together with the session.
-    /// <para>用于所有 boot 协议读写的已打开传输；会随会话一同释放。</para>
+    /// The open transport used for every boot-protocol read and write; it is disposed together with the session,
+    /// and replaced exactly once per successful reconnect.
+    /// <para>用于所有 boot 协议读写的已打开传输；会随会话一同释放，并在每次成功重连时替换一次。</para>
     /// </value>
-    public ICommTransport Transport { get; }
+    public ICommTransport Transport { get; private set; }
 
     /// <summary>
     /// Whether the transport is connected while the session remains in a usable stage.
@@ -294,41 +311,144 @@ public sealed partial class MtkSession : IProtocolSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            RequireState(MtkSessionState.Created);
-            cancellationToken.ThrowIfCancellationRequested();
-            NoteUploadStage(MtkDaUploadStage.Handshake);
+            return await InitializeOwnedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    /// <summary>Runs the boot handshake and identity queries while the caller already holds the operation gate.
+    /// <para>在调用方已持有操作闸门的情况下执行引导握手与身份查询。</para>
+    /// </summary>
+    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    /// <returns>The queried identity. 查询到的身份信息。</returns>
+    private async Task<MtkDeviceInfo> InitializeOwnedAsync(CancellationToken cancellationToken)
+    {
+        RequireState(MtkSessionState.Created);
+        cancellationToken.ThrowIfCancellationRequested();
+        NoteUploadStage(MtkDaUploadStage.Handshake);
+        try
+        {
+            await RunBootHandshakeOwnedAsync(cancellationToken).ConfigureAwait(false);
+
+            NoteUploadStage(MtkDaUploadStage.ChipInfoRequested);
+            await EchoAsync([0xFD], cancellationToken).ConfigureAwait(false);
+            var hardware = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
+            await EchoAsync([0xFC], cancellationToken).ConfigureAwait(false);
+            var versions = await ReadAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false);
+            await EchoAsync([0xD8], cancellationToken).ConfigureAwait(false);
+            var configuration = await ReadAsync(6, _timeoutMs, cancellationToken).ConfigureAwait(false);
+            CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(configuration.AsSpan(4)), "target configuration query");
+            var identity = await QueryBootIdentityOwnedAsync(cancellationToken).ConfigureAwait(false);
+
+            ThrowIfDisposed();
+            DeviceInfo = new MtkDeviceInfo(
+                BinaryPrimitives.ReadUInt16BigEndian(hardware),
+                BinaryPrimitives.ReadUInt16BigEndian(versions),
+                BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(2)),
+                BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(4)),
+                BinaryPrimitives.ReadUInt32BigEndian(configuration),
+                identity.BootLoaderVersion,
+                identity.BromVersion,
+                identity.Meid,
+                identity.Socid);
+            _state = MtkSessionState.Bootloader;
+            return DeviceInfo;
+        }
+        catch (Exception error)
+        {
+            CaptureUploadFailure(error);
+            _state = MtkSessionState.Faulted;
+            throw;
+        }
+    }
+
+    /// <summary>Supplies the seam used to reopen the device after a fault.
+    /// <para>提供故障后重新打开设备的接缝。</para>
+    /// </summary>
+    /// <param name="reopener">The factory-backed reopener, or <see langword="null"/> to report reconnect as unsupported.
+    /// <para>由工厂支撑的重开器；传 <see langword="null"/> 表示重连不受支持。</para></param>
+    /// <remarks>The device session factory attaches this before the session is handed to callers; a session without
+    /// one keeps working for the current transport and simply cannot recover from a fault. The session takes
+    /// ownership of every transport the reopener returns.
+    /// <para>设备会话工厂在把会话交给调用方之前挂接；未挂接的会话对当前传输仍然可用，只是无法从故障中恢复。
+    /// 会话接管重开器返回的每一个传输。</para>
+    /// </remarks>
+    public void AttachReopener(IMtkTransportReopener? reopener) => _reopener = reopener;
+
+    /// <summary>
+    /// Replaces the faulted transport with a freshly opened one and reruns the boot handshake.
+    /// <para>用新打开的传输替换已故障的传输，并重新执行引导握手。</para>
+    /// </summary>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns><see langword="true"/> when a new transport was acquired and the handshake completed;
+    /// <see langword="false"/> when the session has no reopener, is not faulted, or recorded an upload failure
+    /// that must not be replayed.
+    /// <para>已获取新传输并完成握手时为 <see langword="true"/>；会话没有重开器、未处于故障状态，或记录了不得重放的上传失败时为 <see langword="false"/>。</para></returns>
+    /// <remarks>
+    /// Only a faulted session may reconnect: every later stage is rebuilt from the handshake, so a healthy
+    /// session is never silently downgraded. The previous transport is disposed only after the replacement is
+    /// open, because disposing a USB adapter closes the underlying device handle.
+    /// <para>只有已故障的会话可以重连：后续所有阶段都将从握手重建，健康的会话绝不会被静默降级。旧传输在替换品
+    /// 打开之后才释放，因为释放 USB 适配器会关闭底层设备句柄。</para>
+    /// </remarks>
+    /// <exception cref="OperationCanceledException">The caller cancelled the reopen or the handshake.
+    /// <para>调用方取消了重开或握手。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task<bool> TryReconnectAsync(CancellationToken cancellationToken = default)
+    {
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            if (_reopener is not { } reopener || _state != MtkSessionState.Faulted)
+            {
+                return false;
+            }
+
+            if (LastUploadResult is { RetrySafe: false })
+            {
+                return false;
+            }
+
+            _state = MtkSessionState.Reconnecting;
+            ICommTransport? replacement = null;
             try
             {
-                await RunBootHandshakeOwnedAsync(cancellationToken).ConfigureAwait(false);
+                replacement = await reopener.ReopenAsync(cancellationToken).ConfigureAwait(false);
+                ArgumentNullException.ThrowIfNull(replacement);
+                if (!replacement.IsConnected)
+                {
+                    throw new InvalidOperationException("The reopened transport is not connected.");
+                }
 
-                NoteUploadStage(MtkDaUploadStage.ChipInfoRequested);
-                await EchoAsync([0xFD], cancellationToken).ConfigureAwait(false);
-                var hardware = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                await EchoAsync([0xFC], cancellationToken).ConfigureAwait(false);
-                var versions = await ReadAsync(8, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                await EchoAsync([0xD8], cancellationToken).ConfigureAwait(false);
-                var configuration = await ReadAsync(6, _timeoutMs, cancellationToken).ConfigureAwait(false);
-                CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(configuration.AsSpan(4)), "target configuration query");
-                var identity = await QueryBootIdentityOwnedAsync(cancellationToken).ConfigureAwait(false);
+                var previous = Transport;
+                Transport = replacement;
+                replacement = null;
+                previous.Dispose();
 
-                ThrowIfDisposed();
-                DeviceInfo = new MtkDeviceInfo(
-                    BinaryPrimitives.ReadUInt16BigEndian(hardware),
-                    BinaryPrimitives.ReadUInt16BigEndian(versions),
-                    BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(2)),
-                    BinaryPrimitives.ReadUInt16BigEndian(versions.AsSpan(4)),
-                    BinaryPrimitives.ReadUInt32BigEndian(configuration),
-                    identity.BootLoaderVersion,
-                    identity.BromVersion,
-                    identity.Meid,
-                    identity.Socid);
-                _state = MtkSessionState.Bootloader;
-                return DeviceInfo;
+                _uploadStage = MtkDaUploadStage.NotStarted;
+                _uploadCompletionPending = false;
+                _agentAddress = 0;
+                DeviceInfo = null;
+                LastUploadResult = null;
+                _state = MtkSessionState.Created;
+
+                await InitializeOwnedAsync(cancellationToken).ConfigureAwait(false);
+                return true;
             }
-            catch (Exception error)
+            catch (Exception)
             {
-                CaptureUploadFailure(error);
-                _state = MtkSessionState.Faulted;
+                replacement?.Dispose();
+                if (_state == MtkSessionState.Reconnecting)
+                {
+                    _state = MtkSessionState.Faulted;
+                }
+
                 throw;
             }
         }
@@ -340,27 +460,30 @@ public sealed partial class MtkSession : IProtocolSession
 
     /// <summary>Runs the complemented-byte boot handshake, using the relaxed resynchronization only when descriptor evidence proves a non-Boot-ROM USB product id.
     /// <para>执行反码字节 boot 握手；仅当描述符证据证明是非 Boot ROM 的 USB 产品 ID 时，才使用宽松重同步。</para></summary>
-    /// <remarks>The Boot ROM product id keeps the strict single pass. Every other known USB product id first writes
-    /// 0xA0 without reading an echo, then retries the full four-byte sequence up to five times, draining stale input
-    /// and restarting from the first byte after each mismatch, as does.
-    /// <para>Boot ROM 产品 ID 保持严格单趟语义。其他已知 USB 产品 ID 先单独写入 0xA0 且不读取回显，随后最多重试完整
-    /// 四字节序列五次；每次不匹配后清空陈旧输入并从首字节重同步，与 一致。</para></remarks>
+    /// <remarks>Both paths retry a bounded number of times and restart from the first byte after a mismatch. The
+    /// Boot ROM path adds a short backoff and drains stale input between attempts, because a port that has just
+    /// enumerated commonly drops the first byte; the relaxed path keeps its bare 0xA0 warm-up instead.
+    /// <para>两条路径都做有界重试，并在不匹配后从首字节重启。Boot ROM 路径在两次尝试之间加入短暂退避并清空陈旧
+    /// 输入，因为刚枚举完成的端口常常丢掉首字节；宽松路径保留其单独的 0xA0 预热。</para></remarks>
     /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
     private async Task RunBootHandshakeOwnedAsync(CancellationToken cancellationToken)
     {
         if (!UsesRelaxedBootHandshake)
         {
-            foreach (var value in BootHandshakeCommand)
+            for (var attempt = 0; attempt < BootHandshakeAttempts; attempt++)
             {
-                await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                if (reply[0] != (byte)(value ^ 0xFF))
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await TryRunStrictBootHandshakeAttemptOwnedAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    throw new MtkProtocolException("The boot handshake echo did not match.");
+                    return;
                 }
+
+                await DiscardHandshakeInputOwnedAsync(cancellationToken).ConfigureAwait(false);
+                await Task.Delay(HandshakeRetryBackoffMs, cancellationToken).ConfigureAwait(false);
             }
 
-            return;
+            throw new MtkProtocolException(
+                $"The boot handshake echo did not match after {BootHandshakeAttempts} attempts.");
         }
 
         await WriteAsync([BootHandshakeCommand[0]], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
@@ -377,6 +500,33 @@ public sealed partial class MtkSession : IProtocolSession
 
         throw new MtkProtocolException(
             $"The boot handshake did not synchronize after {BootHandshakeAttempts} attempts.");
+    }
+
+    /// <summary>Runs one strict four-byte handshake attempt.
+    /// <para>执行一次严格的四字节握手尝试。</para></summary>
+    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    /// <returns><see langword="true"/> when all four echoes matched.
+    /// <para>四个回显全部匹配时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> TryRunStrictBootHandshakeAttemptOwnedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            foreach (var value in BootHandshakeCommand)
+            {
+                await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                if (reply[0] != (byte)(value ^ 0xFF))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception error) when (error is TimeoutException or MtkProtocolException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Gets whether the observed USB product id is not a documented Boot ROM port.
@@ -453,7 +603,14 @@ public sealed partial class MtkSession : IProtocolSession
         ArgumentOutOfRangeException.ThrowIfGreaterThan(length, MaximumAgentLength);
         ArgumentOutOfRangeException.ThrowIfNegative(signatureLength);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(signatureLength, length);
-        if ((length & 1) != 0 || (loadAddress & 3) != 0 || (ulong)loadAddress + (uint)length > (ulong)uint.MaxValue + 1)
+
+        // An odd image is padded with a single trailing zero, but only when no signature suffix has to stay
+        // at a fixed offset from the end; shifting a signature would invalidate it on the target.
+        var padded = (length & 1) != 0 && signatureLength == 0;
+        var declaredLength = padded ? length + 1 : length;
+
+        if ((!padded && (length & 1) != 0) || (loadAddress & 3) != 0
+            || (ulong)loadAddress + (uint)declaredLength > (ulong)uint.MaxValue + 1)
         {
             throw new ArgumentException("The agent image must be word-aligned and fit the 32-bit load address range.");
         }
@@ -473,22 +630,33 @@ public sealed partial class MtkSession : IProtocolSession
             {
                 await EchoAsync([0xD7], cancellationToken).ConfigureAwait(false);
                 await EchoUInt32Async(loadAddress, cancellationToken).ConfigureAwait(false);
-                await EchoUInt32Async((uint)length, cancellationToken).ConfigureAwait(false);
+                await EchoUInt32Async((uint)declaredLength, cancellationToken).ConfigureAwait(false);
                 await EchoUInt32Async((uint)signatureLength, cancellationToken).ConfigureAwait(false);
                 var requestStatus = BinaryPrimitives.ReadUInt16BigEndian(
                     await ReadAsync(2, _timeoutMs, cancellationToken).ConfigureAwait(false));
                 CheckStatus(requestStatus, "DA upload request");
 
                 NoteUploadStage(MtkDaUploadStage.DataTransferring);
-                var buffer = ArrayPool<byte>.Shared.Rent(AgentChunkLength);
+                var buffer = ArrayPool<byte>.Shared.Rent(BootAgentDownloadChunkLength);
                 ushort checksum = 0;
                 try
                 {
                     var uploaded = 0;
-                    while (uploaded < length)
+                    while (uploaded < declaredLength)
                     {
-                        var count = Math.Min(AgentChunkLength, length - uploaded);
-                        await image.ReadExactlyAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+                        var count = Math.Min(BootAgentDownloadChunkLength, declaredLength - uploaded);
+                        var fromStream = Math.Min(count, length - uploaded);
+                        if (fromStream > 0)
+                        {
+                            await image.ReadExactlyAsync(buffer.AsMemory(0, fromStream), cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+
+                        if (count > fromStream)
+                        {
+                            Array.Clear(buffer, fromStream, count - fromStream);
+                        }
+
                         for (var offset = 0; offset < count; offset += 2)
                         {
                             checksum ^= BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(offset, 2));
@@ -502,6 +670,14 @@ public sealed partial class MtkSession : IProtocolSession
                 finally
                 {
                     ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                // Most Boot ROM revisions only release the completion word after the OUT pipe is flushed with a
+                // zero-length packet and given a short settling window; 0x2531 answers without either.
+                if (DeviceInfo is not { HardwareCode: 0x2531 })
+                {
+                    await Transport.WriteAsync([], 0, 0, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(UploadSettleDelayMs, cancellationToken).ConfigureAwait(false);
                 }
 
                 _uploadCompletionPending = true;
@@ -547,11 +723,19 @@ public sealed partial class MtkSession : IProtocolSession
     /// The operation cancellation token.
     /// <para>操作取消令牌。</para>
     /// </param>
+    /// <param name="echoJumpAddress">
+    /// Whether the target is expected to echo the jump address before reporting status. The documented
+    /// sequence writes the address without an echo and reads it back for comparison; targets that answer
+    /// the address byte for byte instead are handled by leaving this enabled.
+    /// <para>目标是否在报告状态前回显跳转地址。已记载的序列不要求回显，而是回读地址进行比对；
+    /// 若目标逐字节应答地址，则保持本参数启用。</para>
+    /// </param>
     /// <returns>
     /// A task that completes once the target acknowledges execution and the session advances to the agent-started stage.
     /// <para>在目标确认执行、会话推进到代理已启动阶段后完成的任务。</para>
     /// </returns>
-    public async Task StartDownloadAgentAsync(CancellationToken cancellationToken = default)
+    public async Task StartDownloadAgentAsync(CancellationToken cancellationToken = default,
+        bool echoJumpAddress = true)
     {
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -562,13 +746,34 @@ public sealed partial class MtkSession : IProtocolSession
             try
             {
                 await EchoAsync([0xD5], cancellationToken).ConfigureAwait(false);
-                await EchoUInt32Async(_agentAddress, cancellationToken).ConfigureAwait(false);
+                if (echoJumpAddress)
+                {
+                    await EchoUInt32Async(_agentAddress, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    var address = new byte[sizeof(uint)];
+                    BinaryPrimitives.WriteUInt32BigEndian(address, _agentAddress);
+                    await WriteAsync(address, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                    var readBack = await ReadAsync(sizeof(uint), _timeoutMs, cancellationToken).ConfigureAwait(false);
+                    var reported = BinaryPrimitives.ReadUInt32BigEndian(readBack);
+                    if (reported != _agentAddress)
+                    {
+                        throw new MtkProtocolException(
+                            $"The target read back jump address 0x{reported:X8} instead of 0x{_agentAddress:X8}.");
+                    }
+                }
+
                 var status = await ReadAsync(2, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 if (BinaryPrimitives.ReadUInt16BigEndian(status) != 0)
                 {
                     throw new MtkProtocolException("The target rejected execution of the uploaded agent.",
                         BinaryPrimitives.ReadUInt16BigEndian(status));
                 }
+
+                // The agent needs a short settling window before it accepts the first bring-up exchange;
+                // sending immediately after the status read desynchronizes the following sequence.
+                await Task.Delay(JumpSettleDelayMs, cancellationToken).ConfigureAwait(false);
 
                 ThrowIfDisposed();
                 _state = MtkSessionState.AgentStarted;
@@ -613,7 +818,7 @@ public sealed partial class MtkSession : IProtocolSession
     {
         if (status > 0xFF)
         {
-            throw new MtkProtocolException($"The target rejected {operation} (status 0x{status:X4}).", status);
+            throw new MtkProtocolException(MtkProtocolException.DescribeRejection(operation, status), status);
         }
     }
 
