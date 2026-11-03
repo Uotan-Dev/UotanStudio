@@ -35,6 +35,9 @@ sealed class Program
 
         var settings = Services.SettingsPersistenceService.Instance.LoadSettings();
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
+        LogService.Instance.ConfigureFileLogging(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio", "logs"));
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => LogService.Instance.FlushFileLog();
 
         if (args is ["--managed-device-shell", var protocolName, var serial])
         {

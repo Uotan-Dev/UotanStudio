@@ -197,6 +197,12 @@ internal sealed class CommKit : ICommKit
     public Task<IReadOnlyList<UsbDeviceInfo>> EnumerateUsbDevicesAsync(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null, CancellationToken cancellationToken = default) => _usb.EnumerateDevicesAsync(apiKind, filter, cancellationToken);
 
     /// <summary>
+    /// Clears the process-wide Windows enumeration inventory.
+    /// <para>清除进程级 Windows 枚举清单。</para>
+    /// </summary>
+    public void ResetUsbEnumerationCache() => UsbCommunicationLayer.ResetUsbEnumerationInventory();
+
+    /// <summary>
     /// Monitors USB device additions and removals by polling snapshots.
     /// <para>通过轮询快照监视 USB 设备新增与移除。</para>
     /// </summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 
 namespace UotanStudio.Comm.Routing;
 
@@ -12,8 +13,122 @@ public static class DebugBridgeEndpoints
     /// <summary>Local debug bridge server host. <para>本机调试桥 server 主机。</para></summary>
     public const string ServerHost = "127.0.0.1";
 
-    /// <summary>Local ADB server port. <para>本机 adb server 端口。</para></summary>
-    public const int AdbServerPort = 5037;
+    /// <summary>Upstream ANDROID_ADB_SERVER_PORT or a loopback ADB_SERVER_SOCKET override, otherwise 5037.
+    /// <para>遵循上游 ANDROID_ADB_SERVER_PORT 或回环 ADB_SERVER_SOCKET 覆盖，否则使用 5037。</para></summary>
+    /// <remarks>
+    /// ADB_SERVER_SOCKET wins over ANDROID_ADB_SERVER_PORT, exactly like the adb client: <c>tcp:host:port</c>
+    /// is honored only when the host is absent or loopback, because this process serves a local adb server;
+    /// a remote socket spec, a non-tcp spec or a malformed port is ignored instead of redirecting the channel.
+    /// The environment variables are read once per process and the result is cached, so implicit callers
+    /// cannot observe a value change mid-scan.
+    /// <para>ADB_SERVER_SOCKET 优先于 ANDROID_ADB_SERVER_PORT，与 adb 客户端一致：仅在主机缺失或为回环时
+    /// 采用 <c>tcp:host:port</c> 的端口，因为本进程只服务本机 adb server；远端套接字、非 tcp 规范或畸形端口
+    /// 会被忽略，而不是改道。环境变量每个进程只读取一次并缓存结果，隐式调用方不会在一次扫描中观测到值变化。</para>
+    /// </remarks>
+    /// <value>The adb server port in [1, 65535]: the socket-spec or port override when it parses as a
+    /// decimal port within that range, otherwise 5037.
+    /// <para>取值范围为 [1, 65535] 的 adb server 端口：套接字规范或端口覆盖可解析为该范围内的十进制端口时
+    /// 使用它，否则为 5037。</para></value>
+    public static int AdbServerPort
+    {
+        get
+        {
+            lock (AdbPortLock)
+            {
+                _adbServerPort ??= ResolveAdbServerPort(
+                    Environment.GetEnvironmentVariable("ADB_SERVER_SOCKET"),
+                    Environment.GetEnvironmentVariable("ANDROID_ADB_SERVER_PORT"));
+                return _adbServerPort.Value;
+            }
+        }
+    }
+
+    private const int DefaultAdbServerPort = 5037;
+
+    private static readonly Lock AdbPortLock = new();
+
+    private static int? _adbServerPort;
+
+    /// <summary>
+    /// Resolves the local adb server port from the upstream overrides so the precedence is testable without
+    /// mutating process-wide environment variables.
+    /// <para>按上游覆盖解析本机 adb server 端口，使优先级无需修改进程级环境变量即可测试。</para>
+    /// </summary>
+    /// <param name="socketSpec">The <c>ADB_SERVER_SOCKET</c> value, or <see langword="null"/>.
+    /// <para><c>ADB_SERVER_SOCKET</c> 的取值；可为 <see langword="null"/>。</para></param>
+    /// <param name="portOverride">The <c>ANDROID_ADB_SERVER_PORT</c> value, or <see langword="null"/>.
+    /// <para><c>ANDROID_ADB_SERVER_PORT</c> 的取值；可为 <see langword="null"/>。</para></param>
+    /// <returns>The resolved port, defaulting to 5037 when neither value names a usable local port.
+    /// <para>解析出的端口；两个取值都没有给出可用的本机端口时为 5037。</para></returns>
+    internal static int ResolveAdbServerPort(string? socketSpec, string? portOverride)
+        => TryReadLoopbackTcpPort(socketSpec, out var socketPort)
+            ? socketPort
+            : TryParsePort(portOverride) ?? DefaultAdbServerPort;
+
+    /// <summary>
+    /// Reads the port out of an adb socket spec, accepting it only when the spec targets this machine:
+    /// <c>tcp:port</c>, <c>tcp:host:port</c> and <c>tcp:[v6]:port</c> all qualify as long as the host is
+    /// absent or loopback.
+    /// <para>从 adb 套接字规范中读取端口，只在规范指向本机时才接受：<c>tcp:port</c>、<c>tcp:host:port</c>
+    /// 与 <c>tcp:[v6]:port</c> 只要主机缺失或为回环地址即可。</para>
+    /// </summary>
+    /// <param name="spec">The socket spec to read. <para>待读取的套接字规范。</para></param>
+    /// <param name="port">The parsed port when the spec qualifies. <para>规范符合条件时解析出的端口。</para></param>
+    /// <returns><see langword="true"/> when a loopback tcp spec carried a usable port.
+    /// <para>回环 tcp 规范带有可用端口时为 <see langword="true"/>。</para></returns>
+    private static bool TryReadLoopbackTcpPort(string? spec, out int port)
+    {
+        port = 0;
+        const string prefix = "tcp:";
+        if (spec is null || !spec.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var rest = spec[prefix.Length..];
+        string host;
+        string portText;
+        if (rest.StartsWith('['))
+        {
+            var close = rest.IndexOf(']');
+            if (close < 0 || close + 1 >= rest.Length || rest[close + 1] != ':')
+            {
+                return false;
+            }
+
+            host = rest[1..close];
+            portText = rest[(close + 2)..];
+        }
+        else
+        {
+            var colon = rest.LastIndexOf(':');
+            host = colon >= 0 ? rest[..colon] : string.Empty;
+            portText = colon >= 0 ? rest[(colon + 1)..] : rest;
+        }
+
+        if (host.Length > 0 &&
+            !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) &&
+            !(IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address)))
+        {
+            return false;
+        }
+
+        if (TryParsePort(portText) is not { } value)
+        {
+            return false;
+        }
+
+        port = value;
+        return true;
+    }
+
+    private static int? TryParsePort(string? raw)
+        => !string.IsNullOrEmpty(raw) &&
+            !raw.Any(c => !char.IsAsciiDigit(c)) &&
+            int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var value) &&
+            value is >= 1 and <= 65535
+            ? value
+            : null;
 
     /// <summary>Upstream OHOS_HDC_SERVER_PORT override, otherwise 8710.
     /// <para>遵循上游 OHOS_HDC_SERVER_PORT 环境变量，否则使用 8710。</para></summary>
@@ -62,10 +177,5 @@ public static class DebugBridgeEndpoints
     }
 
     private static int ResolveHdcServerPort(string? rawValue)
-    {
-        if (string.IsNullOrEmpty(rawValue)) return DefaultHdcServerPort;
-        if (rawValue.Any(c => !char.IsAsciiDigit(c)) || !int.TryParse(rawValue, CultureInfo.InvariantCulture, out var result) || result is < 1 or > 65535)
-            return DefaultHdcServerPort;
-        return result;
-    }
+        => TryParsePort(rawValue) ?? DefaultHdcServerPort;
 }

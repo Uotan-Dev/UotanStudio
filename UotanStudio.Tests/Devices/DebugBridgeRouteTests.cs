@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
@@ -289,6 +291,51 @@ public sealed class DebugBridgeRouteTests : IDisposable
 
         Assert.Equal(DebugBridgeRouteMode.Auto, configuration.RouteMode);
     }
+
+    [Fact]
+    public async Task TryProbeAsync_LiveLoopbackListener_ReportsListening()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var outcome = await DebugBridgeRoute.TryProbeAsync("127.0.0.1", port, TestContext.Current.CancellationToken);
+
+        Assert.Equal(DebugBridgeProbeOutcome.Listening, outcome);
+    }
+
+    [Fact]
+    public async Task TryProbeAsync_ClosedLoopbackPort_ReportsRefused()
+    {
+        int port;
+        using (var probe = new TcpListener(IPAddress.Loopback, 0))
+        {
+            probe.Start();
+            port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        }
+
+        var outcome = await DebugBridgeRoute.TryProbeAsync("127.0.0.1", port, TestContext.Current.CancellationToken);
+
+        Assert.Equal(DebugBridgeProbeOutcome.Refused, outcome);
+    }
+
+    [Theory]
+    [InlineData(null, null, 5037)]
+    [InlineData(null, "5038", 5038)]
+    [InlineData(null, "0", 5037)]
+    [InlineData(null, "65536", 5037)]
+    [InlineData(null, "abc", 5037)]
+    [InlineData(null, " 5038", 5037)]
+    [InlineData("tcp:localhost:5039", "5038", 5039)]
+    [InlineData("tcp:5039", null, 5039)]
+    [InlineData("tcp:127.0.0.1:5041", null, 5041)]
+    [InlineData("tcp:[::1]:5040", null, 5040)]
+    [InlineData("tcp:192.168.1.5:5039", "5038", 5038)]
+    [InlineData("localabstract:adb", "5038", 5038)]
+    [InlineData("tcp:localhost:notaport", "5038", 5038)]
+    [InlineData("tcp:", null, 5037)]
+    public void ResolveAdbServerPort_HonorsUpstreamOverrides(string? socketSpec, string? portOverride, int expected)
+        => Assert.Equal(expected, DebugBridgeEndpoints.ResolveAdbServerPort(socketSpec, portOverride));
 
     private sealed class NoopOpener : IDeviceTransportOpener
     {

@@ -172,7 +172,7 @@ internal sealed class AdbConnection : IDisposable
             Send(AdbMessaging.BuildConnect());
         }
         catch (Exception ex) when ((ex is System.ComponentModel.Win32Exception or IOException)
-            && _transport is UsbDeviceTransport)
+            && _transport is UsbDeviceTransport { Session.ResetReenumeratesDevice: false })
         {
             _transport.Reset();
             Send(AdbMessaging.BuildConnect());
@@ -203,7 +203,7 @@ internal sealed class AdbConnection : IDisposable
             await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when ((ex is System.ComponentModel.Win32Exception or IOException)
-            && _transport is UsbDeviceTransport)
+            && _transport is UsbDeviceTransport { Session.ResetReenumeratesDevice: false })
         {
             _transport.Reset();
             await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);

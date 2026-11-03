@@ -21,18 +21,22 @@ public static class DebugBridgeSessionOpener
     /// <param name="serial">Target serial to check; when null or blank, any nonempty target list counts as ownership.
     /// <para>待检查的目标序列号；为 null 或空白时，只要目标列表非空即视为归属。</para></param>
     /// <param name="host">adb server host to decide for.<para>待判定的 adb server 主机。</para></param>
-    /// <param name="port">adb server port to decide for.<para>待判定的 adb server 端口。</para></param>
+    /// <param name="port">adb server port to decide for; <see langword="null"/> uses the port resolved from
+    /// <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+    /// <para>待判定的 adb server 端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+    /// <c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></param>
     /// <returns><see langword="true"/> when the server is selected by the mode, marked available, and owns the serial.
     /// <para>模式选择 server、快照标记可用且拥有该序列号时为 <see langword="true"/>。</para></returns>
-    public static bool AdbServerOwns(string? serial, string host = DebugBridgeEndpoints.ServerHost, int port = DebugBridgeEndpoints.AdbServerPort)
+    public static bool AdbServerOwns(string? serial, string host = DebugBridgeEndpoints.ServerHost, int? port = null)
     {
+        port ??= DebugBridgeEndpoints.AdbServerPort;
         if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.DirectOnly) return false;
-        if (!DebugBridgeRoute.UseAdbServer(host, port) && !AnyServerListening("adb"))
+        if (!DebugBridgeRoute.UseAdbServer(host, port.Value) && !AnyServerListening("adb"))
         {
             return false;
         }
 
-        var targets = new AdbServerServices(string.Empty, host, port).ListTargets();
+        var targets = new AdbServerServices(string.Empty, host, port.Value).ListTargets();
         return string.IsNullOrWhiteSpace(serial)
             ? targets.Count != 0
             : targets.Any(target => string.Equals(target.Serial, serial, StringComparison.Ordinal));
@@ -135,25 +139,31 @@ public static class DebugBridgeSessionOpener
     /// <param name="openDirect">Factory invoked when no live server owns the serial.
     /// <para>无存活 server 拥有该序列号时调用的工厂。</para></param>
     /// <param name="host">adb server host to probe.<para>待探测的 adb server 主机。</para></param>
-    /// <param name="port">adb server port to probe.<para>待探测的 adb server 端口。</para></param>
+    /// <param name="port">adb server port to probe; <see langword="null"/> uses the port resolved from
+    /// <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+    /// <para>待探测的 adb server 端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+    /// <c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></param>
     /// <returns>The server-backed session, or the direct factory result (possibly <see langword="null"/>) when unclaimed.
     /// <para>server 会话；若无人接管，则返回直连工厂结果（可能为 <see langword="null"/>）。</para></returns>
     /// <exception cref="IOException">The server-only mode is selected and the server is unavailable.
     /// <para>选择了仅 server 模式但 server 不可用。</para></exception>
     public static IAdbDeviceSession? OpenAdb(string serial, Func<IAdbDeviceSession?> openDirect,
-        string host = DebugBridgeEndpoints.ServerHost, int port = DebugBridgeEndpoints.AdbServerPort)
+        string host = DebugBridgeEndpoints.ServerHost, int? port = null)
     {
+        port ??= DebugBridgeEndpoints.AdbServerPort;
         if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.ServerOnly)
         {
-            if (!DebugBridgeRoute.UseAdbServer(host, port))
+            if (!DebugBridgeRoute.UseAdbServer(host, port.Value))
             {
                 throw new IOException("The ADB server is required by the ServerOnly route mode but is not listening.");
             }
 
-            return AdbSession.ForServer(serial, host, port);
+            return AdbSession.ForServer(serial, host, port.Value);
         }
 
-        return AdbServerOwns(serial, host, port) ? AdbSession.ForServer(serial, host, port) : openDirect();
+        return AdbServerOwns(serial, host, port.Value)
+            ? AdbSession.ForServer(serial, host, port.Value)
+            : openDirect();
     }
 
     /// <summary>Creates a routed HDC session: the server serves only targets it actually lists; a serial missing from the live server's list falls back to the direct factory, except in server-only mode where it is an error.

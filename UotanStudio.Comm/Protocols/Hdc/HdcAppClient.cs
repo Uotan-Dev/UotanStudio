@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using UotanStudio.Compress.Zip;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -401,7 +402,22 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
         cancellationToken.ThrowIfCancellationRequested();
         ValidateOptions(options);
         ValidateBundle(bundle);
-        using var channel = connection.OpenChannel(HdcCommand.AppUninstall, Encoding.UTF8.GetBytes(options.Length == 0 ? bundle : options + " " + bundle));
+        byte[] payload;
+        if (options.Length == 0)
+        {
+            payload = Encoding.UTF8.GetBytes(bundle);
+        }
+        else
+        {
+            using var buffer = Utf8String.CreateWriter(out var writer);
+            writer.Append(options);
+            writer.Append(' ');
+            writer.Append(bundle);
+            writer.Flush();
+            payload = buffer.ToArray();
+        }
+
+        using var channel = connection.OpenChannel(HdcCommand.AppUninstall, payload);
         return ReadResult(channel, 2, cancellationToken);
     }
 

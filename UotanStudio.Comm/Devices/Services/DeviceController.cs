@@ -82,6 +82,37 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     /// <para>缓存；条目按 <see cref="PropertyCacheKey(DeviceEndpoint)"/> 键控，设备移除时丢弃对应端点的条目。</para></value>
     public DevicePropertyCache Properties { get; } = new();
 
+    /// <summary>
+    /// Reads the stable properties cached for an endpoint, or <see langword="null"/> when nothing is cached
+    /// for it yet.
+    /// <para>读取某端点缓存的稳定属性；该端点尚无缓存时返回 <see langword="null"/>。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint whose properties are read; its key is
+    /// <see cref="PropertyCacheKey(DeviceEndpoint)"/>.
+    /// <para>要读取属性的端点；其键由 <see cref="PropertyCacheKey(DeviceEndpoint)"/> 推导。</para></param>
+    /// <returns>The cached property map, or <see langword="null"/> when the endpoint has no entry.
+    /// <para>缓存的属性映射；端点没有条目时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is <see langword="null"/>.
+    /// <para><paramref name="endpoint"/> 为 <see langword="null"/>。</para></exception>
+    public IReadOnlyDictionary<string, string>? GetCachedProperties(DeviceEndpoint endpoint)
+        => Properties.Get(PropertyCacheKey(endpoint));
+
+    /// <summary>
+    /// Merges stable properties into the cache entry for an endpoint; a key already cached keeps its value.
+    /// <para>把稳定属性合并进某端点的缓存条目；已缓存的键保留原值。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint whose properties are written.<para>要写入属性的端点。</para></param>
+    /// <param name="properties">Properties added only for keys not cached yet; may be enumerated more than once.
+    /// <para>仅为尚未缓存的键新增的属性；可能被枚举多次。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> or <paramref name="properties"/> is <see langword="null"/>.
+    /// <para><paramref name="endpoint"/> 或 <paramref name="properties"/> 为 <see langword="null"/>。</para></exception>
+    public void CacheProperties(DeviceEndpoint endpoint, IEnumerable<KeyValuePair<string, string>> properties)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(properties);
+        Properties.Store(PropertyCacheKey(endpoint), properties);
+    }
+
     internal DeviceController(IEnumerable<IDeviceDiscoverySource> sources, IDeviceTransportOpener opener)
         : this(sources, opener, DefaultDeviceSessionFactories.All)
     {

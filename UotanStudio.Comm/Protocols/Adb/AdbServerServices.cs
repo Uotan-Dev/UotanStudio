@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
@@ -13,12 +15,25 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <param name="serial">The server-side serial identifying the target device; device-scoped calls
 /// require it to be non-blank. <para>标识目标设备的 server 侧 serial；设备级调用要求它非空。</para></param>
 /// <param name="host">The adb server host to connect to. <para>要连接的 adb server 主机。</para></param>
-/// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
-public sealed class AdbServerServices(string serial, string host = "127.0.0.1", int port = 5037)
+/// <param name="port">The adb server TCP port; <see langword="null"/> uses the port resolved from
+/// <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+/// <para>adb server 的 TCP 端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+/// <c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></param>
+public sealed class AdbServerServices(string serial, string host = "127.0.0.1", int? port = null)
 {
+    private readonly int _port = port ?? DebugBridgeEndpoints.AdbServerPort;
+
     /// <summary>Oldest adb server protocol version accepted by this client (A_VERSION_MIN, 0x001F).
     /// <para>本客户端接受的最旧 adb server 协议版本（A_VERSION_MIN，0x001F）。</para></summary>
     private const int MinimumServerVersion = 0x001F;
+
+    /// <summary>Byte window size used while streaming shell output, doubling up to the line ceiling.
+    /// <para>流式读取 shell 输出时使用的字节窗口大小，按两倍增长直到行上限。</para></summary>
+    private const int ShellLineWindowBytes = 8192;
+
+    /// <summary>Ceiling for one unterminated shell output line; a device that never emits a newline is refused.
+    /// <para>单个未结尾 shell 输出行的上限；从不换行的设备会被拒绝。</para></summary>
+    private const int MaximumShellLineBytes = 1024 * 1024;
 
     /// <summary>Gets the protocol version reported by the adb server queried most recently in this process, or
     /// <see langword="null"/> before the first answer. It is recorded for diagnostics only; a rejected server is
@@ -28,6 +43,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <value>The parsed <c>host:version</c> value, or <see langword="null"/> when no server answered yet.
     /// <para>解析出的 <c>host:version</c> 值；尚无 server 应答时为 <see langword="null"/>。</para></value>
     internal static int? LastServerVersion { get; private set; }
+
+    /// <summary>How long an answered <c>host:version</c> is reused per endpoint before the probe runs again.
+    /// <para>每个端点在重新探测之前复用已应答 <c>host:version</c> 的时长。</para></summary>
+    private const long VersionReuseMilliseconds = 60_000;
+
+    /// <summary>Answered server versions keyed by <c>host:port</c> with the tick count they were read at.
+    /// <para>按 <c>host:port</c> 保存的已应答 server 版本与其读取时的计数值。</para></summary>
+    private static readonly ConcurrentDictionary<string, (int Version, long Ticks)> ServerVersions = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Lists server-managed targets without selecting a device transport.
@@ -46,9 +69,21 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// 版本不可读、低于支持的最低版本。</para></exception>
     public IReadOnlyList<AdbTargetInfo> ListTargets()
     {
-        using (var versionStream = OpenControlStream())
+        // The server closes a control connection after answering one host request, so the version probe
+        // costs a connect of its own on every listing. That version only changes when the server process
+        // is replaced, so a recently answered endpoint reuses its answer instead of re-connecting.
+        var versionKey = string.Concat(host, ":", _port.ToString(CultureInfo.InvariantCulture));
+        if (ServerVersions.TryGetValue(versionKey, out var known) &&
+            Environment.TickCount64 - known.Ticks < VersionReuseMilliseconds)
         {
-            LastServerVersion = RequestServerVersion(versionStream);
+            LastServerVersion = known.Version;
+        }
+        else
+        {
+            using var versionStream = OpenControlStream();
+            var version = RequestServerVersion(versionStream);
+            LastServerVersion = version;
+            ServerVersions[versionKey] = (version, Environment.TickCount64);
         }
 
         using var stream = OpenControlStream();
@@ -157,8 +192,10 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <para><paramref name="command"/> 为空。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="onLine"/> is <c>null</c>.
     /// <para><paramref name="onLine"/> 为 <c>null</c>。</para></exception>
-    /// <exception cref="IOException">The adb server reported FAIL for the transport or service request.
-    /// <para>adb server 对传输或服务请求返回 FAIL。</para></exception>
+    /// <exception cref="IOException">The adb server reported FAIL for the transport or service request, or one
+    /// unterminated output line exceeds <see cref="MaximumShellLineBytes"/> bytes.
+    /// <para>adb server 对传输或服务请求返回 FAIL，或单个未结尾的输出行超过
+    /// <see cref="MaximumShellLineBytes"/> 字节。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     public async Task StreamShellAsync(string command, Func<string, bool> onLine, CancellationToken cancellationToken = default)
@@ -166,26 +203,54 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         ArgumentNullException.ThrowIfNull(onLine);
         using var stream = await OpenServiceAsync("shell:" + command, cancellationToken).ConfigureAwait(false);
-        var buffer = new byte[8192];
-        var pending = string.Empty;
+        var window = new byte[ShellLineWindowBytes];
+        var held = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (held == window.Length)
+            {
+                if (held >= MaximumShellLineBytes)
+                {
+                    throw new IOException(
+                        $"ADB shell output line exceeds the {MaximumShellLineBytes} byte limit.");
+                }
+
+                var grown = new byte[checked(window.Length * 2)];
+                Buffer.BlockCopy(window, 0, grown, 0, held);
+                window = grown;
+            }
+
             int count;
-            try { count = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false); }
+            try
+            {
+                count = await stream.ReadAsync(window.AsMemory(held, window.Length - held), cancellationToken)
+                    .ConfigureAwait(false);
+            }
             catch (IOException) when (cancellationToken.IsCancellationRequested) { break; }
             if (count <= 0) break;
-            pending += Encoding.UTF8.GetString(buffer, 0, count);
-            int newline;
-            while ((newline = pending.IndexOf('\n')) >= 0)
+
+            // Lines are split on '\n' only, so a bare '\r' progress rewrite stays inside its line until the
+            // server emits the newline that ends it.
+            var available = held + count;
+            var start = 0;
+            while (true)
             {
-                var line = pending[..newline].TrimEnd('\r');
+                var newline = Array.IndexOf(window, (byte)'\n', start, available - start);
+                if (newline < 0) break;
+                var line = Encoding.UTF8.GetString(window, start, newline - start).TrimEnd('\r');
+                start = newline + 1;
                 if (!onLine(line)) return;
-                pending = pending[(newline + 1)..];
+            }
+
+            held = available - start;
+            if (held > 0)
+            {
+                Buffer.BlockCopy(window, start, window, 0, held);
             }
         }
 
-        if (pending.Length > 0) onLine(pending);
+        if (held > 0) onLine(Encoding.UTF8.GetString(window, 0, held));
     }
 
     /// <summary>
@@ -215,7 +280,10 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <param name="password">The one-time pairing password shown with the QR code.
     /// <para>二维码旁显示的一次性配对密码。</para></param>
     /// <param name="serverHost">The adb server host.<para>adb server 主机。</para></param>
-    /// <param name="serverPort">The adb server TCP port.<para>adb server 的 TCP 端口。</para></param>
+    /// <param name="serverPort">The adb server TCP port; <see langword="null"/> uses the port resolved from
+    /// <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+    /// <para>adb server 的 TCP 端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+    /// <c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></param>
     /// <param name="cancellationToken">Cancels connecting and <c>host:pair:</c> processing.
     /// <para>取消连接与 <c>host:pair:</c> 交互。</para></param>
     /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the device accepted the password.
@@ -234,8 +302,9 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <exception cref="OperationCanceledException">The token was canceled before completion.
     /// <para>令牌在完成前被取消。</para></exception>
     public static async Task<string> PairAsync(string host, int pairingPort, string password,
-        string serverHost = "127.0.0.1", int serverPort = 5037, CancellationToken cancellationToken = default)
+        string serverHost = "127.0.0.1", int? serverPort = null, CancellationToken cancellationToken = default)
     {
+        serverPort ??= DebugBridgeEndpoints.AdbServerPort;
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
         if (pairingPort is < 1 or > 65535)
@@ -251,7 +320,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         var response = await RunPairCommandAsync(
                 "host:pair:" + password + ":" +
                 DebugBridgeNetworkAddress.FormatEndpoint(host, pairingPort),
-                serverHost, serverPort, cancellationToken).ConfigureAwait(false);
+                serverHost, serverPort.Value, cancellationToken).ConfigureAwait(false);
         if (!response.StartsWith("Successfully paired", StringComparison.OrdinalIgnoreCase))
         {
             throw PairingFailure(response);
@@ -462,7 +531,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     private async Task<Stream> OpenServiceAsync(string service, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
-        var stream = await OpenHostStreamAsync(host, port, cancellationToken).ConfigureAwait(false);
+        var stream = await OpenHostStreamAsync(host, _port, cancellationToken).ConfigureAwait(false);
         try
         {
             await RequestAsync(stream, "host:transport:" + serial, cancellationToken).ConfigureAwait(false);
@@ -488,11 +557,16 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 
     private static async Task RequestAsync(Stream stream, string request, CancellationToken cancellationToken)
     {
-        var bytes = Encoding.UTF8.GetBytes(request);
-        if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
-        var header = Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture));
-        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-        await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        var (poolBuffer, frame) = BuildFrame(request);
+        try
+        {
+            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(poolBuffer);
+        }
+
         var status = new byte[4];
         await ReadExactlyAsync(stream, status, request, cancellationToken).ConfigureAwait(false);
         if (status.AsSpan().SequenceEqual("OKAY"u8)) return;
@@ -613,7 +687,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
+            client.ConnectAsync(host, _port, timeout.Token).AsTask().GetAwaiter().GetResult();
             var stream = client.GetStream();
             stream.ReadTimeout = 10000;
             stream.WriteTimeout = 10000;
@@ -664,10 +738,16 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     }
     private static void Request(Stream stream, string request)
     {
-        var bytes = Encoding.UTF8.GetBytes(request);
-        if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
-        stream.Write(Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture)));
-        stream.Write(bytes);
+        var (poolBuffer, frame) = BuildFrame(request);
+        try
+        {
+            stream.Write(frame.Span);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(poolBuffer);
+        }
+
         Span<byte> status = stackalloc byte[4];
         ReadExactly(stream, status, request);
         if (status.SequenceEqual("OKAY"u8)) return;
@@ -682,6 +762,51 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         var message = new byte[length];
         ReadExactly(stream, message, request);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
+    }
+
+    /// <summary>
+    /// Encodes one adb server request frame: the UTF-8 request text preceded by its byte length as four uppercase
+    /// hex digits, assembled in a single pooled buffer so the writer issues one write and allocates nothing.
+    /// <para>编码一个 adb server 请求帧：UTF-8 请求文本前缀其字节长度的 4 位大写十六进制数字，整体组装在单个池化
+    /// 缓冲区中，使写手只发出一次写入且不产生分配。</para></summary>
+    /// <param name="request">The raw service text, such as <c>host:devices-l</c>.
+    /// <para>原始服务文本，例如 <c>host:devices-l</c>。</para></param>
+    /// <returns>The rented buffer and the exact frame slice to write; the caller must return the buffer.
+    /// <para>租用的缓冲区与需要写出的精确帧切片；调用方必须归还缓冲区。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The encoded request exceeds the 65535 byte adb server limit.
+    /// <para>编码后的请求超过 adb server 的 65535 字节上限。</para></exception>
+    private static (byte[] Buffer, Memory<byte> Frame) BuildFrame(string request)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(request);
+        if (byteCount > 65535)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request));
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(checked(byteCount + 4));
+        var frame = buffer.AsMemory(0, byteCount + 4);
+        WriteHexLength(frame.Span, byteCount);
+        Encoding.UTF8.GetBytes(request, frame.Span[4..]);
+        return (buffer, frame);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="length"/> as exactly four uppercase hexadecimal ASCII digits, most significant first,
+    /// which is the framing adb server uses for its request and reply lengths.
+    /// <para>将 <paramref name="length"/> 写成精确的 4 位大写十六进制 ASCII 数字，高位在前，即 adb server 用于
+    /// 请求与应答长度的分帧格式。</para></summary>
+    /// <param name="destination">At least four bytes; only the first four are written.
+    /// <para>至少 4 个字节；只写入前 4 个。</para></param>
+    /// <param name="length">The value to encode; callers bound it to 65535. <para>待编码值；调用方将其限制在 65535 以内。</para></param>
+    private static void WriteHexLength(Span<byte> destination, int length)
+    {
+        var value = (uint)length;
+        for (var index = 3; index >= 0; index--)
+        {
+            var digit = value & 0xF;
+            destination[index] = (byte)(digit < 10 ? '0' + digit : 'A' + (digit - 10));
+            value >>= 4;
+        }
     }
 }
 

@@ -67,6 +67,21 @@ public sealed partial class DeviceController
     /// Reopens the physical device session matching the stable key.
     /// <para>按稳定设备键重开物理设备会话。</para>
     /// </summary>
+    /// <summary>
+    /// Drops the Windows enumeration inventory so the next pass re-reads every interface from the registry
+    /// instead of answering from what an earlier pass learned. An explicit user refresh asks for this; a
+    /// device arrival or removal invalidates only the instances it touched.
+    /// <para>丢弃 Windows 枚举清单，使下一轮从注册表重读每个接口，而不再由更早一轮的已知结果作答。用户显式刷新
+    /// 会要求这样处理；设备插入或移除只使其触及的实例失效。</para>
+    /// </summary>
+    /// <remarks>
+    /// The inventory is process-wide, so this also resets the cache another controller in the same process
+    /// relies on; the next pass rebuilds it, which costs registry reads and no device I/O.
+    /// <para>清单是进程级的，因此这也会重置同进程中另一个控制器所依赖的缓存；下一轮会重建它，代价只是注册表读取，
+    /// 不涉及设备 I/O。</para>
+    /// </remarks>
+    public void ResetUsbEnumerationCache() => RequiredKit.ResetUsbEnumerationCache();
+
     internal IUsbDeviceSession? OpenUsbSessionByKey(string deviceKey) => RequiredKit.OpenUsbDeviceSessionByKey(deviceKey);
 
     /// <summary>Creates an ADB session façade routed through the local adb server.

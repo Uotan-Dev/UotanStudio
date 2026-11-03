@@ -68,10 +68,13 @@ public sealed record DeviceCommunicationConfiguration
     public const string ServerHost = DebugBridgeEndpoints.ServerHost;
 
     /// <summary>
-    /// Local ADB server port; the single definition lives in <see cref="DebugBridgeEndpoints"/>.
-    /// <para>本机 ADB server 端口；唯一定义位于 <see cref="DebugBridgeEndpoints"/>。</para>
+    /// Local ADB server port, including the upstream environment overrides; the single definition lives in
+    /// <see cref="DebugBridgeEndpoints"/>.
+    /// <para>本机 ADB server 端口（含上游环境变量覆盖）；唯一定义位于 <see cref="DebugBridgeEndpoints"/>。</para>
     /// </summary>
-    public const int AdbServerPort = DebugBridgeEndpoints.AdbServerPort;
+    /// <value>The port resolved from <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+    /// <para>由 <c>ADB_SERVER_SOCKET</c>、<c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></value>
+    public static int AdbServerPort => DebugBridgeEndpoints.AdbServerPort;
 
     /// <summary>
     /// Checks ADB endpoint ownership; only connection refusal means absent.

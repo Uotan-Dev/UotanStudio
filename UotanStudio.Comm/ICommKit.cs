@@ -47,6 +47,13 @@ internal interface ICommKit
     Task<IReadOnlyList<UsbDeviceInfo>> EnumerateUsbDevicesAsync(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Drops the Windows enumeration inventory so the next USB pass re-reads every interface's registry
+    /// evidence instead of answering from what an earlier pass learned.
+    /// <para>丢弃 Windows 枚举清单，使下一轮 USB 遍历重读每个接口的注册表证据，而不再由更早一轮的已知结果作答。</para>
+    /// </summary>
+    void ResetUsbEnumerationCache();
+
+    /// <summary>
     /// Monitors USB device additions and removals by polling snapshots.
     /// <para>通过轮询快照监视 USB 设备新增与移除。</para>
     /// </summary>

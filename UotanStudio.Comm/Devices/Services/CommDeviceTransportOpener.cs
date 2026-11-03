@@ -16,13 +16,17 @@ namespace UotanStudio.Comm.Devices.Services;
 /// </summary>
 /// <param name="kit">The kit used to open USB device sessions by key. <para>用于按键打开 USB 设备会话的套件。</para></param>
 /// <param name="adbHost">Host of the adb server endpoint to match. <para>待匹配的 adb server 端点主机。</para></param>
-/// <param name="adbPort">Port of the adb server endpoint to match. <para>待匹配的 adb server 端点端口。</para></param>
+/// <param name="adbPort">Port of the adb server endpoint to match; <see langword="null"/> uses the port resolved
+/// from <c>ADB_SERVER_SOCKET</c>, <c>ANDROID_ADB_SERVER_PORT</c> or 5037.
+/// <para>待匹配的 adb server 端点端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+/// <c>ANDROID_ADB_SERVER_PORT</c> 或 5037 解析出的端口。</para></param>
 /// <param name="hdcHost">Host of the HDC server endpoint to match. <para>待匹配的 HDC server 端点主机。</para></param>
 /// <param name="hdcPort">Port of the HDC server endpoint; null uses the default. <para>HDC server 端点端口；null 使用默认端口。</para></param>
 internal sealed class CommDeviceTransportOpener(
-    ICommKit kit, string adbHost = "127.0.0.1", int adbPort = 5037,
+    ICommKit kit, string adbHost = "127.0.0.1", int? adbPort = null,
     string hdcHost = "127.0.0.1", int? hdcPort = null) : IDeviceTransportOpener
 {
+    private readonly int _adbPort = adbPort ?? DebugBridgeEndpoints.AdbServerPort;
     private readonly int _hdcPort = hdcPort ?? HdcServerClient.DefaultServerPort;
 
     /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint whose device was bound as a COM port falls back to that serial port.
@@ -85,14 +89,14 @@ internal sealed class CommDeviceTransportOpener(
             return new OwnedDeviceTransport<IUsbDeviceSession>(session);
         }
 
-        if (endpoint.Source == $"adb-server@{adbHost}:{adbPort}" &&
+        if (endpoint.Source == $"adb-server@{adbHost}:{_adbPort}" &&
             endpoint.Transport == "adb-server" && endpoint.Route == "server" &&
             !string.IsNullOrWhiteSpace(endpoint.Address) && endpoint.Serial == endpoint.Address)
         {
-            if (!DebugBridgeRoute.UseAdbServer(adbHost, adbPort))
+            if (!DebugBridgeRoute.UseAdbServer(adbHost, _adbPort))
                 throw new IOException("ADB server is unavailable.");
             var validation = Task.Run(() =>
-                new AdbServerServices(endpoint.Address, adbHost, adbPort).ValidateTarget());
+                new AdbServerServices(endpoint.Address, adbHost, _adbPort).ValidateTarget());
             try
             {
                 await validation.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -107,7 +111,7 @@ internal sealed class CommDeviceTransportOpener(
             }
             cancellationToken.ThrowIfCancellationRequested();
             return new OwnedDeviceTransport<AdbSession>(
-                AdbSession.ForServer(endpoint.Address, adbHost, adbPort));
+                AdbSession.ForServer(endpoint.Address, adbHost, _adbPort));
         }
 
         if (endpoint.Source == $"hdc-server@{hdcHost}:{_hdcPort}" &&

@@ -13,11 +13,15 @@ namespace UotanStudio.Comm.Devices.Discovery;
 /// <para>待探测 adb server 的主机名或地址；默认为本机回环。</para>
 /// </param>
 /// <param name="port">
-/// TCP port of the adb server; defaults to <c>5037</c>.
-/// <para>adb server 的 TCP 端口；默认为 <c>5037</c>。</para>
+/// TCP port of the adb server; <see langword="null"/> uses the port resolved from <c>ADB_SERVER_SOCKET</c>,
+/// <c>ANDROID_ADB_SERVER_PORT</c> or <c>5037</c>.
+/// <para>adb server 的 TCP 端口；<see langword="null"/> 使用由 <c>ADB_SERVER_SOCKET</c>、
+/// <c>ANDROID_ADB_SERVER_PORT</c> 或 <c>5037</c> 解析出的端口。</para>
 /// </param>
-public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port = 5037) : IDeviceDiscoverySource
+public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int? port = null) : IDeviceDiscoverySource
 {
+    private readonly int _port = port ?? DebugBridgeEndpoints.AdbServerPort;
+
     /// <summary>Service type adb keys a transport with after it auto-connects a discovered secure
     /// daemon. <para>adb 自动连接其发现的安全 adbd 服务后用作传输键的服务类型。</para></summary>
     private const string TlsConnectService = "_adb-tls-connect._tcp";
@@ -36,7 +40,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <para>以 adb-server@host:port 形式内嵌所探测主机与端口的源标签。</para>
     /// </summary>
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
-    public string Name => $"adb-server@{host}:{port}";
+    public string Name => $"adb-server@{host}:{_port}";
 
     /// <summary>Lists the adb server's targets when the fixed route snapshot marks the default endpoint available, and projects each into a <c>server</c>-routed endpoint stamped with the snapshot epoch; DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table. A target query that fails while the snapshot still marks the server available yields an empty list instead of stale endpoints.
     /// <para>当固定路由快照把默认端点标记为可用时列出 adb server 的目标，并把每个目标投影为盖上快照 epoch 的
@@ -48,7 +52,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <para>每个 server 目标对应一个端点；server 不存在或列表无法读取时为空列表。</para></returns>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
-        if (!DebugBridgeRoute.UseAdbServer(host, port))
+        if (!DebugBridgeRoute.UseAdbServer(host, _port))
         {
             return [];
         }
@@ -57,7 +61,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
         IReadOnlyList<AdbTargetInfo> targets;
         try
         {
-            targets = await Task.Run(() => new AdbServerServices(string.Empty, host, port).ListTargets(),
+            targets = await Task.Run(() => new AdbServerServices(string.Empty, host, _port).ListTargets(),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
@@ -66,7 +70,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
             return [];
         }
         cancellationToken.ThrowIfCancellationRequested();
-        var aliases = await ResolveMdnsAliasesAsync(targets, host, port, cancellationToken).ConfigureAwait(false);
+        var aliases = await ResolveMdnsAliasesAsync(targets, host, _port, cancellationToken).ConfigureAwait(false);
         return [.. targets.Select(target =>
         {
             var alias = ResolveAlias(aliases, target.Serial);

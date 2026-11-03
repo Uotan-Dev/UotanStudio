@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -349,7 +350,14 @@ public sealed class HdcAuthentication : IDisposable
     /// <para>构建 HDC 握手公钥消息的 <c>buf</c> 负载：本机主机名、<c>\f</c> 分隔符（<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>）、以及带单个结尾换行的 PEM <c>SubjectPublicKeyInfo</c> 块。守护进程按第一个 <c>\f</c> 切分，把前缀作为请求主机显示在授权提示中，并把余下部分作为已知主机记录保存，因此这里的标注与换行都不能自行编造。</para></summary>
     /// <returns>The UTF-8 encoded handshake payload.<para>UTF-8 编码的握手负载。</para></returns>
     public byte[] BuildDaemonPublicKeyPayload()
-        => Encoding.UTF8.GetBytes(HostName + BufferSeparator + BuildPublicKeyFileText(_rsa));
+    {
+        using var buffer = Utf8String.CreateWriter(out var writer);
+        writer.Append(HostName);
+        writer.Append(BufferSeparator);
+        writer.Append(BuildPublicKeyFileText(_rsa));
+        writer.Flush();
+        return buffer.ToArray();
+    }
 
     /// <summary>
     /// Builds the handshake public-key payload: the UTF-8 bytes of the Base64-encoded DER SubjectPublicKeyInfo.

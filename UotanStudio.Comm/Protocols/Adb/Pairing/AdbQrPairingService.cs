@@ -69,13 +69,14 @@ public sealed record AdbQrPairingProgress(AdbQrPairingStage Stage, string? Detai
 public sealed record AdbQrPairingOutcome(AdbQrPairingRoute Route, string Address);
 
 /// <summary>
-/// Orchestrates wireless-debugging QR pairing: waits for the pairing service the phone
-/// advertises after scanning the QR code, pairs with the one-time password (through the
-/// local adb server when one listens, otherwise the toolbox pairs directly), then waits
-/// for the device's secure connect service and connects.
-/// <para>编排无线调试扫码配对：等待手机扫描二维码后广播的配对服务，用一次性密码完成配对
-/// （本机 adb server 在监听时经 server 配对，否则由工具箱直接配对），随后等待设备的安全
-/// 连接服务并建立连接。</para>
+/// Orchestrates wireless-debugging pairing: QR pairing waits for the pairing service the phone
+/// advertises after scanning the QR code, while pairing-code pairing dials the explicit endpoint
+/// the phone displays. Both pair with the one-time secret (through the local adb server when one
+/// listens, otherwise the toolbox pairs directly) and then connect to the device's secure connect
+/// service.
+/// <para>编排无线调试配对：扫码配对等待手机扫描二维码后广播的配对服务，配对码配对直接拨号手机显示的
+/// 显式端点。两种方式都用一次性密钥完成配对（本机 adb server 在监听时经 server 配对，否则由工具箱直接配对），
+/// 随后连接设备的安全连接服务。</para>
 /// </summary>
 /// <remarks>
 /// While an adb server listens, the pairing endpoint is read from that server's own mDNS table —
@@ -316,6 +317,93 @@ public static class AdbQrPairingService
             DebugBridgeNetworkAddress.FormatHost(host)));
         var connectPort = await ResolveDirectConnectPortAsync(
             new AdbPairingEndpoint(host, pairing.HostName, deviceGuid), snapshot.ConnectCandidates,
+            cancellationToken).ConfigureAwait(false);
+        return new AdbQrPairingOutcome(AdbQrPairingRoute.Direct,
+            DebugBridgeNetworkAddress.FormatEndpoint(host, connectPort));
+    }
+
+    /// <summary>
+    /// Pairs with a device whose wireless-debugging dialog shows an explicit pairing <c>ip:port</c> and one-time
+    /// code, without waiting for an mDNS advertisement, then connects to the secure connect port: through the
+    /// local adb server when one listens and with this host's key otherwise.
+    /// <para>与无线调试对话框显示显式配对 <c>ip:port</c> 与一次性配对码的设备配对，不等待 mDNS 广播；随后连接
+    /// 安全连接端口：本机 adb server 在监听时经 server 完成，否则使用本主机密钥直连。</para>
+    /// </summary>
+    /// <param name="host">The device IP address shown in the phone's pairing dialog.
+    /// <para>手机配对对话框显示的设备 IP 地址。</para></param>
+    /// <param name="pairingPort">The pairing service port shown in that dialog.
+    /// <para>该对话框显示的配对服务端口。</para></param>
+    /// <param name="code">The one-time pairing code; surrounding whitespace is ignored.
+    /// <para>一次性配对码；忽略首尾空白。</para></param>
+    /// <param name="progress">Optional progress reporter. <para>可选的进度回调。</para></param>
+    /// <param name="cancellationToken">Cancels pairing and the connect attempt.
+    /// <para>取消配对与连接尝试。</para></param>
+    /// <returns>The connected address and the route the pairing completed through.
+    /// <para>已连接的地址与配对完成的路径。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="host"/> is blank, <paramref name="code"/> is blank, or
+    /// <paramref name="code"/> contains <c>':'</c>. <para><paramref name="host"/> 为空、<paramref name="code"/>
+    /// 为空，或 <paramref name="code"/> 含 <c>':'</c>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pairingPort"/> is outside 1-65535.
+    /// <para><paramref name="pairingPort"/> 不在 1-65535 之内。</para></exception>
+    /// <exception cref="TimeoutException">Pairing succeeded but no secure connect port answered; the device did not
+    /// advertise it and the scan found no port. <para>配对成功但没有安全连接端口应答；设备没有广播该端口，
+    /// 扫描也未找到。</para></exception>
+    /// <exception cref="IOException">The pairing handshake failed (a wrong or expired code fails here), the server
+    /// rejected the pairing, or <see cref="DebugBridgeRouteMode.ServerOnly"/> is fixed and no server is listening.
+    /// <para>配对握手失败（配对码错误或过期在此失败）、server 拒绝配对，或固定
+    /// <see cref="DebugBridgeRouteMode.ServerOnly"/> 且没有 server 在监听。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
+    public static async Task<AdbQrPairingOutcome> PairWithCodeAsync(string host, int pairingPort, string code,
+        IProgress<AdbQrPairingProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        if (pairingPort is < 1 or > 65535)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pairingPort));
+        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        var password = code.Trim();
+        if (password.Contains(':'))
+        {
+            throw new ArgumentException("The pairing code must not contain ':'.", nameof(code));
+        }
+
+        var useServer = DebugBridgeRoute.UseAdbServer();
+        if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.ServerOnly && !useServer)
+        {
+            throw new IOException("The ServerOnly route mode requires a listening ADB server.");
+        }
+
+        progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.Pairing,
+            DebugBridgeNetworkAddress.FormatEndpoint(host, pairingPort)));
+
+        if (useServer)
+        {
+            try
+            {
+                await AdbServerServices.PairAsync(host, pairingPort, password,
+                    DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort,
+                    cancellationToken).ConfigureAwait(false);
+                var address = await ConnectThroughServerAsync(new AdbPairingEndpoint(host, null), [], progress,
+                    cancellationToken).ConfigureAwait(false);
+                return new AdbQrPairingOutcome(AdbQrPairingRoute.AdbServer, address);
+            }
+            catch (AdbServerPairingClientException) when (AllowsInProcessPairing(DebugBridgeRoute.Mode))
+            {
+                var deviceGuid = await AdbPairingConnection.PairAsync(host, pairingPort, password, cancellationToken)
+                    .ConfigureAwait(false);
+                var address = await ConnectThroughServerAsync(new AdbPairingEndpoint(host, null, deviceGuid), [],
+                    progress, cancellationToken).ConfigureAwait(false);
+                return new AdbQrPairingOutcome(AdbQrPairingRoute.AdbServer, address);
+            }
+        }
+
+        var guid = await AdbPairingConnection.PairAsync(host, pairingPort, password, cancellationToken)
+            .ConfigureAwait(false);
+        progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.Connecting,
+            DebugBridgeNetworkAddress.FormatHost(host)));
+        var connectPort = await ResolveDirectConnectPortAsync(new AdbPairingEndpoint(host, null, guid), [],
             cancellationToken).ConfigureAwait(false);
         return new AdbQrPairingOutcome(AdbQrPairingRoute.Direct,
             DebugBridgeNetworkAddress.FormatEndpoint(host, connectPort));
