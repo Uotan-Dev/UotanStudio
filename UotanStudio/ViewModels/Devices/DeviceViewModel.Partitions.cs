@@ -77,12 +77,17 @@ public partial class DeviceViewModel
             StatusText = result.Success
                 ? $"{_localizer.GetString("Flash_Done")} {partitionName}"
                 : $"{_localizer.GetString("Flash_Failed")} {partitionName}: {result.Summary}";
+            if (!result.Success)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Quick flash {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Flash_Failed")} {partitionName}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Quick flash {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }
@@ -154,12 +159,17 @@ public partial class DeviceViewModel
             StatusText = result.Success
                 ? $"{_localizer.GetString("Backup_Done")} {partitionName}"
                 : $"{_localizer.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            if (!result.Success)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Backup_Failed")} {partitionName}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Backup {partitionName} from {device.Serial} failed: {ex.Message}");
         }
     }
@@ -230,12 +240,17 @@ public partial class DeviceViewModel
             StatusText = result.Success
                 ? $"{_localizer.GetString("Backup_RestoreDone")} {partitionName}"
                 : $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            if (!result.Success)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Restore {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }
@@ -306,12 +321,17 @@ public partial class DeviceViewModel
             StatusText = result.Success
                 ? $"{_localizer.GetString("Backup_Done")} {partitionName}"
                 : $"{_localizer.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            if (!result.Success)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"EDL backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Backup_Failed")} {partitionName}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"EDL backup {partitionName} from {device.Serial} failed: {ex.Message}");
         }
     }
@@ -370,12 +390,17 @@ public partial class DeviceViewModel
             StatusText = result.Success
                 ? $"{_localizer.GetString("Backup_RestoreDone")} {partitionName}"
                 : $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            if (!result.Success)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"EDL restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"EDL restore {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }

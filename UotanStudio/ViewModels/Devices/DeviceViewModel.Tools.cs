@@ -61,7 +61,7 @@ public partial class DeviceViewModel
     /// <para>打开到选中越狱 iOS 设备的 SSH 通道并报告本地端口。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanIosTools))]
-    private void OpenIosSshTunnel()
+    private async Task OpenIosSshTunnelAsync()
     {
         var device = SelectedDevice;
         if (device is null)
@@ -80,6 +80,7 @@ public partial class DeviceViewModel
         {
             StatusText = $"{_localizer.GetString("Device_IosSshTunnelOpen")} {device.Serial} " +
                 _localizer.GetString("UserError_Failed");
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager",
                 $"SSH channel for {device.Serial} failed: {ex.Message}");
         }
@@ -109,7 +110,7 @@ public partial class DeviceViewModel
     /// <para>启动 AirPlay 接收端点，使选中的 iOS 设备可以投屏到本机；该端点只读，之后不发控制消息。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanIosTools))]
-    private void StartIosAirPlayReceiver()
+    private async Task StartIosAirPlayReceiverAsync()
     {
         try
         {
@@ -121,6 +122,7 @@ public partial class DeviceViewModel
         {
             StatusText = _localizer.GetString("Device_IosAirPlayReceive") + " " +
                 _localizer.GetString("UserError_Failed");
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager",
                 $"AirPlay receiver failed: {ex.Message}");
         }
@@ -131,7 +133,7 @@ public partial class DeviceViewModel
     /// <para>把选中设备的崩溃报告导出到临时物化目录。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanIosTools))]
-    private void ExportIosCrashLogs()
+    private async Task ExportIosCrashLogsAsync()
     {
         var device = SelectedDevice;
         if (device is null)
@@ -149,6 +151,7 @@ public partial class DeviceViewModel
         {
             StatusText = $"{_localizer.GetString("Device_IosExportCrashLogs")} {device.Serial} " +
                 _localizer.GetString("UserError_Failed");
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager",
                 $"Crash export for {device.Serial} failed: {ex.Message}");
         }
@@ -195,7 +198,7 @@ public partial class DeviceViewModel
     /// Opens the selected device's interactive shell in the managed terminal dock.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanOpenAdbShell))]
-    private void OpenAdbShell()
+    private async Task OpenAdbShellAsync()
     {
         var device = SelectedDevice;
         if (device is null)
@@ -212,6 +215,7 @@ public partial class DeviceViewModel
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Device_OpenAdbShell")} {device.Serial} {_localizer.GetString("UserError_Failed")}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Open {device.Mode} shell for {device.Serial} failed: {ex.Message}");
         }
     }
@@ -259,6 +263,7 @@ public partial class DeviceViewModel
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Device_FastbootReadInfo")} {device.Serial} {_localizer.GetString("UserError_Failed")}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Fastboot read info {device.Serial} failed: {ex.Message}");
         }
     }

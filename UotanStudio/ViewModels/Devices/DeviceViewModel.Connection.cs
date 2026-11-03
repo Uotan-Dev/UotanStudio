@@ -103,6 +103,7 @@ public partial class DeviceViewModel
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(CanManageSelectedConnection));
+                OnPropertyChanged(nameof(IsDeviceOperationBusy));
                 ConnectCommand.NotifyCanExecuteChanged();
                 DisconnectCommand.NotifyCanExecuteChanged();
                 ConnectRemoteCommand.NotifyCanExecuteChanged();
@@ -116,18 +117,15 @@ public partial class DeviceViewModel
         }
     }
 
-    public string ConnectionStatusText
-    {
-        get;
-        private set => SetProperty(ref field, value);
-    } = string.Empty;
+    /// <summary>
+    /// Gets whether device discovery or a connection operation is active.
+    /// <para>获取设备扫描或连接操作是否正在进行。</para>
+    /// </summary>
+    public bool IsDeviceOperationBusy => IsRefreshing || IsConnectionBusy;
 
     public bool CanManageSelectedConnection => !IsConnectionBusy && SelectedDevice?.CanManageConnection == true;
 
-    private bool CanConnectRemote() => !IsConnectionBusy &&
-        DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
-            RemoteProtocolTransport) &&
-        (!HasPairingCode || DeviceMonitorService.TryNormalizePairingEndpoint(RemoteAddress, out _, out _));
+    private bool CanConnectRemote() => !IsConnectionBusy && !string.IsNullOrWhiteSpace(RemoteAddress);
 
     private void NotifyRemoteAddressChanged()
     {
@@ -138,10 +136,15 @@ public partial class DeviceViewModel
     [RelayCommand(CanExecute = nameof(CanConnectRemote))]
     private async Task ConnectRemoteAsync()
     {
-        if (!CanConnectRemote() ||
-            !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out var address,
-                RemoteProtocolTransport))
+        if (!CanConnectRemote())
         {
+            return;
+        }
+        if (!DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out var address,
+                RemoteProtocolTransport) ||
+            (HasPairingCode && !DeviceMonitorService.TryNormalizePairingEndpoint(RemoteAddress, out _, out _)))
+        {
+            await _showDeviceError(_localizer.GetString("Device_RemoteInvalidAddress"));
             return;
         }
         await ChangeNetworkConnectionAsync(RemoteProtocol, address, null, RemoteProtocolTransport,
@@ -168,6 +171,11 @@ public partial class DeviceViewModel
         try
         {
             await Windows.ShowQrPairingAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Error, "DeviceManager", $"Open QR pairing failed: {ex.Message}");
+            await _showDeviceError(UserError.Describe(ex));
         }
         finally
         {
@@ -231,16 +239,12 @@ public partial class DeviceViewModel
         _connectionCancellation = cancellation;
         IsConnectionBusy = true;
         var operation = pairing ? "Pair" : disconnect is null ? "Connect" : "Disconnect";
-        ConnectionStatusText = string.Format(_localizer.GetString(
-            pairing ? "Device_RemotePairing"
-                : disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
         try
         {
             var connectedAddress = address;
             if (pairing)
             {
-                var progress = new Progress<WirelessPairingProgress>(ReportPairingProgress);
-                connectedAddress = await _pairWithCode(address, pairingCode!, progress, cancellation.Token)
+                connectedAddress = await _pairWithCode(address, pairingCode!, null, cancellation.Token)
                     .ConfigureAwait(true);
                 RemoteAddress = connectedAddress;
                 RemotePairingCode = string.Empty;
@@ -271,13 +275,11 @@ public partial class DeviceViewModel
                     SelectedDevice = connected;
                 }
             }
-            ConnectionStatusText = string.Format(_localizer.GetString(
-                disconnect is null ? "Device_RemoteConnected" : "Device_RemoteDisconnected"), connectedAddress);
             _log.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {connectedAddress}: OK");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            ConnectionStatusText = _localizer.GetString("Device_RemoteCanceled");
+            _log.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {address}: canceled");
         }
         catch (AdbQrPairingConnectPortException ex) when (pairing)
         {
@@ -286,15 +288,15 @@ public partial class DeviceViewModel
             {
                 RemoteAddress = DebugBridgeNetworkAddress.FormatEndpoint(ex.Host, ex.SuggestedPort);
             }
-            ConnectionStatusText = string.Format(_localizer.GetString("Device_RemotePairingPortNeeded"), address);
+            await _showDeviceError(string.Format(_localizer.GetString("Device_RemotePairingPortNeeded"), address));
             _log.Write(LogLevel.Warn, "DeviceManager",
                 $"{operation} {protocol} {address}: paired, but no secure connect port was confirmed: {ex.Message}");
         }
         catch (Exception ex)
         {
-            ConnectionStatusText = pairing
+            await _showDeviceError(pairing
                 ? string.Format(_localizer.GetString("Device_RemotePairingFailed"), address, UserError.Describe(ex))
-                : string.Format(_localizer.GetString("Device_RemoteFailed"), address);
+                : string.Format(_localizer.GetString("Device_RemoteFailed"), address) + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"{operation} {protocol} {address}: {ex.Message}");
         }
         finally
@@ -308,20 +310,14 @@ public partial class DeviceViewModel
         }
     }
 
-    private void ReportPairingProgress(WirelessPairingProgress progress)
+    private async Task ShowDeviceErrorAsync(string message)
     {
-        if (!IsConnectionBusy)
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is not null)
         {
-            return;
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_DeviceManager"), message,
+                Ursa.Controls.MessageBoxIcon.Error);
         }
-        ConnectionStatusText = progress.Stage switch
-        {
-            WirelessPairingStage.Pairing => string.Format(
-                _localizer.GetString("Device_RemotePairing"), progress.Detail ?? RemoteAddress),
-            WirelessPairingStage.Connecting => string.Format(
-                _localizer.GetString("Device_RemotePairingConnecting"), progress.Detail ?? RemoteAddress),
-            _ => ConnectionStatusText,
-        };
     }
 
     private static async Task<string> DefaultPairWithCodeAsync(string address, string pairingCode,
@@ -403,12 +399,17 @@ public partial class DeviceViewModel
             StatusText = ok
                 ? $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} OK"
                 : $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
+            if (!ok)
+            {
+                await _showDeviceError(StatusText);
+            }
             _log.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Reboot {device.Serial} -> {mode}: {(ok ? "OK" : "FAIL")}");
         }
         catch (Exception ex)
         {
             StatusText = $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} {_localizer.GetString("UserError_Failed")}";
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager",
                 $"Reboot {device.Serial} -> {mode} failed: {ex.Message}");
         }

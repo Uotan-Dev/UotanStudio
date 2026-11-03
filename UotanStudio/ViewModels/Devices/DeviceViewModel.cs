@@ -20,6 +20,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private readonly bool _monitorDevices;
     private readonly Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task> _changeNetworkConnection;
     private readonly Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>> _pairWithCode;
+    private readonly Func<string, Task> _showDeviceError;
     private Task? _refreshTask;
 
     /// <summary>Non-zero when a refresh request arrived during a running pass; written and read across the
@@ -167,7 +168,13 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public bool IsRefreshing
     {
         get;
-        set => SetProperty(ref field, value);
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsDeviceOperationBusy));
+            }
+        }
     }
 
     /// <summary>
@@ -261,11 +268,13 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         ILocalizer? localizer = null,
         IUnifiedLog? log = null,
         TimeProvider? clock = null,
-        Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>>? pairWithCode = null)
+        Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>>? pairWithCode = null,
+        Func<string, Task>? showDeviceError = null)
     {
         _monitorDevices = monitorDevices;
         _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
         _pairWithCode = pairWithCode ?? DefaultPairWithCodeAsync;
+        _showDeviceError = showDeviceError ?? ShowDeviceErrorAsync;
         _localizer = localizer ?? LanguageService.Instance;
         _log = log ?? LogService.Instance;
         _clock = clock ?? TimeProvider.System;
@@ -479,6 +488,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             StatusText = _localizer.GetString("Device_RefreshFailed");
+            await _showDeviceError(StatusText + "\n" + UserError.Describe(ex));
             _log.Write(LogLevel.Error, "DeviceManager", $"Device refresh failed: {ex.Message}");
         }
         finally

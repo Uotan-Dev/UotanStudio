@@ -107,7 +107,7 @@
             <ScrollViewer x:Name="DeviceToolbarScrollViewer"
                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <Grid x:Name="DeviceToolbarGrid" ColumnDefinitions="*,Auto"
-                      RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="6">
+                      ColumnSpacing="16">
                     <StackPanel x:Name="DeviceActionsPanel" Orientation="Horizontal" VerticalAlignment="Top" Spacing="6">
                         <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton device-disconnect"
                                 Command="{Binding DisconnectCommand}"
@@ -171,16 +171,6 @@
                             <avalonia:FolderOpen Width="16" Height="16" />
                         </Button>
                     </StackPanel>
-                    <TextBlock x:Name="DeviceStatusText" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding StatusText}"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center" FontSize="12" Opacity="0.65"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding StatusText}" />
-                    <!-- 连接进度条放在左侧按钮下方的状态行内，避免撑高工具栏底部分割线。 -->
-                    <!-- The connect progress bar sits in the status row under the left buttons so it never grows the toolbar divider. -->
-                    <ProgressBar Grid.Row="1" Grid.Column="0" IsIndeterminate="True"
-                                 IsVisible="{Binding IsConnectionBusy}" Height="3"
-                                 VerticalAlignment="Center" />
                     <Border x:Name="RemoteConnectionPanel" Grid.Column="1"
                             Width="500" MaxWidth="500" HorizontalAlignment="Right" VerticalAlignment="Top">
                         <StackPanel Spacing="6">
@@ -226,19 +216,15 @@
                                     <avalonia:Close Width="16" Height="16" />
                                 </Button>
                             </Grid>
-                            <TextBlock x:Name="RemoteAddressError" Text="{DynamicResource Device_RemoteInvalidAddress}"
-                                       IsVisible="{Binding HasInvalidRemoteAddress}" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding ConnectionStatusText}" TextWrapping="Wrap"
-                                       IsVisible="{Binding ConnectionStatusText, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
                         </StackPanel>
                     </Border>
                 </Grid>
             </ScrollViewer>
         </Border>
 
-        <!-- 底部进度条：刷新设备列表期间显示不确定进度（与密钥管理器一致）。 -->
-        <!-- Bottom progress bar: indeterminate while the device list refreshes, as in the key manager. -->
-        <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding IsRefreshing}" Height="3" />
+        <!-- 底部进度条显示扫描或连接操作的忙碌状态。 -->
+        <!-- The bottom progress bar indicates an active scan or connection operation. -->
+        <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding IsDeviceOperationBusy}" Height="3" />
 
         <!-- 左右两栏主区域 -->
         <Grid x:Name="DeviceContentGrid" Margin="20,20,4,16" ColumnDefinitions="300,*" ColumnSpacing="20">

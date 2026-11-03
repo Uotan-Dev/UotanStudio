@@ -31,6 +31,75 @@ public sealed class DevicePairingCodeTests
     public void TryNormalizePairingEndpoint_BareOrInvalidEndpoint_IsRejected(string input)
         => Assert.False(DeviceMonitorService.TryNormalizePairingEndpoint(input, out _, out _));
 
+    [Theory]
+    [InlineData("not a valid address", "")]
+    [InlineData("192.168.1.5", "123456")]
+    public async Task ConnectRemoteCommand_InvalidAddress_ShowsDialogWithoutConnecting(string address, string code)
+    {
+        var errors = new List<string>();
+        var connects = 0;
+        using var viewModel = new DeviceViewModel(monitorDevices: false,
+            changeNetworkConnection: (_, _, _, _, _) =>
+            {
+                connects++;
+                return Task.CompletedTask;
+            },
+            showDeviceError: message =>
+            {
+                errors.Add(message);
+                return Task.CompletedTask;
+            });
+        viewModel.RemoteAddress = address;
+        viewModel.RemotePairingCode = code;
+
+        await viewModel.ConnectRemoteCommand.ExecuteAsync(null);
+
+        Assert.Single(errors);
+        Assert.Equal(0, connects);
+        Assert.False(viewModel.IsConnectionBusy);
+    }
+
+    [Fact]
+    public async Task ConnectRemoteCommand_ConnectionFails_ShowsErrorAndClearsBusyState()
+    {
+        var errors = new List<string>();
+        using var viewModel = new DeviceViewModel(monitorDevices: false,
+            changeNetworkConnection: (_, _, _, _, _) => Task.FromException(new IOException("connection refused")),
+            showDeviceError: message =>
+            {
+                errors.Add(message);
+                return Task.CompletedTask;
+            });
+        viewModel.RemoteAddress = "192.168.1.5:5555";
+
+        await viewModel.ConnectRemoteCommand.ExecuteAsync(null);
+
+        Assert.Contains("192.168.1.5:5555", Assert.Single(errors));
+        Assert.False(viewModel.IsDeviceOperationBusy);
+    }
+
+    [Fact]
+    public async Task ConnectRemoteCommand_Canceled_DoesNotShowError()
+    {
+        var errors = new List<string>();
+        using var viewModel = new DeviceViewModel(monitorDevices: false,
+            changeNetworkConnection: (_, _, _, _, token) => Task.Delay(Timeout.Infinite, token),
+            showDeviceError: message =>
+            {
+                errors.Add(message);
+                return Task.CompletedTask;
+            });
+        viewModel.RemoteAddress = "192.168.1.5:5555";
+
+        var connection = viewModel.ConnectRemoteCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsDeviceOperationBusy);
+        viewModel.CancelConnectionCommand.Execute(null);
+        await connection.WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(errors);
+        Assert.False(viewModel.IsDeviceOperationBusy);
+    }
+
     [Fact]
     public async Task PairWithCodeAsync_BlankArguments_AreRejectedBeforeConnecting()
     {
@@ -57,7 +126,7 @@ public sealed class DevicePairingCodeTests
 
         Assert.True(viewModel.HasPairingCode);
         Assert.True(viewModel.HasInvalidRemoteAddress);
-        Assert.False(viewModel.ConnectRemoteCommand.CanExecute(null));
+        Assert.True(viewModel.ConnectRemoteCommand.CanExecute(null));
     }
 
     [Fact]
