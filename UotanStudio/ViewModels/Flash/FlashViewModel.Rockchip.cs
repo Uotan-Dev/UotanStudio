@@ -42,6 +42,21 @@ public sealed partial class FlashViewModel
     private byte[]? _rkConfigHeader;
 
     /// <summary>
+    /// Every medium ordinal of the vendor storage table, the selector's option set until a device reports which
+    /// media it actually has.
+    /// <para>厂商存储表的全部介质序号；设备报告实际拥有的介质之前，选择框提供的正是这一组。</para>
+    /// </summary>
+    private static readonly int[] AllRkStorageOrdinals = [.. Enumerable.Range(0, RkdlStorage.Names.Length)];
+
+    /// <summary>
+    /// Medium ordinals the storage selector currently offers, in display order; the selected index maps back
+    /// through this array, so the box never sends an ordinal from a medium it does not list.
+    /// <para>存储选择框当前提供的介质序号，按显示顺序排列；选中下标经该数组映射回介质，选择框绝不会把未列出
+    /// 介质的序号发出去。</para>
+    /// </summary>
+    private int[] _rkStorageSelectorOrdinals = AllRkStorageOrdinals;
+
+    /// <summary>
     /// The loader-row check started by the last selection or edit; a caller that needs the verdict awaits it, and the
     /// page itself never blocks on it.
     /// <para>最近一次勾选或编辑启动的 loader 行检查；需要结论的调用方等待它，页面本身从不因此阻塞。</para>
@@ -348,10 +363,10 @@ public sealed partial class FlashViewModel
     private static List<string> ProbeRkStorages(RkdlSession session, ILocalizer language, uint initialMask)
     {
         var header = language.GetString("Flash_RkStorageProbeHeader");
-        var lines = new List<string>(RkStorageTypes.Length + 2) { header };
-        for (var index = 0; index < RkStorageTypes.Length; index++)
+        var lines = new List<string>(RkdlStorage.Names.Length + 2) { header };
+        for (var index = 0; index < RkdlStorage.Names.Length; index++)
         {
-            var label = RkStorageTypes[index];
+            var label = RkdlStorage.Names[index];
             try
             {
                 session.ChangeStorage(RkdlStorage.WireBits[index]);
@@ -385,13 +400,13 @@ public sealed partial class FlashViewModel
             try
             {
                 session.ChangeStorage(RkdlStorage.WireBits[initialIndex]);
-                lines.Add($"{language.GetString("Flash_RkStorage")}: {RkStorageTypes[initialIndex]}");
+                lines.Add($"{language.GetString("Flash_RkStorage")}: {RkdlStorage.Names[initialIndex]}");
             }
             catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
                 or InvalidOperationException or ObjectDisposedException)
             {
                 lines.Add(string.Format(CultureInfo.InvariantCulture,
-                    language.GetString("Flash_RkStorageProbeFailed"), RkStorageTypes[initialIndex],
+                    language.GetString("Flash_RkStorageProbeFailed"), RkdlStorage.Names[initialIndex],
                     exception.Message));
             }
         }
@@ -469,26 +484,28 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Maps a READ_STORAGE mask to the selector label through the official wire-bit table, or reports the
+    /// Maps a READ_STORAGE mask to the medium name through the official wire-bit table, or reports the
     /// raw mask when it names no single medium.
-    /// <para>经官方线上位表把 READ_STORAGE 掩码映射为选择框文本；掩码不对应单一介质时报告原始值。</para>
+    /// <para>经官方线上位表把 READ_STORAGE 掩码映射为介质名；掩码不对应单一介质时报告原始值。</para>
     /// </summary>
     /// <param name="mask">The READ_STORAGE bitmask.<para>READ_STORAGE 位掩码。</para></param>
-    /// <returns>The selector label such as <c>2. EMMC</c>, or the raw mask text.
-    /// <para>选择框文本（如 <c>2. EMMC</c>），或原始掩码文本。</para></returns>
+    /// <returns>The medium name such as <c>EMMC</c>, or the raw mask text.
+    /// <para>介质名（如 <c>EMMC</c>），或原始掩码文本。</para></returns>
     private static string DescribeRkStorage(uint mask)
     {
         var index = RkdlStorage.IndexOfMask(mask);
-        return index >= 0 ? RkStorageTypes[index] : $"0x{mask:X8}";
+        return index >= 0 ? RkdlStorage.Names[index] : $"0x{mask:X8}";
     }
 
     /// <summary>
     /// Shows a storage on the selector, or clears it when no medium is known; the vendor table allows a row to
-    /// name no storage, so the selector keeps an empty state instead of assuming one.
-    /// <para>把存储显示到选择框；介质未知时清空。厂商表格允许行不指定存储，因此选择框保留空状态而不是假定一个。</para>
+    /// name no storage, so the selector keeps an empty state instead of assuming one. A medium the selector does
+    /// not currently offer leaves the selection empty instead of naming something else.
+    /// <para>把存储显示到选择框；介质未知时清空。厂商表格允许行不指定存储，因此选择框保留空状态而不是假定一个。
+    /// 选择框当前未提供的介质会让选择保持为空，而不是显示成别的介质。</para>
     /// </summary>
-    /// <param name="reported">Selector label such as <c>2. EMMC</c> or a plain medium name such as <c>EMMC</c>;
-    /// an empty value clears the selection.<para>选择框文本（如 <c>2. EMMC</c>）或纯介质名（如 <c>EMMC</c>）；
+    /// <param name="reported">Medium name such as <c>EMMC</c>, or a raw mask such as <c>0x00000000</c>;
+    /// an empty value clears the selection.<para>介质名（如 <c>EMMC</c>）或原始掩码（如 <c>0x00000000</c>）；
     /// 空值清空选择。</para></param>
     private void ApplyReportedRkStorage(string reported)
     {
@@ -500,26 +517,48 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var index = Array.FindIndex(RkStorageTypes, label =>
-            string.Equals(label, reported, StringComparison.Ordinal) ||
-            string.Equals(PlainRkStorageLabel(label), reported, StringComparison.OrdinalIgnoreCase));
-        if (index >= 0)
+        var ordinal = Array.FindIndex(RkdlStorage.Names, name =>
+            string.Equals(name, reported, StringComparison.OrdinalIgnoreCase));
+        if (ordinal >= 0)
         {
-            box.SelectedIndex = index;
+            SelectRkStorage(ordinal);
         }
     }
 
     /// <summary>
-    /// The medium name without the selector's ordinal, for example <c>EMMC</c> for <c>2. EMMC</c>.
-    /// <para>去掉选择框序号的介质名，例如 <c>2. EMMC</c> 得到 <c>EMMC</c>。</para>
+    /// Rebuilds the storage selector with the given medium ordinals (positions in
+    /// <see cref="RkdlStorage.Names"/>) and clears the selection, so the box offers only the media the device
+    /// actually answered with.
+    /// <para>按给定的介质序号（<see cref="RkdlStorage.Names"/> 中的位置）重建存储选择框并清空选择，使选择框
+    /// 只提供设备实际应答的介质。</para>
     /// </summary>
-    /// <param name="label">Selector entry.<para>选择框条目。</para></param>
-    /// <returns>The text after the ordinal separator, or the entry unchanged when it has none.
-    /// <para>序号分隔符之后的文本；没有分隔符时原样返回。</para></returns>
-    private static string PlainRkStorageLabel(string label)
+    /// <param name="ordinals">Medium ordinals to offer, in display order.
+    /// <para>要提供的介质序号，按显示顺序排列。</para></param>
+    private void SetRkStorageOptions(IReadOnlyList<int> ordinals)
     {
-        var separator = label.IndexOf(". ", StringComparison.Ordinal);
-        return separator < 0 ? label : label[(separator + 2)..];
+        if (_surface is null) return;
+        _rkStorageSelectorOrdinals = [.. ordinals];
+        var box = Field<ComboBox>("RkStorageTypeBox");
+        box.ItemsSource = _rkStorageSelectorOrdinals.Select(ordinal => RkdlStorage.Names[ordinal]).ToArray();
+        box.SelectedIndex = -1;
+    }
+
+    /// <summary>
+    /// Restores the storage selector to the full vendor table when the selected device changes, because the
+    /// media one device proved say nothing about the next one.
+    /// <para>所选设备变化时把存储选择框恢复为完整厂商表，因为一台设备证明的介质不能说明下一台设备。</para>
+    /// </summary>
+    private void ResetRkStorageOptions() => SetRkStorageOptions(AllRkStorageOrdinals);
+
+    /// <summary>
+    /// Shows one medium on the selector, or clears the selection when the selector does not currently offer it.
+    /// <para>在选择框中显示某个介质；选择框当前未提供该介质时清空选择。</para>
+    /// </summary>
+    /// <param name="ordinal">Medium ordinal to show.<para>要显示的介质序号。</para></param>
+    private void SelectRkStorage(int ordinal)
+    {
+        if (_surface is null) return;
+        Field<ComboBox>("RkStorageTypeBox").SelectedIndex = Array.IndexOf(_rkStorageSelectorOrdinals, ordinal);
     }
 
     /// <summary>
@@ -590,7 +629,7 @@ public sealed partial class FlashViewModel
                 var report = new List<string>();
                 var mask = session.ReadStorageMask();
                 var index = RkdlStorage.IndexOfMask(mask);
-                var label = index >= 0 ? RkStorageTypes[index] : $"0x{mask:X8}";
+                var label = index >= 0 ? RkdlStorage.Names[index] : $"0x{mask:X8}";
                 report.Add($"{language.GetString("Flash_RkStorage")}: {label}");
                 report.AddRange(DescribeRkFlashGeometry(session.ReadFlashInfo(), language));
                 return Task.FromResult(report);
@@ -870,13 +909,14 @@ public sealed partial class FlashViewModel
         }
 
         if (_surface is null) return;
-        var index = Field<ComboBox>("RkStorageTypeBox").SelectedIndex;
-        if (index < 0 || index >= RkStorageTypes.Length)
+        var selected = Field<ComboBox>("RkStorageTypeBox").SelectedIndex;
+        if (selected < 0 || selected >= _rkStorageSelectorOrdinals.Length)
         {
             AppendLog(_localizer.GetString("Flash_RkStorageNotSelected"));
             return;
         }
 
+        var index = _rkStorageSelectorOrdinals[selected];
         var target = RkdlStorage.WireBits[index];
         var language = _localizer;
         using var cancellation = new CancellationTokenSource();
@@ -889,7 +929,7 @@ public sealed partial class FlashViewModel
                 session.ChangeStorage(target);
                 return Task.FromResult(session.ReadStorageMask());
             }, cancellation.Token).ConfigureAwait(true);
-            AppendLog($"{language.GetString("Flash_RkSwitchStorage")}: {RkStorageTypes[index]}");
+            AppendLog($"{language.GetString("Flash_RkSwitchStorage")}: {RkdlStorage.Names[index]}");
             var actualIndex = RkdlStorage.IndexOfMask(reported);
             if (actualIndex == index)
             {
@@ -900,7 +940,7 @@ public sealed partial class FlashViewModel
                 AppendLog(string.Format(CultureInfo.InvariantCulture,
                     "{0}: {1}",
                     language.GetString("Flash_RkStorage"),
-                    actualIndex >= 0 ? RkStorageTypes[actualIndex] : $"0x{reported:X8}"));
+                    actualIndex >= 0 ? RkdlStorage.Names[actualIndex] : $"0x{reported:X8}"));
             }
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }

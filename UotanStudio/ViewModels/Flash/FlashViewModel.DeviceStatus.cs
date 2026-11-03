@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
@@ -80,11 +79,12 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Fills the device status rows from the read-device-info action: a Rockchip device running the
-    /// loader (usbplug stage) gets the answers of the read-only information commands, a maskrom or
-    /// bootrom device gets the waiting-for-loader state without any device query, and every other
-    /// target clears the rows.
+    /// loader (usbplug stage) gets the answers of the read-only information commands and its storage selector
+    /// is narrowed to the media the device actually serves, a maskrom or bootrom device gets the
+    /// waiting-for-loader state without any device query, and every other target clears the rows.
     /// <para>由读取设备信息动作填充设备状态行：运行 loader（usbplug 阶段）的瑞芯微设备填入只读信息命令的
-    /// 应答，maskrom/bootrom 设备只填等待加载 loader 的状态而不发起任何设备查询；其他目标清空状态行。</para>
+    /// 应答，并把存储选择框收窄到设备实际提供的介质；maskrom/bootrom 设备只填等待加载 loader 的状态而
+    /// 不发起任何设备查询；其他目标清空状态行。</para>
     /// </summary>
     /// <remarks>
     /// The table is never filled automatically: only the read-device-info action calls this. The USB boot
@@ -108,6 +108,8 @@ public sealed partial class FlashViewModel
         var language = _localizer;
         var epoch = ++_rkStatusRefreshEpoch;
         List<FlashDeviceStatusEntry> rows;
+        List<int>? storages = null;
+        var currentStorage = -1;
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
         {
             rows = [];
@@ -130,7 +132,7 @@ public sealed partial class FlashViewModel
             try
             {
                 using var timeout = new System.Threading.CancellationTokenSource(RkdlStatusTimeoutMs);
-                rows = await Task.Run(() => App.DeviceMonitor.RunRkdlAsync(device,
+                (rows, storages, currentStorage) = await Task.Run(() => App.DeviceMonitor.RunRkdlAsync(device,
                     session => Task.FromResult(BuildRkdlStatusRows(session, language)), timeout.Token)
                     .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
             }
@@ -161,20 +163,35 @@ public sealed partial class FlashViewModel
         {
             DeviceStatus.Add(row);
         }
+
+        if (storages is not null)
+        {
+            SetRkStorageOptions(storages);
+            if (currentStorage >= 0)
+            {
+                SelectRkStorage(currentStorage);
+            }
+        }
     }
 
     /// <summary>
     /// Builds the device status rows from one open RKDL session: the loader-ready line first, then the
-    /// information commands, and the storage line the running loader answers.
+    /// information commands, and the storage groups the running loader answers; the media those groups list
+    /// and the current medium's ordinal are returned so the selector can offer the same set.
     /// <para>从一个已打开的 RKDL 会话构建设备状态行：先写 loader 已就绪行，再写信息类命令的应答，最后写
-    /// 运行中的 loader 才能应答的存储行。</para>
+    /// 运行中的 loader 才能应答的存储分组；同时返回各组列出的介质与当前介质序号，供选择框提供同一集合。</para>
     /// </summary>
     /// <param name="session">Open RKDL session on the selected device.
     /// <para>选中设备上已打开的 RKDL 会话。</para></param>
     /// <param name="language">Localized string lookup for the row labels.
     /// <para>行标签使用的本地化字符串查询。</para></param>
-    /// <returns>The rows in display order.<para>按显示顺序排列的状态行。</para></returns>
-    private static List<FlashDeviceStatusEntry> BuildRkdlStatusRows(RkdlSession session, ILocalizer language)
+    /// <returns>The rows in display order, the ordinals of the media that produced a storage group, and the
+    /// current medium's ordinal (or <c>-1</c> when it produced no group); the ordinals are
+    /// <see langword="null"/> when the current medium could not be named.
+    /// <para>按显示顺序排列的状态行、产生了存储分组的介质序号，以及当前介质序号（未产生分组时为 <c>-1</c>）；
+    /// 当前介质无法命名时序号为 <see langword="null"/>。</para></returns>
+    private static (List<FlashDeviceStatusEntry> Rows, List<int>? Storages, int CurrentStorage)
+        BuildRkdlStatusRows(RkdlSession session, ILocalizer language)
     {
         var rows = new List<FlashDeviceStatusEntry>
         {
@@ -217,26 +234,33 @@ public sealed partial class FlashViewModel
             });
         }
 
-        AppendRkFlashRows(rows, session, language);
-        return rows;
+        var (storages, currentStorage) = AppendRkFlashRows(rows, session, language);
+        return (rows, storages, currentStorage);
     }
 
     /// <summary>
-    /// Appends the loader-answered flash rows: the medium the device reports right now under
-    /// <see cref="FlashDeviceStatusRowKeys.Storage"/> with its geometry on one row per value, and every other
-    /// medium the vendor table proves present under <see cref="FlashDeviceStatusRowKeys.StorageProbe"/>.
-    /// A medium whose read-back mask does not name it is skipped instead of reported, so the table lists the
-    /// media the device actually serves, and the device is switched back to the medium it started on.
-    /// <para>追加 loader 应答的闪存行：设备当前上报的介质写在 <see cref="FlashDeviceStatusRowKeys.Storage"/>
-    /// 下并逐项各占一行给出几何，其余经厂商表证明存在的介质写在
-    /// <see cref="FlashDeviceStatusRowKeys.StorageProbe"/> 下。读回掩码不指向该介质的被跳过而不报告，使表格
-    /// 只列出设备真正提供的介质；结束时设备切回探测前的介质。</para>
+    /// Probes the storage media the vendor table offers and appends one group per medium that reported flash
+    /// geometry: the current medium first under <see cref="FlashDeviceStatusRowKeys.Storage"/>, then every other
+    /// medium the read-back mask proves present under <see cref="FlashDeviceStatusRowKeys.StorageProbe"/>. A
+    /// medium whose read-back mask does not name it, or that answers without reporting any geometry, produces
+    /// no row, so the table and the selector only offer media the device actually serves; the device is
+    /// switched back to the medium it started on.
+    /// <para>探测厂商表提供的存储介质，并为每个报告了闪存几何的介质追加一组：当前介质在前，写在
+    /// <see cref="FlashDeviceStatusRowKeys.Storage"/> 下；其余经读回掩码证明存在的介质写在
+    /// <see cref="FlashDeviceStatusRowKeys.StorageProbe"/> 下。读回掩码不指向、或应答了却没有报告任何几何的
+    /// 介质不产生行，使表格与选择框只提供设备真正提供的介质；结束时设备切回探测前的介质。</para>
     /// </summary>
     /// <param name="rows">Row list under construction.<para>正在构建的行列表。</para></param>
     /// <param name="session">Open RKDL session in loader mode.<para>loader 模式下已打开的 RKDL 会话。</para></param>
     /// <param name="language">Localized string lookup for the row labels.
     /// <para>行标签使用的本地化字符串查询。</para></param>
-    private static void AppendRkFlashRows(List<FlashDeviceStatusEntry> rows, RkdlSession session, ILocalizer language)
+    /// <returns>The ordinals of the media that produced a group, and the current medium's ordinal when it
+    /// produced one (otherwise <c>-1</c>); <see langword="null"/> ordinals mean the current medium could not
+    /// be named, so the selector is left as it was.
+    /// <para>产生了分组的介质序号，以及当前介质产生分组时的序号（否则为 <c>-1</c>）；序号为
+    /// <see langword="null"/> 表示当前介质无法命名，选择框保持原样。</para></returns>
+    private static (List<int>? Storages, int CurrentStorage) AppendRkFlashRows(
+        List<FlashDeviceStatusEntry> rows, RkdlSession session, ILocalizer language)
     {
         var initialMask = session.ReadStorageMask();
         var initialIndex = RkdlStorage.IndexOfMask(initialMask);
@@ -245,21 +269,18 @@ public sealed partial class FlashViewModel
             rows.Add(new FlashDeviceStatusEntry
             {
                 Key = FlashDeviceStatusRowKeys.Storage,
-                Name = language.GetString("Flash_RkStorage"),
-                Value = $"0x{initialMask:X8}",
+                Name = $"0x{initialMask:X8}",
+                Value = string.Empty,
             });
-            return;
+            return (null, -1);
         }
 
         // 当前介质先行：官方表里排在它前面的候选介质不会把它的几何挤到表格下半部分。
-        rows.Add(new FlashDeviceStatusEntry
+        var media = new List<(string Key, int Ordinal, IReadOnlyList<string> Geometry)>(RkdlStorage.Names.Length)
         {
-            Key = FlashDeviceStatusRowKeys.Storage,
-            Name = language.GetString("Flash_RkStorage"),
-            Value = RkStorageTypes[initialIndex],
-        });
-        AppendRkFlashGeometryRows(rows, FlashDeviceStatusRowKeys.Storage, session.ReadFlashInfo(), language);
-
+            (FlashDeviceStatusRowKeys.Storage, initialIndex,
+                DescribeRkFlashGeometry(session.ReadFlashInfo(), language)),
+        };
         for (var index = 0; index < RkdlStorage.Names.Length; index++)
         {
             if (index == initialIndex)
@@ -275,24 +296,14 @@ public sealed partial class FlashViewModel
                     continue;
                 }
 
-                rows.Add(new FlashDeviceStatusEntry
-                {
-                    Key = FlashDeviceStatusRowKeys.StorageProbe,
-                    Name = RkStorageTypes[index],
-                    Value = string.Empty,
-                });
-                AppendRkFlashGeometryRows(rows, FlashDeviceStatusRowKeys.StorageProbe, session.ReadFlashInfo(), language);
+                media.Add((FlashDeviceStatusRowKeys.StorageProbe, index,
+                    DescribeRkFlashGeometry(session.ReadFlashInfo(), language)));
             }
             catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
                 or InvalidOperationException or ObjectDisposedException)
             {
-                rows.Add(new FlashDeviceStatusEntry
-                {
-                    Key = FlashDeviceStatusRowKeys.StorageProbe,
-                    Name = RkStorageTypes[index],
-                    Value = string.Format(CultureInfo.InvariantCulture,
-                        language.GetString("Flash_RkStorageProbeFailed"), string.Empty, exception.Message).TrimStart('：', ':'),
-                });
+                // 无法服务的介质不产生行：日志侧已在同一动作的第一遍探测中记录失败。
+                _ = exception;
             }
         }
 
@@ -303,45 +314,49 @@ public sealed partial class FlashViewModel
         catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
             or InvalidOperationException or ObjectDisposedException)
         {
-            rows.Add(new FlashDeviceStatusEntry
-            {
-                Key = FlashDeviceStatusRowKeys.StorageProbe,
-                Name = RkStorageTypes[initialIndex],
-                Value = string.Format(CultureInfo.InvariantCulture,
-                    language.GetString("Flash_RkStorageProbeFailed"), string.Empty, exception.Message).TrimStart('：', ':'),
-            });
+            // 切回失败的提示同样由第一遍探测的日志给出，不在表格里补介质行。
+            _ = exception;
         }
+
+        var storages = AppendRkStorageRows(rows, media);
+        return (storages, storages.Contains(initialIndex) ? initialIndex : -1);
     }
 
     /// <summary>
-    /// Appends one row per reported flash geometry value under <paramref name="key"/>: the capacity and the
-    /// erase-block geometry never share a line, and a medium the device described with nothing reports that
-    /// instead of leaving the entry empty.
-    /// <para>在 <paramref name="key"/> 下按上报的闪存几何逐项各追加一行：容量与擦除块几何不共行；设备未给出
-    /// 任何几何的介质报告“未上报”而不是留空。</para>
+    /// Appends one group per medium that reported geometry: the plain medium name leads the group and each
+    /// geometry value gets its own row under it. A medium that reported nothing is left out.
+    /// <para>为每个报告了几何的介质追加一组：纯介质名作为组首行，其下每个几何取值各占一行；没有报告任何内容的
+    /// 介质不列出。</para>
     /// </summary>
     /// <param name="rows">Row list under construction.<para>正在构建的行列表。</para></param>
-    /// <param name="key">Group key the appended rows join.<para>追加行所属的分组键。</para></param>
-    /// <param name="info">Flash geometry the device reported.<para>设备上报的闪存几何。</para></param>
-    /// <param name="language">Localized string lookup for the labels.<para>标签使用的本地化字符串查询。</para></param>
-    private static void AppendRkFlashGeometryRows(
-        List<FlashDeviceStatusEntry> rows, string key, RkFlashInfo info, ILocalizer language)
+    /// <param name="media">Probed media in display order: group key, medium ordinal and the geometry it
+    /// reported.<para>按显示顺序排列的探测结果：分组键、介质序号与其报告的几何。</para></param>
+    /// <returns>The ordinals of the media that produced a group.<para>产生了分组的介质序号。</para></returns>
+    internal static List<int> AppendRkStorageRows(
+        List<FlashDeviceStatusEntry> rows,
+        IReadOnlyList<(string Key, int Ordinal, IReadOnlyList<string> Geometry)> media)
     {
-        var geometry = DescribeRkFlashGeometry(info, language);
-        if (geometry.Count == 0)
+        var storages = new List<int>(media.Count);
+        foreach (var (key, ordinal, geometry) in media)
         {
+            if (ordinal < 0 || ordinal >= RkdlStorage.Names.Length || geometry.Count == 0)
+            {
+                continue;
+            }
+
+            storages.Add(ordinal);
             rows.Add(new FlashDeviceStatusEntry
             {
                 Key = key,
-                Name = string.Empty,
-                Value = language.GetString("Flash_RkStorageNoGeometry"),
+                Name = RkdlStorage.Names[ordinal],
+                Value = string.Empty,
             });
-            return;
+            foreach (var line in geometry)
+            {
+                rows.Add(new FlashDeviceStatusEntry { Key = key, Name = string.Empty, Value = line });
+            }
         }
 
-        foreach (var line in geometry)
-        {
-            rows.Add(new FlashDeviceStatusEntry { Key = key, Name = string.Empty, Value = line });
-        }
+        return storages;
     }
 }

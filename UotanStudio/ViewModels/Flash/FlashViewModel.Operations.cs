@@ -5,7 +5,6 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Mtk;
@@ -52,23 +51,6 @@ public sealed partial class FlashViewModel
 
     private string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
 
-    /// <summary>
-    /// The vendor tool's storage list, numbered as its selector shows it (<c>1. FLASH</c> through <c>10. PCIE</c>).
-    /// <para>厂商工具的存储列表，编号与选择框显示一致（<c>1. FLASH</c> 到 <c>10. PCIE</c>）。</para>
-    /// </summary>
-    /// <remarks>
-    /// <para>These are user-facing numbers, not protocol codes. The vendored <c>rkdeveloptool</c> documents
-    /// <c>1=EMMC, 2=SD, 9=SPINOR</c> for CHANGE_STORAGE. The selector entries carry the official user-facing
-    /// ordinals while the wire identifiers live in <see cref="RkdlStorage.WireBits"/>: SPI NOR is entry 5 here
-    /// but answers on wire bit 9, so the ordinal must never be sent as the medium number.
-    /// <para>这些是面向用户的编号，不是协议编号：随仓库保留的 <c>rkdeveloptool</c> 对 CHANGE_STORAGE 记载
-    /// <c>1=EMMC、2=SD、9=SPINOR</c>。选择框条目携带官方的用户序号，线上标识由
-    /// <see cref="RkdlStorage.WireBits"/> 承载：SPI NOR 在这里是第 5 项但应答在第 9 位，因此序号绝不能
-    /// 当作介质编号发送。</para>
-    /// </remarks>
-    private static readonly string[] RkStorageTypes = RkdlStorage.Names
-        .Select((name, index) => $"{index + 1}. {name}")
-        .ToArray();
     private bool _flatBinPackage;
     private bool _edlBundleReady;
     private CancellationTokenSource? _flashCancellation;
@@ -1110,6 +1092,7 @@ public sealed partial class FlashViewModel
             {
                 _lastObservedDevice = currentDevice;
                 ApplyDeviceProtocolExpansion(currentDevice?.Protocol);
+                ResetRkStorageOptions();
             }
 
             UpdateObservedDeviceInfo();

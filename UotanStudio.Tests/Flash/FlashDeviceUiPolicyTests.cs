@@ -218,7 +218,7 @@ public sealed class FlashDeviceUiPolicyTests
         Assert.Contains(nameof(FlashPartitionEntry.HasFileName), changedProperties);
     }
     [Fact]
-    public void KindOf_SelectedProtocol_RestrictsOnlyAdbAndFastboot()
+    public void KindOf_SelectedProtocol_RestrictsAdbFastbootAndHdc()
     {
         Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(null));
         Assert.Equal(FlashDeviceKind.Adb, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Adb));
@@ -226,7 +226,7 @@ public sealed class FlashDeviceUiPolicyTests
         Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Edl));
         Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Mtk));
         Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Rkdl));
-        Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Hdc));
+        Assert.Equal(FlashDeviceKind.Hdc, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Hdc));
     }
 
     [Fact]
@@ -267,6 +267,21 @@ public sealed class FlashDeviceUiPolicyTests
         {
             Assert.False(FlashDeviceUiPolicy.IsAvailable(section, FlashDeviceMode.Shared,
                 isRockchipLoaderStage: false, FlashDeviceKind.Fastboot), section);
+        }
+    }
+
+    [Fact]
+    public void IsAvailable_HdcDevice_OffersNoPageControl()
+    {
+        var gated = FlashDeviceUiPolicy.GatedControls;
+        Assert.NotEmpty(gated);
+
+        foreach (var name in gated)
+        {
+            Assert.False(FlashDeviceUiPolicy.IsAvailable(name, FlashDeviceMode.Shared,
+                isRockchipLoaderStage: false, FlashDeviceKind.Hdc), name);
+            Assert.False(FlashDeviceUiPolicy.IsAvailable(name, FlashDeviceMode.Shared,
+                isRockchipLoaderStage: true, FlashDeviceKind.Hdc), name);
         }
     }
 

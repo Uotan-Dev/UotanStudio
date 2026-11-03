@@ -281,6 +281,8 @@ public sealed class RkdlMaintenanceAndDevicesTests
 
         public int DefaultTimeoutMs => 1000;
 
+        public bool ResetReenumeratesDevice => false;
+
         public UsbDeviceInfo DeviceInfo { get; } = new()
         {
             VendorId = 0x2207,

@@ -14,9 +14,10 @@ internal enum FlashDeviceMode
     /// </summary>
     None,
 
-    /// <summary>A selected device that only gets the page's shared actions; fastboot, ADB, HDC and Apple endpoints
-    /// all fall in this mode.
-    /// <para>只获得页面通用动作的已选设备；fastboot、ADB、HDC 与 Apple 端点都属该模式。</para>
+    /// <summary>A selected device without a dedicated protocol section; fastboot, ADB, HDC and Apple endpoints all
+    /// fall in this mode, and the kind dimension decides which shared actions each of them keeps.
+    /// <para>没有专属协议分类的已选设备；fastboot、ADB、HDC 与 Apple 端点都属该模式，由种类维度决定各自保留
+    /// 哪些通用动作。</para>
     /// </summary>
     Shared,
 
@@ -32,10 +33,10 @@ internal enum FlashDeviceMode
 
 /// <summary>
 /// The protocol families the page treats with a narrower shared-action set than the mode table alone:
-/// ADB and fastboot endpoints answer only the shared flash action, while every other protocol keeps
-/// the full table behavior.
+/// ADB and fastboot endpoints answer only the shared flash action, HDC endpoints answer no action at all,
+/// while every other protocol keeps the full table behavior.
 /// <para>页面以比模式表更窄的通用动作集合对待的协议族：ADB 与 fastboot 端点只保留通用烧录动作，
-/// 其余协议维持完整的表行为。</para>
+/// HDC 端点不保留任何动作，其余协议维持完整的表行为。</para>
 /// </summary>
 internal enum FlashDeviceKind
 {
@@ -51,7 +52,11 @@ internal enum FlashDeviceKind
 
     /// <summary>A fastboot endpoint; the page offers only the shared flash action.
     /// <para>fastboot 端点；页面只提供通用烧录动作。</para></summary>
-    Fastboot
+    Fastboot,
+
+    /// <summary>An HDC endpoint; the page has no HDC flash path, so it offers no control at all.
+    /// <para>HDC 端点；页面没有 HDC 烧录路径，因此不提供任何控件。</para></summary>
+    Hdc
 }
 
 /// <summary>
@@ -60,10 +65,11 @@ internal enum FlashDeviceKind
 /// </summary>
 /// <remarks>
 /// The page applies this table only to device operations in the right action pane. Shared operations require a
-/// selected device; protocol-specific sections are additionally limited to their matching device mode, and ADB and
-/// fastboot endpoints narrow the shared set to the flash action alone through the kind dimension.
+/// selected device; protocol-specific sections are additionally limited to their matching device mode, and the kind
+/// dimension narrows the shared set to the flash action alone for ADB and fastboot endpoints and to no operation for
+/// HDC endpoints.
 /// <para>页面只对右侧操作区中的设备操作应用这张表。通用操作需要选中设备；协议专属分类还会进一步限制为匹配的设备模式，
-/// 而 ADB 与 fastboot 端点经种类维度把通用集合收窄为仅烧录动作。</para>
+/// 而种类维度把通用集合收窄为仅烧录动作（ADB 与 fastboot 端点）或完全不提供操作（HDC 端点）。</para>
 /// </remarks>
 internal static class FlashDeviceUiPolicy
 {
@@ -215,9 +221,10 @@ internal static class FlashDeviceUiPolicy
     };
 
     /// <summary>
-    /// Maps the selected device's protocol to the restricted-kind dimension: only ADB and fastboot get the
-    /// narrowed shared-action set, every other protocol stays unrestricted.
-    /// <para>把所选设备协议映射到受限种类维度：只有 ADB 与 fastboot 收窄通用动作集合，其余协议不受限。</para>
+    /// Maps the selected device's protocol to the restricted-kind dimension: ADB and fastboot narrow the shared set
+    /// to the flash action, HDC narrows it to nothing, and every other protocol stays unrestricted.
+    /// <para>把所选设备协议映射到受限种类维度：ADB 与 fastboot 把通用集合收窄为烧录动作，HDC 收窄为空，
+    /// 其余协议不受限。</para>
     /// </summary>
     /// <param name="protocol">Protocol of the selected device; <see langword="null"/> means nothing is selected.
     /// <para>所选设备的协议；<see langword="null"/> 表示未选中设备。</para>
@@ -227,6 +234,7 @@ internal static class FlashDeviceUiPolicy
     {
         DeviceProtocolKind.Adb => FlashDeviceKind.Adb,
         DeviceProtocolKind.Fastboot => FlashDeviceKind.Fastboot,
+        DeviceProtocolKind.Hdc => FlashDeviceKind.Hdc,
         _ => FlashDeviceKind.Unknown,
     };
 
@@ -286,7 +294,8 @@ internal static class FlashDeviceUiPolicy
     /// (serial rewritten to <c>ROCKCHIP</c>). <para>所选瑞芯微设备是否处于 loader 阶段（序列号已改写为
     /// <c>ROCKCHIP</c>）。</para></param>
     /// <param name="kind">The restricted protocol kind of the selected device; ADB and fastboot narrow the shared
-    /// set to the flash action. <para>所选设备的受限协议种类；ADB 与 fastboot 把通用集合收窄为烧录动作。</para></param>
+    /// set to the flash action and HDC to no operation.
+    /// <para>所选设备的受限协议种类；ADB 与 fastboot 把通用集合收窄为烧录动作，HDC 收窄为空。</para></param>
     /// <returns><see langword="true"/> when the mode, the device's stage and the kind all offer the control.
     /// <para>模式、设备阶段与种类都提供该控件时为 <see langword="true"/>。</para></returns>
     internal static bool IsAvailable(string controlName, FlashDeviceMode mode, bool isRockchipLoaderStage,
@@ -305,6 +314,11 @@ internal static class FlashDeviceUiPolicy
         if (kind == FlashDeviceKind.Fastboot)
         {
             return FastbootPermittedControls.Contains(controlName, StringComparer.Ordinal);
+        }
+
+        if (kind == FlashDeviceKind.Hdc)
+        {
+            return false;
         }
 
         if (mode != FlashDeviceMode.Rkdl)

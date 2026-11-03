@@ -77,8 +77,7 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("MtkLegacyCompletionBox").SelectedIndex = 0;
         Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable.Range(0, 8).ToArray();
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
-        Field<ComboBox>("RkStorageTypeBox").ItemsSource = RkStorageTypes;
-        Field<ComboBox>("RkStorageTypeBox").SelectedIndex = -1;
+        SetRkStorageOptions(AllRkStorageOrdinals);
         UpdateEdlProgrammerPickOptions();
         WarmRootCatalogs();
         PropertyChanged += OnModelPropertyChanged;

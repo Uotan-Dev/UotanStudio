@@ -34,8 +34,8 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// The restricted protocol kind of the selected device; ADB and fastboot narrow the page to the shared
-    /// flash action.
-    /// <para>所选设备的受限协议种类；ADB 与 fastboot 把页面收窄为通用烧录动作。</para>
+    /// flash action, and HDC offers no device operation at all.
+    /// <para>所选设备的受限协议种类；ADB 与 fastboot 把页面收窄为通用烧录动作，HDC 则不提供任何设备操作。</para>
     /// </summary>
     internal FlashDeviceKind DeviceKind => FlashDeviceUiPolicy.KindOf(SelectedDevice?.Protocol);
 

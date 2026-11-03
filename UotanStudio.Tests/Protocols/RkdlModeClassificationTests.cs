@@ -288,6 +288,8 @@ public sealed class RkdlModeClassificationTests
 
         public int DefaultTimeoutMs => 1000;
 
+        public bool ResetReenumeratesDevice => false;
+
         public UsbDeviceInfo DeviceInfo { get; } = new()
         {
             VendorId = RockchipVid,

@@ -45,4 +45,23 @@ public sealed class FlashDeviceStatusGeometryTests
         Assert.Single(lines);
         Assert.Equal(language.GetString("Flash_RkStorageSize", 32L, 65536L, 512), lines[0]);
     }
+
+    [Fact]
+    public void AppendRkStorageRows_MediaWithoutGeometry_AreLeftOutOfTheTableAndSelector()
+    {
+        var media = new (string Key, int Ordinal, IReadOnlyList<string> Geometry)[]
+        {
+            (FlashDeviceStatusRowKeys.Storage, 1, ["存储容量：238552 MiB（488554496 个扇区 × 512 B）"]),
+            (FlashDeviceStatusRowKeys.StorageProbe, 2, []),
+            (FlashDeviceStatusRowKeys.StorageProbe, 4, ["存储容量：16 MiB（32768 个扇区 × 512 B）"]),
+        };
+        var rows = new List<FlashDeviceStatusEntry>();
+
+        var storages = FlashViewModel.AppendRkStorageRows(rows, media);
+
+        Assert.Equal(new[] { 1, 4 }, storages);
+        Assert.Equal(new[] { "EMMC", string.Empty, "SPINOR", string.Empty }, rows.Select(row => row.Name));
+        Assert.Equal(new[] { string.Empty, media[0].Geometry[0], string.Empty, media[2].Geometry[0] },
+            rows.Select(row => row.Value));
+    }
 }
