@@ -232,7 +232,7 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
             }
 
             token.ThrowIfCancellationRequested();
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            await ApplyOnUIThreadAsync(() =>
             {
                 Children.Clear();
                 foreach (var child in children)
@@ -246,8 +246,27 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         }
         catch (Exception)
         {
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(Children.Clear);
+            await ApplyOnUIThreadAsync(Children.Clear);
         }
+    }
+
+    /// <summary>
+    /// Runs a children-collection mutation on the UI thread while an application is running, and inline when
+    /// none is, so a headless caller never awaits a dispatcher loop that no thread pumps.
+    /// <para>有应用运行时把子集合的改动放到 UI 线程执行，没有应用时就地执行，避免无界面的调用方等待一个
+    /// 无人驱动的调度循环。</para>
+    /// </summary>
+    /// <param name="action">Mutation to perform. <para>要执行的改动。</para></param>
+    /// <returns>The completed or dispatched work. <para>就地完成或已投递的工作。</para></returns>
+    private static async Task ApplyOnUIThreadAsync(Action action)
+    {
+        if (Avalonia.Application.Current is null)
+        {
+            action();
+            return;
+        }
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(action);
     }
 
     /// <summary>Attaches a comparison child node under this node.<para>把一个对比子节点挂到本节点下。</para></summary>
