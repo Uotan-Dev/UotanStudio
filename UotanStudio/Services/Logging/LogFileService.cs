@@ -61,6 +61,15 @@ public static class LogFileService
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Serializes one entry as a single JSON Line record.<para>把一条条目序列化为一行 JSON 记录。</para></summary>
+    /// <param name="line">Entry to serialize.<para>要序列化的条目。</para></param>
+    /// <returns>The JSON text without a trailing newline.<para>不含末尾换行的 JSON 文本。</para></returns>
+    internal static string Serialize(ILogLine line)
+    {
+        var record = new LogFileRecord(line.Text, line.Level, [.. line.Columns]);
+        return JsonSerializer.Serialize(record, JsonContext.LogFileRecord);
+    }
+
     /// <summary>Reads exported logs, logcat text or project logs without live-cache eviction.<para>读取导出日志、logcat 或项目日志，不执行实时缓存淘汰。</para></summary>
     /// <param name="path">File to read.<para>要读取的文件。</para></param>
     /// <param name="cancellationToken">Token cancelling the read.<para>取消读取的令牌。</para></param>

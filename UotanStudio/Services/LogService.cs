@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Composition;
+using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Services;
 
@@ -41,20 +42,47 @@ public enum LogChannel
 }
 
 /// <summary>
-/// Unified log service that buffers entries, applies a minimum level, and notifies subscribers.
-/// <para>统一日志服务：缓冲日志条目，执行最低级别过滤，并向订阅者推送。</para>
+/// Unified log service that retains entries under an entry-count and text budget, applies a minimum level, and
+/// notifies subscribers.
+/// <para>统一日志服务：按条目数与文本预算保留日志，执行最低级别过滤，并向订阅者推送。</para>
 /// </summary>
 public sealed class LogService : IUnifiedLog
 {
+    /// <summary>
+    /// Default entry-count guard; the character budget normally evicts first.
+    /// <para>默认条目数护栏；通常先触发的是字符预算。</para>
+    /// </summary>
+    public const int DefaultMaxQueueSize = 250_000;
+
+    /// <summary>
+    /// Default text budget in characters; the oldest entries are evicted once the retained text exceeds it.
+    /// <para>默认文本字符预算；保留文本超出后淘汰最旧条目。</para>
+    /// </summary>
+    public const long DefaultMaxQueueCharacters = 64L * 1024 * 1024;
+
     private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
     private static int _containerLookup;
     private static readonly ConcurrentDictionary<string, LogChannel> ChannelCache = new();
-    private readonly ConcurrentQueue<LogEntry> _entries = new();
+
+    /// <summary>
+    /// Retained entries in arrival order; the head is the oldest entry and is evicted once the entry or
+    /// character budget is exceeded.
+    /// <para>按到达顺序保留的条目；队首是最旧条目，超出条目数或字符预算时被淘汰。</para>
+    /// </summary>
+    private readonly Queue<LogEntry> _entries = new();
+
     private readonly Lock _subscribersLock = new();
+    private readonly Lock _bufferLock = new();
+    private readonly Lock _fileLogLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
     private EventHandler<LogEntry>[] _subscriberSnapshot = [];
     private volatile LogLevel _minimumLevel = LogLevel.Trace;
-    private int _maxQueueSize = 5000;
+    private volatile int _maxQueueSize = DefaultMaxQueueSize;
+    private long _maxQueueCharacters = DefaultMaxQueueCharacters;
+    private long _queuedCharacters;
+    private volatile bool _debugMode;
+    private string? _fileLogDirectory;
+    private LogFileSink? _fileSink;
 
     /// <summary>
     /// Gets the singleton instance: the container instance when <see cref="ServiceHub"/> is
@@ -87,7 +115,9 @@ public sealed class LogService : IUnifiedLog
         }
     }
 
-    private LogService() { }
+    internal LogService()
+    {
+    }
 
     /// <summary>
     /// Raised when a log entry is enqueued.
@@ -96,47 +126,94 @@ public sealed class LogService : IUnifiedLog
     public event EventHandler<LogEntry>? LogEnqueued;
 
     /// <summary>
-    /// All log entries currently buffered (read-only snapshot).
-    /// <para>当前缓冲区中所有日志条目（只读快照）。</para>
+    /// All log entries currently buffered (read-only snapshot, oldest first).
+    /// <para>当前缓冲区中所有日志条目（只读快照，最旧在前）。</para>
     /// </summary>
     /// <value>A snapshot copy of the buffered entries. <para>缓冲条目的快照副本。</para></value>
     public IReadOnlyList<LogEntry> Entries
     {
         get
         {
-            List<LogEntry> snapshot = [];
-            foreach (var e in _entries) snapshot.Add(e);
-            return snapshot;
+            lock (_bufferLock)
+            {
+                return [.. _entries];
+            }
         }
     }
 
     /// <summary>
-    /// Maximum number of entries in the buffer; the oldest entries are dropped when exceeded.
-    /// <para>缓冲区最大条目数，超出后丢弃最旧条目。</para>
+    /// Entry-count guard; entries are dropped from the head once either this count or
+    /// <see cref="MaxQueueCharacters"/> is exceeded.
+    /// <para>条目数护栏；条目数或 <see cref="MaxQueueCharacters"/> 任一超出时从队首丢弃条目。</para>
     /// </summary>
     /// <value>The entry ceiling; assigned values below 100 are raised to 100.
     /// <para>条目数上限；赋值小于 100 时提升为 100。</para></value>
     public int MaxQueueSize
     {
         get => _maxQueueSize;
-        set => _maxQueueSize = Math.Max(100, value);
+        set
+        {
+            var capacity = Math.Max(100, value);
+            lock (_bufferLock)
+            {
+                if (capacity == _maxQueueSize)
+                {
+                    return;
+                }
+
+                _maxQueueSize = capacity;
+                TrimLocked();
+            }
+        }
     }
 
     /// <summary>
-    /// Writes a log entry when its level meets the minimum, buffers it, trims the queue, and notifies subscribers.
-    /// <para>级别不低于最低值时写入日志条目：入队缓冲、超限裁剪并通知订阅者。</para>
+    /// Text budget in characters; the oldest entries are evicted once the retained source and message text
+    /// exceeds it, so long sessions keep the newest output instead of growing without bound.
+    /// <para>文本字符预算；保留的来源与消息文本超出后淘汰最旧条目，使长会话保留最新输出而不无限增长。</para>
+    /// </summary>
+    /// <value>The character budget; assigned values below 65536 are raised to 65536.
+    /// <para>字符预算；赋值小于 65536 时提升为 65536。</para></value>
+    public long MaxQueueCharacters
+    {
+        get => Volatile.Read(ref _maxQueueCharacters);
+        set
+        {
+            var budget = Math.Max(64 * 1024, value);
+            lock (_bufferLock)
+            {
+                if (budget == Volatile.Read(ref _maxQueueCharacters))
+                {
+                    return;
+                }
+
+                Volatile.Write(ref _maxQueueCharacters, budget);
+                TrimLocked();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes a log entry to the configured file trail; when its level meets the minimum it is also buffered under
+    /// the retention budget and subscribers are notified.
+    /// <para>把日志条目写入已配置的文件接收端；级别不低于最低值时再按保留预算入队缓冲并通知订阅者。</para>
     /// </summary>
     /// <param name="level">The entry level. <para>条目级别。</para></param>
     /// <param name="source">The log source name. <para>日志来源名称。</para></param>
     /// <param name="message">The log text. <para>日志文本。</para></param>
     public void Write(LogLevel level, string source, string message)
     {
+        var entry = new LogEntry(DateTime.Now, level, source ?? string.Empty, message ?? string.Empty);
+        Volatile.Read(ref _fileSink)?.Append(entry);
+
         if (level < _minimumLevel) return;
 
-        var entry = new LogEntry(DateTime.Now, level, source ?? string.Empty, message ?? string.Empty);
-        _entries.Enqueue(entry);
-
-        while (_entries.Count > _maxQueueSize && _entries.TryDequeue(out _)) { }
+        lock (_bufferLock)
+        {
+            _entries.Enqueue(entry);
+            _queuedCharacters += (long)entry.Source.Length + entry.Message.Length;
+            TrimLocked();
+        }
 
         var handlers = Volatile.Read(ref _subscriberSnapshot);
         if (handlers.Length != 0)
@@ -151,8 +228,9 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// Writes a log entry whose text is formatted from the arguments when the level meets the minimum.
-    /// <para>级别不低于最低值时写入按参数格式化日志文本的条目。</para>
+    /// Writes a log entry whose text is formatted from the arguments; the formatted entry reaches the file trail
+    /// even when its level does not meet the store minimum.
+    /// <para>写入按参数格式化日志文本的条目；即使级别低于存储最低级别，格式化后的条目仍会进入文件接收端。</para>
     /// </summary>
     /// <param name="level">The entry level. <para>条目级别。</para></param>
     /// <param name="source">The log source name. <para>日志来源名称。</para></param>
@@ -160,7 +238,6 @@ public sealed class LogService : IUnifiedLog
     /// <param name="args">The format arguments. <para>格式化使用的参数数组。</para></param>
     public void Write(LogLevel level, string source, string format, params object[] args)
     {
-        if (level < _minimumLevel) return;
         string message;
         try
         {
@@ -184,15 +261,90 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
+    /// Gets whether an entry at <paramref name="level"/> survives the configured minimum level, so a caller can
+    /// skip building text that <see cref="Write(LogLevel, string, string)"/> would discard anyway.
+    /// <para>获取某个级别的条目能否通过已配置的最低级别，使调用方可以跳过构建那些
+    /// <see cref="Write(LogLevel, string, string)"/> 反正会丢弃的文本。</para>
+    /// </summary>
+    /// <param name="level">The level the entry would be written at. <para>条目将要写入的级别。</para></param>
+    /// <returns><see langword="true"/> when the entry would be recorded. <para>条目会被记录时为 <see langword="true"/>。</para></returns>
+    public bool IsEnabled(LogLevel level) => level >= _minimumLevel;
+
+    /// <summary>
+    /// Gets whether debug mode is currently enabled; consumers such as the global log window use it to skip
+    /// their own retention budgets while verbose diagnostics are being collected.
+    /// <para>获取当前是否启用调试模式；全局日志窗口等使用方在收集详细诊断期间据此跳过自身的保留预算。</para>
+    /// </summary>
+    /// <value><see langword="true"/> while debug mode is enabled. <para>调试模式开启时为 <see langword="true"/>。</para></value>
+    public bool IsDebugModeEnabled => _debugMode;
+
+    /// <summary>
     /// Applies the debug mode setting: when enabled the minimum level is <see cref="LogLevel.Trace"/>;
-    /// when disabled it is <see cref="LogLevel.Info"/>.
-    /// <para>应用调试模式设置：开启时最低级别为 <see cref="LogLevel.Trace"/>，关闭时为 <see cref="LogLevel.Info"/>。</para>
+    /// when disabled it is <see cref="LogLevel.Info"/>. The file trail configured through
+    /// <see cref="ConfigureFileLogging"/> is independent of this switch.
+    /// <para>应用调试模式设置：开启时最低级别为 <see cref="LogLevel.Trace"/>，关闭时为 <see cref="LogLevel.Info"/>。
+    /// 由 <see cref="ConfigureFileLogging"/> 配置文件接收端与开关无关。</para>
     /// </summary>
     /// <param name="debug">Whether debug mode is enabled. <para>是否启用调试模式。</para></param>
     public void ApplyDebugMode(bool debug)
     {
         SetMinimumLevel(debug ? LogLevel.Trace : LogLevel.Info);
         ApplyCommDebugMode(debug);
+        _debugMode = debug;
+    }
+
+    /// <summary>
+    /// Starts writing every produced entry to a session file in <paramref name="directory"/>; <see langword="null"/>
+    /// stops the trail. The file receives entries below the store minimum as well, so it is not limited by debug mode
+    /// or by the window's level filter.
+    /// <para>开始在 <paramref name="directory"/> 中把每条产生的条目写入会话文件；<see langword="null"/> 停止写入。
+    /// 文件同样接收低于存储最低级别的条目，因此不受调试模式或窗口级别筛选限制。</para>
+    /// </summary>
+    /// <param name="directory">Target directory, or null to disable. <para>目标目录；null 表示关闭。</para></param>
+    public void ConfigureFileLogging(string? directory)
+    {
+        lock (_fileLogLock)
+        {
+            _fileLogDirectory = string.IsNullOrWhiteSpace(directory) ? null : directory;
+            CloseFileSinkLocked();
+            OpenFileSinkLocked();
+        }
+    }
+
+    /// <summary>
+    /// Flushes buffered file-log records; a no-op when file logging is inactive.
+    /// <para>冲刷文件日志缓冲；文件日志未启用时为空操作。</para>
+    /// </summary>
+    public void FlushFileLog()
+    {
+        lock (_fileLogLock)
+        {
+            _fileSink?.Flush();
+        }
+    }
+
+    private void OpenFileSinkLocked()
+    {
+        if (_fileSink is not null || _fileLogDirectory is not { } directory)
+        {
+            return;
+        }
+
+        try
+        {
+            _fileSink = new LogFileSink(directory);
+        }
+        catch
+        {
+            _fileSink = null;
+        }
+    }
+
+    private void CloseFileSinkLocked()
+    {
+        var sink = _fileSink;
+        _fileSink = null;
+        sink?.Dispose();
     }
 
     /// <summary>
@@ -240,7 +392,20 @@ public sealed class LogService : IUnifiedLog
     /// </summary>
     public void Clear()
     {
-        while (_entries.TryDequeue(out _)) { }
+        lock (_bufferLock)
+        {
+            _entries.Clear();
+            _queuedCharacters = 0;
+        }
+    }
+
+    private void TrimLocked()
+    {
+        while (_entries.Count > 0 && (_entries.Count > _maxQueueSize || _queuedCharacters > _maxQueueCharacters))
+        {
+            var removed = _entries.Dequeue();
+            _queuedCharacters -= (long)removed.Source.Length + removed.Message.Length;
+        }
     }
 
     /// <summary>

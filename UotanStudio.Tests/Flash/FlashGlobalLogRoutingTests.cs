@@ -60,11 +60,13 @@ public sealed class FlashGlobalLogRoutingTests
             await model.ImportRkConfigAsync(config);
 
             Assert.Equal(loader, model.EffectiveRkLoaderPath);
+            await model.SpecialFileRowCheck;
 
             File.Delete(loader);
             await model.ImportRkConfigAsync(config);
 
             Assert.Null(model.EffectiveRkLoaderPath);
+            await model.SpecialFileRowCheck;
         }
         finally
         {
@@ -134,6 +136,27 @@ public sealed class FlashGlobalLogRoutingTests
                 Assert.Equal("Flash", entry.Source);
                 Assert.Contains("the loader is missing", entry.Message, StringComparison.Ordinal);
             });
+    }
+
+    [Fact]
+    public void AppendLog_WhileTheGlobalStoreFiltersBelowInfo_StillPublishesTheLineToThePage()
+    {
+        var service = LogService.Instance;
+        try
+        {
+            service.ApplyDebugMode(debug: false);
+            var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, service);
+            var marker = "page-only-" + Guid.NewGuid().ToString("N");
+
+            model.AppendLog(marker);
+            model.FlushPendingLog();
+
+            Assert.Contains(marker, model.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            service.ApplyDebugMode(debug: false);
+        }
     }
 
     private sealed class RecordingUnifiedLog : IUnifiedLog

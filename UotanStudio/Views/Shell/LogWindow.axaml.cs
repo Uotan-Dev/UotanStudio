@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Globalization;
 using System.Text;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -61,8 +62,8 @@ public partial class LogWindow : Window
     }
 
     /// <summary>
-    /// Export button click handler, opening a save dialog and writing the current log collection to a text file.
-    /// <para>导出按钮点击事件，弹出保存对话框并将当前日志集合写入文本文件。</para>
+    /// Export button click handler, opening a save dialog and writing every retained log entry to a text file.
+    /// <para>导出按钮点击事件，弹出保存对话框并将全部保留日志条目写入文本文件。</para>
     /// </summary>
     private async void OnExportClick(object? sender, RoutedEventArgs e)
     {
@@ -70,8 +71,8 @@ public partial class LogWindow : Window
     }
 
     /// <summary>
-    /// Exports logs to a user-chosen file.
-    /// <para>导出日志到用户选择的文件。</para>
+    /// Exports every retained log entry to a user-chosen file, independent of the active filters.
+    /// <para>把所有保留日志条目导出到用户选择的文件，不受当前筛选影响。</para>
     /// </summary>
     private async Task ExportLogsAsync()
     {
@@ -81,10 +82,18 @@ public partial class LogWindow : Window
             return;
         }
 
-        if (DataContext is not LogViewModel vm || vm.Entries.Count == 0)
+        if (DataContext is not LogViewModel vm)
         {
             return;
         }
+
+        vm.FlushPending();
+        if (vm.AllEntries.Count == 0)
+        {
+            return;
+        }
+
+        var entries = vm.AllEntries.ToArray();
 
         var suggestedName = $"UotanStudio_Log_{DateTime.Now:yyyyMMdd_HHmmss}.log";
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
@@ -110,10 +119,11 @@ public partial class LogWindow : Window
         {
             await using var stream = await file.OpenWriteAsync();
             using var writer = new StreamWriter(stream, Encoding.UTF8);
-            foreach (var entry in vm.Entries)
+            foreach (var entry in entries)
             {
                 await writer.WriteLineAsync(
-                    $"{entry.Timestamp} [{entry.Level}] {entry.Source} - {entry.Message}");
+                    $"{entry.WrittenAt.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)} "
+                    + $"[{entry.Level}] {entry.Source} - {entry.Message}");
             }
             await writer.FlushAsync();
 

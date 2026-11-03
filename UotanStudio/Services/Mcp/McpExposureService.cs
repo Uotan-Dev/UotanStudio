@@ -2,6 +2,7 @@ using UotanStudio.Mcp;
 using UotanStudio.Mcp.Http;
 
 using UotanStudio.Mcp.Tools;
+using UotanStudio.Services.Logging;
 namespace UotanStudio.Services.Mcp;
 
 /// <summary>
@@ -145,7 +146,8 @@ internal sealed class McpExposureService
 
             var serverHost = new McpServerHost(sandbox, allowFlash, _deviceManagerFactory(),
                 _deliveryToolsFactory, _signingKeyFactory);
-            var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources(), loggerFactory: null, McpToolCallLog.Instance);
+            var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources(),
+                loggerFactory: UnifiedLogLoggerFactory.Shared, McpToolCallLog.Instance);
             host.Start(effectivePort);
 
             _host = host;

@@ -64,7 +64,6 @@
     <PackageReference Include="LuaCSharp" />
     <PackageReference Include="Porta.Pty" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
-    <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="AvaloniaEdit.TextMate" />
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
@@ -90,6 +89,8 @@
     <PackageReference Include="NodifyM.Avalonia" />
     <!-- Explicit-factory DI container; registrations are AOT/trimming safe. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- Abstractions only: the unified-log bridge reads ILogger producers without the implementation, options or provider pipeline. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />

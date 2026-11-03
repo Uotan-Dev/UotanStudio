@@ -8,7 +8,9 @@ namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
 /// Global log window view model, subscribing to <see cref="LogService"/> log entry pushes and maintaining a bindable collection for the LogWindow to display.
-/// <para>全局日志窗口视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 LogWindow 显示。</para>
+/// Retention budgets are suspended while debug mode is enabled.
+/// <para>全局日志窗口视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 LogWindow 显示。
+/// 调试模式开启期间暂停保留预算。</para>
 /// </summary>
 public partial class LogViewModel : ViewModelBase, IDisposable
 {
@@ -20,6 +22,10 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     {
         /// <summary>Local timestamp text (HH:mm:ss). <para>本地时间戳文本（HH:mm:ss）。</para></summary>
         [ObservableProperty] private string _timestamp = string.Empty;
+
+        /// <summary>Full local timestamp, kept so exports and other consumers do not lose the date.
+        /// <para>完整的本地时间戳，使导出及其他使用方不会丢失日期。</para></summary>
+        public DateTime WrittenAt { get; }
 
         /// <summary>Log level. <para>日志级别。</para></summary>
         [ObservableProperty] private LogLevel _level = LogLevel.Info;
@@ -54,9 +60,14 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         /// Creates a log entry view model.
         /// <para>创建日志条目视图模型。</para>
         /// </summary>
-        public LogEntryViewModel(string timestamp, LogLevel level, string source, string message)
+        /// <param name="writtenAt">Full local timestamp. <para>完整的本地时间戳。</para></param>
+        /// <param name="level">Entry severity. <para>条目级别。</para></param>
+        /// <param name="source">Log source. <para>日志来源。</para></param>
+        /// <param name="message">Log text. <para>日志文本。</para></param>
+        public LogEntryViewModel(DateTime writtenAt, LogLevel level, string source, string message)
         {
-            _timestamp = timestamp;
+            WrittenAt = writtenAt;
+            _timestamp = writtenAt.ToString("HH:mm:ss");
             _level = level;
             _source = source;
             _message = message;
@@ -105,16 +116,42 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     public LogEntryCollection<LogEntryViewModel> Entries { get; } = [];
 
     /// <summary>
-    /// Raw buffer of all log entries (unfiltered); the oldest entries are dropped when over the cap.
-    /// <para>全部日志条目的原始缓冲（未筛选），超出上限时丢弃最旧条目。</para>
+    /// Every retained entry regardless of the active filters; the export path writes this list so filtering never
+    /// hides entries from an exported log.
+    /// <para>不受当前筛选影响的全部保留条目；导出路径写入该列表，使筛选不会让导出的日志缺少条目。</para>
+    /// </summary>
+    public IReadOnlyList<LogEntryViewModel> AllEntries => _allEntries;
+
+    /// <summary>
+    /// Raw buffer of all log entries (unfiltered); the oldest entries are evicted once the entry or character
+    /// budget is exceeded.
+    /// <para>全部日志条目的原始缓冲（未筛选）；超出条目数或字符预算时淘汰最旧条目。</para>
     /// </summary>
     private readonly List<LogEntryViewModel> _allEntries = [];
 
     /// <summary>
-    /// Cumulative entry cap; the oldest entries are dropped when exceeded to prevent unbounded growth.
-    /// <para>累计条目数上限，超过后丢弃最旧条目以防止无限增长。</para>
+    /// Log service owning the debug-mode switch; while debug mode is on the panel keeps every entry it receives.
+    /// <para>持有调试模式开关的日志服务；调试模式开启期间，面板保留收到的每一条条目。</para>
     /// </summary>
-    private const int MaxEntries = 5000;
+    private readonly LogService _source;
+
+    /// <summary>
+    /// Entry-count guard mirroring the store budget.
+    /// <para>与服务存储预算一致的条目数护栏。</para>
+    /// </summary>
+    private readonly int _maxEntries;
+
+    /// <summary>
+    /// Character budget mirroring the store budget, counted over the complete displayed line.
+    /// <para>与服务存储预算一致的字符预算，按完整展示行计数。</para>
+    /// </summary>
+    private readonly long _maxCharacters;
+
+    /// <summary>
+    /// Characters currently retained in <see cref="_allEntries"/>.
+    /// <para><see cref="_allEntries"/> 当前保留的字符数。</para>
+    /// </summary>
+    private long _retainedCharacters;
 
     /// <summary>
     /// Lock guarding <see cref="_pendingEntries"/> which is enqueued from any thread.
@@ -238,16 +275,34 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// Constructs the log panel view model, subscribing to the unified log service and language changes and backfilling the historical buffer.
     /// <para>构造日志面板视图模型，订阅统一日志服务与语言变更并回填历史缓冲。</para>
     /// </summary>
-    public LogViewModel()
+    public LogViewModel() : this(LogService.Instance)
     {
+    }
+
+    internal LogViewModel(LogService source) : this(source, source.MaxQueueSize, source.MaxQueueCharacters)
+    {
+    }
+
+    internal LogViewModel(LogService source, int maxEntries, long maxCharacters)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        _source = source;
+        _maxEntries = Math.Max(1, maxEntries);
+        _maxCharacters = Math.Max(1, maxCharacters);
         SelectedChannel = Channels[0];
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
-        _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
+        _unsubscribe = source.Subscribe(OnLogEnqueued);
         _flushTimer.Tick += (_, _) => FlushPending();
         _flushTimer.Start();
-        foreach (var e in LogService.Instance.Entries)
+        foreach (var e in source.Entries)
         {
             TrackEntry(e);
+        }
+
+        var overflow = TrimToBudget();
+        if (overflow > 0)
+        {
+            _allEntries.RemoveRange(0, overflow);
         }
 
         ReapplyFilter();
@@ -271,10 +326,10 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Timed batch flush: appends the whole backlog at once and trims over-limit entries in bulk.
-    /// <para>定时批量刷新：一次性把积压日志追加到集合并批量裁剪超限条目。</para>
+    /// Timed batch flush: appends the whole backlog at once and trims over-budget entries in bulk.
+    /// <para>定时批量刷新：一次性把积压日志追加到集合并批量裁剪超预算条目。</para>
     /// </summary>
-    private void FlushPending()
+    internal void FlushPending()
     {
         List<LogEntry> batch;
         lock (_pendingGate)
@@ -299,8 +354,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
 
         Entries.Apply(0, added);
 
-        var overflow = _allEntries.Count - MaxEntries;
-        if (overflow <= 0)
+        var overflow = TrimToBudget();
+        if (overflow == 0)
         {
             return;
         }
@@ -319,14 +374,39 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Counts leading entries beyond the count or character budget and subtracts their text from the retained total.
+    /// While debug mode is enabled the panel keeps everything, so no entry is counted for removal.
+    /// <para>统计超出条目数或字符预算的头部条目，并从保留字符总数中扣除它们的文本长度。调试模式开启期间面板保留全部
+    /// 条目，因此不计算任何待移除条目。</para>
+    /// </summary>
+    /// <returns>Number of leading entries to remove. <para>需要移除的头部条目数。</para></returns>
+    private int TrimToBudget()
+    {
+        if (_source.IsDebugModeEnabled)
+        {
+            return 0;
+        }
+
+        var overflow = 0;
+        while (overflow < _allEntries.Count
+            && (_allEntries.Count - overflow > _maxEntries || _retainedCharacters > _maxCharacters))
+        {
+            _retainedCharacters -= _allEntries[overflow].Text.Length;
+            overflow++;
+        }
+
+        return overflow;
+    }
+
+    /// <summary>
     /// Tracks a log entry in the raw buffer and source names without touching the display collection.
     /// <para>登记一条日志到原始缓冲与组件名集合，不触碰展示集合。</para>
     /// </summary>
     private LogEntryViewModel TrackEntry(LogEntry entry)
     {
-        var ts = entry.Timestamp.ToString("HH:mm:ss");
-        var vm = new LogEntryViewModel(ts, entry.Level, entry.Source, entry.Message);
+        var vm = new LogEntryViewModel(entry.Timestamp, entry.Level, entry.Source, entry.Message);
         _allEntries.Add(vm);
+        _retainedCharacters += vm.Text.Length;
 
         if (_sourceSet.Add(entry.Source))
         {
@@ -385,6 +465,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             _pendingEntries.Clear();
         }
         _allEntries.Clear();
+        _allEntries.TrimExcess();
+        _retainedCharacters = 0;
         Entries.Clear();
         Sources.Clear();
         _sourceSet.Clear();
