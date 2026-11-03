@@ -42,11 +42,11 @@
     <!-- Blank space is kept at the bottom: MinHeight raises the window, the content stays top-aligned. -->
     <StackPanel Margin="16,40,16,40" Spacing="14" IsEnabled="{Binding IsIdle}">
 
-    <!-- 文件名 -->
+    <!-- 选择文件 -->
     <StackPanel Spacing="4">
-      <TextBlock Text="{DynamicResource Checksum_FileName}" />
+      <TextBlock Text="{DynamicResource Checksum_ChooseFile}" />
       <Grid ColumnDefinitions="*,Auto">
-        <TextBox Text="{Binding FilePath, Mode=TwoWay}" PlaceholderText="{DynamicResource Checksum_FileName}" />
+        <TextBox Text="{Binding FilePath, Mode=TwoWay}" />
         <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
                 Content="{DynamicResource Checksum_ChooseFile}" Click="OnChooseFile" />
       </Grid>
