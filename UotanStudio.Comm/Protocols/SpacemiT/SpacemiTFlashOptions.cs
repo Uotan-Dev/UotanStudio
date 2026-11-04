@@ -25,8 +25,17 @@ public sealed class SpacemiTFlashOptions
     /// <summary>Gets or sets partition names never flashed, applied after <see cref="OnlyPartitions"/>. <para>获取或设置永不刷写的分区名集合，在 <see cref="OnlyPartitions"/> 之后生效。</para></summary>
     public IReadOnlyList<string> SkipPartitions { get; set; } = [];
 
-    /// <summary>Gets or sets the gzip level used for chunked oversized images, matching the package "gzip-N" hint default of 5. <para>获取或设置超大镜像分块传输使用的 gzip 级别；与包内 "gzip-N" 提示的默认值 5 一致。</para></summary>
-    public int GzipLevel { get; set; } = 5;
+    /// <summary>
+    /// Gets or sets the gzip level used for chunked oversized images. The vendor flasher defaults
+    /// to 2, but that value is safe on its pgzip codec whose stored-block fallback bounds
+    /// incompressible output; on the BCL gzip stack the equivalent fastest safe setting is 4
+    /// (levels 1-3 expand ~5.5% on random data), so 4 is the default here and requests of 1-3 are
+    /// remapped to 4 during transfer. A partition's "gzip-N" table hint overrides this per partition.
+    /// <para>获取或设置超大镜像分块传输使用的 gzip 级别。厂商烧录器默认 2，但该值在其 pgzip 编解码器上
+    /// 安全（stored 块回退约束不可压缩输出）；BCL gzip 栈上等价的最快安全档是 4（1-3 级对随机数据
+    /// 膨胀约 5.5%），因此此处默认 4，传输时 1-3 级的请求也会重映射到 4。分区表中的 "gzip-N" 提示可
+    /// 按分区覆盖该值。</para></summary>
+    public int GzipLevel { get; set; } = 4;
 
     /// <summary>Gets or sets the settle delay in milliseconds after a <c>continue</c> action before the re-open handler is invoked. <para>获取或设置 <c>continue</c> 动作之后、调用重开回调前的等待毫秒数。</para></summary>
     public int ReEnumerateSettleMs { get; set; } = SpacemiTConstants.ReEnumerateSettleMs;
