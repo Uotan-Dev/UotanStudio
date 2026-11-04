@@ -47,6 +47,14 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
     public string DevicePath => Drive.DevicePath;
 
     /// <summary>
+    /// Gets the secondary description including the platform path and mount points when present.
+    /// <para>获取副标题描述，包含平台路径并在存在时附带挂载点。</para>
+    /// </summary>
+    public string Subtitle => Drive.MountPoints.Count > 0
+        ? $"{Drive.DevicePath} ({string.Join(", ", Drive.MountPoints.Select(m => m.TrimEnd('\\')))})"
+        : Drive.DevicePath;
+
+    /// <summary>
     /// Gets or sets whether the row is selected as a flash target.
     /// <para>获取或设置该行是否被选为烧录目标。</para>
     /// </summary>

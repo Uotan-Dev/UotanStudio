@@ -72,6 +72,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     /// <para>获取或设置状态或反馈消息。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private string _statusMessage = string.Empty;
 
     /// <summary>
@@ -132,6 +133,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     /// <para>获取或设置本地化阶段文本。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private string _progressStage;
 
     /// <summary>
@@ -139,7 +141,32 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     /// <para>获取或设置格式化后的字节、速度与剩余时间统计。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private string _progressStats = string.Empty;
+
+    /// <summary>
+    /// Gets the combined progress or status description for the bottom bar.
+    /// <para>获取底栏的组合进度或状态描述。</para>
+    /// </summary>
+    public string ProgressText
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(StatusMessage))
+            {
+                return StatusMessage;
+            }
+
+            if (string.IsNullOrEmpty(ProgressStats))
+            {
+                return ProgressStage;
+            }
+
+            return string.IsNullOrEmpty(ProgressStage)
+                ? ProgressStats
+                : $"{ProgressStage} · {ProgressStats}";
+        }
+    }
 
     /// <summary>
     /// Gets whether no operation is running.
@@ -487,6 +514,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         OnPropertyChanged(nameof(HasDrives));
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(SelectedCountText));
+        OnPropertyChanged(nameof(ProgressText));
     }
 
     private static string DescribeImage(FlashImage image)

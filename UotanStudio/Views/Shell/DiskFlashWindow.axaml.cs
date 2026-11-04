@@ -1,6 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Shell;
@@ -27,6 +30,20 @@ public partial class DiskFlashWindow : Window
     private DiskFlashViewModel ViewModel => (DiskFlashViewModel)DataContext!;
 
     private void OnOpened(object? sender, EventArgs e) => ViewModel.RefreshDrivesCommand.Execute(null);
+
+    private void OnDriveCardPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(sender as Visual).Properties.IsLeftButtonPressed &&
+            sender is Border { DataContext: DiskFlashDriveItem item } &&
+            !item.IsBlocked)
+        {
+            if (e.Source is not CheckBox && (e.Source as Visual)?.FindAncestorOfType<CheckBox>() is null)
+            {
+                item.IsSelected = !item.IsSelected;
+                e.Handled = true;
+            }
+        }
+    }
 
     private async void OnChooseImageClick(object? sender, RoutedEventArgs e)
     {
