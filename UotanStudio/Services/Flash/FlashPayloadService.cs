@@ -80,7 +80,7 @@ public static class FlashPayloadService
             }
 
             ct.ThrowIfCancellationRequested();
-            Directory.Move(staging, output);
+            FlashStagingDirectory.Publish(staging, output);
             return output;
         }
         finally
@@ -124,7 +124,7 @@ public static class FlashPayloadService
             await File.WriteAllLinesAsync(Path.Combine(staging, "flash_fastbootd.txt"),
                 ["mode:fastbootd", .. partitions], ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
-            Directory.Move(staging, output);
+            FlashStagingDirectory.Publish(staging, output);
             return output;
         }
         finally

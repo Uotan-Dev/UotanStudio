@@ -80,7 +80,7 @@ public static class FlashOppoContainerService
                 }
             }
             ct.ThrowIfCancellationRequested();
-            Directory.Move(staging, output);
+            FlashStagingDirectory.Publish(staging, output);
             return output;
         }
         finally

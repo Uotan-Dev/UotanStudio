@@ -51,7 +51,7 @@ public sealed class FlashRemotePayloadService(HttpClient client)
                     throw new InvalidDataException($"Partition extraction did not produce {name}.img.");
             }
             ct.ThrowIfCancellationRequested();
-            Directory.Move(staging, output);
+            FlashStagingDirectory.Publish(staging, output);
             return output;
         }
         finally
