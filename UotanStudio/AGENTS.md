@@ -8,7 +8,7 @@
 - 只允许一个桌面 Shell：`ShellComposition` 在已附着工作区时抛 `InvalidOperationException`；`ProjectOperationsService.Instance` 与 `ProjectContextService.Instance` 是全局单例，不要建第二套。
 - 新增 ViewModel 必须登记到 `ViewModelViewRegistry`（AOT 安全、无反射）；新增编辑器还要登记 `DocumentOpenRegistry`，它同时是打开派发、会话恢复、清理与“打开方式”菜单的唯一来源。
 - 新增 XAML 使用当前 Avalonia API 与编译绑定（`AvaloniaUseCompiledBindingsByDefault=true`），避免已标记 obsolete 的属性，不要退回反射绑定。`IsRidAgnostic=false` 用于保留 Comm 原生资产的 RID，`AllowUnsafeBlocks` 用于 `FileAssociationService` 的源生成 `LibraryImport`，都不要顺手删。
-- 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
+- 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常；ViewModel 层 async void 方法若方法体全程自捕获异常并送入统一日志，亦属合法形态。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
 - 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities` 与无工厂的 `AddSingleton<T>()`；这是裁剪与 NativeAOT 的注册契约，发布验证仍按根 `AGENTS.md` 的命令执行。
 - 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回惰性默认实例；不启动容器的测试可直接运行，注册工厂不会递归。
 - USB 树的「启用接管」与设置页的厂商驱动安装都以管理员令牌执行：`Services/Devices/UsbDriverConfigService` 与 `Services/Devices/DriverPackageService` 在未提权时用 `runas` 重启自身进入 `--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall` 助手模式（参数与结果文件格式见 `UsbDriverElevatedCommand`），等待子进程并读回状态；UAC 被取消或宿主无法重启自身时返回 `ElevationRequired`，界面沿用原有提示。
@@ -28,7 +28,7 @@
 - `.resx` 只作为 `AdditionalFiles` 并从 SDK 默认 `EmbeddedResource` glob 移除，否则会生成 satellite assembly。UI 可见文本只走资源字典，不能在界面中拼接中英文。
 - 已生成脚本文本只在生成时确定语言；切换界面语言不得改写已生成内容。
 - 编辑器明确选择“按文本打开”时必须保持文本模式（`EditorOpenMode.Text`），即使文件含 NUL 或使用二进制扩展名；只有 `Auto` 才允许按扩展名或内容探测。
-- MiSans 字形由 `UotanStudio.Assets` 的 `fonts` 资源包随包（`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，压缩帧与清单在 `UotanStudio.Assets/Assets/fonts`），宿主不再自带字体帧；启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection.DecompressFaces` 经 `AssetStore.Read` 取已校验字节并注册到 `FontManager`。启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解码解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。
+- MiSans 字形由 `UotanStudio.Assets` 的 `fonts` 资源包随包（`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，压缩帧与清单在 `UotanStudio.Assets/Assets/fonts`），字体帧只由 Assets 的 fonts 包提供；启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection.DecompressFaces` 经 `AssetStore.Read` 取已校验字节并注册到 `FontManager`。启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解码解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。
 - `.dat`、`.new.dat`、`.patch.dat`、`.br`、`.transfer.list` 的识别复用现有格式注册与判定（`ImageInputService`、`ImageOutputService`、`ProjectExplorerView`）；不要在 View 复制后缀判断。
 
 ## 项目、快照与交付
@@ -36,7 +36,7 @@
 - 新建、打开、关闭、另存为必须经过 `ProjectOperationsService`。保存失败保留源上下文与原目标内容；另存为成功后才切换项目根目录。自动保存失败要放行项目操作门，不能静默卡住。
 - 解决方案快照中的交付计划、面板可见性与项目资源管理器展开状态只写 `SolutionSnapshot.State`（键 `delivery`/`panels`/`explorer`）；解决方案根目录不存放 `delivery.json`。子项目自己的 `.uotan/` 语义保持不变。
 - 交付页面保持现有控件与布局语义；新行为优先复用 `DeliveryViewModel`、`DeliveryCompositionView`、`DeliveryView.Operations.cs`，不要在 View 层维护第二套镜像归属、确认状态或输出集合。`DeliveryPlan` 仍是交付后端唯一输入。
-- 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。主窗口尺寸、位置与状态存为 `mainWindowPlacement`（`MainWindowPlacement`），烧录页面侧边分类（`edl`/`mtk`/`rockchip`/`image`）的展开状态存为 `expandedFlashSections`；`SettingsViewModel.SaveSettings` 保存前必须从磁盘最新设置合并这两个键，`workspace-session.json` 不再记录窗口几何。
+- 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。主窗口尺寸、位置与状态存为 `mainWindowPlacement`（`MainWindowPlacement`），烧录页面侧边分类（`edl`/`mtk`/`rockchip`/`spacemit`/`image`）的展开状态存为 `expandedFlashSections`；`SettingsViewModel.SaveSettings` 保存前必须从磁盘最新设置合并这两个键，窗口几何只存 `settings.json` 的 `mainWindowPlacement`。
 - 渲染后端与合成模式是启动期设置：设置页只写 `renderingBackend`/`renderingCompositionMode` 并提示重启，桌面入口在下一次启动时转换平台选项；"自动"项展示当前进程实际使用的后端与合成宿主（`RenderingRuntimeProbe`，经保留的解析器反射读取），Wayland 下不提供可选项。
 - MCP 暴露由 `McpExposureService` 启动：只监听 `127.0.0.1`；沙箱根为空或无法规范化时回退不受限沙箱，并强制关闭刷写门控；签名经 `DeliveryKeyProvider`。
 - `KeyLibraryService`（`%AppData%/UotanStudio/keys`）是密钥生成/导入/导出的唯一路径；发布与导出使用不覆盖语义，不得覆盖已有密钥或证书。

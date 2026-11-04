@@ -5,7 +5,7 @@
 ## 边界与可见性
 
 - 不得引用桌面宿主、界面、项目持久化服务或 `KeyLibraryService`；签名私钥只经 `Models/Signing.cs` 的 `IDeliverySigningKeyProvider` 注入。桌面侧适配在 `UotanStudio/Services/Delivery/`：`DeliveryKeyProvider`、`DeliveryPlanSerializer`、`DeliveryDynamicPartitions`。这条方向没有测试守护，只能靠评审维持。
-- 允许引用 `UotanStudio.Firmware`、`UotanStudio.Net` 与必要的第三方库（SharpCompress 等）。
+- 允许引用 `UotanStudio.Assets`、`UotanStudio.Compress`、`UotanStudio.Firmware`、`UotanStudio.Hash` 与 `UotanStudio.Net`；不声明第三方压缩或加密包，压缩与 ZIP 容器走 Compress 门面（`CompressionService`/`ZipContainer`），校验和走 Hash。
 - 工具包下载、GitHub 镜像选择与 Release 元数据经 `UotanStudio.Net`（`HttpDownload`、`GitHubReleaseClient`）完成；本库不复制镜像枚举、测速或版本归一化逻辑。
 - 对外入口是 `Build/DeliveryService.cs`（公共门面，吃 `DeliveryPlan`）。宿主与 MCP 需要的构建/校验/容量/工具准备契约（`IDeliveryTools`、`DeliveryOutputService`、`DeliveryValidation`、`DeliverySuperBuilder`、`DeliveryPayloadBuilder`、`DeliverySuperCapacity`、`DeliveryPackageBuilder`、`DeliveryScriptGenerator`、`DiskSpaceEstimator`、`DeliveryPlanStore` 等）是公共契约；其余实现细节保持 internal。本库不向宿主或 MCP 开放 `InternalsVisibleTo`，只保留 Tests/Benchmarks/DeliverySmoke 等脚手架的授权。
 - csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不得用 `NoWarn` 隐藏新的文档或空引用警告。
@@ -28,7 +28,7 @@
       "system.patch.dat"
   ) || abort("E2001: Failed to update system image.");
   ```
-- 内嵌的 arm64 原生更新器住在 `UotanStudio.Assets` 的 `delivery` 资源包，长度与 SHA-256 由该项目的清单记录：运行时由 `AssetStore.Read(AssetCatalog.DeliveryUpdater, AssetNames.Delivery.Updater)` 解码并校验，然后原子落盘到 `%TEMP%/UotanStudio/delivery-updater/update-binary-arm64`，磁盘上仍是可执行文件；已存在且长度、摘要与清单条目一致时直接复用，不再重复解码。
+- 内嵌的 arm64 原生更新器住在 `UotanStudio.Assets` 的 `delivery` 资源包，长度与 SHA-256 由该项目的清单记录：运行时由 `AssetStore.Read(AssetCatalog.DeliveryUpdater, AssetNames.Delivery.Updater)` 解码并校验，然后原子落盘到 `%TEMP%/UotanStudio/delivery-updater/update-binary-arm64`，磁盘上仍是可执行文件；已存在且长度、摘要与清单条目一致时直接复用，避免重复解码。
 - Bat、Linux/macOS shell 与卡刷脚本由 `Scripts/Generator.cs` 基于同一份文件编排结果生成；机型代号、作者信息与生成元数据一律取自 `DeliveryPlan`，不得在各模板里重复硬编码。脚本语言只在生成时确定，切换界面语言不得改写已生成内容。
 - ZIP 与目录内部路径统一使用 `/`（相对路径经 `Replace('\\', '/')`）。成员集合以 `Build/Output.cs` 末尾的枚举为准：`PackPayload` 时生成项归入 `ZipFileName(plan, "ota.zip")`，`PackSuper` 时走 `OrganizedImageRelativePath`，两者都不是时镜像落在 `images/`；脚本集合排除 `updater-script` 与 `update-binary`，最后统一附加 `README.txt` 与 `checksums.sha256`。`Build/Payload.cs` 在 payload 输出旁边写 `payload_properties.txt`，`Build/Output.cs` 负责把它从镜像目录里剔除，不要把它当可刷写镜像列出。
 - `TXT` 是清单格式：压缩镜像不得直接列为可刷写镜像，必须由脚本先解压到临时路径再交给 fastboot。

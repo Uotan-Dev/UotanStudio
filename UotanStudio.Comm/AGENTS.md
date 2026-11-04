@@ -9,6 +9,7 @@
 - `Routing/DebugBridgeRoute` 只以普通 TCP 探测 adb/HDC server 是否存在；只有连接被拒绝表示 server 不存在，超时/协议失败保持上次状态。正值缓存 2 秒，拒绝不缓存。控制器在首次探测前按 `DeviceCommunicationConfiguration.RouteMode` 固定 `Auto`/`ServerOnly`/`DirectOnly`/`StartupFrozen` 模式，并把启动探测结果写成一份不可变快照；发现、开启、宿主决策都读这一份快照，快照变化推进 epoch 并盖在端点上，打开时 epoch 不符即拒绝而不是静默改路。`StartupFrozen` 不刷新快照。
 - server 的 serial/connect key 是权威身份。目标存在、离线或未授权时仍属于 server 管理的目标；协议错误不得自动回退 USB。HDC 只服务其列表实际包含的 connect key，未注册键才允许直连。`ServerOnly` 一律拒绝直连，`DirectOnly`/`StartupFrozen` 在 server 监听时拒绝直写而不是切换；跨路由打开同一物理设备会被拒绝，旧 server 租约在 server 消失时由监视循环释放。`DeviceEndpointId(Source,Transport,Address)` 区分发现来源。
 - `UsbPhysicalIdentity.ServerPhysicalId` 只在精确序列号、实例 ID 尾部或仅大小写差异且唯一候选时返回物理标识；VID/PID、枚举顺序与列表位置绝不用于映射。
+- 传输压缩统一经 `UotanStudio.Compress`：ADB sync v2 的 zstd/LZ4 走 `CompressionService` 增量流，HDC 传输的 LZ4 块走 `Codecs/Lz4` 的格式域原语，校验和走 `UotanStudio.Hash`。本项目 csproj 不声明压缩类包，也不自带压缩或校验和实现。
 
 ## USB 与生命周期
 

@@ -37,6 +37,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 - 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
 - `Assets` 不引用 `Net`，也不做网络 I/O；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主可引用 `Assets`。
+- 校验和与摘要统一经 `UotanStudio.Hash` 计算，通用压缩统一经 `UotanStudio.Compress` 门面（`CompressionService`/`CompressionFile`），ZIP 容器统一经 `Zip/ZipContainer`：底层库之外不得构造 BCL 压缩流、不得使用 `System.IO.Hashing` 或 MD5/SHA 摘要入口、不得自带 CRC 多项式表。保留例外集中登记在 `HashBoundaryGuardTests` 与 `CompressionImplementationBoundaryTests` 的允许列表和 `UotanStudio.Compress/README.md` 的例外一节；格式域压缩（文件系统簇、boot 组件、OTA delta、厂商容器）留在所属固件上下文，不收进门面。
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。
 - Apple 相关协议（usbmuxd、lockdownd、AFC、syslog 中继与受信隧道）不接设备扫描：`DeviceControllerFactory` 只注册 USB/adb/HDC 发现源，扫描不探 usbmuxd 守护进程、不生成 usbmuxd 端点，`CommDeviceTransportOpener` 也不识别 usbmuxd 路由。不要为扫描恢复 usbmuxd 探针、端点映射或新增 Apple 发现源。
 - `DeliveryPlan` 是交付后端唯一输入契约；宿主负责采集与恢复界面状态，后端负责校验与生成输出，模式互斥只在现有校验路径维护。
@@ -89,7 +90,7 @@ Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug
 
 测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained`，且不得出现新的裁剪/AOT 警告；`PublishAot` 由 `UotanStudio.Desktop.csproj` 声明，Release 默认 `DebugType=none`，发布的原生镜像不产 PDB；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
-文件系统内核验收只使用 `tools/gki-fs-lab` 的 x86_64 GKI 客户机；arm64 客户机不再作为验收路径。KVM 加速可选，未启用时使用 TCG 并在报告中标注 `acceleration=tcg`。
+文件系统内核验收只使用 `tools/gki-fs-lab` 的 x86_64 GKI 客户机。KVM 加速可选，未启用时使用 TCG 并在报告中标注 `acceleration=tcg`。
 
 所有内嵌二进制资源集中在 `UotanStudio.Assets/Assets/<bundle>/` 下（bundle 为 `fonts`、`ohos/device`、`drivers/rockusb`、`drivers/mediatek-vcom`、`drivers/mediatek-full`、`drivers/google-usb`、`drivers/rockchip-adb`、`drivers/qualcomm-qud`、`drivers/silabs-cp210x`、`drivers/ftdi-cdm`、`delivery`、`firmware/magic`，另有可选 `scrcpy`），每个负载是同目录的压缩帧 `<path>.zst`，唯一清单是 `UotanStudio.Assets/Assets/manifest.tsv`（`bundle`/`path`/长度/SHA-256/编码/来源六列）。改原始负载后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单（`dotnet run tools/compress-embedded-assets.cs -- --check` 只校验），生成物与代码一起提交。`firmware/magic` 的帧由 `UotanStudio.Firmware.MagicGen` 生成，该脚本只负责索引。驱动包与字体的原始负载留在 `reference/` 下，脚本按 `specs` 的显式文件表（可直接从 zip 读取）生成帧，`Assets/drivers/<packageId>/` 只提交帧。消费方一律经 `UotanStudio.Assets` 的 `AssetCatalog`/`AssetStore` 准备与抽取，不得再各自读取程序集资源。
 
