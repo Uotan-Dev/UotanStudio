@@ -40,6 +40,13 @@ internal class LinuxUsbDevice : UsbDevice
     private readonly record struct UrbOutcome(int Status, int ActualLength);
 
     /// <summary>
+    /// Result of one bounded usbfs poll slice: the poll return value, the revents the kernel reported and the
+    /// errno captured when the poll failed.
+    /// <para>单个有界 usbfs poll 切片的结果：poll 返回值、内核报告的 revents，以及 poll 失败时捕获的 errno。</para>
+    /// </summary>
+    private readonly record struct PollOutcome(int Result, short Revents, int Errno);
+
+    /// <summary>
     /// Serializes the shared completion table. usbfs hands out whatever URB has completed on the file
     /// descriptor, so a reader and a writer can each reap the other's URB; every completed URB is routed to
     /// the transfer that submitted it instead of belonging to whichever thread reaped it.
@@ -51,6 +58,22 @@ internal class LinuxUsbDevice : UsbDevice
     private readonly Dictionary<IntPtr, UrbOutcome> _urbCompletions = [];
 
     private readonly Dictionary<IntPtr, TaskCompletionSource> _urbWaiters = [];
+
+    /// <summary>
+    /// Cached delegate for one full-slice URB poll, created once per device so the slice wait does not
+    /// allocate a fresh closure for every poll slice.
+    /// <para>单个完整 poll 切片使用的缓存委托；每个设备只创建一次，使逐片等待不必为每个切片分配新闭包。</para>
+    /// </summary>
+    private readonly Func<PollOutcome> _pollUrbFullSlice;
+
+    /// <summary>
+    /// Initializes the cached full-slice poll delegate.
+    /// <para>初始化缓存的完整切片 poll 委托。</para>
+    /// </summary>
+    public LinuxUsbDevice()
+    {
+        _pollUrbFullSlice = PollUrbFullSlice;
+    }
 
     private int Fd => (int)_fd.DangerousGetHandle();
 
@@ -793,6 +816,11 @@ internal class LinuxUsbDevice : UsbDevice
     /// 而不是被丢弃。只有在内核可证明已释放 URB（完成已路由或设备消失）后才释放固定的 URB 结构与移交的缓冲区
     /// 句柄；其余退出路径有意泄漏它们——释放内核仍可能写入的内存会破坏堆。</para>
     /// </summary>
+    /// <remarks>
+    /// The wake-up may belong to the other direction on this descriptor; file every completed URB
+    /// and keep waiting for our own completion.
+    /// <para>唤醒可能属于该描述符上的另一个方向；归档每个已完成的 URB，并继续等待属于本次调用的完成。</para>
+    /// </remarks>
     /// <param name="endpoint">The endpoint address for the URB. <para>URB 的端点地址。</para></param>
     /// <param name="buffer">Pointer into pinned memory that must stay valid until the URB is released.
     /// <para>指向固定内存的指针，在 URB 释放前必须保持有效。</para></param>
@@ -861,16 +889,19 @@ internal class LinuxUsbDevice : UsbDevice
                 }
 
                 var sliceMs = (int)Math.Min(UrbPollSliceMs, remainingMs);
-                var revents = (short)0;
-                var pollErrno = 0;
-                var pollResult = await Task.Run(() =>
+                PollOutcome pollOutcome;
+                if (sliceMs == UrbPollSliceMs)
                 {
-                    var pfd = new PollFd { Fd = Fd, Events = POLLIN | POLLOUT };
-                    var result = poll(ref pfd, 1, sliceMs);
-                    revents = pfd.Revents;
-                    pollErrno = result < 0 ? Marshal.GetLastWin32Error() : 0;
-                    return result;
-                }, cancellationToken).ConfigureAwait(false);
+                    pollOutcome = await Task.Run(_pollUrbFullSlice, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    pollOutcome = await Task.Run(() => PollUrbOnce(sliceMs), cancellationToken).ConfigureAwait(false);
+                }
+
+                var pollResult = pollOutcome.Result;
+                var revents = pollOutcome.Revents;
+                var pollErrno = pollOutcome.Errno;
 
                 if (pollResult < 0)
                 {
@@ -892,8 +923,6 @@ internal class LinuxUsbDevice : UsbDevice
                         $"USB async poll reported POLLERR/POLLHUP (revents 0x{revents:X}); the device is gone or unusable.", ENODEV);
                 }
 
-                // The wake-up may belong to the other direction on this descriptor; file every completed URB
-                // and keep waiting for our own completion.
                 DrainCompletedUrbs();
             }
         }
@@ -929,6 +958,28 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     /// <summary>
+    /// Runs one bounded poll for a URB wait slice. The poll descriptor is a per-call stack local because a
+    /// reader and a writer can wait concurrently on this device; a shared per-instance descriptor would race
+    /// revents between the two directions.
+    /// <para>为 URB 等待切片执行一次有界 poll。poll 描述符是每次调用的栈上局部量，因为读与写可能在本设备上
+    /// 并发等待；共享的实例级描述符会让两个方向的 revents 相互竞争。</para>
+    /// </summary>
+    /// <param name="timeoutMs">The poll slice budget in milliseconds. <para>本片 poll 的预算（毫秒）。</para></param>
+    /// <returns>The poll return value, the reported revents and the captured errno.
+    /// <para>poll 返回值、报告的 revents 与捕获的 errno。</para></returns>
+    private PollOutcome PollUrbOnce(int timeoutMs)
+    {
+        var pfd = new PollFd { Fd = Fd, Events = POLLIN | POLLOUT };
+        var result = poll(ref pfd, 1, timeoutMs);
+        var errno = result < 0 ? Marshal.GetLastWin32Error() : 0;
+        return new PollOutcome(result, pfd.Revents, errno);
+    }
+
+    /// <summary>Polls one full <see cref="UrbPollSliceMs"/> slice through the cached delegate target.
+    /// <para>经缓存的委托目标 poll 一个完整的 <see cref="UrbPollSliceMs"/> 切片。</para></summary>
+    private PollOutcome PollUrbFullSlice() => PollUrbOnce(UrbPollSliceMs);
+
+    /// <summary>
     /// Reaps every URB the kernel has completed on this descriptor and files each completion under its URB
     /// pointer, so a reader that reaps the writer's completion does not lose it.
     /// <para>回收内核在该描述符上已完成的全部 URB，并按 URB 指针归档每个完成结果，使回收了写方向完成结果的
@@ -948,6 +999,12 @@ internal class LinuxUsbDevice : UsbDevice
         }
     }
 
+    /// <remarks>
+    /// Only file the completion while a submitting call still waits for it. A late completion whose
+    /// owner already walked away (quarantined handles) is dropped instead of growing the table forever.
+    /// <para>仅当提交方调用仍在等待时才归档完成结果。所属调用早已离开的迟到完成（被隔离的句柄）会被
+    /// 丢弃，而不是让该表无限增长。</para>
+    /// </remarks>
     private void RouteCompletion(IntPtr urbPointer)
     {
         var completed = Marshal.PtrToStructure<Usbdevfs_urb>(urbPointer);
@@ -955,8 +1012,6 @@ internal class LinuxUsbDevice : UsbDevice
         TaskCompletionSource? waiter;
         lock (_urbSync)
         {
-            // Only file the completion while a submitting call still waits for it. A late completion whose
-            // owner already walked away (quarantined handles) is dropped instead of growing the table forever.
             if (_urbWaiters.TryGetValue(urbPointer, out waiter))
             {
                 _urbCompletions[urbPointer] = outcome;
