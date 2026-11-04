@@ -162,6 +162,10 @@ public sealed class FlashPackageParsingTests
         }
     }
 
+    /// <remarks>
+    /// The directory also holds <c>flash.bat</c>, which must be skipped and never listed as a flashable row.
+    /// <para>目录里还放了 <c>flash.bat</c>，它必须被跳过，绝不列为可刷写行。</para>
+    /// </remarks>
     [Fact]
     public void ParseDirectory_DirectoryWithImagesSubdir_EnumeratesImagesExcludingScripts()
     {
@@ -172,7 +176,7 @@ public sealed class FlashPackageParsingTests
         {
             File.WriteAllBytes(Path.Combine(imagesDir, "boot.img"), new byte[1024]);
             File.WriteAllBytes(Path.Combine(imagesDir, "super_empty.img"), new byte[512]);
-            File.WriteAllBytes(Path.Combine(imagesDir, "flash.bat"), new byte[100]); // should be skipped
+            File.WriteAllBytes(Path.Combine(imagesDir, "flash.bat"), new byte[100]);
 
             var rows = FlashViewModel.ParseDirectory(tempDir);
 

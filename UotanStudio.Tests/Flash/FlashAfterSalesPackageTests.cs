@@ -60,6 +60,35 @@ public sealed class FlashAfterSalesPackageTests
     }
 
     [Fact]
+    public void Read_ManifestReferencingAMissingImage_SkipsThatEntryAndKeepsTheRest()
+    {
+        var root = CreateRoot("flash-service-");
+        try
+        {
+            var images = Directory.CreateDirectory(Path.Combine(root, "IMAGES")).FullName;
+            Directory.CreateDirectory(Path.Combine(root, "META"));
+            File.WriteAllBytes(Path.Combine(images, "system.img"), new byte[8]);
+            File.WriteAllText(Path.Combine(images, "rawprogram0.xml"),
+                """
+                <data>
+                  <program filename="system.img" label="system" start_sector="8" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="super.img" label="super" start_sector="16" num_partition_sectors="1" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                </data>
+                """);
+
+            var package = FlashAfterSalesPackage.Read(root);
+
+            Assert.NotNull(package);
+            Assert.Equal(["system"], package.Images.Select(image => image.Partition));
+            Assert.Contains(package.Programs, program => program.Filename == "super.img");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Read_MergedSuperPackage_HidesScatteredDynamicPartitions()
     {
         var root = CreateRoot("flash-service-");
