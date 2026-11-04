@@ -9,6 +9,7 @@
   <Project Path="UotanStudio.Net/UotanStudio.Net.csproj" />
   <Project Path="UotanStudio.Assets/UotanStudio.Assets.csproj" />
   <Project Path="UotanStudio.Compress/UotanStudio.Compress.csproj" />
+  <Project Path="UotanStudio.DD/UotanStudio.DD.csproj" />
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
   <Project Path="UotanStudio.Firmware.MagicGen/UotanStudio.Firmware.MagicGen.csproj" />
   <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />

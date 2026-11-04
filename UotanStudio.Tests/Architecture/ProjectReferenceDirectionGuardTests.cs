@@ -10,6 +10,7 @@ public partial class ProjectReferenceDirectionGuardTests
         ["UotanStudio.Net"] = new HashSet<string>(StringComparer.Ordinal),
         ["UotanStudio.Hash"] = new HashSet<string>(StringComparer.Ordinal),
         ["UotanStudio.Compress"] = Set("UotanStudio.Hash"),
+        ["UotanStudio.DD"] = Set("UotanStudio.Compress", "UotanStudio.Hash"),
         ["UotanStudio.Assets"] = Set("UotanStudio.Compress", "UotanStudio.Hash"),
         ["UotanStudio.Firmware"] = Set("UotanStudio.Assets", "UotanStudio.Compress", "UotanStudio.Hash"),
         ["UotanStudio.Comm"] = Set("UotanStudio.Assets", "UotanStudio.Firmware", "UotanStudio.Hash"),
