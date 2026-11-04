@@ -73,6 +73,8 @@
         <Style Selector="Button.key-action">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.result-card">
             <Setter Property="BorderThickness" Value="1" />
@@ -113,6 +115,7 @@
                             <TextBox Grid.Column="1" Classes="key-field" Text="{Binding DisableAvbFilePath}"
                                      AutomationProperties.Name="{DynamicResource Avb_DisableSelectFile}" />
                             <Button Grid.Column="2" Classes="key-action" Content="{DynamicResource Avb_Browse}"
+                                    HorizontalAlignment="Stretch"
                                     Click="OnDisableAvbFileBrowseClick" />
 
                             <TextBlock Grid.Row="1" Classes="field-label" Text="{DynamicResource Avb_DisableCommandTitle}" />
@@ -125,6 +128,7 @@
                             <TextBox Grid.Row="2" Grid.Column="1" Classes="key-field" Text="{Binding DisableAvbOutputPath}"
                                      AutomationProperties.Name="{DynamicResource Avb_FooterOutput}" />
                             <Button Grid.Row="2" Grid.Column="2" Classes="key-action" Content="{DynamicResource Avb_SelectDirectory}"
+                                    HorizontalAlignment="Stretch"
                                     Click="OnDisableAvbOutputBrowseClick" />
                         </Grid>
 
@@ -261,24 +265,30 @@
                                     </StackPanel>
                                 </Grid>
                             </Expander>
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="10" RowSpacing="14">
                                 <TextBlock Classes="field-label" Text="{DynamicResource Avb_FooterOutput}" />
                                 <TextBox Grid.Column="1" Classes="key-field" Text="{Binding FooterOutputPath}"
                                          AutomationProperties.Name="{DynamicResource Avb_FooterOutput}" />
                                 <Button Grid.Column="2" Classes="key-action"
+                                        HorizontalAlignment="Stretch"
                                         Content="{DynamicResource Avb_SelectDirectory}"
                                         Click="OnFooterOutputBrowseClick" />
-                            </Grid>
-                            <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
-                                <Button Classes="key-action" Content="{DynamicResource Avb_FooterSign}"
-                                        Click="OnAddFooterClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_FooterVerify}"
-                                        Click="OnVerifyImageClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_FooterInspect}"
-                                        Click="OnInspectImageClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_FooterUnsign}"
+
+                                <WrapPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           ItemSpacing="8" LineSpacing="8">
+                                    <Button Classes="key-action" Content="{DynamicResource Avb_FooterSign}"
+                                            Click="OnAddFooterClick" />
+                                    <Button Classes="key-action" Content="{DynamicResource Avb_FooterVerify}"
+                                            Click="OnVerifyImageClick" />
+                                    <Button Classes="key-action" Content="{DynamicResource Avb_FooterInspect}"
+                                            Click="OnInspectImageClick" />
+                                </WrapPanel>
+                                <Button Grid.Row="1" Grid.Column="2" Classes="key-action"
+                                        HorizontalAlignment="Stretch"
+                                        Content="{DynamicResource Avb_FooterUnsign}"
                                         Click="OnRemoveFooterClick" />
-                            </WrapPanel>
+                            </Grid>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -297,11 +307,13 @@
                         <TextBox Grid.Column="1" Classes="key-field" Text="{Binding OtaInputPath}" IsReadOnly="True"
                                  AutomationProperties.Name="{DynamicResource Avb_OtaInput}" />
                         <Button Grid.Column="2" Classes="key-action" Content="{DynamicResource Avb_Browse}"
+                                HorizontalAlignment="Stretch"
                                 Click="OnOtaInputBrowseClick" />
                         <TextBlock Grid.Row="1" Classes="field-label" Text="{DynamicResource Avb_OtaOutput}" />
                         <TextBox Grid.Row="1" Grid.Column="1" Classes="key-field" Text="{Binding OtaOutputPath}"
                                  AutomationProperties.Name="{DynamicResource Avb_OtaOutput}" />
                         <Button Grid.Row="1" Grid.Column="2" Classes="key-action"
+                                HorizontalAlignment="Stretch"
                                 Content="{DynamicResource Avb_Browse}" Click="OnOtaOutputBrowseClick" />
                     </Grid>
                     <Grid Grid.Row="1" ColumnDefinitions="260,*" ColumnSpacing="16">

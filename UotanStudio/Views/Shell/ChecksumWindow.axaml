@@ -40,20 +40,28 @@
     <!-- Every field is stacked label-above-input, with the action buttons to the right of the inputs. -->
     <!-- 底部留出空白空间：窗口高度由 MinHeight 抬高，内容顶部对齐。 -->
     <!-- Blank space is kept at the bottom: MinHeight raises the window, the content stays top-aligned. -->
-    <StackPanel Margin="16,40,16,40" Spacing="14" IsEnabled="{Binding IsIdle}">
+    <StackPanel Margin="16,40,16,40" Spacing="14" IsEnabled="{Binding IsIdle}" Grid.IsSharedSizeScope="True">
 
     <!-- 选择文件 -->
     <StackPanel Spacing="4">
       <TextBlock Text="{DynamicResource Checksum_ChooseFile}" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding FilePath, Mode=TwoWay}" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_ChooseFile}" Click="OnChooseFile" />
       </Grid>
     </StackPanel>
 
     <!-- 算法勾选（整排居中）+ 右侧「校验」按钮 -->
-    <Grid ColumnDefinitions="*,Auto">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+      </Grid.ColumnDefinitions>
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="18"
                   HorizontalAlignment="Center" VerticalAlignment="Center">
         <CheckBox Content="MD5" IsChecked="{Binding Md5Selected, Mode=TwoWay}" />
@@ -61,7 +69,7 @@
         <CheckBox Content="SHA256" IsChecked="{Binding Sha256Selected, Mode=TwoWay}" />
         <CheckBox Content="CRC" IsChecked="{Binding CrcSelected, Mode=TwoWay}" />
       </StackPanel>
-      <Button Grid.Column="1" MinWidth="88" Margin="8,0,0,0"
+      <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
               Content="{DynamicResource Checksum_Verify}" Click="OnVerify"
               IsEnabled="{Binding CanVerify}" />
     </Grid>
@@ -69,9 +77,13 @@
     <!-- 四排结果：文字 + 只读 TextBox + 复制 -->
     <StackPanel Spacing="4">
       <TextBlock Text="MD5" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding Md5Value}" IsReadOnly="True" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_Copy}" Click="OnCopyMd5"
                 IsEnabled="{Binding CanCopyMd5}" />
       </Grid>
@@ -79,9 +91,13 @@
 
     <StackPanel Spacing="4">
       <TextBlock Text="SHA1" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding Sha1Value}" IsReadOnly="True" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_Copy}" Click="OnCopySha1"
                 IsEnabled="{Binding CanCopySha1}" />
       </Grid>
@@ -89,9 +105,13 @@
 
     <StackPanel Spacing="4">
       <TextBlock Text="SHA256" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding Sha256Value}" IsReadOnly="True" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_Copy}" Click="OnCopySha256"
                 IsEnabled="{Binding CanCopySha256}" />
       </Grid>
@@ -99,9 +119,13 @@
 
     <StackPanel Spacing="4">
       <TextBlock Text="CRC" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding CrcValue}" IsReadOnly="True" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_Copy}" Click="OnCopyCrc"
                 IsEnabled="{Binding CanCopyCrc}" />
       </Grid>
@@ -123,10 +147,14 @@
                      VerticalAlignment="Center" IsVisible="{Binding !PasteIsCorrect}" />
         </StackPanel>
       </StackPanel>
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" SharedSizeGroup="ChecksumActionButton" />
+        </Grid.ColumnDefinitions>
         <TextBox Text="{Binding PastedText, Mode=TwoWay}" IsEnabled="{Binding CanPaste}"
                  PlaceholderText="{DynamicResource Checksum_PasteAndVerify}" />
-        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
                 Content="{DynamicResource Checksum_Paste}" Click="OnPaste"
                 IsEnabled="{Binding CanPaste}" />
       </Grid>
