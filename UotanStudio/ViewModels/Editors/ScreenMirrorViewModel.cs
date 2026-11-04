@@ -877,8 +877,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 "AV1" or "AV01" => VideoCodecId.Av1,
                 _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
             };
-            var probeDeadline = Environment.TickCount64 + 3000;
-            while (!GpuPresenter.CompositionProbeCompleted && Environment.TickCount64 < probeDeadline) Thread.Sleep(25);
+            GpuPresenter.CompositionProbeCompletion.Wait(TimeSpan.FromSeconds(3));
             var options = ActiveDecoderOptions;
             var rebuilds = 0;
             while (!token.IsCancellationRequested)

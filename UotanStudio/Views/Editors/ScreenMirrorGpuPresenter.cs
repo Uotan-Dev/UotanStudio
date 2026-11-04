@@ -38,6 +38,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     private Visual? _attachHost;
     private volatile bool _hostDetached;
     private int _compositionProbeCompleted;
+    private readonly TaskCompletionSource _compositionProbeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _compositionWidth, _compositionHeight;
     private long _compositedFrames;
     private int _compositionStalls;
@@ -111,6 +112,23 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// <para>至少一次探测完成后的取值。</para>
     /// </value>
     internal bool CompositionProbeCompleted => Volatile.Read(ref _compositionProbeCompleted) != 0;
+
+    /// <summary>
+    /// Completes once the composition interop probe has finished at least once; waiters block on this task
+    /// instead of polling <see cref="CompositionProbeCompleted"/>.
+    /// <para>合成互操作探测至少完成一次后完成的任务；等待方阻塞在该任务上，而不是轮询
+    /// <see cref="CompositionProbeCompleted"/>。</para>
+    /// </summary>
+    internal Task CompositionProbeCompletion => _compositionProbeSignal.Task;
+
+    /// <summary>Marks the composition probe as completed and releases waiters blocked on
+    /// <see cref="CompositionProbeCompletion"/>.<para>标记合成探测完成，并释放阻塞在
+    /// <see cref="CompositionProbeCompletion"/> 上的等待方。</para></summary>
+    private void MarkCompositionProbeCompleted()
+    {
+        Volatile.Write(ref _compositionProbeCompleted, 1);
+        _compositionProbeSignal.TrySetResult();
+    }
 
     /// <summary>
     /// Human-readable presentation path for diagnostics: composition, Skia GPU or bitmap.
@@ -222,7 +240,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
         if (closed)
         {
-            Volatile.Write(ref _compositionProbeCompleted, 1);
+            MarkCompositionProbeCompleted();
             EvaluateCompositionCoverage();
             return;
         }
@@ -245,7 +263,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         MirrorTrace.Write($"attach probing gen={generation}");
         if (generation == 0)
         {
-            Volatile.Write(ref _compositionProbeCompleted, 1);
+            MarkCompositionProbeCompleted();
             return;
         }
         Volatile.Write(ref _attaching, 1);
@@ -319,7 +337,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 }
             }
             Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
-            Volatile.Write(ref _compositionProbeCompleted, 1);
+            MarkCompositionProbeCompleted();
         }
     }
 
