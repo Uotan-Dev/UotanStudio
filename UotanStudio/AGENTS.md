@@ -49,6 +49,8 @@
 - `App.Initialize` 先建立容器并调用 `ServiceHub.Initialize`，`OnFrameworkInitializationCompleted` 的既有启动顺序不变；`App.DeviceMonitor` 在容器已注册实例时取容器实例，否则回退组合根持有的默认监视器。
 - 投屏的 GPU 呈现只在 `ScreenMirrorGpuPresenter` 真实取得合成 GPU 上下文并准备好呈现路径后启用；失败时关闭 GPU 导出并保留 CPU 位图回退。不要把“取得 surface”写成“已启用 GPU 解码”。
 - GUI 路径没有控制台；诊断写 `LogService`，不要写 `Console.WriteLine`。文件关联注册失败只记日志。
+- 日志文本的构建统一按级别惰性执行：插值消息直接用 `$"..."` 传给 `IUnifiedLog.Write`，由 `UnifiedLogMessage` 处理器在条目落不到任何目标时跳过格式化；已经提前拼好字符串或需要遍历、走栈、序列化等昂贵前置计算时，先用 `IsEnabled(level)` 守卫。不要用 `IsEnabled` 包住插值调用，也不要用 `string.Format` + 参数数组替代插值重载。
+- 条目级元数据只在确有来源时填充：`Scope` 用于一组条目的关联（工作流按阶段名附加），`Fields` 用于结构化键值（MEL 桥接从生产者状态提取），渲染统一走 `LogMetadataFormat`，不要在窗口、导出或文件接收端各自拼格式。
 
 ## 验证
 

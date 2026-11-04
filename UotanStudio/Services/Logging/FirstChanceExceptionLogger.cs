@@ -109,6 +109,13 @@ public static class FirstChanceExceptionLogger
 
     private static void WriteThrottled(Exception exception)
     {
+        // Guards the stack walk, the throttle key and the rendered stack below: none of them can be deferred by
+        // the interpolated handler because the text is assembled before the call.
+        if (!LogService.Instance.IsEnabled(LogLevel.Debug))
+        {
+            return;
+        }
+
         var topFrame = DescribeTopFrame(exception);
         var key = string.Concat(exception.GetType().Name, "|", exception.Message, "|", topFrame);
 

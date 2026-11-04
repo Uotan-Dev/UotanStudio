@@ -1,6 +1,7 @@
 using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Interactions;
+using UotanStudio.Services.Logging;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Workspace;
@@ -39,9 +40,14 @@ public sealed class NodeExecutionEngine
     /// Unified log service.
     /// <para>统一日志服务。</para>
     /// </param>
-    public NodeExecutionEngine(IUnifiedLog log)
+    /// <param name="scope">
+    /// Correlation scope stamped on every entry written by this run and its nodes; blank means no scope.
+    /// <para>附在本次运行及其节点写入的每条条目上的关联作用域；空白表示不附加。</para>
+    /// </param>
+    public NodeExecutionEngine(IUnifiedLog log, string? scope = null)
     {
-        _log = log ?? throw new ArgumentNullException(nameof(log));
+        ArgumentNullException.ThrowIfNull(log);
+        _log = string.IsNullOrWhiteSpace(scope) ? log : new ScopedUnifiedLog(log, scope);
     }
 
     /// <summary>

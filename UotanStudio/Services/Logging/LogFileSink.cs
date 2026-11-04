@@ -127,7 +127,8 @@ internal sealed class LogFileSink : IDisposable
 
     private static string Format(LogEntry entry) =>
         $"{entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)} "
-        + $"[{entry.Level}] {entry.Source} - {entry.Message}";
+        + $"[{entry.Level}] {entry.Source}{LogMetadataFormat.ScopeSuffix(entry.Scope)} - {entry.Message}"
+        + LogMetadataFormat.FieldSuffix(entry.Fields);
 
     private void DisposeWriterLocked()
     {

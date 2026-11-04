@@ -27,6 +27,31 @@ public sealed class UnifiedLogLoggerBridgeTests
         Assert.Equal("session 3 opened", entry.Message);
     }
 
+    [Fact]
+    public void Log_StructuredArguments_AreForwardedAsFieldsWithoutTheTemplateKey()
+    {
+        var source = "uotan-bridge-" + Guid.NewGuid().ToString("N");
+        var entries = Record(source, service =>
+        {
+            var logger = new UnifiedLogLoggerFactory(service).CreateLogger(source);
+            logger.LogInformation("session {Count} opened at {Path}", 3, "/tmp/a");
+        });
+
+        var entry = Assert.Single(entries);
+        var fields = Assert.IsAssignableFrom<IReadOnlyList<LogField>>(entry.Fields);
+        Assert.Collection(fields,
+            field =>
+            {
+                Assert.Equal("Count", field.Key);
+                Assert.Equal("3", field.Value);
+            },
+            field =>
+            {
+                Assert.Equal("Path", field.Key);
+                Assert.Equal("/tmp/a", field.Value);
+            });
+    }
+
     [Theory]
     [InlineData(MelLogLevel.Trace, AppLogLevel.Trace)]
     [InlineData(MelLogLevel.Debug, AppLogLevel.Debug)]

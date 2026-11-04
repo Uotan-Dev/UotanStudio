@@ -36,6 +36,14 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         /// <summary>Log text. <para>日志文本。</para></summary>
         [ObservableProperty] private string _message = string.Empty;
 
+        /// <summary>Correlation scope shared by a group of entries, or null when the entry belongs to none.
+        /// <para>一组条目共享的关联作用域；条目不属于任何组时为 null。</para></summary>
+        public string? Scope { get; }
+
+        /// <summary>Structured fields attached to the entry, or null when it carries none.
+        /// <para>挂在条目上的结构化字段；不携带时为 null。</para></summary>
+        public IReadOnlyList<LogField>? Fields { get; }
+
         /// <summary>
         /// Cached displayed text, invalidated when the timestamp, level, source or message changes.
         /// <para>缓存的展示文本；时间戳、级别、来源或消息变化时失效。</para>
@@ -46,7 +54,9 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         /// Complete displayed and searchable text.
         /// <para>用于显示和搜索的完整日志行。</para>
         /// </summary>
-        public string Text => _text ??= $"{Timestamp} [{Level,-5}] {Source} - {Message}".ReplaceLineEndings("\n");
+        public string Text => _text ??=
+            ($"{Timestamp} [{Level,-5}] {Source}{LogMetadataFormat.ScopeSuffix(Scope)} - {Message}"
+                + LogMetadataFormat.FieldSuffix(Fields)).ReplaceLineEndings("\n");
 
         partial void OnTimestampChanged(string value) => _text = null;
 
@@ -64,13 +74,18 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         /// <param name="level">Entry severity. <para>条目级别。</para></param>
         /// <param name="source">Log source. <para>日志来源。</para></param>
         /// <param name="message">Log text. <para>日志文本。</para></param>
-        public LogEntryViewModel(DateTime writtenAt, LogLevel level, string source, string message)
+        /// <param name="scope">Correlation scope, or null. <para>关联作用域；无则为 null。</para></param>
+        /// <param name="fields">Structured fields, or null. <para>结构化字段；无则为 null。</para></param>
+        public LogEntryViewModel(DateTime writtenAt, LogLevel level, string source, string message,
+            string? scope = null, IReadOnlyList<LogField>? fields = null)
         {
             WrittenAt = writtenAt;
             _timestamp = writtenAt.ToString("HH:mm:ss");
             _level = level;
             _source = source;
             _message = message;
+            Scope = scope;
+            Fields = fields;
         }
     }
 
@@ -404,7 +419,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// </summary>
     private LogEntryViewModel TrackEntry(LogEntry entry)
     {
-        var vm = new LogEntryViewModel(entry.Timestamp, entry.Level, entry.Source, entry.Message);
+        var vm = new LogEntryViewModel(entry.Timestamp, entry.Level, entry.Source, entry.Message,
+            entry.Scope, entry.Fields);
         _allEntries.Add(vm);
         _retainedCharacters += vm.Text.Length;
 

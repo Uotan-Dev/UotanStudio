@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Composition;
 using UotanStudio.Services.Logging;
@@ -6,18 +7,33 @@ using UotanStudio.Services.Logging;
 namespace UotanStudio.Services;
 
 /// <summary>
-/// Log entry record, containing timestamp, level, source and text.
-/// <para>日志条目记录，包含时间戳、级别、来源和文本。</para>
+/// One structured field attached to a log entry, carrying a name and its rendered value.
+/// <para>挂在日志条目上的一个结构化字段，携带名称与渲染后的取值。</para>
+/// </summary>
+/// <param name="Key">Field name, such as a message-template placeholder. <para>字段名，例如消息模板占位符。</para></param>
+/// <param name="Value">Rendered field value; already formatted and never null.
+/// <para>渲染后的字段值；已格式化且从不为 null。</para></param>
+public readonly record struct LogField(string Key, string Value);
+
+/// <summary>
+/// Log entry record, containing timestamp, level, source, text and optional correlation metadata.
+/// <para>日志条目记录，包含时间戳、级别、来源、文本以及可选的关联元数据。</para>
 /// </summary>
 /// <param name="Timestamp">The local time the entry was written. <para>写入条目的本地时间。</para></param>
 /// <param name="Level">The severity level of the entry. <para>条目的严重级别。</para></param>
 /// <param name="Source">The name of the log source. <para>日志来源名称。</para></param>
 /// <param name="Message">The log text. <para>日志文本。</para></param>
+/// <param name="Scope">Correlation scope shared by a group of entries, or null when the entry belongs to none.
+/// <para>一组条目共享的关联作用域；条目不属于任何组时为 null。</para></param>
+/// <param name="Fields">Structured fields attached to the entry, or null when it carries none.
+/// <para>挂在条目上的结构化字段；不携带时为 null。</para></param>
 public sealed record LogEntry(
     DateTime Timestamp,
     LogLevel Level,
     string Source,
-    string Message);
+    string Message,
+    string? Scope = null,
+    IReadOnlyList<LogField>? Fields = null);
 
 /// <summary>
 /// Log channel categories that group entries by their source.
@@ -202,16 +218,37 @@ public sealed class LogService : IUnifiedLog
     /// <param name="source">The log source name. <para>日志来源名称。</para></param>
     /// <param name="message">The log text. <para>日志文本。</para></param>
     public void Write(LogLevel level, string source, string message)
+        => Write(level, source, message, null, null);
+
+    /// <summary>
+    /// Writes a log entry carrying optional correlation metadata to the file trail, the retention buffer and the
+    /// subscribers.
+    /// <para>把携带可选关联元数据的日志条目写入文件接收端、保留缓冲与订阅者。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">The log text. <para>日志文本。</para></param>
+    /// <param name="scope">Correlation scope shared by a group of entries; blank values are recorded as null.
+    /// <para>一组条目共享的关联作用域；空白值按 null 记录。</para></param>
+    /// <param name="fields">Structured fields attached to the entry; the list is copied and empty lists are
+    /// recorded as null.
+    /// <para>挂在条目上的结构化字段；列表会被复制，空列表按 null 记录。</para></param>
+    public void Write(LogLevel level, string source, string message, string? scope, IReadOnlyList<LogField>? fields)
     {
-        var entry = new LogEntry(DateTime.Now, level, source ?? string.Empty, message ?? string.Empty);
+        var entry = new LogEntry(DateTime.Now, level, source ?? string.Empty, message ?? string.Empty,
+            string.IsNullOrWhiteSpace(scope) ? null : scope,
+            fields is { Count: > 0 } ? [.. fields] : null);
         Volatile.Read(ref _fileSink)?.Append(entry);
 
-        if (level < _minimumLevel) return;
+        if (level < _minimumLevel)
+        {
+            return;
+        }
 
         lock (_bufferLock)
         {
             _entries.Enqueue(entry);
-            _queuedCharacters += (long)entry.Source.Length + entry.Message.Length;
+            _queuedCharacters += CharacterCost(entry);
             TrimLocked();
         }
 
@@ -228,6 +265,25 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
+    /// Writes an interpolated entry, building no text when the entry would not be recorded anywhere.
+    /// <para>写入一条插值条目；条目不会在任何位置被记录时不构建文本。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">Interpolated message; skipped when <see cref="IsEnabled"/> rejects the level.
+    /// <para>插值消息；<see cref="IsEnabled"/> 拒绝该级别时跳过。</para></param>
+    public void Write(LogLevel level, string source,
+        [InterpolatedStringHandlerArgument("", "level")] ref UnifiedLogMessage message)
+    {
+        if (!message.IsEnabled)
+        {
+            return;
+        }
+
+        Write(level, source, message.ToStringAndClear());
+    }
+
+    /// <summary>
     /// Writes a log entry whose text is formatted from the arguments; the formatted entry reaches the file trail
     /// even when its level does not meet the store minimum.
     /// <para>写入按参数格式化日志文本的条目；即使级别低于存储最低级别，格式化后的条目仍会进入文件接收端。</para>
@@ -237,17 +293,32 @@ public sealed class LogService : IUnifiedLog
     /// <param name="format">The composite format string. <para>复合格式字符串。</para></param>
     /// <param name="args">The format arguments. <para>格式化使用的参数数组。</para></param>
     public void Write(LogLevel level, string source, string format, params object[] args)
+        => Write(level, source, FormatMessage(format, args));
+
+    /// <summary>
+    /// Formats a composite message, falling back to the raw format text when the arguments do not match.
+    /// <para>格式化复合消息；参数与模板不匹配时回退为原始格式文本。</para>
+    /// </summary>
+    /// <param name="format">The composite format string. <para>复合格式字符串。</para></param>
+    /// <param name="args">The format arguments; null or empty leaves the text unchanged.
+    /// <para>格式化使用的参数数组；null 或空数组时不改变文本。</para></param>
+    /// <returns>The formatted text, or <paramref name="format"/> when formatting fails.
+    /// <para>格式化后的文本；格式化失败时为 <paramref name="format"/>。</para></returns>
+    internal static string FormatMessage(string format, object[]? args)
     {
-        string message;
+        if (args == null || args.Length == 0)
+        {
+            return format;
+        }
+
         try
         {
-            message = args == null || args.Length == 0 ? format : string.Format(format, args);
+            return string.Format(format, args);
         }
         catch
         {
-            message = format;
+            return format;
         }
-        Write(level, source, message);
     }
 
     /// <summary>
@@ -261,14 +332,19 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
-    /// Gets whether an entry at <paramref name="level"/> survives the configured minimum level, so a caller can
-    /// skip building text that <see cref="Write(LogLevel, string, string)"/> would discard anyway.
-    /// <para>获取某个级别的条目能否通过已配置的最低级别，使调用方可以跳过构建那些
-    /// <see cref="Write(LogLevel, string, string)"/> 反正会丢弃的文本。</para>
+    /// Gets whether an entry at <paramref name="level"/> reaches any destination, so a caller can skip work the
+    /// interpolated handler cannot make lazy.
+    /// <para>获取某个级别的条目是否会被任何一个目标接收，使调用方可以跳过插值处理器无法延迟的工作。</para>
     /// </summary>
     /// <param name="level">The level the entry would be written at. <para>条目将要写入的级别。</para></param>
-    /// <returns><see langword="true"/> when the entry would be recorded. <para>条目会被记录时为 <see langword="true"/>。</para></returns>
-    public bool IsEnabled(LogLevel level) => level >= _minimumLevel;
+    /// <returns><see langword="true"/> when the entry would be buffered or written to the session file.
+    /// <para>条目会进入缓冲或写入会话文件时为 <see langword="true"/>。</para></returns>
+    /// <remarks>An entry below the minimum level still reaches the session file while the file trail is active, so
+    /// this reports <see langword="true"/> for it; formatting may be skipped only when both destinations drop it.
+    /// <para>文件接收端启用期间，低于最低级别的条目仍会写入会话文件，因此此处返回
+    /// <see langword="true"/>；只有两个目标都会丢弃时才能跳过格式化。</para></remarks>
+    public bool IsEnabled(LogLevel level)
+        => level >= _minimumLevel || Volatile.Read(ref _fileSink) is not null;
 
     /// <summary>
     /// Gets whether debug mode is currently enabled; consumers such as the global log window use it to skip
@@ -404,8 +480,33 @@ public sealed class LogService : IUnifiedLog
         while (_entries.Count > 0 && (_entries.Count > _maxQueueSize || _queuedCharacters > _maxQueueCharacters))
         {
             var removed = _entries.Dequeue();
-            _queuedCharacters -= (long)removed.Source.Length + removed.Message.Length;
+            _queuedCharacters -= CharacterCost(removed);
         }
+    }
+
+    /// <summary>
+    /// Counts the characters an entry charges against the retention budget: source, message and any metadata.
+    /// <para>统计条目占用的保留预算字符数：来源、消息以及任何元数据。</para>
+    /// </summary>
+    /// <param name="entry">The entry being charged or released. <para>计入或释放的条目。</para></param>
+    /// <returns>The character cost of the entry. <para>该条目的字符开销。</para></returns>
+    private static long CharacterCost(LogEntry entry)
+    {
+        long cost = (long)entry.Source.Length + entry.Message.Length;
+        if (entry.Scope is { Length: > 0 } scope)
+        {
+            cost += scope.Length;
+        }
+
+        if (entry.Fields is { Count: > 0 } fields)
+        {
+            foreach (var field in fields)
+            {
+                cost += (long)field.Key.Length + field.Value.Length;
+            }
+        }
+
+        return cost;
     }
 
     /// <summary>

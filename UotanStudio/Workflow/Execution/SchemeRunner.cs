@@ -522,7 +522,7 @@ public sealed class SchemeRunner
 
         _log.Write(LogLevel.Info, "Scheme",
             $"Stage '{stage.Id}' ({stage.Kind}) starting with {runtime.Nodes.Count} node(s)");
-        var engine = new NodeExecutionEngine(_log);
+        var engine = new NodeExecutionEngine(_log, stage.Name ?? stage.Id);
         var engineResult = await engine.ExecuteAsync(runtime.Nodes, runtime.Connections, cancellationToken,
             new NodeExecutionOptions
             {

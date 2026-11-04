@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+using UotanStudio.Services.Logging;
+
 namespace UotanStudio.Services;
 
 /// <summary>
@@ -58,6 +61,54 @@ public interface IUnifiedLog
     /// <param name="format">The composite format string. <para>复合格式字符串。</para></param>
     /// <param name="args">The format arguments. <para>格式化使用的参数数组。</para></param>
     void Write(LogLevel level, string source, string format, params object[] args);
+
+    /// <summary>
+    /// Writes an interpolated log entry, formatting it only when this target accepts <paramref name="level"/>.
+    /// <para>写入一条插值日志条目，仅在本目标接受 <paramref name="level"/> 时才执行格式化。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">Interpolated message; no text is built when the level is filtered out.
+    /// <para>插值消息；级别被过滤时不构建任何文本。</para></param>
+    void Write(LogLevel level, string source,
+        [InterpolatedStringHandlerArgument("", "level")] ref UnifiedLogMessage message)
+    {
+        if (!message.IsEnabled)
+        {
+            return;
+        }
+
+        Write(level, source, message.ToStringAndClear());
+    }
+
+    /// <summary>
+    /// Writes a log entry carrying an optional correlation scope and structured fields.
+    /// <para>写入一条可携带关联作用域与结构化字段的日志条目。</para>
+    /// </summary>
+    /// <param name="level">The entry level. <para>条目级别。</para></param>
+    /// <param name="source">The log source name. <para>日志来源名称。</para></param>
+    /// <param name="message">The log text. <para>日志文本。</para></param>
+    /// <param name="scope">Correlation scope shared by a group of entries, or null.
+    /// <para>一组条目共享的关联作用域；无则为 null。</para></param>
+    /// <param name="fields">Structured fields rendered beside the message, or null.
+    /// <para>渲染在消息旁的结构化字段；无则为 null。</para></param>
+    /// <remarks>Targets that keep no metadata still record the text, so a pass-through implementation stays valid.
+    /// <para>不保留元数据的目标仍会记录文本，因此直通实现依然有效。</para></remarks>
+    void Write(LogLevel level, string source, string message, string? scope, IReadOnlyList<LogField>? fields)
+        => Write(level, source, message);
+
+    /// <summary>
+    /// Gets whether an entry at <paramref name="level"/> would be recorded, so a caller can skip work the
+    /// interpolated handler cannot make lazy.
+    /// <para>获取某个级别的条目是否会被记录，使调用方可以跳过插值处理器无法延迟的工作。</para>
+    /// </summary>
+    /// <param name="level">The level the entry would be written at. <para>条目将要写入的级别。</para></param>
+    /// <returns><see langword="true"/> when the entry would be recorded.
+    /// <para>条目会被记录时为 <see langword="true"/>。</para></returns>
+    /// <remarks>The default accepts every level because pass-through targets record everything; a target with a
+    /// minimum level overrides it so the handler can suppress formatting.
+    /// <para>默认接受所有级别，因为直通目标记录全部内容；带最低级别的目标会重写它，以便处理器抑制格式化。</para></remarks>
+    bool IsEnabled(LogLevel level) => true;
 
     /// <summary>
     /// Sets the minimum output level; logs below this level are discarded.
