@@ -87,10 +87,7 @@ internal static class ShellComposition
         SettingsViewModel? settings = null;
         NodeEditorViewModel? nodes = null;
         WorkspaceViewModel? workspace = null;
-        var ownsMenu = false;
-        var ownsNodes = false;
-        var ownsSettings = false;
-        var ownsWorkspace = false;
+        var locallyBuilt = new List<IDisposable>(4);
         try
         {
             await report(SplashPhase.Services);
@@ -100,14 +97,14 @@ internal static class ShellComposition
             if (menu is null)
             {
                 menu = CreateMenu(projects, windows, LanguageService.Instance, LogService.Instance);
-                ownsMenu = true;
+                locallyBuilt.Add(menu);
             }
             await report(SplashPhase.Nodes);
             nodes = services?.GetService<NodeEditorViewModel>();
             if (nodes is null)
             {
                 nodes = CreateNodes();
-                ownsNodes = true;
+                locallyBuilt.Add(nodes);
             }
             await report(SplashPhase.Workspace);
             settings = services?.GetService<SettingsViewModel>();
@@ -117,33 +114,21 @@ internal static class ShellComposition
                 settings = CreateSettings(appSettings,
                     applyLanguage: appliedCultureName is null
                         || !string.Equals(appSettings.CultureName, appliedCultureName, StringComparison.Ordinal));
-                ownsSettings = true;
+                locallyBuilt.Add(settings);
             }
             workspace = services?.GetService<WorkspaceViewModel>();
             if (workspace is null)
             {
                 workspace = CreateWorkspace(settings);
-                ownsWorkspace = true;
+                locallyBuilt.Add(workspace);
             }
             return new ShellComponents(projects, menu, nodes, settings, workspace);
         }
         catch
         {
-            if (ownsMenu)
+            foreach (var component in locallyBuilt)
             {
-                menu?.Dispose();
-            }
-            if (ownsNodes)
-            {
-                nodes?.Dispose();
-            }
-            if (ownsSettings)
-            {
-                settings?.Dispose();
-            }
-            if (ownsWorkspace)
-            {
-                workspace?.Dispose();
+                component.Dispose();
             }
             throw;
         }
