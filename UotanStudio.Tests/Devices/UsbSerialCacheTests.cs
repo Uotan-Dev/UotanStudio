@@ -7,7 +7,7 @@ public sealed class UsbSerialCacheTests : IDisposable
 {
     private const string Path = @"\\?\usb#vid_18d1&pid_4ee7&mi_01#7&2c1f0b3a&0&0001#{guid}";
     private const string OtherPath = @"\\?\usb#vid_18d1&pid_4ee7&mi_02#7&2c1f0b3a&0&0002#{guid}";
-    private const long Now = 1_000_000;
+    private readonly long Now = Environment.TickCount64;
 
     public UsbSerialCacheTests() => UsbSerialCache.Clear();
 
