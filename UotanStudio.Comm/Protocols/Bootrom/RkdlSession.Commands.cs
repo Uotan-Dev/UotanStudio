@@ -614,29 +614,6 @@ public sealed partial class RkdlSession
         return false;
     }
 
-    /// <summary>
-    /// Tests whether the device is ready via a TEST_UNIT_READY (0x00) CBW/CSW transaction,
-    /// asynchronously.
-    /// <para>异步地通过 TEST_UNIT_READY（0x00）CBW/CSW 事务检测设备是否就绪。</para>
-    /// </summary>
-    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
-    /// <returns><c>true</c> when the device is ready. <para>设备就绪时返回 <c>true</c>。</para></returns>
-    public async Task<bool> TestDeviceAsync(CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        var cbw = new RkdlCbw(RkdlCommand.TestUnitReady, RkdlFrame.DirectionIn, 0,
-            RkdlFrame.CbwcbLengthShort);
-        var cbwBytes = cbw.ToBytes();
-        var written = await Transport.WriteAsync(cbwBytes, 0, cbwBytes.Length, _timeoutMs, cancellationToken).ConfigureAwait(false);
-        if (written != cbwBytes.Length)
-        {
-            return false;
-        }
-
-        var cswBuffer = new byte[RkdlFrame.CswLength];
-        var read = await Transport.ReadAsync(cswBuffer, 0, cswBuffer.Length, _timeoutMs, cancellationToken).ConfigureAwait(false);
-        return read == cswBuffer.Length && RkdlCsw.TryParse(cswBuffer, cbw.Tag, out var csw) && csw!.IsSuccess;
-    }
 
     /// <summary>
     /// Reads whole sectors at a logical block address into a byte array using the vendor LBA addressing
@@ -686,6 +663,11 @@ public sealed partial class RkdlSession
     /// <para>与厂商 rkdeveloptool 的 <c>ppt</c> 路径（<c>print_gpt</c>）一致：读取 LBA 0..33 并校验
     /// "EFI PART" 签名。这里只读主表，因此备份表损坏仍能得到当前布局。CRC 以 <see cref="RkdlCrc.Crc32"/>
     /// 计算并作为结论报告，而不作为强制门。</para>
+    /// The geometry must describe the medium that just answered READ_LBA, so it is read uncached:
+    /// CHANGE_STORAGE switches media whose sector counts differ and a cached total would misreport
+    /// every table but the first.
+    /// <para>几何必须描述刚应答 READ_LBA 的介质，因此现读而不读缓存：CHANGE_STORAGE 切换的介质扇区数各不相同，
+    /// 缓存的总扇区数会让除第一个介质外的所有表都报告错误容量。</para>
     /// </remarks>
     public RkdlGptTable ReadGpt(CancellationToken cancellationToken = default)
     {
@@ -715,11 +697,6 @@ public sealed partial class RkdlSession
         var computedHeaderCrc = RkdlCrc.Crc32(master.AsSpan(headerOffset, Math.Clamp((int)headerSize, 0, RkdlConstants.SectorSize)));
         BinaryPrimitives.WriteUInt32LittleEndian(master.AsSpan(headerOffset + 16), storedHeaderCrc);
 
-        // The geometry must describe the medium that just answered READ_LBA, so it is read uncached:
-        // CHANGE_STORAGE switches media whose sector counts differ and a cached total would misreport
-        // every table but the first.
-        // 几何必须描述刚应答 READ_LBA 的介质，因此现读而不读缓存：CHANGE_STORAGE 切换的介质扇区数各不相同，
-        // 缓存的总扇区数会让除第一个介质外的所有表都报告错误容量。
         var totalSectors = ReadFlashInfo().SectorCount;
         var entries = new List<RkdlGptPartition>();
         var boundedEntrySize = entrySize is >= 16 and <= 512 ? (int)entrySize : 128;

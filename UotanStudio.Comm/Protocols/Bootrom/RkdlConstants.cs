@@ -583,6 +583,12 @@ public sealed class RkChipInfo
     /// <para>映射到的芯片名称；当该 ID 拼出本表未映射的可打印四字符标签时返回标签本身；其余情况返回带原始 ID 的
     /// <c>Unknown(0x...)</c>。</para>
     /// </returns>
+    /// <remarks>
+    /// RK3588 reports the chip number byte-reversed, the order RKBOOT/RKFW headers carry it, so the tag
+    /// reads "8853" (the little-endian DWORD is therefore 0x33353838); both wire orders resolve to the name.
+    /// <para>RK3588 按 RKBOOT/RKFW 头部使用的字节倒序上报芯片型号，标签读作 "8853"（小端 DWORD 因而是
+    /// 0x33353838）；两种线上字节序都解析为同一名称。</para>
+    /// </remarks>
     public static string GetChipName(uint chipId)
     {
         return chipId switch
@@ -600,10 +606,6 @@ public sealed class RkChipInfo
             0x33333041 or 0x41303333 or 0x330A => "RK3368",
             0x33333043 or 0x43303333 or 0x330C => "RK3399",
             0x33353041 or 0x41303533 or 0x350A => "RK3566",
-            // RK3588 reports the chip number byte-reversed, the order RKBOOT/RKFW headers carry it, so the tag
-            // reads "8853" (the little-endian DWORD is therefore 0x33353838); both wire orders resolve to the name.
-            // <para>RK3588 按 RKBOOT/RKFW 头部使用的字节倒序上报芯片型号，标签读作 "8853"（小端 DWORD 因而是
-            // 0x33353838）；两种线上字节序都解析为同一名称。</para>
             0x33353838 or 0x38383533 => "RK3588",
             _ => TryReadPrintableTag(chipId, out var tag) ? tag : $"Unknown(0x{chipId:X4})"
         };

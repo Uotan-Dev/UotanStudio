@@ -57,6 +57,85 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
+    /// Erases a sector range with the strategy the medium needs, the way <c>CRKDevice::EraseAllBlocks</c> picks one
+    /// for the whole media: an eMMC medium or one that advertises direct LBA answers ERASE_LBA, and every other
+    /// medium is force-erased block by block, because ERASE_LBA over a NOR/NAND range is refused and stalls the bulk
+    /// pipe.
+    /// <para>按介质所需策略擦除一段扇区，与 <c>CRKDevice::EraseAllBlocks</c> 为整介质选择策略的方式一致：eMMC 或
+    /// 声明直接 LBA 的介质应答 ERASE_LBA，其余介质按块强制擦除，因为对 NOR/NAND 范围执行 ERASE_LBA 会被拒绝并让
+    /// 批量管道停摆。</para>
+    /// </summary>
+    /// <param name="address">The first sector to erase. <para>要擦除的首个扇区。</para></param>
+    /// <param name="sectorCount">The number of 512-byte sectors to erase; zero erases nothing.
+    /// <para>要擦除的 512 字节扇区数；零表示不擦除。</para></param>
+    /// <param name="forceBlockErase"><c>true</c> to skip the LBA strategy even on an eMMC or direct-LBA medium.
+    /// <para>为 <c>true</c> 时即使在 eMMC 或直接 LBA 介质上也跳过 LBA 策略。</para></param>
+    /// <param name="progress">Optional receiver of the erased unit count (sectors on the LBA path, blocks on the
+    /// block path). <para>可选的已擦除单位数接收器（LBA 路径为扇区，块路径为块）。</para></param>
+    /// <param name="cancellationToken">Checked before each chunk. <para>每个分块前检查。</para></param>
+    /// <returns>The number of blocks inside chunks the device answered with CSW status 1; always zero on the LBA
+    /// path. <para>设备以 CSW 状态 1 应答的分块所含块数；LBA 路径恒为零。</para></returns>
+    /// <exception cref="RkdlException">The flash geometry query failed, the block geometry is unusable, or an erase
+    /// transaction failed. <para>闪存几何查询失败、块几何不可用，或某条擦除事务失败。</para></exception>
+    public int EraseRange(long address, long sectorCount, bool forceBlockErase = false,
+        IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (address < 0 || sectorCount < 0)
+        {
+            throw new RkdlException(RkdlError.InvalidParameter,
+                $"Negative erase range: address = {address}, count = {sectorCount}.");
+        }
+
+        if (sectorCount == 0)
+        {
+            return 0;
+        }
+
+        var geometry = RequireFlashGeometry();
+        if (!forceBlockErase && (IsEmmcFlash() || QueryCapabilityOrNone().DirectLba))
+        {
+            EraseLbaRange(address, sectorCount, progress, cancellationToken);
+            return 0;
+        }
+
+        var blockSectors = geometry.BlockSizeSectors;
+        var blockCount = geometry.BlockCount;
+        if (blockSectors <= 0 || blockCount <= 0 || blockCount > uint.MaxValue)
+        {
+            throw new RkdlException(RkdlError.FlashInfoFailed,
+                $"READ_FLASH_INFO reported an unusable block geometry ({blockCount} blocks of {blockSectors} sectors), so a block erase cannot be addressed. 上报的块几何不可用，无法按块擦除。");
+        }
+
+        var firstBlock = address / blockSectors;
+        var lastBlock = (address + sectorCount - 1) / blockSectors;
+        if (lastBlock >= blockCount)
+        {
+            throw new RkdlException(RkdlError.InvalidParameter,
+                $"The erase range ends at block {lastBlock}, past the {blockCount} blocks the device reports. 擦除范围超出设备报告的块数。");
+        }
+
+        IReadOnlyList<int> chips = geometry.FlashChips.Count > 0 ? geometry.FlashChips : [0];
+        var badBlocks = 0;
+        var erased = 0L;
+        foreach (var chip in chips)
+        {
+            long block = firstBlock;
+            while (block <= lastBlock)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var chunk = (uint)Math.Min(lastBlock - block + 1, RkdlConstants.MaxEraseBlocksPerCommand);
+                badBlocks += EraseBlocks((uint)block, chunk, force: true, lun: 0, ucFlashCs: (byte)chip);
+                block += chunk;
+                erased += chunk;
+                progress?.Report(erased);
+            }
+        }
+
+        return badBlocks;
+    }
+
+    /// <summary>
     /// Erases the whole reported media the way <c>CRKDevice::EraseAllBlocks</c> does: ERASE_LBA over
     /// the reported sector count when the medium is eMMC or the device advertises direct LBA, and
     /// ERASE_FORCE over every populated flash chip's blocks otherwise.
@@ -83,39 +162,7 @@ public sealed partial class RkdlSession
     {
         ThrowIfDisposed();
         var geometry = RequireFlashGeometry();
-        var capability = QueryCapabilityOrNone();
-
-        if (!forceBlockErase && (IsEmmcFlash() || capability.DirectLba))
-        {
-            EraseLbaRange(0, geometry.SectorCount, progress, cancellationToken);
-            return 0;
-        }
-
-        var blockCount = geometry.BlockCount;
-        if (blockCount <= 0 || blockCount > uint.MaxValue)
-        {
-            throw new RkdlException(RkdlError.FlashInfoFailed,
-                $"READ_FLASH_INFO reported an unusable block geometry ({blockCount} blocks of {geometry.BlockSizeSectors} sectors), so a block erase cannot be addressed.");
-        }
-
-        IReadOnlyList<int> chips = geometry.FlashChips.Count > 0 ? geometry.FlashChips : [0];
-        var badBlocks = 0;
-        var erased = 0L;
-        foreach (var chip in chips)
-        {
-            long block = 0;
-            while (block < blockCount)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var chunk = (uint)Math.Min(blockCount - block, RkdlConstants.MaxEraseBlocksPerCommand);
-                badBlocks += EraseBlocks((uint)block, chunk, force: true, lun: 0, ucFlashCs: (byte)chip);
-                block += chunk;
-                erased += chunk;
-                progress?.Report(erased);
-            }
-        }
-
-        return badBlocks;
+        return EraseRange(0, geometry.SectorCount, forceBlockErase, progress, cancellationToken);
     }
 
     /// <summary>
