@@ -13,6 +13,10 @@ public static class DeliveryValidation
             "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Upper bound for delivery file, container, and script entry counts.
+    /// <para>交付文件、容器与脚本条目数的上限。</para></summary>
+    private const int MaximumEntries = 10000;
+
     /// <summary>
     /// Determines whether a name is a publishable script filename (updater-script, update-binary, or .sh/.bat/.txt).
     /// <para>判断名称是否为可发布的脚本文件名（updater-script、update-binary 或 .sh/.bat/.txt）。</para>
@@ -68,18 +72,22 @@ public static class DeliveryValidation
             throw new InvalidDataException("请先确认容器配置 / Confirm the container first.");
         if ((plan.PackSuper || plan.PackPayload) && !plan.IsSuperEmptyOnly && plan.Container.Count == 0) throw new InvalidDataException("Super 分区列表为空 / No Super partitions.");
         if (plan.OrganizeDirectory && plan.Files.Count == 0) throw new InvalidDataException("没有交付文件 / No delivery files.");
-        if (plan.Files.Count > 10000 || plan.Container.Count > 10000) throw new InvalidDataException("Too many delivery entries.");
-        if (plan.Scripts.Count > 10000 || plan.Scripts.Any(p => !IsScriptName(p.Key)
-            || p.Value.Length > 1024 * 1024)) throw new InvalidDataException("Invalid delivery scripts.");
-        if (plan.Slot is not ("" or "a" or "b" or "all")) throw new InvalidDataException("Invalid slot policy.");
-        if (plan.Super.DeviceType is not ("" or "VAB" or "AB" or "AOnly")) throw new InvalidDataException("Invalid device type.");
+        if (plan.Files.Count > MaximumEntries || plan.Container.Count > MaximumEntries)
+            throw new InvalidDataException("Too many delivery entries / 交付条目过多。");
+        if (plan.Scripts.Count > MaximumEntries || plan.Scripts.Any(p => !IsScriptName(p.Key)
+            || p.Value.Length > 1024 * 1024)) throw new InvalidDataException("Invalid delivery scripts / 交付脚本无效。");
+        if (plan.Slot is not ("" or "a" or "b" or "all"))
+            throw new InvalidDataException("Invalid slot policy / 槽位策略无效。");
+        if (plan.Super.DeviceType is not ("" or "VAB" or "AB" or "AOnly"))
+            throw new InvalidDataException("Invalid device type / 设备类型无效。");
         if (plan.DeviceCodename.Length > 0 && !IsName(plan.DeviceCodename, 64)) throw new InvalidDataException("机型代号无效 / Invalid device codename.");
         if (plan.OrganizeDirectory && plan.ArchiveName.Length > 0 && !IsName(plan.ArchiveName, 200))
             throw new InvalidDataException("压缩包名称无效 / Invalid archive name.");
         if (plan.Information.Length > 65536 || plan.Information.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))
             || plan.Information.ReplaceLineEndings("\n").Split('\n').Any(line => line.Length > 1024))
             throw new InvalidDataException("作者信息过长或含无效控制字符 / Author information is too long or contains control characters.");
-        if (plan.PackPayload && plan.PackSuper) throw new InvalidDataException("Choose one container format.");
+        if (plan.PackPayload && plan.PackSuper)
+            throw new InvalidDataException("Choose one container format / 只能选择一种容器格式。");
         foreach (var file in plan.Files.Concat(plan.Container))
             if (file.FileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)
                 || file.FileName.EndsWith(".br", StringComparison.OrdinalIgnoreCase)
@@ -99,9 +107,7 @@ public static class DeliveryValidation
         if (plan.Super.ZstdLevel is < 0 or > 22)
             throw new InvalidDataException("Super Zstd 压缩等级无效 / Invalid Super Zstd level.");
         var generated = plan.Files.Where(f => f.Generated).ToArray();
-        if (generated.Any(f => !(plan.PackSuper || plan.PackPayload) || f.SourcePath.Length != 0 || f.Optional
-            || f.Partition != (f.FileName == "super_empty.img" ? "super_empty" : plan.PackPayload ? "payload" : "super")
-            || f.FileName != (f.Partition == "super_empty" ? "super_empty.img" : DeliveryOutputService.ContainerFileName(plan)))
+        if (generated.Any(f => !IsExpectedGeneratedEntry(f, plan))
             || plan.OrganizeDirectory && (plan.PackSuper || plan.PackPayload) && generated.Length != 1)
             throw new InvalidDataException("生成的 Super 条目与配置不一致 / Generated Super does not match the plan.");
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -136,6 +142,19 @@ public static class DeliveryValidation
                     throw new FileNotFoundException("便携 Zstd 路径无效 / Portable Zstd not found: " + platform.Item1, path);
             }
     }
+
+    /// <summary>
+    /// Determines whether a generated entry matches the plan: an output mode is selected, the entry carries no source
+    /// path and is not optional, and its partition and file name follow the Super_Empty, Payload, or Super naming.
+    /// <para>判断生成条目是否与计划一致：已选择输出方式、条目不带源路径且非可选，其分区名与文件名遵循 Super_Empty、
+    /// Payload 或 Super 的命名。</para>
+    /// </summary>
+    /// <param name="file">The generated entry to check. <para>要检查的生成条目。</para></param>
+    /// <param name="plan">The plan the entry must match. <para>条目需要匹配的交付计划。</para></param>
+    private static bool IsExpectedGeneratedEntry(DeliveryFile file, DeliveryPlan plan) =>
+        (plan.PackSuper || plan.PackPayload) && file.SourcePath.Length == 0 && !file.Optional
+        && file.Partition == (file.FileName == "super_empty.img" ? "super_empty" : plan.PackPayload ? "payload" : "super")
+        && file.FileName == (file.Partition == "super_empty" ? "super_empty.img" : DeliveryOutputService.ContainerFileName(plan));
 
     /// <summary>
     /// Validates a single source image exists, is not a symlink, matches its declared length, and is non-empty unless allowed.
