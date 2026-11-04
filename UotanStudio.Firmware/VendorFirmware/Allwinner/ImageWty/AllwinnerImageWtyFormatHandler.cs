@@ -16,8 +16,10 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
 
     /// <summary>Extensions this handler claims before content inspection.
     /// <para>在内容检查之前本处理器声明认领的扩展名。</para></summary>
-    /// <value><c>img</c> and <c>bin</c>; the <c>IMAGEWTY</c> magic still decides acceptance.
-    /// <para><c>img</c> 与 <c>bin</c>；是否接受仍由 <c>IMAGEWTY</c> 魔数决定。</para></value>
+    /// <value><c>img</c> and <c>bin</c>; the plaintext <c>IMAGEWTY</c> magic still decides acceptance, so
+    /// RC6-encrypted containers are detected only through <see cref="ReadMetadataAsync"/>.
+    /// <para><c>img</c> 与 <c>bin</c>；是否接受仍由明文 <c>IMAGEWTY</c> 魔数决定，因此 RC6 加密容器只能经
+    /// <see cref="ReadMetadataAsync"/> 识别。</para></value>
     public IReadOnlyList<string> FileExtensions => ["img", "bin"];
 
     /// <summary>
@@ -38,8 +40,8 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
     /// </summary>
     /// <param name="filePath">Container to inspect. <para>待检查的容器。</para></param>
     /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
-    /// <returns>Outcome carrying version words, USB ids and entry names.
-    /// <para>结果对象，携带版本字、USB id 与条目名。</para></returns>
+    /// <returns>Outcome carrying the version words, USB ids, encryption flag and entry roles.
+    /// <para>结果对象，携带版本字、USB id、加密标志与条目角色。</para></returns>
     public async Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -47,19 +49,22 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
             await using var stream = File.OpenRead(filePath);
             var header = AllwinnerImageWtyFormat.Read(stream, cancellationToken);
             return FirmwareOpResult.Ok(
-                $"IMAGEWTY 0x{header.HeaderVersion:X}: {header.Entries.Count} files",
-                entries: [.. header.Entries.Select(e => $"{e.Name} ({e.MainType}:{e.SubType})")],
+                $"IMAGEWTY {(int)header.Version:X}: {header.Entries.Count} files",
+                entries: [.. header.Entries.Select(DescribeEntry)],
                 metadata: new Dictionary<string, string>
                 {
-                    ["HeaderVersion"] = $"0x{header.HeaderVersion:X}",
-                    ["Version"] = $"0x{header.Version:X}",
+                    ["Version"] = $"{(int)header.Version:X}",
+                    ["ContainerVersion"] = $"0x{header.ContainerVersion:X}",
                     ["ImageSize"] = header.ImageSize.ToString(),
-                    ["ImageHeaderSize"] = header.ImageHeaderSize.ToString(),
+                    ["Alignment"] = header.Alignment.ToString(),
+                    ["Attribute"] = $"0x{header.Attribute:X}",
                     ["Vid"] = $"0x{header.Vid:X4}",
                     ["Pid"] = $"0x{header.Pid:X4}",
                     ["HardwareId"] = $"0x{header.HardwareId:X}",
                     ["FirmwareId"] = $"0x{header.FirmwareId:X}",
-                    ["FileCount"] = header.Entries.Count.ToString()
+                    ["FileCount"] = header.FileCount.ToString(),
+                    ["TableOffset"] = header.TableOffset.ToString(),
+                    ["Encrypted"] = header.IsEncrypted ? "true" : "false"
                 });
         }
         catch (OperationCanceledException)
@@ -72,8 +77,8 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>Extracts the container payloads into the output directory; zero-length entries are skipped.
-    /// <para>将容器负载提取到输出目录；长度为 0 的条目会被跳过。</para></summary>
+    /// <summary>Extracts the container payloads into the output directory; zero-length entries are skipped and encrypted payloads are RC6-decrypted first.
+    /// <para>将容器负载提取到输出目录；长度为 0 的条目会被跳过，加密负载先经 RC6 解密。</para></summary>
     /// <param name="filePath">Container to unpack; never modified.<para>待解包的容器；不会被修改。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
@@ -99,7 +104,8 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var (entry, index) in header.Entries.Select((e, i) => (e, i)))
             {
-                if (entry.Length == 0 || (selected is not null && !selected.Contains(entry.Name)))
+                var length = AllwinnerImageWtyFormat.EffectiveLength(entry);
+                if (length == 0 || (selected is not null && !selected.Contains(entry.Name)))
                 {
                     continue;
                 }
@@ -119,11 +125,11 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
 
                 await using (var output = File.Create(destination))
                 {
-                    AllwinnerImageWtyFormat.ExtractEntry(stream, entry, output, cancellationToken);
+                    AllwinnerImageWtyFormat.ExtractEntry(stream, entry, output, header.IsEncrypted, cancellationToken);
                 }
 
                 written.Add(name);
-                components.Add(FirmwareComponent.Of(name, entry.Length));
+                components.Add(FirmwareComponent.Of(name, length));
             }
 
             return FirmwareOpResult.Ok($"Extracted {written.Count} files to {outputDirectory}",
@@ -138,4 +144,8 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
             return FirmwareOpResult.Fail(exception.Message);
         }
     }
+
+    private static string DescribeEntry(ImageWtyEntry entry) => entry.Item == AllwinnerImageItem.Unknown
+        ? $"{entry.Name} ({entry.MainType}:{entry.SubType})"
+        : $"{entry.Name} ({entry.MainType}:{entry.SubType}, {entry.Item})";
 }
