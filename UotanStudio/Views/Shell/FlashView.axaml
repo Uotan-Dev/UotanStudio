@@ -39,11 +39,15 @@
         </Style>
         <Style Selector="Button.pane-action, DropDownButton.pane-action">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Height" Value="NaN" />
             <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="controls|JustifiedWrapPanel > Button, controls|JustifiedWrapPanel > DropDownButton">
+            <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
         <Style Selector="MenuFlyoutPresenter">
             <Setter Property="MinWidth" Value="240" />
@@ -593,24 +597,32 @@
                                           AutomationProperties.Name="{DynamicResource Flash_EdlSkipResponse}" />
                                 <StackPanel Name="EdlRegionGroup" Spacing="8">
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <TextBox Name="EdlBootableValueBox" Grid.Column="0" Height="32" Text="0"
+                                        <TextBox Name="EdlBootableValueBox" Grid.Column="0" MinHeight="32" Text="0"
                                                  VerticalContentAlignment="Center"
                                                  PlaceholderText="{DynamicResource Flash_EdlBootableValueHint}"
                                                  AutomationProperties.Name="{DynamicResource Flash_EdlBootableValueHint}" />
                                         <Button Name="EdlSetBootableButton" Grid.Column="1" Classes="pane-action"
                                                 Click="OnEdlSetBootableClick"
-                                                Content="{DynamicResource Flash_EdlSetBootable}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlSetBootable}" />
+                                                ToolTip.Tip="{DynamicResource Flash_EdlSetBootable}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlSetBootable}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlSetBootable}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
                                     </Grid>
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <TextBox Name="EdlDigestPartitionBox" Grid.Column="0" Height="32"
+                                        <TextBox Name="EdlDigestPartitionBox" Grid.Column="0" MinHeight="32"
                                                  VerticalContentAlignment="Center"
                                                  PlaceholderText="{DynamicResource Flash_EdlDigestPartitionHint}"
                                                  AutomationProperties.Name="{DynamicResource Flash_EdlDigestPartitionHint}" />
                                         <Button Name="EdlPartitionDigestButton" Grid.Column="1" Classes="pane-action"
                                                 Click="OnEdlPartitionDigestClick"
-                                                Content="{DynamicResource Flash_EdlPartitionDigest}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlPartitionDigest}" />
+                                                ToolTip.Tip="{DynamicResource Flash_EdlPartitionDigest}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlPartitionDigest}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlPartitionDigest}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
                                     </Grid>
                                 </StackPanel>
                                 <!-- 回读清单的两项只在回读入口可用时出现：它们由 OnEdlReadbackClick 消费，
@@ -763,10 +775,15 @@
                                     <TextBox Name="MtkXmlPropertyBox" Height="32" VerticalContentAlignment="Center"
                                              PlaceholderText="{DynamicResource Flash_MtkXmlProperty}"
                                              AutomationProperties.Name="{DynamicResource Flash_MtkXmlProperty}" />
-                                    <Button Grid.Column="1" Name="MtkXmlPropertyQueryButton" Height="32"
+                                    <Button Grid.Column="1" Name="MtkXmlPropertyQueryButton" Classes="pane-action"
+                                            MinHeight="32"
                                             Click="OnMtkXmlPropertyQueryClick"
-                                            Content="{DynamicResource Flash_MtkXmlPropertyQuery}"
-                                            AutomationProperties.Name="{DynamicResource Flash_MtkXmlPropertyQuery}" />
+                                            ToolTip.Tip="{DynamicResource Flash_MtkXmlPropertyQuery}"
+                                            AutomationProperties.Name="{DynamicResource Flash_MtkXmlPropertyQuery}">
+                                        <TextBlock Text="{DynamicResource Flash_MtkXmlPropertyQuery}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
                                 </Grid>
 
                             </StackPanel>
@@ -780,44 +797,91 @@
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
                                           AutomationProperties.Name="{DynamicResource Flash_RkSetStorageType}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <Button Grid.Column="0" Name="RkGetStorageButton" Classes="pane-action"
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="RkGetStorageButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnRkGetStorageClick"
-                                            Content="{DynamicResource Flash_RkGetStorage}"
-                                            AutomationProperties.Name="{DynamicResource Flash_RkGetStorage}" />
-                                    <Button Grid.Column="1" Name="RkSwitchStorageButton" Classes="pane-action"
+                                            ToolTip.Tip="{DynamicResource Flash_RkGetStorage}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkGetStorage}">
+                                        <TextBlock Text="{DynamicResource Flash_RkGetStorage}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkSwitchStorageButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnRkSwitchStorageClick"
-                                            Content="{DynamicResource Flash_RkSwitchStorage}"
-                                            AutomationProperties.Name="{DynamicResource Flash_RkSwitchStorage}" />
-                                </Grid>
-                                <Button Name="RkEnterMaskromButton" Classes="pane-action"
-                                        Click="OnRkEnterMaskromClick"
-                                        Content="{DynamicResource Flash_RkEnterMaskrom}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}" />
-                                <Button Name="RkTestDeviceButton" Classes="pane-action"
-                                        Click="OnRkTestDeviceClick"
-                                        Content="{DynamicResource Flash_RkTestDevice}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkTestDevice}" />
-                                <Button Name="RkEraseFlashButton" Classes="pane-action"
-                                        Click="OnRkEraseFlashClick"
-                                        Content="{DynamicResource Flash_RkEraseFlash}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseFlash}" />
-                                <Button Name="RkEraseSystemButton" Classes="pane-action"
-                                        Click="OnRkEraseSystemClick"
-                                        Content="{DynamicResource Flash_RkEraseSystem}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseSystem}" />
-                                <Button Name="RkLowerFormatButton" Classes="pane-action"
-                                        Click="OnRkLowerFormatClick"
-                                        Content="{DynamicResource Flash_RkLowerFormat}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkLowerFormat}" />
-                                <Button Name="RkEraseUserDataButton" Classes="pane-action"
-                                        Click="OnRkEraseUserDataClick"
-                                        Content="{DynamicResource Flash_RkEraseUserData}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseUserData}" />
-                                <Button Name="RkUserSectorMapButton" Classes="pane-action"
-                                        Click="OnRkUserSectorMapClick"
-                                        Content="{DynamicResource Flash_RkUserSectorMap}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkUserSectorMap}" />
+                                            ToolTip.Tip="{DynamicResource Flash_RkSwitchStorage}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkSwitchStorage}">
+                                        <TextBlock Text="{DynamicResource Flash_RkSwitchStorage}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="RkEnterMaskromButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkEnterMaskromClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkEnterMaskrom}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}">
+                                        <TextBlock Text="{DynamicResource Flash_RkEnterMaskrom}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkTestDeviceButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkTestDeviceClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkTestDevice}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkTestDevice}">
+                                        <TextBlock Text="{DynamicResource Flash_RkTestDevice}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkEraseFlashButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkEraseFlashClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkEraseFlash}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkEraseFlash}">
+                                        <TextBlock Text="{DynamicResource Flash_RkEraseFlash}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkEraseSystemButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkEraseSystemClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkEraseSystem}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkEraseSystem}">
+                                        <TextBlock Text="{DynamicResource Flash_RkEraseSystem}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkLowerFormatButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkLowerFormatClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkLowerFormat}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkLowerFormat}">
+                                        <TextBlock Text="{DynamicResource Flash_RkLowerFormat}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkEraseUserDataButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkEraseUserDataClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkEraseUserData}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkEraseUserData}">
+                                        <TextBlock Text="{DynamicResource Flash_RkEraseUserData}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkUserSectorMapButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkUserSectorMapClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkUserSectorMap}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkUserSectorMap}">
+                                        <TextBlock Text="{DynamicResource Flash_RkUserSectorMap}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,2">
@@ -839,30 +903,57 @@
                                              PlaceholderText="{DynamicResource Flash_RkLbaCount}"
                                              AutomationProperties.Name="{DynamicResource Flash_RkLbaCount}" />
                                 </Grid>
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <Button Grid.Column="0" Name="RkLbaReadButton" Classes="pane-action"
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="RkLbaReadButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnRkLbaReadClick"
-                                            Content="{DynamicResource Flash_RkLbaRead}"
-                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaRead}" />
-                                    <Button Grid.Column="1" Name="RkLbaWriteButton" Classes="pane-action"
+                                            ToolTip.Tip="{DynamicResource Flash_RkLbaRead}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaRead}">
+                                        <TextBlock Text="{DynamicResource Flash_RkLbaRead}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkLbaWriteButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnRkLbaWriteClick"
-                                            Content="{DynamicResource Flash_RkLbaWrite}"
-                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaWrite}" />
-                                </Grid>
-                                <Button Name="RkEraseSectorsButton" Classes="pane-action"
-                                        Click="OnRkEraseSectorsClick"
-                                        Content="{DynamicResource Flash_RkEraseSectors}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseSectors}" />
+                                            ToolTip.Tip="{DynamicResource Flash_RkLbaWrite}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaWrite}">
+                                        <TextBlock Text="{DynamicResource Flash_RkLbaWrite}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkEraseSectorsButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkEraseSectorsClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkEraseSectors}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkEraseSectors}">
+                                        <TextBlock Text="{DynamicResource Flash_RkEraseSectors}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <Button Name="RkExportConfigButton" Classes="pane-action"
-                                        Click="OnRkExportConfigClick"
-                                        Content="{DynamicResource Flash_RkExportConfig}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkExportConfig}" />
-                                <Button Name="RkReadPartitionsButton" Classes="pane-action"
-                                        Click="OnRkReadPartitionsClick"
-                                        Content="{DynamicResource Flash_RkReadPartitions}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkReadPartitions}" />
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="RkExportConfigButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkExportConfigClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkExportConfig}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkExportConfig}">
+                                        <TextBlock Text="{DynamicResource Flash_RkExportConfig}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="RkReadPartitionsButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnRkReadPartitionsClick"
+                                            ToolTip.Tip="{DynamicResource Flash_RkReadPartitions}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkReadPartitions}">
+                                        <TextBlock Text="{DynamicResource Flash_RkReadPartitions}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                             </StackPanel>
                         </Expander>
                         <!-- 进迭时空分类 -->
@@ -917,14 +1008,26 @@
                                 <TextBox Name="SunxiUbootBox" Height="32" VerticalContentAlignment="Center"
                                          IsReadOnly="True" Text="{Binding SunxiUbootPath}"
                                          AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}" />
-                                <Button Name="SunxiChooseUbootButton" Classes="pane-action"
-                                        Click="OnSunxiChooseUbootClick"
-                                        Content="{DynamicResource Flash_SunxiChooseUboot}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}" />
-                                <Button Name="SunxiBootFesButton" Classes="pane-action" IsEnabled="False"
-                                        Click="OnSunxiBootFesClick"
-                                        Content="{DynamicResource Flash_SunxiBootFes}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiBootFes}" />
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="SunxiChooseUbootButton" Classes="pane-action"
+                                            MinWidth="110"
+                                            Click="OnSunxiChooseUbootClick"
+                                            ToolTip.Tip="{DynamicResource Flash_SunxiChooseUboot}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiChooseUboot}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="SunxiBootFesButton" Classes="pane-action" IsEnabled="False"
+                                            MinWidth="110"
+                                            Click="OnSunxiBootFesClick"
+                                            ToolTip.Tip="{DynamicResource Flash_SunxiBootFes}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiBootFes}">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiBootFes}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_SunxiFelTools}" FontSize="12" FontWeight="SemiBold"
@@ -939,16 +1042,26 @@
                                              PlaceholderText="{DynamicResource Flash_SunxiLength}"
                                              AutomationProperties.Name="{DynamicResource Flash_SunxiLength}" />
                                 </Grid>
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <Button Grid.Column="0" Name="SunxiReadMemoryButton" Classes="pane-action"
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="SunxiReadMemoryButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnSunxiReadMemoryClick"
-                                            Content="{DynamicResource Flash_SunxiReadMemory}"
-                                            AutomationProperties.Name="{DynamicResource Flash_SunxiReadMemory}" />
-                                    <Button Grid.Column="1" Name="SunxiWriteMemoryButton" Classes="pane-action"
+                                            ToolTip.Tip="{DynamicResource Flash_SunxiReadMemory}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiReadMemory}">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiReadMemory}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="SunxiWriteMemoryButton" Classes="pane-action"
+                                            MinWidth="110"
                                             Click="OnSunxiWriteMemoryClick"
-                                            Content="{DynamicResource Flash_SunxiWriteMemory}"
-                                            AutomationProperties.Name="{DynamicResource Flash_SunxiWriteMemory}" />
-                                </Grid>
+                                            ToolTip.Tip="{DynamicResource Flash_SunxiWriteMemory}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiWriteMemory}">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiWriteMemory}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                                 <TextBox Name="SunxiExecuteAddressBox" Height="32" VerticalContentAlignment="Center"
                                          Text="{Binding SunxiExecuteAddress}"
                                          PlaceholderText="{DynamicResource Flash_SunxiExecuteAddress}"
@@ -963,12 +1076,24 @@
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="ImagePane" Spacing="8">
-                                <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
-                                        Click="OnExtractSelectedClick"
-                                        Content="{DynamicResource Flash_ExtractSelected}" />
-                                <Button Name="BuildWiredPackageButton" Classes="pane-action" IsEnabled="False"
-                                        Click="OnBuildWiredPackageClick"
-                                        Content="{DynamicResource Flash_BuildWiredPackage}" />
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
+                                            MinWidth="110"
+                                            Click="OnExtractSelectedClick"
+                                            ToolTip.Tip="{DynamicResource Flash_ExtractSelected}">
+                                        <TextBlock Text="{DynamicResource Flash_ExtractSelected}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                    <Button Name="BuildWiredPackageButton" Classes="pane-action" IsEnabled="False"
+                                            MinWidth="110"
+                                            Click="OnBuildWiredPackageClick"
+                                            ToolTip.Tip="{DynamicResource Flash_BuildWiredPackage}">
+                                        <TextBlock Text="{DynamicResource Flash_BuildWiredPackage}"
+                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Button>
+                                </controls:JustifiedWrapPanel>
                             </StackPanel>
                         </Expander>
                     </StackPanel>

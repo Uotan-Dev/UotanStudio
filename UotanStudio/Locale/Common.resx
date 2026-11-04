@@ -541,10 +541,10 @@ Author: 暮间雾
     <value>Select a flash package and the flashable partitions appear here.</value>
   </data>
   <data name="Flash_ReadInfo" xml:space="preserve">
-    <value>Read device info</value>
+    <value>Read Info</value>
   </data>
   <data name="Flash_LoadBoot" xml:space="preserve">
-    <value>Send loader programmer</value>
+    <value>Send Loader</value>
   </data>
   <data name="Flash_LoadBootNoDevice" xml:space="preserve">
     <value>Select a device before sending a loader programmer.</value>
@@ -610,10 +610,10 @@ Author: 暮间雾
     <value>Image actions</value>
   </data>
   <data name="Flash_ExtractSelected" xml:space="preserve">
-    <value>Extract selected images</value>
+    <value>Extract Selected</value>
   </data>
   <data name="Flash_BuildWiredPackage" xml:space="preserve">
-    <value>Build wired flash package</value>
+    <value>Build Package</value>
   </data>
   <data name="Flash_Log" xml:space="preserve">
     <value>Log</value>
@@ -682,7 +682,7 @@ Author: 暮间雾
     <value>Active slot</value>
   </data>
   <data name="Flash_Cancel" xml:space="preserve">
-    <value>Cancel operation</value>
+    <value>Cancel</value>
   </data>
   <data name="Flash_CancelConfirm" xml:space="preserve">
     <value>Cancel the running operation? In-flight device transfers are aborted; the target may keep a partially written state.</value>
@@ -700,7 +700,7 @@ Author: 暮间雾
     <value>Select a vbmeta partition and image to disable verification.</value>
   </data>
   <data name="Flash_ChooseRootPackage" xml:space="preserve">
-    <value>Select Magisk or KernelSU package</value>
+    <value>Select Root Package</value>
   </data>
   <data name="Flash_RootBootMissing" xml:space="preserve">
     <value>Select exactly one boot or init_boot image for Root patching.</value>
@@ -1012,19 +1012,19 @@ Author: 暮间雾
     <value>Dump selected LUN to file</value>
   </data>
   <data name="Flash_EdlBootableValueHint" xml:space="preserve">
-    <value>Boot partition number (0-255)</value>
+    <value>LUN (0-255)</value>
   </data>
   <data name="Flash_EdlSetBootable" xml:space="preserve">
-    <value>Set bootable storage drive</value>
+    <value>Set Bootable</value>
   </data>
   <data name="Flash_EdlBootableValueInvalid" xml:space="preserve">
     <value>The boot partition number must be a whole number between 0 and 255.</value>
   </data>
   <data name="Flash_EdlDigestPartitionHint" xml:space="preserve">
-    <value>Partition for SHA-256</value>
+    <value>Partition name</value>
   </data>
   <data name="Flash_EdlPartitionDigest" xml:space="preserve">
-    <value>Read partition SHA-256</value>
+    <value>Read SHA-256</value>
   </data>
   <data name="Flash_EdlDigestPartitionMissing" xml:space="preserve">
     <value>Enter the partition whose digest should be read.</value>
@@ -1357,7 +1357,7 @@ Author: 暮间雾
     <value>XML property key</value>
   </data>
   <data name="Flash_MtkXmlPropertyQuery" xml:space="preserve">
-    <value>Read system property</value>
+    <value>Query Property</value>
   </data>
   <data name="Flash_MtkXmlPropertyRequired" xml:space="preserve">
     <value>Type the XML property key to query first.</value>
@@ -3865,7 +3865,7 @@ Continue?</value>
     <value>Custom File</value>
   </data>
   <data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve">
-    <value>Choose Custom Programmer File</value>
+    <value>Choose Programmer</value>
   </data>
   <data name="Flash_Rockchip" xml:space="preserve">
     <value>Rockchip</value>
@@ -3898,7 +3898,7 @@ Continue?</value>
     <value>Device progress</value>
   </data>
   <data name="Flash_RkGetStorage" xml:space="preserve">
-    <value>Get Current Storage</value>
+    <value>Get Storage</value>
   </data>
   <data name="Flash_RkChipName" xml:space="preserve">
     <value>Chip Name</value>
@@ -3925,7 +3925,7 @@ Continue?</value>
     <value>Erase Flash</value>
   </data>
   <data name="Flash_RkEraseSystem" xml:space="preserve">
-    <value>Erase System Disk</value>
+    <value>Erase System</value>
   </data>
   <data name="Flash_RkEraseSystemConfirm" xml:space="preserve">
     <value>Erase the system area through the device firmware? Partitions on the system disk will be destroyed.</value>
@@ -3943,7 +3943,7 @@ Continue?</value>
     <value>Erase the user-data area through the device firmware? User data on the device will be destroyed.</value>
   </data>
   <data name="Flash_RkUserSectorMap" xml:space="preserve">
-    <value>User Sector Map</value>
+    <value>Sector Map</value>
   </data>
   <data name="Flash_RkUserSectorMapPresent" xml:space="preserve">
     <value>the firmware reports an addressable user-data area</value>
@@ -3979,7 +3979,7 @@ Continue?</value>
     <value>Force Address Write</value>
   </data>
   <data name="Flash_RkReadPartitions" xml:space="preserve">
-    <value>Read Device Partition Table</value>
+    <value>Read Partitions</value>
   </data>
   <data name="Flash_RkPartitionHeader" xml:space="preserve">
     <value>Partitions on device</value>
@@ -4249,10 +4249,10 @@ Continue?</value>
     <value>Service payload image</value>
   </data>
   <data name="Flash_SunxiChooseUboot" xml:space="preserve">
-    <value>Choose service payload...</value>
+    <value>Choose U-Boot...</value>
   </data>
   <data name="Flash_SunxiBootFes" xml:space="preserve">
-    <value>Boot FES service</value>
+    <value>Boot FES</value>
   </data>
   <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
     <value>Uploads the FES1 loader and the service payload to the selected Allwinner device and executes them, so the device re-enumerates as FES. Uploaded code can leave the device in any state and this cannot be undone.</value>

@@ -18,13 +18,20 @@ public sealed class JustifiedWrapPanel : Panel
     public static readonly StyledProperty<double> LineSpacingProperty =
         AvaloniaProperty.Register<JustifiedWrapPanel, double>(nameof(LineSpacing), 6d);
 
+    /// <summary>
+    /// Identifies the <see cref="EqualColumns"/> styled property.
+    /// <para>标识 <see cref="EqualColumns"/> 样式属性。</para>
+    /// </summary>
+    public static readonly StyledProperty<bool> EqualColumnsProperty =
+        AvaloniaProperty.Register<JustifiedWrapPanel, bool>(nameof(EqualColumns), true);
+
     private readonly List<RowLayout> _rows = [];
     private double[] _requiredWidths = [];
 
     static JustifiedWrapPanel()
     {
-        AffectsMeasure<JustifiedWrapPanel>(MinItemWidthProperty, ItemSpacingProperty, LineSpacingProperty);
-        AffectsArrange<JustifiedWrapPanel>(MinItemWidthProperty, ItemSpacingProperty, LineSpacingProperty);
+        AffectsMeasure<JustifiedWrapPanel>(MinItemWidthProperty, ItemSpacingProperty, LineSpacingProperty, EqualColumnsProperty);
+        AffectsArrange<JustifiedWrapPanel>(MinItemWidthProperty, ItemSpacingProperty, LineSpacingProperty, EqualColumnsProperty);
     }
 
     /// <summary>
@@ -55,6 +62,16 @@ public sealed class JustifiedWrapPanel : Panel
     {
         get => GetValue(LineSpacingProperty);
         set => SetValue(LineSpacingProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether children in the same row share equal width.
+    /// <para>获取或设置同一行中的子项是否均分可用宽度。</para>
+    /// </summary>
+    public bool EqualColumns
+    {
+        get => GetValue(EqualColumnsProperty);
+        set => SetValue(EqualColumnsProperty, value);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -114,7 +131,28 @@ public sealed class JustifiedWrapPanel : Panel
 
     private double BuildMeasuredRows(double availableWidth, double itemSpacing, double lineSpacing)
     {
-        var totalHeight = 0d;
+        if (EqualColumns)
+        {
+            var minItemWidth = Math.Max(1, MinItemWidth);
+            var maxColumns = Math.Max(1, (int)Math.Floor((availableWidth + itemSpacing) / (minItemWidth + itemSpacing)));
+            var totalHeight = 0d;
+
+            for (var index = 0; index < Children.Count; index += maxColumns)
+            {
+                var count = Math.Min(maxColumns, Children.Count - index);
+                totalHeight = AddEqualMeasuredRow(
+                    index,
+                    count,
+                    availableWidth,
+                    itemSpacing,
+                    lineSpacing,
+                    totalHeight);
+            }
+
+            return totalHeight;
+        }
+
+        var totalHeightFallback = 0d;
         var rowStart = 0;
         var rowWidth = 0d;
 
@@ -127,13 +165,13 @@ public sealed class JustifiedWrapPanel : Panel
 
             if (index > rowStart && proposedWidth > availableWidth)
             {
-                totalHeight = AddMeasuredRow(
+                totalHeightFallback = AddMeasuredRow(
                     rowStart,
                     index - rowStart,
                     availableWidth,
                     itemSpacing,
                     lineSpacing,
-                    totalHeight);
+                    totalHeightFallback);
                 rowStart = index;
                 rowWidth = requiredWidth;
             }
@@ -149,7 +187,42 @@ public sealed class JustifiedWrapPanel : Panel
             availableWidth,
             itemSpacing,
             lineSpacing,
-            totalHeight);
+            totalHeightFallback);
+    }
+
+    private double AddEqualMeasuredRow(
+        int startIndex,
+        int count,
+        double availableWidth,
+        double itemSpacing,
+        double lineSpacing,
+        double totalHeight)
+    {
+        var widths = new double[count];
+        var gapWidth = itemSpacing * Math.Max(0, count - 1);
+        var contentWidth = Math.Max(0, availableWidth - gapWidth);
+        var itemWidth = count > 0 ? contentWidth / count : 0d;
+
+        for (var column = 0; column < count; column++)
+        {
+            widths[column] = itemWidth;
+        }
+
+        var rowHeight = 0d;
+        for (var column = 0; column < count; column++)
+        {
+            var child = Children[startIndex + column];
+            child.Measure(new Size(widths[column], double.PositiveInfinity));
+            rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
+        }
+
+        if (_rows.Count > 0)
+        {
+            totalHeight += lineSpacing;
+        }
+
+        _rows.Add(new RowLayout(startIndex, widths, rowHeight));
+        return totalHeight + rowHeight;
     }
 
     private double AddMeasuredRow(
