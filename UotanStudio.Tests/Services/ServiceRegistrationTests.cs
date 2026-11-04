@@ -37,6 +37,31 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
+    public void Register_EveryRegistration_Resolves()
+    {
+        ServiceHub.Reset();
+        var services = new ServiceCollection();
+        ServiceRegistration.Register(services, monitor: null, NullWindowService.Instance);
+        using var provider = ServiceRegistration.BuildProvider(services);
+
+        var failures = new List<string>();
+        foreach (var descriptor in services)
+        {
+            try
+            {
+                _ = provider.GetRequiredService(descriptor.ServiceType);
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{descriptor.ServiceType.FullName}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        Assert.True(failures.Count == 0,
+            "Every registered service must resolve:\n" + string.Join("\n", failures));
+    }
+
+    [Fact]
     public void ServiceHub_Uninitialized_TryGetReturnsNullAndFacadesFallBack()
     {
         ServiceHub.Reset();
