@@ -72,13 +72,20 @@ public partial class KeyManagerWindow : Window
         if (Model.Status == "") ApplicationRestartService.RestartWithSolution();
     }
 
+    /// <remarks>
+    /// The pane's format selection is stored as the <see cref="ApkCertificateExportFormat"/> ordinal: an
+    /// unprotected JKS or all-formats export requires a keystore password, and an unprotected PKCS#12 export
+    /// needs an explicit confirmation before it proceeds.
+    /// <para>面板选择的格式以 <see cref="ApkCertificateExportFormat"/> 的序数存储：无密码的 JKS 或全格式导出
+    /// 必须提供 keystore 密码，无密码的 PKCS#12 导出需先明确确认才会继续。</para>
+    /// </remarks>
     private async void GenerateClick(object? sender, RoutedEventArgs e)
     {
         var model = Model;
         if (!model.IsApkCertificate || !string.IsNullOrWhiteSpace(model.KeystorePassword)) return;
         var language = LanguageService.Instance;
-        // FormatIndex: 0 = All, 1 = JKS, 2 = PKCS12, 3 = PEM.
-        if (model.FormatIndex is 0 or 1)
+        var format = (ApkCertificateExportFormat)model.FormatIndex;
+        if (format is ApkCertificateExportFormat.All or ApkCertificateExportFormat.Jks)
         {
             e.Handled = true;
             await DialogService.ShowAsync(this,
@@ -86,7 +93,7 @@ public partial class KeyManagerWindow : Window
                 language.GetString("Keys_PasswordRequiredMessage"), MessageBoxIcon.Warning);
             ApkKeystorePasswordBox.Focus();
         }
-        else if (model.FormatIndex == 2)
+        else if (format == ApkCertificateExportFormat.Pkcs12)
         {
             e.Handled = true;
             var proceed = await DialogService.ConfirmYesNoAsync(this,
