@@ -885,15 +885,17 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashRkdlAsync(device, partition, imagePath, loaderPath: null, progress, ct).ConfigureAwait(false);
 
-    /// <summary>RKDL path that programs a partition on a loader-stage device; the loader must already be running,
-    /// so this path never downloads one.
-    /// <para>RKDL 路径：在已处于 loader 阶段的设备上烧写分区；loader 必须已在运行，此路径绝不下载 loader。</para></summary>
+    /// <summary>RKDL path that programs a partition on a device that answers the storage commands; the loader must
+    /// already be running, so this path never downloads one.
+    /// <para>RKDL 路径：在能应答存储命令的设备上烧写分区；loader 必须已在运行，此路径绝不下载 loader。</para></summary>
     /// <remarks>
-    /// Only the shared load-boot action transfers a loader; this path requires a loader-stage device and
-    /// refuses a maskrom endpoint instead of booting one. The parameter lookup and
-    /// <see cref="RkdlSession.WriteLBA"/> run on the selected device's own lease.
-    /// <para>只有通用的发送引导程序动作会传输 loader；此路径要求设备已处于 loader 阶段，遇到 maskrom 端点会拒绝
-    /// 而不是为它启动 loader。parameter 查找与 <see cref="RkdlSession.WriteLBA"/> 在所选设备自身的租约上执行。</para>
+    /// Only the shared load-boot action transfers a loader; this path requires a device that answers the storage
+    /// commands and refuses only a stage the descriptor proves to be mask ROM instead of guessing one, because the
+    /// vendor driver usually exposes no <c>bcdUSB</c> value and a board already running a loader would otherwise be
+    /// refused. The parameter lookup and <see cref="RkdlSession.WriteLBA"/> run on the selected device's own lease.
+    /// <para>只有通用的发送引导程序动作会传输 loader；此路径要求设备能应答存储命令，并且只拒绝描述符证实为
+    /// mask ROM 的阶段而不做猜测，因为厂商驱动通常不暴露 <c>bcdUSB</c> 取值，否则已运行 loader 的板子会被拒绝。
+    /// parameter 查找与 <see cref="RkdlSession.WriteLBA"/> 在所选设备自身的租约上执行。</para>
     /// </remarks>
     /// <param name="device">The target device.<para>目标设备。</para></param>
     /// <param name="partition">The target partition name.<para>目标分区名。</para></param>
@@ -903,30 +905,36 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
     /// <param name="verify">Whether to read the written range back and compare it with the source image.
     /// <para>写入成功后是否回读写入范围并与源镜像比对。</para></param>
+    /// <param name="parameterPath">Partition table the caller already resolved, or <see langword="null"/> to search the
+    /// image directory.<para>调用方已解析出的分区表；为 <see langword="null"/> 时在镜像目录中查找。</para></param>
     /// <returns>The flash result.<para>刷写结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The device is proven to be in mask ROM, or no partition table can be
+    /// found.<para>设备被证实处于 mask ROM，或找不到分区表。</para></exception>
     public static async Task<FlashResult> FlashRkdlAsync(
         DeviceTarget device, string partition, string imagePath, string? loaderPath,
-        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false, string? parameterPath = null)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
         return await App.DeviceMonitor.RunRkdlAsync<FlashResult>(device.Endpoint, async rkdl =>
         {
             var token = ct;
-            if (!rkdl.IsRockusbMode)
+            if (rkdl.IsMaskromMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is still in maskrom mode; use the shared load-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用通用的发送引导程序动作启动 loader。");
+                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
             }
 
-            var parameterPath = FindParameterFile(imageDir);
-            if (parameterPath is null)
+            var tablePath = parameterPath is { Length: > 0 } provided && File.Exists(provided)
+                ? provided
+                : FindParameterFile(imageDir);
+            if (tablePath is null)
             {
                 throw new InvalidOperationException(
-                    "No Rockchip parameter file (parameter / parameter.txt) found in the image directory; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表。");
+                    "No Rockchip parameter file (parameter / parameter.txt) was found next to the images and the caller supplied none; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表，调用方也没有提供。");
             }
 
-            var partitions = RockchipParameterParser.Parse(parameterPath);
+            var partitions = RockchipParameterParser.Parse(tablePath);
             var imageName = Path.GetFileName(imagePath);
             var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
             if (IsParameterTarget(partition, imageName, imageNameWithoutExt))
@@ -998,9 +1006,148 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// RKDL path that erases one partition's LBA range from the Rockchip parameter table on a loader-stage
-    /// device; the loader must already be running, so this path never downloads one.
-    /// <para>RKDL 路径：在 loader 阶段设备上按 Rockchip parameter 分区表擦除一个分区的 LBA 范围；loader 必须
+    /// RKDL path that writes one image at a logical block address on one storage medium, the way the vendor tool's
+    /// forced-address write does, so a package whose rows name no partition-table entry can still be restored.
+    /// <para>RKDL 路径：把一幅镜像写入某个存储介质上的一个逻辑块地址，与厂商工具的“强制按地址写”一致，使行不指向
+    /// 分区表条目的包也能刷入。</para>
+    /// </summary>
+    /// <remarks>
+    /// The write is addressed the way <c>rkdeveloptool wl</c> addresses one: the image starts at
+    /// <paramref name="address"/> on the medium the parameter names, which the session switches to first and verifies
+    /// through the read-back mask, because the device acknowledges CHANGE_STORAGE even for a medium it cannot serve.
+    /// A <see langword="null"/> <paramref name="storageId"/> keeps the medium the device is already on. No partition table is involved,
+    /// so the caller decides when this path is the right one.
+    /// <para>寻址方式与 <c>rkdeveloptool wl</c> 相同：镜像从参数指定的介质上的 <paramref name="address"/> 开始，会话
+    /// 先切换到该介质并通过读回掩码校验，因为设备对无法服务的介质也会应答 CHANGE_STORAGE。存储标识为 0 时沿用设备
+    /// 当前介质。此路径不涉及分区表，由调用方判断何时应当使用它。</para>
+    /// </remarks>
+    /// <remarks>
+    /// NOR/NAND cells only go from 1 to 0 inside an erased block: a whole-range ERASE_LBA is refused and stalls
+    /// the bulk pipe, so the blocks covering the target range are force-erased first, matching how vendor tools
+    /// erase SPI before writing.
+    /// <para>NOR/NAND 单元只能按块从 1 写回 0：整段 ERASE_LBA 会被设备拒绝并让 bulk 管道停摆，
+    /// 因此按覆盖目标范围的块执行 ERASE_FORCE，与厂商工具写入 SPI 前的擦除一致。</para>
+    /// </remarks>
+    /// <param name="device">The target device.<para>目标设备。</para></param>
+    /// <param name="partition">Row name reported with progress and in the result.<para>用于进度与结果的行名。</para></param>
+    /// <param name="address">Start LBA in 512-byte sectors.<para>起始 LBA（512 字节扇区）。</para></param>
+    /// <param name="imagePath">Full path of the image file.<para>镜像文件完整路径。</para></param>
+    /// <param name="storageId">Protocol storage identifier (1 eMMC, 9 SPI NOR, ...), or <see langword="null"/> to keep
+    /// the medium the device is already on.<para>协议存储标识（1 为 eMMC、9 为 SPI NOR 等），<see langword="null"/>
+    /// 表示沿用设备当前介质。</para></param>
+    /// <param name="progress">Optional flash progress reporter.<para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The write result, including the transferred byte count.<para>写入结果，含已传输字节数。</para></returns>
+    /// <exception cref="FileNotFoundException">The image file is missing.
+    /// <para>镜像文件不存在。</para></exception>
+    /// <exception cref="InvalidOperationException">The device is proven to be in mask ROM, or the medium the caller
+    /// named is not the one the device switched to.<para>设备被证实处于 mask ROM，或设备切换到的介质不是调用方指定的那个。</para></exception>
+    public static async Task<FlashResult> FlashRkdlLbaAsync(DeviceTarget device, string partition, long address,
+        string imagePath, int? storageId, IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentOutOfRangeException.ThrowIfNegative(address);
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"Image not found: {imagePath} 镜像不存在。", imagePath);
+        }
+
+        var length = new FileInfo(imagePath).Length;
+        if (length <= 0)
+        {
+            throw new InvalidDataException($"The image is empty: {imagePath} 镜像为空。");
+        }
+
+        var mediumIndex = storageId is { } id ? Array.IndexOf(RkdlStorage.WireBits, (byte)id) : -1;
+        if (storageId is not null && mediumIndex < 0)
+        {
+            throw new InvalidOperationException(
+                $"Storage identifier {storageId} is not one the Rockchip protocol knows. 存储标识 {storageId} 不是瑞芯微协议已知的介质。");
+        }
+
+        var medium = mediumIndex >= 0 ? RkdlStorage.Names[mediumIndex] : "current";
+        Report(progress, partition, 0,
+            $"Writing {Path.GetFileName(imagePath)} at LBA 0x{address:X} on {medium}... 正在按地址写入镜像...");
+        return await App.DeviceMonitor.RunRkdlAsync(device.Endpoint, async rkdl =>
+        {
+            if (rkdl.IsMaskromMode)
+            {
+                throw new InvalidOperationException(
+                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
+            }
+
+            if (storageId is { } target)
+            {
+                Report(progress, partition, 0, $"Switching to {medium}... 正在切换到 {medium}...");
+                rkdl.ChangeStorage((byte)target);
+                var mask = rkdl.ReadStorageMask();
+                if (RkdlStorage.IndexOfMask(mask) != mediumIndex)
+                {
+                    throw new InvalidOperationException(
+                        $"The device switched to {RkdlStorage.DescribeMask(mask)} instead of {medium}, so nothing was written. 设备切换到了 {RkdlStorage.DescribeMask(mask)} 而不是 {medium}，未写入任何数据。");
+                }
+            }
+
+            await using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                128 * 1024, FileOptions.SequentialScan);
+            var sectors = (length + RkdlConstants.SectorSize - 1) / RkdlConstants.SectorSize;
+            if (NeedsEraseBeforeWrite(storageId))
+            {
+                var blockSectors = Math.Max((int)rkdl.ReadFlashInfo().BlockSizeSectors, 1);
+                var firstBlock = (uint)(address / blockSectors);
+                var blockCount = (uint)(((address % blockSectors) + sectors + blockSectors - 1) / blockSectors);
+                Report(progress, partition, 0,
+                    $"Erasing {blockCount} block(s) from block {firstBlock} on {medium}... 正在擦除目标块...");
+                var badBlocks = rkdl.EraseBlocks(firstBlock, blockCount, force: true);
+                if (badBlocks > 0)
+                {
+                    Report(progress, partition, 0,
+                        $"{badBlocks} block(s) reported a bad-block status on {medium}. 有块返回坏块状态。");
+                }
+            }
+
+            var written = await Task.Run(
+                () => rkdl.WriteLBA(address, stream, length,
+                    new Progress<long>(done => Report(progress, partition,
+                        (int)Math.Clamp(done * 100 / length, 0, 100),
+                        $"Writing {Path.GetFileName(imagePath)} at LBA 0x{address:X}... 正在按地址写入镜像...")),
+                    ct),
+                ct).ConfigureAwait(false);
+            Report(progress, partition, 100, $"Wrote {written} bytes at LBA 0x{address:X} on {medium}. 已按地址写入。");
+            return new FlashResult
+            {
+                Success = true,
+                Summary = $"Wrote {written} bytes of {Path.GetFileName(imagePath)} at LBA 0x{address:X} on {medium}. 已按地址写入镜像。"
+            };
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Whether a medium only accepts data after its blocks were erased: SPI NOR, SPI NAND and the generic flash
+    /// selection are block-erased before a forced-address write, while eMMC, SD and the RAM-like media overwrite in
+    /// place.
+    /// <para>某介质是否必须先擦除块才能写入：SPI NOR、SPI NAND 与通用 flash 选择在按地址写入前先按块擦除，eMMC、
+    /// SD 与内存类介质则原地覆盖。</para>
+    /// </summary>
+    /// <param name="storageId">Protocol storage identifier, or <see langword="null"/> when the caller kept the
+    /// current medium.<para>协议存储标识；调用方沿用当前介质时为 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when the write needs the target blocks erased first.
+    /// <para>写入前需要先擦除目标块时为 <see langword="true"/>。</para></returns>
+    private static bool NeedsEraseBeforeWrite(int? storageId)
+    {
+        if (storageId is not { } id)
+        {
+            return false;
+        }
+
+        var index = Array.IndexOf(RkdlStorage.WireBits, (byte)id);
+        return index >= 0 && RkdlStorage.Names[index] is "FLASH" or "SPINAND" or "SPINOR";
+    }
+
+    /// <summary>
+    /// RKDL path that erases one partition's LBA range from the Rockchip parameter table on a device that answers the
+    /// storage commands; the loader must already be running, so this path never downloads one.
+    /// <para>RKDL 路径：在能应答存储命令的设备上按 Rockchip parameter 分区表擦除一个分区的 LBA 范围；loader 必须
     /// 已在运行，此路径绝不下载 loader。</para>
     /// </summary>
     /// <param name="device">The target device.<para>目标设备。</para></param>
@@ -1011,9 +1158,9 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The erase result; <see cref="FlashResult.Success"/> is false when the device refused the erase.
     /// <para>擦除结果；设备拒绝擦除时 <see cref="FlashResult.Success"/> 为 false。</para></returns>
-    /// <exception cref="InvalidOperationException">The partition is absent from the parameter table or the device
-    /// is still in maskrom mode.
-    /// <para>分区不在 parameter 表中，或设备仍处于 maskrom 模式。</para></exception>
+    /// <exception cref="InvalidOperationException">The partition is absent from the parameter table or the device is
+    /// proven to be in mask ROM.
+    /// <para>分区不在 parameter 表中，或设备被证实处于 mask ROM 模式。</para></exception>
     public static async Task<FlashResult> EraseRkdlAsync(DeviceTarget device, string partition,
         string parameterPath, string? loaderPath, CancellationToken ct)
     {
@@ -1030,10 +1177,10 @@ public sealed class FlashService : IFlashService
         }
         return await App.DeviceMonitor.RunRkdlAsync(device.Endpoint, rkdl =>
         {
-            if (!rkdl.IsRockusbMode)
+            if (rkdl.IsMaskromMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is still in maskrom mode; use the shared load-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用通用的发送引导程序动作启动 loader。");
+                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
             }
 
             if (target is null)
@@ -1824,16 +1971,6 @@ public sealed class FlashService : IFlashService
             : Directory.EnumerateFiles(imageDir, "parameter*", SearchOption.TopDirectoryOnly)
             .FirstOrDefault(f => !Path.GetExtension(f).Equals(".xml", StringComparison.OrdinalIgnoreCase));
     }
-
-    /// <summary>
-    /// Determines whether the directory contains a Rockchip parameter partition-table file;
-    /// returns false for a missing directory without throwing.
-    /// <para>判断目录中是否存在 Rockchip parameter 分区表文件；目录不存在时为 false，不抛异常。</para>
-    /// </summary>
-    /// <param name="imageDir">The directory to inspect. <para>待检查的目录。</para></param>
-    /// <returns>True when a Rockchip parameter file is present. <para>存在 parameter 文件时为 true。</para></returns>
-    internal static bool HasRockchipParameter(string imageDir)
-        => FindParameterFile(imageDir) is not null;
 
     /// <summary>
     /// Compares a device read-back stream against the source file byte for byte using a bounded

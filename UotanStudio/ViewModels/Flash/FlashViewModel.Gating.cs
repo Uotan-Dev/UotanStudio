@@ -40,6 +40,13 @@ public sealed partial class FlashViewModel
     internal FlashDeviceKind DeviceKind => FlashDeviceUiPolicy.KindOf(SelectedDevice?.Protocol);
 
     /// <summary>
+    /// Whether the selected fastboot endpoint is the SpacemiT K1/K3 gadget; only then does the page offer the
+    /// SpacemiT section.
+    /// <para>所选 fastboot 端点是否为进迭时空 K1/K3 gadget；只有此时页面才提供进迭时空分类。</para>
+    /// </summary>
+    internal bool IsSpacemiTSelected => _deviceViewModel?.SelectedDevice?.IsSpacemiTFastboot == true;
+
+    /// <summary>
     /// The last ADB root-shell verdict for the selected device key; <see langword="null"/> until a probe for
     /// that key completed, so an unprobed device never looks authorized.
     /// <para>所选设备键最近一次的 ADB root shell 结论；对该键的探测完成前为 <see langword="null"/>，
@@ -146,7 +153,7 @@ public sealed partial class FlashViewModel
     /// <para>页面可启用该控件时为 <see langword="true"/>。</para></returns>
     private bool IsOfferedByDevice(string name)
     {
-        if (!FlashDeviceUiPolicy.IsAvailable(name, DeviceMode, IsRockchipLoaderStageDevice, DeviceKind))
+        if (!FlashDeviceUiPolicy.IsAvailable(name, DeviceMode, RkStage, DeviceKind, IsSpacemiTSelected))
         {
             return false;
         }

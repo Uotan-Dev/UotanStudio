@@ -3888,6 +3888,9 @@
   <data name="Flash_RkTestDevice" xml:space="preserve">
     <value>测试设备</value>
   </data>
+  <data name="Flash_RkTestDeviceProgress" xml:space="preserve">
+    <value>设备进度</value>
+  </data>
   <data name="Flash_RkGetStorage" xml:space="preserve">
     <value>获取当前存储</value>
   </data>
@@ -3948,6 +3951,9 @@
   <data name="Flash_RkEraseSectors" xml:space="preserve">
     <value>擦除扇区</value>
   </data>
+  <data name="Flash_RkBadBlocks" xml:space="preserve">
+    <value>坏块</value>
+  </data>
   <data name="Flash_RkLbaGroup" xml:space="preserve">
     <value>LBA 读写</value>
   </data>
@@ -3991,7 +3997,7 @@
     <value>扇区数小于要写入的文件；请增大扇区数或勾选“强制按地址写”。</value>
   </data>
   <data name="Flash_RkParameterMissing" xml:space="preserve">
-    <value>已加载镜像旁没有 Rockchip parameter 分区表，无法解析分区地址。</value>
+    <value>配置的 parameter 行与已加载镜像旁都没有 Rockchip parameter 分区表，无法解析分区地址。</value>
   </data>
   <data name="Flash_RkStorageSwitched" xml:space="preserve">
     <value>存储已切换；设备会重新枚举，请在设备列表中重新选择后再执行下一条命令。</value>
@@ -4075,7 +4081,7 @@
     <value>加载 Loader：{0}</value>
   </data>
   <data name="Flash_RkLoaderMissing" xml:space="preserve">
-    <value>该配置引用的 Loader 不存在：{0}</value>
+    <value>该配置引用的 Loader 不存在：{0}（烧录分区不使用它；只有设备处于 Mask ROM、需要先发送引导时才会用到）</value>
   </data>
   <data name="Flash_RkStorageNeedsLoader" xml:space="preserve">
     <value>设备处于 Mask ROM，无法应答存储查询；读取当前存储前请先加载 Rockchip Loader。</value>
@@ -4100,6 +4106,36 @@
   </data>
   <data name="Flash_RkLoaderChecked" xml:space="preserve">
     <value>瑞芯微 loader 有效，{0}：{1}</value>
+  </data>
+  <data name="Flash_LoaderChecking" xml:space="preserve">
+    <value>正在检查引导文件…</value>
+  </data>
+  <data name="Flash_LoaderMissing" xml:space="preserve">
+    <value>该配置引用的引导文件不存在：{0}</value>
+  </data>
+  <data name="Flash_LoaderValid" xml:space="preserve">
+    <value>引导文件有效</value>
+  </data>
+  <data name="Flash_LoaderInvalidStatus" xml:space="preserve">
+    <value>引导文件无效</value>
+  </data>
+  <data name="Flash_EdlLoaderChecked" xml:space="preserve">
+    <value>Sahara programmer 有效，{0}：{1}</value>
+  </data>
+  <data name="Flash_EdlLoaderNotProgrammer" xml:space="preserve">
+    <value>不是 Sahara programmer 镜像：{0} 中没有 ELF、MBN 或 MELF 结构</value>
+  </data>
+  <data name="Flash_EdlLoaderMelf" xml:space="preserve">
+    <value>MELF，含 {0} 个 ELF 组件</value>
+  </data>
+  <data name="Flash_MtkLoaderChecked" xml:space="preserve">
+    <value>MTK 下载代理有效，{0}：{1}</value>
+  </data>
+  <data name="Flash_MtkLoaderEntries" xml:space="preserve">
+    <value>共 {0} 个可用 loader 条目</value>
+  </data>
+  <data name="Flash_MtkLoaderInvalid" xml:space="preserve">
+    <value>MTK 下载代理结构非法，{0}：{1}</value>
   </data>
   <data name="Flash_RkParameterValid" xml:space="preserve">
     <value>分区表有效，共 {0} 个分区</value>
@@ -4163,5 +4199,119 @@
   </data>
   <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
     <value>生成的正则表达式将在此显示</value>
+  </data>
+  <data name="Flash_SpacemiT" xml:space="preserve">
+    <value>进迭时空</value>
+  </data>
+  <data name="Flash_SpacemiTPackageHint" xml:space="preserve">
+    <value>选择解包后根目录含 fastboot.yaml 的烧录包文件夹；设备需以进迭时空 fastboot 设备（BootROM 或 U-Boot）出现。</value>
+  </data>
+  <data name="Flash_SpacemiTPackagePath" xml:space="preserve">
+    <value>烧录包目录</value>
+  </data>
+  <data name="Flash_SpacemiTChoosePackage" xml:space="preserve">
+    <value>选择烧录包目录</value>
+  </data>
+  <data name="Flash_SpacemiTRebootAfter" xml:space="preserve">
+    <value>烧录完成后重启</value>
+  </data>
+  <data name="Flash_SpacemiTFlash" xml:space="preserve">
+    <value>烧录整包</value>
+  </data>
+  <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
+    <value>烧录包将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作不可撤销。</value>
+  </data>
+  <data name="Flash_SpacemiTPackageMissing" xml:space="preserve">
+    <value>所选目录不是有效的进迭时空烧录包（缺少 fastboot.yaml 或无法读取）。</value>
+  </data>
+  <data name="Flash_Sunxi" xml:space="preserve">
+    <value>全志</value>
+  </data>
+  <data name="Flash_SunxiHint" xml:space="preserve">
+    <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。FES 烧录将在镜像计划接入后提供。</value>
+  </data>
+  <data name="Flash_SunxiRefresh" xml:space="preserve">
+    <value>读取设备信息</value>
+  </data>
+  <data name="Flash_SunxiFes1" xml:space="preserve">
+    <value>FES1 加载器镜像</value>
+  </data>
+  <data name="Flash_SunxiChooseFes1" xml:space="preserve">
+    <value>选择 FES1...</value>
+  </data>
+  <data name="Flash_SunxiUboot" xml:space="preserve">
+    <value>服务负载镜像</value>
+  </data>
+  <data name="Flash_SunxiChooseUboot" xml:space="preserve">
+    <value>选择服务负载...</value>
+  </data>
+  <data name="Flash_SunxiBootFes" xml:space="preserve">
+    <value>引导 FES 服务</value>
+  </data>
+  <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
+    <value>将向所选全志设备上传 FES1 与服务负载并执行，设备会重新枚举为 FES。上传的代码可让设备进入任意状态，此操作不可撤销。</value>
+  </data>
+  <data name="Flash_SunxiFelTools" xml:space="preserve">
+    <value>FEL 内存工具</value>
+  </data>
+  <data name="Flash_SunxiAddress" xml:space="preserve">
+    <value>地址（十六进制）</value>
+  </data>
+  <data name="Flash_SunxiLength" xml:space="preserve">
+    <value>长度（字节）</value>
+  </data>
+  <data name="Flash_SunxiReadMemory" xml:space="preserve">
+    <value>读取内存</value>
+  </data>
+  <data name="Flash_SunxiWriteMemory" xml:space="preserve">
+    <value>写入文件</value>
+  </data>
+  <data name="Flash_SunxiExecuteAddress" xml:space="preserve">
+    <value>入口地址（十六进制）</value>
+  </data>
+  <data name="Flash_SunxiExecute" xml:space="preserve">
+    <value>执行</value>
+  </data>
+  <data name="Flash_SunxiExecuteConfirmDetail" xml:space="preserve">
+    <value>将在设备上调用 0x{0:X8}。已上传代码可让设备进入任意状态。</value>
+  </data>
+  <data name="Flash_SunxiPhaseFes1" xml:space="preserve">
+    <value>正在运行 DRAM 加载器...</value>
+  </data>
+  <data name="Flash_SunxiPhaseService" xml:space="preserve">
+    <value>正在上传服务负载...</value>
+  </data>
+  <data name="Flash_SunxiPhaseStatus" xml:space="preserve">
+    <value>正在等待 FES 服务...</value>
+  </data>
+  <data name="Flash_SunxiBootDone" xml:space="preserve">
+    <value>设备已应答 FES 握手。</value>
+  </data>
+  <data name="Flash_SunxiModeFel" xml:space="preserve">
+    <value>FEL 模式</value>
+  </data>
+  <data name="Flash_SunxiModeFes" xml:space="preserve">
+    <value>FES 模式</value>
+  </data>
+  <data name="Flash_SunxiStorageFormat" xml:space="preserve">
+    <value>存储 {0}</value>
+  </data>
+  <data name="Flash_SunxiSecureFormat" xml:space="preserve">
+    <value>安全 0x{0:X8}</value>
+  </data>
+  <data name="Flash_SunxiStatusTimeout" xml:space="preserve">
+    <value>设备未应答状态查询。</value>
+  </data>
+  <data name="Flash_SunxiStatusFailed" xml:space="preserve">
+    <value>状态查询失败：</value>
+  </data>
+  <data name="Flash_SunxiAddressInvalid" xml:space="preserve">
+    <value>请输入十六进制地址。</value>
+  </data>
+  <data name="Flash_SunxiLengthInvalid" xml:space="preserve">
+    <value>请输入正整数字节数。</value>
+  </data>
+  <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
+    <value>文件超过内存工具上限 {0}。</value>
   </data>
 </root>

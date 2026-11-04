@@ -28,7 +28,14 @@ internal enum FlashDeviceMode
     Mtk,
 
     /// <summary>Rockchip bootrom or loader (rockusb). <para>瑞芯微 bootrom/loader（rockusb）。</para></summary>
-    Rkdl
+    Rkdl,
+
+    /// <summary>A selected fastboot endpoint, which owns the SpacemiT section on top of the shared flash action.
+    /// <para>已选 fastboot 端点，在通用烧录动作之外还拥有进迭时空分类。</para></summary>
+    Fastboot,
+
+    /// <summary>Allwinner FEL or FES. <para>全志 FEL 或 FES。</para></summary>
+    Sunxi
 }
 
 /// <summary>
@@ -56,7 +63,42 @@ internal enum FlashDeviceKind
 
     /// <summary>An HDC endpoint; the page has no HDC flash path, so it offers no control at all.
     /// <para>HDC 端点；页面没有 HDC 烧录路径，因此不提供任何控件。</para></summary>
-    Hdc
+    Hdc,
+
+    /// <summary>An Allwinner endpoint; only the Sunxi section is offered because no image plan drives the shared
+    /// flash actions yet. <para>全志端点；由于尚无镜像计划驱动通用烧录动作，只提供全志分类。</para></summary>
+    Sunxi
+}
+
+/// <summary>
+/// The stage a Rockchip endpoint is proven to be in. The stage is evidence, not a guess: mask ROM and the
+/// usbplug loader share one product ID, and the descriptor bit that tells them apart is often unreadable
+/// through the Windows rockusb driver, so an endpoint whose stage was never proven stays
+/// <see cref="Unknown"/> and keeps the commands the device itself can refuse.
+/// <para>瑞芯微端点被证实的阶段。阶段是证据而不是猜测：mask ROM 与 usbplug loader 共用同一产品 ID，而区分两者的
+/// 描述符位经常无法经 Windows rockusb 驱动读出，因此阶段从未被证实的端点保持 <see cref="Unknown"/>，并保留那些
+/// 设备自己能拒绝的命令。</para>
+/// </summary>
+internal enum RockchipStage
+{
+    /// <summary>No stage was proven: the descriptor carried no readable <c>bcdUSB</c> value and the reported serial
+    /// carried no loader marker. Both storage actions and the loader download stay offered, because only the device's
+    /// own answers can settle the stage, and refusing up front is what blocks a loader-stage board with an unreadable
+    /// descriptor.
+    /// <para>阶段未被证实：描述符没有可读的 <c>bcdUSB</c> 取值，上报序列号也没有 loader 标记。存储动作与 loader
+    /// 下载都保持提供，因为只有设备自己的应答能确定阶段，而提前拒绝正是让描述符不可读的 loader 阶段板子无法烧录的原因。</para>
+    /// </summary>
+    Unknown,
+
+    /// <summary>The descriptor proved mask ROM, which answers information commands only.
+    /// <para>描述符证实处于 mask ROM，该阶段只应答信息类命令。</para>
+    /// </summary>
+    Maskrom,
+
+    /// <summary>The loader (usbplug) is running, so the storage commands the page uses are answerable.
+    /// <para>loader（usbplug）正在运行，因此页面使用的存储命令可被应答。</para>
+    /// </summary>
+    Loader
 }
 
 /// <summary>
@@ -82,6 +124,12 @@ internal static class FlashDeviceUiPolicy
     /// <summary>Modes of the Rockchip section controls. <para>瑞芯微分类控件适用的模式。</para></summary>
     private static readonly FlashDeviceMode[] RkdlOnly = [FlashDeviceMode.Rkdl];
 
+    /// <summary>Modes of the SpacemiT section controls. <para>进迭时空分类控件适用的模式。</para></summary>
+    private static readonly FlashDeviceMode[] SpacemiTOnly = [FlashDeviceMode.Fastboot];
+
+    /// <summary>Modes of the Sunxi section controls. <para>全志分类控件适用的模式。</para></summary>
+    private static readonly FlashDeviceMode[] SunxiOnly = [FlashDeviceMode.Sunxi];
+
     /// <summary>
     /// Modes whose devices can load a boot loader through the page: the EDL programmer upload, the MTK
     /// preloader (DA) package and the Rockchip RKDL loader.
@@ -99,23 +147,51 @@ internal static class FlashDeviceUiPolicy
     /// </summary>
     private static readonly (string Name, FlashDeviceMode[]? Modes)[] Entries =
     [
-        // 通用操作与刷写选项 / shared actions and flash options
         ("LoadBootButton", LoaderOnly),
         ("ReadInfoButton", null),
         ("ReadbackSelectedButton", null),
         ("FlashSelectedButton", null),
         ("EraseSelectedButton", null),
         ("SwitchSlotButton", null),
-        // 协议分类面板 / protocol section panes
         ("EdlPane", EdlOnly),
         ("MtkPane", MtkOnly),
         ("RkPane", RkdlOnly),
-        // 镜像操作分类面板 / image operations section pane
+        ("SpacemiTPane", SpacemiTOnly),
+        ("SpacemiTChoosePackageButton", SpacemiTOnly),
+        ("SpacemiTFlashButton", SpacemiTOnly),
+        ("SunxiPane", SunxiOnly),
+        ("SunxiRefreshButton", SunxiOnly),
+        ("SunxiChooseFes1Button", SunxiOnly),
+        ("SunxiChooseUbootButton", SunxiOnly),
+        ("SunxiBootFesButton", SunxiOnly),
+        ("SunxiReadMemoryButton", SunxiOnly),
+        ("SunxiWriteMemoryButton", SunxiOnly),
+        ("SunxiExecuteButton", SunxiOnly),
         ("ImagePane", null)
     ];
 
     /// <summary>Mode lookup of <see cref="Entries"/>. <para><see cref="Entries"/> 的模式查找表。</para></summary>
     private static readonly Dictionary<string, FlashDeviceMode[]?> ModeIndex = BuildModeIndex();
+
+    /// <summary>
+    /// The controls of the SpacemiT section, gated on top of the mode table by the selected device being the
+    /// SpacemiT fastboot gadget (VID 0x361C / PID 0x1001).
+    /// <para>进迭时空分类的控件，在模式表之上再按所选设备为进迭时空 fastboot gadget（VID 0x361C / PID 0x1001）
+    /// 门控。</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SpacemiTControls { get; } =
+        ["SpacemiTPane", "SpacemiTChoosePackageButton", "SpacemiTFlashButton"];
+
+    /// <summary>
+    /// The controls of the Sunxi section; the page offers them to an Allwinner endpoint only, and offers no shared
+    /// action there until an image plan exists.
+    /// <para>全志分类的控件；页面只把它们提供给全志端点，并在镜像计划出现之前不在该端点提供通用动作。</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SunxiControls { get; } =
+    [
+        "SunxiPane", "SunxiRefreshButton", "SunxiChooseFes1Button", "SunxiChooseUbootButton",
+        "SunxiBootFesButton", "SunxiReadMemoryButton", "SunxiWriteMemoryButton", "SunxiExecuteButton"
+    ];
 
     /// <summary>The gated controls in presentation order. <para>按界面顺序排列的受控控件。</para></summary>
     internal static IReadOnlyList<string> GatedControls { get; } = [.. Entries.Select(entry => entry.Name)];
@@ -129,14 +205,12 @@ internal static class FlashDeviceUiPolicy
     /// </summary>
     internal static IReadOnlyList<string> BusyDisabledControls { get; } =
     [
-        // 通用动作 / shared actions
         "LoadBootButton",
         "ReadInfoButton",
         "ReadbackSelectedButton",
         "FlashSelectedButton",
         "EraseSelectedButton",
         "SwitchSlotButton",
-        // 刷写选项 / flash options
         "DisableVbmetaBox",
         "AddRootBox",
         "EraseDataBox",
@@ -145,10 +219,11 @@ internal static class FlashDeviceUiPolicy
         "DeleteCowBox",
         "AvbOptionsPanel",
         "RootOptionsPanel",
-        // 协议分类面板 / protocol section panes
         "EdlPane",
         "MtkPane",
         "RkPane",
+        "SpacemiTPane",
+        "SunxiPane",
         "ImagePane"
     ];
 
@@ -168,18 +243,19 @@ internal static class FlashDeviceUiPolicy
     internal static bool IsBusyDisabled(string name) => BusyDisabledIndex.Contains(name);
 
     /// <summary>
-    /// Controls a Rockchip device offers only after the loader took over: the shared flash actions and the Rockchip
-    /// section, whose commands all read the storage that mask ROM cannot answer. The loader-stage device is the one
-    /// whose reported serial the stage switch rewrote to the vendor's <c>ROCKCHIP</c> value.
-    /// <para>瑞芯微设备只有在 loader 接管后才提供的控件：通用刷写动作与瑞芯微分类，它们的命令都会读取
-    /// Mask ROM 无法应答的存储。loader 阶段设备指阶段切换已把上报序列号改写为厂商 <c>ROCKCHIP</c> 值的设备。</para>
+    /// Controls a Rockchip device offers only once the loader is proven to run: the shared flash actions and the
+    /// Rockchip section, whose commands all read the storage that mask ROM cannot answer.
+    /// <para>瑞芯微设备只有在 loader 被证实运行后才提供的控件：通用刷写动作与瑞芯微分类，它们的命令都会读取
+    /// Mask ROM 无法应答的存储。</para>
     /// </summary>
     /// <remarks>
     /// This is a second availability dimension on top of <see cref="IsAvailable(string, FlashDeviceMode)"/> rather
     /// than a mode of its own: it only restricts the <see cref="FlashDeviceMode.Rkdl"/> mode, and a page state that
-    /// already made a control unusable stays unusable.
+    /// already made a control unusable stays unusable. Only a stage proven to be mask ROM is excluded; an unproven
+    /// stage keeps these controls, so the device's own answers decide instead of an unreadable descriptor field.
     /// <para>这是叠加在 <see cref="IsAvailable(string, FlashDeviceMode)"/> 之上的第二个可用性维度，而不是独立
-    /// 模式：只约束 <see cref="FlashDeviceMode.Rkdl"/> 模式，页面状态本已禁用的控件仍然不可用。</para>
+    /// 模式：只约束 <see cref="FlashDeviceMode.Rkdl"/> 模式，页面状态本已禁用的控件仍然不可用。只有被证实为
+    /// mask ROM 的阶段被排除；未被证实的阶段保留这些控件，使设备自己的应答而不是不可读的描述符字段作出判断。</para>
     /// </remarks>
     internal static IReadOnlyList<string> RockchipLoaderControls { get; } =
     [
@@ -211,6 +287,8 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Edl => FlashDeviceMode.Edl,
         DeviceProtocolKind.Mtk => FlashDeviceMode.Mtk,
         DeviceProtocolKind.Rkdl => FlashDeviceMode.Rkdl,
+        DeviceProtocolKind.Fastboot => FlashDeviceMode.Fastboot,
+        DeviceProtocolKind.Sunxi => FlashDeviceMode.Sunxi,
         _ => FlashDeviceMode.Shared
     };
 
@@ -229,6 +307,7 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Adb => FlashDeviceKind.Adb,
         DeviceProtocolKind.Fastboot => FlashDeviceKind.Fastboot,
         DeviceProtocolKind.Hdc => FlashDeviceKind.Hdc,
+        DeviceProtocolKind.Sunxi => FlashDeviceKind.Sunxi,
         _ => FlashDeviceKind.Unknown,
     };
 
@@ -276,25 +355,36 @@ internal static class FlashDeviceUiPolicy
     }
 
     /// <summary>
-    /// Reports whether a control may be used in the given mode and Rockchip stage: a maskrom-stage device gets only
-    /// the shared info actions, a loader-stage device additionally gets the storage actions and the Rockchip
-    /// section, and fastboot slot switching stays unusable on every Rockchip stage.
-    /// <para>判断控件在给定模式与瑞芯微阶段下是否可用：maskrom 阶段设备只有通用信息动作，loader 阶段设备才有
-    /// 存储动作与瑞芯微分类，而 fastboot 槽位切换在任何瑞芯微阶段都不可用。</para>
+    /// Reports whether a control may be used in the given mode and Rockchip stage: a stage proven to be mask ROM gets
+    /// only the shared info actions, while a proven loader stage and an unproven stage additionally get the storage
+    /// actions and the Rockchip section; fastboot slot switching stays unusable on every Rockchip stage. The SpacemiT
+    /// section is offered only to a SpacemiT fastboot endpoint regardless of mode and stage.
+    /// <para>判断控件在给定模式与瑞芯微阶段下是否可用：被证实为 mask ROM 的阶段只有通用信息动作，被证实的 loader
+    /// 阶段与未被证实的阶段还有存储动作与瑞芯微分类；fastboot 槽位切换在任何瑞芯微阶段都不可用。进迭时空分类
+    /// 只对进迭时空 fastboot 端点提供，与模式和阶段无关。</para>
     /// </summary>
     /// <param name="controlName">Name of the XAML control. <para>XAML 控件名称。</para></param>
     /// <param name="mode">The mode currently offered by the page. <para>页面当前所处的模式。</para></param>
-    /// <param name="isRockchipLoaderStage">Whether the selected Rockchip device reports the loader stage
-    /// (serial rewritten to <c>ROCKCHIP</c>). <para>所选瑞芯微设备是否处于 loader 阶段（序列号已改写为
-    /// <c>ROCKCHIP</c>）。</para></param>
+    /// <param name="stage">The stage proven for the selected Rockchip endpoint; a device of another protocol passes
+    /// <see cref="RockchipStage.Unknown"/>, which no other mode consults.
+    /// <para>所选瑞芯微端点被证实的阶段；其他协议的设备传入 <see cref="RockchipStage.Unknown"/>，其他模式都不读取它。</para></param>
     /// <param name="kind">The restricted protocol kind of the selected device; ADB and fastboot narrow the shared
     /// set to the flash action and HDC to no operation.
     /// <para>所选设备的受限协议种类；ADB 与 fastboot 把通用集合收窄为烧录动作，HDC 收窄为空。</para></param>
+    /// <param name="isSpacemiTFastboot">Whether the selected fastboot endpoint is the SpacemiT gadget; only a
+    /// <see langword="true"/> verdict offers <see cref="SpacemiTControls"/>.
+    /// <para>所选 fastboot 端点是否为进迭时空 gadget；只有 <see langword="true"/> 才提供
+    /// <see cref="SpacemiTControls"/>。</para></param>
     /// <returns><see langword="true"/> when the mode, the device's stage and the kind all offer the control.
     /// <para>模式、设备阶段与种类都提供该控件时为 <see langword="true"/>。</para></returns>
-    internal static bool IsAvailable(string controlName, FlashDeviceMode mode, bool isRockchipLoaderStage,
-        FlashDeviceKind kind = FlashDeviceKind.Unknown)
+    internal static bool IsAvailable(string controlName, FlashDeviceMode mode, RockchipStage stage,
+        FlashDeviceKind kind = FlashDeviceKind.Unknown, bool isSpacemiTFastboot = false)
     {
+        if (SpacemiTControls.Contains(controlName, StringComparer.Ordinal))
+        {
+            return kind == FlashDeviceKind.Fastboot && isSpacemiTFastboot;
+        }
+
         if (!IsAvailable(controlName, mode))
         {
             return false;
@@ -315,6 +405,11 @@ internal static class FlashDeviceUiPolicy
             return false;
         }
 
+        if (kind == FlashDeviceKind.Sunxi)
+        {
+            return SunxiControls.Contains(controlName, StringComparer.Ordinal);
+        }
+
         if (mode != FlashDeviceMode.Rkdl)
         {
             return true;
@@ -325,36 +420,37 @@ internal static class FlashDeviceUiPolicy
             return false;
         }
 
-        return isRockchipLoaderStage ||
+        return stage != RockchipStage.Maskrom ||
             !RockchipLoaderControls.Contains(controlName, StringComparer.Ordinal);
     }
 
     /// <summary>
     /// Reports whether a device in the observed protocol stage can still accept a boot loader: an EDL endpoint
     /// accepts a programmer only before the loader transition completed (unknown or Sahara), an MTK link that
-    /// only logs accepts nothing, and a Rockchip endpoint accepts a loader only while it stays in mask ROM,
-    /// because the boot download rewrites the reported serial to the vendor's <c>ROCKCHIP</c> value and the
-    /// loader stage answers the storage commands the page would then use instead.
+    /// only logs accepts nothing, and a Rockchip endpoint accepts a loader until the loader stage is proven,
+    /// because the boot download rewrites the reported serial to the vendor's <c>ROCKCHIP</c> value and only that
+    /// stage answers the storage commands the page would then use instead.
     /// <para>判断设备所处的协议阶段是否仍可接受引导：EDL 端点只在加载器切换完成前（未知或 Sahara）接受
-    /// programmer，仅日志的 MTK 链路不接受任何加载，瑞芯微端点仅在仍处于 Mask ROM 时接受 loader，因为
-    /// 引导下载会把上报序列号改写为厂商 <c>ROCKCHIP</c> 值，而 loader 阶段此后应答的是页面改用的存储命令。</para>
+    /// programmer，仅日志的 MTK 链路不接受任何加载，瑞芯微端点在 loader 阶段被证实之前接受 loader，因为引导
+    /// 下载会把上报序列号改写为厂商 <c>ROCKCHIP</c> 值，而只有该阶段此后应答页面改用的存储命令。</para>
     /// </summary>
     /// <param name="protocol">Protocol of the selected device. <para>所选设备的协议。</para></param>
     /// <param name="edlStage">The EDL wire protocol discovery observed. <para>发现层观测到的 EDL 线协议。</para></param>
     /// <param name="mtkStage">The MTK boot stage token; "logging" marks a link that cannot be upgraded.
     /// <para>联发科启动阶段标记；"logging" 表示无法升级的链路。</para></param>
-    /// <param name="isRockchipLoaderStage">Whether the Rockchip device reports the loader (usbplug) stage, i.e.
-    /// its serial was rewritten to <c>ROCKCHIP</c>. <para>瑞芯微设备是否处于 loader（usbplug）阶段，即序列号已
-    /// 改写为 <c>ROCKCHIP</c>。</para></param>
+    /// <param name="stage">The stage proven for the selected Rockchip endpoint; an unproven stage keeps the loader
+    /// download available so a boot ROM whose descriptor is unreadable can still be moved into loader mode.
+    /// <para>所选瑞芯微端点被证实的阶段；未被证实的阶段保留 loader 下载，使描述符不可读的 Boot ROM 仍能被带入
+    /// loader 模式。</para></param>
     /// <returns><see langword="true"/> when the stage can accept a loader.
     /// <para>该阶段可以接受 loader 时为 <see langword="true"/>。</para></returns>
     internal static bool IsLoaderStageLoadable(DeviceProtocolKind protocol, EdlProtocolState edlStage,
-        string mtkStage, bool isRockchipLoaderStage = false)
+        string mtkStage, RockchipStage stage = RockchipStage.Unknown)
         => protocol switch
         {
             DeviceProtocolKind.Edl => edlStage is EdlProtocolState.Unknown or EdlProtocolState.Sahara,
             DeviceProtocolKind.Mtk => !string.Equals(mtkStage, MtkLoggingStage, StringComparison.Ordinal),
-            DeviceProtocolKind.Rkdl => !isRockchipLoaderStage,
+            DeviceProtocolKind.Rkdl => stage != RockchipStage.Loader,
             _ => false,
         };
 

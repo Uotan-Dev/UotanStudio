@@ -528,6 +528,11 @@ public sealed partial class FlashViewModel : ObservableObject
     /// </summary>
     /// <param name="entry">Row whose command or file path just changed.
     /// <para>命令或文件路径刚刚变化的行。</para></param>
+    /// <remarks>
+    /// The in-row picker checks the file itself, so the re-check this property change would start is
+    /// suppressed; one action never reports the same verdict twice.
+    /// <para>行内选文件由选择器自己检查一次；抑制这次属性变化触发的重查，同一次动作才不会写出两行相同结论。</para>
+    /// </remarks>
     private void UpdateRowValidityText(FlashPartitionEntry entry)
     {
         if (entry.Command is LoaderCommand or ParameterCommand)
@@ -538,9 +543,6 @@ public sealed partial class FlashViewModel : ObservableObject
                 return;
             }
 
-            // 行内选文件由选择器自己检查一次；抑制这次属性变化触发的重查，同一次动作才不会写出两行相同结论。
-            // The in-row picker checks the file itself, so the re-check this property change would start is
-            // suppressed; one action never reports the same verdict twice.
             if (_suppressSpecialFileRowCheck)
             {
                 return;

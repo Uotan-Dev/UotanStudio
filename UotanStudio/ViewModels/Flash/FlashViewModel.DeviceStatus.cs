@@ -78,25 +78,32 @@ public sealed partial class FlashViewModel
     private const int RkdlStatusTimeoutMs = 5000;
 
     /// <summary>
-    /// Fills the device status rows from the read-device-info action: a Rockchip device running the
-    /// loader (usbplug stage) gets the answers of the read-only information commands and its storage selector
-    /// is narrowed to the media the device actually serves, a maskrom or bootrom device gets the
-    /// waiting-for-loader state without any device query, and every other target clears the rows.
-    /// <para>由读取设备信息动作填充设备状态行：运行 loader（usbplug 阶段）的瑞芯微设备填入只读信息命令的
-    /// 应答，并把存储选择框收窄到设备实际提供的介质；maskrom/bootrom 设备只填等待加载 loader 的状态而
-    /// 不发起任何设备查询；其他目标清空状态行。</para>
+    /// Fills the device status rows from the read-device-info action: a Rockchip device that answers the storage
+    /// commands gets the answers of the read-only information commands and its storage selector is narrowed to the
+    /// media the device actually serves, a device proven to be in mask ROM gets the waiting-for-loader state without
+    /// any device query, and every other target clears the rows.
+    /// <para>由读取设备信息动作填充设备状态行：能应答存储命令的瑞芯微设备填入只读信息命令的应答，并把存储选择框
+    /// 收窄到设备实际提供的介质；被证实处于 mask ROM 的设备只填等待加载 loader 的状态而不发起任何设备查询；
+    /// 其他目标清空状态行。</para>
     /// </summary>
     /// <remarks>
-    /// The table is never filled automatically: only the read-device-info action calls this. The USB boot
-    /// ROM stages answer only the vendor control requests the discovery layer already used, and their bulk
-    /// CBW behavior on information commands is unreliable (a bootrom port can answer a CRC error), so no
-    /// session is opened for them and their rows carry the stage condition only. The loader query runs on
-    /// the shared RKDL lease path with the page's cooperative timeout and reports failures by publishing
-    /// the failure row at debug level, like the other read-only identity queries.
-    /// <para>该表从不自动填充：只有读取设备信息动作调用此方法。USB boot ROM 阶段只应答发现层已用过的
-    /// vendor 控制请求，其对信息命令的 CBW 批量行为不可靠（bootrom 端口可能以 CRC 错误应答），因此不为
-    /// 它们打开会话，行中只写阶段状态。loader 查询走共享 RKDL 租约路径并受页面协作时限约束，失败时按
-    /// debug 级别发布失败行，与其他只读身份查询一致。</para>
+    /// The table is never filled automatically: only the read-device-info action calls this. A stage the evidence
+    /// proves to be mask ROM answers only the vendor control requests the discovery layer already used, and its bulk
+    /// CBW behavior on information commands is unreliable (a bootrom port can answer a CRC error), so no session is
+    /// opened for it and its rows carry the stage condition only. An unproven stage is queried like a loader stage
+    /// because only the device's own answers settle it, and the failure row reports the outcome when it answers
+    /// nothing. The query runs on the shared RKDL lease path with the page's cooperative timeout and reports failures
+    /// by publishing the failure row at debug level, like the other read-only identity queries.
+    /// <para>该表从不自动填充：只有读取设备信息动作调用此方法。证据证实处于 mask ROM 的阶段只应答发现层已用过的
+    /// vendor 控制请求，其对信息命令的 CBW 批量行为不可靠（bootrom 端口可能以 CRC 错误应答），因此不为它打开会话，
+    /// 行中只写阶段状态。未被证实的阶段按 loader 阶段查询，因为只有设备自己的应答能确定它，而无应答时由失败行报告
+    /// 结果。查询走共享 RKDL 租约路径并受页面协作时限约束，失败时按 debug 级别发布失败行，与其他只读身份查询一致。</para>
+    /// The maskrom stage opens no session: the rows carry the stage condition only until a loader is loaded and
+    /// the device information is queried again.
+    /// <para>maskrom 阶段不打开会话：只写阶段状态，等待加载 loader 后再查询设备信息。</para>
+    /// A read-only status probe must not let any exception escape the async void member: USB errors, dead
+    /// sessions and cancellation all degrade to the failure row here.
+    /// <para>只读状态探测不得让 async void 漏出任何异常：USB 错误、会话失效与取消在此全部降级为失败行。</para>
     /// </remarks>
     internal async void RefreshRkdlDeviceStatus()
     {
@@ -114,9 +121,8 @@ public sealed partial class FlashViewModel
         {
             rows = [];
         }
-        else if (!IsRockchipLoaderStageDevice)
+        else if (RkStage == RockchipStage.Maskrom)
         {
-            // maskrom/bootrom 阶段不打开会话：只写阶段状态，等待加载 loader 后再查询设备信息。
             rows =
             [
                 new()
@@ -138,7 +144,6 @@ public sealed partial class FlashViewModel
             }
             catch (Exception exception)
             {
-                // 只读状态探测不得让 async void 漏出任何异常：USB 错误、会话失效与取消在此全部降级为失败行。
                 _log.Write(LogLevel.Debug, "Flash",
                     $"RKDL device status for {device.Key} is unavailable: {exception.Message}");
                 rows =
@@ -250,6 +255,15 @@ public sealed partial class FlashViewModel
     /// <see cref="FlashDeviceStatusRowKeys.StorageProbe"/> 下。读回掩码不指向、或应答了却没有报告任何几何的
     /// 介质不产生行，使表格与选择框只提供设备真正提供的介质；结束时设备切回探测前的介质。</para>
     /// </summary>
+    /// <remarks>
+    /// The current medium goes first: candidates the vendor table lists before it must not push its geometry
+    /// into the lower half of the table.
+    /// <para>当前介质先行：官方表里排在它前面的候选介质不会把它的几何挤到表格下半部分。</para>
+    /// A medium that cannot be served produces no row; the failure is already logged by the sweep's first pass.
+    /// <para>无法服务的介质不产生行：日志侧已在同一动作的第一遍探测中记录失败。</para>
+    /// A failed switch-back is likewise surfaced only by the first-pass log; no medium row is added for it.
+    /// <para>切回失败的提示同样由第一遍探测的日志给出，不在表格里补介质行。</para>
+    /// </remarks>
     /// <param name="rows">Row list under construction.<para>正在构建的行列表。</para></param>
     /// <param name="session">Open RKDL session in loader mode.<para>loader 模式下已打开的 RKDL 会话。</para></param>
     /// <param name="language">Localized string lookup for the row labels.
@@ -275,7 +289,6 @@ public sealed partial class FlashViewModel
             return (null, -1);
         }
 
-        // 当前介质先行：官方表里排在它前面的候选介质不会把它的几何挤到表格下半部分。
         var media = new List<(string Key, int Ordinal, IReadOnlyList<string> Geometry)>(RkdlStorage.Names.Length)
         {
             (FlashDeviceStatusRowKeys.Storage, initialIndex,
@@ -302,7 +315,6 @@ public sealed partial class FlashViewModel
             catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
                 or InvalidOperationException or ObjectDisposedException)
             {
-                // 无法服务的介质不产生行：日志侧已在同一动作的第一遍探测中记录失败。
                 _ = exception;
             }
         }
@@ -314,7 +326,6 @@ public sealed partial class FlashViewModel
         catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
             or InvalidOperationException or ObjectDisposedException)
         {
-            // 切回失败的提示同样由第一遍探测的日志给出，不在表格里补介质行。
             _ = exception;
         }
 

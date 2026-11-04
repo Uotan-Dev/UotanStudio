@@ -864,6 +864,100 @@
                                         AutomationProperties.Name="{DynamicResource Flash_RkReadPartitions}" />
                             </StackPanel>
                         </Expander>
+                        <!-- 进迭时空分类 -->
+                        <Expander Name="SpacemiTExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_SpacemiT}" IsExpanded="{Binding IsSpacemiTSectionExpanded, Mode=TwoWay}">
+                            <StackPanel Name="SpacemiTPane" Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_SpacemiTPackageHint}" FontSize="12" Opacity="0.8"
+                                           TextWrapping="Wrap" />
+                                <TextBox Name="SpacemiTPackageBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" Text="{Binding SpacemiTPackagePath}"
+                                         Watermark="{DynamicResource Flash_SpacemiTPackageHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SpacemiTPackagePath}" />
+                                <Button Name="SpacemiTChoosePackageButton" Classes="pane-action"
+                                        Click="OnSpacemiTChoosePackageClick"
+                                        Content="{DynamicResource Flash_SpacemiTChoosePackage}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SpacemiTChoosePackage}" />
+                                <CheckBox Name="SpacemiTRebootBox" Content="{DynamicResource Flash_SpacemiTRebootAfter}"
+                                          IsChecked="{Binding SpacemiTRebootAfter, Mode=TwoWay}"
+                                          FontSize="12" MinHeight="0" Padding="4,0,0,0"
+                                          HorizontalAlignment="Left"
+                                          AutomationProperties.Name="{DynamicResource Flash_SpacemiTRebootAfter}" />
+                                <TextBlock Name="SpacemiTStatusText" Text="{Binding SpacemiTStatusText}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Button Name="SpacemiTFlashButton" Classes="pane-action"
+                                        Click="OnSpacemiTFlashClick"
+                                        Content="{DynamicResource Flash_SpacemiTFlash}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SpacemiTFlash}" />
+                            </StackPanel>
+                        </Expander>
+                        <!-- 全志 Sunxi 分类 -->
+                        <Expander Name="SunxiExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_Sunxi}" IsExpanded="{Binding IsSunxiSectionExpanded, Mode=TwoWay}">
+                            <StackPanel Name="SunxiPane" Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_SunxiHint}" FontSize="12" Opacity="0.8"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Name="SunxiStatusText" Text="{Binding SunxiStatusText}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Button Name="SunxiRefreshButton" Classes="pane-action"
+                                        Click="OnSunxiRefreshClick"
+                                        Content="{DynamicResource Flash_SunxiRefresh}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiRefresh}" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_SunxiFes1}" FontSize="12" Opacity="0.8" />
+                                <TextBox Name="SunxiFes1Box" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" Text="{Binding SunxiFes1Path}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SunxiChooseFes1}" />
+                                <Button Name="SunxiChooseFes1Button" Classes="pane-action"
+                                        Click="OnSunxiChooseFes1Click"
+                                        Content="{DynamicResource Flash_SunxiChooseFes1}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiChooseFes1}" />
+                                <TextBox Name="SunxiUbootBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" Text="{Binding SunxiUbootPath}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}" />
+                                <Button Name="SunxiChooseUbootButton" Classes="pane-action"
+                                        Click="OnSunxiChooseUbootClick"
+                                        Content="{DynamicResource Flash_SunxiChooseUboot}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}" />
+                                <Button Name="SunxiBootFesButton" Classes="pane-action" IsEnabled="False"
+                                        Click="OnSunxiBootFesClick"
+                                        Content="{DynamicResource Flash_SunxiBootFes}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiBootFes}" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_SunxiFelTools}" FontSize="12" FontWeight="SemiBold"
+                                           Opacity="0.8" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="SunxiAddressBox" Height="32"
+                                             VerticalContentAlignment="Center" Text="{Binding SunxiAddress}"
+                                             PlaceholderText="{DynamicResource Flash_SunxiAddress}"
+                                             AutomationProperties.Name="{DynamicResource Flash_SunxiAddress}" />
+                                    <TextBox Grid.Column="1" Name="SunxiLengthBox" Height="32"
+                                             VerticalContentAlignment="Center" Text="{Binding SunxiLength}"
+                                             PlaceholderText="{DynamicResource Flash_SunxiLength}"
+                                             AutomationProperties.Name="{DynamicResource Flash_SunxiLength}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <Button Grid.Column="0" Name="SunxiReadMemoryButton" Classes="pane-action"
+                                            Click="OnSunxiReadMemoryClick"
+                                            Content="{DynamicResource Flash_SunxiReadMemory}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiReadMemory}" />
+                                    <Button Grid.Column="1" Name="SunxiWriteMemoryButton" Classes="pane-action"
+                                            Click="OnSunxiWriteMemoryClick"
+                                            Content="{DynamicResource Flash_SunxiWriteMemory}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiWriteMemory}" />
+                                </Grid>
+                                <TextBox Name="SunxiExecuteAddressBox" Height="32" VerticalContentAlignment="Center"
+                                         Text="{Binding SunxiExecuteAddress}"
+                                         PlaceholderText="{DynamicResource Flash_SunxiExecuteAddress}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SunxiExecuteAddress}" />
+                                <Button Name="SunxiExecuteButton" Classes="pane-action"
+                                        Click="OnSunxiExecuteClick"
+                                        Content="{DynamicResource Flash_SunxiExecute}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiExecute}" />
+                            </StackPanel>
+                        </Expander>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">

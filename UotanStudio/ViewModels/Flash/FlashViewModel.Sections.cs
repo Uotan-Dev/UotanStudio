@@ -24,6 +24,14 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private bool _isRockchipSectionExpanded;
 
+    /// <summary>Whether the SpacemiT section is expanded. <para>进迭时空分类是否展开。</para></summary>
+    [ObservableProperty]
+    private bool _isSpacemiTSectionExpanded;
+
+    /// <summary>Whether the Sunxi section is expanded. <para>全志分类是否展开。</para></summary>
+    [ObservableProperty]
+    private bool _isSunxiSectionExpanded;
+
     /// <summary>Whether the image operations section is expanded. <para>镜像操作分类是否展开。</para></summary>
     [ObservableProperty]
     private bool _isImageSectionExpanded;
@@ -33,6 +41,10 @@ public sealed partial class FlashViewModel
     partial void OnIsMtkSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsRockchipSectionExpandedChanged(bool value) => PersistSectionExpansion();
+
+    partial void OnIsSpacemiTSectionExpandedChanged(bool value) => PersistSectionExpansion();
+
+    partial void OnIsSunxiSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsImageSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
@@ -45,6 +57,8 @@ public sealed partial class FlashViewModel
             IsEdlSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Edl);
             IsMtkSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Mtk);
             IsRockchipSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Rockchip);
+            IsSpacemiTSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.SpacemiT);
+            IsSunxiSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Sunxi);
             IsImageSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Image);
         }
         finally
@@ -64,6 +78,8 @@ public sealed partial class FlashViewModel
             IsEdlSectionExpanded,
             IsMtkSectionExpanded,
             IsRockchipSectionExpanded,
-            IsImageSectionExpanded));
+            IsSpacemiTSectionExpanded,
+            IsImageSectionExpanded,
+            IsSunxiSectionExpanded));
     }
 }

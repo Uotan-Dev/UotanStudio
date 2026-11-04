@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 using Xunit;
@@ -120,6 +121,52 @@ public class DeviceLinkDisplayTests
         var device = Create(DeviceProtocolKind.Edl, DeviceTransportKind.Usb, "edl");
 
         Assert.Equal("RKDL", device.RkdlBadge);
+    }
+
+    [Theory]
+    [InlineData(EdlProtocolState.Sahara, "EDL · Sahara")]
+    [InlineData(EdlProtocolState.SaharaMemoryDebug, "EDL · Sahara · memory debug")]
+    [InlineData(EdlProtocolState.Firehose, "EDL · Firehose")]
+    [InlineData(EdlProtocolState.Streaming, "EDL · Streaming DLOAD")]
+    public void EdlBadge_VerifiedWireProtocol_AppendsTheReadableName(EdlProtocolState state, string expected)
+    {
+        var device = Create(DeviceProtocolKind.Edl, DeviceTransportKind.Usb, "edl");
+
+        device.EdlProtocol = state;
+
+        Assert.Equal(expected, device.EdlBadge);
+    }
+
+    [Fact]
+    public void EdlBadge_NoVerifiedProtocol_KeepsPlainLabel()
+    {
+        Assert.Equal("EDL", Create(DeviceProtocolKind.Edl, DeviceTransportKind.Usb, "edl").EdlBadge);
+        Assert.Equal("EDL", Create(DeviceProtocolKind.Rkdl, DeviceTransportKind.Usb, "maskrom").EdlBadge);
+    }
+
+    [Fact]
+    public void EdlBadge_ProtocolBecomesVerified_NotifiesTheBadge()
+    {
+        var device = Create(DeviceProtocolKind.Edl, DeviceTransportKind.Usb, "edl");
+        var changed = new List<string>();
+        device.PropertyChanged += (_, args) => changed.Add(args.PropertyName ?? string.Empty);
+
+        device.EdlProtocol = EdlProtocolState.Firehose;
+
+        Assert.Contains(nameof(DeviceInfo.EdlBadge), changed);
+        Assert.Contains(nameof(DeviceInfo.HasEdlProtocol), changed);
+        Assert.Equal("EDL · Firehose", device.EdlBadge);
+    }
+
+    [Fact]
+    public void EdlBadge_NonEdlProtocol_StaysPlainDespiteVerifiedState()
+    {
+        var device = Create(DeviceProtocolKind.Rkdl, DeviceTransportKind.Usb, "maskrom");
+
+        device.EdlProtocol = EdlProtocolState.Firehose;
+
+        Assert.False(device.HasEdlProtocol);
+        Assert.Equal("EDL", device.EdlBadge);
     }
 
     [Theory]

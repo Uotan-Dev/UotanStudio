@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Hash.RockchipCrc32;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
@@ -42,6 +43,11 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         Assert.False(FlashViewModel.IsWritableEntry(loaderRow));
     }
 
+    /// <remarks>
+    /// With no device bound every grammar is tried in turn, so a file matched by none is rejected in generic wording
+    /// rather than Rockchip-specific wording.
+    /// <para>没有任何设备绑定时会逐种语法尝试；一种语法都不命中的文件以通用措辞拒绝，而不是按瑞芯微专用措辞。</para>
+    /// </remarks>
     [Fact]
     public async Task ImportRkConfigAsync_LoaderRowWithNonLoaderContent_StaysSelectableAndIsRejected()
     {
@@ -56,7 +62,8 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.SpecialFileRowCheck;
 
         var loaderRow = Assert.Single(model.Partitions, row => row.Command == "loader");
-        Assert.Equal(LanguageService.Instance.GetString("Flash_RkLoaderInvalidStatus"), loaderRow.StatusText);
+
+        Assert.Equal(LanguageService.Instance.GetString("Flash_LoaderInvalidStatus"), loaderRow.StatusText);
     }
 
     [Fact]
@@ -114,6 +121,10 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         Assert.Equal(LanguageService.Instance.GetString("Flash_RkParameterInvalidStatus"), parameterRow.StatusText);
     }
 
+    /// <remarks>
+    /// A file no grammar recognizes is rejected in generic wording: at that point its format cannot even be named.
+    /// <para>未被任何语法认出的文件以通用措辞拒绝：此时连它属于哪种格式都无从判断。</para>
+    /// </remarks>
     [Fact]
     public async Task SelectingLoaderRow_AfterItsFileChanged_ReportsTheNewVerdict()
     {
@@ -133,7 +144,8 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.SpecialFileRowCheck;
 
         Assert.True(loaderRow.IsSelected);
-        Assert.Equal(LanguageService.Instance.GetString("Flash_RkLoaderInvalidStatus"), loaderRow.StatusText);
+
+        Assert.Equal(LanguageService.Instance.GetString("Flash_LoaderInvalidStatus"), loaderRow.StatusText);
     }
 
     [Fact]
@@ -149,7 +161,7 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.SpecialFileRowCheck;
         model.FlushPendingLog();
 
-        Assert.Equal(1, CountReportedLines(model.LogText, LanguageService.Instance.GetString("Flash_RkLoaderMissing")));
+        Assert.Equal(1, CountReportedLines(model.LogText, LanguageService.Instance.GetString("Flash_LoaderMissing")));
     }
 
     [Fact]
@@ -167,6 +179,85 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         model.FlushPendingLog();
 
         Assert.Equal(1, CountReportedLines(model.LogText, LanguageService.Instance.GetString("Flash_RkLoaderChecked")));
+    }
+
+    [Fact]
+    public async Task ParameterRow_InAnotherDirectory_SuppliesTheTableTheFlashActionsResolve()
+    {
+        var parameterDirectory = Path.Combine(_root, "table");
+        var imageDirectory = Path.Combine(_root, "images");
+        Directory.CreateDirectory(parameterDirectory);
+        Directory.CreateDirectory(imageDirectory);
+        var parameter = Path.Combine(parameterDirectory, "parameter.txt");
+        await File.WriteAllTextAsync(parameter,
+            "CMDLINE: mtdparts=rk29xxnand:0x00002000@0x00004000(uboot),0x00008000@0x00006000(boot)\n",
+            TestContext.Current.CancellationToken);
+        var image = Path.Combine(imageDirectory, "boot.img");
+        await File.WriteAllBytesAsync(image, [1, 2, 3, 4], TestContext.Current.CancellationToken);
+        var config = await WriteConfigAsync("split-table.cfg",
+            new RockchipConfigEntry { Name = RockchipConfigFile.ParameterRowName, Path = parameter, Selected = true },
+            new RockchipConfigEntry { Name = "boot", Path = image, Selected = true });
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new RecordingUnifiedLog());
+
+        await model.ImportRkConfigAsync(config);
+
+        Assert.Equal(parameter, model.RkParameterTablePath());
+    }
+
+    [Fact]
+    public async Task MissingLoaderRow_LeavesThePartitionTableResolvable()
+    {
+        var parameter = Path.Combine(_root, "parameter.txt");
+        await File.WriteAllTextAsync(parameter,
+            "CMDLINE: mtdparts=rk29xxnand:0x00002000@0x00004000(uboot),0x00008000@0x00006000(boot)\n",
+            TestContext.Current.CancellationToken);
+        var missing = Path.Combine(_root, "MiniLoaderAll.bin");
+        var config = await WriteConfigAsync("missing-loader-table.cfg",
+            new RockchipConfigEntry { Name = RockchipConfigFile.LoaderRowName, Path = missing, Selected = true },
+            new RockchipConfigEntry { Name = RockchipConfigFile.ParameterRowName, Path = parameter, Selected = true },
+            new RockchipConfigEntry { Name = "boot", Path = string.Empty, Selected = true });
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new RecordingUnifiedLog());
+
+        await model.ImportRkConfigAsync(config);
+        await model.SpecialFileRowCheck;
+
+        Assert.Null(model.EffectiveRkLoaderPath);
+        Assert.Equal(parameter, model.RkParameterTablePath());
+    }
+
+    [Theory]
+    [InlineData("", 0L)]
+    [InlineData("0x00004000", 0x4000L)]
+    [InlineData("0x100", 0x100L)]
+    public void RkRowAddress_RowOffset_ResolvesToTheStartLba(string offset, long expected)
+    {
+        var row = new FlashPartitionEntry { Offset = offset };
+
+        Assert.Equal(expected, FlashViewModel.RkRowAddress(row));
+    }
+
+    [Theory]
+    [InlineData("EMMC", 1)]
+    [InlineData("SPINOR", 9)]
+    [InlineData("SD", 2)]
+    [InlineData("", null)]
+    [InlineData("unknown", null)]
+    public void RkRowStorageId_RowMedium_ResolvesToTheProtocolIdentifier(string medium, int? expected)
+    {
+        var row = new FlashPartitionEntry { StorageMedium = medium };
+
+        Assert.Equal(expected, FlashViewModel.RkRowStorageId(row));
+    }
+
+    [Fact]
+    public void FlashModeAllowed_RockchipTarget_NeedsAnAddressingSource()
+    {
+        Assert.True(FlashViewModel.FlashModeAllowed(DeviceProtocolKind.Rkdl, flatBin: false,
+            hasProgrammer: false, rkTargetResolved: true), "a resolved table or the forced-address switch must be enough");
+        Assert.False(FlashViewModel.FlashModeAllowed(DeviceProtocolKind.Rkdl, flatBin: false,
+            hasProgrammer: false, rkTargetResolved: false), "without an addressing source nothing can be written");
+        Assert.True(FlashViewModel.FlashModeAllowed(DeviceProtocolKind.Fastboot, flatBin: false,
+            hasProgrammer: false, rkTargetResolved: false));
     }
 
     [Fact]

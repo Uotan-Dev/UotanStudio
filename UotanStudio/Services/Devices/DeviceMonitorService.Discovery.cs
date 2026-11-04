@@ -75,6 +75,12 @@ public sealed partial class DeviceMonitorService
     /// <para>执行实际的全量枚举与分类。</para>
     /// </summary>
     /// <returns>The classified device list with same-endpoint entries coalesced. <para>分类后的设备列表，同端点条目已合并。</para></returns>
+    /// <remarks>
+    /// Discovery has already resolved the endpoint serial, including the memoized fastboot getvar probe, so a row
+    /// takes that value instead of claiming the same interface a second time in one pass.
+    /// <para>发现阶段已解析过端点 serial（包括带记忆化的 fastboot getvar 探测），条目直接采用该值，
+    /// 而不是在同一轮内对同一接口重复认领一次。</para>
+    /// </remarks>
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         List<DetectedDevice> devices = [];
@@ -102,8 +108,6 @@ public sealed partial class DeviceMonitorService
                 continue;
             }
 
-            // Discovery already resolved the endpoint serial, including the memoized fastboot getvar probe,
-            // so the row takes that value instead of claiming the same interface a second time in one pass.
             var serial = IsUsableSerial(info.SerialNumber) ? info.SerialNumber : UsbSerialOf(usbEndpoint);
             if (protocol == DeviceProtocolKind.Rkdl && !IsUsableSerial(serial))
                 serial = ReadRkdlSerial(info);
@@ -124,6 +128,7 @@ public sealed partial class DeviceMonitorService
                     DeviceProtocolKind.Mtk => MtkState(info),
                     DeviceProtocolKind.Hdc => "device",
                     DeviceProtocolKind.Diagnostic => "diag",
+                    DeviceProtocolKind.Sunxi => "sunxi",
                     _ => string.Empty,
                 },
                 VendorId = info.VendorId,
@@ -296,6 +301,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Edl => "edl",
         DeviceProtocolKind.Rkdl => "rkdl",
         DeviceProtocolKind.Mtk => "mtk",
+        DeviceProtocolKind.Sunxi => "sunxi",
         _ => string.Empty
     };
 
@@ -449,10 +455,10 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// Requests the refresh the user asked for by pressing refresh: the Windows enumeration inventory is
-    /// dropped, so the next pass re-reads every interface's registry evidence instead of trusting what an
-    /// earlier pass learned. Every automatic pass stays incremental.
+    /// dropped, so the next pass re-reads every interface's registry evidence and does not reuse the results
+    /// the previous pass already knew. Every automatic pass stays incremental.
     /// <para>请求用户按下刷新按钮所要求的那次刷新：丢弃 Windows 枚举清单，使下一轮重读每个接口的注册表证据，
-    /// 而不再信任更早一轮的已知结果。所有自动触发的遍历仍保持增量。</para>
+    /// 不复用上一轮已知结果。所有自动触发的遍历仍保持增量。</para>
     /// </summary>
     /// <returns>A completed task; the scan itself is driven by the change notification.
     /// <para>已完成的任务；实际扫描由变更通知驱动。</para></returns>
@@ -496,6 +502,7 @@ public sealed partial class DeviceMonitorService
             "mtk" => DeviceProtocolKind.Mtk,
             "apple" => DeviceProtocolKind.Ios,
             "diag" => DeviceProtocolKind.Diagnostic,
+            "sunxi" => DeviceProtocolKind.Sunxi,
             _ => null
         };
 

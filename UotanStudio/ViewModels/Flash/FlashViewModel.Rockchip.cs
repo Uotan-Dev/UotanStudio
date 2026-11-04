@@ -34,6 +34,14 @@ public sealed partial class FlashViewModel
     private const string LoaderFormatName = "Rockchip Loader Image";
 
     /// <summary>
+    /// Budget of the device ready test. The vendor tool's <c>td</c> polls without a bound; the page reports a verdict
+    /// instead of holding the pane forever, so a device that never answers ready is reported as failed.
+    /// <para>设备就绪测试的预算。厂商工具 <c>td</c> 无上限轮询；页面改为给出结论而不是无限占住面板，因此始终不应答
+    /// 就绪的设备会被报告为失败。</para>
+    /// </summary>
+    private const int RkTestDeviceTimeoutMs = 30_000;
+
+    /// <summary>
     /// Command value of a row that supplies the partition table instead of a partition image; the flash path
     /// resolves its addresses from that table, so the row itself is never written as an image.
     /// <para>提供分区表而非分区镜像的行所用的命令值；刷写路径从该分区表解析地址，因此这一行本身从不作为镜像写入。</para>
@@ -72,34 +80,60 @@ public sealed partial class FlashViewModel
         => _rkLoaderPath is { Length: > 0 } loader && File.Exists(loader) ? loader : null;
 
     /// <summary>
-    /// Whether the selected Rockchip device already reports the loader stage: the stage switch rewrote the
-    /// maskrom serial to the vendor's <c>ROCKCHIP</c> value. This is what makes the Rockchip flash actions and
-    /// the Rockchip section usable.
-    /// <para>所选瑞芯微设备是否已处于 loader 阶段：阶段切换把 maskrom 序列号改写为厂商的 <c>ROCKCHIP</c> 值。
+    /// The stage proven for the selected Rockchip endpoint: a device of another protocol reports
+    /// <see cref="RockchipStage.Unknown"/>, which no other mode consults. This is what makes the Rockchip flash
+    /// actions and the Rockchip section usable.
+    /// <para>所选瑞芯微端点被证实的阶段：其他协议的设备报告 <see cref="RockchipStage.Unknown"/>，其他模式都不读取它。
     /// 这决定了瑞芯微刷写动作与瑞芯微分类是否可用。</para>
     /// </summary>
     /// <remarks>
-    /// A Rockchip device in mask ROM answers only the information commands, so every storage command needs a running
-    /// loader; the booted loader is therefore the precondition of the page, not an option of one action. This flag
-    /// gates the actions through <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> and is
+    /// Mask ROM answers only the information commands, so every storage command needs a running loader. The stage is
+    /// evidence rather than a guess: it comes from the stage label discovery derived and from the vendor
+    /// <c>ROCKCHIP</c> serial the boot download writes, and an endpoint neither of them settles stays
+    /// <see cref="RockchipStage.Unknown"/>, so only a stage proven to be mask ROM is refused. This value gates the
+    /// actions through
+    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, RockchipStage, FlashDeviceKind)"/> and is
     /// republished whenever the selected device changes.
-    /// <para>处于 Mask ROM 的瑞芯微设备只应答信息类命令，因此所有存储命令都需要已运行的 loader；已启动的 loader
-    /// 是页面的前置条件而不是某个动作的选项。该标志经
-    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> 门控这些动作，并在所选设备
-    /// 变化时重新发布。</para>
+    /// <para>Mask ROM 只应答信息类命令，因此所有存储命令都需要已运行的 loader。阶段是证据而不是猜测：取自发现层得出的
+    /// 阶段标签与引导下载写入的厂商 <c>ROCKCHIP</c> 序列号，两者都无法确定的端点保持
+    /// <see cref="RockchipStage.Unknown"/>，使只有被证实为 mask ROM 的阶段才被拒绝。该值经
+    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, RockchipStage, FlashDeviceKind)"/> 门控
+    /// 这些动作，并在所选设备变化时重新发布。</para>
     /// </remarks>
-    private bool IsRockchipLoaderStageDevice => string.Equals(
-        SelectedDevice?.Serial?.Trim(), "ROCKCHIP", StringComparison.OrdinalIgnoreCase);
+    private RockchipStage RkStage => SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } device
+        ? StageOf(device)
+        : RockchipStage.Unknown;
+
+    /// <summary>
+    /// Reads the stage evidence a discovered Rockchip endpoint carries: the stage label discovery derived from the
+    /// descriptor's <c>bcdUSB</c> bit, and the vendor serial marker the boot download writes.
+    /// <para>读取已发现瑞芯微端点携带的阶段证据：发现层由描述符 <c>bcdUSB</c> 位得出的阶段标签，以及引导下载写入的
+    /// 厂商序列号标记。</para>
+    /// </summary>
+    /// <param name="device">Discovered endpoint; other protocols are never asked.
+    /// <para>已发现的端点；其他协议不会被询问。</para></param>
+    /// <returns><see cref="RockchipStage.Maskrom"/> and <see cref="RockchipStage.Loader"/> only when the evidence
+    /// proves them, <see cref="RockchipStage.Unknown"/> otherwise.
+    /// <para>证据能证实时返回 <see cref="RockchipStage.Maskrom"/> 或 <see cref="RockchipStage.Loader"/>，否则返回
+    /// <see cref="RockchipStage.Unknown"/>。</para></returns>
+    private static RockchipStage StageOf(DetectedDevice device)
+    {
+        if (string.Equals(device.State, "usbplug", StringComparison.OrdinalIgnoreCase) ||
+            device.Serial?.Trim().StartsWith("ROCKCHIP", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return RockchipStage.Loader;
+        }
+
+        return string.Equals(device.State, "maskrom", StringComparison.OrdinalIgnoreCase)
+            ? RockchipStage.Maskrom
+            : RockchipStage.Unknown;
+    }
 
     /// <summary>
     /// Republished whenever the selected device changes, so the stage gate is re-applied to the page.
     /// <para>所选设备变化时调用，使阶段门控重新施加到页面。</para>
     /// </summary>
-    private void RefreshRockchipLoaderGate()
-    {
-        OnPropertyChanged(nameof(IsRockchipLoaderStageDevice));
-        RefreshDeviceUiGate();
-    }
+    private void RefreshRockchipLoaderGate() => RefreshDeviceUiGate();
 
     /// <summary>
     /// Points the loader at one file and re-applies the gate, so the configured flash actions use it; whether the file
@@ -121,16 +155,6 @@ public sealed partial class FlashViewModel
     /// <para>行内文件选择器把选中文件写入行期间抑制属性变化触发的重查，使一次选择只运行一次检查、只写一行结论。</para>
     /// </summary>
     private bool _suppressSpecialFileRowCheck;
-
-    /// <summary>
-    /// Publishes the verdict of a loader-row check on the row, so the row and the log always state the same outcome.
-    /// <para>把 loader 行检查的结论发布到该行，使行状态与日志始终表述同一结果。</para>
-    /// </summary>
-    /// <param name="row">Loader row that owns the verdict. <para>承载该结论的 loader 行。</para></param>
-    /// <param name="valid">Whether the loader handler accepted the file.
-    /// <para>loader 处理器是否接受了该文件。</para></param>
-    private void PublishRkLoaderStatus(FlashPartitionEntry row, bool valid)
-        => row.StatusText = _localizer.GetString(valid ? "Flash_RkLoaderValid" : "Flash_RkLoaderInvalidStatus");
 
     /// <summary>
     /// Checks whether one file is a Rockchip loader this page can hand to the RKDL flash path, and reports the outcome.
@@ -213,53 +237,6 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Publishes the loader verdict on its row: with a verdict already computed for the same file it is published
-    /// without re-reading, otherwise the file is re-checked here.
-    /// <para>把 loader 结论发布到其行：调用方已对同一文件算出结论时直接发布而不重读文件，否则在此重查。</para>
-    /// </summary>
-    /// <param name="row">Loader row whose file is checked; the row keeps its text while the check runs.
-    /// <para>待检查文件的 loader 行；检查期间该行保持原有文本。</para></param>
-    /// <param name="knownValid">The verdict a caller already computed for the same file, or <see langword="null"/> to
-    /// re-check. <para>调用方对同一文件已算出的结论；<see langword="null"/> 表示在此重查。</para></param>
-    /// <returns>A task that completes when the row status carries the verdict.
-    /// <para>行状态已携带结论时完成的任务。</para></returns>
-    /// <remarks>
-    /// The picker only proves that a file exists, so a row whose file the user just picked is checked here as well: the
-    /// loader is accepted by its declared structure and its trailing checksum, not by the file name.
-    /// <para>选择器只证明文件存在，因此用户在行内刚点选文件的 loader 行同样在这里检查：loader 按声明的结构与末尾校验和
-    /// 判定，而不是按文件名。</para>
-    /// </remarks>
-    private async Task UpdateRkLoaderRowStatusAsync(FlashPartitionEntry row, bool? knownValid = null)
-    {
-        var language = _localizer;
-        if (row.FilePath.Length == 0)
-        {
-            row.StatusText = string.Empty;
-            return;
-        }
-
-        if (knownValid is { } valid)
-        {
-            PublishRkLoaderStatus(row, valid);
-            RefreshRockchipLoaderGate();
-            return;
-        }
-
-        row.StatusText = language.GetString("Flash_RkLoaderChecking");
-        try
-        {
-            PublishRkLoaderStatus(row, await ValidateRkLoaderFileAsync(row.FilePath, CancellationToken.None).ConfigureAwait(true));
-        }
-        catch (Exception ex)
-        {
-            AppendError(ex);
-            PublishRkLoaderStatus(row, valid: false);
-        }
-
-        RefreshRockchipLoaderGate();
-    }
-
-    /// <summary>
     /// Checks the loaded image of a <c>parameter</c> row, which carries the partition table instead of an image.
     /// <para>检查 <c>parameter</c> 行的已加载文件，该行携带分区表而不是镜像。</para>
     /// </summary>
@@ -297,14 +274,20 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Reads the information commands mask ROM answers as well as a loader does, then probes every storage
-    /// medium the loader can reach: when the loader is running, the current medium is read and reported first,
-    /// each storage is switched to in turn and its flash geometry is reported, and the device is switched back
-    /// to the medium it started on, which the selector then shows, so the shared read-device-info action fills
-    /// in the storage the device actually keeps answering from.
-    /// <para>读取 Mask ROM 与 loader 都能应答的信息类命令，然后探测 loader 能到达的每个存储介质：loader
-    /// 运行时先读取并报告当前介质，再逐个切换到各存储并报告其闪存几何，最后把设备切回探测前的介质，选择框
-    /// 显示的正是该介质，使通用的读取设备信息动作填好的是设备实际继续应答的存储。</para>
+    /// medium the device can reach: when the storage commands are answered, the current medium is read and reported
+    /// first, each storage is switched to in turn and its flash geometry is reported, and the device is switched back
+    /// to the medium it started on, which the selector then shows, so the shared read-device-info action fills in the
+    /// storage the device actually keeps answering from. A stage proven to be mask ROM, and an unproven stage that
+    /// answers no storage command, are reported as waiting for a loader instead of as an error.
+    /// <para>读取 Mask ROM 与 loader 都能应答的信息类命令，然后探测设备能到达的每个存储介质：存储命令被应答时
+    /// 先读取并报告当前介质，再逐个切换到各存储并报告其闪存几何，最后把设备切回探测前的介质，选择框显示的正是该
+    /// 介质，使通用的读取设备信息动作填好的是设备实际继续应答的存储。被证实处于 mask ROM 的阶段，以及不应答任何
+    /// 存储命令的未被证实阶段，都报告为等待加载 loader，而不是报错。</para>
     /// </summary>
+    /// <remarks>
+    /// The storage command is a loader answer: no answer means the loader is still missing, not an error.
+    /// <para>存储命令是 loader 才应答的命令：不应答即视为等待 loader，而不是把设备的拒绝当作错误。</para>
+    /// </remarks>
     /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
     /// <param name="cancellationToken">Token cancelling the session commands. <para>取消会话命令的令牌。</para></param>
     private async Task RunRkReadInfoAsync(DetectedDevice device, CancellationToken cancellationToken)
@@ -317,18 +300,21 @@ public sealed partial class FlashViewModel
         await App.DeviceMonitor.RunRkdlAsync(device, session =>
         {
             lines.AddRange(ReadRkDeviceInformation(session, language));
-            if (session.IsMaskromMode)
+            uint initialMask;
+            try
+            {
+                initialMask = session.ReadStorageMask();
+            }
+            catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
+                or InvalidOperationException or ObjectDisposedException)
             {
                 lines.Add(language.GetString("Flash_RkStorageNeedsLoader"));
-            }
-            else
-            {
-                var initialMask = session.ReadStorageMask();
-                lines.Add($"{language.GetString("Flash_RkStorage")}: {DescribeRkStorage(initialMask)}");
-                lines.AddRange(ProbeRkStorages(session, language, initialMask));
-                storageLabel = DescribeRkStorage(initialMask);
+                return Task.FromResult(true);
             }
 
+            lines.Add($"{language.GetString("Flash_RkStorage")}: {DescribeRkStorage(initialMask)}");
+            lines.AddRange(ProbeRkStorages(session, language, initialMask));
+            storageLabel = DescribeRkStorage(initialMask);
             return Task.FromResult(true);
         }, cancellationToken).ConfigureAwait(true);
 
@@ -420,6 +406,12 @@ public sealed partial class FlashViewModel
     /// <para>在 maskrom 租约上下载已应用的瑞芯微 loader，并等待设备以 loader 模式重新枚举，使加载引导像
     /// 官方工具的下载 Boot 步骤一样真正传输镜像。</para>
     /// </summary>
+    /// <remarks>
+    /// Sending the loader drops the maskrom node before the usbplug node enumerates, and the two carry different
+    /// keys, so the device panel is told to hold the selection before the transfer starts instead of letting the
+    /// next scan move it to whatever enumerates first. <para>发送 loader 会先让 maskrom 节点消失、之后 usbplug
+    /// 节点才枚举，且两者键不同，因此在传输开始前让设备面板保持选择，而不是让下一次扫描把它移到最先枚举出的设备上。</para>
+    /// </remarks>
     /// <param name="device">Target RKDL endpoint. <para>目标 RKDL 端点。</para></param>
     /// <param name="cancellationToken">Token cancelling the download and the wait. <para>取消下载与等待的令牌。</para></param>
     private async Task DownloadRkLoaderAsync(DetectedDevice device, CancellationToken cancellationToken)
@@ -432,10 +424,6 @@ public sealed partial class FlashViewModel
         }
 
         var loaderBytes = await File.ReadAllBytesAsync(loader, cancellationToken).ConfigureAwait(true);
-        // Sending the loader drops the maskrom node before the usbplug node enumerates, and the two carry different
-        // keys, so the device panel is told to hold the selection before the transfer starts instead of letting the
-        // next scan move it to whatever enumerates first. <para>发送 loader 会先让 maskrom 节点消失、之后 usbplug
-        // 节点才枚举，且两者键不同，因此在传输开始前让设备面板保持选择，而不是让下一次扫描把它移到最先枚举出的设备上。</para>
         _deviceViewModel?.BeginSelectionHold();
         await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(device,
             async (session, token) =>
@@ -573,7 +561,13 @@ public sealed partial class FlashViewModel
         ApplyReportedRkStorage(masks.Length == 1 ? RockchipConfigFile.DescribeStorage(masks[0]) : string.Empty);
     }
 
-    /// <summary>Runs the device ready test. <para>执行设备就绪测试。</para></summary>
+    /// <summary>
+    /// Runs the device ready test the way the vendor tool's <c>td</c> does: TEST_UNIT_READY is polled until the device
+    /// answers ready or the budget elapses, so a device that is still busy after a write reports its verdict instead of
+    /// an immediate failure, and a boot in progress reports progress while it runs.
+    /// <para>按厂商工具 <c>td</c> 的方式执行设备就绪测试：轮询 TEST_UNIT_READY 直到设备应答就绪或预算耗尽，使写盘后
+    /// 仍在忙的设备给出真实结论而不是立刻失败，正在进行的引导也会报告进度。</para>
+    /// </summary>
     internal async void OnRkTestDeviceClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (_busy || _confirming) return;
@@ -590,8 +584,11 @@ public sealed partial class FlashViewModel
         try
         {
             AppendLog(language.GetString("Flash_RkTestDevice"));
+            var progress = new Progress<(ushort Current, ushort Total)>(update =>
+                AppendLog($"{language.GetString("Flash_RkTestDeviceProgress")}: {update.Current}/{update.Total}"));
             var ready = await App.DeviceMonitor.RunRkdlAsync(device,
-                session => session.TestDeviceAsync(cancellation.Token), cancellation.Token).ConfigureAwait(true);
+                session => session.WaitForLoaderReadyAsync(RkTestDeviceTimeoutMs, progress, cancellation.Token),
+                cancellation.Token).ConfigureAwait(true);
             AppendLog(language.GetString(ready ? "Flash_Done" : "Flash_Failed"));
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
@@ -672,6 +669,9 @@ public sealed partial class FlashViewModel
     /// <para>某个介质失败只记录并跳过，不终止遍历，因为设备对无法服务的介质也会应答 CHANGE_STORAGE 成功，
     /// 只有读回掩码能证明切换——与存储探测和切换动作使用的校验一致。一次读取的行不会叠加到之前的行上：
     /// 每次运行都整体替换列表。</para>
+    /// A medium the loader cannot serve is skipped silently: the sweep reports only the media it actually
+    /// read, so a failed medium never appears in the log or the grid.
+    /// <para>无法服务的介质静默跳过：遍历只报告真正读到的介质，失败的介质不会出现在日志或列表中。</para>
     /// </remarks>
     internal async void OnRkReadPartitionsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -719,9 +719,6 @@ public sealed partial class FlashViewModel
                     catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
                         or InvalidOperationException or ObjectDisposedException)
                     {
-                        // A medium the loader cannot serve is skipped silently: the sweep reports only the
-                        // media it actually read, so a failed medium never appears in the log or the grid.
-                        // 无法服务的介质静默跳过：遍历只报告真正读到的介质，失败的介质不会出现在日志或列表中。
                         _ = exception;
                     }
                 }
@@ -762,6 +759,10 @@ public sealed partial class FlashViewModel
     /// 厂商 parameter 块。介质按设备能力样式以每个事实一行 <c>名称=值</c> 报告自己，完全没有分区表的介质
     /// 不输出任何内容也不产生任何行。</para>
     /// </summary>
+    /// <remarks>
+    /// When neither table exists on the medium, nothing is reported because the medium holds no partitions.
+    /// <para>介质上两种表都不存在时不报告任何内容，因为它没有承载分区。</para>
+    /// </remarks>
     /// <param name="session">Open RKDL session positioned on the medium.<para>已定位到该介质的 RKDL 会话。</para></param>
     /// <param name="medium">The medium label written onto every row, for example <c>EMMC</c>.
     /// <para>写到每一行的介质名，例如 <c>EMMC</c>。</para></param>
@@ -808,8 +809,6 @@ public sealed partial class FlashViewModel
             var parameter = ParseDeviceParameterBlob(session);
             if (parameter is not { Count: > 0 })
             {
-                // Neither table exists on this medium: report nothing, as the medium holds no partitions.
-                // 该介质上两种表都不存在：不报告任何内容，因为它没有承载分区。
                 return [];
             }
 
@@ -1104,7 +1103,7 @@ public sealed partial class FlashViewModel
         }
     }
 
-    /// <summary>Erases a sector range through LBA addressing. <para>经 LBA 寻址擦除一段扇区。</para></summary>
+    /// <summary>Erases a sector range through the medium's own erase strategy. <para>按介质自身的擦除策略擦除一段扇区。</para></summary>
     internal async void OnRkEraseSectorsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (_busy || _confirming) return;
@@ -1133,12 +1132,13 @@ public sealed partial class FlashViewModel
         SetBusy(true);
         try
         {
-            await App.DeviceMonitor.RunRkdlAsync(device, session =>
-            {
-                session.EraseLbaRange(address, sectors, null, cancellation.Token);
-                return Task.FromResult(true);
-            }, cancellation.Token).ConfigureAwait(true);
-            AppendLog($"{language.GetString("Flash_RkEraseSectors")}: LBA 0x{address:X}, {sectors}");
+            var badBlocks = await App.DeviceMonitor.RunRkdlAsync(device,
+                session => Task.Run(
+                    () => session.EraseRange(address, sectors, forceBlockErase: false, progress: null,
+                        cancellation.Token),
+                    cancellation.Token), cancellation.Token).ConfigureAwait(true);
+            AppendLog($"{language.GetString("Flash_RkEraseSectors")}: LBA 0x{address:X}, {sectors}, " +
+                $"{language.GetString("Flash_RkBadBlocks")}: {badBlocks}");
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -1196,12 +1196,54 @@ public sealed partial class FlashViewModel
     private bool RkForceAddress => _surface is not null && Field<CheckBox>("RkForceAddressBox").IsChecked == true;
 
     /// <summary>
-    /// The parameter file next to the loaded images, used to validate LBA ranges; null when no image is loaded or
-    /// its directory carries no partition table.
-    /// <para>已加载镜像旁的 parameter 文件，用于校验 LBA 范围；没有镜像或其目录没有分区表时为 null。</para>
+    /// The start LBA a row writes at when the forced-address switch is set: the row's address taken from the
+    /// configuration, or zero when the row carries none, which is where a whole-disk Linux image belongs.
+    /// <para>勾选“强制按地址写”时该行写入的起始 LBA：取自配置的行地址；行里没有地址时为 0，正是整盘 Linux 镜像
+    /// 应写入的位置。</para>
     /// </summary>
-    private string? RkParameterTablePath()
+    /// <param name="row">Row to read the address from.<para>待读取地址的行。</para></param>
+    /// <returns>The start LBA; an unparsable address counts as zero.<para>起始 LBA；无法解析的地址按 0 处理。</para></returns>
+    internal static long RkRowAddress(FlashPartitionEntry row)
+        => row.Offset.Length > 0 && TryParseSectorNumber(row.Offset, out var address) ? address : 0;
+
+    /// <summary>
+    /// The protocol storage identifier a row writes to when the forced-address switch is set: the medium the
+    /// configuration named for that row, or zero to keep the medium the device is already on.
+    /// <para>勾选“强制按地址写”时该行写入的协议存储标识：配置为该行指定的介质；为 0 表示沿用设备当前介质。</para>
+    /// </summary>
+    /// <param name="row">Row to read the medium from.<para>待读取介质的行。</para></param>
+    /// <returns>The storage identifier (1 eMMC, 9 SPI NOR, ...), or <see langword="null"/> when the row names no
+    /// medium and the device's current one applies.
+    /// <para>存储标识（1 为 eMMC、9 为 SPI NOR 等）；行未指定介质、沿用设备当前介质时为 <see langword="null"/>。</para></returns>
+    internal static int? RkRowStorageId(FlashPartitionEntry row)
     {
+        var mask = RockchipConfigFile.StorageMaskFromName(row.StorageMedium);
+        var index = mask == 0 ? -1 : RkdlStorage.IndexOfMask(mask);
+        return index < 0 ? null : RkdlStorage.WireBits[index];
+    }
+
+    /// <summary>
+    /// The parameter table the Rockchip actions resolve partition addresses from, used to validate LBA ranges and to
+    /// gate the flash action; null when neither a parameter row nor an image directory carries one.
+    /// <para>瑞芯微动作据此解析分区地址的 parameter 分区表，用于校验 LBA 范围并门控刷写动作；parameter 行与镜像目录
+    /// 都没有该表时为 null。</para>
+    /// </summary>
+    /// <remarks>
+    /// A configuration that names its own table wins, because its rows may sit in another directory than the package
+    /// table and the row is the file the imported package actually declared; only without such a row does the
+    /// directory next to the loaded images get searched, the way the vendor tool resolves a bare flash.
+    /// <para>自带分区表的配置优先，因为其行的文件可能位于与刷机包目录不同的目录，而该行正是导入的包实际声明的文件；只有
+    /// 没有该行时才搜索已加载镜像所在的目录，与厂商工具对裸烧录的解析方式一致。</para>
+    /// </remarks>
+    internal string? RkParameterTablePath()
+    {
+        var declared = Partitions.FirstOrDefault(entry => entry.Command == ParameterCommand &&
+            entry.FilePath.Length > 0 && File.Exists(entry.FilePath));
+        if (declared is not null)
+        {
+            return declared.FilePath;
+        }
+
         var directory = Partitions
             .Where(entry => entry.FilePath.Length > 0)
             .Select(entry => Path.GetDirectoryName(Path.GetFullPath(entry.FilePath)))
@@ -1263,14 +1305,20 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Imports a download-list configuration: every row name is recognized as an operation, so a <c>Loader</c> row
-    /// supplies the RKDL loader image and is published as a load-loader row, a <c>Parameter</c> row is published as
-    /// the partition-table row that the flash path reads its addresses from, a single existing image row goes
-    /// through the package loader so whole-disk and logical-partition images keep their handling, and every other
-    /// row is published as a partition row even when its file is missing or the row names no file at all.
-    /// <para>导入下载列表配置：每一行的名称都被识别为操作，因此 <c>Loader</c> 行提供 RKDL loader 镜像并发布为加载
-    /// loader 行，<c>Parameter</c> 行发布为刷写路径据此解析地址的分区表行；只有一条存在的镜像行时走刷机包加载
-    /// 流程，保留整盘与逻辑分区镜像的处理；其余行一律发布为分区行，即使其文件缺失或该行没有指定文件。</para>
+    /// supplies the boot image the row check then parses for the selected device and is published as a load-loader
+    /// row, a <c>Parameter</c> row is published as the partition-table row that the flash path reads its addresses
+    /// from, a single existing image row goes through the package loader so whole-disk and logical-partition images
+    /// keep their handling, and every other row is published as a partition row even when its file is missing or the
+    /// row names no file at all.
+    /// <para>导入下载列表配置：每一行的名称都被识别为操作，因此 <c>Loader</c> 行提供由行检查按所选设备解析的引导镜像并
+    /// 发布为加载 loader 行，<c>Parameter</c> 行发布为刷写路径据此解析地址的分区表行；只有一条存在的镜像行时走刷机包
+    /// 加载流程，保留整盘与逻辑分区镜像的处理；其余行一律发布为分区行，即使其文件缺失或该行没有指定文件。</para>
     /// </summary>
+    /// <remarks>
+    /// The loader row is not applied here: the file is parsed for the selected device first, and only an accepted
+    /// file configures a boot backend.
+    /// <para>loader 行不在这里直接套用：文件先按所选设备解析，只有被接受的文件才会配置引导后端。</para>
+    /// </remarks>
     /// <param name="path">Existing configuration file; parse failures are logged instead of thrown.
     /// <para>既有的配置文件；解析失败只记录日志，不抛出异常。</para></param>
     internal async Task ImportRkConfigAsync(string path)
@@ -1308,11 +1356,6 @@ public sealed partial class FlashViewModel
                 var operation = RockchipConfigFile.ClassifyOperation(entry.Name);
                 if (operation == RockchipConfigOperation.Loader)
                 {
-                    if (entry.Path.Length > 0)
-                    {
-                        ApplyRkLoaderPath(entry.Path);
-                    }
-
                     continue;
                 }
 
@@ -1417,12 +1460,15 @@ public sealed partial class FlashViewModel
     /// </summary>
     /// <param name="row">Row whose command is <see cref="LoaderCommand"/> or <see cref="ParameterCommand"/>.
     /// <para>命令为 <see cref="LoaderCommand"/> 或 <see cref="ParameterCommand"/> 的行。</para></param>
+    /// <param name="knownLoaderValid">A loader verdict the caller already computed for the same file, or
+    /// <see langword="null"/> to check here. <para>调用方对同一文件已算出的 loader 结论；<see langword="null"/> 表示
+    /// 在此检查。</para></param>
     /// <remarks>
     /// The check is synchronous for a parameter table, which is a small text file, and asynchronous for a loader, whose
-    /// entry tables and trailing checksum are read; an imported row is checked right after it is published, so the grid
-    /// never claims a loader is usable before its content was read.
-    /// <para>分区表是小文本文件，其检查同步完成；loader 要读取条目表与末尾校验和，因此异步完成。导入的行在发布后立即
-    /// 检查，因此列表不会在读取内容之前就声称某个 loader 可用。</para>
+    /// structure the selected device decides; an imported row is checked right after it is published, so the grid never
+    /// claims a loader is usable before its content was read.
+    /// <para>分区表是小文本文件，其检查同步完成；loader 的结构由所选设备决定，因此异步完成。导入的行在发布后立即检查，
+    /// 因此列表不会在读取内容之前就声称某个 loader 可用。</para>
     /// </remarks>
     private void UpdateSpecialFileRowStatus(FlashPartitionEntry row, bool? knownLoaderValid = null)
     {
@@ -1434,7 +1480,7 @@ public sealed partial class FlashViewModel
 
         if (row.Command == LoaderCommand)
         {
-            SpecialFileRowCheck = UpdateRkLoaderRowStatusAsync(row, knownLoaderValid);
+            SpecialFileRowCheck = UpdateLoaderRowStatusAsync(row, knownLoaderValid);
         }
     }
 
@@ -1455,10 +1501,17 @@ public sealed partial class FlashViewModel
     /// <para>把当前各行、loader 与已加载刷机包写为 RKDevTool 配置文件。</para>
     /// </summary>
     /// <param name="path">Destination file chosen by the user.<para>用户选择的目标文件。</para></param>
+    /// <remarks>
+    /// The loader row is where that file came from: a Rockchip loader and another device's boot image are both
+    /// written back from the row, so a load-then-save round trip never drops the row.
+    /// <para>配置里的 loader 行是文件的来源：瑞芯微 loader 与其它设备的引导镜像都从该行原样写回，
+    /// 导入再保存不会丢行。</para>
+    /// </remarks>
     private void SaveRkConfig(string path)
     {
         var entries = new List<RockchipConfigEntry>();
-        if (_rkLoaderPath is { Length: > 0 } loader)
+
+        if (LoaderRowPath is { Length: > 0 } loader)
         {
             entries.Add(new RockchipConfigEntry
             {

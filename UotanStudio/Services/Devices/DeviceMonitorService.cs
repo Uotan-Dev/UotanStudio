@@ -44,6 +44,8 @@ public enum DeviceProtocolKind
     Ios,
     /// <summary>Qualcomm DIAG baseband diagnostic port (for example PID 901D), not a download port.<para>高通 DIAG 基带诊断端口（例如 PID 901D），不是下载端口。</para></summary>
     Diagnostic,
+    /// <summary>Allwinner FEL boot ROM or FES service; both share one VID/PID pair and are told apart by the identity handshake.<para>全志 FEL boot ROM 或 FES 服务；两者共用一组 VID/PID，由身份握手区分。</para></summary>
+    Sunxi,
 }
 
 /// <summary>
@@ -137,6 +139,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Mtk => "MTK",
         DeviceProtocolKind.Ios => "iOS",
         DeviceProtocolKind.Diagnostic => "DIAG",
+        DeviceProtocolKind.Sunxi => "Sunxi",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }

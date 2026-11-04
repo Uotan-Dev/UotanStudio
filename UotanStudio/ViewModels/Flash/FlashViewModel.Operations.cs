@@ -45,11 +45,16 @@ public sealed partial class FlashViewModel
     private string? _rootPackagePath;
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
     private string? _edlProgrammer;
-    private IReadOnlyList<string> _edlProgrammerCandidates = [];
     private string? _edlProgrammerOverride;
     private bool _isCustomProgrammer;
 
-    private string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
+    /// <summary>
+    /// The programmer the EDL path would upload right now: the custom file when the picker is on the custom row,
+    /// otherwise the package candidate. Internal so a test can prove which file a loader row configured.
+    /// <para>EDL 路径此刻会使用的 programmer：选择框处于自选档时是自选文件，否则是包内候选。设为 internal 以便测试
+    /// 证实 loader 行配置了哪个文件。</para>
+    /// </summary>
+    internal string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
 
     private bool _flatBinPackage;
     private bool _edlBundleReady;
@@ -245,6 +250,10 @@ public sealed partial class FlashViewModel
         _mtkResolution = null;
         _mtkRows.Clear();
         _mtkPartitions.Clear();
+        _spacemiTPackage = null;
+        SpacemiTPackagePath = string.Empty;
+        SpacemiTStatusText = string.Empty;
+        SetControlEnabled("SpacemiTFlashButton", false);
         UpdateModeVisibility();
         _payloadPath = null;
         _remotePayloadUrl = null;
@@ -352,21 +361,7 @@ public sealed partial class FlashViewModel
             var extension = Path.GetExtension(path).ToLowerInvariant();
             if (File.Exists(path) && extension is ".ofp" or ".ops" or ".ozip")
             {
-                var entries = await FlashOppoContainerService.ListAsync(path, cancellation.Token);
-                _oppoPath = path;
-                var oppoRows = new List<FlashPartitionEntry>(entries.Count);
-                foreach (var (name, archiveEntry, outputName, size) in entries)
-                {
-                    _oppoEntries.Add(name, (archiveEntry, outputName));
-                    oppoRows.Add(new FlashPartitionEntry
-                    {
-                        Name = name,
-                        Size = $"{size / 1024d / 1024d:F1} MiB"
-                    });
-                }
-                Partitions.Apply(0, oppoRows);
-                SetControlEnabled("ExtractSelectedButton", entries.Count > 0);
-                AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                await ApplyOppoContainerAsync(path, cancellation.Token);
                 return;
             }
 
@@ -487,6 +482,12 @@ public sealed partial class FlashViewModel
                     return;
                 }
 
+                if (FlashSpacemiTPackage.HasStructure(path))
+                {
+                    ApplySpacemiTPackage(FlashSpacemiTPackage.Read(path)!);
+                    return;
+                }
+
                 var directoryImages = Directory.Exists(Path.Combine(path, "images")) ? Path.Combine(path, "images") : path;
                 if (Directory.EnumerateFiles(directoryImages, "rawprogram*.xml", SearchOption.TopDirectoryOnly).Any())
                 {
@@ -494,37 +495,25 @@ public sealed partial class FlashViewModel
                     if (bin.Images.Count > 0)
                     {
                         _flatBinPackage = true;
-                        _edlProgrammerCandidates = bin.Programmers;
+                        ProgrammerCandidates = bin.Programmers;
                         _edlProgrammer = bin.Programmer;
                         _isCustomProgrammer = false;
                         UpdateEdlProgrammerPickOptions();
-                        var edlPrograms = bin.Programs.Where(entry =>
-                            !string.IsNullOrEmpty(entry.Filename) && File.Exists(entry.SourceFile) &&
-                            !entry.Filename.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase))
-                            .ToArray();
-                        var edlRows = new List<FlashPartitionEntry>();
-                        foreach (var (name, image, length) in bin.Images)
+                        var edlRows = new List<FlashPartitionEntry>(bin.Images.Count);
+                        foreach (var image in bin.Images)
                         {
-                            var matches = edlPrograms.Where(entry =>
-                                Path.GetFullPath(entry.SourceFile).Equals(Path.GetFullPath(image),
-                                    StringComparison.OrdinalIgnoreCase)).ToArray();
-                            foreach (var entry in matches.Length == 0 ? [null] : matches.Cast<RawProgramEntry?>())
+                            var row = new FlashPartitionEntry
                             {
-                                var row = new FlashPartitionEntry
-                                {
-                                    Name = entry?.Label is { Length: > 0 } label ? label : name,
-                                    Command = "flash",
-                                    FilePath = image,
-                                    FileName = Path.GetFileName(image),
-                                    Size = FormatByteSize(length),
-                                    StorageMedium = entry is null
-                                        ? string.Empty
-                                        : $"LUN {entry.PhysicalPartitionNumber}",
-                                    IsSelected = false
-                                };
-                                edlRows.Add(row);
-                                if (entry is not null) _edlEntries.Add(row, entry);
-                            }
+                                Name = image.Partition,
+                                Command = "flash",
+                                FilePath = image.FilePath,
+                                FileName = Path.GetFileName(image.FilePath),
+                                Size = FormatByteSize(image.Length),
+                                StorageMedium = $"LUN {image.Program.PhysicalPartitionNumber}",
+                                IsSelected = false
+                            };
+                            edlRows.Add(row);
+                            _edlEntries.Add(row, image.Program);
                         }
                         Partitions.Apply(0, edlRows);
                         _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
@@ -536,6 +525,13 @@ public sealed partial class FlashViewModel
                         AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                         return;
                     }
+                }
+
+                var oppoArchives = Directory.EnumerateFiles(path, "*.ofp", SearchOption.TopDirectoryOnly).ToArray();
+                if (oppoArchives.Length == 1)
+                {
+                    await ApplyOppoContainerAsync(oppoArchives[0], cancellation.Token);
+                    return;
                 }
 
                 var dirRows = ParseDirectory(path);
@@ -599,7 +595,7 @@ public sealed partial class FlashViewModel
     private void ApplyAfterSalesPackage(AfterSalesPackageContents package)
     {
         _flatBinPackage = true;
-        _edlProgrammerCandidates = package.Programmers;
+        ProgrammerCandidates = package.Programmers;
         _edlProgrammer = package.Programmer;
         _isCustomProgrammer = false;
         UpdateEdlProgrammerPickOptions();
@@ -638,6 +634,79 @@ public sealed partial class FlashViewModel
             $"{_localizer.GetString("Flash_AfterSalesPackage")}{merged}");
         UpdateEdlButton();
     }
+
+    /// <summary>
+    /// Lists an Oppo/Realme container archive (<c>.ofp</c>/<c>.ops</c>/<c>.ozip</c>) as rows that the extract
+    /// action and the flash preparation can resolve later.
+    /// <para>把欧加/realme 容器包（<c>.ofp</c>/<c>.ops</c>/<c>.ozip</c>）列成行，供后续提取动作与刷写准备解析。</para>
+    /// </summary>
+    /// <param name="path">Container archive path. <para>容器包路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the listing. <para>取消列举的令牌。</para></param>
+    private async Task ApplyOppoContainerAsync(string path, CancellationToken cancellationToken)
+    {
+        var entries = await FlashOppoContainerService.ListAsync(path, cancellationToken);
+        _oppoPath = path;
+        var oppoRows = new List<FlashPartitionEntry>(entries.Count);
+        foreach (var (name, archiveEntry, outputName, size) in entries)
+        {
+            _oppoEntries.Add(name, (archiveEntry, outputName));
+            oppoRows.Add(new FlashPartitionEntry
+            {
+                Name = name,
+                Size = $"{size / 1024d / 1024d:F1} MiB"
+            });
+        }
+        Partitions.Apply(0, oppoRows);
+        SetControlEnabled("ExtractSelectedButton", entries.Count > 0);
+        AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+    }
+
+    /// <summary>
+    /// Applies a SpacemiT (titan flasher) package folder: registers it for the SpacemiT section's flash action
+    /// and lists the primary partition table's entries as rows; the SpacemiT run honours the rows the user
+    /// selected through <c>OnlyPartitions</c>.
+    /// <para>应用 SpacemiT（titan 烧录器）包目录：把它登记给 SpacemiT 分区的烧录动作，并把主分区表的条目
+    /// 列成行；SpacemiT 烧录会通过 <c>OnlyPartitions</c> 尊重用户勾选的行。</para>
+    /// </summary>
+    /// <param name="contents">Package contents read from the folder. <para>从目录读出的包内容。</para></param>
+    private void ApplySpacemiTPackage(SpacemiTPackageContents contents)
+    {
+        var package = contents.Package;
+        _spacemiTPackage = package;
+        SpacemiTPackagePath = package.RootPath;
+        SpacemiTStatusText = string.Empty;
+        SetControlEnabled("SpacemiTFlashButton", true);
+        var rows = new List<FlashPartitionEntry>(contents.Partitions.Count);
+        foreach (var partition in contents.Partitions)
+        {
+            var reference = partition.ImageReference;
+            rows.Add(new FlashPartitionEntry
+            {
+                Name = partition.Partition,
+                Command = "flash",
+                FilePath = partition.FilePath ?? string.Empty,
+                FileName = partition.FilePath is { } file ? Path.GetFileName(file)
+                    : IsRegexImageReference(reference) ? string.Empty : reference,
+                Size = partition.SizeBytes > 0 ? FormatByteSize(partition.SizeBytes)
+                    : partition.FileLength > 0 ? FormatByteSize(partition.FileLength) : string.Empty,
+                Offset = partition.OffsetBytes > 0 ? FormatByteSize(partition.OffsetBytes) : string.Empty,
+                StorageMedium = partition.TableFormat.ToUpperInvariant(),
+                IsSelected = false
+            });
+        }
+
+        Partitions.Apply(0, rows);
+        AppendLog($"[SpacemiT] {Path.GetFileName(package.RootPath)}: v{package.Script.Version}, " +
+            $"{package.Script.Actions.Count} actions · {rows.Count} partitions");
+    }
+
+    /// <summary>
+    /// Whether a package image reference is a vendor regex marker (<c>/…/</c>) that names no concrete file.
+    /// <para>判断包内镜像引用是否为不指向具体文件的厂商正则标记（<c>/…/</c>）。</para>
+    /// </summary>
+    /// <param name="reference">Image reference text. <para>镜像引用文本。</para></param>
+    private static bool IsRegexImageReference(string reference)
+        => reference.Length > 1 && reference[0] == '/' && reference[^1] == '/';
 
     internal async void OnPackagePathLostFocus(object? sender, RoutedEventArgs e)
         => await LoadPackageAsync(PackagePath);
@@ -835,12 +904,19 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Loads a boot loader for the selected device: EDL picks a Sahara/Firehose programmer, MTK picks a
-    /// preloader (DA) package, and Rockchip validates the loader row, applies it, downloads it to the device
-    /// and waits for the loader-stage re-enumeration.
-    /// <para>为所选设备加载引导：EDL 选择 Sahara/Firehose programmer，MTK 选择 preloader（DA）包，
-    /// 瑞芯微校验条目列表中的 loader 行，应用后下载到设备并等待 loader 阶段的重枚举。</para>
+    /// Loads a boot loader for the selected device: EDL uses the <c>loader</c> row as its Sahara programmer when the
+    /// grid carries one and otherwise picks a programmer, MTK likewise falls back to picking a preloader (DA)
+    /// package, and Rockchip validates the loader row, applies it, downloads it to the device and waits for the
+    /// loader-stage re-enumeration.
+    /// <para>为所选设备加载引导：条目列表带 <c>loader</c> 行时 EDL 把它当作 Sahara programmer，没有该行才选择
+    /// programmer；MTK 同样在没有该行时改为选择 preloader（DA）包；瑞芯微校验该 loader 行，应用后下载到设备并等待
+    /// loader 阶段的重枚举。</para>
     /// </summary>
+    /// <remarks>
+    /// A loader row that already names a programmer is parsed for this device and used; the picker opens only
+    /// when the grid carries no such row.
+    /// <para>loader 行已给出 programmer 时按该设备解析并使用它，没有该行才打开选择器。</para>
+    /// </remarks>
     internal async void OnLoadBootClick(object? sender, RoutedEventArgs e)
     {
         if (SelectedDevice is not { } device)
@@ -852,10 +928,18 @@ public sealed partial class FlashViewModel
         switch (device.Protocol)
         {
             case DeviceProtocolKind.Edl:
-                OnEdlChooseProgrammerClick(sender, e);
+                if (!await TryLoadBootFromLoaderRowAsync().ConfigureAwait(true))
+                {
+                    OnEdlChooseProgrammerClick(sender, e);
+                }
+
                 break;
             case DeviceProtocolKind.Mtk:
-                OnChooseMtkDaClick(sender, e);
+                if (!await TryLoadBootFromLoaderRowAsync().ConfigureAwait(true))
+                {
+                    OnChooseMtkDaClick(sender, e);
+                }
+
                 break;
             case DeviceProtocolKind.Rkdl:
                 await ChooseRkLoaderAsync();
@@ -953,6 +1037,15 @@ public sealed partial class FlashViewModel
         finally { SetBusy(false); _flashCancellation = null; UpdateRootControlsState(); }
     }
 
+    /// <remarks>
+    /// One pick runs one check: the re-check a property change would start is suppressed while the row fields
+    /// are written, and a special row is then checked once here.
+    /// <para>一次选择只检查一次：写入路径期间抑制属性变化触发的重查，之后由本方法为特殊行检查一次。</para>
+    /// A loader row is held to the same strictness as the load-boot entry: the file is parsed with the grammar
+    /// the selected device imposes and only an accepted one is applied, so a damaged file never reaches the
+    /// flash gating.
+    /// <para>与「加载引导」入口同一严格度：按所选设备解析通过才指向新文件，坏文件不进入刷写门控。</para>
+    /// </remarks>
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || sender is not Control { DataContext: FlashPartitionEntry entry } ||
@@ -973,9 +1066,6 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        // 一次选择只检查一次：写入路径期间抑制属性变化触发的重查，之后由本方法为特殊行检查一次。
-        // One pick runs one check: the re-check a property change would start is suppressed while the
-        // row fields are written, and a special row is then checked once here.
         var special = entry.Command is LoaderCommand or ParameterCommand;
         _suppressSpecialFileRowCheck = special;
         try
@@ -1000,24 +1090,8 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        // 与「加载引导」入口同一严格度：校验通过才指向新 loader，坏文件不进入刷写门控。
-        // Same strictness as the load-boot entry: point at the new loader only after validation,
-        // so a damaged file never reaches the flash gating.
-        entry.StatusText = _localizer.GetString("Flash_RkLoaderChecking");
-        try
-        {
-            var valid = await ValidateRkLoaderFileAsync(path, CancellationToken.None).ConfigureAwait(true);
-            PublishRkLoaderStatus(entry, valid);
-            if (valid)
-            {
-                ApplyRkLoaderPath(path);
-            }
-        }
-        catch (Exception ex)
-        {
-            AppendError(ex);
-            PublishRkLoaderStatus(entry, valid: false);
-        }
+        SpecialFileRowCheck = UpdateLoaderRowStatusAsync(entry);
+        await SpecialFileRowCheck.ConfigureAwait(true);
     }
 
     private DeviceInfo? _observedDeviceInfo;
@@ -1061,24 +1135,35 @@ public sealed partial class FlashViewModel
             Field<Expander>("EdlExpander").IsExpanded = true;
             Field<Expander>("MtkExpander").IsExpanded = false;
             Field<Expander>("RkExpander").IsExpanded = false;
+            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Mtk)
         {
             Field<Expander>("MtkExpander").IsExpanded = true;
             Field<Expander>("EdlExpander").IsExpanded = false;
             Field<Expander>("RkExpander").IsExpanded = false;
+            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Rkdl)
         {
             Field<Expander>("RkExpander").IsExpanded = true;
             Field<Expander>("EdlExpander").IsExpanded = false;
             Field<Expander>("MtkExpander").IsExpanded = false;
+            Field<Expander>("SunxiExpander").IsExpanded = false;
+        }
+        else if (protocol is DeviceProtocolKind.Sunxi)
+        {
+            Field<Expander>("SunxiExpander").IsExpanded = true;
+            Field<Expander>("EdlExpander").IsExpanded = false;
+            Field<Expander>("MtkExpander").IsExpanded = false;
+            Field<Expander>("RkExpander").IsExpanded = false;
         }
         else
         {
             Field<Expander>("EdlExpander").IsExpanded = false;
             Field<Expander>("MtkExpander").IsExpanded = false;
             Field<Expander>("RkExpander").IsExpanded = false;
+            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
     }
 
@@ -1093,6 +1178,14 @@ public sealed partial class FlashViewModel
                 _lastObservedDevice = currentDevice;
                 ApplyDeviceProtocolExpansion(currentDevice?.Protocol);
                 ResetRkStorageOptions();
+                if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
+                {
+                    RefreshSunxiDeviceStatus();
+                }
+                else
+                {
+                    SunxiStatusText = string.Empty;
+                }
             }
 
             UpdateObservedDeviceInfo();
@@ -1114,7 +1207,7 @@ public sealed partial class FlashViewModel
     private void ResetEdlProgrammer()
     {
         _edlProgrammer = null;
-        _edlProgrammerCandidates = [];
+        ProgrammerCandidates = [];
         _isCustomProgrammer = false;
         _edlProgrammerOverride = null;
         UpdateEdlProgrammerPickOptions();
@@ -1175,7 +1268,7 @@ public sealed partial class FlashViewModel
         if (_surface is null) return;
         var pickBox = Field<ComboBox>("EdlProgrammerPickBox");
         var customText = _localizer.GetString("Flash_EdlCustomFile");
-        var items = _edlProgrammerCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
+        var items = ProgrammerCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
         var previousCustom = _isCustomProgrammer;
         var previousEdl = _edlProgrammer;
         pickBox.ItemsSource = items;
@@ -1187,9 +1280,9 @@ public sealed partial class FlashViewModel
         else if (previousEdl is not null)
         {
             var idx = -1;
-            for (var i = 0; i < _edlProgrammerCandidates.Count; i++)
+            for (var i = 0; i < ProgrammerCandidates.Count; i++)
             {
-                if (string.Equals(_edlProgrammerCandidates[i], previousEdl, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(ProgrammerCandidates[i], previousEdl, StringComparison.OrdinalIgnoreCase))
                 {
                     idx = i;
                     break;
@@ -1230,6 +1323,14 @@ public sealed partial class FlashViewModel
     /// Picks a programmer file overriding the package-supplied one for later EDL work.
     /// <para>选择用于覆盖包内 programmer 的引导文件；覆盖只影响后续 EDL 刷写与回读。</para>
     /// </summary>
+    /// <remarks>
+    /// An oversized candidate is refused at pick time with the same bounded ceiling as the programmer folder
+    /// scan, instead of reaching session initialization.
+    /// <para>超大的候选在选择时即按与 programmer 目录扫描同一量级的有界上限拒绝，不进入会话初始化。</para>
+    /// The picked file must take effect at once: the picker is moved to the custom row, otherwise
+    /// <c>EffectiveEdlProgrammer</c> keeps reading the package candidate.
+    /// <para>选中的文件必须立刻生效：把候选框切到自选档，否则 <c>EffectiveEdlProgrammer</c> 仍读取包内候选。</para>
+    /// </remarks>
     internal async void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
@@ -1240,9 +1341,6 @@ public sealed partial class FlashViewModel
             FileTypeFilter = [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        // 与 programmer 目录扫描同一量级的有界上限：超大的候选在选择时即拒绝，不进入会话初始化。
-        // The same bounded ceiling as the programmer folder scan: an oversized candidate is refused at
-        // pick time instead of reaching session initialization.
         var length = File.Exists(path) ? new FileInfo(path).Length : 0;
         if (length is 0 or > MaximumProgrammerFileBytes)
         {
@@ -1254,12 +1352,9 @@ public sealed partial class FlashViewModel
         _edlProgrammerOverride = path;
         if (_edlProgrammerOverride is not null)
         {
-            // 选中的文件必须立刻生效：把候选框切到自选档，否则 EffectiveEdlProgrammer 仍读取包内候选。
-            // The picked file must take effect at once: move the picker to the custom row, otherwise
-            // EffectiveEdlProgrammer keeps reading the package candidate.
             _isCustomProgrammer = true;
             _edlProgrammer = null;
-            Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = _edlProgrammerCandidates.Count;
+            Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = ProgrammerCandidates.Count;
         }
 
         UpdateEdlProgrammerUiState();
@@ -1274,12 +1369,12 @@ public sealed partial class FlashViewModel
     internal void OnEdlProgrammerPickChanged(object? source, SelectionChangedEventArgs e)
     {
         var index = Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex;
-        if (index >= 0 && index < _edlProgrammerCandidates.Count)
+        if (index >= 0 && index < ProgrammerCandidates.Count)
         {
             _isCustomProgrammer = false;
-            _edlProgrammer = _edlProgrammerCandidates[index];
+            _edlProgrammer = ProgrammerCandidates[index];
         }
-        else if (index >= 0 && index == _edlProgrammerCandidates.Count)
+        else if (index >= 0 && index == ProgrammerCandidates.Count)
         {
             _isCustomProgrammer = true;
             _edlProgrammer = null;
@@ -1400,9 +1495,9 @@ public sealed partial class FlashViewModel
     /// </value>
     internal IReadOnlyList<string> ProgrammerCandidates
     {
-        get => _edlProgrammerCandidates;
-        set => _edlProgrammerCandidates = value ?? [];
-    }
+        get;
+        set => field = value ?? [];
+    } = [];
 
     /// <summary>
     /// Resolves the current MediaTek boot stage: an explicit declaration in the stage combo outranks the state string
@@ -1438,8 +1533,7 @@ public sealed partial class FlashViewModel
     /// loader（usbplug）的瑞芯微设备将其禁用，因为引导下载无法再次执行。</para>
     /// </summary>
     internal bool CanLoadBoot => SelectedDevice is not { } device ||
-        FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage,
-            IsRockchipLoaderStageDevice);
+        FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage, RkStage);
 
     /// <summary>
     /// Switches the action-pane expansion by the selected device's protocol: expands the protocol-matching
@@ -1487,28 +1581,30 @@ public sealed partial class FlashViewModel
     private bool HasSelectedEdlEntries()
         => Partitions.Any(row => row.IsSelected && IsWritableEntry(row));
 
+    /// <remarks>
+    /// While busy only the side action pane's shared actions and its secondary sections are turned off; page
+    /// scrolling, the package bar, the partition table and the log stay usable.
+    /// <para>忙碌期间只关闭侧边操作区的通用动作与其二级分类；页面滚动、刷机包栏、分区表与日志保持可用。</para>
+    /// The cancel button is not in that always-disabled set: its enabled state tracks the main entry area's
+    /// busy state and is usable only while busy with a registered cancellation source.
+    /// <para>取消按钮不在常启用集合内，其状态完全由这条写入决定：忙碌且已登记取消源时才可用。</para>
+    /// When the run ends, the state-derived enables are recomputed so a package or selection that changed
+    /// during the run is reflected immediately.
+    /// <para>退出忙碌后按当前页面状态重算派生启用值（加载引导、回读、选项与 Root 面板），
+    /// 使本次运行期间改变的包与选中状态立即反映到界面上。</para>
+    /// </remarks>
     private void SetBusy(bool value)
     {
         _busy = value;
         IsBusy = value;
-        // 忙碌期间只关闭侧边操作区的通用动作与其二级分类；页面滚动、刷机包栏、分区表与日志保持可用。
-        // While busy only the side action pane's shared actions and its secondary sections are turned off;
-        // page scrolling, the package bar, the partition table and the log stay usable.
         foreach (var name in FlashDeviceUiPolicy.BusyDisabledControls)
         {
             SetControlEnabled(name, !value);
         }
 
-        // 取消按钮不在常启用集合内，其状态完全由这条写入决定：忙碌且已登记取消源时才可用。
-        // The cancel button's enabled state tracks the main entry area's busy state: it is usable
-        // only while busy with a registered cancellation source.
         SetControlEnabled("CancelFlashButton", value && _flashCancellation is not null);
         if (!value)
         {
-            // 退出忙碌后按当前页面状态重算派生启用值（加载引导、回读、选项与 Root 面板），
-            // 使本次运行期间改变的包与选中状态立即反映到界面上。
-            // After the run the state-derived enables are recomputed so a package or selection that
-            // changed during the run is reflected immediately.
             UpdateModeVisibility();
             FlushPendingLog();
         }
@@ -2292,13 +2388,30 @@ public sealed partial class FlashViewModel
 
         if (device.Protocol == DeviceProtocolKind.Fastboot)
         {
-            if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-                (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key ||
-                    found.Protocol != DeviceProtocolKind.Fastboot))
+            if (SelectedDevice is not DetectedDevice current || current.Key != device.Key)
             {
                 AppendLog(language.GetString("Flash_DeviceChanged"));
                 return;
             }
+
+            bool stillPresent;
+            try
+            {
+                stillPresent = (await Task.Run(App.DeviceMonitor.Scan)).Any(found =>
+                    found.Key == device.Key && found.Protocol == DeviceProtocolKind.Fastboot);
+            }
+            catch (Exception ex)
+            {
+                AppendError(ex);
+                return;
+            }
+
+            if (!stillPresent)
+            {
+                AppendLog(language.GetString("Flash_DeviceChanged"));
+                return;
+            }
+
             using var cancellation = new CancellationTokenSource();
             _flashCancellation = cancellation;
             SetBusy(true);
@@ -2378,6 +2491,13 @@ public sealed partial class FlashViewModel
         }
     }
 
+    /// <remarks>
+    /// A Rockchip flash needs an addressing source, never a loader: rows resolve through the parameter table,
+    /// or through their own row address when the forced-address switch is set, the way the vendor tool writes a
+    /// Linux bundle; whether the device already runs a loader is decided by its own answers.
+    /// <para>瑞芯微刷写只需要一个寻址来源，不需要 loader：分区行按 parameter 分区表寻址，勾选“强制按地址写”时
+    /// 改为像厂商工具那样按行地址写入，设备是否已运行 loader 由它自己的应答决定。</para>
+    /// </remarks>
     private async Task RunSelectedAsync(bool erase)
     {
         if (_busy || _confirming || SelectedDevice is not DetectedDevice device) return;
@@ -2390,15 +2510,18 @@ public sealed partial class FlashViewModel
             IsWritableEntry(entry) &&
             (!erase || entry.Name != "reboot" && entry.EffectiveCommand is not ("set_active" or "reboot" or "wipe_super"))).ToArray();
         if (selected.Length == 0) return;
-        var rkImageDir = selected.FirstOrDefault(row => row.FilePath.Length > 0) is { } firstRow
-            ? Path.GetDirectoryName(Path.GetFullPath(firstRow.FilePath)) ?? string.Empty
-            : string.Empty;
+        var rkForceAddress = device.Protocol == DeviceProtocolKind.Rkdl && RkForceAddress;
+        var rkParameterPath = device.Protocol == DeviceProtocolKind.Rkdl && !rkForceAddress
+            ? RkParameterTablePath()
+            : null;
         if (!FlashModeAllowed(device.Protocol, _flatBinPackage,
                 EffectiveEdlProgrammer is not null,
-                rkImageDir.Length > 0 && FlashService.HasRockchipParameter(rkImageDir)) ||
+                rkParameterPath is not null || rkForceAddress) ||
             device.Protocol == DeviceProtocolKind.Adb && !await FlashSuService.HasSuAsync(device, CancellationToken.None))
         {
-            AppendLog(_localizer.GetString("Flash_ModeMismatch"));
+            AppendLog(_localizer.GetString(device.Protocol == DeviceProtocolKind.Rkdl && rkParameterPath is null
+                ? "Flash_RkParameterMissing"
+                : "Flash_ModeMismatch"));
             return;
         }
         var plainOptions = erase || Field<CheckBox>("DeleteCowBox").IsChecked == true || Field<CheckBox>("EraseDataBox").IsChecked == true ||
@@ -2454,6 +2577,7 @@ public sealed partial class FlashViewModel
         }
 
         var description = $"{device.DisplayName}: {string.Join(", ", selected.Select(entry => entry.Name))}";
+        if (rkForceAddress) description += Environment.NewLine + language.GetString("Flash_RkForceAddress");
         if (deleteCow) description += Environment.NewLine + language.GetString("Flash_DeleteCow");
         if (eraseData) description += Environment.NewLine + language.GetString("Flash_EraseData");
         if (rebootAfter) description += Environment.NewLine + language.GetString("Flash_RebootAfter");
@@ -2724,9 +2848,13 @@ public sealed partial class FlashViewModel
                     var result = command == "erase"
                         ? await FlashService.Default.ErasePartitionAsync(target, entry.Name, progress, cancellation.Token)
                         : device.Protocol == DeviceProtocolKind.Rkdl
-                            ? await FlashService.FlashRkdlAsync(target, entry.Name,
-                                prepared.GetValueOrDefault(entry, entry.FilePath), EffectiveRkLoaderPath,
-                                progress, cancellation.Token)
+                            ? rkForceAddress
+                                ? await FlashService.FlashRkdlLbaAsync(target, entry.Name, RkRowAddress(entry),
+                                    prepared.GetValueOrDefault(entry, entry.FilePath), RkRowStorageId(entry),
+                                    progress, cancellation.Token)
+                                : await FlashService.FlashRkdlAsync(target, entry.Name,
+                                    prepared.GetValueOrDefault(entry, entry.FilePath), EffectiveRkLoaderPath,
+                                    progress, cancellation.Token, parameterPath: rkParameterPath)
                             : await FlashService.Default.FlashImageAsync(target, entry.Name,
                                 prepared.GetValueOrDefault(entry, entry.FilePath), progress, cancellation.Token);
                     AppendLog(result.Summary);
@@ -2829,22 +2957,12 @@ public sealed partial class FlashViewModel
         _mtkLoaderPath = null;
         try
         {
-            var entries = await MtkScatterPackage.ListUsableLoaderEntriesAsync(path, cancellation.Token);
-            if (entries.Count == 0)
+            if (!await ApplyMtkLoaderFileAsync(path, cancellation.Token).ConfigureAwait(true))
             {
                 throw new InvalidDataException(
                     _localizer.GetString("Flash_MtkLoaderNoEntries"));
             }
 
-            _mtkLoaderPath = path;
-            _mtkLoaderEntries = entries;
-            Field<ComboBox>("MtkEntryIndexBox").ItemsSource = entries.Select(entry =>
-                string.Format(_localizer.GetString("Flash_MtkLoaderEntry"),
-                    entry.Index, entry.HardwareCode.ToString("X4"), entry.HardwareSubCode.ToString("X4"),
-                    $"{entry.HardwareVersion}{(entry.SoftwareVersion is { } software ? $".{software}" : string.Empty)}")).ToArray();
-            Field<ComboBox>("MtkEntryIndexBox").SelectedIndex = 0;
-            Field<TextBlock>("MtkDaPathText").Text = Path.GetFileName(path);
-            ToolTip.SetTip(Field<TextBlock>("MtkDaPathText"), path);
             AppendLog(Path.GetFileName(path));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
@@ -4537,10 +4655,22 @@ public sealed partial class FlashViewModel
         IProgress<FlashProgress>? progress, CancellationToken cancellationToken)
         => _flashService.FlashImageAsync(target, partition, imagePath, progress, cancellationToken);
 
+    /// <summary>
+    /// Whether the selected mode can serve this package: fastboot always can, a Rockchip target needs a resolved
+    /// addressing source (a parameter table or the forced-address switch), and a flat-bin package needs a programmer on
+    /// EDL or a rooted ADB shell.
+    /// <para>所选模式能否服务该刷机包：fastboot 总是可以；瑞芯微目标需要已解析的寻址来源（分区表或“强制按地址写”）；
+    /// 扁平 bin 包在 EDL 上需要 programmer，在 ADB 上需要 root shell。</para>
+    /// </summary>
+    /// <param name="mode">Protocol of the selected device.<para>所选设备的协议。</para></param>
+    /// <param name="flatBin">Whether the package is a flat bin bundle.<para>刷机包是否为扁平 bin 包。</para></param>
+    /// <param name="hasProgrammer">Whether an EDL programmer is selected.<para>是否已选择 EDL programmer。</para></param>
+    /// <param name="rkTargetResolved">Whether the Rockchip rows carry an addressing source.<para>瑞芯微行是否带有寻址来源。</para></param>
+    /// <returns><see langword="true"/> when the mode can flash this package.<para>该模式可刷写此包时为 <see langword="true"/>。</para></returns>
     internal static bool FlashModeAllowed(DeviceProtocolKind mode, bool flatBin,
-        bool hasProgrammer, bool hasRockchipParameter)
+        bool hasProgrammer, bool rkTargetResolved)
         => mode == DeviceProtocolKind.Fastboot ||
-            mode == DeviceProtocolKind.Rkdl && hasRockchipParameter ||
+            mode == DeviceProtocolKind.Rkdl && rkTargetResolved ||
             flatBin && (mode == DeviceProtocolKind.Adb ||
                         mode == DeviceProtocolKind.Edl && hasProgrammer);
 

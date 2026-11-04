@@ -79,6 +79,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             MtkBootRomVersion = string.Empty;
             MtkMeidHex = string.Empty;
             MtkSocidHex = string.Empty;
+            SunxiMode = string.Empty;
             EdlSerialPort = string.Empty;
             EdlSaharaVersion = string.Empty;
             EdlMaxCommandLength = string.Empty;
@@ -99,6 +100,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
                 nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl), nameof(RkdlBadge),
+                nameof(IsSunxi), nameof(SunxiMode), nameof(SunxiBadge),
                 nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
                 nameof(EdlProtocol), nameof(HasEdlProtocol), nameof(EdlBadge),
                 nameof(EdlSaharaVersion), nameof(EdlMaxCommandLength), nameof(EdlFirehoseVersion),
@@ -536,10 +538,26 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool HasEdlProtocol => IsEdl && EdlProtocol != EdlProtocolState.Unknown;
 
     /// <summary>
-    /// EDL badge text: appends the Sahara/Firehose mode after EDL once verified.
-    /// <para>EDL 徽章文本：已校验协议时在 EDL 后追加 Sahara/Firehose 模式。</para>
+    /// EDL badge text: appends the Sahara/Firehose mode after EDL once verified, using the readable
+    /// protocol name rather than the enum member name.
+    /// <para>EDL 徽章文本：已校验协议时在 EDL 后追加 Sahara/Firehose 模式，使用可读的协议名而非枚举成员名。</para>
     /// </summary>
-    public string EdlBadge => HasEdlProtocol ? $"EDL · {EdlProtocol}" : "EDL";
+    public string EdlBadge => HasEdlProtocol ? $"EDL · {DescribeEdlProtocol(EdlProtocol)}" : "EDL";
+
+    /// <summary>
+    /// Maps a verified EDL wire protocol to the readable name shown in the badge.
+    /// <para>把已验证的 EDL 线协议映射为徽章中显示的可读名称。</para>
+    /// </summary>
+    /// <param name="state">Verified wire protocol state.<para>已验证的线协议状态。</para></param>
+    /// <returns>Readable protocol name; <c>Unknown</c> maps to plain <c>EDL</c>.<para>可读协议名；<c>Unknown</c> 映射为纯 <c>EDL</c>。</para></returns>
+    private static string DescribeEdlProtocol(EdlProtocolState state) => state switch
+    {
+        EdlProtocolState.Sahara => "Sahara",
+        EdlProtocolState.SaharaMemoryDebug => "Sahara · memory debug",
+        EdlProtocolState.Firehose => "Firehose",
+        EdlProtocolState.Streaming => "Streaming DLOAD",
+        _ => "EDL"
+    };
 
     /// <summary>
     /// The Sahara HELLO-reported protocol version; empty until collected.
@@ -681,6 +699,35 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>是否为 MTK 设备。</para>
     /// </summary>
     public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
+
+    /// <summary>
+    /// Whether the device is an Allwinner FEL or FES target.
+    /// <para>是否为全志 FEL 或 FES 设备。</para>
+    /// </summary>
+    public bool IsSunxi => Device.Protocol == DeviceProtocolKind.Sunxi;
+
+    /// <summary>
+    /// The mode reported by the identity handshake (<c>FEL</c> or <c>FES</c>); empty until a session connected,
+    /// because discovery cannot tell the two modes apart.
+    /// <para>身份握手上报的模式（<c>FEL</c> 或 <c>FES</c>）；会话连接之前为空，因为发现阶段无法区分两种模式。</para>
+    /// </summary>
+    public string SunxiMode
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(SunxiBadge));
+            }
+        }
+    } = string.Empty;
+
+    /// <summary>
+    /// Allwinner badge text: appends the handshake-reported mode once a session connected.
+    /// <para>全志徽章文本：会话连接后追加握手上报的模式。</para>
+    /// </summary>
+    public string SunxiBadge => IsSunxi && SunxiMode.Length > 0 ? $"Sunxi · {SunxiMode}" : "Sunxi";
 
     /// <summary>
     /// Whether the device is an Apple (iOS) target.

@@ -3888,6 +3888,9 @@ Continue?</value>
   <data name="Flash_RkTestDevice" xml:space="preserve">
     <value>Test Device</value>
   </data>
+  <data name="Flash_RkTestDeviceProgress" xml:space="preserve">
+    <value>Device progress</value>
+  </data>
   <data name="Flash_RkGetStorage" xml:space="preserve">
     <value>Get Current Storage</value>
   </data>
@@ -3948,6 +3951,9 @@ Continue?</value>
   <data name="Flash_RkEraseSectors" xml:space="preserve">
     <value>Erase Sectors</value>
   </data>
+  <data name="Flash_RkBadBlocks" xml:space="preserve">
+    <value>Bad blocks</value>
+  </data>
   <data name="Flash_RkLbaGroup" xml:space="preserve">
     <value>LBA Read / Write</value>
   </data>
@@ -3991,7 +3997,7 @@ Continue?</value>
     <value>The sector count is smaller than the file being written; increase it or enable Force Address Write.</value>
   </data>
   <data name="Flash_RkParameterMissing" xml:space="preserve">
-    <value>No Rockchip parameter table was found next to the loaded images, so partition addresses cannot be resolved.</value>
+    <value>Neither the configuration's parameter row nor the images carry a Rockchip parameter table, so partition addresses cannot be resolved.</value>
   </data>
   <data name="Flash_RkStorageSwitched" xml:space="preserve">
     <value>Storage switched; the device re-enumerates, so select it again in the device list before the next command.</value>
@@ -4075,7 +4081,7 @@ Continue?</value>
     <value>Load loader: {0}</value>
   </data>
   <data name="Flash_RkLoaderMissing" xml:space="preserve">
-    <value>The loader this configuration references is missing: {0}</value>
+    <value>The loader this configuration references is missing: {0} (flashing partitions does not use it; only sending a boot loader from mask ROM needs one)</value>
   </data>
   <data name="Flash_RkStorageNeedsLoader" xml:space="preserve">
     <value>The device is in mask ROM, which answers no storage query; load a Rockchip loader to read the current storage.</value>
@@ -4100,6 +4106,36 @@ Continue?</value>
   </data>
   <data name="Flash_RkLoaderChecked" xml:space="preserve">
     <value>Rockchip loader accepted, {0}: {1}</value>
+  </data>
+  <data name="Flash_LoaderChecking" xml:space="preserve">
+    <value>Checking the boot image…</value>
+  </data>
+  <data name="Flash_LoaderMissing" xml:space="preserve">
+    <value>The boot image this configuration references is missing: {0}</value>
+  </data>
+  <data name="Flash_LoaderValid" xml:space="preserve">
+    <value>Boot image accepted</value>
+  </data>
+  <data name="Flash_LoaderInvalidStatus" xml:space="preserve">
+    <value>Boot image rejected</value>
+  </data>
+  <data name="Flash_EdlLoaderChecked" xml:space="preserve">
+    <value>Sahara programmer accepted, {0}: {1}</value>
+  </data>
+  <data name="Flash_EdlLoaderNotProgrammer" xml:space="preserve">
+    <value>Not a Sahara programmer image: no ELF, MBN or MELF structure was found in {0}</value>
+  </data>
+  <data name="Flash_EdlLoaderMelf" xml:space="preserve">
+    <value>MELF, {0} ELF components</value>
+  </data>
+  <data name="Flash_MtkLoaderChecked" xml:space="preserve">
+    <value>MTK download agent accepted, {0}: {1}</value>
+  </data>
+  <data name="Flash_MtkLoaderEntries" xml:space="preserve">
+    <value>{0} usable loader entries</value>
+  </data>
+  <data name="Flash_MtkLoaderInvalid" xml:space="preserve">
+    <value>MTK download agent structure is invalid, {0}: {1}</value>
   </data>
   <data name="Flash_RkParameterValid" xml:space="preserve">
     <value>Partition table accepted, {0} partitions</value>
@@ -4163,5 +4199,119 @@ Continue?</value>
   </data>
   <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
     <value>Generated regular expression will appear here</value>
+  </data>
+  <data name="Flash_SpacemiT" xml:space="preserve">
+    <value>SpacemiT</value>
+  </data>
+  <data name="Flash_SpacemiTPackageHint" xml:space="preserve">
+    <value>Select the unpacked flash package folder that contains fastboot.yaml; the device must show up as a SpacemiT fastboot device (BootROM or U-Boot).</value>
+  </data>
+  <data name="Flash_SpacemiTPackagePath" xml:space="preserve">
+    <value>Flash package folder</value>
+  </data>
+  <data name="Flash_SpacemiTChoosePackage" xml:space="preserve">
+    <value>Choose package folder</value>
+  </data>
+  <data name="Flash_SpacemiTRebootAfter" xml:space="preserve">
+    <value>Reboot after flashing</value>
+  </data>
+  <data name="Flash_SpacemiTFlash" xml:space="preserve">
+    <value>Flash package</value>
+  </data>
+  <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
+    <value>The flash package rewrites the partition table and every image it references on the selected SpacemiT device. This cannot be undone.</value>
+  </data>
+  <data name="Flash_SpacemiTPackageMissing" xml:space="preserve">
+    <value>The selected folder is not a valid SpacemiT flash package (fastboot.yaml missing or unreadable).</value>
+  </data>
+  <data name="Flash_Sunxi" xml:space="preserve">
+    <value>Allwinner</value>
+  </data>
+  <data name="Flash_SunxiHint" xml:space="preserve">
+    <value>FEL is the USB boot ROM mode; FES is the U-Boot service mode. FES flashing arrives with the image plan.</value>
+  </data>
+  <data name="Flash_SunxiRefresh" xml:space="preserve">
+    <value>Read device info</value>
+  </data>
+  <data name="Flash_SunxiFes1" xml:space="preserve">
+    <value>FES1 loader image</value>
+  </data>
+  <data name="Flash_SunxiChooseFes1" xml:space="preserve">
+    <value>Choose FES1...</value>
+  </data>
+  <data name="Flash_SunxiUboot" xml:space="preserve">
+    <value>Service payload image</value>
+  </data>
+  <data name="Flash_SunxiChooseUboot" xml:space="preserve">
+    <value>Choose service payload...</value>
+  </data>
+  <data name="Flash_SunxiBootFes" xml:space="preserve">
+    <value>Boot FES service</value>
+  </data>
+  <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
+    <value>Uploads the FES1 loader and the service payload to the selected Allwinner device and executes them, so the device re-enumerates as FES. Uploaded code can leave the device in any state and this cannot be undone.</value>
+  </data>
+  <data name="Flash_SunxiFelTools" xml:space="preserve">
+    <value>FEL memory tools</value>
+  </data>
+  <data name="Flash_SunxiAddress" xml:space="preserve">
+    <value>Address (hex)</value>
+  </data>
+  <data name="Flash_SunxiLength" xml:space="preserve">
+    <value>Length (bytes)</value>
+  </data>
+  <data name="Flash_SunxiReadMemory" xml:space="preserve">
+    <value>Read memory</value>
+  </data>
+  <data name="Flash_SunxiWriteMemory" xml:space="preserve">
+    <value>Write file</value>
+  </data>
+  <data name="Flash_SunxiExecuteAddress" xml:space="preserve">
+    <value>Entry address (hex)</value>
+  </data>
+  <data name="Flash_SunxiExecute" xml:space="preserve">
+    <value>Execute</value>
+  </data>
+  <data name="Flash_SunxiExecuteConfirmDetail" xml:space="preserve">
+    <value>Calls 0x{0:X8} on the device. Uploaded code can leave it in any state.</value>
+  </data>
+  <data name="Flash_SunxiPhaseFes1" xml:space="preserve">
+    <value>Running the DRAM loader...</value>
+  </data>
+  <data name="Flash_SunxiPhaseService" xml:space="preserve">
+    <value>Uploading the service payload...</value>
+  </data>
+  <data name="Flash_SunxiPhaseStatus" xml:space="preserve">
+    <value>Waiting for the FES service...</value>
+  </data>
+  <data name="Flash_SunxiBootDone" xml:space="preserve">
+    <value>The device answered the FES handshake.</value>
+  </data>
+  <data name="Flash_SunxiModeFel" xml:space="preserve">
+    <value>FEL mode</value>
+  </data>
+  <data name="Flash_SunxiModeFes" xml:space="preserve">
+    <value>FES mode</value>
+  </data>
+  <data name="Flash_SunxiStorageFormat" xml:space="preserve">
+    <value>storage {0}</value>
+  </data>
+  <data name="Flash_SunxiSecureFormat" xml:space="preserve">
+    <value>secure 0x{0:X8}</value>
+  </data>
+  <data name="Flash_SunxiStatusTimeout" xml:space="preserve">
+    <value>The device did not answer the status query.</value>
+  </data>
+  <data name="Flash_SunxiStatusFailed" xml:space="preserve">
+    <value>Status query failed:</value>
+  </data>
+  <data name="Flash_SunxiAddressInvalid" xml:space="preserve">
+    <value>Enter a hexadecimal address.</value>
+  </data>
+  <data name="Flash_SunxiLengthInvalid" xml:space="preserve">
+    <value>Enter a positive byte count.</value>
+  </data>
+  <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
+    <value>The file exceeds the {0} memory-tool limit.</value>
   </data>
 </root>

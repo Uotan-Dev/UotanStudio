@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Hash.RockchipCrc32;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Flash;
@@ -48,8 +51,7 @@ public sealed class FlashGlobalLogRoutingTests
         var config = Path.Combine(directory, "download.cfg");
         try
         {
-            await File.WriteAllBytesAsync(loader, [0x52, 0x4B, 0x42, 0x4F, 0x4F, 0x54],
-                TestContext.Current.CancellationToken);
+            await File.WriteAllBytesAsync(loader, BuildMinimalLoader(), TestContext.Current.CancellationToken);
             RockchipConfigFile.Save(config, RockchipConfigFile.CreateHeader(),
             [
                 new RockchipConfigEntry { Name = RockchipConfigFile.LoaderRowName, Path = loader, Selected = true },
@@ -59,14 +61,14 @@ public sealed class FlashGlobalLogRoutingTests
 
             await model.ImportRkConfigAsync(config);
 
-            Assert.Equal(loader, model.EffectiveRkLoaderPath);
             await model.SpecialFileRowCheck;
+            Assert.Equal(loader, model.EffectiveRkLoaderPath);
 
             File.Delete(loader);
             await model.ImportRkConfigAsync(config);
 
-            Assert.Null(model.EffectiveRkLoaderPath);
             await model.SpecialFileRowCheck;
+            Assert.Null(model.EffectiveRkLoaderPath);
         }
         finally
         {
@@ -74,6 +76,11 @@ public sealed class FlashGlobalLogRoutingTests
         }
     }
 
+    /// <remarks>
+    /// The row check reads that file in the background; waiting for it before the finally deletes the directory keeps
+    /// the cleanup from racing an open handle.
+    /// <para>行检查在后台读取该文件；等它结束再让 finally 删除目录，清理才不会撞上仍被打开的文件句柄。</para>
+    /// </remarks>
     [Fact]
     public async Task ImportRkConfigAsync_ConfigurationRowPointingAtAnotherConfiguration_StaysOutOfTheGrid()
     {
@@ -107,6 +114,8 @@ public sealed class FlashGlobalLogRoutingTests
             Assert.Null(bootRow.Step);
             Assert.Equal("loader", model.Partitions[0].Command);
             Assert.Equal(loader, model.Partitions[0].FilePath);
+
+            await model.SpecialFileRowCheck;
         }
         finally
         {
@@ -157,6 +166,24 @@ public sealed class FlashGlobalLogRoutingTests
         {
             service.ApplyDebugMode(debug: false);
         }
+    }
+
+    /// <summary>
+    /// Builds the smallest image the Rockchip loader handler accepts: a self-consistent header with no entry tables and
+    /// a matching trailing checksum, so a loader row can be proven effective rather than merely pointing at a file.
+    /// <para>构造瑞芯微 loader 处理器能接受的最小镜像：自洽头部、三张条目表都为空、末尾校验和相符，使 loader 行可以被
+    /// 证实有效，而不只是指向某个文件。</para>
+    /// </summary>
+    private static byte[] BuildMinimalLoader()
+    {
+        const int headerSize = 102;
+        var image = new byte[headerSize + 4];
+        Encoding.ASCII.GetBytes("BOOT").CopyTo(image, 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(4), headerSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(6), 0x010B);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(image.Length - 4),
+            RockchipCrc32.Compute(image.AsSpan(0, image.Length - 4)));
+        return image;
     }
 
     private sealed class RecordingUnifiedLog : IUnifiedLog
