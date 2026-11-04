@@ -21,7 +21,7 @@
 - 📦 Firmware parsing and rebuilding: file systems, partitions, OTA, boot images and vendor packages
 - 🔌 Device communication: ADB, HDC, Fastboot, Qualcomm EDL, MediaTek and Rockchip RKDL over USB/TCP/UDP/serial
 - 🛠 Visual programming: node canvas, workflow templates, script nodes and plugin packages
-- 🤖 Embedded MCP server: companion mode inside the GUI and a headless mode for AI clients
+- 🤖 Embedded MCP server: companion mode inside the GUI and a headless mode for AI clients to invoke firmware and device capabilities
 - 🖥 Screen mirroring: scrcpy protocol with GPU presentation and a CPU bitmap fallback
 - 🌍 Multilingual UI: Simplified Chinese and English
 - 🚫 No ads, no telemetry: parsing, packaging and flashing all run locally; the network is used only to download external tools on demand
@@ -85,7 +85,7 @@ flowchart TD
 - `UotanStudio.Delivery` may use the firmware layer but never references host UI, project services or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
 - `UotanStudio.Mirroring` references only `UotanStudio.Comm`, while `UotanStudio.Media` keeps zero Comm dependencies and consumes frames through the decoding factory.
 - `UotanStudio.Net` is the leaf library for downloads, GitHub mirrors and release/version queries; it references no other project.
-- `UotanStudio.Benchmarks` is a BenchmarkDotNet console app now included in the `.slnx` build and CI gates; benchmarks still run separately in Release.
+- `UotanStudio.Benchmarks` is a BenchmarkDotNet console app included in the `.slnx` build and CI gates; benchmarks still run separately in Release.
 
 ## 📦 Firmware formats
 
@@ -100,7 +100,7 @@ Detection follows the handler list published by `FirmwareFormatRegistry.Register
 | Boot and security | boot / recovery / vendor_boot / dtbo parsing and repacking, AVB descriptor verification and signing, hashtree and FEC construction, SELinux policy parsing, boot patch footprint analysis |
 | Android metadata | `resources.arsc`, binary XML, DEX decompilation and Smali, OAT/VDEX, APK parsing and repacking, v1/v2/v3 signing with JKS key stores, QCN modem configuration |
 | Device tree and executables | DTB/DTS editing, ELF inspection, Qualcomm images and PBT |
-| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG and RKBOOT/RKLOADER loaders, Amlogic DZ/KDZ, Allwinner, MediaTek, Sony SIN, NTPi, NB0 |
+| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG and RKBOOT/RKLOADER loaders, Amlogic DZ/KDZ, Allwinner IMAGEWTY, MediaTek, Sony SIN, NTPi, NB0 |
 
 Firmware images, ZIP files, payloads, file system images and device responses are all treated as untrusted input: offsets, lengths, entry counts, decompressed sizes and block counts are bounded and overflow-checked, and every publish goes through a temporary directory plus verification and atomic replacement.
 

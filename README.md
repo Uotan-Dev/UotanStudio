@@ -78,7 +78,7 @@ flowchart TD
 ```
 
 - `UotanStudio.Hash` 与 `UotanStudio.Net` 是最底层叶子；`UotanStudio.Compress` 只依赖 `Hash` 并提供通用压缩与 ZIP/容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Projects` 依赖 `Hash` 与 `Compress`，`UotanStudio.Media` 不依赖其他业务项目。
-- `UotanStudio.Assets` 只依赖 `Hash` 与 `Compress`，是全部随包二进制资源的唯一存放点（字体、OpenHarmony 采集库、厂商驱动包、交付更新器、magic 规则表）；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主经 `AssetCatalog`/`AssetStore` 读取，任何项目都不再自己内嵌资源。
+- `UotanStudio.Assets` 只依赖 `Hash` 与 `Compress`，是全部随包二进制资源的唯一存放点（字体、OpenHarmony 采集库、厂商驱动包、交付更新器、magic 规则表）；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主经 `AssetCatalog`/`AssetStore` 读取，任何项目都不自带内嵌资源。
 - 厂商 Windows 驱动以 `drivers/<packageId>` 资源包随包，设置页的驱动安装器经 `AssetStore` 物化到临时目录后暂存到驱动仓库。
 - 测试宿主实际引用除 `UotanStudio.Desktop` 之外的全部项目，图中只画出一条代表性依赖。
 - 全部设备读写（USB 句柄、套接字、串口、adb/HDC server 协议）由 `UotanStudio.Comm` 持有，宿主只消费 `DeviceController`/`DeviceLease` 与协议客户端。
@@ -100,7 +100,7 @@ flowchart TD
 | 启动与安全 | boot / recovery / vendor_boot / dtbo 解析与重打包、AVB 描述符校验与签名、hashtree 与 FEC 构建、SELinux 策略解析、boot 补丁痕迹分析 |
 | Android 元数据 | `resources.arsc`、二进制 XML、DEX 反编译与 Smali、OAT/VDEX、APK 解析与重打包、v1/v2/v3 签名与 JKS 密钥库、QCN 调制解调器配置 |
 | 设备树与可执行 | DTB/DTS 编辑、ELF 信息、Qualcomm 镜像与 PBT |
-| 厂商包 | OPPO/OnePlus（`.ops`）、Meizu MPK、Lenovo QSB、酷派 CPB、华为 UpdateApp、Rockchip PAC/IMG 与 RKBOOT/RKLOADER loader、Amlogic DZ/KDZ、Allwinner、MediaTek、Sony SIN、NTPi、NB0 |
+| 厂商包 | OPPO/OnePlus（`.ops`）、Meizu MPK、Lenovo QSB、酷派 CPB、华为 UpdateApp、Rockchip PAC/IMG 与 RKBOOT/RKLOADER loader、Amlogic DZ/KDZ、Allwinner IMAGEWTY、MediaTek、Sony SIN、NTPi、NB0 |
 
 固件、ZIP、Payload、文件系统镜像和设备返回数据一律视为不可信输入：偏移、长度、条目数量、解压大小和块数量都有上限检查与溢出防护，写入统一走临时目录 + 校验 + 原子替换。
 
@@ -111,7 +111,7 @@ flowchart TD
 - **HDC**：HarmonyOS / OpenHarmony 设备通道与应用管理
 - **Qualcomm EDL**：Sahara 握手与传输、Firehose 刷写/读取/擦除、按 GPT 分区名操作、GPT 修复、UFS 描述符与 provision 计划、内存调试与 crashdump、项目级认证
 - **MediaTek**：XFlash、Legacy DA、BootROM 与 DA 交互、芯片表、scatter/GPT 计划、DA 补丁与摘要修复
-- **Rockchip RKDL**：BootROM USB 协议、几何校验、传输与刷写
+- **Rockchip RKDL**：BootROM USB 协议、失败即拒的几何校验、传输与刷写
 - **原生 USB**：按物理路径精确筛选接口，libusb 原生库按 RID 随包提供
 
 设备侧能力对应界面：设备面板、USB 树视图、设备日志、扫码配对窗口、投屏窗口与内置终端。
