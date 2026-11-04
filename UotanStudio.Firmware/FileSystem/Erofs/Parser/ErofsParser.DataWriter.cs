@@ -1426,7 +1426,7 @@ public sealed partial class ErofsParser
         {
             cancellationToken.ThrowIfCancellationRequested();
             var recordOffset = checked(extentsBase + i * recSize);
-            var record = ReadInodeMetadata(nid, recordOffset, recSize, $"extent record {i}");
+            var record = ReadInodeMetadata(nid, recordOffset, recSize, "extent record", i);
             var plenRaw = BinaryPrimitives.ReadUInt32LittleEndian(record);
             var logicalStart = checked((long)(BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(12))
                 | (recSize > 16 ? (ulong)BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(16)) << 32 : 0)));
