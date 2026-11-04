@@ -30,7 +30,7 @@ public sealed partial class FastbootSession
             throw new ArgumentException("Partition name must not be empty.", nameof(partition));
         }
 
-        DownloadData(metadataImage, metadataImage.Length, progress, cancellationToken).ThrowIfFailed();
+        DownloadData(metadataImage, metadataImage.Length, progress, null, cancellationToken).ThrowIfFailed();
         return ExecuteCommand(wipe
             ? FastbootConstants.CommandUpdateSuper + partition + ":wipe"
             : FastbootConstants.CommandUpdateSuper + partition);
@@ -262,7 +262,7 @@ public sealed partial class FastbootSession
     public FastbootResponse Boot(Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        DownloadData(stream, length, progress, cancellationToken).ThrowIfFailed();
+        DownloadData(stream, length, progress, null, cancellationToken).ThrowIfFailed();
         return ExecuteCommand(FastbootConstants.CommandBoot);
     }
 
@@ -343,7 +343,7 @@ public sealed partial class FastbootSession
         ThrowIfDisposed();
         var target = resolveSlot ? ResolvePartitionWithSlot(partition) : partition;
         FlashPartitionPreflight.Validate(this, target, length, options ?? FlashPartitionOptions.Default, cancellationToken);
-        DownloadData(stream, length, progress, cancellationToken).ThrowIfFailed();
+        DownloadData(stream, length, progress, null, cancellationToken).ThrowIfFailed();
         return ExecuteCommand(FastbootConstants.CommandFlash + target);
     }
 

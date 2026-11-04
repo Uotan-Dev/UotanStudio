@@ -559,7 +559,7 @@ internal static class DeviceToolHandlers
                     session.ExecuteCommand($"erase:{partition}").ThrowIfFailed();
                 }
 
-                var response = session.DownloadFile(resolvedImage, ToByteProgress(progress), cancellationToken);
+                var response = session.DownloadFile(resolvedImage, ToByteProgress(progress), null, cancellationToken);
                 if (response.State != FastbootResponseState.Success)
                 {
                     return new ToolResult(false, $"Download failed: {response.State} {response.Text}");

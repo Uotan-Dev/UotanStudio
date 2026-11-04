@@ -91,6 +91,8 @@ public sealed partial class FastbootSession
     /// <para>精确负载字节数；必须在 1 到 <see cref="uint.MaxValue"/> 之间，且不超过协商的 max-download-size。</para></param>
     /// <param name="progress">Receives the cumulative sent byte count after each chunk; may be <see langword="null"/>.
     /// <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="timeout">Per-download wire timeout overriding the session default; <see langword="null"/> keeps the session default. Applies to each transport write and to the trailing responses.
+    /// <para>本次下载的线上超时，覆盖会话默认；为 <see langword="null"/> 时沿用会话默认。作用于每次传输写入与尾部应答。</para></param>
     /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload.
     /// <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
     /// <returns>The terminal device response after the payload. A DATA reply announcing fewer bytes than requested is zero-filled up to the announced size, drained, and returned with its text rewritten; a DATA reply announcing more, or a terminal reply that never arrives, resets the transport before returning, because the bootloader's download state machine cannot be satisfied from this side.
@@ -105,7 +107,7 @@ public sealed partial class FastbootSession
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session has been disposed.
     /// <para>会话已释放。</para></exception>
-    public FastbootResponse DownloadData(Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public FastbootResponse DownloadData(Stream stream, long length, IProgress<long>? progress = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         if (length is <= 0 or > uint.MaxValue)
@@ -113,6 +115,7 @@ public sealed partial class FastbootSession
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
+        var timeoutMs = (int?)timeout?.TotalMilliseconds ?? _timeoutMs;
         var maxDownloadSize = GetMaxDownloadSize();
         if (length > maxDownloadSize)
         {
@@ -122,7 +125,7 @@ public sealed partial class FastbootSession
 
         SendCommand(FastbootConstants.CommandDownload + length.ToString("x8"));
 
-        var rawResponse = ReceiveResponse(cancellationToken: cancellationToken);
+        var rawResponse = ReceiveResponse(timeoutMs, cancellationToken);
         if (rawResponse.State != FastbootResponseState.Data)
         {
             return rawResponse;
@@ -157,7 +160,7 @@ public sealed partial class FastbootSession
                     throw new EndOfStreamException($"Stream ended early at {bytesWritten}/{length}");
                 }
 
-                var written = Transport.Write(chunkBuffer, 0, read, _timeoutMs);
+                var written = Transport.Write(chunkBuffer, 0, read, timeoutMs);
                 if (written != read)
                 {
                     throw new FastbootException(FastbootResponseState.Fail, $"Short write: {written}/{read}");
@@ -177,7 +180,7 @@ public sealed partial class FastbootSession
             ArrayPool<byte>.Shared.Return(chunkBuffer);
         }
 
-        var terminal = ReceiveResponse(cancellationToken: cancellationToken);
+        var terminal = ReceiveResponse(timeoutMs, cancellationToken);
         _pendingDownloadBytes = 0;
         if (terminal.State is FastbootResponseState.Timeout)
         {
@@ -299,13 +302,14 @@ public sealed partial class FastbootSession
     /// </summary>
     /// <param name="data">Payload bytes; the array is wrapped in a stream and never mutated. Empty arrays are rejected by the size check. <para>负载字节；数组被包装为流且不会被修改。空数组会被大小检查拒绝。</para></param>
     /// <param name="progress">Receives the cumulative sent byte count after each chunk; may be <see langword="null"/>. <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="timeout">Per-download wire timeout overriding the session default; <see langword="null"/> keeps the session default. <para>本次下载的线上超时，覆盖会话默认；为 <see langword="null"/> 时沿用会话默认。</para></param>
     /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload. <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
     /// <returns>The terminal device response after the payload. <para>负载传输后的设备终态响应。</para></returns>
     /// <exception cref="FastbootException">The payload exceeds the negotiated max-download-size, or the transport short-wrote a chunk. <para>负载超过协商上限，或传输层短写。</para></exception>
-    public FastbootResponse DownloadData(byte[] data, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public FastbootResponse DownloadData(byte[] data, IProgress<long>? progress = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         using var ms = new MemoryStream(data);
-        return DownloadData(ms, data.Length, progress, cancellationToken);
+        return DownloadData(ms, data.Length, progress, timeout, cancellationToken);
     }
 
     /// <summary>
@@ -314,14 +318,15 @@ public sealed partial class FastbootSession
     /// </summary>
     /// <param name="filePath">Existing file opened read-only; its full length is the download size. <para>以只读方式打开的现有文件；其完整长度即下载大小。</para></param>
     /// <param name="progress">Receives the cumulative sent byte count after each chunk; may be <see langword="null"/>. <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="timeout">Per-download wire timeout overriding the session default; <see langword="null"/> keeps the session default. <para>本次下载的线上超时，覆盖会话默认；为 <see langword="null"/> 时沿用会话默认。</para></param>
     /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload. <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
     /// <returns>The terminal device response after the payload. <para>负载传输后的设备终态响应。</para></returns>
     /// <exception cref="FileNotFoundException">The file does not exist. <para>文件不存在。</para></exception>
     /// <exception cref="FastbootException">The file exceeds the negotiated max-download-size, or the transport short-wrote a chunk. <para>文件超过协商上限，或传输层短写。</para></exception>
-    public FastbootResponse DownloadFile(string filePath, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public FastbootResponse DownloadFile(string filePath, IProgress<long>? progress = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         using var fs = File.OpenRead(filePath);
-        return DownloadData(fs, fs.Length, progress, cancellationToken);
+        return DownloadData(fs, fs.Length, progress, timeout, cancellationToken);
     }
 
     /// <summary>Executes a command that yields a DATA response, then receives the announced payload into the specified stream and awaits the trailing OKAY/FAIL. Used by the fetch and upload helpers.
