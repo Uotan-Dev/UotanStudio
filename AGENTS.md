@@ -15,6 +15,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Hash` | 校验和与摘要的唯一公共入口，叶子库 | [AGENTS.md](UotanStudio.Hash/AGENTS.md) |
 | `UotanStudio.Net` | HTTP 下载、GitHub 镜像与 Release/版本查询，叶子库 | [AGENTS.md](UotanStudio.Net/AGENTS.md) |
 | `UotanStudio.Compress` | 通用压缩、解压与容器编解码 | [AGENTS.md](UotanStudio.Compress/AGENTS.md) |
+| `UotanStudio.DD` | 跨平台磁盘镜像探测、驱动策略与烧录/校验 | [AGENTS.md](UotanStudio.DD/AGENTS.md) |
 | `UotanStudio.Assets` | 内嵌二进制资源的统一存储、清单与准备/抽取门面，叶子下层 | [AGENTS.md](UotanStudio.Assets/AGENTS.md) |
 | `UotanStudio.Firmware` | 固件格式、文件系统、Payload、启动镜像与签名 | [AGENTS.md](UotanStudio.Firmware/AGENTS.md) |
 | `UotanStudio.Firmware.MagicGen` | 构建期 magic(5) 规则表生成器 | [AGENTS.md](UotanStudio.Firmware.MagicGen/AGENTS.md) |
@@ -35,10 +36,10 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 ## 全局不变量
 
-- 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
+- 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`DD` 只引用 `Compress` 与 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
 - `Assets` 不引用 `Net`，也不做网络 I/O；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主可引用 `Assets`。
 - 校验和与摘要统一经 `UotanStudio.Hash` 计算，通用压缩统一经 `UotanStudio.Compress` 门面（`CompressionService`/`CompressionFile`），ZIP 容器统一经 `Zip/ZipContainer`：底层库之外不得构造 BCL 压缩流、不得使用 `System.IO.Hashing` 或 MD5/SHA 摘要入口、不得自带 CRC 多项式表。保留例外集中登记在 `HashBoundaryGuardTests` 与 `CompressionImplementationBoundaryTests` 的允许列表和 `UotanStudio.Compress/README.md` 的例外一节；格式域压缩（文件系统簇、boot 组件、OTA delta、厂商容器）留在所属固件上下文，不收进门面。
-- 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。
+- 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。操作系统块设备（`\\.\PhysicalDriveN`、`/dev/*`）的整盘镜像烧录归 `UotanStudio.DD`，不经过 USB/串口协议层。
 - Apple 相关协议（usbmuxd、lockdownd、AFC、syslog 中继与受信隧道）不接设备扫描：`DeviceControllerFactory` 只注册 USB/adb/HDC 发现源，扫描不探 usbmuxd 守护进程、不生成 usbmuxd 端点，`CommDeviceTransportOpener` 也不识别 usbmuxd 路由。不要为扫描恢复 usbmuxd 探针、端点映射或新增 Apple 发现源。
 - `DeliveryPlan` 是交付后端唯一输入契约；宿主负责采集与恢复界面状态，后端负责校验与生成输出，模式互斥只在现有校验路径维护。
 - 固件、ZIP、Payload、文件系统镜像和设备返回数据都按不可信输入处理：流式与有界缓冲、偏移/长度/条目/解压大小上限、整数溢出防护、贯穿 `CancellationToken`、临时文件校验后原子替换；修改镜像要分别报告字节、结构、内容与容量等价性。
