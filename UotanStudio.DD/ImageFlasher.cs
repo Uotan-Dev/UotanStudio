@@ -208,9 +208,7 @@ public sealed class ImageFlasher
         {
             var issues = DriveCompatibilityEvaluator.Evaluate(drive, image, writing: true);
             var blocking = issues
-                .Where(issue => issue.Severity == DriveCompatibilitySeverity.Error
-                    || issue.Issue == DriveCompatibilityIssue.SystemDrive
-                    || (issue.Issue == DriveCompatibilityIssue.LargeDrive && !options.AllowLargeDrive))
+                .Where(issue => DriveCompatibilityEvaluator.IsBlocking(issue, options.AllowLargeDrive))
                 .ToArray();
             if (blocking.Length > 0)
             {

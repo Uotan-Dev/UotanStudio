@@ -68,6 +68,26 @@ public static class DriveCompatibilityEvaluator
     }
 
     /// <summary>
+    /// Determines whether one finding must block writing with the current options.
+    /// <para>判断一项发现在当前选项下是否必须阻止写入。</para>
+    /// </summary>
+    /// <param name="issue">Finding produced by <see cref="Evaluate"/>.<para>由 <see cref="Evaluate"/> 产生的发现。</para></param>
+    /// <param name="allowLargeDrive">Whether large drives were explicitly allowed.
+    /// <para>是否已显式允许大容量驱动器。</para></param>
+    /// <returns>
+    /// <see langword="true"/> for errors, system drives and large drives without explicit permission.
+    /// <para>错误、系统盘以及未经显式许可的大容量驱动器返回 <see langword="true"/>。</para>
+    /// </returns>
+    public static bool IsBlocking(DriveCompatibilityIssueInfo issue, bool allowLargeDrive)
+    {
+        ArgumentNullException.ThrowIfNull(issue);
+
+        return issue.Severity == DriveCompatibilitySeverity.Error
+            || issue.Issue == DriveCompatibilityIssue.SystemDrive
+            || (issue.Issue == DriveCompatibilityIssue.LargeDrive && !allowLargeDrive);
+    }
+
+    /// <summary>
     /// Determines whether the drive can hold the image.
     /// <para>判断驱动器是否能容纳镜像。</para>
     /// </summary>
