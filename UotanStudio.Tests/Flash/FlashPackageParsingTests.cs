@@ -189,4 +189,203 @@ public sealed class FlashPackageParsingTests
             Directory.Delete(tempDir, recursive: true);
         }
     }
+
+    /// <remarks>
+    /// The manifest supplies the medium and the start sector the listing previously lost, and slot siblings stay
+    /// adjacent in the order their first slot occupies on the storage.
+    /// <para>清单提供此前丢失的介质与起始扇区；槽位兄弟项按首个槽位在存储上的位置相邻排列。</para>
+    /// </remarks>
+    [Fact]
+    public void ParseDirectory_RawprogramManifest_RestoresMediumAndOffsetAndKeepsSlotSiblingsAdjacent()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "test-dir-offset-" + Guid.NewGuid().ToString("N"));
+        var imagesDir = Path.Combine(tempDir, "images");
+        Directory.CreateDirectory(imagesDir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(imagesDir, "boot_a.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(imagesDir, "boot_b.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(imagesDir, "dtbo.img"), new byte[1024]);
+            File.WriteAllText(Path.Combine(imagesDir, "rawprogram0.xml"),
+                """
+                <data>
+                  <program filename="boot_a.img" label="boot_a" start_sector="1000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="boot_b.img" label="boot_b" start_sector="2000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="dtbo.img" label="dtbo" start_sector="3000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                </data>
+                """);
+
+            var rows = FlashViewModel.ParseDirectory(tempDir);
+
+            Assert.Equal(["boot_a", "boot_b", "dtbo"], rows.Select(row => row.Name));
+            Assert.All(rows, row => Assert.Equal("LUN 0", row.StorageMedium));
+            Assert.Equal("3.9 MiB", rows[0].Offset);
+            Assert.Equal("7.8 MiB", rows[1].Offset);
+            Assert.Equal("11.7 MiB", rows[2].Offset);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    /// <remarks>
+    /// Rows group by storage medium first, then by the start sector inside that medium, so a LUN 0 partition at a
+    /// later address never precedes an earlier one and LUN 1 never interleaves with LUN 0.
+    /// <para>行先按存储介质分组，再按介质内起始扇区排列，使 LUN 0 中靠后的分区不会跑到靠前的分区之前，
+    /// LUN 1 也不会与 LUN 0 交错。</para>
+    /// </remarks>
+    [Fact]
+    public void ParseDirectory_MultipleLuns_OrdersByMediumThenStartSector()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "test-dir-lun-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(tempDir, "boot.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "dtbo.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "system.bin"), new byte[1024]);
+            File.WriteAllText(Path.Combine(tempDir, "rawprogram0.xml"),
+                """
+                <data>
+                  <program filename="boot.img" label="boot" start_sector="900" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="dtbo.img" label="dtbo" start_sector="100" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                </data>
+                """);
+            File.WriteAllText(Path.Combine(tempDir, "rawprogram1.xml"),
+                """
+                <data>
+                  <program filename="system.bin" label="system" start_sector="500" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="1"/>
+                </data>
+                """);
+
+            var rows = FlashViewModel.ParseDirectory(tempDir);
+
+            Assert.Equal(["dtbo", "boot", "system"], rows.Select(row => row.Name));
+            Assert.Equal(["LUN 0", "LUN 0", "LUN 1"], rows.Select(row => row.StorageMedium));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    /// <remarks>
+    /// A dual-slot package may place slot B on another LUN; the medium block and its physical address order take
+    /// priority, so slot B stays with LUN 1 instead of being pulled next to slot A in LUN 0.
+    /// <para>双槽包可能把 B 槽放在另一个 LUN；介质块与其物理地址顺序优先，因此 B 槽留在 LUN 1，而不会被拉到
+    /// LUN 0 的 A 槽旁边。</para>
+    /// </remarks>
+    [Fact]
+    public void ParseDirectory_SlotPairAcrossMedia_SortsByMediumBeforeSlotAdjacency()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "test-dir-slot-media-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(tempDir, "boot_a.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "boot_b.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "dtbo.img"), new byte[1024]);
+            File.WriteAllText(Path.Combine(tempDir, "rawprogram0.xml"),
+                """
+                <data>
+                  <program filename="boot_a.img" label="boot_a" start_sector="1000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="dtbo.img" label="dtbo" start_sector="5000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                </data>
+                """);
+            File.WriteAllText(Path.Combine(tempDir, "rawprogram1.xml"),
+                """
+                <data>
+                  <program filename="boot_b.img" label="boot_b" start_sector="1500" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="1"/>
+                </data>
+                """);
+
+            var rows = FlashViewModel.ParseDirectory(tempDir);
+
+            Assert.Equal(["boot_a", "dtbo", "boot_b"], rows.Select(row => row.Name));
+            Assert.Equal(["LUN 0", "LUN 0", "LUN 1"], rows.Select(row => row.StorageMedium));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    /// <remarks>
+    /// Partitions addressed from the disk end must keep their relative order: a larger distance from the end sits
+    /// earlier on the storage, and every absolute address still sorts ahead of them.
+    /// <para>以磁盘末尾为基准的分区必须保持相对先后：距末尾越远在存储上越靠前，而所有绝对地址仍排在它们之前。</para>
+    /// </remarks>
+    [Fact]
+    public void ParseDirectory_RelativeStartSectors_KeepTheirStorageOrder()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "test-dir-relative-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(tempDir, "boot.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "dtbo.img"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(tempDir, "misc.img"), new byte[1024]);
+            File.WriteAllText(Path.Combine(tempDir, "rawprogram0.xml"),
+                """
+                <data>
+                  <program filename="boot.img" label="boot" start_sector="5000" num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="dtbo.img" label="dtbo" start_sector="NUM_DISK_SECTORS-100." num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                  <program filename="misc.img" label="misc" start_sector="NUM_DISK_SECTORS-200." num_partition_sectors="2" SECTOR_SIZE_IN_BYTES="4096" physical_partition_number="0"/>
+                </data>
+                """);
+
+            var rows = FlashViewModel.ParseDirectory(tempDir);
+
+            Assert.Equal(["boot", "misc", "dtbo"], rows.Select(row => row.Name));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ClassifyFolder_ChoosesParserByMarkerFiles()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "test-classify-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var edl = Path.Combine(tempDir, "edl");
+            Directory.CreateDirectory(edl);
+            File.WriteAllText(Path.Combine(edl, "rawprogram0.xml"), "<data />");
+
+            var scatter = Path.Combine(tempDir, "scatter");
+            Directory.CreateDirectory(scatter);
+            var scatterFile = Path.Combine(scatter, "MT6580_Android_scatter.txt");
+            File.WriteAllText(scatterFile, "MTK_PLATFORM: MT6580");
+
+            var script = Path.Combine(tempDir, "script");
+            Directory.CreateDirectory(script);
+            File.WriteAllBytes(Path.Combine(script, "boot.img"), new byte[64]);
+            File.WriteAllText(Path.Combine(script, "flash_all.bat"), "fastboot flash boot boot.img");
+
+            var images = Path.Combine(tempDir, "images-only");
+            Directory.CreateDirectory(images);
+            File.WriteAllBytes(Path.Combine(images, "boot.img"), new byte[64]);
+
+            var vendor = Path.Combine(tempDir, "vendor");
+            Directory.CreateDirectory(vendor);
+            var vendorFile = Path.Combine(vendor, "package.nb0");
+            File.WriteAllBytes(vendorFile, new byte[64]);
+
+            Assert.Equal(FlashViewModel.FlashFolderKind.FlatEdl, FlashViewModel.ClassifyFolder(edl).Kind);
+            Assert.Equal(FlashViewModel.FlashFolderKind.MtkScatter, FlashViewModel.ClassifyFolder(scatter).Kind);
+            Assert.Equal(scatterFile, FlashViewModel.ClassifyFolder(scatter).Document);
+            Assert.Equal(FlashViewModel.FlashFolderKind.Script, FlashViewModel.ClassifyFolder(script).Kind);
+            Assert.Equal(FlashViewModel.FlashFolderKind.Images, FlashViewModel.ClassifyFolder(images).Kind);
+            Assert.Equal(FlashViewModel.FlashFolderKind.VendorContainer, FlashViewModel.ClassifyFolder(vendor).Kind);
+            Assert.Equal(vendorFile, FlashViewModel.ClassifyFolder(vendor).Document);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }

@@ -642,6 +642,12 @@ Author: 暮间雾
   <data name="Flash_UnsupportedPackage" xml:space="preserve">
     <value>Unsupported package type: {0}</value>
   </data>
+  <data name="Flash_FolderPath" xml:space="preserve">
+    <value>Folder: {0}</value>
+  </data>
+  <data name="Flash_FolderUnrecognized" xml:space="preserve">
+    <value>No recognized package format in folder: {0}</value>
+  </data>
   <data name="Flash_DeviceChanged" xml:space="preserve">
     <value>The selected device changed. Refresh and confirm again.</value>
   </data>

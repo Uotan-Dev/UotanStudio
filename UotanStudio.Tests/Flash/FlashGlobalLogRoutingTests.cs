@@ -168,6 +168,37 @@ public sealed class FlashGlobalLogRoutingTests
         }
     }
 
+    /// <remarks>
+    /// The folder holds nothing a parser recognizes, so the page log must still name the exact folder the user picked
+    /// instead of only reporting zero loaded images.
+    /// <para>目录内没有任何解析器可识别的内容，页面日志仍必须写明用户所选的具体文件夹，而不是只报零个镜像。</para>
+    /// </remarks>
+    [Fact]
+    public async Task LoadPackage_UnrecognizedFolder_LogsItsFullPathAndTheUnrecognizedFormat()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "uotan-unrecognized-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(folder, "notes.txt"), "not a package",
+                TestContext.Current.CancellationToken);
+            var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new RecordingUnifiedLog());
+
+            await model.LoadPackageAsync(folder);
+            model.FlushPendingLog();
+
+            Assert.Contains(folder, model.LogText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                LanguageService.Instance.GetString("Flash_FolderUnrecognized"), folder), model.LogText,
+                StringComparison.Ordinal);
+            Assert.Empty(model.Partitions);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     /// <summary>
     /// Builds the smallest image the Rockchip loader handler accepts: a self-consistent header with no entry tables and
     /// a matching trailing checksum, so a loader row can be proven effective rather than merely pointing at a file.

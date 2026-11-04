@@ -203,6 +203,8 @@ internal static class LocaleKeySets
         "Flash_AfterSalesMerged",
         "Flash_RkConfigFileType",
         "Flash_UnsupportedPackage",
+        "Flash_FolderPath",
+        "Flash_FolderUnrecognized",
         "Flash_DeviceChanged",
         "Flash_Busy",
         "Flash_FileMissing",

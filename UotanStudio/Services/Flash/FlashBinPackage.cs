@@ -34,8 +34,7 @@ public static class FlashBinPackage
     public static (IReadOnlyList<FlashBinPackageImage> Images,
         IReadOnlyList<RawProgramEntry> Programs, string? Programmer, IReadOnlyList<string> Programmers) Read(string folder)
     {
-        var directory = Directory.Exists(Path.Combine(folder, "images"))
-            ? Path.Combine(folder, "images") : folder;
+        var directory = ResolveImageDirectory(folder);
         var manifests = FlashManifestSelection.Enumerate(directory);
         var programs = manifests.Length == 0 ? [] : RawProgramParser.ParseAll(manifests, directory);
 
@@ -67,5 +66,20 @@ public static class FlashBinPackage
             .Where(path => Path.GetExtension(path) is ".elf" or ".mbn" or ".melf")
             .Order(StringComparer.OrdinalIgnoreCase)];
         return (images, programs, programmers.Length == 1 ? programmers[0] : null, programmers);
+    }
+
+    /// <summary>
+    /// Returns the directory the package reads its images from: the <c>images</c> subdirectory when it carries a
+    /// primary rawprogram manifest, otherwise the folder itself, so an unrelated or empty <c>images</c> directory
+    /// never hides manifests that live next to it.
+    /// <para>返回包读取镜像所用目录：<c>images</c> 子目录带有主 rawprogram 清单时用它，否则用目录本身，
+    /// 使无关或空的 <c>images</c> 目录不会把与其同级的清单隐藏起来。</para>
+    /// </summary>
+    /// <param name="folder">Package folder. <para>包目录。</para></param>
+    /// <returns>The directory holding images and manifests. <para>存放镜像与清单的目录。</para></returns>
+    public static string ResolveImageDirectory(string folder)
+    {
+        var images = Path.Combine(folder, "images");
+        return Directory.Exists(images) && FlashManifestSelection.Enumerate(images).Length > 0 ? images : folder;
     }
 }

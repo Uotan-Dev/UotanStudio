@@ -29,6 +29,15 @@ public sealed partial class FlashViewModel
     /// </summary>
     private const int MaxPartitionTableLines = 64;
 
+    /// <summary>
+    /// Extensions a plain image folder may carry as flashable partitions; everything else in the folder (scripts,
+    /// manifests, checksums, programmers) is metadata rather than a partition image.
+    /// <para>纯镜像目录中可作为分区镜像的扩展名；目录内的其他文件（脚本、清单、校验值、programmer）属于元数据，
+    /// 不是分区镜像。</para>
+    /// </summary>
+    private static readonly string[] PartitionImageExtensions =
+        [".img", ".img.zst", ".zst", ".iso", ".bin", ".mbn", ".elf", ".melf", ".simg", ".raw", ".dat", ".hex"];
+
     private bool _busy;
     private bool _confirming;
     private string _loadedPath = string.Empty;
@@ -223,7 +232,12 @@ public sealed partial class FlashViewModel
         }
     }
 
-    private async Task LoadPackageAsync(string path)
+    /// <summary>
+    /// Loads a package, folder or URL into the page; internal so a test can assert the side log a folder produces.
+    /// <para>把刷机包、文件夹或链接加载到页面；设为 internal 以便测试断言文件夹产生的侧边日志。</para>
+    /// </summary>
+    /// <param name="path">Picked path or URL. <para>所选路径或链接。</para></param>
+    internal async Task LoadPackageAsync(string path)
     {
         if (_busy || _confirming || string.Equals(path, _loadedPath, StringComparison.Ordinal))
         {
@@ -367,71 +381,13 @@ public sealed partial class FlashViewModel
 
             if (File.Exists(path) && extension is ".nb0" or ".ntpi")
             {
-                var entries = await FlashVendorContainerService.ListAsync(path, cancellation.Token);
-                _vendorPath = path;
-                var vendorRows = new List<FlashPartitionEntry>(entries.Count);
-                foreach (var (name, archiveEntry, size) in entries)
-                {
-                    _vendorEntries.Add(name, archiveEntry);
-                    vendorRows.Add(new FlashPartitionEntry
-                    {
-                        Name = name,
-                        Size = $"{size / 1024d / 1024d:F1} MiB"
-                    });
-                }
-                Partitions.Apply(0, vendorRows);
-                SetControlEnabled("ExtractSelectedButton", entries.Count > 0);
-                AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                await ApplyVendorContainerAsync(path, cancellation.Token);
                 return;
             }
 
-            if (File.Exists(path) && extension == ".xml" && LooksLikeScatter(path))
+            if (File.Exists(path) && extension is ".xml" or ".txt" && LooksLikeScatter(path))
             {
-                var resolution = MtkScatterPackage.Resolve(path, MtkScatterPackage.Read(path));
-                _mtkResolution = resolution;
-                var knownNames = new HashSet<string>(StringComparer.Ordinal);
-                var scatterRows = new List<FlashPartitionEntry>(resolution.Rows.Count);
-                for (var index = 0; index < resolution.Rows.Count; index++)
-                {
-                    var (partition, imagePath, length) = resolution.Rows[index];
-                    var row = new FlashPartitionEntry
-                    {
-                        Name = partition.Name,
-                        Command = "flash",
-                        FilePath = imagePath,
-                        FileName = Path.GetFileName(imagePath),
-                        Size = $"{length / 1024d / 1024d:F1} MiB",
-                        StorageMedium = resolution.StorageLabel
-                    };
-                    scatterRows.Add(row);
-                    _mtkRows[row] = index;
-                    _mtkPartitions[row] = partition;
-                    knownNames.Add(partition.Name);
-                }
-
-                var eraseOnlyRows = 0;
-                foreach (var partition in MtkScatterPackage.ListEraseTargets(resolution.Storage))
-                {
-                    if (!knownNames.Add(partition.Name))
-                    {
-                        continue;
-                    }
-
-                    var row = new FlashPartitionEntry
-                    {
-                        Name = partition.Name,
-                        Command = "erase",
-                        Size = $"{partition.Size / 1024d / 1024d:F1} MiB",
-                        StorageMedium = resolution.StorageLabel
-                    };
-                    scatterRows.Add(row);
-                    eraseOnlyRows++;
-                    _mtkPartitions[row] = partition;
-                }
-
-                Partitions.Apply(0, scatterRows);
-                UpdateEdlButton();
-                AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {_localizer.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
+                ApplyMtkScatterFile(path);
                 return;
             }
 
@@ -476,67 +432,39 @@ public sealed partial class FlashViewModel
 
             if (Directory.Exists(path))
             {
-                if (FlashAfterSalesPackage.Read(path) is { } afterSales)
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_FolderPath"), path));
+                var (folderKind, folderDocument) = ClassifyFolder(path);
+                switch (folderKind)
                 {
-                    ApplyAfterSalesPackage(afterSales);
-                    return;
-                }
-
-                if (FlashSpacemiTPackage.HasStructure(path))
-                {
-                    ApplySpacemiTPackage(FlashSpacemiTPackage.Read(path)!);
-                    return;
-                }
-
-                var directoryImages = Directory.Exists(Path.Combine(path, "images")) ? Path.Combine(path, "images") : path;
-                if (Directory.EnumerateFiles(directoryImages, "rawprogram*.xml", SearchOption.TopDirectoryOnly).Any())
-                {
-                    var bin = FlashBinPackage.Read(path);
-                    if (bin.Images.Count > 0)
-                    {
-                        _flatBinPackage = true;
-                        ProgrammerCandidates = bin.Programmers;
-                        _edlProgrammer = bin.Programmer;
-                        _isCustomProgrammer = false;
-                        UpdateEdlProgrammerPickOptions();
-                        var edlRows = new List<FlashPartitionEntry>(bin.Images.Count);
-                        foreach (var image in bin.Images)
-                        {
-                            var row = new FlashPartitionEntry
-                            {
-                                Name = image.Partition,
-                                Command = "flash",
-                                FilePath = image.FilePath,
-                                FileName = Path.GetFileName(image.FilePath),
-                                Size = FormatByteSize(image.Length),
-                                StorageMedium = $"LUN {image.Program.PhysicalPartitionNumber}",
-                                IsSelected = false
-                            };
-                            edlRows.Add(row);
-                            _edlEntries.Add(row, image.Program);
-                        }
-                        Partitions.Apply(0, edlRows);
-                        _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
-                        if (bin.Programmers.Count > 1)
-                        {
-                            AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
-                        }
-                        UpdateEdlButton();
-                        AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                    case FlashFolderKind.AfterSales when FlashAfterSalesPackage.Read(path) is { } afterSales:
+                        ApplyAfterSalesPackage(afterSales);
                         return;
-                    }
-                }
-
-                var oppoArchives = Directory.EnumerateFiles(path, "*.ofp", SearchOption.TopDirectoryOnly).ToArray();
-                if (oppoArchives.Length == 1)
-                {
-                    await ApplyOppoContainerAsync(oppoArchives[0], cancellation.Token);
-                    return;
+                    case FlashFolderKind.SpacemiT when FlashSpacemiTPackage.Read(path) is { } spacemiT:
+                        ApplySpacemiTPackage(spacemiT);
+                        return;
+                    case FlashFolderKind.FlatEdl when ApplyFlatEdlDirectory(path):
+                        return;
+                    case FlashFolderKind.MtkScatter when folderDocument is { } scatter:
+                        ApplyMtkScatterFile(scatter);
+                        return;
+                    case FlashFolderKind.VendorContainer when folderDocument is { } container:
+                        await ApplyVendorContainerAsync(container, cancellation.Token);
+                        return;
+                    case FlashFolderKind.OppoContainer when folderDocument is { } archive:
+                        await ApplyOppoContainerAsync(archive, cancellation.Token);
+                        return;
+                    case FlashFolderKind.Script when folderDocument is { } script:
+                        var scriptLines = await File.ReadAllLinesAsync(script, cancellation.Token);
+                        var scriptRows = ParseScript(script, scriptLines);
+                        Partitions.Apply(0, scriptRows);
+                        AppendFolderLoadResult(path, Partitions.Count);
+                        return;
                 }
 
                 var dirRows = ParseDirectory(path);
                 Partitions.Apply(0, dirRows);
-                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                AppendFolderLoadResult(path, Partitions.Count);
                 return;
             }
 
@@ -581,7 +509,29 @@ public sealed partial class FlashViewModel
         {
             SetBusy(false);
             UpdateEdlButton();
+            ApplyImageSectionExpansion();
         }
+    }
+
+    /// <summary>
+    /// Opens the image-operations section once a package that supports extraction or wired packaging is loaded while no
+    /// device is selected; it never closes the section, so a user's own choice survives package changes.
+    /// <para>在未选中设备时，载入支持提取或线刷打包的刷机包后展开镜像操作分类；它从不收起该分类，使用户自己的选择在换包后仍然保留。</para>
+    /// </summary>
+    private void ApplyImageSectionExpansion()
+    {
+        if (_surface is null || SelectedDevice is not null)
+        {
+            return;
+        }
+
+        if (_payloadPath is null && _remotePayloadUrl is null && _superPath is null &&
+            _vendorPath is null && _oppoPath is null)
+        {
+            return;
+        }
+
+        Field<Expander>("ImageExpander").IsExpanded = true;
     }
 
     /// <summary>
@@ -601,6 +551,7 @@ public sealed partial class FlashViewModel
         UpdateEdlProgrammerPickOptions();
         _edlBundleReady = package.Programs.Count > 0 && package.Programmers.Count > 0;
         var rows = new List<FlashPartitionEntry>(package.Images.Count);
+        var positions = new Dictionary<FlashPartitionEntry, long>(package.Images.Count);
         foreach (var image in package.Images)
         {
             var row = new FlashPartitionEntry
@@ -612,15 +563,18 @@ public sealed partial class FlashViewModel
                 Size = FormatByteSize(image.Length),
                 StorageMedium = image.Program is { } edlProgram
                     ? $"LUN {edlProgram.PhysicalPartitionNumber}"
-                    : string.Empty
+                    : string.Empty,
+                Offset = image.Program is { } offsetProgram ? DescribeProgramOffset(offsetProgram) : string.Empty
             };
             rows.Add(row);
             if (image.Program is { } program)
             {
                 _edlEntries.Add(row, program);
+                positions[row] = ParseStartSectorOrder(program.StartSector);
             }
         }
 
+        OrderFolderRows(rows, positions);
         Partitions.Apply(0, rows);
         if (package.Programmers.Count > 1)
         {
@@ -707,6 +661,429 @@ public sealed partial class FlashViewModel
     /// <param name="reference">Image reference text. <para>镜像引用文本。</para></param>
     private static bool IsRegexImageReference(string reference)
         => reference.Length > 1 && reference[0] == '/' && reference[^1] == '/';
+
+    /// <summary>
+    /// The package layout a picked folder has, inferred from the marker files it carries rather than from its
+    /// name, so one action serves every vendor layout.
+    /// <para>所选目录属于哪种包布局，按目录内的标记文件而非目录名推断，使同一个按钮服务所有厂商布局。</para>
+    /// </summary>
+    internal enum FlashFolderKind
+    {
+        /// <summary>Plain image files without a manifest. <para>没有清单的纯镜像文件。</para></summary>
+        Images,
+
+        /// <summary>Qualcomm flat package with rawprogram manifests. <para>带 rawprogram 清单的高通平铺包。</para></summary>
+        FlatEdl,
+
+        /// <summary>MediaTek scatter package. <para>联发科 scatter 包。</para></summary>
+        MtkScatter,
+
+        /// <summary>Archive container (<c>.nb0</c>/<c>.ntpi</c>). <para>归档容器包（<c>.nb0</c>/<c>.ntpi</c>）。</para></summary>
+        VendorContainer,
+
+        /// <summary>Oppo/Realme archive (<c>.ofp</c>/<c>.ops</c>/<c>.ozip</c>). <para>欧加归档包。</para></summary>
+        OppoContainer,
+
+        /// <summary>Fastboot flash script. <para>Fastboot 刷写脚本。</para></summary>
+        Script,
+
+        /// <summary>Oppo/Realme after-sales EDL package. <para>欧加售后 EDL 包。</para></summary>
+        AfterSales,
+
+        /// <summary>SpacemiT titan flasher package. <para>SpacemiT titan 烧录包。</para></summary>
+        SpacemiT
+    }
+
+    /// <summary>
+    /// Decides which parser a folder needs by looking at the marker files it carries, in the order that keeps a
+    /// full vendor package ahead of the loose scripts and images shipped inside it.
+    /// <para>按目录内的标记文件判断该走哪条解析分支，顺序保证完整厂商包优先于其内部附带的散装脚本与镜像。</para>
+    /// </summary>
+    /// <param name="folder">Picked folder. <para>所选目录。</para></param>
+    /// <returns>The layout kind and the document it anchors on, when it has one.
+    /// <para>布局种类；该种类需要锚定文件时一并返回。</para></returns>
+    internal static (FlashFolderKind Kind, string? Document) ClassifyFolder(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return (FlashFolderKind.Images, null);
+        }
+
+        if (FlashAfterSalesPackage.HasStructure(folder))
+        {
+            return (FlashFolderKind.AfterSales, null);
+        }
+
+        if (FlashSpacemiTPackage.HasStructure(folder))
+        {
+            return (FlashFolderKind.SpacemiT, null);
+        }
+
+        var scatter = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+            .Where(path => Path.GetExtension(path) is ".txt" or ".xml")
+            .Where(path => Path.GetFileName(path).Contains("scatter", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(LooksLikeScatter);
+        if (scatter is not null)
+        {
+            return (FlashFolderKind.MtkScatter, scatter);
+        }
+
+        if (FindSingleFolderFile(folder, ".nb0", ".ntpi") is { } container)
+        {
+            return (FlashFolderKind.VendorContainer, container);
+        }
+
+        if (FlashManifestSelection.Enumerate(folder).Length > 0 ||
+            Directory.Exists(Path.Combine(folder, "images")) &&
+            FlashManifestSelection.Enumerate(Path.Combine(folder, "images")).Length > 0)
+        {
+            return (FlashFolderKind.FlatEdl, null);
+        }
+
+        if (FindSingleFolderFile(folder, ".ofp", ".ops", ".ozip") is { } archive)
+        {
+            return (FlashFolderKind.OppoContainer, archive);
+        }
+
+        var script = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+            .Where(path => Path.GetExtension(path).ToLowerInvariant() is ".bat" or ".sh")
+            .Where(path => Path.GetFileNameWithoutExtension(path)
+                .StartsWith("flash", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (script is not null)
+        {
+            return (FlashFolderKind.Script, script);
+        }
+
+        return (FlashFolderKind.Images, null);
+    }
+
+    /// <summary>
+    /// Returns the only file in the folder with one of the given extensions, or <see langword="null"/> when the
+    /// folder holds none or several so an ambiguous container never wins over explicit images.
+    /// <para>返回目录内唯一一个具有给定扩展名的文件；没有或存在多个时返回 <see langword="null"/>，
+    /// 避免含义不明的容器压过明确的镜像。</para>
+    /// </summary>
+    private static string? FindSingleFolderFile(string folder, params string[] extensions)
+    {
+        var matches = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+            .Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    /// <summary>
+    /// Writes a folder load result to the side log: the image count when rows were produced, otherwise an explicit
+    /// message carrying the full folder path so an unrecognized folder is still identifiable in the log.
+    /// <para>把文件夹加载结果写入侧边日志：有行时写镜像数量，否则写一条携带完整文件夹路径的明确提示，
+    /// 使未识别的文件夹仍能在日志中定位。</para>
+    /// </summary>
+    /// <param name="folder">Picked folder path. <para>所选文件夹路径。</para></param>
+    /// <param name="count">Rows produced from the folder. <para>从该文件夹解析出的行数。</para></param>
+    private void AppendFolderLoadResult(string folder, int count)
+    {
+        if (count > 0)
+        {
+            AppendLog($"{count} {_localizer.GetString("Flash_ImagesLoaded")}");
+            return;
+        }
+
+        AppendLog(string.Format(CultureInfo.InvariantCulture,
+            _localizer.GetString("Flash_FolderUnrecognized"), folder));
+    }
+
+    /// <summary>
+    /// Applies a flat Qualcomm directory whose primary rawprogram manifests describe the images.
+    /// <para>应用由主 rawprogram 清单描述的高通平铺目录。</para>
+    /// </summary>
+    /// <param name="folder">Package folder. <para>包目录。</para></param>
+    /// <returns><see langword="true"/> when at least one image row was produced; a manifest-only folder that
+    /// resolves no existing image falls back to the plain directory parser.
+    /// <para>至少产生一行镜像时为 <see langword="true"/>；清单存在但解析不到任何现有镜像的目录回退到纯目录解析。</para></returns>
+    private bool ApplyFlatEdlDirectory(string folder)
+    {
+        var bin = FlashBinPackage.Read(folder);
+        if (bin.Images.Count == 0)
+        {
+            return false;
+        }
+
+        _flatBinPackage = true;
+        ProgrammerCandidates = bin.Programmers;
+        _edlProgrammer = bin.Programmer;
+        _isCustomProgrammer = false;
+        UpdateEdlProgrammerPickOptions();
+        var rows = new List<FlashPartitionEntry>(bin.Images.Count);
+        var positions = new Dictionary<FlashPartitionEntry, long>(bin.Images.Count);
+        foreach (var image in bin.Images)
+        {
+            var row = new FlashPartitionEntry
+            {
+                Name = image.Partition,
+                Command = "flash",
+                FilePath = image.FilePath,
+                FileName = Path.GetFileName(image.FilePath),
+                Size = FormatByteSize(image.Length),
+                StorageMedium = $"LUN {image.Program.PhysicalPartitionNumber}",
+                Offset = DescribeProgramOffset(image.Program),
+                IsSelected = false
+            };
+            rows.Add(row);
+            positions[row] = ParseStartSectorOrder(image.Program.StartSector);
+            _edlEntries.Add(row, image.Program);
+        }
+
+        OrderFolderRows(rows, positions);
+        Partitions.Apply(0, rows);
+        _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
+        if (bin.Programmers.Count > 1)
+        {
+            AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
+        }
+        UpdateEdlButton();
+        AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+        return true;
+    }
+
+    /// <summary>
+    /// Applies a MediaTek scatter package, listing its download targets and the erase-only partitions so the
+    /// list order follows the storage's linear addresses instead of the scattered SYS indexes.
+    /// <para>应用联发科 scatter 包：列出下载目标与仅擦除分区，使列表顺序按存储线性地址排列而不是 scatter 的
+    /// SYS 索引。</para>
+    /// </summary>
+    /// <param name="path">Scatter file path. <para>scatter 文件路径。</para></param>
+    private void ApplyMtkScatterFile(string path)
+    {
+        var resolution = MtkScatterPackage.Resolve(path, MtkScatterPackage.Read(path));
+        _mtkResolution = resolution;
+        var knownNames = new HashSet<string>(StringComparer.Ordinal);
+        var rows = new List<FlashPartitionEntry>(resolution.Rows.Count);
+        var positions = new Dictionary<FlashPartitionEntry, long>(resolution.Rows.Count);
+        for (var index = 0; index < resolution.Rows.Count; index++)
+        {
+            var (partition, imagePath, length) = resolution.Rows[index];
+            var row = new FlashPartitionEntry
+            {
+                Name = partition.Name,
+                Command = "flash",
+                FilePath = imagePath,
+                FileName = Path.GetFileName(imagePath),
+                Size = $"{length / 1024d / 1024d:F1} MiB",
+                StorageMedium = resolution.StorageLabel,
+                Offset = DescribeAddressOffset(partition.LinearStartAddress)
+            };
+            rows.Add(row);
+            positions[row] = AddressOrder(partition.LinearStartAddress);
+            _mtkRows[row] = index;
+            _mtkPartitions[row] = partition;
+            knownNames.Add(partition.Name);
+        }
+
+        var eraseOnlyRows = 0;
+        foreach (var partition in MtkScatterPackage.ListEraseTargets(resolution.Storage))
+        {
+            if (!knownNames.Add(partition.Name))
+            {
+                continue;
+            }
+
+            var row = new FlashPartitionEntry
+            {
+                Name = partition.Name,
+                Command = "erase",
+                Size = $"{partition.Size / 1024d / 1024d:F1} MiB",
+                StorageMedium = resolution.StorageLabel,
+                Offset = DescribeAddressOffset(partition.LinearStartAddress)
+            };
+            rows.Add(row);
+            positions[row] = AddressOrder(partition.LinearStartAddress);
+            eraseOnlyRows++;
+            _mtkPartitions[row] = partition;
+        }
+
+        OrderFolderRows(rows, positions);
+        Partitions.Apply(0, rows);
+        UpdateEdlButton();
+        AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {_localizer.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
+    }
+
+    /// <summary>
+    /// Lists an <c>.nb0</c>/<c>.ntpi</c> archive as rows that the extract action and the flash preparation
+    /// resolve later.
+    /// <para>把 <c>.nb0</c>/<c>.ntpi</c> 归档列成行，供后续提取动作与刷写准备解析。</para>
+    /// </summary>
+    /// <param name="path">Archive path. <para>归档路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the listing. <para>取消列举的令牌。</para></param>
+    private async Task ApplyVendorContainerAsync(string path, CancellationToken cancellationToken)
+    {
+        var entries = await FlashVendorContainerService.ListAsync(path, cancellationToken);
+        _vendorPath = path;
+        var rows = new List<FlashPartitionEntry>(entries.Count);
+        foreach (var (name, archiveEntry, size) in entries)
+        {
+            _vendorEntries.Add(name, archiveEntry);
+            rows.Add(new FlashPartitionEntry
+            {
+                Name = name,
+                Size = $"{size / 1024d / 1024d:F1} MiB"
+            });
+        }
+
+        Partitions.Apply(0, rows);
+        SetControlEnabled("ExtractSelectedButton", entries.Count > 0);
+        AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+    }
+
+    /// <summary>
+    /// Sorts folder-derived rows with the storage medium as the primary key and the partition's physical position as
+    /// the secondary key inside that medium, so a LUN 1 partition never interleaves with LUN 0; slot siblings stay
+    /// adjacent only when they share a medium, because a cross-medium pair must not break the per-medium address order.
+    /// <para>以存储介质为主键、介质内的物理位置为次键对目录解析出的行排序，使 LUN 1 的分区不会与 LUN 0 交错；
+    /// 槽位兄弟项只在同一介质内相邻，因为跨介质的一对不能破坏按介质划分的地址顺序。</para>
+    /// </summary>
+    /// <param name="rows">Rows to reorder in place. <para>就地重排的行。</para></param>
+    /// <param name="positions">Numeric storage position per row; missing rows sort after known ones.
+    /// <para>每行在存储上的数值位置；缺失的行排在已知位置之后。</para></param>
+    private static void OrderFolderRows(List<FlashPartitionEntry> rows,
+        IReadOnlyDictionary<FlashPartitionEntry, long> positions)
+    {
+        if (rows.Count < 2)
+        {
+            return;
+        }
+
+        var items = new List<(FlashPartitionEntry Row, int Index, (int Kind, long Number, string Text) Medium,
+            string Base, int Slot, long Position)>(rows.Count);
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            var baseName = StripSlotSuffix(row.Name, out var slot);
+            items.Add((row, index, MediumOrderKey(row.StorageMedium), baseName, slot,
+                positions.TryGetValue(row, out var position) ? position : long.MaxValue));
+        }
+
+        var groupPositions = items
+            .GroupBy(item => (item.Medium, item.Base))
+            .ToDictionary(group => group.Key, group => group.Min(item => item.Position));
+        var ordered = items
+            .OrderBy(item => item.Medium)
+            .ThenBy(item => groupPositions[(item.Medium, item.Base)])
+            .ThenBy(item => item.Base, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Slot)
+            .ThenBy(item => item.Index)
+            .Select(item => item.Row)
+            .ToArray();
+        rows.Clear();
+        rows.AddRange(ordered);
+    }
+
+    /// <summary>
+    /// Splits a trailing <c>_a</c>/<c>_b</c> slot suffix from a partition name and reports the slot rank so
+    /// slot siblings share one grouping key.
+    /// <para>从分区名中拆出尾部 <c>_a</c>/<c>_b</c> 槽位后缀并给出槽位次序，使同一槽位组的兄弟项共享分组键。</para>
+    /// </summary>
+    /// <param name="name">Partition name. <para>分区名。</para></param>
+    /// <param name="slot">0 without a suffix, 1 for <c>_a</c> and 2 for <c>_b</c>.
+    /// <para>无后缀为 0，<c>_a</c> 为 1，<c>_b</c> 为 2。</para></param>
+    /// <returns>The name without its slot suffix. <para>去掉槽位后缀的名称。</para></returns>
+    private static string StripSlotSuffix(string name, out int slot)
+    {
+        if (name.Length > 2 && name[^2] == '_' && name[^1] is 'a' or 'b' or 'A' or 'B')
+        {
+            slot = char.ToLowerInvariant(name[^1]) == 'b' ? 2 : 1;
+            return name[..^2];
+        }
+
+        slot = 0;
+        return name;
+    }
+
+    /// <summary>
+    /// Turns a medium label into a comparable key: numeric <c>LUN n</c> labels order by number first, other
+    /// labels follow in ordinal order.
+    /// <para>把介质标签转成可比较的键：数值型 <c>LUN n</c> 按编号优先排序，其余标签按字典序排在后面。</para>
+    /// </summary>
+    private static (int Kind, long Number, string Text) MediumOrderKey(string medium)
+    {
+        var text = medium.Trim();
+        if (text.Length > 4 && text.StartsWith("LUN ", StringComparison.OrdinalIgnoreCase) &&
+            long.TryParse(text.AsSpan(4), NumberStyles.Integer, CultureInfo.InvariantCulture, out var lun))
+        {
+            return (0, lun, string.Empty);
+        }
+
+        if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric))
+        {
+            return (0, numeric, string.Empty);
+        }
+
+        return (1, 0, text.ToUpperInvariant());
+    }
+
+    /// <summary>
+    /// Parses a rawprogram <c>start_sector</c> into a comparable position: decimal, <c>0x</c> hexadecimal, and
+    /// <c>NUM_DISK_SECTORS-</c> relative addresses are understood, while unknown text sorts last. Relative addresses
+    /// keep their order by placing a larger distance from the disk end earlier, as it does on the storage.
+    /// <para>把 rawprogram 的 <c>start_sector</c> 解析为可比较的位置：支持十进制、<c>0x</c> 十六进制与
+    /// <c>NUM_DISK_SECTORS-</c> 相对地址，无法识别的文本排在最后。相对地址保持彼此先后：距磁盘末尾越远越靠前，
+    /// 与存储上的实际位置一致。</para>
+    /// </summary>
+    private static long ParseStartSectorOrder(string startSector)
+    {
+        const string relativePrefix = "NUM_DISK_SECTORS-";
+        var text = startSector.Trim().TrimEnd('.');
+        if (text.StartsWith(relativePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var fromEnd = text[relativePrefix.Length..].Trim();
+            return long.TryParse(fromEnd, NumberStyles.Integer, CultureInfo.InvariantCulture, out var offset) &&
+                offset >= 0 && offset < long.MaxValue - 1
+                ? long.MaxValue - 1 - offset
+                : long.MaxValue - 1;
+        }
+
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)
+                ? hex : long.MaxValue;
+        }
+
+        return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value : long.MaxValue;
+    }
+
+    /// <summary>
+    /// Renders the manifest offset the way the rest of the page renders offsets, falling back to the literal
+    /// <c>start_sector</c> text when the sector size or the address cannot be resolved.
+    /// <para>按页面统一方式显示清单偏移；扇区大小或地址无法解析时回退为字面 <c>start_sector</c> 文本。</para>
+    /// </summary>
+    private static string DescribeProgramOffset(RawProgramEntry program)
+    {
+        var sector = ParseStartSectorOrder(program.StartSector);
+        if (sector >= long.MaxValue - 1 || program.SectorSizeInBytes <= 0)
+        {
+            return program.StartSector.Trim();
+        }
+
+        return sector > long.MaxValue / program.SectorSizeInBytes
+            ? program.StartSector.Trim()
+            : FormatByteSize(sector * program.SectorSizeInBytes);
+    }
+
+    /// <summary>
+    /// Renders a scatter linear address as a byte offset.
+    /// <para>把 scatter 线性地址显示为字节偏移。</para>
+    /// </summary>
+    private static string DescribeAddressOffset(ulong address)
+        => address == 0 || address > (ulong)long.MaxValue ? string.Empty : FormatByteSize((long)address);
+
+    /// <summary>
+    /// Maps a scatter linear address onto the row's ordering position.
+    /// <para>把 scatter 线性地址映射为行的排序位置。</para>
+    /// </summary>
+    private static long AddressOrder(ulong address)
+        => address > (ulong)long.MaxValue ? long.MaxValue : (long)address;
 
     internal async void OnPackagePathLostFocus(object? sender, RoutedEventArgs e)
         => await LoadPackageAsync(PackagePath);
@@ -797,6 +1174,20 @@ public sealed partial class FlashViewModel
         }
     }
 
+    /// <summary>
+    /// Image operations section: it works on the loaded package rather than on the device, so every selected endpoint
+    /// without a restricted kind offers it and only the busy state closes it.
+    /// <para>镜像操作分类：它作用于已加载的刷机包而不是设备，因此任何没有受限种类的已选端点都提供它，只有忙碌状态会关闭它。</para>
+    /// </summary>
+    private void RegisterImageControlGates()
+    {
+        RegisterGate("ImageExpander", FlashControlGate.ImageSectionHeader("ImageExpander"));
+        RegisterGate("ImagePane", FlashControlGate.SharedAny("ImagePane", busyDisabled: true));
+        RegisterGate("ExtractSelectedButton",
+            FlashControlGate.SharedAny("ExtractSelectedButton", busyDisabled: true));
+        RegisterGate("BuildWiredPackageButton",
+            FlashControlGate.SharedAny("BuildWiredPackageButton", busyDisabled: true));
+    }
 
     internal void UpdateRootControlsState()
     {
@@ -1182,20 +1573,6 @@ public sealed partial class FlashViewModel
             var currentDevice = SelectedDevice;
             if (!ReferenceEquals(_lastObservedDevice, currentDevice) ||
                 _lastObservedDevice?.Protocol != currentDevice?.Protocol)
-    /// <summary>
-    /// Image operations section: it works on the loaded package rather than on the device, so every selected endpoint
-    /// without a restricted kind offers it and only the busy state closes it.
-    /// <para>镜像操作分类：它作用于已加载的刷机包而不是设备，因此任何没有受限种类的已选端点都提供它，只有忙碌状态会关闭它。</para>
-    /// </summary>
-    private void RegisterImageControlGates()
-    {
-        RegisterGate("ImageExpander", FlashControlGate.ImageSectionHeader("ImageExpander"));
-        RegisterGate("ImagePane", FlashControlGate.SharedAny("ImagePane", busyDisabled: true));
-        RegisterGate("ExtractSelectedButton",
-            FlashControlGate.SharedAny("ExtractSelectedButton", busyDisabled: true));
-        RegisterGate("BuildWiredPackageButton",
-            FlashControlGate.SharedAny("BuildWiredPackageButton", busyDisabled: true));
-    }
             {
                 _lastObservedDevice = currentDevice;
                 ApplyDeviceProtocolExpansion(currentDevice?.Protocol, IsSpacemiTSelected);
@@ -1339,6 +1716,23 @@ public sealed partial class FlashViewModel
             SetControlEnabled("EdlProgrammerPathBox", false);
             SetControlEnabled("EdlChooseProgrammerButton", false);
         }
+    }
+
+    /// <summary>
+    /// Qualcomm EDL section: its controls answer only on an EDL endpoint, so the pane carries the section's own condition
+    /// and the header hides once another protocol is selected.
+    /// <para>高通 EDL 分类：其控件只在 EDL 端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// </summary>
+    private void RegisterEdlControlGates()
+    {
+        RegisterGate("EdlExpander", FlashControlGate.SectionHeader("EdlExpander", FlashDeviceMode.Edl));
+        RegisterGate("EdlPane", FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true));
+        RegisterGate("EdlChooseProgrammerButton",
+            FlashControlGate.Section("EdlChooseProgrammerButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlSetBootableButton",
+            FlashControlGate.Section("EdlSetBootableButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlPartitionDigestButton",
+            FlashControlGate.Section("EdlPartitionDigestButton", FlashDeviceMode.Edl));
     }
 
     /// <summary>
@@ -1718,23 +2112,6 @@ public sealed partial class FlashViewModel
 
 
     /// <summary>
-    /// <summary>
-    /// Qualcomm EDL section: its controls answer only on an EDL endpoint, so the pane carries the section's own condition
-    /// and the header hides once another protocol is selected.
-    /// <para>高通 EDL 分类：其控件只在 EDL 端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
-    /// </summary>
-    private void RegisterEdlControlGates()
-    {
-        RegisterGate("EdlExpander", FlashControlGate.SectionHeader("EdlExpander", FlashDeviceMode.Edl));
-        RegisterGate("EdlPane", FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true));
-        RegisterGate("EdlChooseProgrammerButton",
-            FlashControlGate.Section("EdlChooseProgrammerButton", FlashDeviceMode.Edl));
-        RegisterGate("EdlSetBootableButton",
-            FlashControlGate.Section("EdlSetBootableButton", FlashDeviceMode.Edl));
-        RegisterGate("EdlPartitionDigestButton",
-            FlashControlGate.Section("EdlPartitionDigestButton", FlashDeviceMode.Edl));
-    }
-
     /// Formats a GPT partition table into lines, keeping at most <paramref name="maxLines"/> rows and
     /// appending a remainder note beyond that. The caller supplies the formats from the resource
     /// dictionary, so the result follows the current interface language.
@@ -3763,6 +4140,25 @@ public sealed partial class FlashViewModel
         }
     }
 
+    /// <summary>
+    /// MediaTek section: its controls answer only on a MediaTek endpoint, so the pane carries the section's own condition
+    /// and the header hides once another protocol is selected.
+    /// <para>联发科分类：其控件只在联发科端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// </summary>
+    private void RegisterMtkControlGates()
+    {
+        RegisterGate("MtkExpander", FlashControlGate.SectionHeader("MtkExpander", FlashDeviceMode.Mtk));
+        RegisterGate("MtkPane", FlashControlGate.Section("MtkPane", FlashDeviceMode.Mtk, busyDisabled: true));
+        RegisterGate("ChooseMtkDaButton", FlashControlGate.Section("ChooseMtkDaButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkEmiButton", FlashControlGate.Section("ChooseMtkEmiButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkKeyDirButton",
+            FlashControlGate.Section("ChooseMtkKeyDirButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkAuthFileButton",
+            FlashControlGate.Section("ChooseMtkAuthFileButton", FlashDeviceMode.Mtk));
+        RegisterGate("MtkXmlPropertyQueryButton",
+            FlashControlGate.Section("MtkXmlPropertyQueryButton", FlashDeviceMode.Mtk));
+    }
+
     internal async void OnMtkFlashClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || _mtkResolution is not { } resolution ||
@@ -4140,25 +4536,6 @@ public sealed partial class FlashViewModel
             || agentPacket is < 1 or > 16 * 1024 * 1024
             || storagePacket is < 1 or > 16 * 1024 * 1024)
         {
-    /// <summary>
-    /// MediaTek section: its controls answer only on a MediaTek endpoint, so the pane carries the section's own condition
-    /// and the header hides once another protocol is selected.
-    /// <para>联发科分类：其控件只在联发科端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
-    /// </summary>
-    private void RegisterMtkControlGates()
-    {
-        RegisterGate("MtkExpander", FlashControlGate.SectionHeader("MtkExpander", FlashDeviceMode.Mtk));
-        RegisterGate("MtkPane", FlashControlGate.Section("MtkPane", FlashDeviceMode.Mtk, busyDisabled: true));
-        RegisterGate("ChooseMtkDaButton", FlashControlGate.Section("ChooseMtkDaButton", FlashDeviceMode.Mtk));
-        RegisterGate("ChooseMtkEmiButton", FlashControlGate.Section("ChooseMtkEmiButton", FlashDeviceMode.Mtk));
-        RegisterGate("ChooseMtkKeyDirButton",
-            FlashControlGate.Section("ChooseMtkKeyDirButton", FlashDeviceMode.Mtk));
-        RegisterGate("ChooseMtkAuthFileButton",
-            FlashControlGate.Section("ChooseMtkAuthFileButton", FlashDeviceMode.Mtk));
-        RegisterGate("MtkXmlPropertyQueryButton",
-            FlashControlGate.Section("MtkXmlPropertyQueryButton", FlashDeviceMode.Mtk));
-    }
-
             throw new InvalidOperationException(language.GetString("Flash_MtkLegacyParamsInvalid"));
         }
 
@@ -4976,6 +5353,16 @@ public sealed partial class FlashViewModel
         return txtRows;
     }
 
+    /// <summary>
+    /// Lists a folder's partition images, using the rawprogram manifests shipped with them to restore the storage
+    /// medium and start offset of every file a manifest references, and dropping the scripts, manifests, checksums
+    /// and programmer files so they never masquerade as partitions.
+    /// <para>列出目录内的分区镜像，并用随附的 rawprogram 清单还原清单引用文件所在的存储介质与起始偏移；同时
+    /// 剔除脚本、清单、校验值与 programmer 文件，避免它们被当成分区。</para>
+    /// </summary>
+    /// <param name="path">Picked folder; its <c>images</c> subdirectory is used when the root has no <c>.img</c>.
+    /// <para>所选目录；根目录没有 <c>.img</c> 时使用其 <c>images</c> 子目录。</para></param>
+    /// <returns>The ordered image rows. <para>排好序的镜像行。</para></returns>
     internal static List<FlashPartitionEntry> ParseDirectory(string path)
     {
         var targetDir = path;
@@ -4987,40 +5374,107 @@ public sealed partial class FlashViewModel
             targetDir = imagesSubdir;
         }
 
-        var imgFiles = Directory.GetFiles(targetDir, "*", SearchOption.TopDirectoryOnly);
-        var dirRows = new List<FlashPartitionEntry>(imgFiles.Length);
-        foreach (var file in imgFiles)
+        var programs = ReadDirectoryPrograms(path, targetDir);
+        var programBySource = new Dictionary<string, RawProgramEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var program in programs)
+        {
+            if (program.SourceFile.Length > 0)
+            {
+                programBySource.TryAdd(Path.GetFullPath(program.SourceFile), program);
+            }
+        }
+
+        var dirRows = new List<FlashPartitionEntry>();
+        var positions = new Dictionary<FlashPartitionEntry, long>();
+        foreach (var file in Directory.EnumerateFiles(targetDir, "*", SearchOption.TopDirectoryOnly))
         {
             var fileInfo = new FileInfo(file);
             var fileName = fileInfo.Name;
-            var ext = Path.GetExtension(fileName).ToLowerInvariant();
-            if (ext is ".bat" or ".sh" or ".exe" or ".cmd" or ".ps1" or ".txt")
+            if (!IsPartitionImageFile(fileName))
             {
                 continue;
             }
 
-            var partName = Path.GetFileNameWithoutExtension(fileName).Replace(" ", "");
-            if (fileName.EndsWith(".img.zst", StringComparison.OrdinalIgnoreCase))
+            var partName = PartitionNameFromImageFile(fileName);
+            if (partName.Length == 0)
             {
-                partName = Path.GetFileNameWithoutExtension(partName);
+                continue;
             }
-            var sizeStr = FormatByteSize(fileInfo.Length);
+
             var isSuperEmpty = partName.Equals("super_empty", StringComparison.OrdinalIgnoreCase);
             var command = isSuperEmpty ? "wipe_super" : "flash";
-            var step = new FlashStep(command, partName, file, fileInfo.Length);
-
-            dirRows.Add(new FlashPartitionEntry
+            var program = programBySource.GetValueOrDefault(Path.GetFullPath(file));
+            var row = new FlashPartitionEntry
             {
-                Step = step,
+                Step = new FlashStep(command, partName, file, fileInfo.Length),
                 Name = partName,
-                Size = sizeStr,
+                Size = FormatByteSize(fileInfo.Length),
                 Command = command,
                 FileName = fileName,
                 FilePath = file,
+                StorageMedium = program is null ? string.Empty : $"LUN {program.PhysicalPartitionNumber}",
+                Offset = program is null ? string.Empty : DescribeProgramOffset(program),
                 IsSelected = false
-            });
+            };
+            dirRows.Add(row);
+            positions[row] = program is null ? long.MaxValue : ParseStartSectorOrder(program.StartSector);
         }
 
+        OrderFolderRows(dirRows, positions);
         return dirRows;
+    }
+
+    /// <summary>
+    /// Parses the rawprogram manifests that describe the folder's images, looking in both the picked folder and
+    /// the image directory so manifests next to an <c>images</c> subdirectory still contribute their metadata.
+    /// <para>解析描述目录镜像的 rawprogram 清单，同时查看所选目录与镜像目录，使位于 <c>images</c> 子目录旁边的
+    /// 清单也能贡献元数据。</para>
+    /// </summary>
+    private static List<RawProgramEntry> ReadDirectoryPrograms(string folder, string imageDirectory)
+    {
+        var programs = new List<RawProgramEntry>();
+        foreach (var directory in new[] { folder, imageDirectory }.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            var manifests = FlashManifestSelection.Enumerate(directory);
+            if (manifests.Length > 0)
+            {
+                programs.AddRange(RawProgramParser.ParseAll(manifests, directory));
+            }
+        }
+
+        return programs;
+    }
+
+    /// <summary>
+    /// Whether a file name can hold a partition image rather than package metadata.
+    /// <para>判断文件名是否可能承载分区镜像而不是包元数据。</para>
+    /// </summary>
+    private static bool IsPartitionImageFile(string fileName)
+    {
+        if (fileName.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase) ||
+            fileName.StartsWith("ALIGN_TO_", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Contains("firehose", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return PartitionImageExtensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Derives the partition name of an image file, including the double extension of zstd-compressed images.
+    /// <para>从镜像文件名推导分区名，包含 zstd 压缩镜像的双重扩展名。</para>
+    /// </summary>
+    private static string PartitionNameFromImageFile(string fileName)
+    {
+        var name = fileName.EndsWith(".img.zst", StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^".img.zst".Length]
+            : Path.GetFileNameWithoutExtension(fileName);
+        return name.Replace(" ", string.Empty);
     }
 }
