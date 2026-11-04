@@ -1,12 +1,17 @@
 using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Services;
+using UotanStudio.Services.Compare;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Network;
 using UotanStudio.Services.PatchPackages;
+using UotanStudio.Services.Projects;
 using UotanStudio.Services.Scrcpy;
 using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.VisualPlugins;
+using UotanStudio.Services.Workspace;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Flash;
@@ -18,13 +23,18 @@ namespace UotanStudio.Composition;
 
 /// <summary>
 /// Composition-root registrations for the desktop host: application services and the shell view
-/// models are added through explicit factories. The container never scans assemblies, never
-/// activates constructors by reflection and never uses <see cref="ActivatorUtilities"/>; that keeps
-/// registration compatible with trimming and NativeAOT as a contract, without claiming a publish
-/// verification here.
-/// <para>桌面宿主的组合根注册：应用服务与 Shell 视图模型全部通过显式工厂加入。容器不扫描程序集、
-/// 不反射激活构造函数、也不使用 <see cref="ActivatorUtilities"/>；这是裁剪与 NativeAOT 兼容的注册契约，
-/// 不表示此处已完成发布验证。</para>
+/// models are added through explicit factories, and the catalog names every application-scoped
+/// singleton so <see cref="ServiceHub"/> resolves all of them instead of only a subset. The container
+/// never scans assemblies, never activates constructors by reflection and never uses
+/// <see cref="ActivatorUtilities"/>; type-mapped registration stays out because the host view models
+/// expose internal constructors next to public parameterless ones, so a mapping would silently pick the
+/// parameterless overload, and because open generic registrations fail at run time under NativeAOT
+/// without any build diagnostic.
+/// <para>桌面宿主的组合根注册：应用服务与 Shell 视图模型全部通过显式工厂加入，目录覆盖每一个应用级
+/// 单例，使 <see cref="ServiceHub"/> 能解析全部单例而不只是其中一部分。容器不扫描程序集、不反射激活
+/// 构造函数、也不使用 <see cref="ActivatorUtilities"/>；类型映射注册保持禁用，因为宿主视图模型的内部
+/// 构造函数与公共无参构造函数并存，映射会静默选中无参重载，而开放泛型注册在 NativeAOT 下运行时才失败
+/// 且没有任何编译诊断。</para>
 /// </summary>
 internal static class ServiceRegistration
 {
@@ -71,6 +81,16 @@ internal static class ServiceRegistration
         services.AddSingleton<IFlashService>(_ => FlashService.Default);
         services.AddSingleton<ProjectOperationsService>(_ => ProjectOperationsService.Instance);
         services.AddSingleton<SettingsPersistenceService>(_ => SettingsPersistenceService.Instance);
+        services.AddSingleton<BinaryDiffService>(_ => BinaryDiffService.Instance);
+        services.AddSingleton<FolderCompareService>(_ => FolderCompareService.Instance);
+        services.AddSingleton<TextDiffService>(_ => TextDiffService.Instance);
+        services.AddSingleton<DeviceFileSystemService>(_ => DeviceFileSystemService.Instance);
+        services.AddSingleton<DexService>(_ => DexService.Instance);
+        services.AddSingleton<FirmwareService>(_ => FirmwareService.Instance);
+        services.AddSingleton<OperationHistoryService>(_ => OperationHistoryService.Instance);
+        services.AddSingleton<ProjectContextService>(_ => ProjectContextService.Instance);
+        services.AddSingleton<VisualPluginManager>(_ => VisualPluginManager.Instance);
+        services.AddSingleton<WorkspacePanelService>(_ => WorkspacePanelService.Instance);
 
         services.AddSingleton<FlashViewModel>(sp => new FlashViewModel(
             sp.GetRequiredService<IFlashService>(),
@@ -88,9 +108,9 @@ internal static class ServiceRegistration
     }
 
     /// <summary>
-    /// Builds the provider without reflection-based validation so startup never activates a service
-    /// eagerly and every registration stays an explicit factory.
-    /// <para>构建提供程序时不启用基于反射的校验，使启动不会急切激活任何服务，并保持全部注册为显式工厂。</para>
+    /// Builds the provider without eager activation so startup still constructs nothing until a service
+    /// is first resolved; Debug builds additionally validate the descriptor graph at build time.
+    /// <para>构建提供程序时不急切激活服务，启动期仍不构造任何服务；Debug 构建额外在构建期校验描述符图。</para>
     /// </summary>
     /// <param name="services">The populated service collection. <para>已注册的服务集合。</para></param>
     /// <returns>The composed provider. <para>组合得到的提供程序。</para></returns>
@@ -100,8 +120,20 @@ internal static class ServiceRegistration
         ArgumentNullException.ThrowIfNull(services);
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
-            ValidateOnBuild = false,
+            // 工厂注册的构造过程对容器不可见，构建期校验只覆盖描述符级的类型映射；工厂自身的依赖
+            // 完整性由 ServiceRegistrationTests.Register_EveryRegistration_Resolves 兜住。
+            ValidateOnBuild = ValidateRegisteredGraph,
             ValidateScopes = false
         });
     }
+
+#if DEBUG
+    /// <summary>Whether the provider validates its descriptor graph while it is built.
+    /// <para>提供程序在构建时是否校验描述符图。</para></summary>
+    private const bool ValidateRegisteredGraph = true;
+#else
+    /// <summary>Whether the provider validates its descriptor graph while it is built.
+    /// <para>提供程序在构建时是否校验描述符图。</para></summary>
+    private const bool ValidateRegisteredGraph = false;
+#endif
 }
