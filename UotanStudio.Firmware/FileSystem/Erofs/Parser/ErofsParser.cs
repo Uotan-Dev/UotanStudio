@@ -776,7 +776,20 @@ public sealed partial class ErofsParser : IDisposable
         var progressGate = new object();
         IProgress<(long Processed, long Total)>? entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
         var entryProgress = new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
-        var groups = Enumerable.Range(0, entries.Count).GroupBy(index => targets[index], comparer).ToArray();
+        var groups = new List<List<int>>(entries.Count);
+        var groupsByTarget = new Dictionary<string, List<int>>(comparer);
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var target = targets[index];
+            if (!groupsByTarget.TryGetValue(target, out var members))
+            {
+                members = new List<int>();
+                groupsByTarget.Add(target, members);
+                groups.Add(members);
+            }
+
+            members.Add(index);
+        }
         var createdParents = new ConcurrentDictionary<string, bool>(comparer);
         Core.FirmwareParallelism.ForEach(groups, group =>
         {
@@ -1241,14 +1254,33 @@ public sealed partial class ErofsParser : IDisposable
         }
     }
 
+    private bool ExceedsImageBounds(long offset, int length)
+        => offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset;
+
+    private bool ExceedsMetaboxBounds(long offset, int length)
+        => _metaboxData is null || offset < 0 || length < 0
+        || offset > _metaboxData.Length || length > _metaboxData.Length - offset;
+
     private byte[] ReadBytes(long offset, int length, string what)
     {
         _readCancellation.ThrowIfCancellationRequested();
-        if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
+        if (ExceedsImageBounds(offset, length))
         {
             throw new FileSystemCorruptedException($"{what} exceeds the image bounds.");
         }
 
+        return ReadImageBytes(offset, length);
+    }
+
+    /// <summary>
+    /// Reads an image range whose bounds the caller has already validated; no failure label is involved.
+    /// <para>读取调用方已通过边界校验的镜像区间；全程不涉及失败标签。</para>
+    /// </summary>
+    /// <param name="offset">The validated byte offset inside the image. <para>已校验的镜像内字节偏移。</para></param>
+    /// <param name="length">The validated number of bytes to read. <para>已校验的要读取字节数。</para></param>
+    /// <returns>The requested bytes. <para>请求的字节。</para></returns>
+    private byte[] ReadImageBytes(long offset, int length)
+    {
         var buffer = new byte[length];
         ReadPositioned(_stream, checked(_baseOffset + offset), buffer, length);
         return buffer;
@@ -1799,6 +1831,50 @@ public sealed partial class ErofsParser : IDisposable
     private byte[] ReadInodeMetadata(ulong nid, long offset, int length, string what)
         => IsMetaboxInode(nid) ? ReadMetaboxBytes(offset, length, what) : ReadBytes(offset, length, what);
 
+    /// <summary>
+    /// Reads inode metadata with a lazily formatted label: <paramref name="whatIndex"/> is appended to
+    /// <paramref name="whatPrefix"/> only on a failure path, so per-record loops allocate no label string.
+    /// The thrown messages are identical to the <see cref="ReadInodeMetadata(ulong,long,int,string)"/> overloads.
+    /// <para>读取 inode 元数据并延迟格式化标签：仅在失败路径把 <paramref name="whatIndex"/> 追加到
+    /// <paramref name="whatPrefix"/> 之后，使逐条记录的循环不再分配标签字符串。抛出的消息与
+    /// <see cref="ReadInodeMetadata(ulong,long,int,string)"/> 重载完全一致。</para>
+    /// </summary>
+    /// <param name="nid">The inode identifier selecting the image or METABOX source.
+    /// <para>选择镜像或 METABOX 来源的 inode 标识。</para></param>
+    /// <param name="offset">The byte offset inside the selected source. <para>所选来源内的字节偏移。</para></param>
+    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
+    /// <param name="whatPrefix">The label prefix used verbatim in failure messages.
+    /// <para>失败消息中原样使用的标签前缀。</para></param>
+    /// <param name="whatIndex">The record index appended after a single space on failure.
+    /// <para>失败时追加在单个空格之后的记录索引。</para></param>
+    /// <returns>The requested metadata bytes. <para>请求的元数据字节。</para></returns>
+    /// <exception cref="OperationCanceledException">The parser-wide read token was canceled.
+    /// <para>解析器范围的读取令牌已被取消。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The range exceeds the selected source's bounds.
+    /// <para>区间超出所选来源的边界。</para></exception>
+    private byte[] ReadInodeMetadata(ulong nid, long offset, int length, string whatPrefix, long whatIndex)
+    {
+        _readCancellation.ThrowIfCancellationRequested();
+        if (IsMetaboxInode(nid))
+        {
+            var metaboxData = _metaboxData;
+            if (metaboxData is null || ExceedsMetaboxBounds(offset, length))
+            {
+                throw new FileSystemCorruptedException(
+                    $"{whatPrefix} {whatIndex} exceeds the METABOX data stream.");
+            }
+
+            return metaboxData.AsSpan((int)offset, length).ToArray();
+        }
+
+        if (ExceedsImageBounds(offset, length))
+        {
+            throw new FileSystemCorruptedException($"{whatPrefix} {whatIndex} exceeds the image bounds.");
+        }
+
+        return ReadImageBytes(offset, length);
+    }
+
     private byte[] ReadMetaboxBytes(long offset, int length, string what)
         => ReadMetaboxSpan(offset, length, what).ToArray();
 
@@ -1812,12 +1888,12 @@ public sealed partial class ErofsParser : IDisposable
     private ReadOnlySpan<byte> ReadMetaboxSpan(long offset, int length, string what)
     {
         _readCancellation.ThrowIfCancellationRequested();
-        if (_metaboxData is null || offset < 0 || length < 0
-            || offset > _metaboxData.Length || length > _metaboxData.Length - offset)
+        var data = _metaboxData;
+        if (data is null || ExceedsMetaboxBounds(offset, length))
         {
             throw new FileSystemCorruptedException($"{what} exceeds the METABOX data stream.");
         }
-        return _metaboxData.AsSpan((int)offset, length);
+        return data.AsSpan((int)offset, length);
     }
 
     /// <summary>
