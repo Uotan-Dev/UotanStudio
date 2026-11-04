@@ -21,7 +21,7 @@ leaves that every upper layer may reference.
 | --- | --- | --- |
 | OS adapters | `Transports/Usb/Backend/{Windows,Linux,MacOS,HarmonyOS,LibUsb}` | Native enumeration, handles, endpoint I/O and hotplug. |
 | Bearers | `Transports/{Usb,Serial,Tcp,Udp}` | Bounded I/O, timeouts, cancellation and disposal; USB session extensions and `UsbStream` live beside the sessions they wrap. |
-| Protocols | `Protocols/{Adb,Hdc,Fastboot,Edl,Bootrom,Mtk}` | Framing, authentication, command and session state. Fastboot network transports and framing live under `Protocols/Fastboot/Transport`; flash-time image helpers under `Protocols/Fastboot/Images`. Screen mirroring is not a protocol here: scrcpy lives in `UotanStudio.Mirroring`. |
+| Protocols | `Protocols/{Adb,Hdc,Fastboot,Edl,Bootrom,Mtk,Sunxi}` | Framing, authentication, command and session state. Fastboot network transports and framing live under `Protocols/Fastboot/Transport`; flash-time image helpers under `Protocols/Fastboot/Images`. Screen mirroring is not a protocol here: scrcpy lives in `UotanStudio.Mirroring`. |
 | Contracts | `Contracts/` | Host-facing façade interfaces (`IAdbDeviceSession`, `HdcSession` contracts, endpoints, session kinds). No internal dependencies. |
 | Routing | `Routing/` | TCP server liveness probes (`DebugBridgeRoute`), server endpoint facts (`DebugBridgeEndpoints`), ownership decisions and routed session opening (`Devices/Services/DebugBridgeSessionOpener`). |
 | Inventory | `Devices/Discovery` | Separate USB and server discovery sources; exact endpoint identity and reported state. |
@@ -196,6 +196,26 @@ DA-version independent). Device-initiated XML file operations are served only wh
 `MtkSession.HostFileStore` is attached; without it the session stays fail-closed.
 SLA/DAA key material comes exclusively from an `IMtkDaaResourceProvider`
 (e.g. `MtkDirectoryKeyStore` over a user-supplied directory); nothing is bundled.
+
+## Sunxi notes
+
+FEL and FES (eFEX) share VID 0x1F3A / PID 0xEFE8. `Protocols/Sunxi` implements the wire protocol and the
+mode transition: `SunxiEfexFrames` builds the 32-byte `AWUC` request header, the 16-byte inner FEL request, the
+20-byte FES transfer header and parses the 13-byte `AWUS` response; `SunxiFelSession` covers identity, chunked
+memory read/write and execute at 64 KiB per stage; `SunxiFesSession` covers storage/secure/flash-size queries,
+tagged downloads and uploads (byte addressing for data tags, 512-byte sectors for the flash tag), whole-storage
+erase, CRC verification and the tool mode. A non-zero `AWUS` status raises `SunxiEfexException`.
+
+`SunxiFesHandoff` drives the cold-device transition: it clears the DRAM parameter area, uploads and executes the
+`eGON.BT0` first-stage loader, uploads the `u-boot` service payload with its work mode forced to the USB product
+path, and waits for the re-enumerated device to answer the FES handshake. `SunxiDeviceSession` resolves FEL or FES
+from that handshake because both modes enumerate with the same ids; `SunxiEfexUsbTransport` adapts a leased USB
+session, and `DefaultDeviceSessionFactories` registers the `DeviceSessionKind.Sunxi` factory. Discovery classifies
+0x1F3A:0xEFE8 as `sunxi`.
+
+The page-side building blocks are wired: the host leases the endpoint, reads status, runs the FEL memory tools and
+starts the FES service. IMAGEWTY to FES download planning (MBR/`sys_partition` partition ranges and role-to-tag
+mapping) and FES flashing remain to be built, and no real device has been exercised.
 
 ## GPT observation options
 

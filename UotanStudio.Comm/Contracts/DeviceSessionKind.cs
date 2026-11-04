@@ -48,5 +48,12 @@ public enum DeviceSessionKind
     /// Qualcomm DIAG session on a direct USB diagnostic interface or a serial port.
     /// <para>运行在直连 USB 诊断接口或串口上的高通 DIAG 会话。</para>
     /// </summary>
-    Diagnostic
+    Diagnostic,
+    /// <summary>
+    /// Allwinner FEL or FES session on a direct USB transport; both modes share one vendor and product id, so the
+    /// session resolves the mode from the identity handshake.
+    /// <para>运行在直连 USB 传输上的全志 FEL 或 FES 会话；两种模式共用一个厂商与产品 id，因此会话通过身份握手
+    /// 确定模式。</para>
+    /// </summary>
+    Sunxi
 }

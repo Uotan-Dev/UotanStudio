@@ -9,6 +9,7 @@ using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
+using UotanStudio.Comm.Protocols.Sunxi;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -27,7 +28,8 @@ internal static class DefaultDeviceSessionFactories
         new BootromDeviceSessionFactory(),
         new MtkDeviceSessionFactory(),
         new AppleDeviceSessionFactory(),
-        new DiagnosticDeviceSessionFactory()
+        new DiagnosticDeviceSessionFactory(),
+        new SunxiDeviceSessionFactory()
     ];
 }
 
@@ -202,6 +204,25 @@ internal sealed class DiagnosticDeviceSessionFactory : IDeviceSessionFactory
 
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         return Task.FromResult<object>(new DiagSession(new UsbDeviceTransport(usb)));
+    }
+}
+
+/// <summary>
+/// Completes the Allwinner identity handshake over the leased USB endpoint and returns the mode-specific session.
+/// <para>在已租用的 USB 端点之上完成全志身份握手，并返回对应模式的会话。</para>
+/// </summary>
+internal sealed class SunxiDeviceSessionFactory : IDeviceSessionFactory
+{
+    public DeviceSessionKind Kind => DeviceSessionKind.Sunxi;
+
+    public async Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LeasedTransport.RequireProtocol(endpoint, "sunxi");
+        var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
+        return await SunxiDeviceSession.OpenAsync(new SunxiEfexUsbTransport(usb), cancellationToken)
+            .ConfigureAwait(false);
     }
 }
 

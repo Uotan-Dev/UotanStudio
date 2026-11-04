@@ -18,11 +18,13 @@ public static class UsbProtocolClassifier
     private const ushort NetgearVid = 0x0846;
     private const ushort ZteVid = 0x19D2;
     private const ushort QuectelVid = 0x2C7C;
+    private const ushort AllwinnerVid = 0x1F3A;
+    private const ushort AllwinnerFesPid = 0xEFE8;
 
     /// <summary>
-    /// Classifies the device as <c>edl</c>, <c>mtk</c> or <c>rkdl</c> from its bootrom VID/PID pair,
+    /// Classifies the device as <c>edl</c>, <c>mtk</c>, <c>rkdl</c> or <c>sunxi</c> from its bootrom VID/PID pair,
     /// otherwise from the first interface matching a known debug-bridge triple.
-    /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>
+    /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c>、<c>rkdl</c> 或 <c>sunxi</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>
     /// </summary>
     /// <param name="device">
     /// The enumerated USB device. <para>已枚举的 USB 设备。</para>
@@ -82,8 +84,8 @@ public static class UsbProtocolClassifier
         };
 
     /// <summary>
-    /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c> or <c>rkdl</c>, covering Qualcomm and
-    /// MediaTek bootrom and download ports plus Rockchip loader ports. Pairs in
+    /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c>, <c>rkdl</c> or <c>sunxi</c>, covering Qualcomm and
+    /// MediaTek bootrom and download ports, Rockchip loader ports and the Allwinner FEL/FES pair. Pairs in
     /// <see cref="RkdlConstants.MscExcludedDevices"/> are rejected first, exactly like the vendor tool's scan.
     /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，覆盖高通与联发科的 bootrom/下载端口以及瑞芯微 loader 端口。
     /// 属于 <see cref="RkdlConstants.MscExcludedDevices"/> 的组合会先被拒绝，与厂商工具的扫描一致。</para>
@@ -118,6 +120,11 @@ public static class UsbProtocolClassifier
         }
 
         var product = productId ?? 0;
+        if (vendorId == AllwinnerVid && product == AllwinnerFesPid)
+        {
+            return "sunxi";
+        }
+
         if (vendorId == QualcommVid &&
             product is 0x9006 or 0x9008 or 0x900E or 0x9025 or 0x9307)
         {
