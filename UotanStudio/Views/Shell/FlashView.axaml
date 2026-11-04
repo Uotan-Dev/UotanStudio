@@ -873,7 +873,7 @@
                                            TextWrapping="Wrap" />
                                 <TextBox Name="SpacemiTPackageBox" Height="32" VerticalContentAlignment="Center"
                                          IsReadOnly="True" Text="{Binding SpacemiTPackagePath}"
-                                         Watermark="{DynamicResource Flash_SpacemiTPackageHint}"
+                                         PlaceholderText="{DynamicResource Flash_SpacemiTPackageHint}"
                                          AutomationProperties.Name="{DynamicResource Flash_SpacemiTPackagePath}" />
                                 <Button Name="SpacemiTChoosePackageButton" Classes="pane-action"
                                         Click="OnSpacemiTChoosePackageClick"
