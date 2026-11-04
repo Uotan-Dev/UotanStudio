@@ -37,6 +37,20 @@ public sealed partial class FlashViewModel
     private string _spacemiTStatusText = string.Empty;
 
     /// <summary>
+    /// SpacemiT section: the pane and both buttons answer only on the SpacemiT fastboot gadget itself, so each of them
+    /// carries that condition instead of a page-wide lookup; the header also disappears for every other endpoint.
+    /// <para>进迭时空分类：面板与两个按钮只在进迭时空 fastboot gadget 本身应答，因此各自持有该条件，而不是依赖页面级查表；
+    /// 表头还会对其他端点隐藏。</para>
+    /// </summary>
+    private void RegisterSpacemiTControlGates()
+    {
+        RegisterGate("SpacemiTExpander", FlashControlGate.SpacemiTSectionHeader("SpacemiTExpander"));
+        RegisterGate("SpacemiTPane", FlashControlGate.SpacemiT("SpacemiTPane"));
+        RegisterGate("SpacemiTChoosePackageButton", FlashControlGate.SpacemiT("SpacemiTChoosePackageButton"));
+        RegisterGate("SpacemiTFlashButton", FlashControlGate.SpacemiT("SpacemiTFlashButton"));
+    }
+
+    /// <summary>
     /// Opens the folder picker, validates the directory as a SpacemiT flash package and records it for the
     /// flash action.
     /// <para>打开文件夹选择器，把目录校验为进迭时空烧录包，并为烧录动作记录它。</para>

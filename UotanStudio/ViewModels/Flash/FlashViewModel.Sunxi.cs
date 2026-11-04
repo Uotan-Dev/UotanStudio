@@ -68,6 +68,24 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
+    /// Allwinner section: the pane and every button answer only on an Allwinner endpoint, so each carries that condition
+    /// instead of a page-wide lookup.
+    /// <para>全志分类：面板与每个按钮只在全志端点上应答，因此各自持有该条件，而不是依赖页面级查表。</para>
+    /// </summary>
+    private void RegisterSunxiControlGates()
+    {
+        RegisterGate("SunxiExpander", FlashControlGate.SectionHeader("SunxiExpander", FlashDeviceMode.Sunxi));
+        RegisterGate("SunxiPane", FlashControlGate.Section("SunxiPane", FlashDeviceMode.Sunxi, busyDisabled: true));
+        RegisterGate("SunxiRefreshButton", FlashControlGate.Sunxi("SunxiRefreshButton"));
+        RegisterGate("SunxiChooseFes1Button", FlashControlGate.Sunxi("SunxiChooseFes1Button"));
+        RegisterGate("SunxiChooseUbootButton", FlashControlGate.Sunxi("SunxiChooseUbootButton"));
+        RegisterGate("SunxiBootFesButton", FlashControlGate.Sunxi("SunxiBootFesButton"));
+        RegisterGate("SunxiReadMemoryButton", FlashControlGate.Sunxi("SunxiReadMemoryButton"));
+        RegisterGate("SunxiWriteMemoryButton", FlashControlGate.Sunxi("SunxiWriteMemoryButton"));
+        RegisterGate("SunxiExecuteButton", FlashControlGate.Sunxi("SunxiExecuteButton"));
+    }
+
+    /// <summary>
     /// Queries the selected endpoint once and publishes the identity, mode and — in FES mode — the storage answers.
     /// The mode also updates the device badge, because discovery cannot tell FEL from FES.
     /// <para>查询一次所选端点并发布身份、模式，以及 FES 模式下的存储应答。模式同时更新设备徽章，因为发现阶段无法区分

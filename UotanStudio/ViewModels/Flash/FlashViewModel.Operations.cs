@@ -1127,10 +1127,18 @@ public sealed partial class FlashViewModel
 
     private DetectedDevice? _lastObservedDevice;
 
-    internal void ApplyDeviceProtocolExpansion(DeviceProtocolKind? protocol)
+    internal void ApplyDeviceProtocolExpansion(DeviceProtocolKind? protocol, bool spacemiTFastboot = false)
     {
         if (_surface is null) return;
-        if (protocol is DeviceProtocolKind.Edl)
+        if (protocol is DeviceProtocolKind.Fastboot && spacemiTFastboot)
+        {
+            Field<Expander>("SpacemiTExpander").IsExpanded = true;
+            Field<Expander>("EdlExpander").IsExpanded = false;
+            Field<Expander>("MtkExpander").IsExpanded = false;
+            Field<Expander>("RkExpander").IsExpanded = false;
+            Field<Expander>("SunxiExpander").IsExpanded = false;
+        }
+        else if (protocol is DeviceProtocolKind.Edl)
         {
             Field<Expander>("EdlExpander").IsExpanded = true;
             Field<Expander>("MtkExpander").IsExpanded = false;
@@ -1174,9 +1182,23 @@ public sealed partial class FlashViewModel
             var currentDevice = SelectedDevice;
             if (!ReferenceEquals(_lastObservedDevice, currentDevice) ||
                 _lastObservedDevice?.Protocol != currentDevice?.Protocol)
+    /// <summary>
+    /// Image operations section: it works on the loaded package rather than on the device, so every selected endpoint
+    /// without a restricted kind offers it and only the busy state closes it.
+    /// <para>镜像操作分类：它作用于已加载的刷机包而不是设备，因此任何没有受限种类的已选端点都提供它，只有忙碌状态会关闭它。</para>
+    /// </summary>
+    private void RegisterImageControlGates()
+    {
+        RegisterGate("ImageExpander", FlashControlGate.ImageSectionHeader("ImageExpander"));
+        RegisterGate("ImagePane", FlashControlGate.SharedAny("ImagePane", busyDisabled: true));
+        RegisterGate("ExtractSelectedButton",
+            FlashControlGate.SharedAny("ExtractSelectedButton", busyDisabled: true));
+        RegisterGate("BuildWiredPackageButton",
+            FlashControlGate.SharedAny("BuildWiredPackageButton", busyDisabled: true));
+    }
             {
                 _lastObservedDevice = currentDevice;
-                ApplyDeviceProtocolExpansion(currentDevice?.Protocol);
+                ApplyDeviceProtocolExpansion(currentDevice?.Protocol, IsSpacemiTSelected);
                 ResetRkStorageOptions();
                 if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
                 {
@@ -1582,12 +1604,12 @@ public sealed partial class FlashViewModel
         => Partitions.Any(row => row.IsSelected && IsWritableEntry(row));
 
     /// <remarks>
-    /// While busy only the side action pane's shared actions and its secondary sections are turned off; page
-    /// scrolling, the package bar, the partition table and the log stay usable.
-    /// <para>忙碌期间只关闭侧边操作区的通用动作与其二级分类；页面滚动、刷机包栏、分区表与日志保持可用。</para>
-    /// The cancel button is not in that always-disabled set: its enabled state tracks the main entry area's
-    /// busy state and is usable only while busy with a registered cancellation source.
-    /// <para>取消按钮不在常启用集合内，其状态完全由这条写入决定：忙碌且已登记取消源时才可用。</para>
+    /// While busy only the controls whose own gate turns them off during an operation are closed; page scrolling,
+    /// the package bar, the partition table and the log stay usable.
+    /// <para>忙碌期间只关闭自身门控声明了“运行期间关闭”的控件；页面滚动、刷机包栏、分区表与日志保持可用。</para>
+    /// The cancel button is not in that set: its enabled state tracks the main entry area's busy state and is usable
+    /// only while busy with a registered cancellation source.
+    /// <para>取消按钮不在该集合内，其状态完全由这条写入决定：忙碌且已登记取消源时才可用。</para>
     /// When the run ends, the state-derived enables are recomputed so a package or selection that changed
     /// during the run is reflected immediately.
     /// <para>退出忙碌后按当前页面状态重算派生启用值（加载引导、回读、选项与 Root 面板），
@@ -1597,9 +1619,9 @@ public sealed partial class FlashViewModel
     {
         _busy = value;
         IsBusy = value;
-        foreach (var name in FlashDeviceUiPolicy.BusyDisabledControls)
+        foreach (var (_, gate) in _controlGates.Where(entry => entry.Value.BusyDisabled))
         {
-            SetControlEnabled(name, !value);
+            SetControlEnabled(gate.Name, !value);
         }
 
         SetControlEnabled("CancelFlashButton", value && _flashCancellation is not null);
@@ -1612,7 +1634,7 @@ public sealed partial class FlashViewModel
 
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(FlashViewModel.SelectedCount))
+        if (e.PropertyName is nameof(FlashViewModel.SelectedCount) or nameof(FlashViewModel.HasSelectedPartitions))
         {
             UpdateEdlButton();
         }
@@ -1696,6 +1718,23 @@ public sealed partial class FlashViewModel
 
 
     /// <summary>
+    /// <summary>
+    /// Qualcomm EDL section: its controls answer only on an EDL endpoint, so the pane carries the section's own condition
+    /// and the header hides once another protocol is selected.
+    /// <para>高通 EDL 分类：其控件只在 EDL 端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// </summary>
+    private void RegisterEdlControlGates()
+    {
+        RegisterGate("EdlExpander", FlashControlGate.SectionHeader("EdlExpander", FlashDeviceMode.Edl));
+        RegisterGate("EdlPane", FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true));
+        RegisterGate("EdlChooseProgrammerButton",
+            FlashControlGate.Section("EdlChooseProgrammerButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlSetBootableButton",
+            FlashControlGate.Section("EdlSetBootableButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlPartitionDigestButton",
+            FlashControlGate.Section("EdlPartitionDigestButton", FlashDeviceMode.Edl));
+    }
+
     /// Formats a GPT partition table into lines, keeping at most <paramref name="maxLines"/> rows and
     /// appending a remainder note beyond that. The caller supplies the formats from the resource
     /// dictionary, so the result follows the current interface language.
@@ -4101,6 +4140,25 @@ public sealed partial class FlashViewModel
             || agentPacket is < 1 or > 16 * 1024 * 1024
             || storagePacket is < 1 or > 16 * 1024 * 1024)
         {
+    /// <summary>
+    /// MediaTek section: its controls answer only on a MediaTek endpoint, so the pane carries the section's own condition
+    /// and the header hides once another protocol is selected.
+    /// <para>联发科分类：其控件只在联发科端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// </summary>
+    private void RegisterMtkControlGates()
+    {
+        RegisterGate("MtkExpander", FlashControlGate.SectionHeader("MtkExpander", FlashDeviceMode.Mtk));
+        RegisterGate("MtkPane", FlashControlGate.Section("MtkPane", FlashDeviceMode.Mtk, busyDisabled: true));
+        RegisterGate("ChooseMtkDaButton", FlashControlGate.Section("ChooseMtkDaButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkEmiButton", FlashControlGate.Section("ChooseMtkEmiButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkKeyDirButton",
+            FlashControlGate.Section("ChooseMtkKeyDirButton", FlashDeviceMode.Mtk));
+        RegisterGate("ChooseMtkAuthFileButton",
+            FlashControlGate.Section("ChooseMtkAuthFileButton", FlashDeviceMode.Mtk));
+        RegisterGate("MtkXmlPropertyQueryButton",
+            FlashControlGate.Section("MtkXmlPropertyQueryButton", FlashDeviceMode.Mtk));
+    }
+
             throw new InvalidOperationException(language.GetString("Flash_MtkLegacyParamsInvalid"));
         }
 

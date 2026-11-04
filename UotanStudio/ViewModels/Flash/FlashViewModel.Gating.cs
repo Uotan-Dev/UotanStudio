@@ -6,25 +6,33 @@ using UotanStudio.Services.Flash;
 namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
-/// Device awareness of the flash page: every enable decision goes through <see cref="SetControlEnabled"/> and the
-/// gated controls stay unusable until a device is selected and offers them.
-/// <para>烧录页面的设备感知：所有启用决定都经 <see cref="SetControlEnabled"/> 作出，受控控件在选中设备并提供该
-/// 功能之前保持不可用。</para>
+/// Device awareness of the flash page: every control carries its own <see cref="FlashControlGate"/>, every enable
+/// decision goes through <see cref="SetControlEnabled"/>, and a control stays unusable until a device satisfying that
+/// control's own condition is selected.
+/// <para>烧录页面的设备感知：每个控件自带 <see cref="FlashControlGate"/>，所有启用决定都经
+/// <see cref="SetControlEnabled"/> 作出，控件在选中满足其自身条件的设备之前保持不可用。</para>
 /// </summary>
 /// <remarks>
-/// The page state stays authoritative for what it wants enabled; <see cref="RefreshDeviceUiGate"/> re-applies the
-/// device restriction on top of that intent whenever the selected device changes, so a device swap neither leaves a
-/// hidden control enabled nor forgets what the page had enabled for the previous one.
-/// <para>页面状态仍然是“想要启用什么”的依据；选中设备变化时，<see cref="RefreshDeviceUiGate"/> 在该意图之上重新
-/// 施加设备限制，因此换设备既不会留下被隐藏的可用控件，也不会丢掉页面对上一台设备的启用状态。</para>
+/// The page state stays authoritative for what it wants enabled; <see cref="RefreshDeviceUiGate"/> re-applies each
+/// control's own condition on top of that intent whenever the selected device changes, so a device swap neither leaves
+/// a hidden control enabled nor forgets what the page had enabled for the previous one.
+/// <para>页面状态仍然是“想要启用什么”的依据；选中设备变化时，<see cref="RefreshDeviceUiGate"/> 在该意图之上重新施加
+/// 每个控件自身的条件，因此换设备既不会留下被隐藏的可用控件，也不会丢掉页面对上一台设备的启用状态。</para>
 /// </remarks>
 public sealed partial class FlashViewModel
 {
     /// <summary>
-    /// Enable intent the page last asked for, per control name; the device restriction is applied on top of it.
-    /// <para>页面最近一次请求的启用意图（按控件名）；设备限制叠加在其之上。</para>
+    /// Enable intent the page last asked for, per control name; each control's own device condition is applied on top of it.
+    /// <para>页面最近一次请求的启用意图（按控件名）；每个控件自身的设备条件叠加在其之上。</para>
     /// </summary>
     private readonly Dictionary<string, bool> _controlIntent = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The control each gate belongs to; the page evaluates gates by walking these controls, never by looking a gate up
+    /// from a page-wide name table.
+    /// <para>每个门控所属的控件；页面通过遍历这些控件来求值，而不是到页面级名称表中反查门控。</para>
+    /// </summary>
+    private readonly Dictionary<Control, FlashControlGate> _controlGates = [];
 
     /// <summary>
     /// The mode whose controls the page offers, derived from the selected device's protocol.
@@ -93,10 +101,92 @@ public sealed partial class FlashViewModel
         new(AlwaysEnabledControlNames, StringComparer.Ordinal);
 
     /// <summary>
-    /// Records the enable intent of one control and writes it to the page, restricted by the selected device's mode
-    /// and by the busy state of the side action pane. The intent is recorded even while the control is forced off, so
-    /// leaving the busy state restores it; the log area can never be turned off.
-    /// <para>记录单个控件的启用意图并写入页面，按所选设备的模式与侧边操作区的忙碌状态施加限制。即使控件被强制关闭，
+    /// The device and page snapshot every control's own condition is evaluated against.
+    /// <para>每个控件自身条件求值所用的设备与页面快照。</para>
+    /// </summary>
+    private FlashGateContext GateContext =>
+        new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions);
+
+    /// <summary>
+    /// Registers every control's own gate; called once when the page is attached, before any enable decision reads it.
+    /// <para>注册每个控件自身的门控；页面附加时调用一次，且先于任何读取门控的启用决定。</para>
+    /// </summary>
+    internal void RegisterControlGates()
+    {
+        RegisterPageControlGates();
+        RegisterSharedControlGates();
+        RegisterEdlControlGates();
+        RegisterMtkControlGates();
+        RegisterRockchipControlGates();
+        RegisterSpacemiTControlGates();
+        RegisterSunxiControlGates();
+        RegisterImageControlGates();
+    }
+
+    /// <summary>
+    /// Package bar and partition toolbar: these actions work on the page state rather than on the device, so they carry
+    /// only the busy condition; the delete action additionally needs selected rows.
+    /// <para>刷机包栏与分区工具栏：这些动作作用于页面状态而不是设备，因此只持有忙碌条件；删除动作还要求已勾选的行。</para>
+    /// </summary>
+    private void RegisterPageControlGates()
+    {
+        RegisterGate("ChooseFileButton", FlashControlGate.BusyOnly("ChooseFileButton"));
+        RegisterGate("ChooseFolderButton", FlashControlGate.BusyOnly("ChooseFolderButton"));
+        RegisterGate("GetPackageButton", FlashControlGate.BusyOnly("GetPackageButton"));
+        RegisterGate("AddPartitionButton", FlashControlGate.BusyOnly("AddPartitionButton"));
+        RegisterGate("DeletePartitionsButton", FlashControlGate.SelectionRequired("DeletePartitionsButton"));
+    }
+
+    /// <summary>
+    /// Attaches one gate to the control it belongs to; a gate whose control is missing is reported to the log instead of
+    /// silently leaving that control ungated.
+    /// <para>把门控挂到它所属的控件上；控件缺失时写入日志，而不是让该控件悄悄失去门控。</para>
+    /// </summary>
+    /// <param name="name">Name of the XAML control. <para>XAML 控件名称。</para></param>
+    /// <param name="gate">The control's own condition. <para>该控件自身的条件。</para></param>
+    private void RegisterGate(string name, FlashControlGate gate)
+    {
+        if (_surface?.FindControl<Control>(name) is not { } control)
+        {
+            _log.Write(LogLevel.Debug, "Flash", $"Gated control {name} is missing from the page.");
+            return;
+        }
+
+        _controlGates[control] = gate;
+    }
+
+    /// <summary>
+    /// Shared action pane: the common actions, the busy-only check boxes and the two option panels.
+    /// <para>通用操作区：通用动作、仅随忙碌态变化的复选框与两个选项面板。</para>
+    /// </summary>
+    private void RegisterSharedControlGates()
+    {
+        RegisterGate("LoadBootButton", FlashControlGate.LoaderOnly("LoadBootButton", busyDisabled: true));
+        RegisterGate("ReadInfoButton", FlashControlGate.SharedStorage("ReadInfoButton", busyDisabled: true));
+        RegisterGate("ReadbackSelectedButton",
+            FlashControlGate.SharedStorage("ReadbackSelectedButton", busyDisabled: true));
+        RegisterGate("FlashSelectedButton",
+            FlashControlGate.SharedFlash("FlashSelectedButton", busyDisabled: true));
+        RegisterGate("EraseSelectedButton",
+            FlashControlGate.SharedStorage("EraseSelectedButton", busyDisabled: true));
+        RegisterGate("SwitchSlotButton", FlashControlGate.SlotSwitch("SwitchSlotButton", busyDisabled: true));
+
+        RegisterGate("DisableVbmetaBox", FlashControlGate.BusyOnly("DisableVbmetaBox"));
+        RegisterGate("AddRootBox", FlashControlGate.BusyOnly("AddRootBox"));
+        RegisterGate("EraseDataBox", FlashControlGate.BusyOnly("EraseDataBox"));
+        RegisterGate("RebootAfterBox", FlashControlGate.BusyOnly("RebootAfterBox"));
+        RegisterGate("ShowAllPartitionsBox", FlashControlGate.BusyOnly("ShowAllPartitionsBox"));
+        RegisterGate("DeleteCowBox", FlashControlGate.BusyOnly("DeleteCowBox"));
+        RegisterGate("AvbOptionsPanel", FlashControlGate.BusyOnly("AvbOptionsPanel"));
+        RegisterGate("RootOptionsPanel", FlashControlGate.BusyOnly("RootOptionsPanel"));
+        RegisterGate("ChooseRootPackageButton", FlashControlGate.BusyOnly("ChooseRootPackageButton"));
+    }
+
+    /// <summary>
+    /// Records the enable intent of one control and writes it to the page, restricted by the control's own gate and by
+    /// the busy state of the side action pane. The intent is recorded even while the control is forced off, so leaving
+    /// the busy state restores it; the log area can never be turned off.
+    /// <para>记录单个控件的启用意图并写入页面，按该控件自身的门控与侧边操作区的忙碌状态施加限制。即使控件被强制关闭，
     /// 意图仍被记录，退出忙碌后即可恢复；日志区永远无法被关闭。</para>
     /// </summary>
     /// <param name="name">Name of the XAML control. <para>XAML 控件名称。</para></param>
@@ -116,8 +206,8 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        control.IsEnabled = !(_busy && FlashDeviceUiPolicy.IsBusyDisabled(name)) &&
-            enabled && IsOfferedByDevice(name);
+        var gate = _controlGates.GetValueOrDefault(control);
+        ApplyGate(control, gate, enabled, GateContext);
     }
 
     /// <summary>
@@ -126,47 +216,21 @@ public sealed partial class FlashViewModel
     /// </summary>
     private void CaptureControlIntent()
     {
-        if (_surface is null)
+        foreach (var (control, gate) in _controlGates)
         {
-            return;
-        }
-
-        foreach (var name in FlashDeviceUiPolicy.GatedControls)
-        {
-            if (_controlIntent.ContainsKey(name) || _surface.FindControl<Control>(name) is not { } control)
+            if (_controlIntent.ContainsKey(gate.Name))
             {
                 continue;
             }
 
-            _controlIntent[name] = control.IsEnabled;
+            _controlIntent[gate.Name] = control.IsEnabled;
         }
     }
 
     /// <summary>
-    /// The single availability verdict for one control: the device mode and Rockchip stage from the policy table,
-    /// plus the ADB root-shell verdict for the controls that need it.
-    /// <para>单个控件的唯一可用性结论：来自策略表的设备模式与瑞芯微阶段，以及对需要它的控件追加的
-    /// ADB root shell 结论。</para>
-    /// </summary>
-    /// <param name="name">Name of the XAML control. <para>XAML 控件名称。</para></param>
-    /// <returns><see langword="true"/> when the page may enable the control.
-    /// <para>页面可启用该控件时为 <see langword="true"/>。</para></returns>
-    private bool IsOfferedByDevice(string name)
-    {
-        if (!FlashDeviceUiPolicy.IsAvailable(name, DeviceMode, RkStage, DeviceKind, IsSpacemiTSelected))
-        {
-            return false;
-        }
-
-        return DeviceKind != FlashDeviceKind.Adb ||
-            !FlashDeviceUiPolicy.RequiresAdbSu(name) ||
-            HasConfirmedAdbSu;
-    }
-
-    /// <summary>
-    /// Re-applies the device restriction to every gated control; called whenever the selected device can have
-    /// changed, so a mode without a section leaves that section unusable.
-    /// <para>把设备限制重新施加到全部受控控件；所选设备可能变化时调用，使没有专属分类的模式关闭对应分类。</para>
+    /// Re-applies every control's own condition; called whenever the selected device can have changed, so a mode
+    /// without a section leaves that section unusable.
+    /// <para>重新施加每个控件自身的条件；所选设备可能变化时调用，使没有专属分类的模式关闭对应分类。</para>
     /// </summary>
     internal void RefreshDeviceUiGate()
     {
@@ -175,18 +239,36 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var mode = DeviceMode;
-        foreach (var name in FlashDeviceUiPolicy.GatedControls)
+        var context = GateContext;
+        foreach (var (control, gate) in _controlGates)
         {
-            if (_surface.FindControl<Control>(name) is not { } control)
-            {
-                continue;
-            }
+            var intent = _controlIntent.TryGetValue(gate.Name, out var stored) ? stored : control.IsEnabled;
+            _controlIntent[gate.Name] = intent;
+            ApplyGate(control, gate, intent, context);
+        }
+    }
 
-            var intent = _controlIntent.TryGetValue(name, out var stored) ? stored : control.IsEnabled;
-            _controlIntent[name] = intent;
-            control.IsEnabled = !(_busy && FlashDeviceUiPolicy.IsBusyDisabled(name)) && intent &&
-                IsOfferedByDevice(name);
+    /// <summary>
+    /// Writes one control's enable and, when its gate owns visibility, its visibility from the same snapshot.
+    /// <para>把一个控件的启用状态写入页面；门控声明了可见性时，用同一快照一并写入可见性。</para>
+    /// </summary>
+    /// <param name="control">The control the gate belongs to. <para>门控所属的控件。</para></param>
+    /// <param name="gate">The control's own gate, or <see langword="null"/> for an ungated control.
+    /// <para>该控件自身的门控；未受门控的控件为 <see langword="null"/>。</para></param>
+    /// <param name="intent">Whether the page state wants the control enabled. <para>页面状态是否希望启用该控件。</para></param>
+    /// <param name="context">The device and page snapshot. <para>设备与页面快照。</para></param>
+    private void ApplyGate(Control control, FlashControlGate? gate, bool intent, FlashGateContext context)
+    {
+        if (gate is null)
+        {
+            control.IsEnabled = intent;
+            return;
+        }
+
+        control.IsEnabled = !(_busy && gate.BusyDisabled) && intent && gate.IsOffered(context);
+        if (gate.IsVisible is { } isVisible)
+        {
+            control.IsVisible = isVisible(context);
         }
     }
 

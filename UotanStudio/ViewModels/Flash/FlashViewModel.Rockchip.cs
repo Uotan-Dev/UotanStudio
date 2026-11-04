@@ -91,14 +91,12 @@ public sealed partial class FlashViewModel
     /// evidence rather than a guess: it comes from the stage label discovery derived and from the vendor
     /// <c>ROCKCHIP</c> serial the boot download writes, and an endpoint neither of them settles stays
     /// <see cref="RockchipStage.Unknown"/>, so only a stage proven to be mask ROM is refused. This value gates the
-    /// actions through
-    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, RockchipStage, FlashDeviceKind)"/> and is
+    /// actions through the <see cref="FlashControlGate"/> each control carries and is
     /// republished whenever the selected device changes.
     /// <para>Mask ROM 只应答信息类命令，因此所有存储命令都需要已运行的 loader。阶段是证据而不是猜测：取自发现层得出的
     /// 阶段标签与引导下载写入的厂商 <c>ROCKCHIP</c> 序列号，两者都无法确定的端点保持
-    /// <see cref="RockchipStage.Unknown"/>，使只有被证实为 mask ROM 的阶段才被拒绝。该值经
-    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, RockchipStage, FlashDeviceKind)"/> 门控
-    /// 这些动作，并在所选设备变化时重新发布。</para>
+    /// <see cref="RockchipStage.Unknown"/>，使只有被证实为 mask ROM 的阶段才被拒绝。该值经每个控件自带的
+    /// <see cref="FlashControlGate"/> 门控这些动作，并在所选设备变化时重新发布。</para>
     /// </remarks>
     private RockchipStage RkStage => SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } device
         ? StageOf(device)
@@ -127,6 +125,40 @@ public sealed partial class FlashViewModel
         return string.Equals(device.State, "maskrom", StringComparison.OrdinalIgnoreCase)
             ? RockchipStage.Maskrom
             : RockchipStage.Unknown;
+    }
+
+    /// <summary>
+    /// Rockchip section: its controls read and write storage, so the pane carries the section's own condition and a
+    /// stage proven to be mask ROM closes the whole pane while an unproven stage keeps it; the header hides once another
+    /// protocol is selected.
+    /// <para>瑞芯微分类：其控件读写存储，因此由该面板持有本分类自身的条件；被证实为 mask ROM 的阶段关闭整个面板，
+    /// 未被证实的阶段保持提供；选中其他协议后隐藏表头。</para>
+    /// </summary>
+    private void RegisterRockchipControlGates()
+    {
+        RegisterGate("RkExpander", FlashControlGate.SectionHeader("RkExpander", FlashDeviceMode.Rkdl));
+        RegisterGate("RkPane", FlashControlGate.Section("RkPane", FlashDeviceMode.Rkdl, busyDisabled: true));
+        RegisterGate("RkGetStorageButton", FlashControlGate.Section("RkGetStorageButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkSwitchStorageButton",
+            FlashControlGate.Section("RkSwitchStorageButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkEnterMaskromButton",
+            FlashControlGate.Section("RkEnterMaskromButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkTestDeviceButton", FlashControlGate.Section("RkTestDeviceButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkEraseFlashButton", FlashControlGate.Section("RkEraseFlashButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkEraseSystemButton", FlashControlGate.Section("RkEraseSystemButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkLowerFormatButton", FlashControlGate.Section("RkLowerFormatButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkEraseUserDataButton",
+            FlashControlGate.Section("RkEraseUserDataButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkUserSectorMapButton",
+            FlashControlGate.Section("RkUserSectorMapButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkLbaReadButton", FlashControlGate.Section("RkLbaReadButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkLbaWriteButton", FlashControlGate.Section("RkLbaWriteButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkEraseSectorsButton",
+            FlashControlGate.Section("RkEraseSectorsButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkExportConfigButton",
+            FlashControlGate.Section("RkExportConfigButton", FlashDeviceMode.Rkdl));
+        RegisterGate("RkReadPartitionsButton",
+            FlashControlGate.Section("RkReadPartitionsButton", FlashDeviceMode.Rkdl));
     }
 
     /// <summary>

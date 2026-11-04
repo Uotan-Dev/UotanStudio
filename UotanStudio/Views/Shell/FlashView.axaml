@@ -182,7 +182,7 @@
                                 <icons:Add Width="16" Height="16" />
                             </Button>
                             <Button Name="DeletePartitionsButton" Width="32" MinWidth="32" Padding="0"
-                                    Click="OnDeletePartitionsClick" IsEnabled="{Binding HasSelectedPartitions}"
+                                    Click="OnDeletePartitionsClick"
                                     ToolTip.Tip="{DynamicResource Flash_DeletePartitions}"
                                     AutomationProperties.Name="{DynamicResource Flash_DeletePartitions}">
                                 <icons:Delete Width="16" Height="16" />
@@ -237,7 +237,8 @@
                                     </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FlashPartitionEntry">
-                                            <Grid ColumnDefinitions="*,Auto">
+                                            <Grid ColumnDefinitions="*,Auto"
+                                                  IsEnabled="{Binding $parent[UserControl].((vm:FlashViewModel)DataContext).IsBusy, Converter={x:Static BoolConverters.Not}}">
                                                 <HyperlinkButton Content="{Binding FileName}"
                                                                  Foreground="{DynamicResource HyperlinkButtonForeground}"
                                                                  Padding="6,0" VerticalAlignment="Center"

@@ -32,6 +32,7 @@ public sealed partial class FlashViewModel
     {
         ArgumentNullException.ThrowIfNull(surface);
         _surface = surface;
+        RegisterControlGates();
         CaptureControlIntent();
         InitializeSurface();
         RefreshDeviceUiGate();
@@ -96,7 +97,7 @@ public sealed partial class FlashViewModel
         }
 
         _lastObservedDevice = SelectedDevice;
-        ApplyDeviceProtocolExpansion(SelectedDevice?.Protocol);
+        ApplyDeviceProtocolExpansion(SelectedDevice?.Protocol, IsSpacemiTSelected);
         UpdateObservedDeviceInfo();
         UpdateEdlButton();
         RefreshAdbSuGate();
