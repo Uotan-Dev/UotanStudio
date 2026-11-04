@@ -21,6 +21,7 @@ public sealed partial class EdlSession
         ThrowIfDisposed();
         if (IsConfigured || Backend != EdlDownloadBackend.None
             || _protocolState is EdlProtocolState.Firehose or EdlProtocolState.Streaming
+                or EdlProtocolState.SaharaMemoryDebug
             || LinkStage is EdlLinkStage.ProgrammerUploading or EdlLinkStage.AwaitingReenumeration
                 or EdlLinkStage.FirehoseVerifying or EdlLinkStage.FirehoseReady)
         {

@@ -158,6 +158,7 @@ public sealed partial class SaharaProtocol
             if ((waitingForDone && header.Command != SaharaCommand.DoneResponse)
                 || (waitingForHello && header.Command != SaharaCommand.Hello))
             {
+                await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
                 throw new SaharaException($"Unexpected Sahara command {header.Command} during image completion.");
             }
 
@@ -244,6 +245,7 @@ public sealed partial class SaharaProtocol
                             waitingForHello = true;
                             break;
                         }
+                        await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
                         throw new SaharaException($"Unexpected DONE_RESPONSE status: {dr.Status} ({DescribeSaharaStatus(dr.Status)})");
                     }
 
@@ -257,6 +259,7 @@ public sealed partial class SaharaProtocol
                     waitingForHello = false;
                     break;
                 default:
+                    await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
                     throw DescribeUnsupportedSaharaCommand((uint)header.Command);
             }
         }
@@ -326,6 +329,29 @@ public sealed partial class SaharaProtocol
         catch (Exception ex)
         {
             Log($"Cleanup DONE after a rejected image transfer failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Returns a target that received an unexpected packet to the state that re-announces HELLO, so the next
+    /// attempt does not require replugging the device.
+    /// <para>让收到意外数据包的目标回到会重新宣告 HELLO 的状态，使下一次尝试不必重新插拔设备。</para>
+    /// </summary>
+    /// <remarks>Every failure is logged and swallowed because the caller rethrows the original protocol error
+    /// unchanged. <para>所有失败只记录并被吞掉，因为调用方必须原样抛出原始的协议错误。</para></remarks>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task completing after the best-effort reset. <para>尽力复位后完成的任务。</para></returns>
+    private async Task TryResetStateMachineAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var reset = BuildSaharaSimpleCommand(SaharaCommand.ResetState);
+            await WriteDataAsync(reset, cancellationToken).ConfigureAwait(false);
+            Log("Sent RESET_STATE_MACHINE so the target re-announces HELLO.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log($"Best-effort RESET_STATE_MACHINE failed: {ex.Message}");
         }
     }
 
@@ -412,7 +438,7 @@ public sealed partial class SaharaProtocol
                             Encoding.UTF8.GetString(document, skip, length - skip));
                         if (block.Response is { } response)
                         {
-                            return response.IsAck && !response.IsRawMode;
+                            return (response.IsAck || response.IsNak) && !response.IsRawMode;
                         }
                         length = 0;
                         prefixPending = true;

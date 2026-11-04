@@ -260,7 +260,8 @@ internal sealed class EdlConnectionCache(
             var portName = session.UnderlyingSerialPortName;
             EdlDetailsSnapshot? details = state switch
             {
-                EdlProtocolState.Sahara when session.SaharaHandshake is { } handshake
+                EdlProtocolState.Sahara or EdlProtocolState.SaharaMemoryDebug
+                    when session.SaharaHandshake is { } handshake
                     => new EdlDetailsSnapshot { Sahara = handshake, SerialPortName = portName },
                 EdlProtocolState.Streaming => portName is null ? null : new EdlDetailsSnapshot { SerialPortName = portName },
                 EdlProtocolState.Firehose => await CollectFirehoseDetailsAsync(session, portName, cancellationToken)

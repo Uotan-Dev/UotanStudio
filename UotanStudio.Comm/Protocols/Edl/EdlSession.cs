@@ -207,8 +207,8 @@ public sealed partial class EdlSession : IProtocolSession
         if (_protocolState == EdlProtocolState.Unknown)
         {
             var state = await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false);
-            if (state == EdlProtocolState.Sahara && _probeTransport.TryReadSaharaHello(out var hello) &&
-                hello.Version > 0 && hello.MaxCommandLength > 0)
+            if (state is EdlProtocolState.Sahara or EdlProtocolState.SaharaMemoryDebug
+                && _probeTransport.TryReadSaharaHello(out var hello) && hello.Version > 0)
             {
                 SaharaHandshake = new SaharaHandshakeInfo(hello.Version, hello.MinVersion,
                     hello.MaxCommandLength, hello.Mode);
@@ -254,6 +254,13 @@ public sealed partial class EdlSession : IProtocolSession
     public string? UnderlyingSerialPortName => Transport is EdlProbeTransport { Inner: SerialTransport serial }
         ? serial.PortName
         : null;
+
+    /// <summary>
+    /// Gets whether this session runs over the QDLoader serial fallback, whose driver may consume the
+    /// bootrom HELLO before the application reads it.
+    /// <para>获取本会话是否运行在 QDLoader 串口回退上；该驱动可能在应用读到之前就消费掉 bootrom HELLO。</para>
+    /// </summary>
+    private bool UsesSerialFallback => Transport is EdlProbeTransport { Inner: SerialTransport };
 
     /// <summary>
     /// Gets the Firehose protocol instance.
@@ -425,12 +432,18 @@ public sealed partial class EdlSession : IProtocolSession
         try
         {
             var streamDloadSelected = false;
+            if (_protocolState == EdlProtocolState.SaharaMemoryDebug)
+            {
+                throw new SaharaException(
+                    "The target reports Sahara memory-debug mode, which offers crashdump regions instead of image " +
+                    "transfer. Collect the ramdump or re-enter EDL before uploading a programmer.");
+            }
             if (_protocolState != EdlProtocolState.Firehose)
             {
                 LinkStage = programmerImage is null ? EdlLinkStage.SaharaConnecting : EdlLinkStage.ProgrammerUploading;
                 Sahara = new SaharaProtocol(Transport)
                 {
-                    QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? false,
+                    QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? UsesSerialFallback,
                     AllowSingleFirehosePendingCompletion = options?.AllowSingleFirehosePendingCompletion ?? false,
                     QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false,
                     AllowStreamDload = options?.AllowStreamDload ?? false
@@ -450,7 +463,9 @@ public sealed partial class EdlSession : IProtocolSession
                 else
                 {
                     SetProtocolState(EdlProtocolState.Firehose);
-                    LinkStage = EdlLinkStage.FirehoseVerifying;
+                    LinkStage = programmerImage is null
+                        ? EdlLinkStage.FirehoseVerifying
+                        : EdlLinkStage.AwaitingReenumeration;
                 }
             }
             else if (options?.QueryIdentityBeforeUpload == true)
@@ -460,6 +475,7 @@ public sealed partial class EdlSession : IProtocolSession
 
             if (!streamDloadSelected)
             {
+                LinkStage = EdlLinkStage.FirehoseVerifying;
                 await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true).ConfigureAwait(false);
                 await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
                 IsConfigured = true;

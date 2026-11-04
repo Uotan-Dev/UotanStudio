@@ -10,6 +10,8 @@ public enum EdlProtocolState
     Unknown,
     /// <summary>A complete Sahara packet has been validated.<para>已校验到完整的 Sahara 数据包。</para></summary>
     Sahara,
+    /// <summary>A Sahara HELLO reported memory-debug mode, so the target offers crashdump regions instead of image transfer.<para>Sahara HELLO 报告内存调试模式，目标提供 crashdump 区域而不是镜像传输。</para></summary>
+    SaharaMemoryDebug,
     /// <summary>A Firehose response or completed loader transition has been observed.<para>已观测到 Firehose 响应或已完成的加载器切换。</para></summary>
     Firehose,
     /// <summary>Sahara switched the target into the streaming DLOAD downloader and its hello exchange succeeded; the Firehose configure path was not taken.<para>Sahara 已把目标切换到流式 DLOAD 下载器且其 hello 交换成功；未走 Firehose 配置路径。</para></summary>

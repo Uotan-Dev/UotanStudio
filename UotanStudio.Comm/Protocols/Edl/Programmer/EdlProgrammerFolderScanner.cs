@@ -61,7 +61,13 @@ public static class EdlProgrammerFolderScanner
 
     private const int HardwareIdentifierHexLength = 16;
     private const int PublicKeyHashPrefixHexLength = 16;
-    private static readonly string[] ProgrammerExtensions = [".bin", ".mbn", ".elf"];
+    /// <summary>
+    /// Extensions the scan admits: the single-image <c>.elf</c> and <c>.mbn</c> programmers, the bare
+    /// <c>.bin</c> form, and the multi-ELF <c>.melf</c> container newer loaders ship as.
+    /// <para>扫描接纳的扩展名：单镜像的 <c>.elf</c> 与 <c>.mbn</c> programmer、裸 <c>.bin</c> 形式，以及较新
+    /// loader 使用的多 ELF <c>.melf</c> 容器。</para>
+    /// </summary>
+    private static readonly string[] ProgrammerExtensions = [".bin", ".mbn", ".elf", ".melf"];
 
     /// <summary>
     /// Scans a folder with the default candidate-count and per-file-size ceilings.
@@ -225,12 +231,12 @@ public static class EdlProgrammerFolderScanner
 
     /// <summary>
     /// Parses one bare file name against the loader naming convention without touching the disk. The
-    /// extension must be <c>.bin</c>, <c>.mbn</c> or <c>.elf</c>; the name without its extension splits
+    /// extension must be <c>.bin</c>, <c>.mbn</c>, <c>.elf</c> or <c>.melf</c>; the name without its extension splits
     /// on <c>_</c> into two to eight non-empty segments, the first being the 16-hex-digit hardware id,
     /// the second the 16-hex-digit OEM public-key-hash prefix, and the rest free-form vendor tags. A
     /// name that does not fit is refused rather than silently repaired.
     /// <para>在不访问磁盘的前提下按 loader 命名约定解析单个纯文件名。扩展名必须为 <c>.bin</c>、
-    /// <c>.mbn</c> 或 <c>.elf</c>；去掉扩展名后按 <c>_</c> 切分为 2 至 8 个非空段，第一段是 16 个
+    /// <c>.mbn</c>、<c>.elf</c> 或 <c>.melf</c>；去掉扩展名后按 <c>_</c> 切分为 2 至 8 个非空段，第一段是 16 个
     /// 十六进制字符的硬件标识符，第二段是 16 个十六进制字符的 OEM 公钥哈希前缀，其余为自由的厂商标记。
     /// 不符合约定的名称直接拒绝，不做静默修复。</para>
     /// </summary>
@@ -272,7 +278,7 @@ public static class EdlProgrammerFolderScanner
         {
             var extension = Path.GetExtension(fileName);
             refusalReason = $"'{fileName}' has the extension '{extension}' instead of one of the programmer " +
-                "extensions .bin, .mbn or .elf.";
+                "extensions .bin, .mbn, .elf or .melf.";
             return false;
         }
 
@@ -511,8 +517,8 @@ public static class EdlProgrammerFolderScanner
     /// The bare candidate file name. <para>纯候选文件名。</para>
     /// </param>
     /// <returns>
-    /// <see langword="true"/> for a <c>.bin</c>, <c>.mbn</c> or <c>.elf</c> suffix.
-    /// <para>以 <c>.bin</c>、<c>.mbn</c> 或 <c>.elf</c> 结尾时返回 <see langword="true"/>。</para>
+    /// <see langword="true"/> for a <c>.bin</c>, <c>.mbn</c>, <c>.elf</c> or <c>.melf</c> suffix.
+    /// <para>以 <c>.bin</c>、<c>.mbn</c>、<c>.elf</c> 或 <c>.melf</c> 结尾时返回 <see langword="true"/>。</para>
     /// </returns>
     private static bool HasProgrammerExtension(string fileName)
     {

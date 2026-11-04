@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Serial;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -9,82 +10,155 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Retains inspected bytes for the subsequent protocol handshake.
 /// <para>保留检测读取的字节，供后续协议握手继续消费。</para>
 /// </summary>
+/// <remarks>
+/// The probe never writes a Sahara packet, because the handshake that owns Sahara negotiation is the only
+/// component that can consume the target state a speculative HELLO response would create. It writes exactly
+/// one Firehose NOP, and only on a transport that cannot silently lose the bootrom HELLO, so a live Sahara
+/// target is never handed XML it would parse as an unknown command.
+/// <para>探测从不写入 Sahara 数据包，因为只有负责 Sahara 协商的握手层才能消费主动 HELLO 应答造成的目标状态。
+/// 它只写入一条 Firehose NOP，且仅在不会静默丢掉 bootrom HELLO 的传输上写入，因此处于 Sahara 的目标
+/// 绝不会收到会被解析为未知命令的 XML。</para>
+/// </remarks>
 internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
 {
     private const int MaximumProbeBytes = 64 * 1024;
+    private const int MaximumProbeMilliseconds = EdlConstants.ProbeReadBudgetMs;
+    private const int ProbeReadSliceMilliseconds = 500;
+    private const int ProbeReadChunkBytes = 48;
+    private const int MaximumIdleReads = 64;
+    private const int FirehoseSilenceGraceMilliseconds = 1000;
+
     private byte[]? _buffer;
     private int _length;
     private int _position;
 
+    /// <summary>
+    /// Classifies the endpoint by reading what the target sends, then probing Firehose once when the target
+    /// stays silent on a transport that cannot lose the bootrom HELLO.
+    /// <para>通过读取目标发出的数据分类端点；当目标在不丢失 bootrom HELLO 的传输上保持静默时，再探测一次
+    /// Firehose。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels bounded protocol reads.<para>取消有界的协议读取。</para></param>
+    /// <returns>The verified protocol, or Unknown when no bounded evidence arrived in the probe budget.
+    /// <para>经校验的协议；探测预算内没有出现有界证据时为 Unknown。</para></returns>
     internal async Task<EdlProtocolState> ProbeAsync(CancellationToken cancellationToken)
     {
         _buffer ??= new byte[MaximumProbeBytes];
-        if (_position > 0)
-        {
-            _buffer.AsSpan(_position, _length - _position).CopyTo(_buffer);
-            _length -= _position;
-            _position = 0;
-        }
+        Compact();
         var started = Environment.TickCount64;
-        var sentNop = false;
-        while (Environment.TickCount64 - started < 2000)
+        var idleReads = 0;
+        var nopSent = false;
+        var nopAllowed = Inner is not SerialTransport;
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var state = Classify(_buffer.AsSpan(0, _length));
-            if (state != EdlProtocolState.Unknown)
+            var buffered = _buffer.AsSpan(0, _length);
+            var state = Classify(buffered);
+            if (state == EdlProtocolState.Firehose)
             {
-                if (state == EdlProtocolState.Firehose)
-                {
-                    _length = 0;
-                    _position = 0;
-                }
+                _length = 0;
+                _position = 0;
                 return state;
             }
-            if (_length == MaximumProbeBytes)
+            if (state != EdlProtocolState.Unknown)
+            {
+                return state;
+            }
+
+            if (_length == MaximumProbeBytes || idleReads >= MaximumIdleReads)
             {
                 return EdlProtocolState.Unknown;
             }
+            var elapsed = Environment.TickCount64 - started;
+            if (elapsed >= MaximumProbeMilliseconds)
+            {
+                return EdlProtocolState.Unknown;
+            }
+            var pendingDocument = HasPendingDocument(buffered);
+            if (nopSent && !pendingDocument && elapsed >= FirehoseSilenceGraceMilliseconds)
+            {
+                return EdlProtocolState.Unknown;
+            }
+            var canProbe = nopAllowed && !nopSent && !pendingDocument && AcceptsFirehoseProbe(buffered);
 
-            var remaining = (int)Math.Max(1, 2000 - (Environment.TickCount64 - started));
+            var remaining = (int)Math.Max(1, MaximumProbeMilliseconds - elapsed);
+            var chunk = Math.Min(ProbeReadChunkBytes, MaximumProbeBytes - _length);
             int count;
             try
             {
-                count = await inner.ReadAsync(_buffer, _length, Math.Min(48, MaximumProbeBytes - _length),
-                    Math.Min(500, remaining), cancellationToken).ConfigureAwait(false);
+                count = await inner.ReadAsync(_buffer, _length, chunk,
+                    Math.Min(ProbeReadSliceMilliseconds, remaining), cancellationToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
                 count = 0;
             }
-            catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
             {
                 count = 0;
             }
-            if (count is < 0 or > 48 || count > MaximumProbeBytes - _length)
+            if (count is < 0 || count > chunk)
             {
                 throw new IOException("Invalid EDL probe receive length.");
             }
             if (count != 0)
             {
                 _length += count;
+                idleReads = 0;
                 continue;
             }
-            if (sentNop || (_length != 0 && !ContainsOnlyFirehoseLogs(_buffer.AsSpan(0, _length))))
-            {
-                return EdlProtocolState.Unknown;
-            }
 
-            var nop = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen +
-                "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (await inner.WriteAsync(nop, 0, nop.Length, remaining, cancellationToken).ConfigureAwait(false) != nop.Length)
+            idleReads++;
+            if (canProbe)
             {
-                throw new IOException("Incomplete EDL protocol probe write.");
+                var nop = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen +
+                    "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await inner.WriteAsync(nop, 0, nop.Length, remaining, cancellationToken).ConfigureAwait(false) != nop.Length)
+                {
+                    throw new IOException("Incomplete EDL protocol probe write.");
+                }
+                nopSent = true;
+                idleReads = 0;
             }
-            sentNop = true;
         }
-        return EdlProtocolState.Unknown;
     }
+
+    private void Compact()
+    {
+        if (_position <= 0)
+        {
+            return;
+        }
+
+        var pending = _length - _position;
+        if (pending > 0)
+        {
+            _buffer!.AsSpan(_position, pending).CopyTo(_buffer);
+        }
+        _length = pending;
+        _position = 0;
+    }
+
+    /// <summary>
+    /// Reports whether the buffered bytes are a Firehose document that has started but not finished, so the
+    /// probe keeps waiting instead of discarding a target that is still writing its startup block.
+    /// <para>报告缓冲字节是否为已开始但未结束的 Firehose 文档，使探测继续等待，而不是丢弃仍在输出启动块的
+    /// 目标。</para>
+    /// </summary>
+    /// <param name="bytes">Buffered probe bytes.<para>已缓冲的探测字节。</para></param>
+    /// <returns><see langword="true"/> when an opening tag arrived without its closing tag.
+    /// <para>已出现开标签但缺少闭标签时为 true。</para></returns>
+    private static bool HasPendingDocument(ReadOnlySpan<byte> bytes)
+    {
+        var document = bytes[EdlConstants.MeasureDocumentPrefix(bytes)..];
+        return !document.IsEmpty && document[0] == (byte)'<' && document.IndexOf("</data>"u8) < 0;
+    }
+
+    private static bool AcceptsFirehoseProbe(ReadOnlySpan<byte> bytes)
+        => bytes.IsEmpty
+            || bytes[EdlConstants.MeasureDocumentPrefix(bytes)..].IsEmpty
+            || ContainsOnlyFirehoseLogs(bytes);
 
     private static bool ContainsOnlyFirehoseLogs(ReadOnlySpan<byte> bytes)
     {
@@ -174,14 +248,21 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             };
             if (expected != 0 && length == expected && bytes.Length >= expected)
             {
-                if (command == SaharaCommand.Hello &&
-                    (BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]) == 0 ||
-                     BinaryPrimitives.ReadUInt32LittleEndian(bytes[12..]) > BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]) ||
-                     BinaryPrimitives.ReadUInt32LittleEndian(bytes[20..]) > 3))
+                if (command != SaharaCommand.Hello)
+                {
+                    return EdlProtocolState.Sahara;
+                }
+
+                var version = BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]);
+                var minVersion = BinaryPrimitives.ReadUInt32LittleEndian(bytes[12..]);
+                var mode = BinaryPrimitives.ReadUInt32LittleEndian(bytes[20..]);
+                if (version == 0 || minVersion > version || mode > (uint)SaharaMode.Command)
                 {
                     return EdlProtocolState.Unknown;
                 }
-                return EdlProtocolState.Sahara;
+                return mode == (uint)SaharaMode.MemoryDebug
+                    ? EdlProtocolState.SaharaMemoryDebug
+                    : EdlProtocolState.Sahara;
             }
         }
 
