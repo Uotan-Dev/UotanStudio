@@ -23,6 +23,13 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     private ProgressMeter? _meter;
     private FlashStage? _meterStage;
 
+    /// <summary>
+    /// Identifies the current flash run so callbacks posted by <see cref="Progress{T}"/> after the run ended are
+    /// ignored instead of touching state that has already been cleared.
+    /// <para>标识当前烧录轮次，使 <see cref="Progress{T}"/> 在轮次结束后才投递的回调被忽略，而不是访问已清理的状态。</para>
+    /// </summary>
+    private int _progressGeneration;
+
     private static LanguageService Language => LanguageService.Instance;
 
     /// <summary>
@@ -352,7 +359,8 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         IsProgressIndeterminate = true;
         ProgressStats = string.Empty;
         ProgressStage = Language.GetString("DiskFlash_StagePreparing");
-        var progress = new Progress<FlashProgress>(ApplyProgress);
+        var generation = Interlocked.Increment(ref _progressGeneration);
+        var progress = new Progress<FlashProgress>(value => ApplyProgress(generation, value));
         try
         {
             var result = await _flasher.FlashAsync(
@@ -402,6 +410,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             }
 
             cts.Dispose();
+            Interlocked.Increment(ref _progressGeneration);
             _meter = null;
             _meterStage = null;
             IsBusy = false;
@@ -422,27 +431,33 @@ public sealed partial class DiskFlashViewModel : ObservableObject
 
     partial void OnAllowLargeDriveChanged(bool value) => RefreshItems();
 
-    private void ApplyProgress(FlashProgress value)
+    private void ApplyProgress(int generation, FlashProgress value)
     {
+        if (Volatile.Read(ref _progressGeneration) != generation)
+        {
+            return;
+        }
+
+        var meter = _meter;
+        if (meter is null)
+        {
+            return;
+        }
+
         if (_meterStage != value.Stage)
         {
             _meterStage = value.Stage;
-            _meter?.Reset();
+            meter.Reset();
         }
 
         ProgressStage = StageText(value.Stage);
         ProgressPercent = value.Percentage ?? 0;
         IsProgressIndeterminate = value.Percentage is null;
-        if (_meter is null)
-        {
-            return;
-        }
-
-        _meter.Report(value.BytesProcessed, value.TotalBytes ?? 0);
+        meter.Report(value.BytesProcessed, value.TotalBytes ?? 0);
         var template = value.TotalBytes is > 0
-            ? _meter.EstimatedRemaining is null ? "Progress_StatsNoEta" : "Progress_Stats"
+            ? meter.EstimatedRemaining is null ? "Progress_StatsNoEta" : "Progress_Stats"
             : "Progress_ProcessedStats";
-        ProgressStats = _meter.FormatStats(Language.GetString(template));
+        ProgressStats = meter.FormatStats(Language.GetString(template));
     }
 
     private void RefreshItems()
