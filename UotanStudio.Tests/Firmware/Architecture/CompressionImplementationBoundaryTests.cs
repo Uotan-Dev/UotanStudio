@@ -40,14 +40,6 @@ public class CompressionImplementationBoundaryTests
             "The test project builds fixtures with the in-box streams on purpose so library decoders are checked against an independent encoder; it is excluded from this scan wholesale.",
     };
 
-    private static readonly IReadOnlySet<string> MigratingGenericCompressionCallSites = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "UotanStudio.Firmware/AndroidMeta/Apk/ApkRepacker.cs",
-        "UotanStudio.Firmware/BootSecurity/Patcher/KSudExtractor.cs",
-        "UotanStudio.Firmware/VendorFirmware/Oppo/OppoSplashFormat.cs",
-        "UotanStudio/Services/Firmware/RemoteRomService.cs",
-    };
-
     [Fact]
     public void ScanProductionSources_GenericCompressionStreamConstruction_StaysInsideTheCompressLibrary()
     {
@@ -274,25 +266,10 @@ public class CompressionImplementationBoundaryTests
 
     private static string BuildViolationMessage(IReadOnlyList<string> offenders)
     {
-        var migrating = offenders
-            .Select(offender => offender[..offender.IndexOf(':', StringComparison.Ordinal)].Trim())
-            .Distinct(StringComparer.Ordinal)
-            .Where(MigratingGenericCompressionCallSites.Contains)
-            .Order(StringComparer.Ordinal)
-            .Select(path => $"{path} (a migration onto the CompressionService facade is in flight)")
-            .ToList();
-
-        var message = $"Generic compression escapes {CompressProjectDirectory}: {string.Join(", ", offenders)}. "
+        return $"Generic compression escapes {CompressProjectDirectory}: {string.Join(", ", offenders)}. "
             + "Route these through UotanStudio.Compress.CompressionService so the library stays the single generic codec implementation. "
             + "Format-domain compression (SquashFS/EROFS/F2FS block clusters, boot-image component packaging, Payload compression operations and .cpio.gz/.tar.xz combinations) is legitimate, but it must not build generic streams by hand. "
             + $"The retained exceptions are declared with their reasons in the {nameof(RetainedBclCompressionExceptions)} allow-list; extend it only after an architect review.";
-
-        if (migrating.Count > 0)
-        {
-            message += $" Still un-migrated call sites: {string.Join(", ", migrating)}.";
-        }
-
-        return message;
     }
 
     private static string Describe(CompressionConstructorSite site)

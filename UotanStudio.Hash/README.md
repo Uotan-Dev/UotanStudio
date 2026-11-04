@@ -16,6 +16,7 @@
 | `Crc16CcittReversed` | 反射 0x8408，init 0xFFFF，末异或 0xFFFF | HDLC 帧 DIAG 报文、展讯 UPDATE.APP 条目与头校验 |
 | `Crc16CcittFalse` | 高位优先 0x1021，init 0xFFFF，无末异或 | RKDL loader 下载帧 |
 | `Crc16Xmodem` | 高位优先 0x1021，init 0x0000，无末异或 | RKDL loader 升级写入的旧式 RK28 ID block 扇区校验 |
+| `CpbCrc16` | 高位优先 0x1021，32 位不截断累加器，带续算，无末异或 | 酷派 CPB 容器头与镜像负载校验和 |
 | `RockchipCrc32` | 高位优先 0x04C11DB7，带 seed | RKAF 资源镜像 |
 | `XzCrc64` | 反射 0xC96C5795D7870F42，全 1 初值，出值取反 | XZ 容器的 CRC-64 校验字段 |
 | `Adler32` | 模 65521，按 5552 字节分块归约 | zlib 风格载荷与 DTBO/DEX 尾部校验 |

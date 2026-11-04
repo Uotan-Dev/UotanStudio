@@ -7,7 +7,7 @@
 - 本库只引用 `UotanStudio.Hash`，不得引用 `UotanStudio.Firmware` 或任何上层项目；反向引用会形成程序集环。`UotanStudio.Tests/Firmware/Architecture/CompressProjectBoundaryTests.cs` 会同时校验工程引用、命名空间与固件引用。
 - 每个源文件的命名空间必须由目录推导（`Compressors/`、`Files/`、`Detection/`、`Internal/`、`Codecs/Lz4` 等）；`Properties/` 除外。不要移动目录后留下旧命名空间。
 - 本库只拥有通用算法选择、压缩参数、流与文件编排、容器编解码；归档成员、文件系统簇、OTA、启动镜像、厂商容器语义留在 `UotanStudio.Firmware`，不要在这里复制。
-- 通用压缩只在 `UotanStudio.Compress` 内实现：其他生产工程不得直接 `new GZipStream`、`DeflateStream`、`ZLibStream` 或 `BrotliStream`，必须经本库门面。保留的 BCL 例外与理由集中在 `CompressionImplementationBoundaryTests.cs` 的允许列表，新增例外要同时给出理由。
+- 通用压缩只在 `UotanStudio.Compress` 内实现：其他生产工程不得直接 `new GZipStream`、`DeflateStream`、`ZLibStream` 或 `BrotliStream`，必须经本库门面。保留的 BCL 例外与理由集中在 `CompressionImplementationBoundaryTests.cs` 的允许列表，新增例外要同时给出理由。第三方编解码库（SharpCompress、K4os、ZstdSharp、LZMA-SDK）是本库的实现细节，生产工程不得直连其类型；固件格式域直接使用第三方编码器的路径与理由登记在 `README.md` 的例外一节。
 - ZIP 容器的构造与打开统一经 `Zip/ZipContainer`；其他生产工程不得直接 `new ZipArchive` 或调用 `ZipFile.Open*`，条目路径规范化与可选上限由该门面提供，`ContainerBoundaryGuardTests` 守护这条边界。
 
 ## 入口与行为

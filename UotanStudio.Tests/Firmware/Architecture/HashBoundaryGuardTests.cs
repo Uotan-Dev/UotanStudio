@@ -38,6 +38,8 @@ public partial class HashBoundaryGuardTests
     {
         ["UotanStudio.Benchmarks/Firmware/ChecksumSliceBenchmarks.cs"] =
             "The slice benchmark measures the software CRC-32 table directly against the hardware path; both polynomial tables are the measurement input, not production hashing.",
+        ["UotanStudio.Benchmarks/Firmware/RegisterContinuationBenchmarks.cs"] =
+            "The continuation benchmark measures the library's slice-by-8 CCITT-16 and CRC-32 register paths against byte-at-a-time scalar baselines; the table and bitwise loop here are those measurement baselines, not production hashing.",
     };
 
     [Fact]
@@ -111,6 +113,7 @@ public partial class HashBoundaryGuardTests
                 "var digest = SHA256.HashData(span);",
                 "using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);",
                 "var table = InitTable(0xEDB88320u);",
+                "var cpb = Fold(0x1021);",
                 "return Aes.Create();"));
 
         Assert.Equal(
@@ -119,7 +122,8 @@ public partial class HashBoundaryGuardTests
             "Sample.cs:2: System.IO.Hashing.Crc32.HashToUInt32",
             "Sample.cs:3: SHA256.HashData(",
             "Sample.cs:4: IncrementalHash.CreateHash(",
-            "Sample.cs:5: 0xEDB88320"
+            "Sample.cs:5: 0xEDB88320",
+            "Sample.cs:6: 0x1021"
         ], offenders);
     }
 
@@ -136,7 +140,8 @@ public partial class HashBoundaryGuardTests
                 "var seeded = UotanStudio.Hash.Crc32Register.Crc32Register.Compute(span, F2fsSuperblock.Magic);",
                 "var digest = Sha256.ComputeHash(span);",
                 "using var accumulator = Sha256.CreateAccumulator();",
-                "accumulator.Append(span);"));
+                "accumulator.Append(span);",
+                "var watchdogBase = 0x1021_2000;"));
 
         Assert.Empty(offenders);
     }
@@ -224,7 +229,7 @@ public partial class HashBoundaryGuardTests
     [GeneratedRegex(@"\b(?:MD5|SHA(?:1|256|384|512))\.(?:HashData|Create)\(|\bIncrementalHash\.CreateHash\(")]
     private static partial Regex BclDigestEntryPointPattern();
 
-    [GeneratedRegex(@"0x(?:EDB88320|82F63B78|04C11DB7|C96C5795D7870F42|A001|8408)(?![0-9A-Fa-f])", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"0x(?:EDB88320|82F63B78|04C11DB7|C96C5795D7870F42|A001|8408|1021)(?![0-9A-Fa-f_])", RegexOptions.IgnoreCase)]
     private static partial Regex LocalCrcPolynomialPattern();
 
     [GeneratedRegex(@"PackageReference\s+Include=""System\.IO\.Hashing""")]

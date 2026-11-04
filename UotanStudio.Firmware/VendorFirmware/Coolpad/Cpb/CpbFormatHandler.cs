@@ -1,5 +1,6 @@
 using System.Globalization;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Hash.CpbCrc16;
 
 namespace UotanStudio.Firmware.VendorFirmware.Coolpad.Cpb;
 
@@ -217,7 +218,7 @@ internal sealed class CpbFormatHandler : IReadonlyFormatHandler
                 throw new InvalidDataException($"CPB image '{image.Name}' ends before its declared {image.Size} bytes.");
             }
 
-            checksum = CpbFormat.Crc16(buffer.AsSpan(0, read), checksum);
+            checksum = CpbCrc16.Compute(buffer.AsSpan(0, read), checksum);
             await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             remaining -= read;
         }

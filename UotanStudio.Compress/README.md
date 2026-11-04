@@ -76,6 +76,8 @@
 - `DeviceTree/Dt/DtboFiles.cs` 的 zlib 两个方向：本库 `ZlibCompressor` 由 SharpCompress 支撑，其等级映射到不了 `CompressionLevel.SmallestSize`，且截断载荷抛出的异常类型与 BCL 不同，重打包字节保真测试会失败。
 - `BootSecurity/BootImage/Components/BootCompressor.cs` 的 `Detect`：它的魔数表与 `Detection/CompressionDetector` 有意不等价（空输入返回 `None` 而非抛异常、4 字节短路、`5D 00 00` 的裸 LZMA 判据、9 字节 lzop 魔数、额外的 `0B 0A` brotli 规则），且 `DecompressOrReturn` 依赖“未识别即原样返回”。解压分支已全部走本库。
 - `VendorFirmware/NTPi/Lzma2Compressor.cs`、`VendorFirmware/SonySin/SonySinFormatHandler.cs`、`OtaDelta/Diff/StrictBrotliReadStream.cs`、`OtaDelta/Payload/**` 的 zstd 字典与 `checksumFlag`/`windowLog` 设置：分别属于 `NTDECOMP` 成帧、厂商私有 LZ、严格帧校验（拒绝尾字节与截断）与载荷字典语义，本库不提供也不应提供这些语义。puffin 局部解压已统一到本库的 `PuffDeflateCodec`。
+- `OtaDelta/Diff/BinaryDeltaPatch.cs` 的 BSDIFF40/BSDF2 三流：写入与解压直连 SharpCompress 的 `BZip2Stream` 并固定 `decompressConcatenated: false`，让每段补丁流在段尾出现剩余数据时抛错——本库通用解压入口按串接语义打开（`concatenated: true`），替换会放宽对不可信补丁的防护；压缩侧参数与本库 `Bzip2Compressor` 完全一致。
+- `Archive/Browsing/ArchiveBrowser.cs` 的多格式归档浏览：经 SharpCompress 归档层读取 ZIP/TAR 等容器，条目上限由浏览会话自管；外层压缩流（`.tgz`/`.txz`/`.tzst` 等）仍经 `CompressionService.Decompress` 解压。
 
 ## 许可证
 
