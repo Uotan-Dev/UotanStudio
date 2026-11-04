@@ -534,7 +534,25 @@ public sealed partial class WorkspacePanelService : ObservableObject
             return;
         }
 
-        // 1. Sync LeftPane
+        SyncLeftPane(leftPane, factory, mainLayout, isShowing);
+        SyncRightColumn(rightCol, rightPaneTop, rightPane, factory, mainLayout, isShowing);
+        SyncBottomPane(bottomPane, centerCol, factory, isShowing);
+    }
+
+    /// <summary>
+    /// Syncs the project explorer host with the front of <paramref name="mainLayout"/>: a host holding no
+    /// dockables is removed together with its trailing splitter, and a showing host is re-inserted at the front.
+    /// <para>把项目资源管理器宿主同步到 <paramref name="mainLayout"/> 的开头：宿主无内容时连同其后的分隔条
+    /// 一起移除，显示时重新插入到最前面。</para>
+    /// </summary>
+    /// <param name="leftPane">The project explorer host, or <see langword="null"/> when unregistered.
+    /// <para>项目资源管理器宿主；未登记时为 <see langword="null"/>。</para></param>
+    /// <param name="factory">The dock factory used for list creation.<para>用于创建列表的停靠工厂。</para></param>
+    /// <param name="mainLayout">The root proportional layout.<para>根比例布局。</para></param>
+    /// <param name="isShowing">Whether the sync happens while panels are being shown.
+    /// <para>本次同步是否发生在面板显示时。</para></param>
+    private void SyncLeftPane(IDock? leftPane, IFactory factory, IProportionalDock mainLayout, bool isShowing)
+    {
         if (leftPane is not null)
         {
             var leftCount = leftPane.VisibleDockables?.Count ?? 0;
@@ -561,8 +579,26 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
             }
         }
+    }
 
-        // 2. Sync Right Column
+    /// <summary>
+    /// Syncs the right column with <paramref name="mainLayout"/>: the column collapses when neither host holds
+    /// dockables, a showing column is appended as the last layout entry, and the top/bottom split is rebuilt from
+    /// the hosts that still hold dockables.
+    /// <para>把右侧列同步到 <paramref name="mainLayout"/>：两个宿主都无内容时收起该列，显示时作为布局最后一项
+    /// 追加，并按仍有内容的宿主重建上/下切分。</para>
+    /// </summary>
+    /// <param name="rightCol">The right column dock, or <see langword="null"/> when not found.
+    /// <para>右侧列停靠区；未找到时为 <see langword="null"/>。</para></param>
+    /// <param name="rightPaneTop">The top right host.<para>右上宿主。</para></param>
+    /// <param name="rightPane">The bottom right host.<para>右下宿主。</para></param>
+    /// <param name="factory">The dock factory used for list creation.<para>用于创建列表的停靠工厂。</para></param>
+    /// <param name="mainLayout">The root proportional layout.<para>根比例布局。</para></param>
+    /// <param name="isShowing">Whether the sync happens while panels are being shown.
+    /// <para>本次同步是否发生在面板显示时。</para></param>
+    private void SyncRightColumn(IProportionalDock? rightCol, IDock? rightPaneTop, IDock? rightPane,
+        IFactory factory, IProportionalDock mainLayout, bool isShowing)
+    {
         if (rightCol is not null && rightPaneTop is not null && rightPane is not null)
         {
             var topVisible = rightPaneTop.VisibleDockables is { Count: > 0 };
@@ -621,7 +657,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
                         rightPaneTop.Proportion = double.NaN;
                         rightCol.VisibleDockables = factory.CreateList<IDockable>(rightPaneTop);
                     }
-                    else // bottomVisible
+                    else
                     {
                         rightPane.Owner = rightCol;
                         rightPane.Proportion = double.NaN;
@@ -630,8 +666,22 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 }
             }
         }
+    }
 
-        // 3. Sync BottomPane in Center Column
+    /// <summary>
+    /// Syncs the workspace log host with the end of <paramref name="centerCol"/>: a host holding no dockables is
+    /// removed together with its leading splitter, and a showing host is appended after a splitter.
+    /// <para>把工作区日志宿主同步到 <paramref name="centerCol"/> 的末尾：宿主无内容时连同其前的分隔条一起移除，
+    /// 显示时在分隔条之后追加。</para>
+    /// </summary>
+    /// <param name="bottomPane">The workspace log host, or <see langword="null"/> when unregistered.
+    /// <para>工作区日志宿主；未登记时为 <see langword="null"/>。</para></param>
+    /// <param name="centerCol">The center column dock.<para>中央列停靠区。</para></param>
+    /// <param name="factory">The dock factory used for list creation.<para>用于创建列表的停靠工厂。</para></param>
+    /// <param name="isShowing">Whether the sync happens while panels are being shown.
+    /// <para>本次同步是否发生在面板显示时。</para></param>
+    private void SyncBottomPane(IDock? bottomPane, IProportionalDock centerCol, IFactory factory, bool isShowing)
+    {
         if (bottomPane is not null)
         {
             var bottomToolsCount = bottomPane.VisibleDockables?.Count ?? 0;
