@@ -152,7 +152,7 @@ public static class HttpDownload
         if (sources.Length == 1) return sources;
         try
         {
-            var probes = sources.Select(async source =>
+            var probes = sources.Select(async (source, index) =>
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(SpeedProbeTimeout);
@@ -174,20 +174,20 @@ public static class HttpDownload
                     }
 
                     stopwatch.Stop();
-                    return (Source: source, Score: stopwatch.Elapsed.Ticks + (readTotal > 0 ? 0 : TimeSpan.TicksPerDay));
+                    return (Index: index, Source: source, Score: stopwatch.Elapsed.Ticks + (readTotal > 0 ? 0 : TimeSpan.TicksPerDay));
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                    return (Source: source, Score: long.MaxValue);
+                    return (Index: index, Source: source, Score: long.MaxValue);
                 }
                 catch (Exception)
                 {
-                    return (Source: source, Score: long.MaxValue);
+                    return (Index: index, Source: source, Score: long.MaxValue);
                 }
             }).ToArray();
             var results = await Task.WhenAll(probes).ConfigureAwait(false);
             if (results.All(r => r.Score == long.MaxValue)) return sources;
-            return [.. results.OrderBy(r => r.Score).ThenBy(r => Array.IndexOf(sources, r.Source)).Select(r => r.Source)];
+            return [.. results.OrderBy(r => r.Score).ThenBy(r => r.Index).Select(r => r.Source)];
         }
         catch (OperationCanceledException)
         {
