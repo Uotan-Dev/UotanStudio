@@ -261,7 +261,15 @@ public static class PuffDeflateCodec
         bits.Write(5, counts[0]); bits.Write(5, counts[1]); bits.Write(4, counts[2]);
         var packed = reader.Take((codeCount + 1) / 2); Span<byte> codes = stackalloc byte[19];
         for (var i = 0; i < codeCount; i++)
-        { codes[Order[i]] = (byte)(((i & 1) == 0 ? packed[i / 2] >> 4 : packed[i / 2]) & 15); if (codes[Order[i]] > 7) throw new InvalidDataException("Invalid Puff code length."); bits.Write(3, codes[Order[i]]); }
+        {
+            codes[Order[i]] = (byte)(((i & 1) == 0 ? packed[i / 2] >> 4 : packed[i / 2]) & 15);
+            if (codes[Order[i]] > 7)
+            {
+                throw new InvalidDataException("Invalid Puff code length.");
+            }
+
+            bits.Write(3, codes[Order[i]]);
+        }
         var codeTree = new Huffman(codes, decoding: false, retainCodes: true); Span<byte> lengths = stackalloc byte[286 + 30];
         var lengthCount = 0;
         while (lengthCount < literalCount + distanceCount)
@@ -269,8 +277,15 @@ public static class PuffDeflateCodec
             var value = reader.Take(1)[0];
             var code = value < 16 ? value : value < 20 ? 16 : value < 28 ? 17 : 18;
             codeTree.Write(bits, code);
-            if (code < 16) lengths[lengthCount++] = value;
-            else { bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28)); ExpandLength(lengths, ref lengthCount, value); }
+            if (code < 16)
+            {
+                lengths[lengthCount++] = value;
+            }
+            else
+            {
+                bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28));
+                ExpandLength(lengths, ref lengthCount, value);
+            }
         }
         if (lengthCount != literalCount + distanceCount || reader.Remaining != 0) throw new InvalidDataException("Invalid Puff Huffman metadata length.");
         return (new Huffman(lengths[..literalCount], decoding: false, retainCodes: true), new Huffman(lengths[literalCount..], decoding: false, retainCodes: true));
@@ -278,13 +293,29 @@ public static class PuffDeflateCodec
 
     private static void ExpandLength(Span<byte> lengths, ref int lengthCount, byte packed)
     {
-        if (packed > 155 || (packed < 20 && lengthCount == 0)) throw new InvalidDataException("Invalid Puff code repeat.");
+        if (packed > 155 || (packed < 20 && lengthCount == 0))
+        {
+            throw new InvalidDataException("Invalid Puff code repeat.");
+        }
+
         var count = packed < 20 ? packed - 16 + 3 : packed < 28 ? packed - 20 + 3 : packed - 28 + 11;
         var value = packed < 20 ? lengths[lengthCount - 1] : (byte)0;
-        for (var i = 0; i < count; i++) lengths[lengthCount++] = value;
+        for (var i = 0; i < count; i++)
+        {
+            lengths[lengthCount++] = value;
+        }
     }
+
     private static int FindBase(int[] values, int value)
-    { var i = 0; while (i + 1 < values.Length && values[i + 1] <= value) i++; return i; }
+    {
+        var i = 0;
+        while (i + 1 < values.Length && values[i + 1] <= value)
+        {
+            i++;
+        }
+
+        return i;
+    }
     private static void WriteBig16(Stream output, int value) { Span<byte> bytes = stackalloc byte[2]; BinaryPrimitives.WriteUInt16BigEndian(bytes, checked((ushort)value)); output.Write(bytes); }
     private static (Huffman, Huffman) FixedTrees()
         => (FixedLiteralTree, FixedDistanceTree);
