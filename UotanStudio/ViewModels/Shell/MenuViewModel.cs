@@ -1392,6 +1392,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenRegexGenerator() => _windows.ShowHostWindow(HostWindowKind.RegexGenerator);
 
+    /// <summary>Opens or activates the disk-image flashing tool.
+    /// <para>打开或聚焦磁盘镜像烧录工具。</para></summary>
+    [RelayCommand]
+    private void OpenDiskFlash() => _windows.ShowHostWindow(HostWindowKind.DiskFlash);
+
     /// <summary>打开文件校验器窗口；窗口已打开时前置聚焦。</summary>
     [RelayCommand]
     private void OpenFileChecksum() => _windows.ShowChecksumWindow();

@@ -31,7 +31,10 @@ public enum HostWindowKind
     AvbTool,
 
     /// <summary>The regular expression generator window. <para>正则表达式生成器窗口。</para></summary>
-    RegexGenerator
+    RegexGenerator,
+
+    /// <summary>The disk-image flashing window. <para>磁盘镜像烧录窗口。</para></summary>
+    DiskFlash
 }
 
 /// <summary>

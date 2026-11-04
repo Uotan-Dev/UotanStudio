@@ -1,0 +1,199 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell"
+        x:Class="UotanStudio.Views.Shell.DiskFlashWindow"
+        x:DataType="vm:DiskFlashViewModel"
+        Title="{DynamicResource DiskFlash_Title}"
+        Width="820" Height="660" MinWidth="680" MinHeight="560"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#D9534F" />
+    </Style>
+    <Style Selector="ListBox.drive-list > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.drive-list > ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background">
+        <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+      </Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,136,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Margin="20,44,20,16"
+        RowDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+        RowSpacing="10">
+
+    <!-- 镜像文件 -->
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Text="{DynamicResource DiskFlash_ImageFile}" FontWeight="Medium" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+        <TextBox Grid.Column="0"
+                 Height="32"
+                 IsReadOnly="True"
+                 VerticalContentAlignment="Center"
+                 Text="{Binding ImagePath}"
+                 PlaceholderText="{DynamicResource DiskFlash_ImagePlaceholder}" />
+        <Button Grid.Column="1"
+                Name="ChooseImageButton"
+                MinWidth="100" Height="32"
+                HorizontalContentAlignment="Center"
+                Content="{DynamicResource DiskFlash_Browse}"
+                IsEnabled="{Binding IsIdle}"
+                Click="OnChooseImageClick" />
+      </Grid>
+      <TextBlock Text="{Binding ImageSummary}"
+                 FontSize="11" Opacity="0.7"
+                 IsVisible="{Binding HasImage}" />
+    </StackPanel>
+
+    <!-- 目标驱动器 -->
+    <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="6">
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+        <TextBlock Grid.Column="0"
+                   Text="{DynamicResource DiskFlash_Targets}"
+                   FontWeight="Medium"
+                   VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding SelectedCountText}"
+                   Opacity="0.7"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Name="RefreshDrivesButton"
+                MinWidth="100" Height="32"
+                HorizontalContentAlignment="Center"
+                Content="{DynamicResource DiskFlash_Refresh}"
+                Command="{Binding RefreshDrivesCommand}"
+                IsEnabled="{Binding CanRefresh}" />
+      </Grid>
+
+      <Grid Grid.Row="1" RowDefinitions="*,Auto" RowSpacing="4">
+        <ListBox Grid.Row="0"
+                 Name="DriveList"
+                 Classes="drive-list"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 ItemsSource="{Binding Drives}"
+                 IsVisible="{Binding HasDrives}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DiskFlashDriveItem">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,6" ColumnSpacing="10">
+                <CheckBox Grid.Column="0"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          IsEnabled="{Binding !IsBlocked}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <TextBlock Text="{Binding DisplayName}"
+                             FontWeight="Medium"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding DevicePath}"
+                             FontSize="11"
+                             Opacity="0.6"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding IssueText}"
+                             FontSize="11"
+                             Foreground="#D9534F"
+                             IsVisible="{Binding IssueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="2">
+                  <TextBlock Text="{Binding SizeText}" HorizontalAlignment="Right" />
+                  <TextBlock Text="{Binding KindText}"
+                             FontSize="11"
+                             Opacity="0.6"
+                             HorizontalAlignment="Right" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock Grid.Row="0"
+                   Text="{DynamicResource DiskFlash_NoDrives}"
+                   Opacity="0.6"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding !HasDrives}" />
+      </Grid>
+    </Grid>
+
+    <!-- 写入选项 -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="24">
+      <CheckBox Content="{DynamicResource DiskFlash_VerifyAfterWrite}"
+                IsChecked="{Binding VerifyAfterWrite, Mode=TwoWay}"
+                IsEnabled="{Binding IsIdle}" />
+      <CheckBox Content="{DynamicResource DiskFlash_AllowLargeDrive}"
+                IsChecked="{Binding AllowLargeDrive, Mode=TwoWay}"
+                IsEnabled="{Binding IsIdle}" />
+    </StackPanel>
+
+    <!-- 覆盖确认 -->
+    <CheckBox Grid.Row="3"
+              Content="{DynamicResource DiskFlash_ConfirmOverwrite}"
+              IsChecked="{Binding ConfirmOverwrite, Mode=TwoWay}"
+              IsEnabled="{Binding IsIdle}" />
+
+    <!-- 进度 -->
+    <StackPanel Grid.Row="4" Spacing="4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <TextBlock Grid.Column="0" Text="{Binding ProgressStage}" FontWeight="Medium" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding ProgressStats}"
+                   FontSize="11" Opacity="0.7"
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding ProgressStats, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </Grid>
+      <ProgressBar Minimum="0" Maximum="100"
+                   Height="8"
+                   Value="{Binding ProgressPercent}"
+                   IsIndeterminate="{Binding IsProgressIndeterminate}" />
+    </StackPanel>
+
+    <!-- 操作 -->
+    <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+      <Button Name="FlashButton"
+              Classes="Primary"
+              MinWidth="130" Height="34"
+              HorizontalContentAlignment="Center"
+              Content="{DynamicResource DiskFlash_Flash}"
+              Command="{Binding FlashCommand}"
+              IsEnabled="{Binding CanFlash}" />
+      <Button Name="CancelButton"
+              MinWidth="100" Height="34"
+              HorizontalContentAlignment="Center"
+              Content="{DynamicResource DiskFlash_Cancel}"
+              Command="{Binding CancelCommand}"
+              IsEnabled="{Binding CanCancel}" />
+    </StackPanel>
+
+    <!-- 状态提示 -->
+    <TextBlock Grid.Row="6"
+               Text="{Binding StatusMessage}"
+               Classes.error="{Binding StatusIsError}"
+               Opacity="0.8" FontSize="12" Margin="2,0,0,0"
+               TextWrapping="Wrap"
+               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </Grid>
+</Window>

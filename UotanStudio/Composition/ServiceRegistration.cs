@@ -52,6 +52,7 @@ internal static class ServiceRegistration
         services.AddTransient<UsbTreeViewModel>(_ => new UsbTreeViewModel());
         services.AddTransient<VisualPluginManagerViewModel>(_ => new VisualPluginManagerViewModel());
         services.AddTransient<RegexGeneratorViewModel>(_ => new RegexGeneratorViewModel());
+        services.AddTransient<DiskFlashViewModel>(_ => new DiskFlashViewModel());
         services.AddSingleton<ILocalizer>(_ => LanguageService.Instance);
         services.AddSingleton<LanguageService>(_ => LanguageService.Instance);
         services.AddSingleton<IUnifiedLog>(_ => LogService.Instance);

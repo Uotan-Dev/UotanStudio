@@ -1032,4 +1032,7 @@ Continue creating the project?</value>
   <data name="Menu_RegexGenerator" xml:space="preserve">
     <value>Regex Generator</value>
   </data>
+  <data name="Menu_DiskFlash" xml:space="preserve">
+    <value>Disk Image Flasher</value>
+  </data>
 </root>

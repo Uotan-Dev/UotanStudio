@@ -1032,4 +1032,7 @@
   <data name="Menu_RegexGenerator" xml:space="preserve">
     <value>正则表达式生成器</value>
   </data>
+  <data name="Menu_DiskFlash" xml:space="preserve">
+    <value>磁盘镜像烧录</value>
+  </data>
 </root>

@@ -55,6 +55,7 @@
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
     <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
     <ProjectReference Include="..\UotanStudio.RegexInfer\UotanStudio.RegexInfer.csproj" />
+    <ProjectReference Include="..\UotanStudio.DD\UotanStudio.DD.csproj" />
   </ItemGroup>
 
   <ItemGroup>

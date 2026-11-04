@@ -4314,4 +4314,121 @@
   <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
     <value>文件超过内存工具上限 {0}。</value>
   </data>
+  <data name="DiskFlash_Title" xml:space="preserve">
+    <value>磁盘镜像烧录</value>
+  </data>
+  <data name="DiskFlash_ImageFile" xml:space="preserve">
+    <value>镜像文件</value>
+  </data>
+  <data name="DiskFlash_ImagePlaceholder" xml:space="preserve">
+    <value>选择镜像文件</value>
+  </data>
+  <data name="DiskFlash_Browse" xml:space="preserve">
+    <value>浏览</value>
+  </data>
+  <data name="DiskFlash_Targets" xml:space="preserve">
+    <value>目标驱动器</value>
+  </data>
+  <data name="DiskFlash_Refresh" xml:space="preserve">
+    <value>重新扫描</value>
+  </data>
+  <data name="DiskFlash_SelectedCount" xml:space="preserve">
+    <value>已选择 {0} 个</value>
+  </data>
+  <data name="DiskFlash_NoDrives" xml:space="preserve">
+    <value>未发现可写入的目标驱动器。</value>
+  </data>
+  <data name="DiskFlash_DriveRemovable" xml:space="preserve">
+    <value>可移动</value>
+  </data>
+  <data name="DiskFlash_DriveInternal" xml:space="preserve">
+    <value>内置</value>
+  </data>
+  <data name="DiskFlash_IssueLocked" xml:space="preserve">
+    <value>写保护</value>
+  </data>
+  <data name="DiskFlash_IssueSystemDrive" xml:space="preserve">
+    <value>系统盘</value>
+  </data>
+  <data name="DiskFlash_IssueContainsImage" xml:space="preserve">
+    <value>包含源镜像</value>
+  </data>
+  <data name="DiskFlash_IssueLargeDrive" xml:space="preserve">
+    <value>大容量盘</value>
+  </data>
+  <data name="DiskFlash_IssueTooSmall" xml:space="preserve">
+    <value>容量不足</value>
+  </data>
+  <data name="DiskFlash_VerifyAfterWrite" xml:space="preserve">
+    <value>写入后校验</value>
+  </data>
+  <data name="DiskFlash_AllowLargeDrive" xml:space="preserve">
+    <value>允许大容量驱动器</value>
+  </data>
+  <data name="DiskFlash_ConfirmOverwrite" xml:space="preserve">
+    <value>我已知晓所选驱动器的数据将被完全覆盖</value>
+  </data>
+  <data name="DiskFlash_Flash" xml:space="preserve">
+    <value>开始烧录</value>
+  </data>
+  <data name="DiskFlash_Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="DiskFlash_StageScanning" xml:space="preserve">
+    <value>正在扫描驱动器…</value>
+  </data>
+  <data name="DiskFlash_StagePreparing" xml:space="preserve">
+    <value>正在准备目标…</value>
+  </data>
+  <data name="DiskFlash_StageWriting" xml:space="preserve">
+    <value>正在写入…</value>
+  </data>
+  <data name="DiskFlash_StageVerifying" xml:space="preserve">
+    <value>正在校验…</value>
+  </data>
+  <data name="DiskFlash_StageCompleted" xml:space="preserve">
+    <value>烧录完成</value>
+  </data>
+  <data name="DiskFlash_Ready" xml:space="preserve">
+    <value>就绪</value>
+  </data>
+  <data name="DiskFlash_ScanFailed" xml:space="preserve">
+    <value>扫描驱动器失败。</value>
+  </data>
+  <data name="DiskFlash_ImageInvalid" xml:space="preserve">
+    <value>镜像“{0}”不可用。</value>
+  </data>
+  <data name="DiskFlash_NoTarget" xml:space="preserve">
+    <value>请至少选择一个目标驱动器。</value>
+  </data>
+  <data name="DiskFlash_ConfirmRequired" xml:space="preserve">
+    <value>烧录前请确认覆盖。</value>
+  </data>
+  <data name="DiskFlash_Success" xml:space="preserve">
+    <value>已写入 {0} 个目标，共 {1}，耗时 {2}。</value>
+  </data>
+  <data name="DiskFlash_Cancelled" xml:space="preserve">
+    <value>操作已取消。</value>
+  </data>
+  <data name="DiskFlash_Failed" xml:space="preserve">
+    <value>镜像烧录失败。</value>
+  </data>
+  <data name="DiskFlash_ValidationFailed" xml:space="preserve">
+    <value>以下目标无法写入：{0}</value>
+  </data>
+  <data name="DiskFlash_SizeUnknown" xml:space="preserve">
+    <value>容量未知</value>
+  </data>
+  <data name="DiskFlash_ImageRaw" xml:space="preserve">
+    <value>裸镜像</value>
+  </data>
+  <data name="DiskFlash_ImageZip" xml:space="preserve">
+    <value>ZIP 归档</value>
+  </data>
+  <data name="DiskFlash_ImageCompressed" xml:space="preserve">
+    <value>{0} 压缩</value>
+  </data>
+  <data name="DiskFlash_ImageSummary" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
 </root>

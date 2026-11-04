@@ -4314,4 +4314,121 @@ Continue?</value>
   <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
     <value>The file exceeds the {0} memory-tool limit.</value>
   </data>
+  <data name="DiskFlash_Title" xml:space="preserve">
+    <value>Disk Image Flasher</value>
+  </data>
+  <data name="DiskFlash_ImageFile" xml:space="preserve">
+    <value>Image file</value>
+  </data>
+  <data name="DiskFlash_ImagePlaceholder" xml:space="preserve">
+    <value>Choose an image file</value>
+  </data>
+  <data name="DiskFlash_Browse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
+  <data name="DiskFlash_Targets" xml:space="preserve">
+    <value>Target drives</value>
+  </data>
+  <data name="DiskFlash_Refresh" xml:space="preserve">
+    <value>Rescan</value>
+  </data>
+  <data name="DiskFlash_SelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="DiskFlash_NoDrives" xml:space="preserve">
+    <value>No writable target drives were found.</value>
+  </data>
+  <data name="DiskFlash_DriveRemovable" xml:space="preserve">
+    <value>Removable</value>
+  </data>
+  <data name="DiskFlash_DriveInternal" xml:space="preserve">
+    <value>Internal</value>
+  </data>
+  <data name="DiskFlash_IssueLocked" xml:space="preserve">
+    <value>Write-protected</value>
+  </data>
+  <data name="DiskFlash_IssueSystemDrive" xml:space="preserve">
+    <value>System drive</value>
+  </data>
+  <data name="DiskFlash_IssueContainsImage" xml:space="preserve">
+    <value>Contains the source image</value>
+  </data>
+  <data name="DiskFlash_IssueLargeDrive" xml:space="preserve">
+    <value>Large drive</value>
+  </data>
+  <data name="DiskFlash_IssueTooSmall" xml:space="preserve">
+    <value>Not enough space</value>
+  </data>
+  <data name="DiskFlash_VerifyAfterWrite" xml:space="preserve">
+    <value>Verify after writing</value>
+  </data>
+  <data name="DiskFlash_AllowLargeDrive" xml:space="preserve">
+    <value>Allow large drives</value>
+  </data>
+  <data name="DiskFlash_ConfirmOverwrite" xml:space="preserve">
+    <value>I understand every selected drive will be overwritten</value>
+  </data>
+  <data name="DiskFlash_Flash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="DiskFlash_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="DiskFlash_StageScanning" xml:space="preserve">
+    <value>Scanning drives...</value>
+  </data>
+  <data name="DiskFlash_StagePreparing" xml:space="preserve">
+    <value>Preparing targets...</value>
+  </data>
+  <data name="DiskFlash_StageWriting" xml:space="preserve">
+    <value>Writing...</value>
+  </data>
+  <data name="DiskFlash_StageVerifying" xml:space="preserve">
+    <value>Verifying...</value>
+  </data>
+  <data name="DiskFlash_StageCompleted" xml:space="preserve">
+    <value>Flash completed</value>
+  </data>
+  <data name="DiskFlash_Ready" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="DiskFlash_ScanFailed" xml:space="preserve">
+    <value>The drives could not be scanned.</value>
+  </data>
+  <data name="DiskFlash_ImageInvalid" xml:space="preserve">
+    <value>The image "{0}" cannot be used.</value>
+  </data>
+  <data name="DiskFlash_NoTarget" xml:space="preserve">
+    <value>Select at least one target drive.</value>
+  </data>
+  <data name="DiskFlash_ConfirmRequired" xml:space="preserve">
+    <value>Confirm the overwrite before flashing.</value>
+  </data>
+  <data name="DiskFlash_Success" xml:space="preserve">
+    <value>Wrote {0} target(s), {1} in {2}.</value>
+  </data>
+  <data name="DiskFlash_Cancelled" xml:space="preserve">
+    <value>The operation was cancelled.</value>
+  </data>
+  <data name="DiskFlash_Failed" xml:space="preserve">
+    <value>The image could not be flashed.</value>
+  </data>
+  <data name="DiskFlash_ValidationFailed" xml:space="preserve">
+    <value>These targets cannot be written: {0}</value>
+  </data>
+  <data name="DiskFlash_SizeUnknown" xml:space="preserve">
+    <value>Size unknown</value>
+  </data>
+  <data name="DiskFlash_ImageRaw" xml:space="preserve">
+    <value>Raw image</value>
+  </data>
+  <data name="DiskFlash_ImageZip" xml:space="preserve">
+    <value>ZIP archive</value>
+  </data>
+  <data name="DiskFlash_ImageCompressed" xml:space="preserve">
+    <value>{0} compressed</value>
+  </data>
+  <data name="DiskFlash_ImageSummary" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
 </root>
