@@ -125,6 +125,13 @@ public sealed partial class DeviceMonitorService
     /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。
     /// 幂等，可安全多次调用。</para>
     /// </summary>
+    /// <remarks>
+    /// A vanished endpoint also has to let go of anything still querying it, and it has to force a rescan: the
+    /// topology diff only reports devices it could classify, so an endpoint whose descriptors were already half
+    /// gone would otherwise leave its row on screen indefinitely.
+    /// <para>消失的端点还必须放开仍在查询它的一切，并且必须强制一次重扫：拓扑差异只上报能被分类的设备，
+    /// 否则描述符已缺失一半的端点会使其条目无限期留在屏幕上。</para>
+    /// </remarks>
     public void Start()
     {
         lock (_sync)
@@ -150,9 +157,6 @@ public sealed partial class DeviceMonitorService
             }
         };
         _controller.UsbTopologyChanged += handler;
-        // A vanished endpoint also has to let go of anything still querying it, and it has to force a rescan:
-        // the topology diff only reports devices it could classify, so an endpoint whose descriptors were
-        // already half gone would otherwise leave its row on screen indefinitely.
         _controller.DeviceRemoved += OnEndpointGone;
         _controller.DeviceChanged += OnEndpointGone;
         lock (_sync)

@@ -160,6 +160,13 @@ public partial class DeviceViewModel
     /// 绝不等待端点打开。官方 adb server 会枚举 USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server
     /// 服务执行 shell；仅在 server 连接被拒绝时使用共享会话入口解析 USB 直连。</para>
     /// </summary>
+    /// <remarks>
+    /// The detail query and the root probe are timed separately: the detail query covers the endpoint open, the
+    /// CNXN handshake and every shell command, so reporting the two apart is what makes a slow stage visible in
+    /// the log without a debugger attached.
+    /// <para>详情查询与 root 探测分别计时：详情查询覆盖端点打开、CNXN 握手与每一条 shell 命令，
+    /// 两者分开上报才能在没有调试器时从日志看出慢在哪一段。</para>
+    /// </remarks>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
     {
         var endpoint = device.Device;
@@ -175,9 +182,6 @@ public partial class DeviceViewModel
         {
             (info, hasSu) = await Task.Run(async () =>
             {
-                // Staged timing: the detail query covers the endpoint open, the CNXN handshake and every
-                // shell command, so reporting it separately from the root probe is what makes a slow stage
-                // visible in the log without a debugger attached.
                 var queryWatch = System.Diagnostics.Stopwatch.StartNew();
                 var queried = await Task.Factory.StartNew(
                     () => QueryViaAdbServer(device, cachedProperties) ?? QueryViaAdbSession(device, token, cachedProperties),

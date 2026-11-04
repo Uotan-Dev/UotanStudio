@@ -485,6 +485,12 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     /// <param name="deviceKey">The stable device key from <see cref="UsbDeviceInfo.DeviceKey"/>. <para>来自 <see cref="UsbDeviceInfo.DeviceKey"/> 的稳定设备键。</para></param>
     /// <param name="apiKind">The backend selection mode. <para>后端选择模式。</para></param>
     /// <returns>The matching session, or <c>null</c> when no device matches. <para>匹配的会话；无匹配设备时返回 <c>null</c>。</para></returns>
+    /// <remarks>
+    /// A backend that already classified this exact path opens it directly; a null answer (unknown
+    /// path, or the recorded backend no longer opens) falls through to the enumeration below.
+    /// <para>已对该精确路径完成分类的后端会直接打开它；null 应答（路径未知，或已记录的后端已打不开）
+    /// 则落入下方的枚举流程。</para>
+    /// </remarks>
     public IUsbDeviceSession? OpenDeviceSessionByKey(
         string deviceKey,
         UsbApiKind apiKind = UsbApiKind.Auto)
@@ -531,8 +537,6 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
                 continue;
             }
 
-            // A backend that already classified this exact path opens it directly; a null answer (unknown
-            // path, or the recorded backend no longer opens) falls through to the enumeration below.
             var exact = provider.TryOpenExactSession(keyFilter);
             if (exact is not null)
             {

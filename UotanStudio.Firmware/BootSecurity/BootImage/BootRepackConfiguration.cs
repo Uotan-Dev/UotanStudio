@@ -55,11 +55,11 @@ internal sealed class BootRepackConfiguration
 
     /// <summary>
     /// Validates the header geometry of a version 3/4 boot configuration against its page size and the parser's
-    /// capture bound, replacing the former flat <c>16384</c> ceiling: the declared header size must be at least the
-    /// canonical size for the version and its page-aligned extent must stay within the 64 KiB header block the
-    /// unpack pipeline can persist, so 16 KiB-page devices pack while corrupt size words are refused.
-    /// <para>按页大小与解析器捕获上限校验版本 3/4 配置的头部几何信息，取代原先固定的 <c>16384</c> 上限：声明的头部大小
-    /// 不得小于该版本的规范尺寸，且其页对齐范围必须落在解包管道可持久化的 64 KiB 头部块内，从而支持 16 KiB 页设备，同时拒绝损坏的大小字段。</para>
+    /// capture bound: the declared header size must be at least the canonical size for the version and its
+    /// page-aligned extent must stay within the 64 KiB header block the unpack pipeline can persist, so 16 KiB-page
+    /// devices pack while corrupt size words are refused.
+    /// <para>按页大小与解析器捕获上限校验版本 3/4 配置的头部几何信息：声明的头部大小不得小于该版本的规范尺寸，
+    /// 且其页对齐范围必须落在解包管道可持久化的 64 KiB 头部块内，从而支持 16 KiB 页设备，同时拒绝损坏的大小字段。</para>
     /// </summary>
     /// <param name="header">Header restored from the stored repack configuration.
     /// <para>从已保存的重打包配置恢复的头部。</para></param>

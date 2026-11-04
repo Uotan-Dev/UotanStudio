@@ -26,6 +26,9 @@ public sealed partial class MtkSession
     /// caller-supplied authorized key source, not a missing adapter in the host.
     /// <para>Comm 内没有 DA2 SLA 的响应提供方类型，也不携带 SLA 密钥，因此启用状态对该会话即终局：从不读取挑战，也不写出任何响应字节。
     /// 重新打开这一交换是有意的重新立项决定，需要针对具体机型的设备证据与调用方提供的授权密钥来源，而不是宿主缺少一个适配器。</para>
+    /// The refusal is decided before any response byte is written, so the DA2 channel is
+    /// still in the state the caller expects and must stay usable.
+    /// <para>拒绝判定发生在写出任何响应字节之前，因此 DA2 通道仍处于调用方期望的状态，必须保持可用。</para>
     /// </remarks>
     public async Task RequireXFlashStageTwoSlaInactiveAsync(int timeoutMs = 60000,
         CancellationToken cancellationToken = default)
@@ -77,8 +80,6 @@ public sealed partial class MtkSession
             {
                 if (refusalRecorded && IsSecurityPolicyRefusal(error))
                 {
-                    // The refusal is decided before any response byte is written, so the DA2 channel is
-                    // still in the state the caller expects and must stay usable.
                     throw;
                 }
 

@@ -39,7 +39,11 @@ public sealed partial class DeviceController
     /// <summary>Waits for USB re-enumeration using an explicitly selected container or physical-port policy.
     /// <para>使用显式选择的容器或物理端口策略等待 USB 重枚举。</para></summary>
     /// <remarks>The physical-port policy permits a device without a container ID to reconnect at the same observed bus and port chain. It cannot distinguish replacement hardware on that port and is not an authentication mechanism. Neither policy falls back to serial numbers, VID/PID or list order. The old lease must be released; the old endpoint must disappear; ambiguous matches are rejected. The opened handle is rechecked before session creation. No protocol commands are sent.
-    /// <para>物理端口策略允许没有容器 ID 的设备在相同的已观测总线与端口链上重连。 它无法区分该端口上被替换的硬件，也不是认证机制。两种策略均不回退到序列号、VID/PID 或列表顺序。 必须释放旧租约并观测到旧端点消失，歧义匹配会被拒绝。创建会话前重新检查打开的句柄，不发送协议命令。</para></remarks>
+    /// <para>物理端口策略允许没有容器 ID 的设备在相同的已观测总线与端口链上重连。 它无法区分该端口上被替换的硬件，也不是认证机制。两种策略均不回退到序列号、VID/PID 或列表顺序。 必须释放旧租约并观测到旧端点消失，歧义匹配会被拒绝。创建会话前重新检查打开的句柄，不发送协议命令。</para>
+    /// The previous device node's PnP location chain dies with the node: after the stage switch the old instance id no longer resolves, so re-reading the chain from previousInfo during the wait would always fail and leave only the differing serial tails. The chain is stable physical topology, so it is read once, while the previous node is alive, and reused for every later comparison.
+    /// <para>旧设备节点的 PnP 位置链随节点一起消失：阶段切换后旧实例 ID 不再能解析，等待期间从 previousInfo 重读链必然失败，只剩下不一致的序列号尾部。链是稳定的物理拓扑，因此在旧节点仍存在时读一次并供后续所有比较复用。</para>
+    /// A stage switch that Windows serves by reusing the same device node keeps the previous endpoint id and device path while the observation itself changes (the loader rewrites the serial and the OS may assign a new container id). The loader policy therefore also treats "still listed, but the same-location observation now reports a different identity" as the previous endpoint being replaced; otherwise the wait never sees a disappearance and times out although the replacement is already in the snapshot.
+    /// <para>由 Windows 复用同一设备节点完成的阶段切换会保留旧端点 ID 与设备路径，而观测本身已经变化（loader 改写序列号，操作系统可能分配新的容器 ID）。因此 loader 策略把「仍在清单中，但同位置观测已报告不同身份」同样视为旧端点已被替代；否则等待永远看不到消失，即使替代端点已在快照中也会超时。</para></remarks>
     /// <param name="previous">The endpoint captured from the released lease.
     /// <para>从已释放租约捕获的端点。</para></param>
     /// <param name="kind">The explicitly expected MTK, EDL, Fastboot or Rockchip bootrom session.
@@ -101,13 +105,6 @@ public sealed partial class DeviceController
             throw new NotSupportedException("The previous endpoint lacks the evidence required by the selected USB reconnection policy.");
         }
 
-        // The previous device node's PnP location chain dies with the node: after the stage switch the old
-        // instance id no longer resolves, so re-reading the chain from previousInfo during the wait would
-        // always fail and leave only the differing serial tails. The chain is stable physical topology, so
-        // it is read once, while the previous node is alive, and reused for every later comparison.
-        // <para>旧设备节点的 PnP 位置链随节点一起消失：阶段切换后旧实例 ID 不再能解析，等待期间从
-        // previousInfo 重读链必然失败，只剩下不一致的序列号尾部。链是稳定的物理拓扑，因此在旧节点
-        // 仍存在时读一次并供后续所有比较复用。</para>
         var stickyLocationChain = identityPolicy == UsbReconnectIdentityPolicy.RockchipLoader
             ? (capturedLocationChain is { Length: > 0 } ? capturedLocationChain : ReadRockchipLocationChain(previousInfo))
             : null;
@@ -137,16 +134,6 @@ public sealed partial class DeviceController
                 token.ThrowIfCancellationRequested();
                 lastSnapshot = snapshot;
                 var previousStillListed = snapshot.Endpoints.FirstOrDefault(endpoint => endpoint.Id == previous.Id);
-                // A stage switch that Windows serves by reusing the same device node keeps the previous
-                // endpoint id and device path while the observation itself changes (the loader rewrites the
-                // serial and the OS may assign a new container id). The loader policy therefore also treats
-                // "still listed, but the same-location observation now reports a different identity" as the
-                // previous endpoint being replaced; otherwise the wait never sees a disappearance and times
-                // out although the replacement is already in the snapshot.
-                // <para>由 Windows 复用同一设备节点完成的阶段切换会保留旧端点 ID 与设备路径，而观测本身已经
-                // 变化（loader 改写序列号，操作系统可能分配新的容器 ID）。因此 loader 策略把「仍在清单中，
-                // 但同位置观测已报告不同身份」同样视为旧端点已被替代；否则等待永远看不到消失，即使替代端点
-                // 已在快照中也会超时。</para>
                 if (identityPolicy == UsbReconnectIdentityPolicy.RockchipLoader &&
                     previousStillListed is { } listed &&
                     RockchipObservationReplaced(previousInfo, listed.UsbInfo))

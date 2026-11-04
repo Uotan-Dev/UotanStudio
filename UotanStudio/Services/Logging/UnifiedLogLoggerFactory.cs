@@ -80,6 +80,12 @@ internal sealed class UnifiedLogLoggerFactory : ILoggerFactory
             return mapped is not null && log.IsEnabled(mapped.Value);
         }
 
+        /// <remarks>
+        /// MEL hands the exception to the sink separately: the formatter's text never carries it, so a bridge
+        /// that ignores this argument silently drops every stack trace the producer reported.
+        /// <para>MEL 会把异常单独交给 sink：格式化文本从不携带异常，忽略该参数的桥接器会静默丢弃
+        /// 生产方报告的全部堆栈。</para>
+        /// </remarks>
         public void Log<TState>(MelLogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
@@ -100,8 +106,6 @@ internal sealed class UnifiedLogLoggerFactory : ILoggerFactory
 
             if (exception is not null)
             {
-                // MEL hands the exception to the sink separately: the formatter's text never carries it, so a
-                // bridge that ignores this argument silently drops every stack trace the producer reported.
                 message = $"{message}{Environment.NewLine}{exception}";
             }
 

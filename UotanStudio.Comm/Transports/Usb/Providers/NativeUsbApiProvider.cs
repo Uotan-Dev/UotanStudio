@@ -78,6 +78,12 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             ? WinUSBFinder.TryOpenSingleDevice(devicePath)
             : null;
 
+    /// <remarks>
+    /// IOUSBHost loaded but described nothing. The classic IOKit path may still enumerate the device,
+    /// so try it instead of reporting an empty macOS inventory; if both are empty the result is empty.
+    /// <para>IOUSBHost 已加载但没有描述任何设备。经典 IOKit 路径仍可能枚举到设备，因此改用它而不是
+    /// 直接上报空的 macOS 清单；两者都为空时结果才为空。</para>
+    /// </remarks>
     protected override List<UsbDevice> EnumerateBackendDevices(UsbDeviceFilter? filter)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -103,8 +109,6 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
                 return usbHostDevices;
             }
 
-            // IOUSBHost loaded but described nothing. The classic IOKit path may still enumerate the device,
-            // so try it instead of reporting an empty macOS inventory; if both are empty the result is empty.
             var iokitDevices = IOKitUsbFinder.FindDevice(filter);
             return iokitDevices.Count > 0 ? iokitDevices : usbHostDevices;
         }

@@ -57,8 +57,8 @@
             <SolidColorBrush x:Key="NodeBadgeBorderBrush" Color="#E8A09A" />
             <SolidColorBrush x:Key="NodeBadgeForegroundBrush" Color="#7A241E" />
 
-            <!-- 控件状态键：按钮文字改回普通文本色，悬浮/选中改为主色底。 -->
-            <!-- Control-state keys: button text back to the normal text colour, hover/selected fills use the accent. -->
+            <!-- 控件状态键：按钮文字使用普通文本色，悬浮/选中使用主色底。 -->
+            <!-- Control-state keys: button text uses the normal text colour, hover/selected fills use the accent. -->
             <SolidColorBrush x:Key="ButtonDefaultPrimaryForeground" Color="#1A1A1A" />
             <SolidColorBrush x:Key="ButtonDefaultBackground" Color="#F4F5F7" />
             <SolidColorBrush x:Key="ButtonDefaultPointeroverBackground" Color="{StaticResource AccentColor}" />
@@ -80,7 +80,7 @@
             <StaticResource x:Key="DataGridColumnHeaderPointeroverBackground" ResourceKey="SemiColorPrimaryLight" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-            <!-- 深色模式同样的红会显得更亮，这里用深色专用的暗一档取值：浅色系键不再使用近白色底。 -->
+            <!-- 深色模式同样的红会显得更亮，这里用深色专用的暗一档取值：浅色系键使用避开近白的底色。 -->
             <!-- The same red reads brighter on dark surfaces, so the dark set uses darker derivatives and
                  keeps the "light" tint keys away from near-white fills. -->
             <Color x:Key="AccentColor">#D33B2F</Color>

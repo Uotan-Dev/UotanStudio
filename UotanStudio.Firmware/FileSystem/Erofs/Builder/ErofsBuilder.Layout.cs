@@ -19,10 +19,11 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 public sealed partial class ErofsBuilder
 {
     /// <summary>
-    /// Shared mutable context threaded through the image build phases; it carries the values that
-    /// were locals of the former monolithic <see cref="BuildImage"/> body.
-    /// <para>贯穿镜像构建各阶段共享的上下文；承载原先单体 <see cref="BuildImage"/> 方法体
-    /// 中的局部状态。</para>
+    /// Shared mutable context threaded through the image build phases; it carries the layout state the phases
+    /// share: the collected node list, the inode and device table offsets, the meta-zone placement, the
+    /// compression configuration, and the xattr prefix and shared-entry tables.
+    /// <para>贯穿镜像构建各阶段共享的上下文；承载各阶段共享的布局状态：收集到的节点列表、inode 与设备表
+    /// 偏移、元数据区位置、压缩配置，以及 xattr 长前缀表与共享条目表。</para>
     /// </summary>
     private sealed class ImageBuildContext(ErofsInode root, ErofsOptions options)
     {

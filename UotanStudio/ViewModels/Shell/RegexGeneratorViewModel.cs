@@ -81,11 +81,9 @@ public sealed partial class RegexGeneratorViewModel : ObservableObject
             }
             catch
             {
-                // Fallback to literal pattern below
             }
         }
 
-        // Fallback to escaped regex pattern
         Pattern = Regex.Escape(FindContent);
         StatusMessage = validTargets.Length == 0
             ? LanguageService.Instance.GetString("RegexGenerator_NoMatchFallback")

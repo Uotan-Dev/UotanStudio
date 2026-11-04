@@ -227,14 +227,17 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
     }
 
+    /// <remarks>
+    /// The event names the interface that arrived or left, so the inventory can forget exactly that
+    /// instance instead of re-reading every interface on the bus.
+    /// <para>事件给出的是到达或离开的那个接口，因此清单只需遗忘该实例，而不必重读总线上的全部接口。</para>
+    /// </remarks>
     private static IntPtr DispatchWindowMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (msg == Win32API.WM_DEVICECHANGE &&
             (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL || wParam == (IntPtr)Win32API.DBT_DEVICEREMOVECOMPLETE) &&
             Windows.TryGetValue(hWnd, out var monitor))
         {
-            // The event names the interface that arrived or left, so the inventory can forget exactly that
-            // instance instead of re-reading every interface on the bus.
             WinUSBFinder.InvalidateInventoryForPath(ReadBroadcastInterfacePath(lParam));
             monitor.TriggerPoll();
         }
@@ -248,6 +251,12 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     /// <para>从 <c>DEV_BROADCAST_DEVICEINTERFACE_W</c> 头部读出变长 <c>Dbcc_name</c>；负载不是接口广播或不含名称时
     /// 返回 <see langword="null"/>。</para>
     /// </summary>
+    /// <remarks>
+    /// The header is size, devicetype, reserved, classguid and then the variable-length wide name;
+    /// OffsetOf keeps this in step with the structure the registration filter already uses.
+    /// <para>头部依次为 size、devicetype、reserved、classguid，其后是变长宽字符名称；
+    /// <see cref="Marshal.OffsetOf{T}"/> 与注册过滤器已使用的结构保持同步。</para>
+    /// </remarks>
     private static string? ReadBroadcastInterfacePath(IntPtr lParam)
     {
         if (lParam == IntPtr.Zero ||
@@ -256,8 +265,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             return null;
         }
 
-        // The header is size, devicetype, reserved, classguid and then the variable-length wide name;
-        // OffsetOf keeps this in step with the structure the registration filter already uses.
         var nameOffset = (int)Marshal.OffsetOf<Win32API.DEV_BROADCAST_DEVICEINTERFACE_W>(
             nameof(Win32API.DEV_BROADCAST_DEVICEINTERFACE_W.Dbcc_name));
         return Marshal.PtrToStringUni(IntPtr.Add(lParam, nameOffset));

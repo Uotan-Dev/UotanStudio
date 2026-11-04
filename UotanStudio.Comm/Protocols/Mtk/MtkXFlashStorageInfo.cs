@@ -223,6 +223,16 @@ public sealed class MtkXFlashStorageInfo
         return BinaryPrimitives.ReadUInt32LittleEndian(geometry) == 0;
     }
 
+    /// <remarks>
+    /// eMMC reports eight sections starting at offset 8; UFS reports lu0/lu1/lu2 at the same
+    /// offsets and has no fourth load unit, so index 3 stays empty rather than borrowing a size.
+    /// <para>eMMC 从偏移 8 起上报八个分节；UFS 在相同偏移处上报 lu0/lu1/lu2，没有第四个逻辑单元，
+    /// 因此索引 3 保持为空，而不是借用其他尺寸。</para>
+    /// <c>ufs_info_struct</c> places a 16-bit vendor_id at offset 32 and the 20-byte cid at 34;
+    /// <c>mmc_info_struct</c> places the 16-byte cid at 72.
+    /// <para><c>ufs_info_struct</c> 在偏移 32 处放置 16 位 vendor_id，在 34 处放置 20 字节 cid；
+    /// <c>mmc_info_struct</c> 在 72 处放置 16 字节 cid。</para>
+    /// </remarks>
     internal static MtkXFlashStorageInfo Parse(MtkXFlashStorageKind kind, ReadOnlySpan<byte> geometry,
         ReadOnlySpan<byte> packetLengths)
     {
@@ -283,8 +293,6 @@ public sealed class MtkXFlashStorageInfo
         var regions = new MtkXFlashStorageRegion[count];
         for (var index = 0; index < count; index++)
         {
-            // eMMC reports eight sections starting at offset 8; UFS reports lu0/lu1/lu2 at the same
-            // offsets and has no fourth load unit, so index 3 stays empty rather than borrowing a size.
             var sizeOffset = 8 + (index * 8);
             var size = kind == MtkXFlashStorageKind.Ufs && index == 3
                 ? 0UL
@@ -301,8 +309,6 @@ public sealed class MtkXFlashStorageInfo
             throw new MtkProtocolException("The selected storage has no ordinary addressable region.");
         }
 
-        // ufs_info_struct places a 16-bit vendor_id at offset 32 and the 20-byte cid at 34;
-        // mmc_info_struct places the 16-byte cid at 72.
         var cidOffset = kind == MtkXFlashStorageKind.Emmc ? 72 : 34;
         return new MtkXFlashStorageInfo(kind, BinaryPrimitives.ReadUInt32LittleEndian(geometry), (int)blockSize,
             regions, Convert.ToHexString(geometry.Slice(cidOffset, 16)), (int)writeLength, (int)readLength);

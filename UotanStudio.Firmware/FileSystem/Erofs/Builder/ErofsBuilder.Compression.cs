@@ -1640,10 +1640,9 @@ public sealed partial class ErofsBuilder
     /// <param name="staging">Staging file holding accepted compressed frames, or <see langword="null"/> when
     /// this build staged none. <para>承载已接受压缩帧的暂存文件；本次构建未暂存任何帧时为
     /// <see langword="null"/>。</para></param>
-    /// <returns>The zero-filled body buffer with every resident and shared xattr record in place. Gaps stay
-    /// zero, which is what the image preallocation used to guarantee for the slot-wise writer.
-    /// <para>已填入全部常驻记录与共享 xattr 记录、其余为零的本体缓冲。空隙保持为零，这正是逐槽位写入方原先
-    /// 依赖镜像预分配保证的结果。</para></returns>
+    /// <returns>The zero-filled body buffer with every resident and shared xattr record in place; gaps stay
+    /// zero, which the slot-wise writer relies on.
+    /// <para>已填入全部常驻记录与共享 xattr 记录、其余为零的本体缓冲。空隙保持为零，逐槽位写入方依赖该保证。</para></returns>
     private static byte[] BuildMetaboxContainerBody(int blockSize, ulong now, List<ErofsInode> residents,
         long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs, ErofsOptions options,
         Core.CompressionPayloadStaging? staging)

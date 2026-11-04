@@ -38,8 +38,8 @@ public static class RootPatchSources
 
     /// <summary>Every provisionable source in presentation order.
     /// <para>按呈现顺序排列的全部可供给来源。</para></summary>
-    /// <value>Five stable entries; the collection is never mutated after initialization.
-    /// <para>五个稳定条目；初始化后不再修改该集合。</para></value>
+    /// <value>Five stable entries; the collection is immutable after initialization.
+    /// <para>五个稳定条目；初始化后不可变。</para></value>
     public static IReadOnlyList<RootPatchPackageSource> All { get; } =
     [
         RootPatchPackageSource.Magisk,

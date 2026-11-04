@@ -874,10 +874,10 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// Blits one decoder texture into the destination view, reusing the processor input view cached for
     /// the texture/subresource pair. Creating a view is the expensive part of the blit, so views stay
     /// cached until the processor itself is rebuilt; when acquiring or using a cached view fails the
-    /// entry is released and the original per-frame create/blit/release path runs instead.
+    /// entry is released and the per-frame create/blit/release path runs instead.
     /// <para>把一个解码纹理搬运到目标视图，优先复用按纹理/子资源缓存的处理输入视图。创建视图是搬运中
-    /// 开销最大的部分，因此视图会缓存到处理器重建为止；获取或使用缓存视图失败时释放该条目并退回原先
-    /// “每帧新建/搬运/释放”的路径。</para>
+    /// 开销最大的部分，因此视图会缓存到处理器重建为止；获取或使用缓存视图失败时释放该条目并退回每帧
+    /// 新建/搬运/释放路径。</para>
     /// </summary>
     /// <param name="sourceTexture">The decoder-owned NV12 texture for this frame.
     /// <para>该帧的解码器 NV12 纹理。</para></param>

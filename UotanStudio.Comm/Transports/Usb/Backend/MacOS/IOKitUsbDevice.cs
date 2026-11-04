@@ -276,6 +276,14 @@ internal class IOKitUsbDevice : UsbDevice
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Device-level user-client calls (GetConfiguration/SetConfiguration, USBDeviceReset) need an
+    /// open client. Open it best-effort: the system driver usually owns the device on modern macOS,
+    /// and the interface path still works when this open is refused.
+    /// <para>设备级 user-client 调用（GetConfiguration/SetConfiguration、USBDeviceReset）需要一个
+    /// 已打开的 client。此处尽力打开：现代 macOS 上系统驱动通常已持有该设备，打开被拒绝时接口路径
+    /// 仍然可用。</para>
+    /// </remarks>
     public override int CreateHandle()
     {
         if (_deviceInterface != IntPtr.Zero)
@@ -322,9 +330,6 @@ internal class IOKitUsbDevice : UsbDevice
 
                 _pluginInterface = plugin;
 
-                // Device-level user-client calls (GetConfiguration/SetConfiguration, USBDeviceReset) need an
-                // open client. Open it best-effort: the system driver usually owns the device on modern macOS,
-                // and the interface path still works when this open is refused.
                 try
                 {
                     var openDevice = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceOpenDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceOpen);

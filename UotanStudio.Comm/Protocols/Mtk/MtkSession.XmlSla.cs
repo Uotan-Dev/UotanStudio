@@ -29,6 +29,9 @@ public sealed partial class MtkSession
     /// The property read itself is shared with the other XML property flows.
     /// <para>这里只读取 SLA 指示。设备信息读取、有界 <c>sla</c> 信封、刷写策略上传与"响应被接受"结果都要求一个授权密钥来源，
     /// 而 Comm 不携带 DA2 SLA 密钥、也不暴露可接收它的类型，因此启用状态改为结束会话。属性读取本身与其他 XML 属性流程共用。</para>
+    /// The refusal is decided before any response byte is written, so the DA2 channel is
+    /// still in the state the caller expects and must stay usable.
+    /// <para>拒绝判定发生在写出任何响应字节之前，因此 DA2 通道仍处于调用方期望的状态，必须保持可用。</para>
     /// </remarks>
     public async Task RequireXmlStageTwoSlaInactiveAsync(string? expectedEnvelopeName,
         int timeoutMs = 60000, CancellationToken cancellationToken = default)
@@ -84,8 +87,6 @@ public sealed partial class MtkSession
             {
                 if (refusalRecorded && IsSecurityPolicyRefusal(error))
                 {
-                    // The refusal is decided before any response byte is written, so the DA2 channel is
-                    // still in the state the caller expects and must stay usable.
                     throw;
                 }
 

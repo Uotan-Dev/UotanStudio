@@ -61,11 +61,15 @@ partial class NodeEditorView
     /// <para>Routes every canvas press: the right button pans, a left press on a connector is left to NodifyM so connector
     /// dragging still starts, and any other left press is taken over by the canvas gesture before NodifyM sees it.</para>
     /// </summary>
+    /// <remarks>
+    /// The handlers attach to the surface rather than NodifyEditor itself. The editor visual bounds are scaled and
+    /// translated, so a press in the rendered blank area can otherwise bypass the editor route and fall through to
+    /// Nodify's left-pan logic.
+    /// <para>处理程序附着在 surface 上而不是 NodifyEditor 本身。编辑器的可视边界经过缩放与平移，
+    /// 否则落在渲染出的空白区域的按下会绕过编辑器路由，落入 Nodify 的左键平移逻辑。</para>
+    /// </remarks>
     private void AttachCanvasGestureHandlers()
     {
-        // Attach to the surface rather than NodifyEditor itself. The editor visual bounds are scaled and translated,
-        // so a press in the rendered blank area can otherwise bypass the editor route and fall through to Nodify's
-        // left-pan logic.
         EditorSurface.AddHandler(PointerPressedEvent, OnCanvasGesturePressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         EditorSurface.AddHandler(PointerMovedEvent, OnCanvasGestureMoved,
@@ -85,6 +89,13 @@ partial class NodeEditorView
     /// because NodifyM would otherwise clear the selection on a press that the status-bar hint promises is harmless.
     /// <para>决定画布按下由谁处理：右键平移画布，连接器按下交还给 NodifyM，其余左键由画布手势接管。</para>
     /// </summary>
+    /// <remarks>
+    /// The gesture origin is kept in the same surface space used by the selection overlay. GetPosition(Editor) is in
+    /// Nodify zoomed canvas coordinates, so using it for a screen-space threshold and then mixing it with
+    /// EditorSurface coordinates shifts the selection box whenever Zoom is not 1.
+    /// <para>手势起点保存在与选择框覆盖层相同的 surface 坐标空间中。GetPosition(Editor) 得到的是 Nodify
+    /// 缩放画布坐标，把它用于屏幕空间的阈值判定再与 EditorSurface 坐标混用，会在 Zoom 不为 1 时使选择框偏移。</para>
+    /// </remarks>
     /// <param name="sender">The editor that routed the event.</param>
     /// <param name="e">The press arguments.</param>
     private void OnCanvasGesturePressed(object? sender, PointerPressedEventArgs e)
@@ -136,10 +147,6 @@ partial class NodeEditorView
         _canvasGesturePointer = e.Pointer;
         _canvasGestureTrigger = e;
         _canvasGestureAdditiveSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        // Keep the gesture origin in the same surface space used by the selection overlay.
-        // GetPosition(Editor) is in Nodify zoomed canvas coordinates, so using it for a
-        // screen-space threshold and then mixing it with EditorSurface coordinates shifts
-        // the selection box whenever Zoom is not 1.
         _canvasGestureOrigin = e.GetPosition(EditorSurface);
         _canvasGestureNode = FindNodeAt(e.Source);
         e.Pointer.Capture(Editor);
@@ -497,6 +504,10 @@ partial class NodeEditorView
     /// <para>Tells whether the pointer landed inside the zoomable canvas.</para>
     /// </summary>
     /// <param name="e">The press arguments.</param>
+    /// <remarks>
+    /// The minimap is a separate interactive overlay on the same surface and must keep receiving its own gestures.
+    /// <para>小地图是同一 surface 上独立的交互覆盖层，必须继续接收它自己的手势。</para>
+    /// </remarks>
     private bool IsPointerOnCanvas(PointerEventArgs e)
     {
         if (!Editor.IsVisible || !IsPointerOnSurface(e))
@@ -504,7 +515,6 @@ partial class NodeEditorView
             return false;
         }
 
-        // The minimap is a separate interactive overlay on the same surface and must keep receiving its own gestures.
         return e.Source is not Visual visual
             || !visual.GetSelfAndVisualAncestors()
                 .Any(candidate => candidate is NodifyM.Avalonia.Controls.NodifyEditorMinimap);

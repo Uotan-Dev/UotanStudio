@@ -74,13 +74,13 @@ public sealed class RockusbPipeSelectionTests
         Assert.Equal(0x02, selection.EndpointOut);
     }
 
-    /// <summary>An interface whose directed endpoints cannot be named fails instead of binding a neighbouring pipe.
-    /// <para>无法按名字精确指向的接口直接失败，而不是绑定到相邻管道。</para>
+    /// <summary>An interface whose directed endpoints cannot be named fails instead of binding a neighbouring pipe:
+    /// with two IN endpoints and the bulk one second, literal index 1 collides with the reserved "first OUT" selector.
+    /// <para>无法按名字精确指向的接口直接失败，而不是绑定到相邻管道：两个 IN 端点且批量端点在第二位时，字面序号 1 与保留的「第一条 OUT」选择器冲突。</para>
     /// </summary>
     [Fact]
     public void SelectPipes_UnaddressableBulkIn_ReturnsNull()
     {
-        // Two IN endpoints with the bulk one second: index 1 collides with the "first OUT" selector.
         var selection = RockusbDevice.SelectPipes([Endpoint(0x83, 0x03), Endpoint(0x82), Endpoint(0x01)]);
 
         Assert.Null(selection);

@@ -227,6 +227,12 @@ internal static partial class LibUsbFinder
     /// <para>为单个 libusb 设备构建后端设备（或仅元数据条目），读取其配置描述符。
     /// 线程安全：无共享可变状态。</para>
     /// </summary>
+    /// <remarks>
+    /// The node is present whether or not it exposes a bulk pair; report it metadata-only so the
+    /// libusb inventory matches what the native backends see. Opening it later simply fails.
+    /// <para>无论节点是否暴露 bulk 端点对，节点本身都在；此处按仅元数据上报，使 libusb 清单与原生
+    /// 后端看到的保持一致。之后再打开它只会直接失败。</para>
+    /// </remarks>
     private static UsbDevice? BuildDevice(
         LibUsbDotNet.LibUsb.UsbDevice libUsbDevice,
         UsbDeviceFilter? filter)
@@ -243,8 +249,6 @@ internal static partial class LibUsbFinder
             out var interfaceProtocol,
             out var interfaces))
         {
-            // The node is present whether or not it exposes a bulk pair; report it metadata-only so the
-            // libusb inventory matches what the native backends see. Opening it later simply fails.
             var degradedBus = libUsbDevice.BusNumber;
             var degradedAddress = libUsbDevice.Address;
             var degraded = new LibUsbDevice

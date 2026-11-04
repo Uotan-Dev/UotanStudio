@@ -21,6 +21,12 @@ internal static partial class WinUSBFinder
     /// <para>取自物理设备键的精确接口路径。</para></param>
     /// <returns>The opened backend device, or <see langword="null"/> to request a full enumeration.
     /// <para>已打开的后端设备；需要回退到完整枚举时返回 <see langword="null"/>。</para></returns>
+    /// <remarks>
+    /// Without a remembered interface there is no cheap answer for its class triple, container id or
+    /// backend, and guessing them from the path alone would report a device the walk never confirmed.
+    /// <para>没有记住的接口时，它的类三元组、容器 ID 与后端都无从廉价作答；仅凭路径猜测会报告一个
+    /// 遍历从未确认过的设备。</para>
+    /// </remarks>
     internal static UsbDevice? TryOpenSingleDevice(string devicePath)
     {
         (var vid, var pid) = TryParseVidPid(devicePath);
@@ -32,8 +38,6 @@ internal static partial class WinUSBFinder
 
         if (!WinUsbInventoryCache.TryGet(instanceId, out var cached))
         {
-            // Without a remembered interface there is no cheap answer for its class triple, container id or
-            // backend, and guessing them from the path alone would report a device the walk never confirmed.
             return null;
         }
 
@@ -76,6 +80,15 @@ internal static partial class WinUSBFinder
         return device;
     }
 
+    /// <remarks>
+    /// Detection opens the path twice: once to ask whether the legacy driver answers, then again through
+    /// the backend it chose. A warm pass that already recorded which backend served this interface goes
+    /// straight there, and only falls back to the full sequence when that backend no longer opens — which
+    /// is what a driver rebind looks like.
+    /// <para>探测会把路径打开两次：先询问 legacy 驱动是否应答，再通过选定的后端再开一次。已记录该接口
+    /// 由哪个后端服务的暖轮直接走该后端，只有在该后端打不开时才回退到完整序列——驱动重新绑定的表现正是
+    /// 如此。</para>
+    /// </remarks>
     private static UsbDevice? ProbeDevice(
         string path,
         UsbSessionOptions? options,
@@ -90,10 +103,6 @@ internal static partial class WinUSBFinder
         }
         UsbAccessPolicy.RequireDirect(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol, serial);
 
-        // Detection opens the path twice: once to ask whether the legacy driver answers, then again through
-        // the backend it chose. A warm pass that already recorded which backend served this interface goes
-        // straight there, and only falls back to the full sequence when that backend no longer opens — which
-        // is what a driver rebind looks like.
         if (cached?.BackendKind is { Length: > 0 } knownBackend &&
             OpenKnownBackend(knownBackend, path, options, serial, vid, pid) is { } known)
         {
@@ -185,6 +194,12 @@ internal static partial class WinUSBFinder
     /// <para>打开更早一轮为该接口记录的后端，跳过探测往返。该后端此刻已打不开时返回
     /// <see langword="null"/>，由调用方执行完整探测序列——驱动重新绑定正是以这种方式显现。</para>
     /// </summary>
+    /// <remarks>
+    /// The detection path reports a legacy node even when its handle failed, because the node is
+    /// still real; the remembered backend must answer the same way.
+    /// <para>探测路径在 legacy 节点的句柄打开失败时仍会报告该节点，因为节点本身确实存在；记住的后端
+    /// 必须以相同方式作答。</para>
+    /// </remarks>
     private static UsbDevice? OpenKnownBackend(
         string backend,
         string path,
@@ -205,8 +220,6 @@ internal static partial class WinUSBFinder
                     };
                     _ = legacy.CreateHandle();
 
-                    // The detection path reports a legacy node even when its handle failed, because the node is
-                    // still real; the remembered backend must answer the same way.
                     return legacy;
                 }
 

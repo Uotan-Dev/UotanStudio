@@ -5,10 +5,10 @@ namespace UotanStudio.Services.Terminal;
 
 /// <summary>
 /// Presents an in-process device shell relay as a PTY connection, so the terminal view consumes it
-/// like any spawned shell while the host keeps its single ADB/HDC transport instead of a second
-/// process opening a competing one.
-/// <para>把进程内的设备 shell 转发以 PTY 连接的形式提供给终端视图：终端照常消费它，而宿主始终只保留
-/// 一条 ADB/HDC 传输，不再由第二个进程另开一份竞争的传输。</para>
+/// like any spawned shell while the host keeps its single ADB/HDC transport and no process opens a
+/// competing one.
+/// <para>把进程内的设备 shell 转发以 PTY 连接的形式提供给终端视图：终端照常消费它，设备 shell 终端
+/// 复用本进程内的这条 ADB/HDC 传输，不另起进程。</para>
 /// </summary>
 internal sealed class DeviceShellConnection : IPtyConnection
 {

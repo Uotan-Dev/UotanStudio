@@ -61,6 +61,17 @@ internal static partial class WinUSBFinder
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
     /// <param name="options">Optional session tuning options. <para>可选的会话调优选项。</para></param>
     /// <returns>The discovered backend devices. <para>发现的后端设备。</para></returns>
+    /// <remarks>
+    /// Every pass walks every present device class, because a USB node can carry a vendor-renamed
+    /// instance id and restricting the walk would drop it from later passes. What a warm pass skips is
+    /// the per-interface re-read: the interface triple, the container id and the device-interface GUIDs
+    /// come from the inventory cache instead of the registry, and the DeviceClasses reverse map is reused
+    /// across passes instead of walking 200+ registry keys each time.
+    /// <para>每一轮遍历都会走过当前存在的全部设备类，因为 USB 节点可能携带厂商重命名的实例 ID，限制
+    /// 遍历范围会让它在后续轮次中漏掉。暖轮省去的是每个接口的重读：接口三元组、容器 ID 与设备接口 GUID
+    /// 改由清单缓存提供而不是注册表，DeviceClasses 反向映射也在各轮之间复用，而不是每轮遍历 200 多个
+    /// 注册表键。</para>
+    /// </remarks>
     public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null, UsbSessionOptions? options = null)
     {
         var devices = new List<UsbDevice>();
@@ -70,11 +81,6 @@ internal static partial class WinUSBFinder
 
         var pass = new ScanPass(filter);
 
-        // Every pass walks every present device class, because a USB node can carry a vendor-renamed
-        // instance id and restricting the walk would drop it from later passes. What a warm pass skips is
-        // the per-interface re-read: the interface triple, the container id and the device-interface GUIDs
-        // come from the inventory cache instead of the registry, and the DeviceClasses reverse map is reused
-        // across passes instead of walking 200+ registry keys each time.
         var devInfoSet = Win32API.SetupDiGetClassDevsW(IntPtr.Zero, null, IntPtr.Zero,
             Win32API.DIGCF_PRESENT | Win32API.DIGCF_ALLCLASSES);
         LastSetupDiSucceeded = devInfoSet != -1;
@@ -303,6 +309,22 @@ internal static partial class WinUSBFinder
     /// <param name="uniqueKeys">Dedup keys shared across GUID walks. <para>跨 GUID 遍历共享的去重键。</para></param>
     /// <param name="pass">The pass context carrying the incremental decision and observed instances.
     /// <para>携带增量判定与已观测实例的遍历上下文。</para></param>
+    /// <remarks>
+    /// The interface path carries the PnP instance id, so a warm pass derives it for free and lets the
+    /// inventory cache answer for the interface triple, the container id and the opened backend instead
+    /// of re-reading CompatibleIDs, the node instance id and ContainerID from the registry.
+    /// <para>接口路径本身携带 PnP 实例 ID，暖轮因此可以免费推导它，并让清单缓存代答接口三元组、容器 ID
+    /// 与已打开的后端，而不是从注册表重读 CompatibleIDs、节点实例 ID 与 ContainerID。</para>
+    /// A class GUID collected from a USB node is also registered by that class's non-USB devices
+    /// (RAS ports, volumes, root hubs), and the per-GUID walk returns them all. Requiring the
+    /// hardware ids a firmware device always carries keeps those out of discovery instead of
+    /// projecting every machine-wide interface as a candidate device.
+    /// <para>从 USB 节点收集的类 GUID 也会被该类的非 USB 设备（RAS 端口、卷、根集线器）注册，按 GUID
+    /// 的遍历会把它们全部返回。要求具备固件设备必然携带的硬件 ID，就能把它们挡在发现结果之外，而不是把
+    /// 全机每个接口都投影成候选设备。</para>
+    /// An unopened pass learns no backend, so it must not erase a backend an opened pass recorded.
+    /// <para>未打开设备的轮次学不到任何后端，因此不得抹除已打开轮次记录的后端。</para>
+    /// </remarks>
     private static unsafe void ProcessInterface(
         IntPtr devInfo,
         ref Win32API.SpDeviceInterfaceData interfaceData,
@@ -354,16 +376,9 @@ internal static partial class WinUSBFinder
                 return;
             }
 
-            // The interface path carries the PnP instance id, so a warm pass derives it for free and lets the
-            // inventory cache answer for the interface triple, the container id and the opened backend instead
-            // of re-reading CompatibleIDs, the node instance id and ContainerID from the registry.
             var derivedInstanceId = TryDeriveInstanceId(path);
             if (derivedInstanceId is null)
             {
-                // A class GUID collected from a USB node is also registered by that class's non-USB devices
-                // (RAS ports, volumes, root hubs), and the per-GUID walk returns them all. Requiring the
-                // hardware ids a firmware device always carries keeps those out of discovery instead of
-                // projecting every machine-wide interface as a candidate device.
                 return;
             }
 
@@ -430,7 +445,6 @@ internal static partial class WinUSBFinder
                     device.Dispose();
                 }
 
-                // An unopened pass learns no backend, so it must not erase a backend an opened pass recorded.
                 WinUsbInventoryCache.RememberInterfaceMetadata(
                     instanceId,
                     vid ?? 0,

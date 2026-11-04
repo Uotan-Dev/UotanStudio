@@ -291,10 +291,10 @@ public static class ElfReader
 
     /// <summary>
     /// Delegates the file-range bounds check to the shared kernel validator. Range inputs originate as unsigned
-    /// gABI fields; values above <see cref="long.MaxValue"/> wrap to negatives and are still rejected, matching
-    /// the previous unsigned comparisons exactly.
+    /// gABI fields; values above <see cref="long.MaxValue"/> wrap to negatives when cast to <c>long</c> and the
+    /// shared check rejects them like any other out-of-range value.
     /// <para>将文件范围校验委托给共享内核校验器。范围输入源自无符号的 gABI 字段；超过 <see cref="long.MaxValue"/>
-    /// 的值回绕为负数后同样被拒绝，与原先的无符号比较结果完全一致。</para>
+    /// 的值转换为 <c>long</c> 时回绕为负数，共享校验会像拒绝任何越界取值一样拒绝它们。</para>
     /// </summary>
     private static void ValidateRange(ulong offset, ulong size, ulong length)
     {

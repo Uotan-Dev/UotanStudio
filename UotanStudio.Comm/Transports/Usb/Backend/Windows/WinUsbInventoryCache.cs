@@ -239,6 +239,12 @@ internal static class WinUsbInventoryCache
     /// </summary>
     /// <param name="instanceId">Instance id reported by the change event; blank invalidates nothing.
     /// <para>变化事件报告的实例 ID；空白时不使任何记录失效。</para></param>
+    /// <remarks>
+    /// A composite device reports "USB\VID_x&amp;PID_y\serial" while its interfaces report
+    /// "USB\VID_x&amp;PID_y&amp;MI_nn\..."; dropping the shared hardware-id prefix covers both.
+    /// <para>组合设备报告 "USB\VID_x&amp;PID_y\serial"，而其接口报告 "USB\VID_x&amp;PID_y&amp;MI_nn\..."；
+    /// 丢弃共享的硬件 ID 前缀即可同时覆盖两者。</para>
+    /// </remarks>
     internal static void InvalidateInstance(string? instanceId)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
@@ -246,8 +252,6 @@ internal static class WinUsbInventoryCache
             return;
         }
 
-        // A composite device reports "USB\VID_x&PID_y\serial" while its interfaces report
-        // "USB\VID_x&PID_y&MI_nn\..."; dropping the shared hardware-id prefix covers both.
         var separator = instanceId.LastIndexOf('\\');
         var prefix = separator > 0 ? instanceId[..separator] : instanceId;
         lock (Sync)
@@ -389,6 +393,11 @@ internal static class WinUsbInventoryCache
         }
     }
 
+    /// <remarks>
+    /// Dictionary insertion order is stable for keys that are never removed, so the first key
+    /// is the oldest entry; evicting it bounds growth without a separate timestamp list.
+    /// <para>从不移除键时字典保持插入序，因此首个键即最旧条目；驱逐它即可限制增长，无需额外的时间戳列表。</para>
+    /// </remarks>
     private static void Update(string? instanceId, UpdateCallback apply)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
@@ -402,8 +411,6 @@ internal static class WinUsbInventoryCache
             {
                 if (ByInstance.Count >= Capacity)
                 {
-                    // Dictionary insertion order is stable for keys that are never removed, so the first key
-                    // is the oldest entry; evicting it bounds growth without a separate timestamp list.
                     ByInstance.Remove(ByInstance.Keys.First());
                 }
 

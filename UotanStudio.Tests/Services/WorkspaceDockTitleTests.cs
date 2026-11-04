@@ -664,7 +664,6 @@ public sealed class WorkspaceDockTitleTests
             Assert.True(dockManager.ValidateDockable(
                 projectExplorer, documentDock, DragAction.Move, DockOperation.Fill, bExecute: true));
 
-            // Simulate host dock being detached/collapsed from layout
             mainLayout.VisibleDockables!.Remove(leftPane);
 
             factory.CloseDockable(projectExplorer);
@@ -673,7 +672,6 @@ public sealed class WorkspaceDockTitleTests
             Assert.False(panels.ProjectExplorerVisible);
             Assert.False(mainLayout.VisibleDockables!.Contains(leftPane));
 
-            // User clicks Window menu item to reopen
             panels.Show(WorkspacePanelService.ProjectExplorer);
 
             Assert.True(panels.ProjectExplorerVisible);
@@ -706,7 +704,6 @@ public sealed class WorkspaceDockTitleTests
             var rightPane = Assert.IsAssignableFrom<IDock>(
                 factory.FindDockable(root, static d => d.Id == "RightPane"));
 
-            // Initially both are visible and split
             Assert.True(mainLayout.VisibleDockables!.Contains(rightCol));
             Assert.Equal(3, rightCol.VisibleDockables!.Count);
             Assert.True(panels.ImagesViewVisible);
@@ -714,7 +711,6 @@ public sealed class WorkspaceDockTitleTests
 
             for (var cycle = 0; cycle < 5; cycle++)
             {
-                // 1. Close Properties from Window menu -> ImagesView must fill 100% of the column
                 panels.Hide(WorkspacePanelService.Properties);
                 Assert.False(panels.PropertiesVisible);
                 Assert.True(panels.ImagesViewVisible);
@@ -723,13 +719,11 @@ public sealed class WorkspaceDockTitleTests
                 Assert.Same(rightPaneTop, rightCol.VisibleDockables[0]);
                 Assert.Equal(double.NaN, rightPaneTop.Proportion);
 
-                // 2. Close ImagesView -> Right column must completely collapse from WorkspaceMainLayout
                 panels.Hide(WorkspacePanelService.ImagesView);
                 Assert.False(panels.ImagesViewVisible);
                 Assert.False(mainLayout.VisibleDockables!.Contains(rightCol));
                 Assert.Empty(rightCol.VisibleDockables!);
 
-                // 3. Open Properties alone from Window menu -> Restores alone and fills column
                 panels.Show(WorkspacePanelService.Properties);
                 Assert.True(panels.PropertiesVisible);
                 Assert.False(panels.ImagesViewVisible);
@@ -738,7 +732,6 @@ public sealed class WorkspaceDockTitleTests
                 Assert.Same(rightPane, rightCol.VisibleDockables[0]);
                 Assert.Equal(double.NaN, rightPane.Proportion);
 
-                // 4. Open ImagesView -> Both restored and split nicely
                 panels.Show(WorkspacePanelService.ImagesView);
                 Assert.True(panels.PropertiesVisible);
                 Assert.True(panels.ImagesViewVisible);

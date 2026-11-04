@@ -90,12 +90,12 @@ public sealed partial class PayloadBuilder
     /// filled chunk is folded into the input digest there, so the serial digest cost overlaps compression; the
     /// completed read task orders those appends before the consumer observes the batch. Only the consumer enforces
     /// the 65536-operation limit, because it is the side that knows how many operations earlier partitions emitted.
-    /// Compression runs on the consumer thread's parallel loop, which keeps every emitted chunk in the exact order
-    /// the previous barrier-based loop produced.
+    /// Compression runs on the consumer thread's parallel loop, so every emitted chunk follows the partition
+    /// order, the within-batch chunk order and the operation order.
     /// <para>分配并轮换两批槽位，因此流水线在构建本就需要压缩缓冲之上多付出一批缓冲。读取发生在流水线自有的任务上，
     /// 每个填充的块都在该任务内并入输入摘要，使串行的摘要代价与压缩重叠；读取任务完成所建立的内存序保证这些追加
     /// 在消费方观察该批之前已经生效。只有消费方执行 65536 条操作上限检查，因为只有它知道前面各分区已输出多少条操作。
-    /// 压缩运行在消费线程的并行循环中，从而让每个写出的块与原先基于屏障的循环顺序完全一致。</para>
+    /// 压缩运行在消费线程的并行循环中，使每个写出的块都遵循分区顺序、批内块序与操作序。</para>
     /// </remarks>
     private sealed class PartitionPipeline : IDisposable
     {

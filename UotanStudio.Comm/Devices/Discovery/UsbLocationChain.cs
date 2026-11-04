@@ -71,6 +71,13 @@ internal static class UsbLocationChain
     /// <para>从一条位置路径解析以根为锚的 USB 段链。PCIROOT 形式承载物理拓扑；ACPI 形式只是同一硬件
     /// 的另一命名，因此只解析 <c>USBROOT</c> 变体。</para>
     /// </summary>
+    /// <remarks>
+    /// USB(n) names one port on the way to the device; USBMI(n) is an interface child and
+    /// never part of the physical chain; the first segment is the root-hub remainder ("0)")
+    /// and carries no port number.
+    /// <para>USB(n) 是通往设备路上的一个端口；USBMI(n) 是接口子节点，不属于物理链；首段是
+    /// 根集线器的剩余部分（"0)"），不携带端口号。</para>
+    /// </remarks>
     internal static string? ParseRootChain(string? locationPath)
     {
         if (string.IsNullOrEmpty(locationPath))
@@ -88,11 +95,6 @@ internal static class UsbLocationChain
         List<string> ports = [];
         foreach (var segment in segments)
         {
-            // USB(n) names one port on the way to the device; USBMI(n) is an interface child and
-            // never part of the physical chain; the first segment is the root-hub remainder ("0)")
-            // and carries no port number.
-            // <para>USB(n) 是通往设备路上的一个端口；USBMI(n) 是接口子节点，不属于物理链；首段是
-            // 根集线器的剩余部分（"0)"），不携带端口号。</para>
             if (segment.StartsWith("USB(", StringComparison.OrdinalIgnoreCase))
             {
                 var number = segment[4..segment.IndexOf(')')];

@@ -595,6 +595,16 @@ public sealed partial class MtkSession : IProtocolSession
         IProgress<long>? progress = null, CancellationToken cancellationToken = default)
         => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, cancellationToken);
 
+    /// <remarks>
+    /// An odd image is padded with a single trailing zero, but only when no signature suffix has to stay
+    /// at a fixed offset from the end; shifting a signature would invalidate it on the target.
+    /// <para>奇数长度的镜像会补一个尾部零字节，但仅在无需让签名后缀保持在距镜像末尾固定偏移处时才补；
+    /// 移动签名会使它在目标机上失效。</para>
+    /// Most Boot ROM revisions only release the completion word after the OUT pipe is flushed with a
+    /// zero-length packet and given a short settling window; 0x2531 answers without either.
+    /// <para>大多数 Boot ROM 版本只有在 OUT 管道以零长包冲刷并获得短暂稳定窗口后才释放完成字；0x2531
+    /// 则两者都不需要。</para>
+    /// </remarks>
     private async Task UploadDownloadAgentCoreAsync(Stream image, uint loadAddress, int length, int signatureLength,
         IProgress<long>? progress, CancellationToken cancellationToken)
     {
@@ -604,8 +614,6 @@ public sealed partial class MtkSession : IProtocolSession
         ArgumentOutOfRangeException.ThrowIfNegative(signatureLength);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(signatureLength, length);
 
-        // An odd image is padded with a single trailing zero, but only when no signature suffix has to stay
-        // at a fixed offset from the end; shifting a signature would invalidate it on the target.
         var padded = (length & 1) != 0 && signatureLength == 0;
         var declaredLength = padded ? length + 1 : length;
 
@@ -672,8 +680,6 @@ public sealed partial class MtkSession : IProtocolSession
                     ArrayPool<byte>.Shared.Return(buffer);
                 }
 
-                // Most Boot ROM revisions only release the completion word after the OUT pipe is flushed with a
-                // zero-length packet and given a short settling window; 0x2531 answers without either.
                 if (DeviceInfo is not { HardwareCode: 0x2531 })
                 {
                     await Transport.WriteAsync([], 0, 0, _timeoutMs, cancellationToken).ConfigureAwait(false);
@@ -719,6 +725,12 @@ public sealed partial class MtkSession : IProtocolSession
     /// Requests execution of the successfully uploaded agent at its recorded address.
     /// <para>请求在已记录地址处执行先前成功上传的代理。</para>
     /// </summary>
+    /// <remarks>
+    /// The agent needs a short settling window before it accepts the first bring-up exchange;
+    /// sending immediately after the status read desynchronizes the following sequence.
+    /// <para>代理需要一段短暂的稳定窗口才会接受第一次启动交互；状态读取后立即发送会使后续序列
+    /// 失步。</para>
+    /// </remarks>
     /// <param name="cancellationToken">
     /// The operation cancellation token.
     /// <para>操作取消令牌。</para>
@@ -771,8 +783,6 @@ public sealed partial class MtkSession : IProtocolSession
                         BinaryPrimitives.ReadUInt16BigEndian(status));
                 }
 
-                // The agent needs a short settling window before it accepts the first bring-up exchange;
-                // sending immediately after the status read desynchronizes the following sequence.
                 await Task.Delay(JumpSettleDelayMs, cancellationToken).ConfigureAwait(false);
 
                 ThrowIfDisposed();

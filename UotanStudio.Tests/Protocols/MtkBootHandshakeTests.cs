@@ -40,6 +40,11 @@ public sealed class MtkBootHandshakeTests
         Assert.True(device.HandshakeReceived.Count > 4);
     }
 
+    /// <remarks>
+    /// Each attempt aborts on its first rejected echo, so only the leading 0xA0 of the handshake is sent per attempt;
+    /// five rejected attempts therefore leave exactly five bytes.
+    /// <para>每次尝试都在第一个被拒的回显处中止，因此每次尝试只发出握手中前导的 0xA0；五次被拒尝试恰好留下五个字节。</para>
+    /// </remarks>
     [Fact]
     public async Task StrictPathFaultsAfterFiveRejectedAttempts()
     {
@@ -51,7 +56,6 @@ public sealed class MtkBootHandshakeTests
 
         Assert.Equal(MtkSessionState.Faulted, session.State);
 
-        // Each attempt aborts on its first rejected echo, so only the leading 0xA0 is sent per attempt.
         Assert.Equal(5, device.HandshakeReceived.Count);
     }
 
@@ -69,6 +73,12 @@ public sealed class MtkBootHandshakeTests
         Assert.True(device.HandshakeReceived.Count > 4);
     }
 
+    /// <remarks>
+    /// The relaxed path warms the port with one bare 0xA0 and then makes five attempts, each of which aborts on the
+    /// first rejected echo before the remaining three bytes are sent, so the count is 1 + 5.
+    /// <para>宽松路径先发一个裸 0xA0 预热端口，再进行五次尝试；每次尝试都在第一个被拒的回显处中止、其余三个字节尚未发出，
+    /// 因此计数为 1 + 5。</para>
+    /// </remarks>
     [Fact]
     public async Task RelaxedPathGivesUpAfterFiveAttempts()
     {
@@ -81,8 +91,6 @@ public sealed class MtkBootHandshakeTests
 
         Assert.Equal(MtkSessionState.Faulted, session.State);
 
-        // The relaxed path warms the port with one bare 0xA0 and then makes five attempts, each of
-        // which aborts on the first rejected echo before the remaining three bytes are sent.
         Assert.Equal(1 + 5, device.HandshakeReceived.Count);
     }
 

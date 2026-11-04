@@ -402,6 +402,20 @@ public sealed partial class DeviceMonitorService
     /// The RKDL session cannot observe its own mode transition: its device-info snapshot is taken
     /// when the session opens. Re-observation therefore happens only through the device layer, and the
     /// PID-switching transition still needs real-device confirmation.
+    /// The stage switch replaces the old device node, so its stable hub chain must be captured while
+    /// the lease keeps the node alive; the later wait re-reads nothing after the node is gone.
+    /// <para>阶段切换会替换旧设备节点，因此必须在租约保持节点存活时捕获其稳定集线器链；节点消失后
+    /// 后续等待读不到任何链。</para>
+    /// The loader switch rewrites the reported serial (maskrom digits → ROCKCHIP) and may change the
+    /// OS container id, so the loader-stage replacement is matched by physical location plus
+    /// loader-stage evidence instead of the container identity.
+    /// <para>loader 切换会改写上报的序列号（maskrom 数字 → ROCKCHIP），操作系统容器 ID 也可能变化，
+    /// 因此 loader 阶段替代端点按物理位置加 loader 阶段证据匹配，而不按容器身份匹配。</para>
+    /// The transferred byte count is not proof the loader took over: wait for readiness through
+    /// TEST_UNIT_READY before the flash phase, and report a timeout as failure instead of sending
+    /// storage commands to a device that is not ready yet.
+    /// <para>上传完成的字节数不是 loader 已接管的证明：在 flash 阶段前以 TEST_UNIT_READY 等待 loader
+    /// 就绪，超时按失败上报而不是把存储命令送进尚未就绪的设备。</para>
     /// <para>loader 下载租约总是在等待重连前释放，因此绝不会在旧的 maskrom 句柄上发送批量命令。loader
     /// 下载阶段返回 <see langword="null"/> 表示设备已处于 loader 模式，刷写阶段在同一租约上执行而无需
     /// 重连。重连使用从已释放租约捕获的 <see cref="RkdlLoaderTransitionOffer"/> 证据；超时或缺少 USB
@@ -435,10 +449,6 @@ public sealed partial class DeviceMonitorService
         RkdlLoaderTransitionOffer? observedOffer = null;
         var transitionExpected = await RunRkdlOnLeaseAsync(device, async (session, lease, token) =>
         {
-            // The stage switch replaces the old device node, so its stable hub chain must be captured while
-            // the lease keeps the node alive; the later wait re-reads nothing after the node is gone.
-            // <para>阶段切换会替换旧设备节点，因此必须在租约保持节点存活时捕获其稳定集线器链；节点消失后
-            // 后续等待读不到任何链。</para>
             var stickyChain = lease.Endpoint.UsbInfo is { } previousInfo
                 ? DeviceController.CaptureUsbLocationChain(previousInfo)
                 : null;
@@ -469,11 +479,6 @@ public sealed partial class DeviceMonitorService
             var timeoutMs = (int)Math.Clamp(offer.Timeout.TotalMilliseconds, 1, 86_400_000);
             try
             {
-                // The loader switch rewrites the reported serial (maskrom digits → ROCKCHIP) and may change the
-                // OS container id, so the loader-stage replacement is matched by physical location plus
-                // loader-stage evidence instead of the container identity.
-                // <para>loader 切换会改写上报的序列号（maskrom 数字 → ROCKCHIP），操作系统容器 ID 也可能变化，
-                // 因此 loader 阶段替代端点按物理位置加 loader 阶段证据匹配，而不按容器身份匹配。</para>
                 replacement = await _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Bootrom,
                     UsbReconnectIdentityPolicy.RockchipLoader, timeoutMs, cancellationToken,
                     offer.StickyLocationChain).ConfigureAwait(false);
@@ -507,11 +512,6 @@ public sealed partial class DeviceMonitorService
                     "因此不会在该句柄上发送批量刷写命令。");
             }
 
-            // 上传完成的字节数不是 loader 已接管的证明：在 flash 阶段前以 TEST_UNIT_READY 等待 loader 就绪，
-            // 超时按失败上报而不是把存储命令送进尚未就绪的设备。
-            // The transferred byte count is not proof the loader took over: wait for readiness through
-            // TEST_UNIT_READY before the flash phase, and report a timeout as failure instead of sending
-            // storage commands to a device that is not ready yet.
             if (!await session.WaitForLoaderReadyAsync(5_000,
                     cancellationToken: cancellationToken).ConfigureAwait(false))
             {

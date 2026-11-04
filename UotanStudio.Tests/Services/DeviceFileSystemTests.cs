@@ -51,13 +51,11 @@ public sealed class DeviceFileSystemTests
 
         Assert.Equal(3, entries.Count);
 
-        // Directories come first
         Assert.True(entries[0].IsDirectory);
         Assert.Equal("Download", entries[0].Name);
         Assert.Equal("/storage/emulated/0/Download", entries[0].FullPath);
         Assert.Equal(-1, entries[0].Size);
 
-        // Then files / symlinks
         var notesFile = Assert.Single(entries, e => e.Name == "notes with space.txt");
         Assert.False(notesFile.IsDirectory);
         Assert.Equal(123, notesFile.Size);

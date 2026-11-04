@@ -125,8 +125,8 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <!-- 顶部只保留镜像格式与操作按钮；镜像文件路径已按需求移除。 -->
-      <!-- Top row keeps only the image format and the action buttons; the image path was removed on request. -->
+      <!-- 顶部只保留镜像格式与操作按钮，不含镜像文件路径行。 -->
+      <!-- Top row keeps only the image format and the action buttons, with no image path row. -->
       <Grid ColumnDefinitions="Auto,*">
         <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"

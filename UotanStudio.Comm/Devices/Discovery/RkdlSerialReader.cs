@@ -38,6 +38,12 @@ internal static class RkdlSerialReader
     /// interface, or no location evidence was observed.
     /// <para>显示序列号；无会话匹配、设备非 rockusb 接口或未观测到位置证据时返回 <c>null</c>。</para>
     /// </returns>
+    /// <remarks>
+    /// READ_CHIP_INFO is a loader-mode command; a maskrom device answers with a failure and
+    /// the identity keeps the maskrom label, exactly like RKDevTool's MASKROM rows.
+    /// <para>READ_CHIP_INFO 是 loader 模式命令；maskrom 设备会应答失败，身份保持 maskrom
+    /// 标签，与 RKDevTool 的 MASKROM 行一致。</para>
+    /// </remarks>
     internal static string? Read(ICommKit kit, UsbDeviceInfo device, IUsbLogger? failureSink = null)
     {
         ArgumentNullException.ThrowIfNull(kit);
@@ -60,10 +66,6 @@ internal static class RkdlSerialReader
             }
 
             session = created;
-            // READ_CHIP_INFO is a loader-mode command; a maskrom device answers with a failure and
-            // the identity keeps the maskrom label, exactly like RKDevTool's MASKROM rows.
-            // <para>READ_CHIP_INFO 是 loader 模式命令；maskrom 设备会应答失败，身份保持 maskrom
-            // 标签，与 RKDevTool 的 MASKROM 行一致。</para>
             var label = session.IsRockusbMode ? ProbeChipName(session) : "maskrom";
             return $"{label}-{location}";
         }
@@ -130,6 +132,15 @@ internal static class RkdlSerialReader
     /// <param name="instanceId">The PnP device instance id. <para>PnP 设备实例 ID。</para></param>
     /// <returns>The location tail, or <c>null</c> when the id carries no device-instance tail.
     /// <para>位置尾部；实例 ID 没有设备实例尾部时返回 <c>null</c>。</para></returns>
+    /// <remarks>
+    /// An id without a device-instance tail (USB\VID_…&amp;PID_…) exposes no location evidence.
+    /// <para>没有设备实例尾部的 ID（USB\VID_…&amp;PID_…）不提供任何位置证据。</para>
+    /// A hardware instance id has at least two &amp;-segments (hub instance and port). An interface
+    /// child appends one more qualifier such as 0000; port numbers are never four padded hex
+    /// digits, so only such a trailing qualifier is dropped.
+    /// <para>硬件实例 ID 至少有两段（集线器实例与端口）。接口子节点会多出一段如 0000 的限定段；
+    /// 端口号绝不会是四位补零十六进制，因此只去掉这样的末尾限定段。</para>
+    /// </remarks>
     internal static string? InstanceLocationTail(string instanceId)
     {
         var separator = instanceId.LastIndexOf('\\');
@@ -139,19 +150,12 @@ internal static class RkdlSerialReader
         }
 
         var tail = instanceId[(separator + 1)..];
-        // An id without a device-instance tail (USB\VID_…&amp;PID_…) exposes no location evidence.
-        // <para>没有设备实例尾部的 ID（USB\VID_…&amp;PID_…）不提供任何位置证据。</para>
         if (tail.StartsWith("VID_", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
         var segments = tail.Split('&');
-        // A hardware instance id has at least two &-segments (hub instance and port). An interface
-        // child appends one more qualifier such as 0000; port numbers are never four padded hex
-        // digits, so only such a trailing qualifier is dropped.
-        // <para>硬件实例 ID 至少有两段（集线器实例与端口）。接口子节点会多出一段如 0000 的限定段；
-        // 端口号绝不会是四位补零十六进制，因此只去掉这样的末尾限定段。</para>
         if (segments.Length < 2)
         {
             return null;

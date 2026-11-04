@@ -126,7 +126,7 @@
         </Setter>
     </Style>
     <!-- 自动隐藏后的固定工具条（ToolPinItemControl）内文本项的右键菜单：同样补上图标。 -->
-    <!-- Pinned (auto-hidden) tool bar item menu: icons added as well. -->
+    <!-- Pinned (auto-hidden) tool bar item menu: with icons. -->
     <Style Selector="dock|ToolPinItemControl TextBlock">
         <Setter Property="ContextMenu">
             <Template>

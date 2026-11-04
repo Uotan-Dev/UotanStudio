@@ -15,15 +15,30 @@ public partial class DeviceViewModel
             .GetAwaiter().GetResult().Trim() == "__UOTAN_HDC_READY__";
     }
 
+    /// <remarks>
+    /// The whole detail pass shares one direct session. Each additional direct session costs a USB interface
+    /// open, a stale-block drain and a fresh daemon handshake, and measured on a real target that came to
+    /// roughly 260 ms per command against about 80 ms when the command reused an open session.
+    /// <para>整轮详情查询共用一个直连会话。每多开一个直连会话都要付出 USB 接口打开、陈旧块排空与全新
+    /// 守护进程握手的代价；在真机上实测约为每条命令 260 ms，而复用已打开会话的命令约为 80 ms。</para>
+    /// An interface another host owns is a property of the target, not of the refresh: it is recorded once
+    /// here instead of failing the whole device list and repeating the same failed open per command.
+    /// <para>被其他主机占用的接口是目标设备的属性，而不是刷新流程的问题：在此处记录一次即可，
+    /// 不让整个设备列表失败，也不在每条命令上重复同样的失败打开。</para>
+    /// Stable parameters are cached per physical device; a cached key skips its command entirely and its
+    /// value fills the device entry directly.
+    /// <para>稳定参数按物理设备缓存；命中缓存的键完全跳过其命令，值直接填入设备条目。</para>
+    /// One unusable command must not blank the rest of the pass; the warning names it so a target whose
+    /// hidumper or df is missing is distinguishable in the log.
+    /// <para>单条不可用命令不得清空整轮其余结果；警告会点名该命令，使 hidumper 或 df 缺失的目标
+    /// 在日志中可被区分。</para>
+    /// </remarks>
     private async Task EnrichHdcInfoAsync(DeviceInfo device)
     {
         var monitor = App.DeviceMonitor;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var token = timeout.Token;
 
-        // One direct session for the whole detail pass. Each additional direct session costs a USB interface
-        // open, a stale-block drain and a fresh daemon handshake, and measured on a real target that came to
-        // roughly 260 ms per command against about 80 ms when the command reused an open session.
         HdcSessionHandle? lease = null;
         HdcSession? session = null;
         if (!DeviceMonitorService.UseHdcServerFor(device.Device))
@@ -44,8 +59,6 @@ public partial class DeviceViewModel
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                // An interface another host owns is a property of the target, not of the refresh: record it once
-                // here instead of failing the whole device list and repeating the same failed open per command.
                 _log.Write(LogLevel.Warn, "DeviceManager",
                     $"HDC direct session for {device.Serial} could not be opened: {ex.GetType().Name}: {ex.Message}");
             }
@@ -81,8 +94,6 @@ public partial class DeviceViewModel
 
         try
         {
-            // Stable parameters are cached per physical device; a cached key skips its command entirely and
-            // its value fills the device entry directly.
             async Task Parameter(string name, string cacheKey, Action<string> apply)
             {
                 if (cached is not null && cached.TryGetValue(cacheKey, out var cachedValue))
@@ -115,8 +126,6 @@ public partial class DeviceViewModel
                 apply(value);
             }
 
-            // One unusable command must not blank the rest of the pass; the warning names it so a target
-            // whose hidumper or df is missing is distinguishable in the log.
             async Task Optional(string command, Action<string> apply)
             {
                 string text;

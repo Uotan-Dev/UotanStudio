@@ -153,6 +153,12 @@ internal static class ProfileRunner
         return profile.Stop();
     }
 
+    /// <remarks>
+    /// The EROFS walk records the source directory's own last-write time into the root inode, so an
+    /// unpinned directory puts the wall clock, at one-second granularity, into the image bytes.
+    /// <para>EROFS 遍历会把源目录自身的最后写入时间记入根 inode，因此不固定目录时间会让墙上时钟
+    /// 以一秒粒度进入镜像字节。</para>
+    /// </remarks>
     private static string BuildTree(string root, int files, int megabytes)
     {
         Directory.CreateDirectory(root);
@@ -171,8 +177,6 @@ internal static class ProfileRunner
         File.SetLastWriteTimeUtc(large, NewYearUtc);
         File.SetCreationTimeUtc(large, NewYearUtc);
 
-        // The EROFS walk records the source directory's own last-write time into the root inode, so an
-        // unpinned directory puts the wall clock, at one-second granularity, into the image bytes.
         Directory.SetLastWriteTimeUtc(root, NewYearUtc);
         return root;
     }

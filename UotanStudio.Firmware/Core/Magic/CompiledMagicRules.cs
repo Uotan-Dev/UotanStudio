@@ -25,15 +25,17 @@ internal static class CompiledMagicRules
     /// <see cref="CompiledMagicData.RulesSha256"/> 不符。</para></exception>
     /// <exception cref="KeyNotFoundException">This build ships no <c>firmware/magic</c> entry for the rule table.
     /// <para>本次构建未随包 <c>firmware/magic</c> 规则表条目。</para></exception>
+    /// <remarks>
+    /// The asset manifest owns storage-level integrity (frame shape, decoded length and digest); the generator
+    /// constants below pin format-level identity, so a frame produced by a different generator build cannot pass
+    /// unnoticed.
+    /// <para>资源清单负责存储层完整性（帧形态、解码长度与摘要）；生成器常量锁定格式层同一性，
+    /// 其它生成器构建产出的帧无法蒙混通过。</para>
+    /// </remarks>
     internal static byte[] Rules => Decoded.Value;
 
     private static byte[] Load()
     {
-        // The asset manifest owns storage-level integrity (frame shape, decoded length and digest); the generator
-        // constants below pin format-level identity, so a frame produced by a different generator build cannot pass
-        // unnoticed.
-        // 资源清单负责存储层完整性（帧形态、解码长度与摘要）；下面的生成器常量锁定格式层同一性，
-        // 其它生成器构建产出的帧无法蒙混通过。
         var rules = AssetStore.Read(AssetCatalog.MagicRules, AssetNames.Magic.Rules);
         if (rules.Length != CompiledMagicData.RulesByteLength)
         {

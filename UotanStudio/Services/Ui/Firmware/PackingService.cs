@@ -37,6 +37,13 @@ internal static class PackingService
     /// format; <see langword="null"/> applies none. <para>显式格式下合并到记录打包选项之上的选项覆盖；为
     /// <see langword="null"/> 时不追加。</para></param>
     /// <returns>The build result, carrying a failure summary when packing is refused. <para>构建结果，打包被拒绝时携带失败摘要。</para></returns>
+    /// <remarks>
+    /// This method must be called on a non-UI thread: it blocks on asynchronous packing through
+    /// <c>GetAwaiter().GetResult()</c>, and the only current call chain already sinks it to a worker thread with
+    /// <c>Task.Run</c>. New callers must not invoke it directly on the UI thread.
+    /// <para>该方法必须在非 UI 线程调用：它经 <c>GetAwaiter().GetResult()</c> 阻塞等待异步打包，当前唯一调用链
+    /// 已经用 <c>Task.Run</c> 下沉到工作线程。新增调用方不得在 UI 线程直接调用。</para>
+    /// </remarks>
     public static FirmwareOperationResult BuildImage(
         string sourceDirectory,
         string outputPath,

@@ -38,13 +38,13 @@
     </Style>
   </UserControl.Styles>
   <DockPanel>
-    <!-- 顶部工具栏（容器样式）：条目/合并视图 + 资源与签名控件 + 签名状态。原先位于底部状态栏的
-         资源/签名控件已上移到这一条；文件路径与「重建并保存」按钮已按需求移除（保存仍可通过菜单 / Ctrl+S
-         触发，命令与脏标记保留在视图模型）。整条工具栏只在容器样式下占位。 -->
+    <!-- 顶部工具栏（容器样式）：条目/合并视图 + 资源与签名控件 + 签名状态。资源/签名控件位于这一条工具栏；
+         本页不含文件路径行与「重建并保存」按钮（保存仍可通过菜单 / Ctrl+S 触发，命令与脏标记保留在视图模型）。
+         整条工具栏只在容器样式下占位。 -->
     <!-- Top toolbar (container style): entry / merge view, resource and signing controls plus the signing
-         status. The resource/signing controls that used to live in the bottom status bar moved up here;
-         the file path and the "Rebuild & Save" button were removed on request (saving stays available via
-         the menu / Ctrl+S). The strip only occupies space in container mode. -->
+         status. The resource/signing controls sit on this toolbar; this page has no file path row and no
+         "Rebuild & Save" button (saving stays available via the menu / Ctrl+S). The strip only occupies
+         space in container mode. -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
             IsVisible="{Binding IsContainer}">
       <DockPanel>

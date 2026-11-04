@@ -260,6 +260,11 @@ internal static class DevicePropertyReader
     /// 详情查询在各段齐全时经一次批量 shell 取回，否则逐条执行。缓存中稳定键齐全时用它替代 <c>getprop</c>
     /// 与静态段，使重复的拉取只执行实时查询。</para>
     /// </summary>
+    /// <remarks>
+    /// Each detail section takes the bundled result when it came back; otherwise the same command is
+    /// issued on its own.
+    /// <para>各详情段在批量结果返回时取批量结果；否则单独执行同一条命令。</para>
+    /// </remarks>
     /// <param name="run">Runs a shell command on the device and returns its raw output.<para>在设备上执行 shell 命令并返回原始输出。</para></param>
     /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
     /// <param name="cached">Stable properties from a previous pass, or <see langword="null"/> for a full query.
@@ -282,7 +287,6 @@ internal static class DevicePropertyReader
             return propertyTable.TryGetValue(name, out var value) ? Clean(value) : Clean(string.Empty);
         }
 
-        // One bundled section when it came back, otherwise the same command issued on its own.
         string Section(string key, string command) =>
             bundle is not null && bundle.TryGetValue(key, out var section) ? section : run(command);
 

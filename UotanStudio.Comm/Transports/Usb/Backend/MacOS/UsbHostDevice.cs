@@ -371,6 +371,12 @@ internal class UsbHostDevice : UsbDevice
         }
     }
 
+    /// <remarks>
+    /// Publish the claimed interface's own class triple and endpoints; the finder could not read them
+    /// before the interface was opened, and post-open filter matching depends on them.
+    /// <para>发布被占用接口自身的类三元组与端点；接口打开之前查找器读不到它们，而打开后的过滤器
+    /// 匹配依赖这些值。</para>
+    /// </remarks>
     private bool TryOpenInterface(uint ifcService)
     {
         var usbInterface = UsbHostAPI.CreateObject(UsbHostAPI.GetInterfaceClass(), ifcService, out _);
@@ -457,8 +463,6 @@ internal class UsbHostDevice : UsbDevice
             _interface = usbInterface;
             usbInterface = IntPtr.Zero;
 
-            // Publish the claimed interface's own class triple and endpoints; the finder could not read them
-            // before the interface was opened, and post-open filter matching depends on them.
             _interfaceNumber = interfaceNumber;
             InterfaceClass = interfaceClass;
             InterfaceSubClass = interfaceSubClass;

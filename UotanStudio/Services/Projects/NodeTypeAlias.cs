@@ -149,10 +149,10 @@ internal static class NodeTypeAlias
         };
 
     /// <summary>
-    /// Type keys removed from the node library. Loading a workflow that still carries one of them is refused with an
-    /// explicit message instead of degrading to a placeholder, because the operation these nodes performed is no
-    /// longer expressible in the node view.
-    /// <para>已从节点库删除的类型键。仍携带这些键的工程在加载时被明确拒绝，而不是退化为占位符，因为这些节点原先承担的操作在节点视图里已无法表达。</para>
+    /// Type keys the node library does not accept. Loading a workflow that carries one of them is refused with an
+    /// explicit message instead of degrading to a placeholder, because the operation such a node performs is not
+    /// expressible in the node view.
+    /// <para>节点库不接受的类型键。携带这些键的工程在加载时被明确拒绝，而不是退化为占位符，因为这些节点承担的操作在节点视图里无法表达。</para>
     /// </summary>
     internal static IReadOnlySet<string> RefusedTypeKeys { get; } = new HashSet<string>(StringComparer.Ordinal)
     {

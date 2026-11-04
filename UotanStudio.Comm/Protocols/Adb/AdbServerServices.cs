@@ -60,18 +60,19 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <para>对应 <c>host:devices-l</c> 报告的每条非空设备行，并保留其传输描述符。</para></returns>
     /// <remarks>
     /// The server closes a control connection after answering one host request, so the version probe and the
-    /// device listing each use their own connection; only a transport upgrade keeps the socket open.
+    /// device listing each use their own connection; only a transport upgrade keeps the socket open. The
+    /// version probe therefore costs a connect of its own on every listing, and because that version only
+    /// changes when the server process is replaced, a recently answered endpoint reuses its answer instead
+    /// of re-connecting.
     /// <para>server 应答一条 host 请求后即关闭该控制连接，因此版本探测与设备列表各用一条独立连接；
-    /// 只有传输升级会保持套接字打开。</para>
+    /// 只有传输升级会保持套接字打开。版本探测因此每次列表都要自付一次连接开销，而 server 版本只在
+    /// server 进程被替换时才会变化，所以最近已应答的端点会复用其应答，而不是重新连接。</para>
     /// </remarks>
     /// <exception cref="IOException">The device list length is invalid, the server connection failed, or the server
     /// version is unreadable or older than the supported minimum. <para>设备列表长度非法、server 连接失败，或 server
     /// 版本不可读、低于支持的最低版本。</para></exception>
     public IReadOnlyList<AdbTargetInfo> ListTargets()
     {
-        // The server closes a control connection after answering one host request, so the version probe
-        // costs a connect of its own on every listing. That version only changes when the server process
-        // is replaced, so a recently answered endpoint reuses its answer instead of re-connecting.
         var versionKey = string.Concat(host, ":", _port.ToString(CultureInfo.InvariantCulture));
         if (ServerVersions.TryGetValue(versionKey, out var known) &&
             Environment.TickCount64 - known.Ticks < VersionReuseMilliseconds)
@@ -182,6 +183,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 
     /// <summary>Streams device shell output line by line; <paramref name="onLine"/> returning <c>false</c> stops early.
     /// <para>逐行流式读取设备 shell 输出；<paramref name="onLine"/> 返回 <c>false</c> 时提前停止。</para></summary>
+    /// <remarks>
+    /// Lines are split on <c>'\n'</c> only, so a bare <c>'\r'</c> progress rewrite stays inside its line
+    /// until the server emits the newline that ends it.
+    /// <para>行只按 <c>'\n'</c> 切分，因此裸 <c>'\r'</c> 的进度改写会留在同一行内，直到 server 发出
+    /// 结束该行的换行符。</para>
+    /// </remarks>
     /// <param name="command">The shell command string sent as <c>shell:</c> plus this text.
     /// <para>以 <c>shell:</c> 前缀加上该文本发送的 shell 命令字符串。</para></param>
     /// <param name="onLine">Invoked once per decoded line; returning <c>false</c> stops the stream.
@@ -230,8 +237,6 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             catch (IOException) when (cancellationToken.IsCancellationRequested) { break; }
             if (count <= 0) break;
 
-            // Lines are split on '\n' only, so a bare '\r' progress rewrite stays inside its line until the
-            // server emits the newline that ends it.
             var available = held + count;
             var start = 0;
             while (true)

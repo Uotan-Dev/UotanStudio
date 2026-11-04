@@ -108,6 +108,10 @@ public partial class MainSplashWindow : SplashWindow
     /// 上运行，故 UI 线程解压资源或预构建主窗口时仍能持续推进。</para>
     /// </summary>
     /// <param name="ratio">Target fill ratio, clamped to <c>0..1</c>.<para>目标填充比例，被限制在 <c>0..1</c>。</para></param>
+    /// <remarks>
+    /// The end value is committed as the base so the fill settles there when the transient animation completes.
+    /// <para>终值被提交为基准值，使瞬时动画结束后填充停在终值上。</para>
+    /// </remarks>
     private void ApplyProgress(double ratio)
     {
         ratio = Math.Clamp(ratio, 0d, 1d);
@@ -138,7 +142,6 @@ public partial class MainSplashWindow : SplashWindow
         animation.InsertKeyFrame(0f, new Vector3D(from, 1f, 1f));
         animation.InsertKeyFrame(1f, new Vector3D(to, 1f, 1f), new CubicEaseOut());
         visual.StartAnimation("Scale", animation);
-        // Commit the end value as the base so the fill settles there when the transient animation completes.
         visual.Scale = new Vector3D(to, 1f, 1f);
     }
 
