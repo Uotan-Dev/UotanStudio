@@ -20,6 +20,8 @@
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
     <!-- Compression library under test (internal codecs exposed through InternalsVisibleTo). -->
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
+    <!-- Cross-platform disk-image flashing library (image probing, drive policy, write/verify pipeline). -->
+    <ProjectReference Include="..\UotanStudio.DD\UotanStudio.DD.csproj" />
     <!-- Unified embedded asset store under test (internal store seams exposed through InternalsVisibleTo). -->
     <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <!-- Download, mirror and release metadata leaf library under test. -->
