@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core.Streams;
@@ -293,6 +294,86 @@ internal static class AllwinnerImageWtyFormat
         return entry.OriginalLength > 0 && entry.OriginalLength < entry.StoredLength
             ? entry.OriginalLength
             : entry.StoredLength;
+    }
+
+    /// <summary>
+    /// Copies one 16-byte-aligned segment of an entry payload into the output stream, decrypting complete
+    /// blocks in place when the container is encrypted. The content cipher is block-independent, so a segment
+    /// taken at a block-aligned offset decrypts exactly like the same bytes inside a full extraction; the
+    /// caller keeps segment offsets at multiples of the 16-byte block.
+    /// <para>把一个条目负载的 16 字节对齐段复制到输出流；容器加密时对完整分组就地解密。内容密钥逐分组独立，
+    /// 从分组对齐偏移取得的段与完整提取中的相同字节解密结果一致；调用方应让段偏移保持 16 字节分组对齐。</para>
+    /// </summary>
+    /// <param name="input">Container stream the entry was read from. <para>读取条目所用容器流。</para></param>
+    /// <param name="entry">Entry to extract from. <para>提取来源条目。</para></param>
+    /// <param name="offset">Segment offset from the entry payload start; a multiple of the block size.
+    /// <para>段相对条目负载起点的偏移；须为分组大小倍数。</para></param>
+    /// <param name="count">Bytes to copy; the segment must stay inside the effective payload.
+    /// <para>复制的字节数；段必须留在有效负载之内。</para></param>
+    /// <param name="output">Destination stream. <para>目标流。</para></param>
+    /// <param name="decrypt">Whether the container payloads are RC6-encrypted.
+    /// <para>容器负载是否经 RC6 加密。</para></param>
+    /// <param name="cancellationToken">Cancels the copy. <para>取消本次复制。</para></param>
+    /// <returns>A task that produces the number of bytes written, which is <paramref name="count"/>.
+    /// <para>产生写出的字节数（即 <paramref name="count"/>）的任务。</para></returns>
+    /// <exception cref="ArgumentNullException">Any argument is null. <para>任一参数为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The offset or count is negative, or the segment leaves the
+    /// effective payload. <para>偏移或长度为负，或段离开有效负载范围。</para></exception>
+    /// <exception cref="EndOfStreamException">The container ends before the segment is complete.
+    /// <para>容器在段完成前结束。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    public static async Task<long> ExtractEntrySegmentAsync(Stream input, ImageWtyEntry entry, long offset,
+        long count, Stream output, bool decrypt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(output);
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset), "The segment offset must not be negative.");
+        }
+
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), "The segment length must not be negative.");
+        }
+
+        if (offset + count > EffectiveLength(entry))
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), "The segment leaves the entry payload.");
+        }
+
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        using var range = new BoundedReadStream(input, entry.Offset + offset, entry.StoredLength - offset,
+            leaveOpen: true);
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            var remaining = count;
+            while (remaining > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var wanted = (int)Math.Min(buffer.Length, remaining);
+                await range.ReadExactlyAsync(buffer, 0, wanted, cancellationToken).ConfigureAwait(false);
+                if (decrypt)
+                {
+                    AllwinnerImageWtyCrypto.DecryptBlocks(ImageWtyCipherScope.Content, buffer.AsSpan(0, wanted));
+                }
+
+                await output.WriteAsync(buffer.AsMemory(0, wanted), cancellationToken).ConfigureAwait(false);
+                remaining -= wanted;
+            }
+
+            return count;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>

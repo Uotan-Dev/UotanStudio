@@ -43,6 +43,13 @@ public enum AllwinnerImageItem
     /// <summary>Split package descriptor. <para>分包描述文件。</para></summary>
     Split,
 
+    /// <summary>Preboot image uploaded before the boot chain in normal and package boot modes.
+    /// <para>正常与打包启动模式下在引导链之前上传的预启动镜像。</para></summary>
+    Preboot,
+
+    /// <summary>Preboot image for the TOC trust chain. <para>TOC 信任链使用的预启动镜像。</para></summary>
+    Toc0Preboot,
+
     /// <summary>NAND first-stage boot loader. <para>NAND 一级引导程序。</para></summary>
     Boot0Nand,
 
@@ -51,6 +58,9 @@ public enum AllwinnerImageItem
 
     /// <summary>SPI NOR first-stage boot loader. <para>SPI NOR 一级引导程序。</para></summary>
     Boot0Nor,
+
+    /// <summary>UFS first-stage boot loader. <para>UFS 一级引导程序。</para></summary>
+    Boot0Ufs,
 
     /// <summary>Boot package bundling the first-stage loaders. <para>打包一级引导程序的启动包。</para></summary>
     BootPackage,
@@ -69,6 +79,9 @@ public enum AllwinnerImageItem
 
     /// <summary>SPI NOR TOC0 descriptor. <para>SPI NOR TOC0 描述。</para></summary>
     Toc0Nor,
+
+    /// <summary>UFS TOC0 descriptor. <para>UFS TOC0 描述。</para></summary>
+    Toc0Ufs,
 
     /// <summary>TOC1 trust chain descriptor. <para>TOC1 信任链描述。</para></summary>
     Toc1,
@@ -118,9 +131,12 @@ internal static class AllwinnerImageItemTable
         new(AllwinnerImageItem.Split, "split_xxxx.fex", "COMMON", "SPLIT_0000000000"),
         new(AllwinnerImageItem.SysPartition, "sys_partition.fex", "COMMON", "SYS_CONFIG000000"),
         new(AllwinnerImageItem.DeviceTree, "sunxi.fex", "COMMON", "DTB_CONFIG000000"),
+        new(AllwinnerImageItem.Preboot, "preboot.fex", "12345678", "1234567890PREB_0"),
+        new(AllwinnerImageItem.Toc0Preboot, "toc0_preboot.fex", "12345678", "TOC0_PREBOOT0000"),
         new(AllwinnerImageItem.Boot0Nand, "boot0_nand.fex", "BOOT", "BOOT0_0000000000"),
         new(AllwinnerImageItem.Boot0Card, "boot0_sdcard.fex", "12345678", "1234567890BOOT_0"),
         new(AllwinnerImageItem.Boot0Nor, "boot0_spinor.fex", "12345678", "1234567890BNOR_0"),
+        new(AllwinnerImageItem.Boot0Ufs, "boot0_ufs.fex", "12345678", "1234567890BUFS_0"),
         new(AllwinnerImageItem.UBoot, "u-boot-efex.fex", "12345678", "UBOOT_0000000000"),
         new(AllwinnerImageItem.UBootCrash, "u-boot-crash.fex", "12345678", "UBOOT_CRASH_0000"),
         new(AllwinnerImageItem.Toc1, "toc1.fex", "12345678", "TOC1_00000000000"),
@@ -131,6 +147,7 @@ internal static class AllwinnerImageItemTable
         new(AllwinnerImageItem.Toc0SdCard, "toc0_sdcard.fex", "12345678", "TOC0_SDCARD00000"),
         new(AllwinnerImageItem.Toc0Nand, "toc0_nand.fex", "12345678", "TOC0_NAND0000000"),
         new(AllwinnerImageItem.Toc0Nor, "toc0_nor.fex", "12345678", "TOC0_SPINOR00000"),
+        new(AllwinnerImageItem.Toc0Ufs, "toc0_ufs.fex", "12345678", "TOC0_UFS00000000"),
         new(AllwinnerImageItem.UsbTool, "usbtool.fex", "PXTOOLSB", "xxxxxxxxxxxxxxxx"),
         new(AllwinnerImageItem.UsbToolCrash, "usbtool_crash.fex", "PXTOOLCH", "xxxxxxxxxxxxxxxx"),
         new(AllwinnerImageItem.Aultools, "aultools.fex", "UPFLYTLS", "xxxxxxxxxxxxxxxx"),
