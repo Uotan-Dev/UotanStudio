@@ -30,6 +30,22 @@
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.3.0" />
     <!-- Irihi.Lingua i18n source generator: turns Locale/*.resx into strongly-typed reactive managers. -->
     <PackageVersion Include="Irihi.Lingua" Version="1.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Abstractions" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Bmp" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Color.Icc" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Gif" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Heif" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Ico" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jbig2" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg.GainMap" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg2000" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Png" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Pnm" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Qoi" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Tiff" Version="1.4.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Webp" Version="1.4.0" />
     <PackageVersion Include="Semi.Avalonia" Version="12.1.0.1" />
     <PackageVersion Include="Semi.Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.1" />
@@ -51,7 +67,7 @@
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageVersion Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
     <PackageVersion Include="LZMA-SDK" Version="22.1.1" />
-    <PackageVersion Include="SharpCompress" Version="0.50.7" />
+    <PackageVersion Include="SharpCompress" Version="0.50.8" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.14" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
@@ -65,8 +81,8 @@
     <PackageVersion Include="LTRData.DiscUtils.Fat" Version="1.0.90" />
     <PackageVersion Include="LTRData.DiscUtils.ExFat" Version="1.0.90" />
     <!-- Official Model Context Protocol C# SDK for the embedded MCP server -->
-    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
-    <PackageVersion Include="ModelContextProtocol.Core" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.1" />
+    <PackageVersion Include="ModelContextProtocol.Core" Version="2.3.1" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <!-- Abstractions only: the host bridges Microsoft.Extensions.Logging producers into IUnifiedLog without pulling the implementation, options or provider pipeline. -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
