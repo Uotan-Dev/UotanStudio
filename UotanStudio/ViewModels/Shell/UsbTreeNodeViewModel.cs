@@ -23,6 +23,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     private readonly IReadOnlyList<string> _protocols;
     private readonly Func<UsbTreeNodeViewModel, Task>? _enableTakeover;
     private readonly Func<UsbTreeNodeViewModel, Task>? _cancelTakeover;
+    private readonly Func<UsbTreeNodeViewModel, Task>? _installDriver;
 
     /// <summary><para>节点是否展开，与 <c>TreeViewItem.IsExpanded</c> 双向绑定。</para>
     /// Whether the node is expanded, bound two-way to <c>TreeViewItem.IsExpanded</c>.</summary>
@@ -43,6 +44,28 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// <para>设备当前是否绑定到本应用安装的自签名 WinUSB 包，决定该行提供接管还是取消接管。</para>
     /// </summary>
     [ObservableProperty] private bool _isTakenOver;
+
+    /// <summary>
+    /// Whether the row may offer the vendor driver installation; the row keeps the action when a bundled
+    /// driver package covers the device, and the observed driver state decides whether it is shown.
+    /// <para>该行是否可提供厂商驱动安装；捆绑驱动包覆盖该设备时行保留此操作，观测到的驱动状态决定是否显示。</para>
+    /// </summary>
+    [ObservableProperty] private bool _showDriverInstallAction;
+
+    /// <summary>
+    /// Whether the device currently has a driver bound, observed from the topology the row was built
+    /// from; a bound driver hides the install action.
+    /// <para>设备当前是否已绑定驱动，取自行构建时依据的拓扑；已绑定驱动时隐藏安装操作。</para>
+    /// </summary>
+    [ObservableProperty] private bool _isDriverInstalled;
+
+    /// <summary>
+    /// The identifier of the bundled driver package that covers this device, resolved in the background
+    /// after the tree read; <see langword="null"/> when no bundled package matches.
+    /// <para>覆盖该设备的捆绑驱动包标识，在树读取之后于后台解析；没有匹配的包时为
+    /// <see langword="null"/>。</para>
+    /// </summary>
+    [ObservableProperty] private string? _matchedDriverPackageId;
 
     /// <summary>
     /// Whether a driver operation is running on this node; the row buttons stay disabled until it
@@ -68,10 +91,16 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// package this app installed.
     /// <para><c>CancelTakeoverCommand</c> 调用的可选回调，移除本应用安装的自签名 WinUSB 包。</para>
     /// </param>
+    /// <param name="installDriver">
+    /// The optional callback invoked by <c>InstallDriverCommand</c> to install the bundled vendor driver
+    /// package that covers the node's device.
+    /// <para><c>InstallDriverCommand</c> 调用的可选回调，安装覆盖该节点设备的捆绑厂商驱动包。</para>
+    /// </param>
     public UsbTreeNodeViewModel(UsbTopologyNode node, UsbTopologyCapabilities capabilities,
         IReadOnlyList<UsbTreeNodeViewModel> children, int depth,
         Func<UsbTreeNodeViewModel, Task>? enableTakeover = null,
-        Func<UsbTreeNodeViewModel, Task>? cancelTakeover = null)
+        Func<UsbTreeNodeViewModel, Task>? cancelTakeover = null,
+        Func<UsbTreeNodeViewModel, Task>? installDriver = null)
     {
         Node = node;
         _capabilities = capabilities;
@@ -79,6 +108,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         _protocols = CollectProtocols(node, children);
         _enableTakeover = enableTakeover;
         _cancelTakeover = cancelTakeover;
+        _installDriver = installDriver;
         IsExpanded = depth <= 1 || _protocols.Count > 0;
     }
 
@@ -97,6 +127,14 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     public bool CanCancelTakeover => ShowDriverAction && IsTakenOver;
 
     /// <summary>
+    /// Whether the row shows the vendor-driver installation action: the row keeps the action, no driver is
+    /// bound yet, and a bundled package covering the device was resolved.
+    /// <para>该行是否显示厂商驱动安装操作：行保留此操作、设备尚未绑定驱动，且已解析出覆盖该设备的捆绑包。</para>
+    /// </summary>
+    public bool CanInstallDriver => ShowDriverInstallAction && !IsDriverInstalled &&
+        MatchedDriverPackageId is not null;
+
+    /// <summary>
     /// Forwards to the injected takeover callback; without one the command completes without doing
     /// anything.
     /// <para>转发到注入的接管回调；未注入时命令直接完成，不做任何事。</para>
@@ -112,17 +150,34 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     [RelayCommand]
     private Task CancelTakeoverAsync() => _cancelTakeover?.Invoke(this) ?? Task.CompletedTask;
 
+    /// <summary>
+    /// Forwards to the injected driver-install callback; without one the command completes without doing
+    /// anything.
+    /// <para>转发到注入的驱动安装回调；未注入时命令直接完成，不做任何事。</para>
+    /// </summary>
+    [RelayCommand]
+    private Task InstallDriverAsync() => _installDriver?.Invoke(this) ?? Task.CompletedTask;
+
     partial void OnShowDriverActionChanged(bool value)
     {
         OnPropertyChanged(nameof(CanEnableTakeover));
         OnPropertyChanged(nameof(CanCancelTakeover));
     }
 
+    partial void OnShowDriverInstallActionChanged(bool value)
+        => OnPropertyChanged(nameof(CanInstallDriver));
+
     partial void OnIsTakenOverChanged(bool value)
     {
         OnPropertyChanged(nameof(CanEnableTakeover));
         OnPropertyChanged(nameof(CanCancelTakeover));
     }
+
+    partial void OnIsDriverInstalledChanged(bool value)
+        => OnPropertyChanged(nameof(CanInstallDriver));
+
+    partial void OnMatchedDriverPackageIdChanged(string? value)
+        => OnPropertyChanged(nameof(CanInstallDriver));
 
     /// <summary><para>底层扁平节点，供详情面板与文本导出读取原始字段。</para>
     /// The underlying flat node, read by the detail panel and the text export.</summary>
@@ -234,9 +289,9 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// <summary>The installer class, gated by the driver capability. <para>安装类名，受驱动能力门控。</para></summary>
     public string ClassNameText => GateDriverInfo(Node.ClassName);
 
-    /// <summary><para>安装类 GUID，受驱动能力门控。</para>
-    /// The installer class GUID, gated by the driver capability.</summary>
-    public string ClassGuidText => !_capabilities.SupportsDriverInfo
+    /// <summary><para>安装类 GUID，受类 GUID 能力门控。</para>
+    /// The installer class GUID, gated by the class-GUID capability.</summary>
+    public string ClassGuidText => !_capabilities.SupportsClassGuid
         ? Localized("UsbTree_NotProvided")
         : Node.ClassGuid is Guid guid ? guid.ToString("D") : Localized("UsbTree_None");
 
@@ -244,9 +299,11 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// The kernel driver service, gated by the driver capability.</summary>
     public string DriverServiceText => GateDriverInfo(Node.DriverService);
 
-    /// <summary><para>驱动 INF 名，受驱动能力门控。</para>
-    /// The driver INF name, gated by the driver capability.</summary>
-    public string DriverInfText => GateDriverInfo(Node.DriverInfPath);
+    /// <summary><para>驱动 INF 名，受驱动 INF 能力门控。</para>
+    /// The driver INF name, gated by the driver-INF capability.</summary>
+    public string DriverInfText => !_capabilities.SupportsDriverInfPath
+        ? Localized("UsbTree_NotProvided")
+        : OrNone(Node.DriverInfPath);
 
     /// <summary><para>PnP 故障码文本，受故障码能力门控。</para>
     /// The PnP problem code text, gated by the problem-code capability.</summary>
@@ -254,10 +311,13 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         ? Localized("UsbTree_NotProvided")
         : Node.ProblemCode is uint code ? $"0x{code:X8}" : Localized("UsbTree_None");
 
-    /// <summary>The container id text. <para>容器 ID 文本。</para></summary>
-    public string ContainerIdText => Node.ContainerId is Guid container
-        ? container.ToString("D")
-        : Localized("UsbTree_None");
+    /// <summary><para>容器 ID 文本，受容器 ID 能力门控。</para>
+    /// The container id text, gated by the container-id capability.</summary>
+    public string ContainerIdText => !_capabilities.SupportsContainerId
+        ? Localized("UsbTree_NotProvided")
+        : Node.ContainerId is Guid container
+            ? container.ToString("D")
+            : Localized("UsbTree_None");
 
     /// <summary>The physical location paths, one per line. <para>物理位置路径列表，逐行展示。</para></summary>
     public string LocationPathsText => JoinLines(Node.LocationPaths);
@@ -265,8 +325,11 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// <summary>The hardware ids, one per line. <para>硬件 ID 列表，逐行展示。</para></summary>
     public string HardwareIdsText => JoinLines(Node.HardwareIds);
 
-    /// <summary>The compatible ids, one per line. <para>兼容 ID 列表，逐行展示。</para></summary>
-    public string CompatibleIdsText => JoinLines(Node.CompatibleIds);
+    /// <summary><para>兼容 ID 列表，逐行展示，受兼容 ID 能力门控。</para>
+    /// The compatible ids, one per line, gated by the compatible-ids capability.</summary>
+    public string CompatibleIdsText => !_capabilities.SupportsCompatibleIds
+        ? Localized("UsbTree_NotProvided")
+        : JoinLines(Node.CompatibleIds);
 
     /// <summary>
     /// The registered device-interface GUIDs, gated by the device-interface capability.
@@ -301,6 +364,75 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     public bool HasAdbWarning => AdbWarningText.Length > 0;
 
     /// <summary>
+    /// The detail-panel rows for this node, in display order. Entries the producing backend cannot report
+    /// in principle are left out entirely, so the panel never shows a "not provided" row; entries the
+    /// backend does report keep their row even when the value is empty, rendering as "none".
+    /// <para>本节点的详情面板行，按展示顺序排列。产出后端原理上无法上报的条目完全不生成，面板不会出现
+    /// 「该后端不提供」的行；后端确实上报的条目即使值为空也保留行，渲染为「无」。</para>
+    /// </summary>
+    public IReadOnlyList<UsbTreeDetailRow> DetailRows => BuildDetailRows();
+
+    private IReadOnlyList<UsbTreeDetailRow> BuildDetailRows()
+    {
+        List<(string LabelKey, string Value)> rows =
+        [
+            ("UsbTree_Detail_InstanceId", InstanceIdText),
+            ("UsbTree_Detail_Parent", ParentInstanceIdText),
+            ("UsbTree_Detail_Kind", KindText),
+            ("UsbTree_Detail_Vendor", VendorText),
+            ("UsbTree_Detail_Speed", SpeedDetailText)
+        ];
+        if (_capabilities.SupportsDriverInfo)
+        {
+            rows.Add(("UsbTree_Detail_Class", ClassNameText));
+        }
+
+        if (_capabilities.SupportsClassGuid)
+        {
+            rows.Add(("UsbTree_Detail_ClassGuid", ClassGuidText));
+        }
+
+        if (_capabilities.SupportsDriverInfo)
+        {
+            rows.Add(("UsbTree_Detail_DriverService", DriverServiceText));
+        }
+
+        if (_capabilities.SupportsDriverInfPath)
+        {
+            rows.Add(("UsbTree_Detail_DriverInf", DriverInfText));
+        }
+
+        if (_capabilities.SupportsInterfaceNodes)
+        {
+            rows.Add(("UsbTree_Detail_Interface", InterfaceDetailText));
+        }
+
+        if (_capabilities.SupportsProblemCodes)
+        {
+            rows.Add(("UsbTree_Detail_Problem", ProblemCodeText));
+        }
+
+        if (_capabilities.SupportsContainerId)
+        {
+            rows.Add(("UsbTree_Detail_Container", ContainerIdText));
+        }
+
+        rows.Add(("UsbTree_Detail_Location", LocationPathsText));
+        rows.Add(("UsbTree_Detail_HardwareIds", HardwareIdsText));
+        if (_capabilities.SupportsCompatibleIds)
+        {
+            rows.Add(("UsbTree_Detail_CompatibleIds", CompatibleIdsText));
+        }
+
+        if (_capabilities.SupportsDeviceInterfaceGuids)
+        {
+            rows.Add(("UsbTree_Detail_InterfaceGuids", DeviceInterfaceGuidsText));
+        }
+
+        return [.. rows.Select(row => new UsbTreeDetailRow(Localized(row.LabelKey), row.Value))];
+    }
+
+    /// <summary>
     /// Recomputes every localization-dependent display text after a language change.
     /// <para>语言切换后重算所有依赖本地化的显示文本。</para>
     /// </summary>
@@ -330,6 +462,7 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         OnPropertyChanged(nameof(InterfaceDetailText));
         OnPropertyChanged(nameof(AdbWarningText));
         OnPropertyChanged(nameof(HasAdbWarning));
+        OnPropertyChanged(nameof(DetailRows));
     }
 
     /// <summary>

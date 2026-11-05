@@ -34,6 +34,10 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Opacity" Value="0.85" />
         </Style>
+        <Style Selector="TextBlock.gate-hint">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="24,40,24,20">
@@ -62,15 +66,16 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="4" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+        <Grid Grid.Row="4" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
             <CheckBox x:Name="AckCheckBox" Grid.Row="0" IsChecked="False"
                       Content="{DynamicResource DangerousConfirm_Ack}"
                       IsCheckedChanged="OnGateChanged" />
-            <TextBox x:Name="ConfirmWordBox" Grid.Row="1"
+            <!-- 提示：由调用方的确认口令填充，保证提示与闸门一致 -->
+            <TextBlock x:Name="EnterHintText" Grid.Row="1" Classes="gate-hint" TextWrapping="Wrap" />
+            <TextBox x:Name="ConfirmWordBox" Grid.Row="2"
                      HorizontalAlignment="Stretch" MinWidth="120" MinHeight="32"
-                     PlaceholderText="{DynamicResource DangerousConfirm_EnterHint}"
                      TextChanged="OnGateChanged" />
-            <StackPanel Grid.Row="2" Orientation="Horizontal"
+            <StackPanel Grid.Row="3" Orientation="Horizontal"
                         HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
                 <Button x:Name="CancelButton"
                         Content="{DynamicResource DangerousConfirm_CancelButton}"

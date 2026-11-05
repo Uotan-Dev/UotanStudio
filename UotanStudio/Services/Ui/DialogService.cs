@@ -155,6 +155,16 @@ internal static class DialogService
     internal static bool ShouldEnableConfirm(bool isChecked, string typed, string word) =>
         isChecked && typed == word;
 
+    /// <summary>
+    /// Builds the dialog hint that names the token the caller's <see cref="DangerousConfirmRequest.ConfirmWord"/>
+    /// requires, so the instruction always matches the gate instead of assuming the default word.
+    /// <para>按调用方的 <see cref="DangerousConfirmRequest.ConfirmWord"/> 生成提示语，使界面提示与闸门比较的口令始终一致，而不是假定默认口令。</para>
+    /// </summary>
+    /// <param name="word">The confirm word the gate compares against.<para>闸门比较所用的确认口令。</para></param>
+    /// <returns>The localized hint naming <paramref name="word"/>.<para>包含 <paramref name="word"/> 的本地化提示。</para></returns>
+    internal static string FormatConfirmHint(string word) =>
+        LanguageService.Instance.GetString("DangerousConfirm_EnterHint", word);
+
     private static MessageBoxWindow CreateWindow(
         string title, object content, MessageBoxIcon icon, MessageBoxButton buttons,
         string? confirmText = null, string? cancelText = null)

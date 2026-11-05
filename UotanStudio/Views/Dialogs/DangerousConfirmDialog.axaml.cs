@@ -66,6 +66,7 @@ internal sealed partial class DangerousConfirmDialog : Window
         }
 
         _confirmWord = request.ConfirmWord;
+        EnterHintText.Text = DialogService.FormatConfirmHint(_confirmWord);
         UpdateConfirmEnabled();
     }
 

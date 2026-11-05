@@ -762,4 +762,49 @@
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>Driver state query failed: {0}</value>
   </data>
+  <data name="UsbTree_InstallDriver" xml:space="preserve">
+    <value>Install driver</value>
+  </data>
+  <data name="UsbTree_DriverInstalling" xml:space="preserve">
+    <value>Installing the {0} driver for {1}...</value>
+  </data>
+  <data name="UsbTree_DriverInstalled" xml:space="preserve">
+    <value>{0} installed for {1}; the device binding completes in the background</value>
+  </data>
+  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
+    <value>Administrator rights are required to install the driver</value>
+  </data>
+  <data name="UsbTree_DriverInstallFailed" xml:space="preserve">
+    <value>Driver installation failed: {0}</value>
+  </data>
+  <data name="DriverPackage_Rockusb_Name" xml:space="preserve">
+    <value>Rockchip Rockusb (DriverAssistant v5.14)</value>
+  </data>
+  <data name="DriverPackage_MediaTekVcom_Name" xml:space="preserve">
+    <value>MediaTek USB VCOM (WHQL cdc-acm)</value>
+  </data>
+  <data name="DriverPackage_MediaTekFull_Name" xml:space="preserve">
+    <value>MediaTek USB full package (WHQL)</value>
+  </data>
+  <data name="DriverPackage_GoogleUsb_Name" xml:space="preserve">
+    <value>Google USB Driver r13</value>
+  </data>
+  <data name="DriverPackage_RockchipAdb_Name" xml:space="preserve">
+    <value>Rockchip ADB driver (v5.14)</value>
+  </data>
+  <data name="DriverPackage_QualcommQud_Name" xml:space="preserve">
+    <value>Qualcomm USB Driver (QUD 1.00.95.6)</value>
+  </data>
+  <data name="DriverPackage_SilabsCp210x_Name" xml:space="preserve">
+    <value>Silicon Labs CP210x virtual COM port</value>
+  </data>
+  <data name="DriverPackage_FtdiCdm_Name" xml:space="preserve">
+    <value>FTDI CDM (2.12.36.20)</value>
+  </data>
+  <data name="DriverPackage_WchSerial_Name" xml:space="preserve">
+    <value>WCH CH341SER and CH343SER</value>
+  </data>
+  <data name="DriverPackage_HuaweiHiSuite_Name" xml:space="preserve">
+    <value>Huawei HiSuite driver</value>
+  </data>
 </root>

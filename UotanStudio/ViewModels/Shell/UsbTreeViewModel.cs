@@ -372,6 +372,68 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Installs the bundled vendor driver package that covers the node's device: the package is staged
+    /// into the driver store and PnP is asked to install it on the driverless device, which is how a
+    /// Rockchip maskrom, MediaTek preloader or other vendor-mode device becomes usable. The node must
+    /// offer the installation action and no operation may be running on it; the install runs in the
+    /// background, the status bar reports the outcome and the tree refreshes on success.
+    /// <para>安装覆盖该节点设备的捆绑厂商驱动包：包被暂存到驱动仓库，并请求 PnP 在该无驱动设备上安装，
+    /// 这是瑞芯微 maskrom、联发科预加载器等厂商模式设备可用的前提。节点必须提供安装操作且当前无进行中的
+    /// 操作；安装后台执行，期间树不读取、工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
+    /// </summary>
+    /// <param name="node">The tree node whose device receives the driver.
+    /// <para>要安装驱动的树节点。</para></param>
+    public async Task InstallDriverAsync(UsbTreeNodeViewModel node)
+    {
+        if (node is null || !node.CanInstallDriver || node.IsDriverBusy || IsDriverOperationRunning ||
+            _disposed || !OperatingSystem.IsWindows() || node.MatchedDriverPackageId is not { } packageId)
+        {
+            return;
+        }
+
+        SetDriverOperationRunning(node, true);
+        var nameKey = DriverPackageCatalog.Find(packageId)?.DisplayNameKey ?? packageId;
+        var packageName = Localized($"DriverPackage_{nameKey}_Name");
+        StatusText = Localized("UsbTree_DriverInstalling", packageName, node.DisplayText);
+        var refreshRequired = false;
+        try
+        {
+            var result = await Task.Run(() => _driverConfig.InstallPackage(packageId)).ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case WinUsbDriverOperationStatus.Succeeded:
+                    StatusText = Localized("UsbTree_DriverInstalled", packageName, node.DisplayText);
+                    refreshRequired = true;
+                    break;
+                case WinUsbDriverOperationStatus.ElevationRequired:
+                    StatusText = Localized("UsbTree_DriverElevationRequired");
+                    break;
+                default:
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    StatusText = Localized("UsbTree_DriverInstallFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"Vendor driver package install failed: {packageId}: {detail}");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = Localized("UsbTree_DriverInstallFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                $"Vendor driver package install failed: {packageId}: {ex.Message}");
+        }
+        finally
+        {
+            SetDriverOperationRunning(node, false);
+        }
+
+        if (refreshRequired)
+        {
+            await RefreshAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
     /// Device-change entry point: invoked by the <c>DeviceMonitorService.DevicesChanged</c> subscription,
     /// debounced and then marshalled back to the UI thread to start a read. Tests drive this same entry
     /// point to verify the subscription lifetime.
@@ -606,12 +668,18 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth,
-            EnableTakeoverAsync, CancelTakeoverAsync);
+            EnableTakeoverAsync, CancelTakeoverAsync, InstallDriverAsync);
         node.ShowDriverAction = _driverConfig.IsSupported &&
             capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
             branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
             branch.Node.HardwareIds.Count > 0 &&
             IsFilteredIn(branch.Node);
+        node.ShowDriverInstallAction = _driverConfig.IsSupported &&
+            capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
+            branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
+            branch.Node.HardwareIds.Count > 0;
+        node.IsDriverInstalled = capabilities.SupportsDriverInfo &&
+            (branch.Node.DriverService is { Length: > 0 } || branch.Node.DriverInfPath is { Length: > 0 });
         if (_expandedById.TryGetValue(branch.Node.InstanceId, out var expanded))
         {
             node.IsExpanded = expanded;
@@ -627,9 +695,10 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        List<UsbTreeNodeViewModel> driverNodes = [];
-        CollectDriverActionNodes(Roots, driverNodes);
-        if (driverNodes.Count == 0)
+        List<UsbTreeNodeViewModel> takeoverNodes = [];
+        List<UsbTreeNodeViewModel> installNodes = [];
+        CollectDriverActionNodes(Roots, takeoverNodes, installNodes);
+        if (takeoverNodes.Count == 0 && installNodes.Count == 0)
         {
             return;
         }
@@ -641,7 +710,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            foreach (var driverNode in driverNodes)
+            foreach (var driverNode in takeoverNodes)
             {
                 if (_disposed)
                 {
@@ -676,38 +745,68 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
                     }
                 });
             }
+
+            foreach (var installNode in installNodes)
+            {
+                if (_disposed || installNode.IsDriverInstalled)
+                {
+                    continue;
+                }
+
+                List<string> deviceIds = [.. installNode.Node.HardwareIds, .. installNode.Node.CompatibleIds];
+                var matchedPackage = DriverPackageCatalog.FindMatch(deviceIds);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_disposed && !installNode.IsDriverBusy)
+                    {
+                        installNode.MatchedDriverPackageId = matchedPackage?.Id;
+                    }
+                });
+            }
         });
     }
 
     private static void CollectDriverActionNodes(IReadOnlyList<UsbTreeNodeViewModel> nodes,
-        List<UsbTreeNodeViewModel> collected)
+        List<UsbTreeNodeViewModel> takeoverNodes, List<UsbTreeNodeViewModel> installNodes)
     {
         foreach (var candidate in nodes)
         {
             if (candidate.ShowDriverAction)
             {
-                collected.Add(candidate);
+                takeoverNodes.Add(candidate);
             }
 
-            CollectDriverActionNodes(candidate.Children, collected);
+            if (candidate.ShowDriverInstallAction)
+            {
+                installNodes.Add(candidate);
+            }
+
+            CollectDriverActionNodes(candidate.Children, takeoverNodes, installNodes);
         }
     }
 
     /// <summary>
     /// Toggles the "a driver operation is in flight" state and mirrors it onto every node that offers the
-    /// takeover action, so all of their row buttons disable at once. Reads are skipped while the state is
-    /// on, because a rebuild recreates the node view models and would drop the operation's own state.
-    /// <para>切换「有驱动操作进行中」状态，并同步到每个提供接管操作的节点，使其行按钮同时禁用。该状态开启时
-    /// 跳过读取，因为重建会重创节点视图模型并丢失操作自身的状态。</para>
+    /// takeover or driver-installation action, so all of their row buttons disable at once. Reads are
+    /// skipped while the state is on, because a rebuild recreates the node view models and would drop the
+    /// operation's own state.
+    /// <para>切换「有驱动操作进行中」状态，并同步到每个提供接管或驱动安装操作的节点，使其行按钮同时禁用。
+    /// 该状态开启时跳过读取，因为重建会重创节点视图模型并丢失操作自身的状态。</para>
     /// </summary>
     /// <param name="node">The node the operation runs on.<para>操作所在的节点。</para></param>
     /// <param name="running">Whether the operation is in flight.<para>操作是否在进行中。</para></param>
     private void SetDriverOperationRunning(UsbTreeNodeViewModel node, bool running)
     {
         IsDriverOperationRunning = running;
-        var driverNodes = new List<UsbTreeNodeViewModel>();
-        CollectDriverActionNodes(Roots, driverNodes);
-        foreach (var candidate in driverNodes)
+        var takeoverNodes = new List<UsbTreeNodeViewModel>();
+        var installNodes = new List<UsbTreeNodeViewModel>();
+        CollectDriverActionNodes(Roots, takeoverNodes, installNodes);
+        foreach (var candidate in takeoverNodes)
+        {
+            candidate.IsDriverBusy = running;
+        }
+
+        foreach (var candidate in installNodes)
         {
             candidate.IsDriverBusy = running;
         }

@@ -762,4 +762,49 @@
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>驱动状态查询失败：{0}</value>
   </data>
+  <data name="UsbTree_InstallDriver" xml:space="preserve">
+    <value>安装驱动</value>
+  </data>
+  <data name="UsbTree_DriverInstalling" xml:space="preserve">
+    <value>正在为 {1} 安装 {0} 驱动...</value>
+  </data>
+  <data name="UsbTree_DriverInstalled" xml:space="preserve">
+    <value>已为 {1} 安装 {0}，设备绑定在后台完成</value>
+  </data>
+  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
+    <value>安装驱动需要管理员权限</value>
+  </data>
+  <data name="UsbTree_DriverInstallFailed" xml:space="preserve">
+    <value>驱动安装失败：{0}</value>
+  </data>
+  <data name="DriverPackage_Rockusb_Name" xml:space="preserve">
+    <value>瑞芯微 Rockusb（DriverAssistant v5.14）</value>
+  </data>
+  <data name="DriverPackage_MediaTekVcom_Name" xml:space="preserve">
+    <value>联发科 USB VCOM（WHQL cdc-acm）</value>
+  </data>
+  <data name="DriverPackage_MediaTekFull_Name" xml:space="preserve">
+    <value>联发科 USB 全量包（WHQL）</value>
+  </data>
+  <data name="DriverPackage_GoogleUsb_Name" xml:space="preserve">
+    <value>Google USB 驱动 r13</value>
+  </data>
+  <data name="DriverPackage_RockchipAdb_Name" xml:space="preserve">
+    <value>瑞芯微 ADB 驱动（v5.14）</value>
+  </data>
+  <data name="DriverPackage_QualcommQud_Name" xml:space="preserve">
+    <value>高通 USB 驱动（QUD 1.00.95.6）</value>
+  </data>
+  <data name="DriverPackage_SilabsCp210x_Name" xml:space="preserve">
+    <value>Silicon Labs CP210x 虚拟串口</value>
+  </data>
+  <data name="DriverPackage_FtdiCdm_Name" xml:space="preserve">
+    <value>FTDI CDM（2.12.36.20）</value>
+  </data>
+  <data name="DriverPackage_WchSerial_Name" xml:space="preserve">
+    <value>沁恒 CH341SER 与 CH343SER</value>
+  </data>
+  <data name="DriverPackage_HuaweiHiSuite_Name" xml:space="preserve">
+    <value>华为 HiSuite 驱动</value>
+  </data>
 </root>

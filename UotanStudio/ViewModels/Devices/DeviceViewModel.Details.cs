@@ -126,28 +126,46 @@ public partial class DeviceViewModel
     internal static bool ShouldQueryMtkIdentity(string state, bool hasMtkInfo)
         => !hasMtkInfo && state is "brom" or "preloader";
 
+    /// <summary>
+    /// Cooperative bound for the EDL wire-protocol probe, sized so the probe can write its bounded
+    /// RESET_STATE_MACHINE wake, read the re-announced HELLO and fall back to a Firehose NOP.
+    /// The probe publishes its verified state before collecting details, and a cancelled detail pass never
+    /// overwrites that state, so this budget decides only how long the refresh waits.
+    /// <para>EDL 线协议探测的协作式时限，容量足以让探测写出有界的 RESET_STATE_MACHINE 唤醒、读取重新宣告的
+    /// HELLO 并回退到 Firehose NOP。探测在采集详情之前就发布了已验证状态，且被取消的详情采集不会覆盖该
+    /// 状态，因此这个时限只决定刷新等待多久。</para>
+    /// </summary>
+    private const int EdlProbeTimeoutMs = 10_000;
+
     private async Task EnrichEdlInfoAsync(DeviceInfo device)
     {
         var endpoint = device.Device;
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var probeBudget = new CancellationTokenSource(EdlProbeTimeoutMs);
             var state = await Task.Run(
-                () => App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, timeout.Token), timeout.Token).ConfigureAwait(true);
+                () => App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, probeBudget.Token),
+                probeBudget.Token).ConfigureAwait(true);
             if (ReferenceEquals(device.Device, endpoint))
             {
                 device.EdlProtocol = state;
-                device.SetEdlDetails(App.DeviceMonitor.GetEdlDetails(endpoint));
             }
         }
         catch (Exception ex)
         {
-            if (ReferenceEquals(device.Device, endpoint))
-            {
-                device.EdlProtocol = Comm.Protocols.Edl.EdlProtocolState.Unknown;
-            }
             _log.Write(LogLevel.Debug, "DeviceManager",
-                $"EDL protocol detection for {endpoint.Key} failed: {ex.Message}");
+                $"EDL protocol detection for {endpoint.Key} reported {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (!ReferenceEquals(device.Device, endpoint))
+        {
+            return;
+        }
+
+        var cached = App.DeviceMonitor.GetEdlDetails(endpoint);
+        if (cached is not null)
+        {
+            device.SetEdlDetails(cached);
         }
     }
     /// <summary>

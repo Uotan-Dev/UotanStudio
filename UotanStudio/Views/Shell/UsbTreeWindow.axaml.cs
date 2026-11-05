@@ -147,4 +147,19 @@ public partial class UsbTreeWindow : Window
 
         _ = _model.CancelTakeoverAsync(node);
     }
+
+    /// <summary>
+    /// Installs the bundled vendor driver package covering the clicked row's device; the package only
+    /// stages into the driver store and installs on driverless devices, so no confirmation is needed.
+    /// <para>安装覆盖点击行设备的捆绑厂商驱动包；包只暂存到驱动仓库并在无驱动设备上安装，因此无需确认。</para>
+    /// </summary>
+    private void OnInstallDriverClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
+        {
+            return;
+        }
+
+        _ = _model.InstallDriverAsync(node);
+    }
 }

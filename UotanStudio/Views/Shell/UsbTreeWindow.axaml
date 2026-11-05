@@ -134,17 +134,20 @@
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="vm:UsbTreeNodeViewModel" ItemsSource="{Binding Children}">
               <StackPanel Orientation="Vertical" Spacing="1">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
                   <TextBlock Classes="node-title" Text="{Binding DisplayText}" />
                   <TextBlock Grid.Column="1" Classes="node-meta" Text="{Binding MetaText}"
                              IsVisible="{Binding HasMeta}" />
                   <Border Grid.Column="2" Classes="protocol-badge" IsVisible="{Binding HasProtocol}">
                     <TextBlock Classes="protocol-badge" Text="{Binding ProtocolText}" />
                   </Border>
-                  <Button Grid.Column="3" Classes="node-action" Click="OnEnableTakeoverClick"
+                  <Button Grid.Column="3" Classes="node-action" Click="OnInstallDriverClick"
+                          Content="{DynamicResource UsbTree_InstallDriver}"
+                          IsVisible="{Binding CanInstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="4" Classes="node-action" Click="OnEnableTakeoverClick"
                           Content="{DynamicResource UsbTree_EnableTakeover}"
                           IsVisible="{Binding CanEnableTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
-                  <Button Grid.Column="3" Classes="node-action" Click="OnCancelTakeoverClick"
+                  <Button Grid.Column="4" Classes="node-action" Click="OnCancelTakeoverClick"
                           Content="{DynamicResource UsbTree_CancelTakeover}"
                           IsVisible="{Binding CanCancelTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
                 </Grid>
@@ -164,41 +167,21 @@
           <TextBlock FontSize="11" Opacity="0.72" TextWrapping="Wrap"
                      IsVisible="{Binding !HasSelection}" Text="{DynamicResource UsbTree_NoSelection}" />
           <StackPanel IsVisible="{Binding HasSelection}" Spacing="5">
-            <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                  ColumnSpacing="6" RowSpacing="4">
-              <TextBlock Grid.Row="0" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_InstanceId}" />
-              <TextBlock Grid.Row="0" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.InstanceIdText}" />
-              <TextBlock Grid.Row="1" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Parent}" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ParentInstanceIdText}" />
-              <TextBlock Grid.Row="2" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Kind}" />
-              <TextBlock Grid.Row="2" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.KindText}" />
-              <TextBlock Grid.Row="3" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Vendor}" />
-              <TextBlock Grid.Row="3" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.VendorText}" />
-              <TextBlock Grid.Row="4" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Speed}" />
-              <TextBlock Grid.Row="4" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.SpeedDetailText}" />
-              <TextBlock Grid.Row="5" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Class}" />
-              <TextBlock Grid.Row="5" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ClassNameText}" />
-              <TextBlock Grid.Row="6" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_ClassGuid}" />
-              <TextBlock Grid.Row="6" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ClassGuidText}" />
-              <TextBlock Grid.Row="7" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_DriverService}" />
-              <TextBlock Grid.Row="7" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DriverServiceText}" />
-              <TextBlock Grid.Row="8" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_DriverInf}" />
-              <TextBlock Grid.Row="8" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DriverInfText}" />
-              <TextBlock Grid.Row="9" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Interface}" />
-              <TextBlock Grid.Row="9" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.InterfaceDetailText}" />
-              <TextBlock Grid.Row="10" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Problem}" />
-              <TextBlock Grid.Row="10" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ProblemCodeText}" />
-              <TextBlock Grid.Row="11" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Container}" />
-              <TextBlock Grid.Row="11" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.ContainerIdText}" />
-              <TextBlock Grid.Row="12" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_Location}" />
-              <TextBlock Grid.Row="12" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.LocationPathsText}" />
-              <TextBlock Grid.Row="13" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_HardwareIds}" />
-              <TextBlock Grid.Row="13" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.HardwareIdsText}" />
-              <TextBlock Grid.Row="14" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_CompatibleIds}" />
-              <TextBlock Grid.Row="14" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.CompatibleIdsText}" />
-              <TextBlock Grid.Row="15" Classes="detail-label" Text="{DynamicResource UsbTree_Detail_InterfaceGuids}" />
-              <TextBlock Grid.Row="15" Grid.Column="1" Classes="detail-value" Text="{Binding SelectedNode.DeviceInterfaceGuidsText}" />
-            </Grid>
+            <ItemsControl ItemsSource="{Binding SelectedNode.DetailRows}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:UsbTreeDetailRow">
+                  <Grid ColumnDefinitions="110,*" ColumnSpacing="6">
+                    <TextBlock Classes="detail-label" Text="{Binding Label}" />
+                    <TextBlock Grid.Column="1" Classes="detail-value" Text="{Binding Value}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <TextBlock Classes="detail-warning" IsVisible="{Binding SelectedNode.HasAdbWarning}"
                        Text="{Binding SelectedNode.AdbWarningText}" />
           </StackPanel>

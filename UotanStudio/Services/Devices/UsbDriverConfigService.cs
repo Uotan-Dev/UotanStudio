@@ -45,10 +45,13 @@ public interface IUsbDriverConfigService
 
     /// <summary>
     /// Takes over the device by installing a freshly generated self-signed WinUSB package that binds the
-    /// in-box <c>WinUSB</c> service to it. The operation requires an administrator token; a non-elevated
-    /// process raises a UAC prompt and installs from an elevated child process.
-    /// <para>通过安装新生成的自签名 WinUSB 包接管设备，把系统内置 <c>WinUSB</c> 服务绑定到该设备。操作需要
-    /// 管理员令牌；进程未提权时会弹出 UAC 提示，并由提权后的子进程完成安装。</para>
+    /// in-box <c>WinUSB</c> service to it. The operation always runs in an elevated relaunch of the
+    /// application — the UAC prompt appears only when the host is not elevated — because the install may
+    /// fall back to the synchronous PnP install API, which is only allowed in the helper and would block
+    /// the host process for a long time.
+    /// <para>通过安装新生成的自签名 WinUSB 包接管设备，把系统内置 <c>WinUSB</c> 服务绑定到该设备。操作一律在
+    /// 应用的提权重启中执行——仅宿主未提权时才出现 UAC 提示——因为安装可能回退到同步 PnP 安装 API，该 API 只
+    /// 允许在助手进程中调用，否则会长时间阻塞宿主进程。</para>
     /// </summary>
     /// <param name="request">The takeover parameters.<para>接管参数。</para></param>
     /// <returns>The operation result; never throws and fails outside Windows.
@@ -94,12 +97,13 @@ public interface IUsbDriverConfigService
 /// Default <see cref="IUsbDriverConfigService"/> implementation wrapping the single
 /// <see cref="WinUsbDriverInstaller"/> instance. Windows-only members are attributed so the installer
 /// is only reached through guarded paths, while the class itself stays constructible on every platform.
-/// A non-elevated Windows process runs every mutating operation through an elevated relaunch of the same
-/// executable, so the driver work always happens with an administrator token.
+/// The takeover always runs through an elevated relaunch of the same executable, because its install may
+/// fall back to the synchronous PnP install API; the vendor package operations stay in-process when the
+/// host already holds an administrator token.
 /// <para><see cref="IUsbDriverConfigService"/> 的默认实现，内部唯一持有
 /// <see cref="WinUsbDriverInstaller"/> 实例。Windows 专属成员带平台标注，安装器只经守卫路径触达，
-/// 类本身在任何平台都可构造。Windows 上进程未提权时，安装与卸载通过以管理员身份重启同一个可执行
-/// 文件完成，驱动操作始终持有管理员令牌。</para>
+/// 类本身在任何平台都可构造。接管安装一律通过以管理员身份重启同一个可执行文件完成，因为其安装可能回退到
+/// 同步 PnP 安装 API；宿主已持管理员令牌时，厂商驱动包操作在本进程内执行。</para>
 /// </summary>
 public sealed class UsbDriverConfigService : IUsbDriverConfigService
 {
@@ -149,11 +153,9 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, "Windows only");
         }
 
-        if (WinUsbDriverInstaller.IsElevated)
-        {
-            return Installer.InstallTakeover(request);
-        }
-
+        // The takeover can fall back to UpdateDriverForPlugAndPlayDevices, which only the elevated helper
+        // may call, so the install always relaunches even when this process already holds an administrator
+        // token.
         List<string> arguments =
         [
             UsbDriverElevatedCommand.TakeoverSwitch, request.InstanceId, request.HardwareId
