@@ -1980,4 +1980,154 @@
   <data name="FindReplace_RegexGenerator" xml:space="preserve">
     <value>Regex Generator</value>
   </data>
+  <data name="Dock_Properties_Type_ImageViewerDocument" xml:space="preserve">
+    <value>Picture</value>
+  </data>
+  <data name="Dock_Properties_Img_Mime" xml:space="preserve">
+    <value>MIME type</value>
+  </data>
+  <data name="Dock_Properties_Img_MagicExtensions" xml:space="preserve">
+    <value>Magic extensions</value>
+  </data>
+  <data name="Dock_Properties_Img_Dimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="Dock_Properties_Img_Channels" xml:space="preserve">
+    <value>Channels</value>
+  </data>
+  <data name="Dock_Properties_Img_BitDepth" xml:space="preserve">
+    <value>Bit depth</value>
+  </data>
+  <data name="Dock_Properties_Img_SampleFormat" xml:space="preserve">
+    <value>Sample format</value>
+  </data>
+  <data name="Dock_Properties_Img_Frames" xml:space="preserve">
+    <value>Frames / pages</value>
+  </data>
+  <data name="Dock_Properties_Img_Orientation" xml:space="preserve">
+    <value>Orientation</value>
+  </data>
+  <data name="Dock_Properties_Img_Decodable" xml:space="preserve">
+    <value>Decodable</value>
+  </data>
+  <data name="Dock_Properties_Img_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="Dock_Properties_Img_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="Dock_ImageViewer_Loading" xml:space="preserve">
+    <value>Decoding image...</value>
+  </data>
+  <data name="Dock_ImageViewer_Empty" xml:space="preserve">
+    <value>No preview available.</value>
+  </data>
+  <data name="Dock_ImageViewer_Error" xml:space="preserve">
+    <value>The image could not be opened.</value>
+  </data>
+  <data name="Dock_ImageViewer_TooLarge" xml:space="preserve">
+    <value>The image exceeds the viewer's size limit.</value>
+  </data>
+  <data name="Dock_ImageViewer_Unsupported" xml:space="preserve">
+    <value>This image format is recognised but cannot be decoded.</value>
+  </data>
+  <data name="Dock_ImageViewer_Dimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="Dock_ImageViewer_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Properties_Type_LogoPartitionDocument" xml:space="preserve">
+    <value>Logo Partition</value>
+  </data>
+  <data name="Dock_Properties_Logo_FileName" xml:space="preserve">
+    <value>File name</value>
+  </data>
+  <data name="Dock_Properties_Logo_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Dock_Properties_Logo_Format" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Dock_Properties_Logo_Magic" xml:space="preserve">
+    <value>Magic</value>
+  </data>
+  <data name="Dock_Properties_Logo_Kind" xml:space="preserve">
+    <value>Container</value>
+  </data>
+  <data name="Dock_Properties_Logo_HeaderOffset" xml:space="preserve">
+    <value>Header offset</value>
+  </data>
+  <data name="Dock_Properties_Logo_Size" xml:space="preserve">
+    <value>Partition size</value>
+  </data>
+  <data name="Dock_Properties_Logo_Entries" xml:space="preserve">
+    <value>Embedded images</value>
+  </data>
+  <data name="Dock_Logo_Title" xml:space="preserve">
+    <value>Logo Partition Workbench</value>
+  </data>
+  <data name="Dock_Logo_Entries" xml:space="preserve">
+    <value>Embedded images</value>
+  </data>
+  <data name="Dock_Logo_Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Dock_Logo_Related" xml:space="preserve">
+    <value>Related partitions</value>
+  </data>
+  <data name="Dock_Logo_ExtractSelected" xml:space="preserve">
+    <value>Extract selected</value>
+  </data>
+  <data name="Dock_Logo_ExtractAll" xml:space="preserve">
+    <value>Extract all</value>
+  </data>
+  <data name="Dock_Logo_OpenImage" xml:space="preserve">
+    <value>Open image</value>
+  </data>
+  <data name="Dock_Logo_OpenPartition" xml:space="preserve">
+    <value>Open partition</value>
+  </data>
+  <data name="Dock_Logo_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Dock_Logo_Loading" xml:space="preserve">
+    <value>Decoding logo images...</value>
+  </data>
+  <data name="Dock_Logo_Empty" xml:space="preserve">
+    <value>No embedded images.</value>
+  </data>
+  <data name="Dock_Logo_ExtractFailed" xml:space="preserve">
+    <value>Extraction failed.</value>
+  </data>
+  <data name="Dock_Logo_ExtractDone" xml:space="preserve">
+    <value>Extracted {0} image(s).</value>
+  </data>
+  <data name="Dock_Logo_PickFolder" xml:space="preserve">
+    <value>Select extraction directory</value>
+  </data>
+  <data name="Dock_Logo_RelatedMissing" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="Dock_Logo_CapabilityExtract" xml:space="preserve">
+    <value>Logo tool - extractable</value>
+  </data>
+  <data name="Dock_Logo_CapabilityOpen" xml:space="preserve">
+    <value>Open only</value>
+  </data>
+  <data name="Dock_Logo_MagicUnknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Dock_Logo_ColumnName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Dock_Logo_ColumnDimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="Dock_Logo_ColumnEncoding" xml:space="preserve">
+    <value>Encoding</value>
+  </data>
+  <data name="Dock_Logo_ColumnSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
 </root>

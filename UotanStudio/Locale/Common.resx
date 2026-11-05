@@ -1080,6 +1080,126 @@ Author: 暮间雾
   <data name="Flash_EdlGeneralizedXml" xml:space="preserve">
     <value>Generalize XML (fit different storage sizes)</value>
   </data>
+  <data name="Flash_EdlBootImageHint" xml:space="preserve">
+    <value>Bootloader control image (8192-byte misc image)</value>
+  </data>
+  <data name="Flash_EdlBootImageChoose" xml:space="preserve">
+    <value>Choose boot image</value>
+  </data>
+  <data name="Flash_EdlBootImageWritten" xml:space="preserve">
+    <value>Wrote the bootloader control block to misc (LUN {0}, sector {1}, {2} sector(s)).</value>
+  </data>
+  <data name="Flash_EdlInfoGroup" xml:space="preserve">
+    <value>Device information by read stage</value>
+  </data>
+  <data name="Flash_EdlInfoDone" xml:space="preserve">
+    <value>Read {0} device-information row(s).</value>
+  </data>
+  <data name="Flash_EdlInfoEmpty" xml:space="preserve">
+    <value>The target returned no readable device information.</value>
+  </data>
+  <data name="Flash_EdlRebootTarget" xml:space="preserve">
+    <value>Reboot target mode</value>
+  </data>
+  <data name="Flash_EdlRebootTargetGo" xml:space="preserve">
+    <value>Reboot to mode</value>
+  </data>
+  <data name="Flash_EdlRebootTargetConfirm" xml:space="preserve">
+    <value>The device will reboot into the selected target mode and this session ends. Continue?</value>
+  </data>
+  <data name="Flash_EdlRebootTargetDone" xml:space="preserve">
+    <value>Requested a reboot into the target mode.</value>
+  </data>
+  <data name="Flash_EdlRebootTargetMissingMisc" xml:space="preserve">
+    <value>The target mode needs a misc boot image, none was provided, so no command was sent.</value>
+  </data>
+  <data name="Flash_EdlRebootSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="Flash_EdlRebootRecovery" xml:space="preserve">
+    <value>Recovery</value>
+  </data>
+  <data name="Flash_EdlRebootFastbootd" xml:space="preserve">
+    <value>Fastbootd</value>
+  </data>
+  <data name="Flash_EdlRebootEdl" xml:space="preserve">
+    <value>EDL</value>
+  </data>
+  <data name="Flash_EdlRebootPowerOff" xml:space="preserve">
+    <value>Power off</value>
+  </data>
+  <data name="Flash_EdlInfo_Protocol" xml:space="preserve">
+    <value>Protocol state</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaVersion" xml:space="preserve">
+    <value>Sahara protocol version</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMinVersion" xml:space="preserve">
+    <value>Sahara minimum version</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMaxCommandLength" xml:space="preserve">
+    <value>Sahara maximum command length</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMode" xml:space="preserve">
+    <value>Sahara mode</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentitySerial" xml:space="preserve">
+    <value>Chip serial number</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityHardware" xml:space="preserve">
+    <value>Hardware identifier</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentitySblVersion" xml:space="preserve">
+    <value>SBL version</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityOemKeyHash" xml:space="preserve">
+    <value>OEM public-key hash</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityChipIdentifier" xml:space="preserve">
+    <value>Chip identifier (v3)</value>
+  </data>
+  <data name="Flash_EdlInfo_FirehoseVersion" xml:space="preserve">
+    <value>Firehose version</value>
+  </data>
+  <data name="Flash_EdlInfo_Programmer" xml:space="preserve">
+    <value>Programmer</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageType" xml:space="preserve">
+    <value>Storage type</value>
+  </data>
+  <data name="Flash_EdlInfo_SectorSize" xml:space="preserve">
+    <value>Sector size</value>
+  </data>
+  <data name="Flash_EdlInfo_Capacity" xml:space="preserve">
+    <value>Storage capacity</value>
+  </data>
+  <data name="Flash_EdlInfo_SectorCount" xml:space="preserve">
+    <value>Physical sector count</value>
+  </data>
+  <data name="Flash_EdlInfo_MaxPayload" xml:space="preserve">
+    <value>Maximum payload</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageSerial" xml:space="preserve">
+    <value>Storage serial</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageManufacturer" xml:space="preserve">
+    <value>Storage manufacturer</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageFirmware" xml:space="preserve">
+    <value>Storage firmware version</value>
+  </data>
+  <data name="Flash_EdlInfo_PageSize" xml:space="preserve">
+    <value>Page size</value>
+  </data>
+  <data name="Flash_EdlInfo_SlotLayout" xml:space="preserve">
+    <value>A/B slot layout</value>
+  </data>
+  <data name="Flash_EdlInfo_ActiveSlot" xml:space="preserve">
+    <value>Active slot</value>
+  </data>
+  <data name="Flash_EdlInfo_SerialPort" xml:space="preserve">
+    <value>Serial port</value>
+  </data>
   <data name="Flash_EdlSerialPort" xml:space="preserve">
     <value>EDL serial port</value>
   </data>
@@ -1450,7 +1570,7 @@ Author: 暮间雾
     <value>I understand this operation is irreversible</value>
   </data>
   <data name="DangerousConfirm_EnterHint" xml:space="preserve">
-    <value>Type CONFIRM to continue</value>
+    <value>Type {0} to continue</value>
   </data>
   <data name="DangerousConfirm_ConfirmButton" xml:space="preserve">
     <value>Proceed</value>
@@ -1814,6 +1934,9 @@ Author: 暮间雾
   </data>
   <data name="Log_Channel_Build" xml:space="preserve">
     <value>Nodes</value>
+  </data>
+  <data name="Log_Channel_Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
   </data>
   <data name="Workspace_DropNoFiles" xml:space="preserve">
     <value>Dropped content contains no openable files; ignored.</value>
@@ -4134,6 +4257,27 @@ Continue?</value>
   <data name="Flash_EdlLoaderMelf" xml:space="preserve">
     <value>MELF, {0} ELF components</value>
   </data>
+  <data name="Flash_EdlLoaderManifest" xml:space="preserve">
+    <value>Multi-image programmer manifest, {0} images (ids {1})</value>
+  </data>
+  <data name="Flash_EdlLoaderManifestInvalid" xml:space="preserve">
+    <value>Multi-image programmer manifest cannot be used, {0}: {1}</value>
+  </data>
+  <data name="Flash_LoaderFileType" xml:space="preserve">
+    <value>Programmer or the multi-image manifest (*.elf, *.mbn, *.melf, *.xml)</value>
+  </data>
+  <data name="Flash_EdlChooseLoaderFile" xml:space="preserve">
+    <value>Select boot image or programmer manifest</value>
+  </data>
+  <data name="Flash_LoaderManifestSize" xml:space="preserve">
+    <value>{0} images</value>
+  </data>
+  <data name="Flash_LoaderManifestValid" xml:space="preserve">
+    <value>Programmer manifest accepted</value>
+  </data>
+  <data name="Flash_LoaderManifestInvalidStatus" xml:space="preserve">
+    <value>Programmer manifest rejected</value>
+  </data>
   <data name="Flash_MtkLoaderChecked" xml:space="preserve">
     <value>MTK download agent accepted, {0}: {1}</value>
   </data>
@@ -4234,7 +4378,7 @@ Continue?</value>
     <value>Allwinner</value>
   </data>
   <data name="Flash_SunxiHint" xml:space="preserve">
-    <value>FEL is the USB boot ROM mode; FES is the U-Boot service mode. FES flashing arrives with the image plan.</value>
+    <value>FEL is the USB boot ROM mode; FES is the U-Boot service mode. Flash an IMAGEWTY package once the device runs FES.</value>
   </data>
   <data name="Flash_SunxiRefresh" xml:space="preserve">
     <value>Read device info</value>
@@ -4251,11 +4395,98 @@ Continue?</value>
   <data name="Flash_SunxiChooseUboot" xml:space="preserve">
     <value>Choose U-Boot...</value>
   </data>
+  <data name="Flash_SunxiDtb" xml:space="preserve">
+    <value>Device tree (optional)</value>
+  </data>
+  <data name="Flash_SunxiChooseDtb" xml:space="preserve">
+    <value>Choose device tree...</value>
+  </data>
+  <data name="Flash_SunxiSysConfig" xml:space="preserve">
+    <value>System config (optional)</value>
+  </data>
+  <data name="Flash_SunxiChooseSysConfig" xml:space="preserve">
+    <value>Choose system config...</value>
+  </data>
+  <data name="Flash_SunxiBoardConfig" xml:space="preserve">
+    <value>Board config (optional)</value>
+  </data>
+  <data name="Flash_SunxiChooseBoardConfig" xml:space="preserve">
+    <value>Choose board config...</value>
+  </data>
   <data name="Flash_SunxiBootFes" xml:space="preserve">
     <value>Boot FES</value>
   </data>
   <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
     <value>Uploads the FES1 loader and the service payload to the selected Allwinner device and executes them, so the device re-enumerates as FES. Uploaded code can leave the device in any state and this cannot be undone.</value>
+  </data>
+  <data name="Flash_SunxiImage" xml:space="preserve">
+    <value>Firmware image</value>
+  </data>
+  <data name="Flash_SunxiChooseImage" xml:space="preserve">
+    <value>Choose image...</value>
+  </data>
+  <data name="Flash_SunxiFlash" xml:space="preserve">
+    <value>Flash package</value>
+  </data>
+  <data name="Flash_SunxiFlashConfirmDetail" xml:space="preserve">
+    <value>Writes the selected IMAGEWTY package to the device storage with the selected erase mode. This cannot be undone.</value>
+  </data>
+  <data name="Flash_SunxiFlashDone" xml:space="preserve">
+    <value>Firmware flash completed.</value>
+  </data>
+  <data name="Flash_SunxiFlashMode" xml:space="preserve">
+    <value>Erase mode</value>
+  </data>
+  <data name="Flash_SunxiModeFullErase" xml:space="preserve">
+    <value>Full erase</value>
+  </data>
+  <data name="Flash_SunxiModePartitionErase" xml:space="preserve">
+    <value>Partition erase</value>
+  </data>
+  <data name="Flash_SunxiModePartition" xml:space="preserve">
+    <value>No erase</value>
+  </data>
+  <data name="Flash_SunxiModeKeepData" xml:space="preserve">
+    <value>Keep user data</value>
+  </data>
+  <data name="Flash_SunxiPostAction" xml:space="preserve">
+    <value>After flashing</value>
+  </data>
+  <data name="Flash_SunxiPostReboot" xml:space="preserve">
+    <value>Reboot</value>
+  </data>
+  <data name="Flash_SunxiPostPowerOff" xml:space="preserve">
+    <value>Power off</value>
+  </data>
+  <data name="Flash_SunxiPartitions" xml:space="preserve">
+    <value>Partitions</value>
+  </data>
+  <data name="Flash_SunxiPartitionsHint" xml:space="preserve">
+    <value>Comma-separated names; empty writes all</value>
+  </data>
+  <data name="Flash_SunxiFlashProgress" xml:space="preserve">
+    <value>Flashing: {0} {1} ({2}%)</value>
+  </data>
+  <data name="Flash_SunxiFlashProgressNoPercent" xml:space="preserve">
+    <value>Flashing: {0} {1}</value>
+  </data>
+  <data name="Flash_SunxiPhaseErase" xml:space="preserve">
+    <value>erase</value>
+  </data>
+  <data name="Flash_SunxiPhaseDownload" xml:space="preserve">
+    <value>download</value>
+  </data>
+  <data name="Flash_SunxiPhaseVerify" xml:space="preserve">
+    <value>verify</value>
+  </data>
+  <data name="Flash_SunxiPhaseSkip" xml:space="preserve">
+    <value>skip</value>
+  </data>
+  <data name="Flash_SunxiPhaseTool" xml:space="preserve">
+    <value>finish</value>
+  </data>
+  <data name="Flash_SunxiPhaseDone" xml:space="preserve">
+    <value>done</value>
   </data>
   <data name="Flash_SunxiFelTools" xml:space="preserve">
     <value>FEL memory tools</value>
@@ -4436,5 +4667,17 @@ Continue?</value>
   </data>
   <data name="DiskFlash_ImageSummary" xml:space="preserve">
     <value>{0} · {1}</value>
+  </data>
+  <data name="Explorer_OpenAsImage" xml:space="preserve">
+    <value>Image Viewer</value>
+  </data>
+  <data name="Explorer_ViewImage" xml:space="preserve">
+    <value>View Image</value>
+  </data>
+  <data name="Explorer_OpenAsLogo" xml:space="preserve">
+    <value>Logo Partition Tool</value>
+  </data>
+  <data name="Explorer_ViewLogoPartition" xml:space="preserve">
+    <value>Open Logo Partition</value>
   </data>
 </root>

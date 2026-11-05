@@ -1080,6 +1080,126 @@
   <data name="Flash_EdlGeneralizedXml" xml:space="preserve">
     <value>通用化 XML（适配不同存储容量）</value>
   </data>
+  <data name="Flash_EdlBootImageHint" xml:space="preserve">
+    <value>引导控制镜像（8192 字节 misc 镜像）</value>
+  </data>
+  <data name="Flash_EdlBootImageChoose" xml:space="preserve">
+    <value>选择引导镜像</value>
+  </data>
+  <data name="Flash_EdlBootImageWritten" xml:space="preserve">
+    <value>已把引导控制块写入 misc（LUN {0}，起始扇区 {1}，{2} 个扇区）。</value>
+  </data>
+  <data name="Flash_EdlInfoGroup" xml:space="preserve">
+    <value>设备信息（按读取阶段）</value>
+  </data>
+  <data name="Flash_EdlInfoDone" xml:space="preserve">
+    <value>已读取 {0} 条设备信息。</value>
+  </data>
+  <data name="Flash_EdlInfoEmpty" xml:space="preserve">
+    <value>目标没有返回任何可读的设备信息。</value>
+  </data>
+  <data name="Flash_EdlRebootTarget" xml:space="preserve">
+    <value>重启目标模式</value>
+  </data>
+  <data name="Flash_EdlRebootTargetGo" xml:space="preserve">
+    <value>重启到该模式</value>
+  </data>
+  <data name="Flash_EdlRebootTargetConfirm" xml:space="preserve">
+    <value>将把设备重启到所选目标模式，当前会话会被结束。确定继续？</value>
+  </data>
+  <data name="Flash_EdlRebootTargetDone" xml:space="preserve">
+    <value>已请求设备重启到目标模式。</value>
+  </data>
+  <data name="Flash_EdlRebootTargetMissingMisc" xml:space="preserve">
+    <value>目标模式需要 misc 引导镜像，但未提供该镜像，因此未发送任何命令。</value>
+  </data>
+  <data name="Flash_EdlRebootSystem" xml:space="preserve">
+    <value>系统</value>
+  </data>
+  <data name="Flash_EdlRebootRecovery" xml:space="preserve">
+    <value>Recovery</value>
+  </data>
+  <data name="Flash_EdlRebootFastbootd" xml:space="preserve">
+    <value>Fastbootd</value>
+  </data>
+  <data name="Flash_EdlRebootEdl" xml:space="preserve">
+    <value>EDL</value>
+  </data>
+  <data name="Flash_EdlRebootPowerOff" xml:space="preserve">
+    <value>关机</value>
+  </data>
+  <data name="Flash_EdlInfo_Protocol" xml:space="preserve">
+    <value>协议状态</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaVersion" xml:space="preserve">
+    <value>Sahara 协议版本</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMinVersion" xml:space="preserve">
+    <value>Sahara 最低版本</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMaxCommandLength" xml:space="preserve">
+    <value>Sahara 最大命令长度</value>
+  </data>
+  <data name="Flash_EdlInfo_SaharaMode" xml:space="preserve">
+    <value>Sahara 模式</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentitySerial" xml:space="preserve">
+    <value>芯片序列号</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityHardware" xml:space="preserve">
+    <value>硬件标识</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentitySblVersion" xml:space="preserve">
+    <value>SBL 版本</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityOemKeyHash" xml:space="preserve">
+    <value>OEM 公钥哈希</value>
+  </data>
+  <data name="Flash_EdlInfo_IdentityChipIdentifier" xml:space="preserve">
+    <value>芯片标识（v3）</value>
+  </data>
+  <data name="Flash_EdlInfo_FirehoseVersion" xml:space="preserve">
+    <value>Firehose 版本</value>
+  </data>
+  <data name="Flash_EdlInfo_Programmer" xml:space="preserve">
+    <value>引导程序</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageType" xml:space="preserve">
+    <value>存储类型</value>
+  </data>
+  <data name="Flash_EdlInfo_SectorSize" xml:space="preserve">
+    <value>扇区大小</value>
+  </data>
+  <data name="Flash_EdlInfo_Capacity" xml:space="preserve">
+    <value>存储容量</value>
+  </data>
+  <data name="Flash_EdlInfo_SectorCount" xml:space="preserve">
+    <value>物理扇区数</value>
+  </data>
+  <data name="Flash_EdlInfo_MaxPayload" xml:space="preserve">
+    <value>最大负载</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageSerial" xml:space="preserve">
+    <value>存储序列号</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageManufacturer" xml:space="preserve">
+    <value>存储厂商</value>
+  </data>
+  <data name="Flash_EdlInfo_StorageFirmware" xml:space="preserve">
+    <value>存储固件版本</value>
+  </data>
+  <data name="Flash_EdlInfo_PageSize" xml:space="preserve">
+    <value>页大小</value>
+  </data>
+  <data name="Flash_EdlInfo_SlotLayout" xml:space="preserve">
+    <value>A/B 槽位布局</value>
+  </data>
+  <data name="Flash_EdlInfo_ActiveSlot" xml:space="preserve">
+    <value>活动槽位</value>
+  </data>
+  <data name="Flash_EdlInfo_SerialPort" xml:space="preserve">
+    <value>串口</value>
+  </data>
   <data name="Flash_EdlSerialPort" xml:space="preserve">
     <value>EDL 串口</value>
   </data>
@@ -1447,7 +1567,7 @@
     <value>我已理解该操作不可逆</value>
   </data>
   <data name="DangerousConfirm_EnterHint" xml:space="preserve">
-    <value>输入 CONFIRM 继续</value>
+    <value>输入 {0} 继续</value>
   </data>
   <data name="DangerousConfirm_ConfirmButton" xml:space="preserve">
     <value>继续</value>
@@ -1814,6 +1934,9 @@
   </data>
   <data name="Log_Channel_Build" xml:space="preserve">
     <value>节点</value>
+  </data>
+  <data name="Log_Channel_Diagnostics" xml:space="preserve">
+    <value>诊断</value>
   </data>
   <data name="Workspace_DropNoFiles" xml:space="preserve">
     <value>拖入内容不含可打开的文件，已忽略</value>
@@ -4134,6 +4257,27 @@
   <data name="Flash_EdlLoaderMelf" xml:space="preserve">
     <value>MELF，含 {0} 个 ELF 组件</value>
   </data>
+  <data name="Flash_EdlLoaderManifest" xml:space="preserve">
+    <value>多镜像 programmer 清单，含 {0} 个镜像（标识 {1}）</value>
+  </data>
+  <data name="Flash_EdlLoaderManifestInvalid" xml:space="preserve">
+    <value>多镜像 programmer 清单不可用，{0}：{1}</value>
+  </data>
+  <data name="Flash_LoaderFileType" xml:space="preserve">
+    <value>Programmer 或多镜像清单（*.elf、*.mbn、*.melf、*.xml）</value>
+  </data>
+  <data name="Flash_EdlChooseLoaderFile" xml:space="preserve">
+    <value>选择引导镜像或 programmer 清单</value>
+  </data>
+  <data name="Flash_LoaderManifestSize" xml:space="preserve">
+    <value>{0} 个镜像</value>
+  </data>
+  <data name="Flash_LoaderManifestValid" xml:space="preserve">
+    <value>Programmer 清单有效</value>
+  </data>
+  <data name="Flash_LoaderManifestInvalidStatus" xml:space="preserve">
+    <value>Programmer 清单无效</value>
+  </data>
   <data name="Flash_MtkLoaderChecked" xml:space="preserve">
     <value>MTK 下载代理有效，{0}：{1}</value>
   </data>
@@ -4234,7 +4378,7 @@
     <value>全志</value>
   </data>
   <data name="Flash_SunxiHint" xml:space="preserve">
-    <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。FES 烧录将在镜像计划接入后提供。</value>
+    <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。设备进入 FES 后可烧录 IMAGEWTY 整包。</value>
   </data>
   <data name="Flash_SunxiRefresh" xml:space="preserve">
     <value>读取设备信息</value>
@@ -4251,11 +4395,98 @@
   <data name="Flash_SunxiChooseUboot" xml:space="preserve">
     <value>选择服务负载...</value>
   </data>
+  <data name="Flash_SunxiDtb" xml:space="preserve">
+    <value>设备树（可选）</value>
+  </data>
+  <data name="Flash_SunxiChooseDtb" xml:space="preserve">
+    <value>选择设备树...</value>
+  </data>
+  <data name="Flash_SunxiSysConfig" xml:space="preserve">
+    <value>系统配置（可选）</value>
+  </data>
+  <data name="Flash_SunxiChooseSysConfig" xml:space="preserve">
+    <value>选择系统配置...</value>
+  </data>
+  <data name="Flash_SunxiBoardConfig" xml:space="preserve">
+    <value>板级配置（可选）</value>
+  </data>
+  <data name="Flash_SunxiChooseBoardConfig" xml:space="preserve">
+    <value>选择板级配置...</value>
+  </data>
   <data name="Flash_SunxiBootFes" xml:space="preserve">
     <value>引导 FES 服务</value>
   </data>
   <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
     <value>将向所选全志设备上传 FES1 与服务负载并执行，设备会重新枚举为 FES。上传的代码可让设备进入任意状态，此操作不可撤销。</value>
+  </data>
+  <data name="Flash_SunxiImage" xml:space="preserve">
+    <value>固件镜像</value>
+  </data>
+  <data name="Flash_SunxiChooseImage" xml:space="preserve">
+    <value>选择镜像...</value>
+  </data>
+  <data name="Flash_SunxiFlash" xml:space="preserve">
+    <value>烧录整包</value>
+  </data>
+  <data name="Flash_SunxiFlashConfirmDetail" xml:space="preserve">
+    <value>将按所选擦除模式把所选 IMAGEWTY 包写入设备存储。此操作不可撤销。</value>
+  </data>
+  <data name="Flash_SunxiFlashDone" xml:space="preserve">
+    <value>固件烧录完成。</value>
+  </data>
+  <data name="Flash_SunxiFlashMode" xml:space="preserve">
+    <value>擦除模式</value>
+  </data>
+  <data name="Flash_SunxiModeFullErase" xml:space="preserve">
+    <value>整片擦除</value>
+  </data>
+  <data name="Flash_SunxiModePartitionErase" xml:space="preserve">
+    <value>分区擦除</value>
+  </data>
+  <data name="Flash_SunxiModePartition" xml:space="preserve">
+    <value>不擦除</value>
+  </data>
+  <data name="Flash_SunxiModeKeepData" xml:space="preserve">
+    <value>保留用户数据</value>
+  </data>
+  <data name="Flash_SunxiPostAction" xml:space="preserve">
+    <value>烧录后</value>
+  </data>
+  <data name="Flash_SunxiPostReboot" xml:space="preserve">
+    <value>重启</value>
+  </data>
+  <data name="Flash_SunxiPostPowerOff" xml:space="preserve">
+    <value>关机</value>
+  </data>
+  <data name="Flash_SunxiPartitions" xml:space="preserve">
+    <value>分区</value>
+  </data>
+  <data name="Flash_SunxiPartitionsHint" xml:space="preserve">
+    <value>逗号分隔；留空写入全部</value>
+  </data>
+  <data name="Flash_SunxiFlashProgress" xml:space="preserve">
+    <value>正在烧录：{0} {1}（{2}%）</value>
+  </data>
+  <data name="Flash_SunxiFlashProgressNoPercent" xml:space="preserve">
+    <value>正在烧录：{0} {1}</value>
+  </data>
+  <data name="Flash_SunxiPhaseErase" xml:space="preserve">
+    <value>擦除</value>
+  </data>
+  <data name="Flash_SunxiPhaseDownload" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Flash_SunxiPhaseVerify" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Flash_SunxiPhaseSkip" xml:space="preserve">
+    <value>跳过</value>
+  </data>
+  <data name="Flash_SunxiPhaseTool" xml:space="preserve">
+    <value>收尾</value>
+  </data>
+  <data name="Flash_SunxiPhaseDone" xml:space="preserve">
+    <value>完成</value>
   </data>
   <data name="Flash_SunxiFelTools" xml:space="preserve">
     <value>FEL 内存工具</value>
@@ -4436,5 +4667,17 @@
   </data>
   <data name="DiskFlash_ImageSummary" xml:space="preserve">
     <value>{0} · {1}</value>
+  </data>
+  <data name="Explorer_OpenAsImage" xml:space="preserve">
+    <value>图片查看</value>
+  </data>
+  <data name="Explorer_ViewImage" xml:space="preserve">
+    <value>查看图片</value>
+  </data>
+  <data name="Explorer_OpenAsLogo" xml:space="preserve">
+    <value>Logo 分区工具</value>
+  </data>
+  <data name="Explorer_ViewLogoPartition" xml:space="preserve">
+    <value>打开 Logo 分区</value>
   </data>
 </root>
