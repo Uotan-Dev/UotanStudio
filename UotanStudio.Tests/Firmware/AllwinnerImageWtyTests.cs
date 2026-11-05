@@ -546,6 +546,74 @@ public sealed class AllwinnerImageWtyTests : IDisposable
         Assert.Null(AllwinnerImageItemTable.GetFileName(AllwinnerImageItem.Unknown));
     }
 
+    [Fact]
+    public async Task ExtractEntrySegmentAsync_PlainContainer_MatchesTheFullExtraction()
+    {
+        var payload = new byte[200 * 1024];
+        Random.Shared.NextBytes(payload);
+        var image = BuildImage(VersionOne, new EntrySpec("data.fex", "DATAFILE", "xxxxxxxxxxxxxxxx", payload));
+        var imagePath = Path.Combine(_root, "segment.img");
+        await File.WriteAllBytesAsync(imagePath, image, TestContext.Current.CancellationToken);
+
+        await using var stream = File.OpenRead(imagePath);
+        var header = AllwinnerImageWtyReader.Read(stream, TestContext.Current.CancellationToken);
+        var entry = Assert.Single(header.Entries);
+        var full = new byte[AllwinnerImageWtyReader.EffectiveLength(entry)];
+        Assert.Equal(full.Length, AllwinnerImageWtyReader.ExtractEntry(stream, entry, new MemoryStream(full),
+            header.IsEncrypted, TestContext.Current.CancellationToken));
+
+        var segmented = new byte[full.Length];
+        for (var offset = 0; offset < full.Length; offset += 64 * 1024)
+        {
+            var count = Math.Min(64 * 1024, full.Length - offset);
+            using var sink = new MemoryStream(segmented, offset, count, writable: true);
+            Assert.Equal(count, await AllwinnerImageWtyReader.ExtractEntrySegmentAsync(stream, entry, offset, count,
+                sink, header.IsEncrypted, TestContext.Current.CancellationToken));
+        }
+
+        Assert.Equal(full, segmented);
+    }
+
+    [Fact]
+    public async Task ExtractEntrySegmentAsync_EncryptedContainer_MatchesTheFullExtraction()
+    {
+        var payload = new byte[3 * Rc6.BlockSize + 5];
+        Random.Shared.NextBytes(payload);
+        var spec = new EntrySpec("data.fex", "DATAFILE", "xxxxxxxxxxxxxxxx", payload);
+        var plain = BuildImage(VersionOne, spec);
+        var imagePath = Path.Combine(_root, "segment-encrypted.img");
+        await File.WriteAllBytesAsync(imagePath, Encrypt(plain, VersionOne, [spec]), TestContext.Current.CancellationToken);
+
+        await using var stream = File.OpenRead(imagePath);
+        var header = AllwinnerImageWtyReader.Read(stream, TestContext.Current.CancellationToken);
+        var entry = Assert.Single(header.Entries);
+        var full = new byte[AllwinnerImageWtyReader.EffectiveLength(entry)];
+        AllwinnerImageWtyReader.ExtractEntry(stream, entry, new MemoryStream(full), header.IsEncrypted,
+            TestContext.Current.CancellationToken);
+
+        var segmented = new byte[full.Length];
+        using var sink = new MemoryStream(segmented, writable: true);
+        Assert.Equal(full.Length - Rc6.BlockSize, await AllwinnerImageWtyReader.ExtractEntrySegmentAsync(stream,
+            entry, Rc6.BlockSize, full.Length - Rc6.BlockSize, sink, header.IsEncrypted,
+            TestContext.Current.CancellationToken));
+        Assert.True(full.AsSpan(Rc6.BlockSize).SequenceEqual(segmented.AsSpan(0, full.Length - Rc6.BlockSize)));
+    }
+
+    [Fact]
+    public async Task ExtractEntrySegmentAsync_SegmentBeyondThePayload_IsRejected()
+    {
+        var image = BuildImage(VersionOne, new EntrySpec("data.fex", "DATAFILE", "xxxxxxxxxxxxxxxx", new byte[1024]));
+        var imagePath = Path.Combine(_root, "segment-out-of-range.img");
+        await File.WriteAllBytesAsync(imagePath, image, TestContext.Current.CancellationToken);
+
+        await using var stream = File.OpenRead(imagePath);
+        var header = AllwinnerImageWtyReader.Read(stream, TestContext.Current.CancellationToken);
+        var entry = Assert.Single(header.Entries);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AllwinnerImageWtyReader.ExtractEntrySegmentAsync(
+            stream, entry, 512, 1024, Stream.Null, header.IsEncrypted, TestContext.Current.CancellationToken));
+    }
+
     private sealed class CancelingStream(Stream inner, CancellationTokenSource source, int triggerBytes) : Stream
     {
         private long _served;
