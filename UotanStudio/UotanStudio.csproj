@@ -45,11 +45,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
-    <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
+    <ProjectReference Include="..\UotanStudio.Pipeline\UotanStudio.Pipeline.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <ProjectReference Include="..\UotanStudio.Mirroring\UotanStudio.Mirroring.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
-    <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />

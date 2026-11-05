@@ -2,7 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Project Path="UotanStudio.Projects/UotanStudio.Projects.csproj" />
+  <Project Path="UotanStudio.Pipeline/UotanStudio.Pipeline.csproj" />
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
   <Project Path="UotanStudio.Hash/UotanStudio.Hash.csproj" />
@@ -12,7 +12,6 @@
   <Project Path="UotanStudio.DD/UotanStudio.DD.csproj" />
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
   <Project Path="UotanStudio.Firmware.MagicGen/UotanStudio.Firmware.MagicGen.csproj" />
-  <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
   <Project Path="UotanStudio.Media/UotanStudio.Media.csproj" />
   <Project Path="UotanStudio.Mirroring/UotanStudio.Mirroring.csproj" />
   <Project Path="UotanStudio.RegexInfer/UotanStudio.RegexInfer.csproj" />
@@ -20,7 +19,7 @@
   <Project Path="UotanStudio/UotanStudio.csproj">
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
     <BuildDependency Project="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
-    <BuildDependency Project="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
+    <BuildDependency Project="UotanStudio.Pipeline/UotanStudio.Pipeline.csproj" />
   </Project>
   <Project Path="UotanStudio.Tests/UotanStudio.Tests.csproj" />
   <Project Path="UotanStudio.Benchmarks/UotanStudio.Benchmarks.csproj" />
