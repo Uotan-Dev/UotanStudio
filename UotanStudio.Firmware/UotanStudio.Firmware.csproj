@@ -12,6 +12,7 @@
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="LTRData.DiscUtils.ExFat" />
     <PackageReference Include="LTRData.DiscUtils.Fat" />
+    <PackageReference Include="Sdcb.SimdCodecs" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="YamlDotNet" />
     <!-- Value-enumerable LINQ over the per-class/per-inode arrays the Smali and EROFS writers walk. -->

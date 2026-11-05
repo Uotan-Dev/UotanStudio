@@ -46,6 +46,7 @@ public static class FirmwareFormatRegistry
             Register(new FileSystem.Fat.ExFatFormatHandler());
 
             Register(new BootSecurity.Avb.AvbFormatHandler());
+            Register(new BootSecurity.LogoPartition.LogoPartitionFormatHandler());
             Register(new BootSecurity.BootImage.BootImageFormatHandler());
 
             Register(new AndroidMeta.Dex.DexFormatHandler());
