@@ -16,7 +16,8 @@ public class DocumentOpenRegistryTests
         var expected = new[]
         {
             "Text", "Firmware", "FileManager", "Dtb", "Dex", "Elf", "Qualcomm",
-            "Manifest", "Arsc", "Hex", "Apk", "Partition", "Compare", "RockchipConfig"
+            "Manifest", "Arsc", "Hex", "Apk", "Partition", "Compare", "RockchipConfig",
+            "ImageViewer", "LogoPartition"
         };
 
         var actual = DocumentOpenRegistry.All
@@ -47,7 +48,9 @@ public class DocumentOpenRegistryTests
             (EditorOpenMode.Apk, "Apk"),
             (EditorOpenMode.Firmware, "Firmware"),
             (EditorOpenMode.FileSystem, "FileManager"),
-            (EditorOpenMode.RockchipConfig, "RockchipConfig")
+            (EditorOpenMode.RockchipConfig, "RockchipConfig"),
+            (EditorOpenMode.Image, "ImageViewer"),
+            (EditorOpenMode.LogoPartition, "LogoPartition")
         };
 
         foreach (var (mode, kind) in expected)
@@ -67,7 +70,8 @@ public class DocumentOpenRegistryTests
             EditorOpenMode.Partition, EditorOpenMode.Text, EditorOpenMode.Log,
             EditorOpenMode.Hex, EditorOpenMode.Dtb, EditorOpenMode.Dex,
             EditorOpenMode.Axml, EditorOpenMode.Arsc, EditorOpenMode.Apk,
-            EditorOpenMode.Firmware, EditorOpenMode.FileSystem, EditorOpenMode.RockchipConfig
+            EditorOpenMode.Firmware, EditorOpenMode.FileSystem, EditorOpenMode.RockchipConfig,
+            EditorOpenMode.Image, EditorOpenMode.LogoPartition
         };
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.Mode!.Value).ToList();
@@ -84,7 +88,8 @@ public class DocumentOpenRegistryTests
             "Explorer_OpenAsPartition", "Explorer_OpenAsText", "Explorer_OpenAsLog",
             "Explorer_OpenAsHex", "Explorer_OpenAsDtb", "Explorer_OpenAsDex",
             "Explorer_OpenAsAxml", "Explorer_OpenAsArsc", "Explorer_OpenAsApk",
-            "Explorer_OpenAsFirmware", "Explorer_OpenAsFileSystem", "Explorer_OpenAsRockchipConfig"
+            "Explorer_OpenAsFirmware", "Explorer_OpenAsFileSystem", "Explorer_OpenAsRockchipConfig",
+            "Explorer_OpenAsImage", "Explorer_OpenAsLogo"
         };
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.LocaleKey).ToList();
@@ -110,7 +115,9 @@ public class DocumentOpenRegistryTests
             (typeof(ApkEditorViewModel), "Apk"),
             (typeof(PartitionEditorViewModel), "Partition"),
             (typeof(CompareViewModel), "Compare"),
-            (typeof(RockchipConfigEditorViewModel), "RockchipConfig")
+            (typeof(RockchipConfigEditorViewModel), "RockchipConfig"),
+            (typeof(ImageViewerViewModel), "ImageViewer"),
+            (typeof(LogoPartitionViewModel), "LogoPartition")
         };
 
         foreach (var (viewModelType, kind) in expected)
@@ -166,6 +173,14 @@ public class DocumentOpenRegistryTests
     [InlineData("console.log", EditorOpenMode.Log)]
     [InlineData("blob.dat", EditorOpenMode.Firmware)]
     [InlineData("archive.xyz", EditorOpenMode.Auto)]
+    [InlineData("logo.png", EditorOpenMode.Image)]
+    [InlineData("photo.JPEG", EditorOpenMode.Image)]
+    [InlineData("animation.webp", EditorOpenMode.Image)]
+    [InlineData("page.tiff", EditorOpenMode.Image)]
+    [InlineData("icon.heic", EditorOpenMode.Image)]
+    [InlineData("scan.jp2", EditorOpenMode.Image)]
+    [InlineData("frame.pfm", EditorOpenMode.Image)]
+    [InlineData("modern.avif", EditorOpenMode.Image)]
     public void ResolveMode_PathOnlyRoutes_MatchesDelegatedDocumentFormatPolicy(string path, EditorOpenMode expected)
     {
         Assert.Equal(expected, DocumentOpenRegistry.ResolveMode(path));

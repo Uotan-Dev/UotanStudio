@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.IO;
 using System.Net.Sockets;
 using UotanStudio.Services;
 using UotanStudio.Services.Logging;
@@ -6,13 +8,16 @@ using Xunit;
 namespace UotanStudio.Tests.Services;
 
 /// <summary>
-/// Regression tests for <see cref="FirstChanceExceptionLogger"/>: the installed hook stays silent until
-/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> is set, the enabled hook writes Debug-level entries carrying the throw-site
-/// call path, repeated installs hook only once, and duplicates inside one throttle window collapse into a later
-/// summary line.
-/// <para><see cref="FirstChanceExceptionLogger"/> 回归测试：已安装的钩子在设置
-/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> 前保持静默；启用后写出带抛出点调用路径的 Debug 级别条目；重复安装只挂接
-/// 一次；同一节流窗口内的重复在窗口结束后折叠为一条汇总。</para>
+/// Regression tests for <see cref="FirstChanceExceptionLogger"/>: the installed hook captures device- and
+/// transport-level exceptions (Win32, COM, I/O, socket, timeout) by default as Debug-level entries carrying the
+/// throw-site call path and error codes, skips control-flow exceptions, widens capture to every type only with
+/// <c>UOTAN_FIRST_CHANCE_LOG=1</c>, disables capture with <c>UOTAN_FIRST_CHANCE_LOG=0</c>, hooks once across
+/// repeated installs with the switch read only at install, and collapses duplicates inside one throttle window
+/// into a later summary line.
+/// <para><see cref="FirstChanceExceptionLogger"/> 回归测试：已安装的钩子默认捕获设备与传输层异常
+/// （Win32、COM、I/O、套接字、超时），写出带抛出点调用路径与错误码的 Debug 级别条目；跳过控制流异常；仅在
+/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> 时扩大捕获到全部类型；<c>UOTAN_FIRST_CHANCE_LOG=0</c> 关闭捕获；重复安装只
+/// 挂接一次且开关仅在安装时读取；同一节流窗口内的重复在窗口结束后折叠为一条汇总。</para>
 /// </summary>
 [Collection("Log pipeline")]
 public sealed class FirstChanceExceptionLoggerTests : IDisposable
@@ -48,7 +53,7 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
         => _entries.Where(e => e.Source == "Exception" && e.Message.Contains(contains, StringComparison.Ordinal)).ToList();
 
     [Fact]
-    public void Hook_DefaultSwitch_WritesNoEntries()
+    public void Hook_DefaultSwitch_WritesDiagnosticExceptions()
     {
         FirstChanceExceptionLogger.Uninstall();
 
@@ -56,18 +61,80 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
         {
             FirstChanceExceptionLogger.Install();
 
+            try { throw new Win32Exception(23, "crc-win32-probe"); }
+            catch (Win32Exception) { }
+
+            try { throw new IOException("crc-io-probe"); }
+            catch (IOException) { }
+
+            try { throw new TimeoutException("diagnostic-timeout-probe"); }
+            catch (TimeoutException) { }
+
             try { throw new SocketException((int)SocketError.ConnectionRefused); }
             catch (SocketException) { }
 
-            try { throw new OperationCanceledException("default-switch-probe"); }
+            var win32 = FindEntry("crc-win32-probe");
+            Assert.NotNull(win32);
+            Assert.Equal(LogLevel.Debug, win32!.Level);
+            Assert.Contains("Win32Exception", win32.Message, StringComparison.Ordinal);
+            Assert.Contains("code=23", win32.Message, StringComparison.Ordinal);
+            Assert.Contains("thrown at:", win32.Message, StringComparison.Ordinal);
+
+            var io = FindEntry("crc-io-probe");
+            Assert.NotNull(io);
+            Assert.Contains("IOException", io!.Message, StringComparison.Ordinal);
+            Assert.Contains("thrown at:", io.Message, StringComparison.Ordinal);
+
+            Assert.NotNull(FindEntry("diagnostic-timeout-probe"));
+            Assert.NotNull(FindEntry("SocketException"));
+        }
+        finally
+        {
+            FirstChanceExceptionLogger.Uninstall();
+            Environment.SetEnvironmentVariable(SwitchVariable, null);
+        }
+    }
+
+    [Fact]
+    public void Hook_DefaultSwitch_SkipsControlFlowExceptions()
+    {
+        FirstChanceExceptionLogger.Uninstall();
+
+        try
+        {
+            FirstChanceExceptionLogger.Install();
+
+            try { throw new OperationCanceledException("control-flow-cancellation-probe"); }
             catch (OperationCanceledException) { }
 
-            try { throw new TimeoutException("default-switch-probe"); }
-            catch (TimeoutException) { }
+            try { throw new InvalidOperationException("control-flow-invalid-probe"); }
+            catch (InvalidOperationException) { }
 
-            Assert.Empty(FindEntries("default-switch-probe"));
-            Assert.Empty(FindEntries("SocketException"));
-            Assert.DoesNotContain(_entries, e => e.Source == "Exception");
+            Assert.Empty(FindEntries("control-flow-cancellation-probe"));
+            Assert.Empty(FindEntries("control-flow-invalid-probe"));
+        }
+        finally
+        {
+            FirstChanceExceptionLogger.Uninstall();
+            Environment.SetEnvironmentVariable(SwitchVariable, null);
+        }
+    }
+
+    [Fact]
+    public void Hook_DefaultSwitch_AppendsInnerExceptionSummary()
+    {
+        FirstChanceExceptionLogger.Uninstall();
+
+        try
+        {
+            FirstChanceExceptionLogger.Install();
+
+            try { throw new IOException("io-outer-probe", new Win32Exception(23, "win32-inner-probe")); }
+            catch (IOException) { }
+
+            var entry = FindEntry("io-outer-probe");
+            Assert.NotNull(entry);
+            Assert.Contains("inner: Win32Exception: win32-inner-probe", entry!.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -103,6 +170,30 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
     }
 
     [Fact]
+    public void Hook_SwitchEnabled_WritesAllExceptionTypes()
+    {
+        FirstChanceExceptionLogger.Uninstall();
+        Environment.SetEnvironmentVariable(SwitchVariable, "1");
+
+        try
+        {
+            FirstChanceExceptionLogger.Install();
+
+            try { throw new InvalidOperationException("all-types-probe"); }
+            catch (InvalidOperationException) { }
+
+            var entry = FindEntry("all-types-probe");
+            Assert.NotNull(entry);
+            Assert.Equal(LogLevel.Debug, entry!.Level);
+        }
+        finally
+        {
+            FirstChanceExceptionLogger.Uninstall();
+            Environment.SetEnvironmentVariable(SwitchVariable, null);
+        }
+    }
+
+    [Fact]
     public void Hook_EnabledCancellation_WritesCanceledTokenState()
     {
         FirstChanceExceptionLogger.Uninstall();
@@ -122,6 +213,28 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
             Assert.Equal(LogLevel.Debug, entry!.Level);
             Assert.Contains("OperationCanceledException", entry.Message, StringComparison.Ordinal);
             Assert.Contains("canceled=True", entry.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            FirstChanceExceptionLogger.Uninstall();
+            Environment.SetEnvironmentVariable(SwitchVariable, null);
+        }
+    }
+
+    [Fact]
+    public void Hook_SwitchZero_WritesNoEntries()
+    {
+        FirstChanceExceptionLogger.Uninstall();
+        Environment.SetEnvironmentVariable(SwitchVariable, "0");
+
+        try
+        {
+            FirstChanceExceptionLogger.Install();
+
+            try { throw new TimeoutException("zero-switch-probe"); }
+            catch (TimeoutException) { }
+
+            Assert.DoesNotContain(_entries, e => e.Source == "Exception");
         }
         finally
         {
@@ -166,8 +279,8 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
             Environment.SetEnvironmentVariable(SwitchVariable, "1");
             FirstChanceExceptionLogger.Install();
 
-            try { throw new TimeoutException("switch-read-once-probe"); }
-            catch (TimeoutException) { }
+            try { throw new OperationCanceledException("switch-read-once-probe"); }
+            catch (OperationCanceledException) { }
 
             Assert.Empty(FindEntries("switch-read-once-probe"));
         }

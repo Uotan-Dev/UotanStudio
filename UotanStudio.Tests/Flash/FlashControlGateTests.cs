@@ -222,7 +222,6 @@ public sealed class FlashControlGateTests
         }
 
         Assert.True(gate.BusyDisabled);
-        Assert.Null(gate.IsVisible);
     }
 
     [Fact]
@@ -237,7 +236,6 @@ public sealed class FlashControlGateTests
             var gate = FlashControlGate.BusyOnly(name);
             Assert.True(gate.IsOffered(Context(FlashDeviceMode.None)), name);
             Assert.True(gate.BusyDisabled, name);
-            Assert.Null(gate.IsVisible);
         }
     }
 
@@ -253,49 +251,32 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
-    public void SectionHeader_HidesOnlyWhenAnotherProtocolIsSelected()
+    public void SectionHeader_StaysUsableForEveryDevice()
     {
-        var gate = FlashControlGate.SectionHeader("EdlExpander", FlashDeviceMode.Edl);
-        var visible = gate.IsVisible;
-        Assert.NotNull(visible);
+        var gate = FlashControlGate.SectionHeader("EdlExpander");
 
-        Assert.True(gate.IsOffered(Context(FlashDeviceMode.None)));
-        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
+        foreach (var mode in SelectedModes.Append(FlashDeviceMode.None))
+        {
+            Assert.True(gate.IsOffered(Context(mode)), mode.ToString());
+        }
 
-        Assert.True(visible(Context(FlashDeviceMode.None)));
-        Assert.True(visible(Context(FlashDeviceMode.Edl)));
-        Assert.False(visible(Context(FlashDeviceMode.Mtk)));
-        Assert.False(visible(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb)));
+        Assert.False(gate.BusyDisabled);
     }
 
     [Fact]
-    public void SpacemiTSectionHeader_HidesForEveryOtherEndpoint()
+    public void FlashPage_ClosesUnmatchedActionsWithoutHidingAnything()
     {
-        var gate = FlashControlGate.SpacemiTSectionHeader("SpacemiTExpander");
-        var visible = gate.IsVisible;
-        Assert.NotNull(visible);
+        var directory = Path.Combine(RepositoryRoot(), "UotanStudio", "ViewModels", "Flash");
+        var gateSource = File.ReadAllText(Path.Combine(directory, "FlashControlGate.cs"));
 
-        Assert.True(visible(Context(FlashDeviceMode.None)));
-        Assert.True(visible(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
-            spacemiTFastboot: true)));
-        Assert.False(visible(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
-        Assert.False(visible(Context(FlashDeviceMode.Edl)));
-    }
+        Assert.DoesNotContain("IsVisible", gateSource, StringComparison.Ordinal);
 
-    [Fact]
-    public void ImageSectionHeader_HidesForRestrictedKinds()
-    {
-        var gate = FlashControlGate.ImageSectionHeader("ImageExpander");
-        var visible = gate.IsVisible;
-        Assert.NotNull(visible);
-
-        Assert.True(visible(Context(FlashDeviceMode.None)));
-        Assert.True(visible(Context(FlashDeviceMode.Edl)));
-        Assert.True(visible(Context(FlashDeviceMode.Shared)));
-        Assert.False(visible(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb)));
-        Assert.False(visible(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
-        Assert.False(visible(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
-        Assert.False(visible(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
+        {
+            var source = File.ReadAllText(file);
+            Assert.False(source.Contains(".IsVisible =", StringComparison.Ordinal),
+                $"{Path.GetFileName(file)} hides a control instead of disabling it.");
+        }
     }
 
     [Fact]
