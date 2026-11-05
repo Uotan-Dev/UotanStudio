@@ -29,6 +29,50 @@ internal sealed class CommDeviceTransportOpener(
     private readonly int _adbPort = adbPort ?? DebugBridgeEndpoints.AdbServerPort;
     private readonly int _hdcPort = hdcPort ?? HdcServerClient.DefaultServerPort;
 
+    /// <summary>
+    /// Opens the native USB session for one endpoint, retrying a bounded number of times while the port is
+    /// momentarily unopenable. Discovery probes the same node right before the lease (a fastboot serial read opens,
+    /// reads and releases the interface), and Windows can still report the earlier handle as live for a moment after
+    /// it was closed, which makes a single open attempt fail on a perfectly healthy device. Each retry waits briefly
+    /// so the previous handle really is gone, and the last attempt's real failure text is what reaches the caller.
+    /// <para>为一个端点打开原生 USB 会话，并在端口短暂不可打开时有界重试。发现层紧接着租约探测同一节点（fastboot
+    /// 序列号读取会打开、读取并释放该接口），而 Windows 在句柄关闭后的瞬间仍可能报告前一个句柄存活，使一次打开尝试在
+    /// 完全健康的设备上失败。每次重试短暂等待，让前一个句柄确实消失；最后一次尝试的真实失败文案才会到达调用方。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint to open, carrying its backend and key. <para>要打开的端点，携带其后端与设备键。</para></param>
+    /// <param name="usb">The USB details recorded for that endpoint. <para>该端点记录的 USB 详细信息。</para></param>
+    /// <param name="cancellationToken">Cancels the remaining attempts. <para>取消剩余尝试。</para></param>
+    /// <returns>The opened session, or <see langword="null"/> when every attempt failed.
+    /// <para>已打开的会话；每次尝试都失败时为 <see langword="null"/>。</para></returns>
+    private IUsbDeviceSession? OpenNativeSessionWithRetry(DeviceEndpoint endpoint, UsbEndpointDetails usb,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend);
+            if (session is not null || attempt >= NativeOpenAttempts)
+            {
+                return session;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Thread.Sleep(NativeOpenRetryDelayMs);
+        }
+    }
+
+    /// <summary>
+    /// Total number of native open attempts for one endpoint; the extra attempts absorb the transient port
+    /// contention discovery can leave right before a lease.
+    /// <para>单个端点的原生打开尝试总数；额外的尝试吸收发现层在租约之前可能留下的瞬态端口竞争。</para>
+    /// </summary>
+    private const int NativeOpenAttempts = 4;
+
+    /// <summary>
+    /// Pause between two native open attempts, long enough for the previous handle's teardown to complete.
+    /// <para>两次原生打开尝试之间的暂停，足够前一个句柄完成拆除。</para>
+    /// </summary>
+    private const int NativeOpenRetryDelayMs = 250;
+
     /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint whose device was bound as a COM port falls back to that serial port.
     /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 端点回退到该串口。</para></summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
@@ -60,7 +104,7 @@ internal sealed class CommDeviceTransportOpener(
             filter.InterfaceProtocol == usb.InterfaceProtocol)
         {
             DebugBridgeSessionOpener.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
-            var session = kit.OpenUsbDeviceSessionByKey(endpoint.Address, usb.Backend);
+            var session = OpenNativeSessionWithRetry(endpoint, usb, cancellationToken);
             if (session is null)
             {
                 if (string.Equals(endpoint.Protocol, "edl", StringComparison.Ordinal) &&
@@ -170,7 +214,8 @@ internal sealed class CommDeviceTransportOpener(
             .DeviceInstanceId;
         var instance = string.IsNullOrWhiteSpace(instanceId) ? string.Empty : $" (instance '{instanceId}')";
         return $"{identity}{instance} is still connected but no {usb.Backend} backend could open it: another process " +
-            $"most likely holds an exclusive handle to this port. Close the other flasher or debug tool and retry " +
-            $"({endpoint.Protocol} endpoint).";
+            $"most likely holds an exclusive handle to this port, or the device withdrew its interface after a mode " +
+            $"switch (the communication log records the native error of the failed open). Close the other flasher or " +
+            $"debug tool and retry ({endpoint.Protocol} endpoint).";
     }
 }

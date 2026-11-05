@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Routing;
 
@@ -67,6 +68,8 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int? por
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
             ex is IOException or System.Net.Sockets.SocketException)
         {
+            CommTrace.Error("adb-server",
+                $"Listing adb server targets at {host}:{_port} failed and no server targets are reported: {ExceptionSummary.Describe(ex)}");
             return [];
         }
         cancellationToken.ThrowIfCancellationRequested();

@@ -94,19 +94,21 @@ public sealed partial class DeviceController
         {
             throw new NotSupportedException("USB reconnection requires observed metadata on one explicit native endpoint.");
         }
+        var capturedChain = capturedLocationChain is { Length: > 0 } ? capturedLocationChain : null;
         var evidenceSatisfied = identityPolicy switch
         {
-            UsbReconnectIdentityPolicy.Container => previousInfo.ContainerId is null || previousInfo.ContainerId == Guid.Empty,
-            UsbReconnectIdentityPolicy.PhysicalPort => !IsUsableUsbPortPath(previousInfo.PhysicalPortPath),
-            _ => !HasRockchipLoaderLocationEvidence(previousInfo)
+            UsbReconnectIdentityPolicy.Container => previousInfo.ContainerId is { } container && container != Guid.Empty,
+            UsbReconnectIdentityPolicy.PhysicalPort => IsUsableUsbPortPath(previousInfo.PhysicalPortPath),
+            _ => capturedChain is not null || HasUsbLocationEvidence(previousInfo)
         };
         if (!evidenceSatisfied)
         {
             throw new NotSupportedException("The previous endpoint lacks the evidence required by the selected USB reconnection policy.");
         }
 
-        var stickyLocationChain = identityPolicy == UsbReconnectIdentityPolicy.RockchipLoader
-            ? (capturedLocationChain is { Length: > 0 } ? capturedLocationChain : ReadRockchipLocationChain(previousInfo))
+        var stickyLocationChain = identityPolicy is UsbReconnectIdentityPolicy.RockchipLoader
+                or UsbReconnectIdentityPolicy.PhysicalLocation
+            ? (capturedChain ?? ReadUsbLocationChain(previousInfo))
             : null;
         if (!_factories.TryGetValue(kind, out var factory))
         {
@@ -134,7 +136,8 @@ public sealed partial class DeviceController
                 token.ThrowIfCancellationRequested();
                 lastSnapshot = snapshot;
                 var previousStillListed = snapshot.Endpoints.FirstOrDefault(endpoint => endpoint.Id == previous.Id);
-                if (identityPolicy == UsbReconnectIdentityPolicy.RockchipLoader &&
+                if (identityPolicy is UsbReconnectIdentityPolicy.RockchipLoader
+                        or UsbReconnectIdentityPolicy.PhysicalLocation &&
                     previousStillListed is { } listed &&
                     RockchipObservationReplaced(previousInfo, listed.UsbInfo))
                 {
@@ -284,8 +287,8 @@ public sealed partial class DeviceController
             endpoint.Protocol == protocol && endpoint.Usb?.Backend == backend))
         {
             var info = endpoint.UsbInfo;
-            var previousChain = ReadRockchipLocationChain(previousInfo);
-            var candidateChain = info is null ? null : ReadRockchipLocationChain(info);
+            var previousChain = ReadUsbLocationChain(previousInfo);
+            var candidateChain = info is null ? null : ReadUsbLocationChain(info);
             CommTrace.Debug("reconnect", $"Reconnect wait: candidate {endpoint.Id} rejected by {identityPolicy} evidence. " +
                 $"previous chain={previousChain ?? "-"} serial={previousInfo.SerialNumber ?? "-"} bcdUSB={(previousInfo.BcdUsb is { } pb ? $"0x{pb:X4}" : "-")} instance={previousInfo.DeviceInstanceId ?? "-"}; " +
                 $"candidate chain={candidateChain ?? "-"} serial={info?.SerialNumber ?? "-"} bcdUSB={(info?.BcdUsb is { } cb ? $"0x{cb:X4}" : "-")} instance={info?.DeviceInstanceId ?? "-"}.");
@@ -351,6 +354,10 @@ public sealed partial class DeviceController
         {
             return MatchesRockchipLoaderEvidence(expected, actual, stickyLocationChain);
         }
+        if (policy == UsbReconnectIdentityPolicy.PhysicalLocation)
+        {
+            return MatchesUsbLocation(expected, actual, stickyLocationChain);
+        }
         return IsUsableUsbPortPath(actual.PhysicalPortPath)
             && string.Equals(expected.PhysicalPortPath, actual.PhysicalPortPath, StringComparison.Ordinal)
             && !(expected.ContainerId is { } first && first != Guid.Empty
@@ -378,7 +385,7 @@ public sealed partial class DeviceController
     /// 存在时决定位置比较。</para></param>
     internal static bool MatchesRockchipLoaderEvidence(UsbDeviceInfo previous, UsbDeviceInfo replacement,
         string? stickyLocationChain = null)
-        => MatchesRockchipLocation(previous, replacement, stickyLocationChain) && IsRockchipLoaderStage(replacement);
+        => MatchesUsbLocation(previous, replacement, stickyLocationChain) && IsRockchipLoaderStage(replacement);
 
     /// <summary>
     /// Reports whether the replacement sits at the same physical location as the previous observation. A
@@ -396,20 +403,20 @@ public sealed partial class DeviceController
     /// The previous hub chain captured while the previous device node was alive, or
     /// <see langword="null"/> when unavailable.
     /// <para>旧设备节点存活时捕获的集线器链；不可用时为 <see langword="null"/>。</para></param>
-    internal static bool MatchesRockchipLocation(UsbDeviceInfo previous, UsbDeviceInfo replacement,
+    internal static bool MatchesUsbLocation(UsbDeviceInfo previous, UsbDeviceInfo replacement,
         string? stickyLocationChain = null)
     {
         if (stickyLocationChain is { Length: > 0 })
         {
-            var replacementChainOnly = ReadRockchipLocationChain(replacement);
+            var replacementChainOnly = ReadUsbLocationChain(replacement);
             if (replacementChainOnly is not null)
             {
                 return string.Equals(stickyLocationChain, replacementChainOnly, StringComparison.Ordinal);
             }
         }
 
-        var previousChain = ReadRockchipLocationChain(previous);
-        var replacementChain = ReadRockchipLocationChain(replacement);
+        var previousChain = ReadUsbLocationChain(previous);
+        var replacementChain = ReadUsbLocationChain(replacement);
         if (previousChain is not null && replacementChain is not null)
         {
             return string.Equals(previousChain, replacementChain, StringComparison.Ordinal);
@@ -436,7 +443,7 @@ public sealed partial class DeviceController
     /// <param name="info">The observed USB metadata to read from.<para>要读取的 USB 观测元数据。</para></param>
     /// <returns>The hub chain, or <see langword="null"/> when no usable chain was reported.
     /// <para>集线器链；没有可用链时为 <see langword="null"/>。</para></returns>
-    public static string? CaptureUsbLocationChain(UsbDeviceInfo info) => ReadRockchipLocationChain(info);
+    public static string? CaptureUsbLocationChain(UsbDeviceInfo info) => ReadUsbLocationChain(info);
 
     /// <summary>
     /// Reads the stable physical hub chain of one observation: the Windows chain behind the device instance id
@@ -445,7 +452,7 @@ public sealed partial class DeviceController
     /// <para>读取一次观测的稳定物理集线器链：优先设备实例 ID 背后的 Windows 集线器链，否则后端端口路径；
     /// 两个证据源都没有可用链时返回 <see langword="null"/>。</para>
     /// </summary>
-    private static string? ReadRockchipLocationChain(UsbDeviceInfo info)
+    private static string? ReadUsbLocationChain(UsbDeviceInfo info)
     {
         if (info.DeviceInstanceId is { Length: > 0 } instanceId
             && UsbLocationChain.TryRead(instanceId) is { Length: > 0 } chain)
@@ -532,8 +539,8 @@ public sealed partial class DeviceController
     /// <para>判定旧端点是否携带 Rockchip loader 策略所需的位置证据：设备实例 ID 背后的 Windows 集线器链，
     /// 或可用的后端端口路径。</para>
     /// </summary>
-    private static bool HasRockchipLoaderLocationEvidence(UsbDeviceInfo info)
-        => ReadRockchipLocationChain(info) is not null
+    private static bool HasUsbLocationEvidence(UsbDeviceInfo info)
+        => ReadUsbLocationChain(info) is not null
         || RkdlSerialReader.InstanceLocationTail(info.DeviceInstanceId ?? string.Empty) is not null;
 
 }

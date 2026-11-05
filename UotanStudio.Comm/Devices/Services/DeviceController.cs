@@ -203,7 +203,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
                 {
                     throw;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     var previous = result.Endpoints
                         .Where(endpoint => endpoint.Source == source.Name)
@@ -213,6 +213,9 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
                         throw;
                     }
 
+                    CommTrace.Error("discovery",
+                        $"Discovery source {source.Name} failed; keeping the {previous.Length} endpoint(s) from " +
+                        $"the previous snapshot: {ExceptionSummary.Describe(ex)}");
                     discovered = previous;
                 }
 

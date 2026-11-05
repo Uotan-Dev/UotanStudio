@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 
@@ -52,6 +53,8 @@ public sealed class HdcServerDiscoverySource(string host = "127.0.0.1", int? por
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
             ex is IOException or System.Net.Sockets.SocketException or TimeoutException)
         {
+            CommTrace.Error("hdc-server",
+                $"Listing HDC server targets at {host}:{_port} failed and no server targets are reported: {ExceptionSummary.Describe(ex)}");
             return [];
         }
 
