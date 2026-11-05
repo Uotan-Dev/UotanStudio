@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.SpacemiT;
@@ -14,6 +15,20 @@ public sealed partial class DeviceMonitorService
     /// 慢速主机上可能耗时数秒。</para>
     /// </summary>
     private const int SpacemiTReopenTimeoutMs = 60_000;
+
+    /// <summary>
+    /// Number of re-open attempts made when <c>continue</c> left the gadget on the same USB node: the vendor
+    /// flasher loops ten times two seconds apart, so this mirrors its cadence within the cooperative deadline.
+    /// <para><c>continue</c> 之后 gadget 仍停留在同一 USB 节点时的重开尝试次数：厂商烧录器循环十次、间隔两秒，
+    /// 因此在协作式时限内对齐它的节奏。</para>
+    /// </summary>
+    private const int SpacemiTReopenAttempts = 10;
+
+    /// <summary>
+    /// Pause between two re-open attempts, matching the vendor flasher's two-second reconnect cadence.
+    /// <para>两次重开尝试之间的暂停，对应厂商烧录器两秒的重连节奏。</para>
+    /// </summary>
+    private const int SpacemiTReopenDelayMs = 2_000;
 
     /// <summary>
     /// Runs a SpacemiT flash package against the device while holding one fastboot lease across the whole run:
@@ -105,33 +120,147 @@ public sealed partial class DeviceMonitorService
     /// <para>等待重枚举出的进迭时空 gadget 并返回其租约；所有身份策略都超时或缺少所需证据时返回
     /// <see langword="null"/>。</para>
     /// </summary>
+    /// <remarks>
+    /// The board does not always re-enumerate on <c>continue</c>: the BootROM stage hands over to U-Boot and
+    /// comes back as a new USB node (new serial, new container id — only the physical location survives), while
+    /// U-Boot's own <c>continue</c> keeps the same node and simply answers the next command. The same-node reopen
+    /// is therefore tried first and accepted only on a read-only <c>getvar</c> answer, which is what the vendor
+    /// flasher does; the location and container policies cover the re-enumerating stage, and a bounded scan poll
+    /// is the last resort.
+    /// <para>板卡在 <c>continue</c> 之后并不总会重枚举：BootROM 阶段移交给 U-Boot 时以新的 USB 节点返回
+    /// （新序列号、新容器 ID——只有物理位置延续），而 U-Boot 自身的 <c>continue</c> 保持同一节点并直接应答下一条
+    /// 命令。因此先尝试就地重开，并只在只读 <c>getvar</c> 得到应答时才接受，这正是厂商烧录器的做法；位置与容器
+    /// 策略覆盖会重枚举的阶段，有界的扫描轮询是最后回退。</para>
+    /// </remarks>
     /// <param name="previous">The endpoint captured from the released stale lease.
     /// <para>从已释放的过期租约捕获的端点。</para></param>
-    /// <param name="locationChain">The previous node's hub chain captured while it was alive, reused by the
-    /// physical-port policy. <para>旧节点存活时捕获的集线器链，供物理端口策略复用。</para></param>
+    /// <param name="locationChain">The previous node's hub chain captured while it was alive.
+    /// <para>旧节点存活时捕获的集线器链。</para></param>
     /// <param name="cancellationToken">Cancellation for the waits. <para>等待的取消令牌。</para></param>
     /// <returns>The verified replacement lease, or <see langword="null"/> when the gadget never reappeared.
     /// <para>经校验的替代租约；gadget 未重新出现时为 <see langword="null"/>。</para></returns>
     private DeviceLease? WaitForSpacemiTReconnect(DeviceEndpoint previous, string? locationChain,
         CancellationToken cancellationToken)
     {
-        try
+        if (TryLeaseSpacemiTFastbootGadget(locationChain, cancellationToken) is { } sameNode)
         {
-            return _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Fastboot,
-                SpacemiTReopenTimeoutMs, cancellationToken).GetAwaiter().GetResult();
+            return sameNode;
         }
-        catch (Exception exception) when (exception is NotSupportedException or TimeoutException)
+
+        foreach (var policy in new[]
+        {
+            UsbReconnectIdentityPolicy.PhysicalLocation,
+            UsbReconnectIdentityPolicy.PhysicalPort,
+            UsbReconnectIdentityPolicy.Container
+        })
         {
             try
             {
-                return _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Fastboot,
-                    UsbReconnectIdentityPolicy.PhysicalPort, SpacemiTReopenTimeoutMs, cancellationToken,
-                    locationChain).GetAwaiter().GetResult();
+                return _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Fastboot, policy,
+                    SpacemiTReopenTimeoutMs, cancellationToken, locationChain).GetAwaiter().GetResult();
             }
-            catch (Exception fallback) when (fallback is NotSupportedException or TimeoutException)
+            catch (Exception exception) when (exception is NotSupportedException or TimeoutException)
+            {
+            }
+        }
+
+        return PollSpacemiTFastbootGadget(locationChain, cancellationToken);
+    }
+
+    /// <summary>
+    /// Re-polls the board after every reconnection policy ran out: the current snapshot is scanned for the
+    /// SpacemiT fastboot endpoint at the captured physical location, leased fresh, and accepted only when a
+    /// read-only fastboot probe answers, which is what proves the handle really drives the gadget.
+    /// <para>在所有重连策略都用尽后重新轮询板卡：扫描当前快照中位于已捕获物理位置的进迭时空 fastboot 端点，
+    /// 重新租用，并且只在只读 fastboot 探测得到应答时才接受——这才证明句柄真的驱动 gadget。</para>
+    /// </summary>
+    /// <param name="locationChain">The captured hub chain the replacement must still sit on. <para>替代端点仍须位于的已捕获集线器链。</para></param>
+    /// <param name="cancellationToken">Cancels the poll. <para>取消轮询。</para></param>
+    /// <returns>The verified lease, or <see langword="null"/> when no poll answered. <para>经校验的租约；没有轮询得到应答时为 <see langword="null"/>。</para></returns>
+    private DeviceLease? PollSpacemiTFastbootGadget(string? locationChain, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= SpacemiTReopenAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (attempt > 1)
+            {
+                Thread.Sleep(SpacemiTReopenDelayMs);
+            }
+
+            if (TryLeaseSpacemiTFastbootGadget(locationChain, cancellationToken) is { } lease)
+            {
+                return lease;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Leases the single SpacemiT fastboot endpoint of the current snapshot and verifies it with a read-only probe.
+    /// <para>租用当前快照中唯一的进迭时空 fastboot 端点，并用只读探测校验它。</para>
+    /// </summary>
+    /// <remarks>
+    /// The released lease's key cannot be reused: it embeds the BootROM stage's serial, which the next stage
+    /// replaces. When a captured hub chain exists it is required to still match, so a second board on the same
+    /// host is never picked up; without it, only an unambiguous single match is accepted. Any open or probe
+    /// failure releases the lease and reports <see langword="null"/> instead of a half-usable session.
+    /// <para>已释放租约的键不能复用：它内嵌 BootROM 阶段的序列号，而下一阶段会替换它。存在已捕获的集线器链时
+    /// 要求它仍然匹配，因此同一主机上的第二块板卡绝不会被选中；没有链时只接受无歧义的唯一匹配。任何打开或探测
+    /// 失败都会释放租约并报告 <see langword="null"/>，而不是返回一个半可用的会话。</para>
+    /// </remarks>
+    /// <param name="locationChain">The hub chain the endpoint must sit on, or <see langword="null"/> to accept a unique match.
+    /// <para>端点必须位于的集线器链；为 <see langword="null"/> 时接受唯一匹配。</para></param>
+    /// <param name="cancellationToken">Cancels the refresh, the open and the probe. <para>取消刷新、打开与探测。</para></param>
+    /// <returns>The verified lease, or <see langword="null"/> when none matched or the probe failed.
+    /// <para>经校验的租约；没有匹配或探测失败时为 <see langword="null"/>。</para></returns>
+    private DeviceLease? TryLeaseSpacemiTFastbootGadget(string? locationChain, CancellationToken cancellationToken)
+    {
+        DeviceLease? lease = null;
+        try
+        {
+            var snapshot = _controller.RefreshAsync(cancellationToken).GetAwaiter().GetResult();
+            var candidates = snapshot.Endpoints
+                .Where(endpoint => endpoint.Source == UsbDiscoverySource.SourceName &&
+                    endpoint.Route == "direct-usb" &&
+                    endpoint.Protocol == "fastboot" &&
+                    endpoint.Usb is { VendorId: SpacemiTConstants.UsbVendorId, ProductId: SpacemiTConstants.UsbProductId } &&
+                    (locationChain is null || string.Equals(
+                        DeviceController.CaptureUsbLocationChain(endpoint.UsbInfo!), locationChain, StringComparison.Ordinal)))
+                .Take(2)
+                .ToArray();
+            if (candidates.Length != 1)
             {
                 return null;
             }
+
+            lease = _controller.OpenAsync(snapshot, candidates[0].Id, DeviceSessionKind.Fastboot, cancellationToken)
+                .GetAwaiter().GetResult();
+            if (!lease.TryGetSession<FastbootSession>(out var session))
+            {
+                CloseLease(lease);
+                return null;
+            }
+
+            if (session.GetVarWithResult(SpacemiTConstants.VarBromVersion, useCache: false).Success
+                || session.GetVarWithResult("version", useCache: false).Success
+                || session.GetVarWithResult("product", useCache: false).Success)
+            {
+                return lease;
+            }
+
+            CloseLease(lease);
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException
+            or FastbootException or KeyNotFoundException or NotSupportedException or TimeoutException)
+        {
+            if (lease is not null)
+            {
+                CloseLease(lease);
+            }
+
+            return null;
         }
     }
 }
