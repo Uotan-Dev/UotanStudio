@@ -400,16 +400,24 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
                             </Grid>
-                            <StackPanel Name="AvbOptionsPanel" Spacing="8"
-                                        IsVisible="{Binding #DisableVbmetaBox.IsChecked}">
+                            <!-- AVB 选项组常驻：未勾选“禁用 AVB”时只把命令选择框置灰，组本身不消失。 -->
+                            <!-- The AVB option group stays on the page: with AVB disabling unchecked only the command
+                                 selector turns unusable instead of the group leaving the page. -->
+                            <StackPanel Name="AvbOptionsPanel" Spacing="8">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_DisableVbmeta}" FontWeight="SemiBold" />
                                 <ComboBox Name="AvbDisableCommandBox" HorizontalAlignment="Stretch" Height="32"
                                           VerticalContentAlignment="Center"
                                           SelectedIndex="0"
+                                          IsEnabled="{Binding #DisableVbmetaBox.IsChecked}"
                                           AutomationProperties.Name="{DynamicResource Avb_DisableCommandTitle}" />
                             </StackPanel>
-                            <StackPanel Name="RootOptionsPanel" Spacing="8" IsVisible="False">
+                            <!-- Root 分组常驻：未勾选“添加 Root”时整组只置灰，自定义包入口与版本列表各自按所选来源置灰，
+                                 而不是从页面上消失。 -->
+                            <!-- The root group stays on the page: with the root patch unchecked the group only turns
+                                 unusable, and the custom-package entries and the version list each follow the chosen
+                                 source instead of leaving the page. -->
+                            <StackPanel Name="RootOptionsPanel" Spacing="8">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_AddRoot}" FontWeight="SemiBold" />
                                 <ComboBox Name="RootPartitionBox" HorizontalAlignment="Stretch" Height="32"
@@ -421,10 +429,9 @@
                                 <ComboBox Name="RootVersionBox" HorizontalAlignment="Stretch" Height="32"
                                           VerticalContentAlignment="Center" />
                                 <TextBox Name="RootPackagePathBox" Height="32" VerticalContentAlignment="Center"
-                                         IsVisible="False"
                                          IsReadOnly="True" PlaceholderText="{DynamicResource Flash_RootPackageHint}"
                                          AutomationProperties.Name="{DynamicResource Flash_ChooseRootPackage}" />
-                                <Button Name="ChooseRootPackageButton" Classes="pane-action" IsVisible="False"
+                                <Button Name="ChooseRootPackageButton" Classes="pane-action"
                                         Click="OnChooseRootPackageClick"
                                         Content="{DynamicResource Flash_ChooseRootPackage}" />
                             </StackPanel>
@@ -595,6 +602,31 @@
                                 <CheckBox Name="EdlSkipResponseBox" Content="{DynamicResource Flash_EdlSkipResponse}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlSkipResponse}" />
+                                <StackPanel Name="EdlInfoGroup" Spacing="6">
+                                    <!-- 读取设备信息的结果逐条呈现：键取自本地化资源，值由 EdlInfoFormatter 格式化。 -->
+                                    <!-- Each row of the device-information read is shown in place: the key comes from the localised resources and the value is formatted by EdlInfoFormatter. -->
+                                    <TextBlock Text="{DynamicResource Flash_EdlInfoGroup}" FontSize="12"
+                                               FontWeight="SemiBold" Opacity="0.8" />
+                                    <Border Classes="InfoCard" MaxHeight="220" MinHeight="40">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl Name="EdlInfoList" ItemsSource="{Binding EdlInfoRows}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid ColumnDefinitions="150,*" ColumnSpacing="8" Margin="0,2">
+                                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                                       FontSize="12" Opacity="0.8"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Size}"
+                                                                       FontSize="12" TextWrapping="Wrap"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
+                                </StackPanel>
                                 <StackPanel Name="EdlRegionGroup" Spacing="8">
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <TextBox Name="EdlBootableValueBox" Grid.Column="0" MinHeight="32" Text="0"
@@ -624,12 +656,73 @@
                                                        VerticalAlignment="Center" MaxLines="2" />
                                         </Button>
                                     </Grid>
+                                    <!-- 重启到指定目标模式：System/PowerOff/Edl 直接发 power，Recovery/Fastbootd 需要 misc 引导镜像。 -->
+                                    <!-- Reboot into a chosen target mode: System/PowerOff/Edl send power directly; Recovery/Fastbootd need a misc boot image. -->
+                                    <TextBlock Text="{DynamicResource Flash_EdlRebootTarget}" FontSize="12"
+                                               Opacity="0.8" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <TextBox Name="EdlBootImageBox" Grid.Column="0" Height="28"
+                                                 VerticalContentAlignment="Center"
+                                                 PlaceholderText="{DynamicResource Flash_EdlBootImageHint}"
+                                                 AutomationProperties.Name="{DynamicResource Flash_EdlBootImageHint}" />
+                                        <Button Name="EdlBootImageButton" Grid.Column="1" Classes="pane-action"
+                                                Click="OnEdlBootImageClick"
+                                                Content="{DynamicResource Flash_EdlBootImageChoose}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlBootImageChoose}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <ComboBox Name="EdlRebootTargetBox" Grid.Column="0" Height="32"
+                                                  VerticalContentAlignment="Center"
+                                                  AutomationProperties.Name="{DynamicResource Flash_EdlRebootTarget}" />
+                                        <Button Name="EdlRebootTargetButton" Grid.Column="1" Classes="pane-action"
+                                                Click="OnEdlRebootTargetClick"
+                                                ToolTip.Tip="{DynamicResource Flash_EdlRebootTarget}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlRebootTarget}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlRebootTargetGo}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
+                                    </Grid>
+                                    <!-- 已有的 EDL 区域动作：回读、擦除、整区转储与复位。它们一直存在处理器，这里补上入口。 -->
+                                    <!-- Existing EDL region actions: read-back, erase, whole-region dump and reset. Their handlers already existed; this adds the entries. -->
+                                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                        <Button Name="EdlReadbackButton" Classes="pane-action" MinWidth="110"
+                                                Click="OnEdlReadbackClick"
+                                                ToolTip.Tip="{DynamicResource Flash_EdlReadbackSelected}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlReadbackSelected}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlReadbackSelected}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
+                                        <Button Name="EdlReadLunButton" Classes="pane-action" MinWidth="110"
+                                                Click="OnEdlReadLunClick"
+                                                ToolTip.Tip="{DynamicResource Flash_EdlReadLun}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlReadLun}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlReadLun}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
+                                        <Button Name="EdlEraseButton" Classes="pane-action" MinWidth="110"
+                                                Click="OnEdlEraseClick"
+                                                ToolTip.Tip="{DynamicResource Flash_EdlErase}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlErase}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlErase}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
+                                        <Button Name="EdlResetButton" Classes="pane-action" MinWidth="110"
+                                                Click="OnEdlResetClick"
+                                                ToolTip.Tip="{DynamicResource Flash_EdlReset}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlReset}">
+                                            <TextBlock Text="{DynamicResource Flash_EdlReset}"
+                                                       FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Button>
+                                    </controls:JustifiedWrapPanel>
                                 </StackPanel>
-                                <!-- 回读清单的两项只在回读入口可用时出现：它们由 OnEdlReadbackClick 消费，
-                                     阶段未到 Firehose 时整组隐藏，与回读按钮同判据。 -->
-                                <!-- The two read-back manifest boxes appear only while the read-back entry is usable:
-                                     OnEdlReadbackClick consumes them, so the set hides with that button until the
-                                     link has answered on Firehose. -->
+                                <!-- 回读清单两项由 OnEdlReadbackClick 消费；它们随 EDL 分类一起呈现，回读入口不可用时随同分类置灰而不隐藏。 -->
+                                <!-- The two read-back manifest boxes are consumed by OnEdlReadbackClick; they stay on the
+                                     page with the EDL section and turn unusable with it instead of disappearing. -->
                                 <CheckBox Name="EdlGenerateXmlBox" Content="{DynamicResource Flash_EdlGenerateXml}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlGenerateXml}" />
@@ -1008,6 +1101,39 @@
                                 <TextBox Name="SunxiUbootBox" Height="32" VerticalContentAlignment="Center"
                                          IsReadOnly="True" Text="{Binding SunxiUbootPath}"
                                          AutomationProperties.Name="{DynamicResource Flash_SunxiChooseUboot}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="SunxiDtbBox" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             Text="{Binding SunxiDtbPath}"
+                                             PlaceholderText="{DynamicResource Flash_SunxiDtb}"
+                                             AutomationProperties.Name="{DynamicResource Flash_SunxiDtb}" />
+                                    <Button Grid.Column="1" Name="SunxiChooseDtbButton" Classes="pane-action"
+                                            Click="OnSunxiChooseDtbClick"
+                                            Content="{DynamicResource Flash_SunxiChooseDtb}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiChooseDtb}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="SunxiSysConfigBox" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             Text="{Binding SunxiSysConfigPath}"
+                                             PlaceholderText="{DynamicResource Flash_SunxiSysConfig}"
+                                             AutomationProperties.Name="{DynamicResource Flash_SunxiSysConfig}" />
+                                    <Button Grid.Column="1" Name="SunxiChooseSysConfigButton" Classes="pane-action"
+                                            Click="OnSunxiChooseSysConfigClick"
+                                            Content="{DynamicResource Flash_SunxiChooseSysConfig}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiChooseSysConfig}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="SunxiBoardConfigBox" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             Text="{Binding SunxiBoardConfigPath}"
+                                             PlaceholderText="{DynamicResource Flash_SunxiBoardConfig}"
+                                             AutomationProperties.Name="{DynamicResource Flash_SunxiBoardConfig}" />
+                                    <Button Grid.Column="1" Name="SunxiChooseBoardConfigButton" Classes="pane-action"
+                                            Click="OnSunxiChooseBoardConfigClick"
+                                            Content="{DynamicResource Flash_SunxiChooseBoardConfig}"
+                                            AutomationProperties.Name="{DynamicResource Flash_SunxiChooseBoardConfig}" />
+                                </Grid>
                                 <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="SunxiChooseUbootButton" Classes="pane-action"
                                             MinWidth="110"
@@ -1028,6 +1154,46 @@
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
                                 </controls:JustifiedWrapPanel>
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_SunxiImage}" FontSize="12" Opacity="0.8" />
+                                <TextBox Name="SunxiImageBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" Text="{Binding SunxiImagePath}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SunxiChooseImage}" />
+                                <Button Name="SunxiChooseImageButton" Classes="pane-action"
+                                        Click="OnSunxiChooseImageClick"
+                                        Content="{DynamicResource Flash_SunxiChooseImage}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiChooseImage}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiFlashMode}" FontSize="12"
+                                                   Opacity="0.8" />
+                                        <ComboBox Name="SunxiFlashModeBox" HorizontalAlignment="Stretch"
+                                                  SelectedIndex="{Binding SunxiFlashModeIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiModeFullErase}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiModePartitionErase}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiModePartition}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiModeKeepData}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="{DynamicResource Flash_SunxiPostAction}" FontSize="12"
+                                                   Opacity="0.8" />
+                                        <ComboBox Name="SunxiPostActionBox" HorizontalAlignment="Stretch"
+                                                  SelectedIndex="{Binding SunxiPostActionIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiPostReboot}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_SunxiPostPowerOff}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBox Name="SunxiPartitionsBox" Height="32" VerticalContentAlignment="Center"
+                                         Text="{Binding SunxiPartitions}"
+                                         PlaceholderText="{DynamicResource Flash_SunxiPartitionsHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_SunxiPartitions}" />
+                                <Button Name="SunxiFlashButton" Classes="pane-action" IsEnabled="False"
+                                        Click="OnSunxiFlashClick"
+                                        Content="{DynamicResource Flash_SunxiFlash}"
+                                        AutomationProperties.Name="{DynamicResource Flash_SunxiFlash}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_SunxiFelTools}" FontSize="12" FontWeight="SemiBold"

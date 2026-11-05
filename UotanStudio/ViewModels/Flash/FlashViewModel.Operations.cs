@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Firmware.BlockImage.Gpt;
@@ -16,6 +17,7 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.PatchPackages;
 using UotanStudio.Services.Ui;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Flash;
@@ -37,6 +39,57 @@ public sealed partial class FlashViewModel
     /// </summary>
     private static readonly string[] PartitionImageExtensions =
         [".img", ".img.zst", ".zst", ".iso", ".bin", ".mbn", ".elf", ".melf", ".simg", ".raw", ".dat", ".hex"];
+
+    /// <summary>
+    /// Extensions the <c>loader</c> row offers beyond plain images: the Sahara programmer forms plus the
+    /// multi-image manifest that spreads one programmer across several Sahara image identifiers.
+    /// <para><c>loader</c> 行在普通镜像之外提供的扩展名：Sahara programmer 的各个形态，以及把同一个 programmer
+    /// 分散到多个 Sahara 镜像标识上的多镜像清单。</para>
+    /// </summary>
+    private static readonly string[] LoaderRowPatterns =
+        ["*.elf", "*.mbn", "*.melf", "*.bin", "*.xml"];
+
+    /// <summary>
+    /// Builds the picker entry of the <c>loader</c> row, which admits the programmer forms and a Qualcomm
+    /// multi-image manifest directly instead of leaving both behind an "all files" choice.
+    /// <para>构造 <c>loader</c> 行的选择器条目：直接接纳 programmer 各形态与高通多镜像清单，而不是把它们
+    /// 留在“全部文件”选项之后。</para>
+    /// </summary>
+    /// <returns>The picker entry listing the loader-row formats.
+    /// <para>列出 loader 行格式的选择器条目。</para></returns>
+    private FilePickerFileType CreateLoaderRowFileType() => new(_localizer.GetString("Flash_LoaderFileType"))
+    {
+        Patterns = [.. LoaderRowPatterns]
+    };
+
+    /// <summary>
+    /// Describes the size column of a <c>loader</c> row: a manifest states how many images it carries instead of
+    /// its own byte count, because the manifest file's size says nothing about what will be uploaded.
+    /// <para>描述 <c>loader</c> 行的大小列：清单说明它携带多少个镜像，而不是自身的字节数，因为清单文件的大小
+    /// 并不能说明将要上传的内容。</para>
+    /// </summary>
+    /// <param name="path">The file the row now carries. <para>该行当前携带的文件。</para></param>
+    /// <param name="length">Its size in bytes. <para>其字节数。</para></param>
+    /// <returns>The size text for the row. <para>该行的大小文本。</para></returns>
+    private string DescribeLoaderRowSize(string path, long length)
+    {
+        if (!SaharaProgrammerManifest.IsManifestPath(path))
+        {
+            return $"{length / 1024d / 1024d:F1} MiB";
+        }
+
+        try
+        {
+            var images = SaharaProgrammerManifest.Read(path);
+            return string.Format(CultureInfo.InvariantCulture, _localizer.GetString("Flash_LoaderManifestSize"),
+                images.Count);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or ArgumentException
+            or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return $"{length / 1024d / 1024d:F1} MiB";
+        }
+    }
 
     private bool _busy;
     private bool _confirming;
@@ -1175,13 +1228,13 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Image operations section: it works on the loaded package rather than on the device, so every selected endpoint
-    /// without a restricted kind offers it and only the busy state closes it.
-    /// <para>镜像操作分类：它作用于已加载的刷机包而不是设备，因此任何没有受限种类的已选端点都提供它，只有忙碌状态会关闭它。</para>
+    /// Image operations section: it works on the loaded package rather than on the device, so the section stays present
+    /// for every endpoint and its actions report whether the page currently offers them.
+    /// <para>镜像操作分类：它作用于已加载的刷机包而不是设备，因此对任何端点都保持呈现，由动作自身表明页面当前是否提供它。</para>
     /// </summary>
     private void RegisterImageControlGates()
     {
-        RegisterGate("ImageExpander", FlashControlGate.ImageSectionHeader("ImageExpander"));
+        RegisterGate("ImageExpander", FlashControlGate.SectionHeader("ImageExpander"));
         RegisterGate("ImagePane", FlashControlGate.SharedAny("ImagePane", busyDisabled: true));
         RegisterGate("ExtractSelectedButton",
             FlashControlGate.SharedAny("ExtractSelectedButton", busyDisabled: true));
@@ -1189,21 +1242,24 @@ public sealed partial class FlashViewModel
             FlashControlGate.SharedAny("BuildWiredPackageButton", busyDisabled: true));
     }
 
+    /// <summary>
+    /// Applies the root options to the side pane: the panel stays present and turns unusable while adding root is off,
+    /// and the custom-package entries and the version list report their own availability instead of disappearing.
+    /// <para>把 Root 选项应用到侧边栏：面板保持呈现，在未启用添加 Root 时不可用；自定义包入口与版本列表改为各自表明可用性
+    /// 而不是隐藏。</para>
+    /// </summary>
     internal void UpdateRootControlsState()
     {
         var addRoot = Field<CheckBox>("AddRootBox").IsChecked == true;
         var sourceBox = Field<ComboBox>("RootFileSourceBox");
         var pathBox = Field<TextBox>("RootPackagePathBox");
-        var chooseBtn = Field<Button>("ChooseRootPackageButton");
 
-        var rootPanel = Field<StackPanel>("RootOptionsPanel");
-        rootPanel.IsVisible = addRoot;
-        SetControlEnabled("RootOptionsPanel", !_busy);
+        SetControlEnabled("RootOptionsPanel", addRoot);
         var customFile = sourceBox.SelectedIndex == RootCustomFileIndex;
-        pathBox.IsVisible = customFile;
-        chooseBtn.IsVisible = customFile;
+        pathBox.IsEnabled = addRoot && customFile;
+        SetControlEnabled("ChooseRootPackageButton", addRoot && customFile);
         var versionBox = Field<ComboBox>("RootVersionBox");
-        versionBox.IsVisible = !customFile;
+        versionBox.IsEnabled = addRoot && !customFile && _rootListCts is null;
         if (!addRoot)
         {
             CancelRootOperations();
@@ -1447,9 +1503,13 @@ public sealed partial class FlashViewModel
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = _localizer.GetString("Flash_ChooseFile"),
+            Title = _localizer.GetString(entry.Command == LoaderCommand
+                ? "Flash_EdlChooseLoaderFile"
+                : "Flash_ChooseFile"),
             AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
+            FileTypeFilter = entry.Command == LoaderCommand
+                ? [CreateLoaderRowFileType(), FilePickerFileTypes.All]
+                : [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || !Partitions.Contains(entry) ||
             files.Count != 1 || files[0].TryGetLocalPath() is not { } path || !File.Exists(path))
@@ -1464,7 +1524,9 @@ public sealed partial class FlashViewModel
             entry.FilePath = path;
             entry.FileName = Path.GetFileName(path);
             var length = new FileInfo(path).Length;
-            entry.Size = $"{length / 1024d / 1024d:F1} MiB";
+            entry.Size = entry.Command == LoaderCommand
+                ? DescribeLoaderRowSize(path, length)
+                : $"{length / 1024d / 1024d:F1} MiB";
             if (entry.Step is { } step)
             {
                 entry.Step = step with { ImagePath = path, ImageLength = length };
@@ -1518,51 +1580,39 @@ public sealed partial class FlashViewModel
 
     private DetectedDevice? _lastObservedDevice;
 
-    internal void ApplyDeviceProtocolExpansion(DeviceProtocolKind? protocol, bool spacemiTFastboot = false)
+    /// <summary>
+    /// Expands the side section the selected device's protocol owns and leaves every other section as the user left it,
+    /// so selecting a device never hides the sections that do not match it; a page without a device keeps the persisted
+    /// expansion untouched.
+    /// <para>展开所选设备协议对应的侧边分类，并保持其他分类为用户留下的状态，使选中设备不会隐藏不匹配的分类；
+    /// 没有设备的页面保持已持久化的展开状态不变。</para>
+    /// </summary>
+    /// <param name="protocol">Protocol of the selected device; <see langword="null"/> means nothing is selected.
+    /// <para>所选设备的协议；<see langword="null"/> 表示未选中设备。</para></param>
+    /// <param name="spacemiTFastboot">Whether the selected fastboot endpoint is the SpacemiT gadget.
+    /// <para>所选 fastboot 端点是否为进迭时空 gadget。</para></param>
+    internal void ExpandDeviceProtocolSection(DeviceProtocolKind? protocol, bool spacemiTFastboot = false)
     {
         if (_surface is null) return;
         if (protocol is DeviceProtocolKind.Fastboot && spacemiTFastboot)
         {
             Field<Expander>("SpacemiTExpander").IsExpanded = true;
-            Field<Expander>("EdlExpander").IsExpanded = false;
-            Field<Expander>("MtkExpander").IsExpanded = false;
-            Field<Expander>("RkExpander").IsExpanded = false;
-            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Edl)
         {
             Field<Expander>("EdlExpander").IsExpanded = true;
-            Field<Expander>("MtkExpander").IsExpanded = false;
-            Field<Expander>("RkExpander").IsExpanded = false;
-            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Mtk)
         {
             Field<Expander>("MtkExpander").IsExpanded = true;
-            Field<Expander>("EdlExpander").IsExpanded = false;
-            Field<Expander>("RkExpander").IsExpanded = false;
-            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Rkdl)
         {
             Field<Expander>("RkExpander").IsExpanded = true;
-            Field<Expander>("EdlExpander").IsExpanded = false;
-            Field<Expander>("MtkExpander").IsExpanded = false;
-            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Sunxi)
         {
             Field<Expander>("SunxiExpander").IsExpanded = true;
-            Field<Expander>("EdlExpander").IsExpanded = false;
-            Field<Expander>("MtkExpander").IsExpanded = false;
-            Field<Expander>("RkExpander").IsExpanded = false;
-        }
-        else
-        {
-            Field<Expander>("EdlExpander").IsExpanded = false;
-            Field<Expander>("MtkExpander").IsExpanded = false;
-            Field<Expander>("RkExpander").IsExpanded = false;
-            Field<Expander>("SunxiExpander").IsExpanded = false;
         }
     }
 
@@ -1575,7 +1625,7 @@ public sealed partial class FlashViewModel
                 _lastObservedDevice?.Protocol != currentDevice?.Protocol)
             {
                 _lastObservedDevice = currentDevice;
-                ApplyDeviceProtocolExpansion(currentDevice?.Protocol, IsSpacemiTSelected);
+                ExpandDeviceProtocolSection(currentDevice?.Protocol, IsSpacemiTSelected);
                 ResetRkStorageOptions();
                 if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
                 {
@@ -1653,11 +1703,8 @@ public sealed partial class FlashViewModel
             return existing;
         }
 
-        var programmerPath = EffectiveEdlProgrammer;
-        using var programmer = programmerPath is { } loader && File.Exists(loader)
-            ? File.OpenRead(loader)
-            : null;
-        await session.EnsureInitializedAsync(programmer, initialization, cancellationToken).ConfigureAwait(true);
+        await EdlProgrammerSession.EnsureInitializedAsync(session, EffectiveEdlProgrammer, initialization,
+            cancellationToken).ConfigureAwait(true);
         return session.Firehose ?? throw new InvalidOperationException(
             "The EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
     }
@@ -1720,12 +1767,12 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Qualcomm EDL section: its controls answer only on an EDL endpoint, so the pane carries the section's own condition
-    /// and the header hides once another protocol is selected.
-    /// <para>高通 EDL 分类：其控件只在 EDL 端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// and reports itself unusable for every other device while staying present.
+    /// <para>高通 EDL 分类：其控件只在 EDL 端点上应答，因此由该面板持有本分类自身的条件，并在其他设备下仅表明自身不可用而保持呈现。</para>
     /// </summary>
     private void RegisterEdlControlGates()
     {
-        RegisterGate("EdlExpander", FlashControlGate.SectionHeader("EdlExpander", FlashDeviceMode.Edl));
+        RegisterGate("EdlExpander", FlashControlGate.SectionHeader("EdlExpander"));
         RegisterGate("EdlPane", FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true));
         RegisterGate("EdlChooseProgrammerButton",
             FlashControlGate.Section("EdlChooseProgrammerButton", FlashDeviceMode.Edl));
@@ -1733,6 +1780,19 @@ public sealed partial class FlashViewModel
             FlashControlGate.Section("EdlSetBootableButton", FlashDeviceMode.Edl));
         RegisterGate("EdlPartitionDigestButton",
             FlashControlGate.Section("EdlPartitionDigestButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlBootImageBox",
+            FlashControlGate.Section("EdlBootImageBox", FlashDeviceMode.Edl));
+        RegisterGate("EdlBootImageButton",
+            FlashControlGate.Section("EdlBootImageButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlRebootTargetBox",
+            FlashControlGate.Section("EdlRebootTargetBox", FlashDeviceMode.Edl));
+        RegisterGate("EdlRebootTargetButton",
+            FlashControlGate.Section("EdlRebootTargetButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlReadbackButton", FlashControlGate.Section("EdlReadbackButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlReadLunButton", FlashControlGate.Section("EdlReadLunButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlEraseButton", FlashControlGate.Section("EdlEraseButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlResetButton", FlashControlGate.Section("EdlResetButton", FlashDeviceMode.Edl));
+        UpdateEdlRebootTargetOptions();
     }
 
     /// <summary>
@@ -1746,6 +1806,10 @@ public sealed partial class FlashViewModel
     /// The picked file must take effect at once: the picker is moved to the custom row, otherwise
     /// <c>EffectiveEdlProgrammer</c> keeps reading the package candidate.
     /// <para>选中的文件必须立刻生效：把候选框切到自选档，否则 <c>EffectiveEdlProgrammer</c> 仍读取包内候选。</para>
+    /// A multi-image manifest is admitted here as well, because a programmer spread over several Sahara image
+    /// identifiers has to be selectable from the same entry that selects a single image.
+    /// <para>多镜像清单在此同样被接纳，因为分散在多个 Sahara 镜像标识上的 programmer 必须能从这个选择入口
+    /// 选中，而不是只能选单镜像。</para>
     /// </remarks>
     internal async void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e)
     {
@@ -1754,11 +1818,18 @@ public sealed partial class FlashViewModel
         {
             Title = _localizer.GetString("Flash_EdlChooseCustomProgrammer"),
             AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
+            FileTypeFilter = [CreateLoaderRowFileType(), FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
         var length = File.Exists(path) ? new FileInfo(path).Length : 0;
-        if (length is 0 or > MaximumProgrammerFileBytes)
+        if (SaharaProgrammerManifest.IsManifestPath(path))
+        {
+            if (!await ValidateEdlProgrammerManifestAsync(path).ConfigureAwait(true))
+            {
+                return;
+            }
+        }
+        else if (length is 0 or > MaximumProgrammerFileBytes)
         {
             AppendLog(string.Format(CultureInfo.InvariantCulture,
                 _localizer.GetString("Flash_EdlProgrammerTooLarge"), Path.GetFileName(path)));
@@ -1781,6 +1852,42 @@ public sealed partial class FlashViewModel
         UpdateEdlButton();
     }
 
+    /// <summary>
+    /// Validates a picked multi-image programmer manifest before it becomes the custom programmer, so a manifest
+    /// with an unresolvable reference is refused at pick time instead of failing at session initialization.
+    /// <para>在成为自选 programmer 之前校验选中的多镜像清单，使引用解析不出的清单在选择时即被拒绝，而不是在
+    /// 会话初始化时才失败。</para>
+    /// </summary>
+    /// <param name="path">The picked manifest path. <para>选中的清单路径。</para></param>
+    /// <returns><see langword="true"/> when the manifest resolved every referenced image and its total stays inside
+    /// the programmer ceiling.<para>清单解析出全部被引用镜像且总体积未超过 programmer 上限时为
+    /// <see langword="true"/>。</para></returns>
+    private async Task<bool> ValidateEdlProgrammerManifestAsync(string path)
+    {
+        try
+        {
+            var images = await Task.Run(() => SaharaProgrammerManifest.Read(path)).ConfigureAwait(true);
+            var total = images.Sum(image => image.LengthBytes);
+            if (total > MaximumProgrammerFileBytes)
+            {
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_EdlProgrammerTooLarge"), Path.GetFileName(path)));
+                return false;
+            }
+
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_EdlLoaderManifest"), images.Count,
+                string.Join(", ", images.Select(image => image.ImageId.ToString("X", CultureInfo.InvariantCulture)))));
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or ArgumentException
+            or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_EdlLoaderManifestInvalid"), exception.Message));
+            return false;
+        }
+    }
 
     internal void OnEdlProgrammerPickChanged(object? source, SelectionChangedEventArgs e)
     {
@@ -1952,11 +2059,9 @@ public sealed partial class FlashViewModel
         FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage, RkStage);
 
     /// <summary>
-    /// Switches the action-pane expansion by the selected device's protocol: expands the protocol-matching
-    /// expander and collapses the others; with no device selected the preparation state (the EDL bundle
-    /// row and an MTK pane backed by a loaded scatter) determines the expansion.
-    /// <para>按所选设备的协议切换操作面板展开状态：展开与选中设备协议匹配的分类并收起其他分类；
-    /// 未选中设备时根据准备态（EDL 完整包或已加载的 MTK scatter）决定默认展开项。</para>
+    /// Recomputes the enables derived from the selected device and the protocol stage; sections keep their own expansion
+    /// and stay present, so a device only closes the controls it cannot serve.
+    /// <para>按所选设备与协议阶段重算派生启用值；各分类保持自身展开状态并保持呈现，设备只关闭它无法提供的控件。</para>
     /// </summary>
     private void UpdateModeVisibility()
     {
@@ -2194,7 +2299,7 @@ public sealed partial class FlashViewModel
 
         if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } && !_busy && !_confirming)
         {
-            OnEdlPartitionDigestClick(sender, e);
+            await RunEdlDeviceInfoAsync(sender, e);
             return;
         }
 
@@ -3700,6 +3805,79 @@ public sealed partial class FlashViewModel
 
 
     /// <summary>
+    /// Reads the connected EDL target's information through whichever protocol stages it currently reaches,
+    /// formats every row, and publishes them to the pane and the log.
+    /// <para>通过目标当前抵达的协议阶段读取已连接 EDL 设备的信息，格式化每一行，并送入面板与日志。</para>
+    /// </summary>
+    /// <remarks>
+    /// Sahara stops before the loader runs, so it reports the HELLO facts, the chip identity the bootrom already
+    /// answered, and the transport; Firehose adds the negotiated capabilities, the storage geometry and the
+    /// active A/B slot. The read never uploads a programmer, never writes storage and never changes the boot
+    /// slot, so it stays safe on a device the user has not decided to flash yet.
+    /// <para>Sahara 阶段在加载器运行之前结束，因此报告 HELLO 信息、bootrom 已应答的芯片身份与传输方式；
+    /// Firehose 阶段再补充协商能力、存储几何信息与活动 A/B 槽位。本次读取从不上传 programmer、不写存储、
+    /// 不修改启动槽位，因此在用户尚未决定刷写的设备上仍然安全。</para>
+    /// </remarks>
+    /// <param name="sender">The read button. <para>读取按钮。</para></param>
+    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
+    private async Task RunEdlDeviceInfoAsync(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device) return;
+        var language = _localizer;
+        await RunEdlInfoReadAsync(device, language);
+    }
+
+    private async Task RunEdlInfoReadAsync(DetectedDevice device, ILocalizer language)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var snapshot = await App.DeviceMonitor.RunEdlAsync(device, async session =>
+            {
+                var sahara = await EdlInfoCollector.CollectSaharaAsync(session, cancellation.Token);
+                if (session.IsConfigured)
+                {
+                    var firehose = await EdlInfoCollector.CollectFirehoseAsync(session, SelectedEdlLun,
+                        cancellationToken: cancellation.Token).ConfigureAwait(true);
+                    return EdlInfoCollector.Merge(sahara, firehose);
+                }
+
+                return sahara;
+            }, cancellation.Token).ConfigureAwait(true);
+
+            var rows = EdlInfoFormatter.Format(snapshot);
+            PublishEdlInfoRows(rows, language);
+            AppendLog(rows.Count == 0
+                ? language.GetString("Flash_EdlInfoEmpty")
+                : string.Format(language.GetString("Flash_EdlInfoDone"), rows.Count));
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendError(ex); }
+        finally
+        {
+            _flashCancellation = null;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    private void PublishEdlInfoRows(IReadOnlyList<EdlInfoRow> rows, ILocalizer language)
+    {
+        EdlInfoRows.Clear();
+        foreach (var row in rows)
+        {
+            EdlInfoRows.Add(new FlashPartitionEntry
+            {
+                Name = language.GetString(row.Key),
+                Size = row.Value
+            });
+            AppendLog($"{language.GetString(row.Key)}: {row.Value}");
+        }
+    }
+
+    /// <summary>
     /// Dumps the pane-selected LUN into <c>lun-N.bin</c> inside the chosen directory; the summary names the
     /// transferred byte count and the per-region SHA-256.
     /// <para>把界面选中的 LUN 整区转储到已选目录下的 <c>lun-N.bin</c>；摘要写明字节数与逐区 SHA-256。</para>
@@ -3763,6 +3941,154 @@ public sealed partial class FlashViewModel
                 .ConfigureAwait(true);
             return result.Summary;
         });
+    }
+
+    /// <summary>
+    /// One entry of the reboot-target selector: the target mode plus the localised label shown for it.
+    /// <para>重启目标选择器的一项：目标模式与为其显示的本地化标签。</para>
+    /// </summary>
+    /// <param name="Target">The target mode this entry selects. <para>本项选中的目标模式。</para></param>
+    /// <param name="Label">The localised label shown in the pane. <para>面板中显示的本地化标签。</para></param>
+    internal sealed record EdlRebootTargetOption(EdlRebootTarget Target, string Label)
+    {
+        /// <summary>Returns the label, so the combo box renders text without a display template.
+        /// <para>返回标签，使下拉框无需显示模板即可呈现文本。</para></summary>
+        /// <returns>The localised label. <para>本地化标签。</para></returns>
+        public override string ToString() => Label;
+    }
+
+    /// <summary>
+    /// Fills the reboot-target selector with the modes this build can reach.
+    /// <para>用本构建可达的模式填充重启目标选择器。</para>
+    /// </summary>
+    private void UpdateEdlRebootTargetOptions()
+    {
+        var box = Field<ComboBox>("EdlRebootTargetBox");
+        var previous = box.SelectedItem is EdlRebootTargetOption option ? option.Target : EdlRebootTarget.System;
+        var items = new[]
+        {
+            new EdlRebootTargetOption(EdlRebootTarget.System, _localizer.GetString("Flash_EdlRebootSystem")),
+            new EdlRebootTargetOption(EdlRebootTarget.Recovery, _localizer.GetString("Flash_EdlRebootRecovery")),
+            new EdlRebootTargetOption(EdlRebootTarget.Fastbootd, _localizer.GetString("Flash_EdlRebootFastbootd")),
+            new EdlRebootTargetOption(EdlRebootTarget.Edl, _localizer.GetString("Flash_EdlRebootEdl")),
+            new EdlRebootTargetOption(EdlRebootTarget.PowerOff, _localizer.GetString("Flash_EdlRebootPowerOff")),
+        };
+        box.ItemsSource = items;
+        box.SelectedItem = items.FirstOrDefault(item => item.Target == previous) ?? items[0];
+    }
+    /// <summary>
+    /// Reboots the connected EDL target into the mode selected in the pane. System, power-off and EDL are a
+    /// bare power command; recovery and fastbootd write a bootloader control block to the misc partition
+    /// first and then reset, because the power command alone cannot name a target mode.
+    /// <para>把已连接的 EDL 设备重启到面板中选择的模式。系统、关机与 EDL 只需一条 power 命令；
+    /// recovery 与 fastbootd 先把引导控制块写入 misc 分区再复位，因为 power 命令本身无法指定目标模式。</para>
+    /// </summary>
+    /// <remarks>
+    /// The misc image comes from the pane's control-image box, so a caller who supplies none is refused
+    /// instead of receiving a plain reset that would silently boot the system.
+    /// <para>misc 镜像取自面板的控制镜像输入框，因此未提供镜像的调用方会被拒绝，而不是得到一次静默启动系统的
+    /// 普通复位。</para>
+    /// </remarks>
+    /// <param name="sender">The reboot-target button. <para>重启目标按钮。</para></param>
+    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
+    internal async void OnEdlRebootTargetClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } || _busy || _confirming) return;
+        var language = _localizer;
+        if (Field<ComboBox>("EdlRebootTargetBox").SelectedItem is not EdlRebootTargetOption option)
+        {
+            AppendLog(language.GetString("Flash_EdlRebootTarget"));
+            return;
+        }
+
+        var plan = EdlModeSwitchPlanner.Plan(option.Target);
+        if (plan.BootloaderControlImage is not null)
+        {
+            await RunEdlPowerWithBootImageAsync(plan, language);
+            return;
+        }
+
+        await RunEdlPowerRequestAsync("Flash_EdlRebootTarget", "Flash_EdlRebootTargetConfirm",
+            "Flash_EdlRebootTargetDone",
+            (firehose, cancellationToken) => firehose.PowerAsync(
+                EdlModeSwitchPlanner.ToRebootOption(option.Target), cancellationToken));
+    }
+
+    /// <summary>
+    /// Picks the bootloader control image that recovery and fastbootd require, so the reboot-target action
+    /// has a real image instead of refusing for lack of one.
+    /// <para>选择 recovery 与 fastbootd 所需的引导控制镜像，使重启目标动作拥有真实镜像而不是因缺少镜像而拒绝。</para>
+    /// </summary>
+    /// <param name="sender">The pick button. <para>选择按钮。</para></param>
+    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
+    internal async void OnEdlBootImageClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = _localizer.GetString("Flash_EdlBootImageChoose"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (files.Count != 1 || files[0].TryGetLocalPath() is not { Length: > 0 } path) return;
+        Field<TextBox>("EdlBootImageBox").Text = path;
+        AppendLog(Path.GetFileName(path));
+    }
+    /// <summary>
+    /// Writes the bootloader control block the selected target needs and then resets, so recovery and
+    /// fastbootd become reachable instead of being refused.
+    /// <para>写入所选目标所需的引导控制块再复位，使 recovery 与 fastbootd 可达而不是被拒绝。</para>
+    /// </summary>
+    /// <param name="plan">The plan naming the control image. <para>指明控制镜像的计划。</para></param>
+    /// <param name="language">The active localizer. <para>当前本地化器。</para></param>
+    private async Task RunEdlPowerWithBootImageAsync(EdlModeSwitchPlan plan, ILocalizer language)
+    {
+        var imagePath = Field<TextBox>("EdlBootImageBox").Text?.Trim() ?? string.Empty;
+        if (imagePath.Length == 0 || !File.Exists(imagePath))
+        {
+            AppendLog(string.Format(language.GetString("Flash_EdlRebootTargetMissingMisc"),
+                plan.BootloaderControlImage ?? string.Empty));
+            return;
+        }
+
+        var image = await File.ReadAllBytesAsync(imagePath);
+        if (!await ConfirmEdlRegionWriteAsync("Flash_EdlRebootTarget")) return;
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device) return;
+        if (!TryBuildEdlInitialization(out var initialization)) return;
+
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            await App.DeviceMonitor.RunEdlAsync(device, async session =>
+            {
+                var firehose = await ConfigureEdlAsync(session, initialization, cancellation.Token)
+                    .ConfigureAwait(true);
+                var written = await EdlBootloaderControlWriter.WriteMiscAsync(firehose, image, SelectedEdlLun,
+                    allowWrite: true, cancellation.Token).ConfigureAwait(true);
+                AppendLog(string.Format(language.GetString("Flash_EdlBootImageWritten"),
+                    written.Lun, written.StartSector, written.SectorCount));
+                var response = await firehose.PowerAsync(RebootOption.Reset, cancellation.Token)
+                    .ConfigureAwait(true);
+                if (!response.IsAck)
+                {
+                    throw new InvalidOperationException(string.Format(
+                        language.GetString("Flash_EdlPowerNotAcknowledged"), EdlFailureText.Describe(response)));
+                }
+
+                return true;
+            }, cancellation.Token);
+            AppendLog(language.GetString("Flash_EdlRebootTargetDone"));
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendError(ex); }
+        finally
+        {
+            _flashCancellation = null;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
     }
 
     /// <summary>
@@ -4142,12 +4468,12 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// MediaTek section: its controls answer only on a MediaTek endpoint, so the pane carries the section's own condition
-    /// and the header hides once another protocol is selected.
-    /// <para>联发科分类：其控件只在联发科端点上应答，因此由该面板持有本分类自身的条件，并在选中其他协议后隐藏表头。</para>
+    /// and reports itself unusable for every other device while staying present.
+    /// <para>联发科分类：其控件只在联发科端点上应答，因此由该面板持有本分类自身的条件，并在其他设备下仅表明自身不可用而保持呈现。</para>
     /// </summary>
     private void RegisterMtkControlGates()
     {
-        RegisterGate("MtkExpander", FlashControlGate.SectionHeader("MtkExpander", FlashDeviceMode.Mtk));
+        RegisterGate("MtkExpander", FlashControlGate.SectionHeader("MtkExpander"));
         RegisterGate("MtkPane", FlashControlGate.Section("MtkPane", FlashDeviceMode.Mtk, busyDisabled: true));
         RegisterGate("ChooseMtkDaButton", FlashControlGate.Section("ChooseMtkDaButton", FlashDeviceMode.Mtk));
         RegisterGate("ChooseMtkEmiButton", FlashControlGate.Section("ChooseMtkEmiButton", FlashDeviceMode.Mtk));

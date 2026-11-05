@@ -38,13 +38,13 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// SpacemiT section: the pane and both buttons answer only on the SpacemiT fastboot gadget itself, so each of them
-    /// carries that condition instead of a page-wide lookup; the header also disappears for every other endpoint.
+    /// carries that condition instead of a page-wide lookup; the header stays present for every endpoint.
     /// <para>进迭时空分类：面板与两个按钮只在进迭时空 fastboot gadget 本身应答，因此各自持有该条件，而不是依赖页面级查表；
-    /// 表头还会对其他端点隐藏。</para>
+    /// 表头对任何端点都保持呈现。</para>
     /// </summary>
     private void RegisterSpacemiTControlGates()
     {
-        RegisterGate("SpacemiTExpander", FlashControlGate.SpacemiTSectionHeader("SpacemiTExpander"));
+        RegisterGate("SpacemiTExpander", FlashControlGate.SectionHeader("SpacemiTExpander"));
         RegisterGate("SpacemiTPane", FlashControlGate.SpacemiT("SpacemiTPane"));
         RegisterGate("SpacemiTChoosePackageButton", FlashControlGate.SpacemiT("SpacemiTChoosePackageButton"));
         RegisterGate("SpacemiTFlashButton", FlashControlGate.SpacemiT("SpacemiTFlashButton"));

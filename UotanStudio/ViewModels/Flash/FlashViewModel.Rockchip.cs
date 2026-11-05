@@ -129,14 +129,14 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Rockchip section: its controls read and write storage, so the pane carries the section's own condition and a
-    /// stage proven to be mask ROM closes the whole pane while an unproven stage keeps it; the header hides once another
-    /// protocol is selected.
+    /// stage proven to be mask ROM closes the whole pane while an unproven stage keeps it; the header stays present for
+    /// every selected device.
     /// <para>瑞芯微分类：其控件读写存储，因此由该面板持有本分类自身的条件；被证实为 mask ROM 的阶段关闭整个面板，
-    /// 未被证实的阶段保持提供；选中其他协议后隐藏表头。</para>
+    /// 未被证实的阶段保持提供；表头对任何已选设备都保持呈现。</para>
     /// </summary>
     private void RegisterRockchipControlGates()
     {
-        RegisterGate("RkExpander", FlashControlGate.SectionHeader("RkExpander", FlashDeviceMode.Rkdl));
+        RegisterGate("RkExpander", FlashControlGate.SectionHeader("RkExpander"));
         RegisterGate("RkPane", FlashControlGate.Section("RkPane", FlashDeviceMode.Rkdl, busyDisabled: true));
         RegisterGate("RkGetStorageButton", FlashControlGate.Section("RkGetStorageButton", FlashDeviceMode.Rkdl));
         RegisterGate("RkSwitchStorageButton",

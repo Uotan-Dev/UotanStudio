@@ -316,6 +316,8 @@ public partial class FlashView : UserControl
     private void OnEdlReadLunClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadLunClick(sender, e);
     private void OnEdlSetBootableClick(object? sender, RoutedEventArgs e) => _model.OnEdlSetBootableClick(sender, e);
     private void OnEdlPartitionDigestClick(object? sender, RoutedEventArgs e) => _model.OnEdlPartitionDigestClick(sender, e);
+    private void OnEdlRebootTargetClick(object? sender, RoutedEventArgs e) => _model.OnEdlRebootTargetClick(sender, e);
+    private void OnEdlBootImageClick(object? sender, RoutedEventArgs e) => _model.OnEdlBootImageClick(sender, e);
     private void OnExtractSelectedClick(object? sender, RoutedEventArgs e) => _model.OnExtractSelectedClick(sender, e);
     private void OnBuildWiredPackageClick(object? sender, RoutedEventArgs e) => _model.OnBuildWiredPackageClick(sender, e);
     private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
@@ -343,4 +345,9 @@ public partial class FlashView : UserControl
     private void OnSunxiReadMemoryClick(object? sender, RoutedEventArgs e) => _model.OnSunxiReadMemoryClick(sender, e);
     private void OnSunxiWriteMemoryClick(object? sender, RoutedEventArgs e) => _model.OnSunxiWriteMemoryClick(sender, e);
     private void OnSunxiExecuteClick(object? sender, RoutedEventArgs e) => _model.OnSunxiExecuteClick(sender, e);
+    private void OnSunxiChooseImageClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseImageClick(sender, e);
+    private void OnSunxiFlashClick(object? sender, RoutedEventArgs e) => _model.OnSunxiFlashClick(sender, e);
+    private void OnSunxiChooseDtbClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseDtbClick(sender, e);
+    private void OnSunxiChooseSysConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseSysConfigClick(sender, e);
+    private void OnSunxiChooseBoardConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseBoardConfigClick(sender, e);
 }

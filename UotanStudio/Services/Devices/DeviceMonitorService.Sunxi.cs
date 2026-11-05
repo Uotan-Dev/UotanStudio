@@ -219,8 +219,9 @@ public sealed partial class DeviceMonitorService
     /// <para>所选全志端点；必须处于 FEL 模式。</para></param>
     /// <param name="fes1Image">First-stage loader image, including its <c>eGON.BT0</c> header.
     /// <para>一级加载器镜像，含其 <c>eGON.BT0</c> 头部。</para></param>
-    /// <param name="ubootImage">Service payload, including its <c>u-boot</c> header.
-    /// <para>服务负载，含其 <c>u-boot</c> 头部。</para></param>
+    /// <param name="images">Service payload and the optional device tree, system configuration and board
+    /// configuration uploaded into the post-U-Boot memory slots.
+    /// <para>服务负载，以及上传到 U-Boot 之后内存槽位的可选设备树、系统配置与板级配置。</para></param>
     /// <param name="progress">Optional phase text sink. <para>可选的阶段文本接收器。</para></param>
     /// <param name="cancellationToken">Cancels the uploads, the waits and the status query.
     /// <para>取消上传、等待与状态查询。</para></param>
@@ -231,7 +232,7 @@ public sealed partial class DeviceMonitorService
     /// <exception cref="TimeoutException">The device did not answer the FES handshake in time.
     /// <para>设备未及时应答 FES 握手。</para></exception>
     internal async Task<SunxiDeviceStatus> RunSunxiBootServiceAsync(DetectedDevice device,
-        ReadOnlyMemory<byte> fes1Image, ReadOnlyMemory<byte> ubootImage, IProgress<string>? progress,
+        ReadOnlyMemory<byte> fes1Image, SunxiServiceImages images, IProgress<string>? progress,
         CancellationToken cancellationToken = default)
     {
         if (device.Protocol != DeviceProtocolKind.Sunxi)
@@ -264,7 +265,7 @@ public sealed partial class DeviceMonitorService
             progress?.Report("fes1");
             await handoff.InitialiseDramAsync(session.Fel, fes1Image, cancellationToken).ConfigureAwait(false);
             progress?.Report("service");
-            await handoff.StartServiceAsync(session.Fel, ubootImage, SunxiServiceAttempts, cancellationToken)
+            await handoff.StartServiceAsync(session.Fel, images, SunxiServiceAttempts, cancellationToken)
                 .ConfigureAwait(false);
             if (fesSession is null)
             {
@@ -301,6 +302,53 @@ public sealed partial class DeviceMonitorService
                 CloseLease(freshLease);
             }
         }
+    }
+
+    /// <summary>
+    /// Runs one IMAGEWTY package against a FES endpoint: loads the download plan, applies the selected erase and
+    /// partition scope, switches flash access around the partition writes and requests the completion tool mode.
+    /// <para>在 FES 端点上运行一个 IMAGEWTY 包：加载下载计划、应用所选的擦除与分区范围、在分区写入前后切换闪存
+    /// 访问，并请求完成用的工具模式。</para>
+    /// </summary>
+    /// <param name="device">The selected Sunxi endpoint; it must answer as FES. <para>所选全志端点；必须以 FES 应答。</para></param>
+    /// <param name="imagePath">IMAGEWTY package to write. <para>待写入的 IMAGEWTY 包。</para></param>
+    /// <param name="options">Flash scope, confirmation and completion mode.
+    /// <para>烧录范围、确认短语与完成模式。</para></param>
+    /// <param name="progress">Optional progress sink. <para>可选的进度接收器。</para></param>
+    /// <param name="cancellationToken">Cancels opening, the plan load and the run.
+    /// <para>取消打开、计划加载与运行。</para></param>
+    /// <exception cref="InvalidOperationException">The device is not running FES.
+    /// <para>设备未运行 FES。</para></exception>
+    /// <exception cref="FileNotFoundException">The package does not exist. <para>包不存在。</para></exception>
+    internal async Task FlashSunxiAsync(DetectedDevice device, string imagePath, SunxiFlashOptions options,
+        IProgress<SunxiFlashProgress>? progress, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(options);
+        if (device.Protocol != DeviceProtocolKind.Sunxi)
+        {
+            throw new ArgumentException("A Sunxi target is required.", nameof(device));
+        }
+
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException($"The Allwinner image '{imagePath}' does not exist.", imagePath);
+        }
+
+        CancelBackgroundEndpointWork(device);
+        await RunSunxiAsync(device, async (session, _, token) =>
+        {
+            if (!session.IsFes)
+            {
+                throw new InvalidOperationException(
+                    $"The device reports mode {session.Mode} but flashing requires FES mode.");
+            }
+
+            using var plan = await Task.Run(() => SunxiFlashPlan.Load(imagePath, token), token)
+                .ConfigureAwait(false);
+            await new SunxiFlasher(plan, options).ExecuteAsync(session.Fes, progress, token).ConfigureAwait(false);
+            return true;
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<(DeviceLease Lease, SunxiFesSession Session)> ReopenSunxiFesAsync(DetectedDevice previous,
