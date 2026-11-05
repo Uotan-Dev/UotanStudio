@@ -117,6 +117,33 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
+    /// <summary>
+    /// Opens the right-clicked picture in the image viewer with an explicit mode, so the request bypasses
+    /// automatic detection without changing the default route used by double-click.
+    /// <para>以显式方式在图片查看器中打开被右键的图片；该请求不经过自动识别，也不改变双击使用的默认路由。</para>
+    /// </summary>
+    private void OnViewImage(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        {
+            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path, EditorOpenMode.Image));
+        }
+    }
+
+    /// <summary>
+    /// Opens the right-clicked logo/splash partition in the logo workbench with an explicit mode,
+    /// leaving the double-click auto-detection chain unchanged.
+    /// <para>以显式方式在 Logo 工作台中打开被右键的 Logo/splash 分区，不改变双击使用的自动识别链路。</para>
+    /// </summary>
+    private void OnViewLogoPartition(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        {
+            WeakReferenceMessenger.Default.Send(
+                new OpenDocumentRequestMessage(node.Path, EditorOpenMode.LogoPartition));
+        }
+    }
+
     private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(ProjectTree).Properties.PointerUpdateKind != PointerUpdateKind.RightButtonPressed ||

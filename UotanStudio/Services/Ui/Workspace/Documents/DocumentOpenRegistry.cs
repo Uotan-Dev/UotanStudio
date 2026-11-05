@@ -1,7 +1,9 @@
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BootSecurity.LogoPartition;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.Executable.Elf;
+using UotanStudio.Services.Images;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
@@ -235,6 +237,33 @@ internal static class DocumentOpenRegistry
         },
         new()
         {
+            Kind = "ImageViewer",
+            Mode = EditorOpenMode.Image,
+            ViewModelType = typeof(ImageViewerViewModel),
+            LocaleKey = "Explorer_OpenAsImage",
+            MenuOrder = 16,
+            IconKind = AppIconKind.Image,
+            Probe = static r => ImageFileCatalog.HasImageExtension(r.Path)
+                || ImageFileCatalog.IsDecodableImageHeader(ProbeHeader(r)),
+            Open = static (w, r) => w.OpenImageAsync(r.Path!),
+            GetPath = vm => ((ImageViewerViewModel)vm).FilePath,
+            Cleanup = vm => ((ImageViewerViewModel)vm).Cleanup(),
+        },
+        new()
+        {
+            Kind = "LogoPartition",
+            Mode = EditorOpenMode.LogoPartition,
+            ViewModelType = typeof(LogoPartitionViewModel),
+            LocaleKey = "Explorer_OpenAsLogo",
+            MenuOrder = 17,
+            IconKind = AppIconKind.Image,
+            Probe = static r => LogoPartitionFormat.IsLogoPartitionHeader(ProbeHeader(r)),
+            Open = static (w, r) => w.OpenLogoPartitionAsync(r.Path!),
+            GetPath = vm => ((LogoPartitionViewModel)vm).FilePath,
+            Cleanup = vm => ((LogoPartitionViewModel)vm).Cleanup(),
+        },
+        new()
+        {
             Kind = "Compare",
             ViewModelType = typeof(CompareViewModel),
             GetPath = _ => null,
@@ -436,6 +465,13 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
             header is not null && DocumentFormatPolicy.IsRockchipParameterText(header)),
 
+        new(EditorOpenMode.LogoPartition, static (_, header, _, _) =>
+            header is not null && LogoPartitionFormat.IsLogoPartitionHeader(header)),
+
+        new(EditorOpenMode.Image, static (_, header, _, extension) =>
+            header is not null && ImageFileCatalog.IsDecodableImageHeader(header)
+            && extension.Value is not (EditorOpenMode.Text or EditorOpenMode.Log)),
+
         new(EditorOpenMode.Arsc, static (_, _, detection, _) =>
             detection is { Confidence: not DetectionConfidence.ExtensionOnly }
             && detection.Handler.FormatName.Contains("Resource Table", StringComparison.OrdinalIgnoreCase)),
@@ -457,6 +493,7 @@ internal static class DocumentOpenRegistry
             && Logging.LogFileService.LooksLikeLog(header)),
 
         new(EditorOpenMode.Text, static (_, _, _, extension) => extension.Value == EditorOpenMode.Text),
+        new(EditorOpenMode.Image, static (_, _, _, extension) => extension.Value == EditorOpenMode.Image),
         new(EditorOpenMode.Log, static (_, _, _, extension) => extension.Value == EditorOpenMode.Log),
         new(EditorOpenMode.Dtb, static (_, _, _, extension) => extension.Value == EditorOpenMode.Dtb),
         new(EditorOpenMode.Dex, static (_, _, _, extension) => extension.Value == EditorOpenMode.Dex),
@@ -508,6 +545,11 @@ internal static class DocumentOpenRegistry
         }
 
         var ext = Path.GetExtension(path);
+
+        if (ImageFileCatalog.IsImageExtension(ext))
+        {
+            return EditorOpenMode.Image;
+        }
 
         if (IsLogExtension(ext))
         {

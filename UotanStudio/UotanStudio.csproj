@@ -95,6 +95,24 @@
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
+    <!-- Image viewer: the facade sniffs magic bytes and dispatches to these per-format decoders.
+         HEIF is not part of the facade and is registered explicitly by ImageFileCatalog. -->
+    <PackageReference Include="Sdcb.SimdCodecs" />
+    <PackageReference Include="Sdcb.SimdCodecs.Abstractions" />
+    <PackageReference Include="Sdcb.SimdCodecs.Bmp" />
+    <PackageReference Include="Sdcb.SimdCodecs.Color.Icc" />
+    <PackageReference Include="Sdcb.SimdCodecs.Gif" />
+    <PackageReference Include="Sdcb.SimdCodecs.Heif" />
+    <PackageReference Include="Sdcb.SimdCodecs.Ico" />
+    <PackageReference Include="Sdcb.SimdCodecs.Jbig2" />
+    <PackageReference Include="Sdcb.SimdCodecs.Jpeg" />
+    <PackageReference Include="Sdcb.SimdCodecs.Jpeg.GainMap" />
+    <PackageReference Include="Sdcb.SimdCodecs.Jpeg2000" />
+    <PackageReference Include="Sdcb.SimdCodecs.Png" />
+    <PackageReference Include="Sdcb.SimdCodecs.Pnm" />
+    <PackageReference Include="Sdcb.SimdCodecs.Qoi" />
+    <PackageReference Include="Sdcb.SimdCodecs.Tiff" />
+    <PackageReference Include="Sdcb.SimdCodecs.Webp" />
   </ItemGroup>
 
 </Project>

@@ -306,6 +306,8 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.FirmwareDocument => _localizer.GetString("Dock_Properties_Type_FirmwareDocument"),
                 PropertiesContentType.HexDocument => _localizer.GetString("Dock_Properties_Type_HexDocument"),
                 PropertiesContentType.CompareEntry => _localizer.GetString("Dock_Properties_Type_CompareEntry"),
+                PropertiesContentType.ImageViewerDocument => _localizer.GetString("Dock_Properties_Type_ImageViewerDocument"),
+                PropertiesContentType.LogoPartitionDocument => _localizer.GetString("Dock_Properties_Type_LogoPartitionDocument"),
                 _ => string.Empty,
             };
 
@@ -410,7 +412,9 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.ScreenMirror
                 || ContentType == PropertiesContentType.ElfDocument
                 || ContentType == PropertiesContentType.PartitionDocument
-                || ContentType == PropertiesContentType.LogDocument)
+                || ContentType == PropertiesContentType.LogDocument
+                || ContentType == PropertiesContentType.ImageViewerDocument
+                || ContentType == PropertiesContentType.LogoPartitionDocument)
             {
                 ClearProperties();
                 ResetSelection();
@@ -435,6 +439,8 @@ internal partial class PropertiesViewModel : Tool
     {
         switch (message)
         {
+            case { ActiveDocument: LogoPartitionViewModel logo }: RefreshForLogoPartitionDocument(logo); return true;
+            case { ActiveDocument: ImageViewerViewModel viewer }: RefreshForImageViewerDocument(viewer); return true;
             case { ActiveDocument: ElfInfoViewModel elf }: RefreshForElfDocument(elf); return true;
             case { ActiveDocument: PartitionEditorViewModel partition }: RefreshForPartitionDocument(partition); return true;
             case { ActiveDocument: LogEditorViewModel log }: RefreshForLogDocument(log); return true;
@@ -499,6 +505,84 @@ internal partial class PropertiesViewModel : Tool
         _ = RefreshImageDetailsAsync(image, imageDetailsGeneration);
 
         _log.Write(LogLevel.Debug, "Properties", $"Refreshed for image '{image.DisplayName}'");
+    }
+
+    /// <summary>
+    /// Pushes the logo partition header facts and magic description into the property rows.
+    /// <para>把 Logo 分区头部信息与魔数描述推送到属性行。</para>
+    /// </summary>
+    /// <param name="doc">The active logo partition document.<para>当前活动的 Logo 分区文档。</para></param>
+    public void RefreshForLogoPartitionDocument(LogoPartitionViewModel doc)
+    {
+        ClearProperties();
+        if (doc is null)
+        {
+            ResetSelection();
+            return;
+        }
+
+        var image = doc.Image;
+        ShowProperties(PropertiesContentType.LogoPartitionDocument);
+        SelectedNodeTitle = Path.GetFileName(doc.FilePath ?? string.Empty);
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_FileName", Path.GetFileName(doc.FilePath ?? string.Empty)));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Path", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Format", doc.FormatName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Magic", doc.MagicDescription));
+        if (image is not null)
+        {
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Kind", image.Kind.ToString()));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_HeaderOffset", image.HeaderOffset.ToString("N0")));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Size", $"{image.SourceLength:N0} bytes"));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Logo_Entries", image.Entries.Count.ToString("N0")));
+            foreach (var fact in image.Metadata)
+            {
+                Properties.Add(CreateDynamicRow(fact.Key, fact.Value));
+            }
+        }
+
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for logo partition '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// Pushes the attributes read by the image viewer into the property rows: file identity, codec
+    /// format, raster layout, frame count, EXIF orientation and compiled magic metadata.
+    /// <para>把图片查看器读取的属性推送到属性行：文件标识、编解码格式、栅格布局、帧数、
+    /// EXIF 方向与编译型魔数元数据。</para>
+    /// </summary>
+    /// <param name="doc">The active image-viewer document.<para>当前活动的图片查看器文档。</para></param>
+    public void RefreshForImageViewerDocument(ImageViewerViewModel doc)
+    {
+        ClearProperties();
+        if (doc is null)
+        {
+            ResetSelection();
+            return;
+        }
+
+        var path = doc.FilePath ?? string.Empty;
+        var properties = doc.Properties;
+        ShowProperties(PropertiesContentType.ImageViewerDocument);
+        SelectedNodeTitle = Path.GetFileName(path);
+
+        Properties.Add(CreateLocalizedRow("Dock_Properties_ImageName", Path.GetFileName(path)));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Path", path));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Size", $"{properties?.FileSize ?? 0:N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Format", properties?.CodecFormat ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Magic", properties?.MagicDescription ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Mime", properties?.MimeType ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_MagicExtensions", properties?.MagicExtensions ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Dimensions", properties?.Dimensions ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Channels", properties?.Channels ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_BitDepth", properties?.BitDepth ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_SampleFormat", properties?.SampleFormat ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Frames", properties?.FrameCount ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Orientation", properties?.Orientation ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Img_Decodable",
+            _localizer.GetString(properties?.Decodable == true
+                ? "Dock_Properties_Img_Yes"
+                : "Dock_Properties_Img_No")));
+
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for picture '{path}'");
     }
 
     /// <summary>
@@ -1401,5 +1485,17 @@ public enum PropertiesContentType
     PartitionDocument,
 
     /// <summary>Offline log document and filter state.</summary>
-    LogDocument
+    LogDocument,
+
+    /// <summary>
+    /// Raster picture attributes read by the image viewer.
+    /// <para>图片查看器读取的位图属性。</para>
+    /// </summary>
+    ImageViewerDocument,
+
+    /// <summary>
+    /// Boot logo or splash partition attributes read by the logo partition workbench.
+    /// <para>Logo 分区工作台读取的开机 Logo 或 splash 分区属性。</para>
+    /// </summary>
+    LogoPartitionDocument
 }

@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.ImageViewerView"
+             x:DataType="viewmodels:ImageViewerViewModel">
+    <!-- Preview area: the decoded raster is scaled to the pane; the status text replaces it while
+         loading, for formats without a decoder, and for files that exceed the decode bounds. -->
+    <!-- 预览区：解码栅格按窗格缩放；加载中、格式不可解码或超出解码上限时改显状态文案。 -->
+    <Grid RowDefinitions="*,Auto">
+        <Grid Grid.Row="0">
+            <Image Source="{Binding Preview}" Stretch="Uniform" Margin="12"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding HasPreview}" />
+            <TextBlock Text="{Binding StatusText}" IsVisible="{Binding !HasPreview}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       MaxWidth="520" TextWrapping="Wrap" TextAlignment="Center"
+                       Opacity="0.75" />
+        </Grid>
+        <Border Grid.Row="1" Padding="12,6" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource SemiColorBorder}">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <TextBlock Opacity="0.75">
+                    <Run Text="{DynamicResource Dock_ImageViewer_Format}" />
+                    <Run Text="  " />
+                    <Run Text="{Binding FormatText}" />
+                </TextBlock>
+                <TextBlock Opacity="0.75">
+                    <Run Text="{DynamicResource Dock_ImageViewer_Dimensions}" />
+                    <Run Text="  " />
+                    <Run Text="{Binding DimensionsText}" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

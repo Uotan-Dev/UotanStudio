@@ -95,5 +95,13 @@ public enum EditorOpenMode
 
     /// <summary>Open an RKDevTool download-list configuration in the read-only configuration browser.
     /// <para>以只读配置浏览视图打开 RKDevTool 下载列表配置。</para></summary>
-    RockchipConfig
+    RockchipConfig,
+
+    /// <summary>Open a raster picture in the image viewer (decoded by the SIMD codec facade).
+    /// <para>以图片查看器打开位图图片（由 SIMD 编解码门面解码）。</para></summary>
+    Image,
+
+    /// <summary>Open a boot logo or splash partition in the logo partition workbench.
+    /// <para>以 Logo 分区工作台打开开机 Logo 或 splash 分区。</para></summary>
+    LogoPartition
 }

@@ -492,6 +492,28 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
+    /// Opens or focuses a picture in the image viewer: the document reads its attributes through the
+    /// SIMD codec facade and publishes them to the properties panel.
+    /// <para>在图片查看器中打开或聚焦图片：文档经 SIMD 编解码门面读取属性并发布到属性面板。</para>
+    /// </summary>
+    /// <param name="path">Picture file path.<para>图片文件路径。</para></param>
+    public Task OpenImageAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new ImageViewerViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>
+    /// Opens or focuses a logo/splash partition in the logo partition workbench, which lists the
+    /// embedded images and offers preview, extraction and related-partition opening.
+    /// <para>在 Logo 分区工作台中打开或聚焦 Logo/splash 分区，列出内嵌图片并提供预览、提取与相关分区打开。</para>
+    /// </summary>
+    /// <param name="path">Logo partition file path.<para>Logo 分区文件路径。</para></param>
+    public Task OpenLogoPartitionAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new LogoPartitionViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>
     /// Opens the given firmware file in the firmware metadata panel in the document area: focuses it if
     /// already open; otherwise creates and loads a <see cref="FirmwareInfoViewModel"/>.
     /// <para>在文档区以固件元数据面板打开指定的固件文件：若已打开则聚焦并返回；

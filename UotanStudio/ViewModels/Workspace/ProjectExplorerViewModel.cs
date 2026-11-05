@@ -378,6 +378,24 @@ public sealed partial class ExplorerNode : ObservableObject
         ImageInputService.SupportsFormatConversion(Path);
 
     /// <summary>
+    /// Gets whether this file carries a picture suffix; gates the explorer's direct "view image" entry.
+    /// The check is extension-only so binding a tree row never reads the file system.
+    /// <para>获取该文件是否带图片后缀，用作资源管理器右键「查看图片」入口的显示条件。
+    /// 判定只看扩展名，绑定树节点时不会访问文件系统。</para>
+    /// </summary>
+    public bool IsImageFile => !IsDirectory && !IsPlaceholder &&
+        Services.Images.ImageFileCatalog.HasImageExtension(Path);
+
+    /// <summary>
+    /// Gets whether this node looks like a logo or splash partition image; gates the explorer's
+    /// "open logo partition" entry. The check is name-only so binding a tree row never reads the file.
+    /// <para>获取该节点是否像 Logo 或 splash 分区镜像，用作资源管理器右键「打开 Logo 分区」入口的显示条件。
+    /// 判定只看名称，绑定树节点时不会读取文件。</para>
+    /// </summary>
+    public bool IsLogoPartition => !IsDirectory && !IsPlaceholder &&
+        Services.Firmware.LogoPartitionCatalog.IsLogoFileName(Path);
+
+    /// <summary>
     /// Gets the collection of child nodes, populated on the directory's first expansion.
     /// <para>获取子节点集合，在目录首次展开时填充。</para>
     /// </summary>

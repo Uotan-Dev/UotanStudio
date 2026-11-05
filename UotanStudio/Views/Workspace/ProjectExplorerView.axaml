@@ -27,6 +27,22 @@
                                 <icons:ArrowRightUp Width="16" Height="16" />
                             </MenuItem.Icon>
                         </controls:OpenAsMenuItem>
+                        <!-- 图片文件右键菜单：直接以图片查看器打开（不经过自动识别）。 -->
+                        <!-- Picture right-click entry: opens the image viewer directly, bypassing automatic detection. -->
+                        <MenuItem Header="{DynamicResource Explorer_ViewImage}"
+                                  IsVisible="{Binding IsImageFile}" Click="OnViewImage">
+                            <MenuItem.Icon>
+                                <icons:FileImage Width="16" Height="16" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <!-- Logo/splash 分区右键入口：直接以 Logo 分区工作台打开（不经过自动识别）。 -->
+                        <!-- Logo/splash right-click entry: opens the logo workbench directly. -->
+                        <MenuItem Header="{DynamicResource Explorer_ViewLogoPartition}"
+                                  IsVisible="{Binding IsLogoPartition}" Click="OnViewLogoPartition">
+                            <MenuItem.Icon>
+                                <icons:FileImage Width="16" Height="16" />
+                            </MenuItem.Icon>
+                        </MenuItem>
                         <!-- 可转换的镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
                                   IsVisible="{Binding SupportsFormatConversion}">

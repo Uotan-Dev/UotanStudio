@@ -56,6 +56,8 @@ internal static class ViewModelViewRegistry
         [typeof(ApkEditorViewModel)] = new(() => new ApkEditorView(), IsDocumentStyle: true),
         [typeof(FirmwareInfoViewModel)] = new(() => new FirmwareInfoView(), IsDocumentStyle: true),
         [typeof(FileManagerEditorViewModel)] = new(() => new FileManagerEditorView(), IsDocumentStyle: true),
+        [typeof(ImageViewerViewModel)] = new(() => new ImageViewerView(), IsDocumentStyle: true),
+        [typeof(LogoPartitionViewModel)] = new(() => new LogoPartitionView(), IsDocumentStyle: true),
         [typeof(ImageViewModel)] = new(() => new ImageView()),
         [typeof(AiAssistantViewModel)] = new(() => new AiAssistantView()),
         [typeof(AiSettingsViewModel)] = new(() => new AiSettingsView()),
