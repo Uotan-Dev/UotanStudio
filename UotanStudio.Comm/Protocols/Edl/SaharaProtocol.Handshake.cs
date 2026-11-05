@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -9,6 +10,20 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed partial class SaharaProtocol
 {
+    /// <summary>
+    /// Number of bounded RESET_STATE_MACHINE attempts made while re-establishing a HELLO that the QUD serial
+    /// driver consumed before this host read it.
+    /// <para>为重新建立被 QUD 串口驱动在本主机读取之前消费掉的 HELLO，所做有界 RESET_STATE_MACHINE 尝试次数。</para>
+    /// </summary>
+    private const int QudHelloRecoveryAttempts = 2;
+
+    /// <summary>
+    /// Largest payload this host is willing to drain from an unexpected packet so it can resynchronize the
+    /// Sahara stream before trying the wake command again.
+    /// <para>主机愿意从意外数据包中读取的最大负载字节数，用于在再次尝试唤起命令前重新同步 Sahara 流。</para>
+    /// </summary>
+    private const int QudHelloRecoveryDrainLimitBytes = 4096;
+
     /// <summary>
     /// Performs the Sahara handshake, uploading the specified programmer image.
     /// <para>执行 Sahara 握手，上传指定的 programmer 镜像。</para>
@@ -63,30 +78,22 @@ public sealed partial class SaharaProtocol
             if (QudHelloRecoveryEnabled)
             {
                 Log("First read timed out; the QUD driver may have consumed the HELLO. " +
-                    "Sending unsolicited HELLO_RESPONSE and waiting for the device to re-send HELLO...");
-                var probeHello = new SaharaHelloResponsePacket
+                    "Sending RESET_STATE_MACHINE so the target re-announces HELLO...");
+                var recoveredHello = await RecoverQudHelloAsync(cancellationToken).ConfigureAwait(false);
+                if (recoveredHello is not null)
                 {
-                    Command = SaharaCommand.HelloResponse,
-                    Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
-                    Version = EdlConstants.SaharaVersion,
-                    MinVersion = EdlConstants.SaharaHostCompatibleVersion,
-                    Status = 0,
-                    Mode = SaharaMode.ImageTxPending
-                };
-                await WriteStructAsync(probeHello, cancellationToken);
-                try
-                {
-                    firstData = await ReadExactAsync(Marshal.SizeOf<SaharaHelloPacket>(), _timeoutMs, cancellationToken);
+                    firstData = recoveredHello;
                 }
-                catch (EdlException recoveryEx) when (recoveryEx.ErrorCode == EdlErrorCode.ReadPortTimeout)
+                else if (await ProbeFirehoseNopAsync(cancellationToken))
                 {
-                    if (await ProbeFirehoseNopAsync(cancellationToken))
-                    {
-                        RequireIdentityNotRequested();
-                        FirehoseAlreadyRunning = true;
-                        Log("Device is already running Firehose; skipping Sahara handshake.");
-                        return SaharaMode.ImageTxComplete;
-                    }
+                    RequireIdentityNotRequested();
+                    FirehoseAlreadyRunning = true;
+                    Log("Device is already running Firehose; skipping Sahara handshake.");
+                    return SaharaMode.ImageTxComplete;
+                }
+                else
+                {
+                    Log("Sahara HELLO recovery failed; reporting the original read timeout.");
                     throw;
                 }
             }
@@ -353,6 +360,139 @@ public sealed partial class SaharaProtocol
         {
             Log($"Best-effort RESET_STATE_MACHINE failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Wakes a target whose bootrom HELLO was already consumed by the QUD serial driver by sending
+    /// RESET_STATE_MACHINE and then reading the HELLO it re-announces.
+    /// <para>通过发送 RESET_STATE_MACHINE 再读取目标重新宣告的 HELLO，唤起 bootrom HELLO 已被 QUD 串口驱动消费的目标。</para>
+    /// </summary>
+    /// <remarks>
+    /// Every attempt is bounded: a target that stays silent simply ends that attempt, and an unexpected
+    /// packet is drained to its full protocol length before the next wake, so a following read cannot
+    /// start in the middle of a half-consumed packet. <see langword="null"/> means no HELLO arrived; the
+    /// caller keeps the original read-timeout semantics.
+    /// <para>每次尝试都有界：保持静默的目标只会结束当前尝试，意外数据包则在下次唤起之前按完整协议长度读掉，
+    /// 因此后续读取不会从半个数据包的中间开始。<see langword="null"/> 表示没有收到 HELLO；调用方保持原始读取
+    /// 超时语义。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token checked before every wake and read.
+    /// <para>在每次唤起与读取之前检查的取消令牌。</para></param>
+    /// <returns>The 48-byte HELLO packet, or <see langword="null"/> when no bounded attempt produced one.
+    /// <para>48 字节的 HELLO 包；没有任何有界尝试得到时为 <see langword="null"/>。</para></returns>
+    private async Task<byte[]?> RecoverQudHelloAsync(CancellationToken cancellationToken)
+    {
+        var helloBytes = Marshal.SizeOf<SaharaHelloPacket>();
+        var headerBytes = Marshal.SizeOf<SaharaPacketHeader>();
+        var wakeTimeoutMs = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
+        for (var attempt = 1; attempt <= QudHelloRecoveryAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var reset = BuildSaharaSimpleCommand(SaharaCommand.ResetState);
+                await WriteDataAsync(reset, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log($"RESET_STATE_MACHINE attempt {attempt} could not be written: {ex.Message}");
+                CommTrace.Debug("edl", $"Sahara HELLO recovery: RESET_STATE_MACHINE write failed ({ex.Message}).");
+                return null;
+            }
+
+            Log($"Sent RESET_STATE_MACHINE (attempt {attempt} of {QudHelloRecoveryAttempts}) so the target re-announces HELLO.");
+            byte[] headerData;
+            try
+            {
+                headerData = await ReadExactAsync(headerBytes, wakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+            }
+            catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
+            {
+                Log($"No Sahara packet arrived after RESET_STATE_MACHINE attempt {attempt}.");
+                CommTrace.Debug("edl", $"Sahara HELLO recovery: no packet after wake attempt {attempt}.");
+                continue;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log($"Reading the packet after RESET_STATE_MACHINE attempt {attempt} failed: {ex.Message}");
+                CommTrace.Debug("edl",
+                    $"Sahara HELLO recovery: packet read failed on wake attempt {attempt} ({ex.Message}).");
+                return null;
+            }
+
+            var header = BytesToStruct<SaharaPacketHeader>(headerData);
+            if (header.Command == SaharaCommand.Hello && header.Length == (uint)helloBytes)
+            {
+                byte[] body;
+                try
+                {
+                    body = await ReadExactAsync(helloBytes - headerBytes, wakeTimeoutMs, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Log($"The HELLO after RESET_STATE_MACHINE attempt {attempt} was truncated: {ex.Message}");
+                    CommTrace.Debug("edl", $"Sahara HELLO recovery: truncated HELLO on wake attempt {attempt}.");
+                    return null;
+                }
+                var hello = new byte[helloBytes];
+                headerData.CopyTo(hello, 0);
+                body.CopyTo(hello, headerBytes);
+                Log("The target re-announced HELLO after RESET_STATE_MACHINE.");
+                CommTrace.Debug("edl",
+                    $"Sahara HELLO recovery: HELLO received after wake attempt {attempt}.");
+                return hello;
+            }
+
+            Log($"Received {header.Command} (len {header.Length}) instead of HELLO after RESET_STATE_MACHINE.");
+            if (!await TryDrainUnexpectedSaharaPacketAsync(header, cancellationToken).ConfigureAwait(false))
+            {
+                CommTrace.Debug("edl",
+                    $"Sahara HELLO recovery: could not drain {header.Command} (len {header.Length}); attempt stopped.");
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Consumes the remaining bytes of an unexpected Sahara packet so the next read starts on a packet boundary.
+    /// <para>读取意外 Sahara 数据包的全部剩余字节，使下一次读取从数据包边界开始。</para>
+    /// </summary>
+    /// <param name="header">The already-read packet header. <para>已读取的数据包头。</para></param>
+    /// <param name="cancellationToken">Cancellation token for the bounded drain read.
+    /// <para>用于有界排出读取的取消令牌。</para></param>
+    /// <returns><see langword="true"/> when the whole packet was drained, <see langword="false"/> when the
+    /// reported length is unusable or the drain could not finish.
+    /// <para>整包已读掉时为 <see langword="true"/>；上报长度不可用或未能读完时为
+    /// <see langword="false"/>。</para></returns>
+    private async Task<bool> TryDrainUnexpectedSaharaPacketAsync(SaharaPacketHeader header,
+        CancellationToken cancellationToken)
+    {
+        var headerBytes = (uint)Marshal.SizeOf<SaharaPacketHeader>();
+        if (header.Length < headerBytes || header.Length - headerBytes > QudHelloRecoveryDrainLimitBytes)
+        {
+            return false;
+        }
+
+        var remaining = (int)(header.Length - headerBytes);
+        if (remaining == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            await ReadExactAsync(remaining, _timeoutMs, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log($"Draining {remaining} bytes of {header.Command} failed: {ex.Message}");
+            return false;
+        }
+        CommTrace.Debug("edl", $"Sahara HELLO recovery: drained {remaining} bytes of {header.Command}.");
+        return true;
     }
 
     private static void ValidateHello(SaharaHelloPacket hello)

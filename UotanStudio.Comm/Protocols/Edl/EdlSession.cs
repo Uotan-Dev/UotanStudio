@@ -1,6 +1,7 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
@@ -197,6 +198,16 @@ public sealed partial class EdlSession : IProtocolSession
     /// Observes Sahara packets or a Firehose NOP response without loading a programmer or configuring storage.
     /// <para>通过 Sahara 数据包或 Firehose NOP 响应检测协议，不加载 programmer，也不配置存储。</para>
     /// </summary>
+    /// <remarks>
+    /// A verified state is not re-observed, because probing writes to the target. The one exception is a
+    /// Sahara state whose HELLO facts were never captured: a session parked after an earlier probe carries the
+    /// verified state but not the handshake facts, and re-running the probe is what re-acquires them. That
+    /// probe writes at most one RESET_STATE_MACHINE wake and never a Sahara reply, so repeating it leaves the
+    /// target in the same image-transfer state it was already in.
+    /// <para>已验证状态不会被重新观测，因为探测会向目标写入。唯一的例外是 Sahara 状态且从未捕获 HELLO 事实：
+    /// 早先探测之后暂存的会话携带已验证状态但不携带握手事实，重跑一次探测正是重新获取它们的方式。该探测至多写
+    /// 一条 RESET_STATE_MACHINE 唤醒、从不写 Sahara 应答，因此重复它只会让目标停留在原本已处的镜像传输状态。</para>
+    /// </remarks>
     /// <param name="cancellationToken">Cancels bounded protocol reads.<para>取消有界的协议读取。</para></param>
     /// <returns>The verified protocol, or Unknown for absent or incomplete evidence.<para>经校验的协议；证据缺失或不完整时返回 Unknown。</para></returns>
     public async Task<EdlProtocolState> ProbeProtocolAsync(CancellationToken cancellationToken = default)
@@ -204,7 +215,10 @@ public sealed partial class EdlSession : IProtocolSession
         ThrowIfDisposed();
         using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        if (_protocolState == EdlProtocolState.Unknown)
+        var needsProbe = _protocolState == EdlProtocolState.Unknown
+            || (_protocolState is EdlProtocolState.Sahara or EdlProtocolState.SaharaMemoryDebug
+                && SaharaHandshake is null);
+        if (needsProbe)
         {
             var state = await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false);
             if (state is EdlProtocolState.Sahara or EdlProtocolState.SaharaMemoryDebug
@@ -411,9 +425,65 @@ public sealed partial class EdlSession : IProtocolSession
         }
     }
 
-    /// <summary>Initializes while the caller holds this session's Firehose operation lease.</summary>
-    internal async Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken,
+    /// <summary>
+    /// Observes the endpoint once before startup so a target that is already running Firehose is detected
+    /// instead of being handed a Sahara exchange it cannot interpret. The caller already holds this session's
+    /// Firehose operation lease.
+    /// <para>在启动前观测一次端点，使已在运行 Firehose 的目标被识别出来，而不是收到它无法解析的 Sahara 交换。
+    /// 调用方已持有本会话的 Firehose 操作租约。</para>
+    /// </summary>
+    /// <remarks>
+    /// Only an unobserved session is probed; a verified state is never re-observed, because probing writes to the
+    /// target. A probe failure leaves the state Unknown and the caller keeps its existing startup path, so this
+    /// preflight can only improve the outcome it would have reached anyway.
+    /// <para>只有尚未观测过的会话才会被探测；已验证状态绝不重新观测，因为探测会向目标写入。探测失败会保持
+    /// Unknown 并让调用方沿用既有启动路径，因此该预检只可能改善原本就会得到的结果。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancels the bounded probe.<para>取消有界探测。</para></param>
+    private async Task ProbeProtocolBeforeInitializationAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var state = await _probeTransport.ProbeAsync(cancellationToken).ConfigureAwait(false);
+            if (state is EdlProtocolState.Sahara or EdlProtocolState.SaharaMemoryDebug
+                && _probeTransport.TryReadSaharaHello(out var hello) && hello.Version > 0)
+            {
+                SaharaHandshake = new SaharaHandshakeInfo(hello.Version, hello.MinVersion,
+                    hello.MaxCommandLength, hello.Mode);
+            }
+            SetProtocolState(state);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            CommTrace.Debug("edl", $"EDL startup preflight probe failed and the startup path is unchanged: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Initializes while the caller holds this session's Firehose operation lease, answering the
+    /// <c>Firehose</c> image id with the single supplied stream.
+    /// <para>在调用方持有本会话 Firehose 操作租约时初始化，用所给单个流应答 <c>Firehose</c> 镜像标识。</para>
+    /// </summary>
+    /// <param name="programmerImage">Optional programmer image stream, or <see langword="null"/> to start without an upload.
+    /// <para>可选的 programmer 镜像流；为 <see langword="null"/> 时不带上传启动。</para></param>
+    /// <param name="cancellationToken">Cancels the handshake and configuration.
+    /// <para>取消握手与配置。</para></param>
+    /// <param name="options">Optional startup requirements.
+    /// <para>可选的启动要求。</para></param>
+    /// <returns>A task completing when the session reaches its configured state.
+    /// <para>会话抵达配置态时完成的任务。</para></returns>
+    internal Task InitializeOwnedAsync(Stream? programmerImage, CancellationToken cancellationToken,
         EdlInitializationOptions? options = null)
+        => InitializeOwnedFromImagesAsync(
+            programmerImage is null
+                ? null
+                : new Dictionary<uint, Stream> { [(uint)SaharaImageId.Firehose] = programmerImage },
+            cancellationToken, options);
+
+    /// <summary>Initializes from a set of images keyed by the Sahara image id the target will request, while the
+    /// caller holds this session's Firehose operation lease.</summary>
+    internal async Task InitializeOwnedFromImagesAsync(IReadOnlyDictionary<uint, Stream>? programmerImages,
+        CancellationToken cancellationToken, EdlInitializationOptions? options = null)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
@@ -429,6 +499,10 @@ public sealed partial class EdlSession : IProtocolSession
         var skipResponse = options?.SkipResponseOnReadWrite ?? false;
         Firehose!.Configuration.SkipResponseOnErase = skipResponse;
         Firehose.Configuration.SkipResponseOnReadWrite = skipResponse;
+        if (_protocolState == EdlProtocolState.Unknown)
+        {
+            await ProbeProtocolBeforeInitializationAsync(cancellationToken).ConfigureAwait(false);
+        }
         try
         {
             var streamDloadSelected = false;
@@ -440,7 +514,7 @@ public sealed partial class EdlSession : IProtocolSession
             }
             if (_protocolState != EdlProtocolState.Firehose)
             {
-                LinkStage = programmerImage is null ? EdlLinkStage.SaharaConnecting : EdlLinkStage.ProgrammerUploading;
+                LinkStage = HasProgrammerImages(programmerImages) ? EdlLinkStage.ProgrammerUploading : EdlLinkStage.SaharaConnecting;
                 Sahara = new SaharaProtocol(Transport)
                 {
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? UsesSerialFallback,
@@ -448,9 +522,10 @@ public sealed partial class EdlSession : IProtocolSession
                     QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false,
                     AllowStreamDload = options?.AllowStreamDload ?? false
                 };
-                var mode = await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-                if (mode == SaharaMode.Command && options?.AllowStreamDload == true && programmerImage is null)
+                var mode = HasProgrammerImages(programmerImages)
+                    ? await Sahara.HandshakeAsync(programmerImages!, cancellationToken).ConfigureAwait(false)
+                    : await Sahara.HandshakeAsync(programmerImage: null, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (mode == SaharaMode.Command && options?.AllowStreamDload == true && !HasProgrammerImages(programmerImages))
                 {
                     await EnterStreamDloadAsync(cancellationToken).ConfigureAwait(false);
                     streamDloadSelected = true;
@@ -463,9 +538,9 @@ public sealed partial class EdlSession : IProtocolSession
                 else
                 {
                     SetProtocolState(EdlProtocolState.Firehose);
-                    LinkStage = programmerImage is null
-                        ? EdlLinkStage.FirehoseVerifying
-                        : EdlLinkStage.AwaitingReenumeration;
+                    LinkStage = HasProgrammerImages(programmerImages)
+                        ? EdlLinkStage.AwaitingReenumeration
+                        : EdlLinkStage.FirehoseVerifying;
                 }
             }
             else if (options?.QueryIdentityBeforeUpload == true)
@@ -624,6 +699,127 @@ public sealed partial class EdlSession : IProtocolSession
         }
 
         await InitializeAsync(programmerImage, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reports whether a programmer input set carries at least one image, which is the condition the Sahara
+    /// exchange needs before it can answer READ_DATA at all.
+    /// <para>报告 programmer 输入集合是否至少含一个镜像，这是 Sahara 交换应答 READ_DATA 的前提条件。</para>
+    /// </summary>
+    /// <param name="programmerImages">Candidate image set, possibly <see langword="null"/>.
+    /// <para>候选镜像集合，可能为 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when at least one image is present.
+    /// <para>至少存在一个镜像时为 <see langword="true"/>。</para></returns>
+    private static bool HasProgrammerImages(IReadOnlyDictionary<uint, Stream>? programmerImages)
+        => programmerImages is { Count: > 0 };
+
+    /// <summary>
+    /// Opens every image of a programmer set, uploads all of them in one Sahara exchange, and disposes them again.
+    /// <para>打开 programmer 集合的全部镜像，在一次 Sahara 交换中上传它们，随后释放。</para>
+    /// </summary>
+    /// <remarks>
+    /// The caller holds the Firehose operation lease, so the transport is exclusive. Streams already opened are
+    /// disposed even when a later image cannot be opened, so a partial open never leaks a file handle.
+    /// <para>调用方持有 Firehose 操作租约，因此传输独占。即使后续镜像无法打开，已打开的流也会被释放，
+    /// 部分打开不会泄漏文件句柄。</para>
+    /// </remarks>
+    /// <param name="programmerImages">The validated image set to upload.
+    /// <para>要上传的已校验镜像集合。</para></param>
+    /// <param name="cancellationToken">Cancels the opens and the handshake.
+    /// <para>取消打开与握手。</para></param>
+    /// <param name="options">Optional startup requirements. <para>可选的启动要求。</para></param>
+    /// <returns>A task completing when the session reaches its configured state.
+    /// <para>会话抵达配置态时完成的任务。</para></returns>
+    /// <exception cref="InvalidDataException">One referenced image is missing.
+    /// <para>某个被引用的镜像缺失。</para></exception>
+    /// <exception cref="IOException">One referenced image cannot be opened.
+    /// <para>某个被引用的镜像无法打开。</para></exception>
+    private async Task InitializeOwnedFromImageSetAsync(EdlProgrammerImageSet programmerImages,
+        CancellationToken cancellationToken, EdlInitializationOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(programmerImages);
+        var streams = new Dictionary<uint, Stream>(programmerImages.Images.Count);
+        try
+        {
+            foreach (var image in programmerImages.Images)
+            {
+                if (!File.Exists(image.Path))
+                {
+                    throw new InvalidDataException(
+                        $"The programmer image is missing: {image.Path}.");
+                }
+
+                // FileShare.Read keeps one upload from blocking another reader of the same image.
+                streams[image.ImageId] = File.Open(image.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            }
+
+            await InitializeOwnedFromImagesAsync(streams, cancellationToken, options).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var stream in streams.Values)
+            {
+                stream.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Initializes the session from a programmer image set, so a manifest that spreads the programmer across
+    /// several Sahara image identifiers uploads all of them in one exchange.
+    /// <para>用 programmer 镜像集合初始化会话，使把 programmer 分散到多个 Sahara 镜像标识上的清单在同一次交换中
+    /// 上传全部镜像。</para>
+    /// </summary>
+    /// <param name="programmerImages">The validated image set to upload.
+    /// <para>要上传的已校验镜像集合。</para></param>
+    /// <param name="initialization">Optional startup requirements.
+    /// <para>可选的启动要求。</para></param>
+    /// <param name="cancellationToken">Cancels the opens, the handshake and the configuration.
+    /// <para>取消打开、握手与配置。</para></param>
+    /// <returns>A task completing when the session reaches its configured state.
+    /// <para>会话抵达配置态时完成的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="programmerImages"/> is <see langword="null"/>.
+    /// <para><paramref name="programmerImages"/> 为 <see langword="null"/>。</para></exception>
+    public async Task InitializeFromImageSetAsync(EdlProgrammerImageSet programmerImages,
+        EdlInitializationOptions? initialization, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(programmerImages);
+        ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        await InitializeOwnedFromImageSetAsync(programmerImages, cancellationToken, initialization)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ensures the session is initialized from a programmer image set, returning immediately for an already
+    /// configured session or a link handed to the streaming DLOAD backend.
+    /// <para>确保会话用 programmer 镜像集合初始化；对已配置的会话或已交接给流式 DLOAD 后端的链路直接返回。</para>
+    /// </summary>
+    /// <remarks>The early return happens before any image is opened, so an already configured endpoint pays no
+    /// extra file I/O.<para>提前返回发生在任何镜像被打开之前，因此已配置的端点不产生额外文件 I/O。</para></remarks>
+    /// <param name="programmerImages">The validated image set to upload.
+    /// <para>要上传的已校验镜像集合。</para></param>
+    /// <param name="initialization">Optional startup requirements.
+    /// <para>可选的启动要求。</para></param>
+    /// <param name="cancellationToken">Cancels the opens, the handshake and the configuration.
+    /// <para>取消打开、握手与配置。</para></param>
+    /// <returns>A task completing when the session reaches its configured state.
+    /// <para>会话抵达配置态时完成的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="programmerImages"/> is <see langword="null"/>.
+    /// <para><paramref name="programmerImages"/> 为 <see langword="null"/>。</para></exception>
+    public async Task EnsureInitializedFromImageSetAsync(EdlProgrammerImageSet programmerImages,
+        EdlInitializationOptions? initialization, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(programmerImages);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (IsConfigured || _protocolState == EdlProtocolState.Streaming)
+        {
+            return;
+        }
+
+        await InitializeFromImageSetAsync(programmerImages, initialization, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
