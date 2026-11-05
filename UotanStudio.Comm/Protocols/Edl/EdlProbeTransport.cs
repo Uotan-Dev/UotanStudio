@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 
@@ -11,13 +12,20 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <para>保留检测读取的字节，供后续协议握手继续消费。</para>
 /// </summary>
 /// <remarks>
-/// The probe never writes a Sahara packet, because the handshake that owns Sahara negotiation is the only
-/// component that can consume the target state a speculative HELLO response would create. It writes exactly
-/// one Firehose NOP, and only on a transport that cannot silently lose the bootrom HELLO, so a live Sahara
-/// target is never handed XML it would parse as an unknown command.
-/// <para>探测从不写入 Sahara 数据包，因为只有负责 Sahara 协商的握手层才能消费主动 HELLO 应答造成的目标状态。
-/// 它只写入一条 Firehose NOP，且仅在不会静默丢掉 bootrom HELLO 的传输上写入，因此处于 Sahara 的目标
-/// 绝不会收到会被解析为未知命令的 XML。</para>
+/// The probe never writes a Sahara HELLO_RESPONSE, because the handshake that owns Sahara negotiation is the only
+/// component that can consume the target state an unsolicited HELLO response would create. When the buffered
+/// prefix holds no evidence it writes one Sahara RESET_STATE_MACHINE packet, which makes a silent bootrom target
+/// re-announce HELLO and only produces a parser log on a target that already runs Firehose. It also writes at
+/// most one Firehose NOP: unconditionally on a transport that cannot silently lose the bootrom HELLO, and on a
+/// serial transport only after the target has already produced a complete Firehose XML document, so a live Sahara
+/// target is never handed XML it would parse as an unknown command. Emitting Firehose XML at all proves the target
+/// is not a bootrom waiting for HELLO, because such a bootrom only sends binary HELLO or nothing.
+/// <para>探测从不写入 Sahara HELLO_RESPONSE，因为只有负责 Sahara 协商的握手层才能消费主动 HELLO 应答造成的目标状态。
+/// 当缓冲前缀不含任何证据时，它写入一条 Sahara RESET_STATE_MACHINE，使静默的 bootrom 目标重新宣告 HELLO，
+/// 而在已运行 Firehose 的目标上只会留下一条解析日志。它还会写入至多一条 Firehose NOP：在不会静默丢掉
+/// bootrom HELLO 的传输上无条件写入，在串口上则只在目标已经吐出一份完整的 Firehose XML 文档之后写入，
+/// 因此处于 Sahara 的目标绝不会收到会被解析为未知命令的 XML。只要输出 Firehose XML 就证明目标不是等待
+/// HELLO 的 bootrom（这种 bootrom 只会发二进制 HELLO 或什么都不发）。</para>
 /// </remarks>
 internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
 {
@@ -27,16 +35,20 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     private const int ProbeReadChunkBytes = 48;
     private const int MaximumIdleReads = 64;
     private const int FirehoseSilenceGraceMilliseconds = 1000;
+    private const int SaharaResetStatePacketBytes = 8;
 
     private byte[]? _buffer;
     private int _length;
     private int _position;
 
     /// <summary>
-    /// Classifies the endpoint by reading what the target sends, then probing Firehose once when the target
-    /// stays silent on a transport that cannot lose the bootrom HELLO.
-    /// <para>通过读取目标发出的数据分类端点；当目标在不丢失 bootrom HELLO 的传输上保持静默时，再探测一次
-    /// Firehose。</para>
+    /// Classifies the endpoint by reading what the target sends, waking a silent bootrom target with one Sahara
+    /// RESET_STATE_MACHINE packet, then probing Firehose once: on a transport that cannot lose the bootrom HELLO
+    /// as soon as the target stays silent, and on a serial transport only once the target has already produced a
+    /// complete Firehose XML document.
+    /// <para>通过读取目标发出的数据分类端点；对静默的 bootrom 目标先写入一条 Sahara RESET_STATE_MACHINE 唤醒，
+    /// 再探测一次 Firehose：在不会丢失 bootrom HELLO 的传输上只要目标静默即可，在串口上则要等目标已经吐出一份
+    /// 完整的 Firehose XML 文档之后。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancels bounded protocol reads.<para>取消有界的协议读取。</para></param>
     /// <returns>The verified protocol, or Unknown when no bounded evidence arrived in the probe budget.
@@ -47,7 +59,10 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         Compact();
         var started = Environment.TickCount64;
         var idleReads = 0;
+        var wakeSent = false;
+        var readPendingAfterWake = false;
         var nopSent = false;
+        var nopSentAtMilliseconds = 0L;
         var nopAllowed = Inner is not SerialTransport;
         while (true)
         {
@@ -56,30 +71,44 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             var state = Classify(buffered);
             if (state == EdlProtocolState.Firehose)
             {
+                if (wakeSent)
+                {
+                    CommTrace.Write(CommLogLevel.Debug, "edl",
+                        "EDL probe read Firehose evidence after writing Sahara RESET_STATE_MACHINE.");
+                }
                 _length = 0;
                 _position = 0;
                 return state;
             }
             if (state != EdlProtocolState.Unknown)
             {
+                if (wakeSent)
+                {
+                    CommTrace.Write(CommLogLevel.Debug, "edl",
+                        $"EDL probe read {state} evidence after writing Sahara RESET_STATE_MACHINE.");
+                }
                 return state;
             }
 
             if (_length == MaximumProbeBytes || idleReads >= MaximumIdleReads)
             {
-                return EdlProtocolState.Unknown;
+                break;
             }
             var elapsed = Environment.TickCount64 - started;
             if (elapsed >= MaximumProbeMilliseconds)
             {
-                return EdlProtocolState.Unknown;
+                break;
             }
             var pendingDocument = HasPendingDocument(buffered);
-            if (nopSent && !pendingDocument && elapsed >= FirehoseSilenceGraceMilliseconds)
+            if (nopSent && !pendingDocument
+                && Environment.TickCount64 - nopSentAtMilliseconds >= FirehoseSilenceGraceMilliseconds)
             {
-                return EdlProtocolState.Unknown;
+                break;
             }
-            var canProbe = nopAllowed && !nopSent && !pendingDocument && AcceptsFirehoseProbe(buffered);
+            var canWake = !wakeSent && !pendingDocument && HasNoProtocolEvidence(buffered);
+            var canProbe = !nopSent && !readPendingAfterWake && !pendingDocument
+                && AcceptsFirehoseProbe(buffered)
+                && (nopAllowed || HasFirehoseDocumentEvidence(buffered));
 
             var remaining = (int)Math.Max(1, MaximumProbeMilliseconds - elapsed);
             var chunk = Math.Min(ProbeReadChunkBytes, MaximumProbeBytes - _length);
@@ -104,11 +133,24 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             if (count != 0)
             {
                 _length += count;
+                readPendingAfterWake = false;
                 idleReads = 0;
                 continue;
             }
 
             idleReads++;
+            readPendingAfterWake = false;
+            if (canWake)
+            {
+                if (!await TryWriteSaharaWakeAsync(remaining, elapsed, cancellationToken).ConfigureAwait(false))
+                {
+                    break;
+                }
+                wakeSent = true;
+                readPendingAfterWake = true;
+                idleReads = 0;
+                continue;
+            }
             if (canProbe)
             {
                 var nop = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen +
@@ -119,8 +161,58 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
                     throw new IOException("Incomplete EDL protocol probe write.");
                 }
                 nopSent = true;
+                nopSentAtMilliseconds = Environment.TickCount64;
                 idleReads = 0;
             }
+        }
+
+        if (wakeSent)
+        {
+            CommTrace.Write(CommLogLevel.Debug, "edl",
+                $"EDL probe wrote Sahara RESET_STATE_MACHINE but observed no bounded Sahara or Firehose evidence within {MaximumProbeMilliseconds} ms.");
+        }
+        return EdlProtocolState.Unknown;
+    }
+
+    /// <summary>
+    /// Writes one Sahara RESET_STATE_MACHINE packet so a silent bootrom target re-announces HELLO, and reports
+    /// whether the write completed; every transport failure is logged and swallowed because the probe must
+    /// still return Unknown instead of surfacing a write error.
+    /// <para>写入一条 Sahara RESET_STATE_MACHINE 数据包，使静默的 bootrom 目标重新宣告 HELLO，并报告写入是否完成；
+    /// 所有传输失败都只记录并被吞掉，因为探测仍须返回 Unknown 而不是抛出写入错误。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Upper bound for the write in milliseconds.
+    /// <para>写入的毫秒上限。</para></param>
+    /// <param name="elapsedMilliseconds">Silence already observed before the write, used in diagnostics.
+    /// <para>写入前已观测到的静默时长，用于诊断日志。</para></param>
+    /// <param name="cancellationToken">Cancels the write before any byte is sent.
+    /// <para>在发送任何字节前取消写入。</para></param>
+    /// <returns><see langword="true"/> when the packet was written completely.
+    /// <para>数据包完整写入时为 true。</para></returns>
+    private async Task<bool> TryWriteSaharaWakeAsync(int timeoutMs, long elapsedMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        var packet = new byte[SaharaResetStatePacketBytes];
+        BinaryPrimitives.WriteUInt32LittleEndian(packet, (uint)SaharaCommand.ResetState);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), (uint)packet.Length);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var written = await inner.WriteAsync(packet, 0, packet.Length, timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+            if (written != packet.Length)
+            {
+                throw new IOException("Incomplete Sahara RESET_STATE_MACHINE write.");
+            }
+            CommTrace.Write(CommLogLevel.Debug, "edl",
+                $"EDL probe wrote a Sahara RESET_STATE_MACHINE packet (cmd=0x13, {packet.Length} bytes) after {elapsedMilliseconds} ms of silence.");
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            CommTrace.Write(CommLogLevel.Debug, "edl",
+                $"EDL probe Sahara RESET_STATE_MACHINE wake failed after {elapsedMilliseconds} ms of silence: {ex.Message}");
+            return false;
         }
     }
 
@@ -158,7 +250,39 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     private static bool AcceptsFirehoseProbe(ReadOnlySpan<byte> bytes)
         => bytes.IsEmpty
             || bytes[EdlConstants.MeasureDocumentPrefix(bytes)..].IsEmpty
-            || ContainsOnlyFirehoseLogs(bytes);
+            || ContainsOnlyFirehoseLogs(bytes)
+            || HasFirehoseDocumentEvidence(bytes);
+
+    /// <summary>
+    /// Reports whether the buffered prefix has already yielded at least one complete Firehose XML document, which
+    /// is the evidence a serial transport needs before a NOP is written. Concatenated documents are accepted
+    /// because targets emit several documents back to back; only the first opening bracket and one closing
+    /// <c>&lt;/data&gt;</c> are required, in that order.
+    /// <para>报告缓冲前缀是否已经产出了至少一份完整的 Firehose XML 文档，这是串口在写入 NOP 之前所需的证据。
+    /// 允许文档拼接，因为目标会连续输出多份文档；只要求第一个开尖括号与其后至少一个 <c>&lt;/data&gt;</c>。</para>
+    /// </summary>
+    /// <param name="bytes">Buffered probe bytes.<para>已缓冲的探测字节。</para></param>
+    /// <returns><see langword="true"/> when the buffer starts with an opening tag and contains a closing tag.
+    /// <para>缓冲以开标签开始并包含闭标签时为 true。</para></returns>
+    private static bool HasFirehoseDocumentEvidence(ReadOnlySpan<byte> bytes)
+    {
+        var document = bytes[EdlConstants.MeasureDocumentPrefix(bytes)..];
+        return !document.IsEmpty
+            && document[0] == (byte)'<'
+            && document.IndexOf("</data>"u8) >= 0;
+    }
+
+    /// <summary>
+    /// Reports whether the buffered prefix carries no protocol evidence at all, counting packet padding and a
+    /// UTF-8 BOM as absence, so the wake is issued only to a target that has said nothing.
+    /// <para>报告缓冲前缀是否完全不含协议证据，把包填充和 UTF-8 BOM 视为无证据，从而只对尚未开口的目标
+    /// 发出唤醒。</para>
+    /// </summary>
+    /// <param name="bytes">Buffered probe bytes.<para>已缓冲的探测字节。</para></param>
+    /// <returns><see langword="true"/> when nothing but padding arrived.
+    /// <para>只到达填充字节时为 true。</para></returns>
+    private static bool HasNoProtocolEvidence(ReadOnlySpan<byte> bytes)
+        => bytes[EdlConstants.MeasureDocumentPrefix(bytes)..].IsEmpty;
 
     private static bool ContainsOnlyFirehoseLogs(ReadOnlySpan<byte> bytes)
     {
