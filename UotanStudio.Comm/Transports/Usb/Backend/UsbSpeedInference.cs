@@ -28,6 +28,27 @@ internal static class UsbSpeedInference
     }
 
     /// <summary>
+    /// Maps the hub port query's raw <c>USB_DEVICE_SPEED</c> byte (0 low, 1 full, 2 high, 3 super)
+    /// to a <see cref="UsbDeviceSpeed"/>.
+    /// <para>把集线器端口查询返回的原始 <c>USB_DEVICE_SPEED</c> 字节（0 低速、1 全速、2 高速、3 超速）
+    /// 映射到 <see cref="UsbDeviceSpeed"/>。</para>
+    /// </summary>
+    /// <param name="speedByte">The raw <c>USB_DEVICE_SPEED</c> byte. <para>原始 <c>USB_DEVICE_SPEED</c> 字节。</para></param>
+    /// <returns>The mapped speed; <see cref="UsbDeviceSpeed.Unknown"/> for values outside the range.
+    /// <para>映射后的速度；超出范围的值为 <see cref="UsbDeviceSpeed.Unknown"/>。</para></returns>
+    internal static UsbDeviceSpeed FromPortSpeedByte(byte speedByte)
+    {
+        return speedByte switch
+        {
+            0 => UsbDeviceSpeed.Low,
+            1 => UsbDeviceSpeed.Full,
+            2 => UsbDeviceSpeed.High,
+            3 => UsbDeviceSpeed.Super,
+            _ => UsbDeviceSpeed.Unknown
+        };
+    }
+
+    /// <summary>
     /// Maps a negotiated link speed in Mbps (as reported by the sysfs <c>speed</c>
     /// attribute) to a <see cref="UsbDeviceSpeed"/>.
     /// <para>将协商链路速度（Mbps，由 sysfs <c>speed</c> 属性报告）映射到

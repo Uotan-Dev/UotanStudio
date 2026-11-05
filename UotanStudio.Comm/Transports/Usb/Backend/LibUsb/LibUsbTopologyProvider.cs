@@ -34,7 +34,11 @@ internal sealed class LibUsbTopologyProvider : IUsbTopologyProvider
         SupportsInterfaceNodes = true,
         SupportsHostControllerNodes = false,
         SupportsDeviceInterfaceGuids = false,
-        SupportsProblemCodes = false
+        SupportsProblemCodes = false,
+        SupportsClassGuid = false,
+        SupportsDriverInfPath = false,
+        SupportsContainerId = false,
+        SupportsCompatibleIds = false
     };
 
     /// <inheritdoc />

@@ -53,6 +53,11 @@ internal sealed record UsbDevNodeRawRecord
     /// <value>The published INF name or <see langword="null"/>. <para>已发布 INF 名或 <see langword="null"/>。</para></value>
     public string? DriverInfPath { get; init; }
 
+    /// <summary>DEVPKEY_Device_Driver, the class driver key that hub port driver-key queries report for the
+    /// device on a port. <para>DEVPKEY_Device_Driver，即集线器端口驱动键查询为端口设备报告的类驱动键。</para></summary>
+    /// <value>The class driver key or <see langword="null"/>. <para>类驱动键或 <see langword="null"/>。</para></value>
+    public string? DriverKeyName { get; init; }
+
     /// <summary>DEVPKEY_Device_ProblemCode. <para>DEVPKEY_Device_ProblemCode 值。</para></summary>
     /// <value>The problem code or <see langword="null"/>. <para>故障码或 <see langword="null"/>。</para></value>
     public uint? ProblemCode { get; init; }
@@ -97,7 +102,11 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
         SupportsInterfaceNodes = true,
         SupportsHostControllerNodes = true,
         SupportsDeviceInterfaceGuids = true,
-        SupportsProblemCodes = true
+        SupportsProblemCodes = true,
+        SupportsClassGuid = true,
+        SupportsDriverInfPath = true,
+        SupportsContainerId = true,
+        SupportsCompatibleIds = true
     };
 
     /// <inheritdoc />
@@ -163,20 +172,131 @@ internal sealed class WindowsUsbTopologyProvider : IUsbTopologyProvider
         }
 
         var interfaceClasses = ReadRegisteredInterfaceClasses();
-        var nodes = new List<UsbTopologyNode>(devInstById.Count);
+        var raws = new List<UsbDevNodeRawRecord>(devInstById.Count);
         foreach (var (instanceId, devInst) in devInstById)
         {
-            var raw = UsbPnpNative.ReadProperties(devInst, instanceId) with
+            raws.Add(UsbPnpNative.ReadProperties(devInst, instanceId) with
             {
                 ParentInstanceId = parentById.TryGetValue(instanceId, out var parent) ? parent : null,
                 DeviceInterfaceGuids = interfaceClasses.TryGetValue(instanceId, out var classes)
                     ? classes
                     : []
-            };
-            nodes.Add(ShapeNode(raw));
+            });
+        }
+
+        var speeds = ResolveNodeSpeeds(raws, CollectHubPortSnapshots(raws));
+        var nodes = new List<UsbTopologyNode>(raws.Count);
+        foreach (var raw in raws)
+        {
+            nodes.Add(ShapeNode(raw) with
+            {
+                Speed = speeds.TryGetValue(raw.InstanceId, out var speed)
+                    ? speed
+                    : UsbDeviceSpeed.Unknown
+            });
         }
 
         return nodes;
+    }
+
+    /// <summary>
+    /// Snapshots every distinct USB parent hub referenced by the raw records. Composite devices appear as
+    /// parents of their interface children and answer no hub interface, so their snapshot comes back empty.
+    /// <para>对原始记录引用的每个互不相同的 USB 父集线器做端口快照。复合设备会作为接口子节点的父节点出现，
+    /// 但不发布集线器接口，因此其快照为空。</para>
+    /// </summary>
+    /// <param name="raws">The raw records of one enumeration. <para>一次枚举的原始记录。</para></param>
+    /// <returns>The populated ports of every referenced hub, flattened.
+    /// <para>所有被引用集线器的在位端口快照的扁平集合。</para></returns>
+    private static List<HubPortSnapshot> CollectHubPortSnapshots(IReadOnlyList<UsbDevNodeRawRecord> raws)
+    {
+        var snapshots = new List<HubPortSnapshot>();
+        foreach (var hubInstanceId in raws
+            .Select(raw => raw.ParentInstanceId)
+            .Where(id => id is { Length: > 0 } && id.StartsWith("USB\\", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            snapshots.AddRange(UsbHubDescriptorReader.ReadHubPorts(hubInstanceId!));
+        }
+
+        return snapshots;
+    }
+
+    /// <summary>
+    /// Resolves the negotiated link speed for each device node from the hub port snapshots. A device is
+    /// correlated with its port by the class driver key the hub driver reports for the port — the authoritative
+    /// identity that survives vendor stacks whose <c>DEVPKEY_Device_Address</c> disagrees with the hub's
+    /// connection indexes — falling back to a VID/PID match on the parent hub's ports. Composite interface
+    /// children inherit the speed of the device node they belong to. Nodes without a USB parent hub, without
+    /// any matching port and root hubs stay <see cref="UsbDeviceSpeed.Unknown"/>.
+    /// <para>从集线器端口快照解析每个设备节点的协商链路速度。设备与端口的关联依据是集线器驱动为端口报告的
+    /// 类驱动键——这是能穿越厂商栈（其 <c>DEVPKEY_Device_Address</c> 与集线器连接索引不一致）的权威身份——
+    /// 找不到时回退为在父集线器端口上按 VID/PID 匹配。复合设备的接口子节点继承所属设备节点的速度。没有 USB
+    /// 父集线器、匹配不到端口的节点与根集线器保持 <see cref="UsbDeviceSpeed.Unknown"/>。</para>
+    /// </summary>
+    /// <param name="raws">The raw records of one enumeration. <para>一次枚举的原始记录。</para></param>
+    /// <param name="hubPorts">The populated-port snapshots of every referenced hub.
+    /// <para>所有被引用集线器的在位端口快照。</para></param>
+    /// <returns>The negotiated speed per device instance id; absent entries stay unknown.
+    /// <para>按设备实例标识归集的协商速度；缺失的条目保持未知。</para></returns>
+    internal static Dictionary<string, UsbDeviceSpeed> ResolveNodeSpeeds(IReadOnlyList<UsbDevNodeRawRecord> raws,
+        IReadOnlyList<HubPortSnapshot> hubPorts)
+    {
+        var speedByDriverKey = new Dictionary<string, UsbDeviceSpeed>(StringComparer.OrdinalIgnoreCase);
+        var portsByHubId = new Dictionary<string, List<HubPortSnapshot>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var snapshot in hubPorts)
+        {
+            if (snapshot.DriverKeyName is { Length: > 0 } driverKeyName)
+            {
+                speedByDriverKey[driverKeyName] = snapshot.Speed;
+            }
+
+            if (!portsByHubId.TryGetValue(snapshot.HubInstanceId, out var ports))
+            {
+                ports = [];
+                portsByHubId[snapshot.HubInstanceId] = ports;
+            }
+
+            ports.Add(snapshot);
+        }
+
+        var speeds = new Dictionary<string, UsbDeviceSpeed>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in raws)
+        {
+            if (raw.ParentInstanceId is not { Length: > 0 } hubInstanceId ||
+                !hubInstanceId.StartsWith("USB\\", StringComparison.OrdinalIgnoreCase) ||
+                raw.InstanceId.Contains("&MI_", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (raw.DriverKeyName is { Length: > 0 } driverKey &&
+                speedByDriverKey.TryGetValue(driverKey, out var matched))
+            {
+                speeds[raw.InstanceId] = matched;
+                continue;
+            }
+
+            var identitySource = raw.HardwareIds.Count > 0 ? raw.HardwareIds[0] : raw.InstanceId;
+            var matchedPort =
+                ToUInt16(ParseHexToken(identitySource, "VID_")) is { } vendorId &&
+                ToUInt16(ParseHexToken(identitySource, "PID_")) is { } productId &&
+                portsByHubId.TryGetValue(hubInstanceId, out var ports)
+                    ? ports.FirstOrDefault(port => port.VendorId == vendorId && port.ProductId == productId)
+                    : null;
+            speeds[raw.InstanceId] = matchedPort?.Speed ?? UsbDeviceSpeed.Unknown;
+        }
+
+        foreach (var raw in raws)
+        {
+            if (!speeds.ContainsKey(raw.InstanceId) && raw.ParentInstanceId is { } parent &&
+                speeds.TryGetValue(parent, out var inherited))
+            {
+                speeds[raw.InstanceId] = inherited;
+            }
+        }
+
+        return speeds;
     }
 
     /// <summary>

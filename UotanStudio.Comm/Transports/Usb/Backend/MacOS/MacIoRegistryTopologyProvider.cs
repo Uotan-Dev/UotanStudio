@@ -26,7 +26,11 @@ internal sealed class MacIoRegistryTopologyProvider : IUsbTopologyProvider
         SupportsInterfaceNodes = true,
         SupportsHostControllerNodes = true,
         SupportsDeviceInterfaceGuids = false,
-        SupportsProblemCodes = false
+        SupportsProblemCodes = false,
+        SupportsClassGuid = false,
+        SupportsDriverInfPath = false,
+        SupportsContainerId = false,
+        SupportsCompatibleIds = false
     };
 
     /// <inheritdoc />

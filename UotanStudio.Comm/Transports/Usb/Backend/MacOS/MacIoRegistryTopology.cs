@@ -118,8 +118,11 @@ internal static class MacIoRegistryTopology
     /// The parent property bag when known, otherwise <see langword="null"/>. <para>已知时的父属性袋，否则为 <see langword="null"/>。</para>
     /// </param>
     /// <returns>
-    /// The flat node with the role stated explicitly and unreadable attributes left <see langword="null"/>.
-    /// <para>显式标注角色、不可读属性保持 <see langword="null"/> 的扁平节点。</para>
+    /// The flat node with the role stated explicitly and unreadable attributes left <see langword="null"/>. The
+    /// <c>IOClass</c> backs both <c>ClassName</c> and <c>DriverService</c>, and the registry service path is
+    /// reported as an <c>ioreg:</c> location.
+    /// <para>显式标注角色、不可读属性保持 <see langword="null"/> 的扁平节点。<c>IOClass</c> 同时作为
+    /// <c>ClassName</c> 与 <c>DriverService</c>，注册表服务路径以 <c>ioreg:</c> 位置上报。</para>
     /// </returns>
     internal static UsbTopologyNode Shape(MacIoRegistryEntry entry, MacIoRegistryEntry? parent)
     {
@@ -147,6 +150,7 @@ internal static class MacIoRegistryTopology
             Description = function ? entry.InterfaceName ?? entry.ProductName : entry.ProductName,
             ManufacturerName = vendorName,
             ClassName = entry.IOClass,
+            DriverService = entry.IOClass,
             VendorId = vendorId,
             ProductId = productId,
             Revision = bcdDevice is { } release
@@ -158,7 +162,8 @@ internal static class MacIoRegistryTopology
             InterfaceSubClass = function ? entry.InterfaceSubClass : null,
             InterfaceProtocol = function ? entry.InterfaceProtocol : null,
             Speed = speed,
-            HardwareIds = BuildHardwareIds(function, vendorId, productId, entry)
+            HardwareIds = BuildHardwareIds(function, vendorId, productId, entry),
+            LocationPaths = [$"ioreg:{entry.InstanceId}"]
         };
     }
 

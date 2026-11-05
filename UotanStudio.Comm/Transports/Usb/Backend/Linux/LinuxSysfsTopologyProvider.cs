@@ -24,7 +24,11 @@ internal sealed class LinuxSysfsTopologyProvider : IUsbTopologyProvider
         SupportsInterfaceNodes = true,
         SupportsHostControllerNodes = true,
         SupportsDeviceInterfaceGuids = false,
-        SupportsProblemCodes = false
+        SupportsProblemCodes = false,
+        SupportsClassGuid = false,
+        SupportsDriverInfPath = false,
+        SupportsContainerId = false,
+        SupportsCompatibleIds = true
     };
 
     /// <inheritdoc />

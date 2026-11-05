@@ -80,8 +80,9 @@ internal partial class WinUSBDevice : UsbDevice
     private int _configuredWritePipeTimeoutMs = -1;
     public override int CreateHandle()
     {
-        int Fail(int error)
+        int Fail(string step, int error)
         {
+            UsbTrace.LogFormatted($"WinUSB: open of [{DevicePath}] failed at {step} with native error {error}.");
             _winUsbHandle.Dispose();
             _fileHandle.Dispose();
             return error;
@@ -90,26 +91,26 @@ internal partial class WinUSBDevice : UsbDevice
         var hUsb = SimpleCreateHandle(DevicePath, true);
         if (hUsb == new IntPtr(-1))
         {
-            return Marshal.GetLastWin32Error();
+            return Fail("CreateFileW", Marshal.GetLastWin32Error());
         }
 
         _fileHandle = new SafeFileHandle(hUsb, ownsHandle: true);
         if (!WinUsb_Initialize(hUsb, out var winUsbHandle))
         {
-            return Fail(Marshal.GetLastWin32Error());
+            return Fail("WinUsb_Initialize", Marshal.GetLastWin32Error());
         }
 
         _winUsbHandle = new SafeWinUsbHandle(winUsbHandle);
         if (!WinUsb_GetCurrentAlternateSetting(_winUsbHandle.DangerousGetHandle(), out _interfaceNum))
         {
-            return Fail(Marshal.GetLastWin32Error());
+            return Fail("WinUsb_GetCurrentAlternateSetting", Marshal.GetLastWin32Error());
         }
 
         var ptr = Marshal.AllocHGlobal(Marshal.SizeOf<USBDeviceDescriptor>());
         if (!WinUsb_GetDescriptor(_winUsbHandle.DangerousGetHandle(), USB_DEVICE_DESCRIPTOR_TYPE, 0, 0, ptr, (uint)Marshal.SizeOf<USBDeviceDescriptor>(), out _))
         {
             Marshal.FreeHGlobal(ptr);
-            return Fail(Marshal.GetLastWin32Error());
+            return Fail("WinUsb_GetDescriptor(device)", Marshal.GetLastWin32Error());
         }
         _usbDeviceDescriptor = Marshal.PtrToStructure<USBDeviceDescriptor>(ptr);
         VendorId = _usbDeviceDescriptor.IdVendor;
@@ -121,7 +122,7 @@ internal partial class WinUSBDevice : UsbDevice
         if (!WinUsb_GetDescriptor(_winUsbHandle.DangerousGetHandle(), USB_CONFIGURATION_DESCRIPTOR_TYPE, 0, 0, ptr, (uint)Marshal.SizeOf<USBDeviceConfigDescriptor>(), out _))
         {
             Marshal.FreeHGlobal(ptr);
-            return Fail(Marshal.GetLastWin32Error());
+            return Fail("WinUsb_GetDescriptor(configuration)", Marshal.GetLastWin32Error());
         }
         _usbDeviceConfigDescriptor = Marshal.PtrToStructure<USBDeviceConfigDescriptor>(ptr);
         uint totalConfigLength = _usbDeviceConfigDescriptor.WTotalLength;
@@ -146,13 +147,13 @@ internal partial class WinUSBDevice : UsbDevice
 
         if (!WinUsb_QueryInterfaceSettings(_winUsbHandle.DangerousGetHandle(), _interfaceNum, out _usbDeviceInterfaceDescriptor))
         {
-            return Fail(Marshal.GetLastWin32Error());
+            return Fail("WinUsb_QueryInterfaceSettings", Marshal.GetLastWin32Error());
         }
 
         var bindError = BindInterface(_interfaceNum);
         if (bindError != 0)
         {
-            return Fail(bindError);
+            return Fail("BindInterface", bindError);
         }
 
         EnumeratedInterfaces = parsedInterfaces;

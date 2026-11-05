@@ -78,6 +78,20 @@ public sealed record UsbTopologyCapabilities
 
     /// <summary>Whether PnP problem codes are reported. <para>是否上报 PnP 故障码。</para></summary>
     public bool SupportsProblemCodes { get; init; }
+
+    /// <summary>Whether Windows-style class GUIDs are reported. <para>是否上报 Windows 风格的类 GUID。</para></summary>
+    public bool SupportsClassGuid { get; init; }
+
+    /// <summary>Whether published driver INF names are reported. <para>是否上报已发布的驱动 INF 名。</para></summary>
+    public bool SupportsDriverInfPath { get; init; }
+
+    /// <summary>Whether the container id grouping one physical device's functions is reported.
+    /// <para>是否上报把同一物理设备的功能归到一起的容器 ID。</para></summary>
+    public bool SupportsContainerId { get; init; }
+
+    /// <summary>Whether Windows-style compatible ids (or a platform equivalent such as the kernel modalias) are
+    /// reported. <para>是否上报 Windows 风格的兼容 ID（或平台等价物，如内核 modalias）。</para></summary>
+    public bool SupportsCompatibleIds { get; init; }
 }
 
 /// <summary>

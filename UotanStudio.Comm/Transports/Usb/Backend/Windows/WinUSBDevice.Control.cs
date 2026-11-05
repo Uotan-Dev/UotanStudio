@@ -68,8 +68,29 @@ internal partial class WinUSBDevice
         }
     }
 
+    /// <summary>
+    /// Reads the device's iSerialNumber string descriptor into <see cref="UsbDevice.SerialNumber"/>.
+    /// <para>读取设备的 iSerialNumber 字符串描述符到 <see cref="UsbDevice.SerialNumber"/>。</para>
+    /// </summary>
+    /// <remarks>
+    /// A device descriptor with <c>iSerialNumber == 0</c> has no serial string at all, so asking for descriptor
+    /// index 0 returns the supported-languages table, whose payload <c>0x0409</c> decodes into a single Cyrillic
+    /// character. Treating that as the serial would rewrite the identity of every gadget without one — including
+    /// the SpacemiT U-Boot fastboot stage — so the resolved serial (the Windows device-instance suffix, as adb
+    /// uses) is kept instead.
+    /// <para>设备描述符中 <c>iSerialNumber == 0</c> 表示根本没有序列号字符串，此时请求描述符索引 0 返回的是支持语言表，
+    /// 其负载 <c>0x0409</c> 会被解码成一个西里尔字符。把它当作序列号会改写每个没有序列号的 gadget 的身份——包括
+    /// 进迭时空 U-Boot 的 fastboot 阶段——因此这里改为保留已解析的序列号（Windows 设备实例后缀，与 adb 一致）。</para>
+    /// </remarks>
+    /// <returns>Zero on success, or the native error / -1 when the device has no serial string.
+    /// <para>成功返回 0；设备没有序列号字符串时返回原生错误或 -1。</para></returns>
     public override int GetSerialNumber()
     {
+        if (_usbDeviceDescriptor.ISerialNumber == 0)
+        {
+            return -1;
+        }
+
         var usb = AcquireWinUsbHandle();
         try
         {

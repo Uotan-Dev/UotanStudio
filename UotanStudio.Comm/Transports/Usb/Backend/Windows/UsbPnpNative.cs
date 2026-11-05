@@ -49,6 +49,7 @@ internal static partial class UsbPnpNative
     private static readonly DEVPROPKEY ContainerIdKey = new(DeviceContainerFmtid, 2);
     private static readonly DEVPROPKEY BusReportedDeviceDescKey = new(DeviceBusReportedFmtid, 4);
     private static readonly DEVPROPKEY DriverInfPathKey = new(DeviceDriverFmtid, 5);
+    private static readonly DEVPROPKEY DriverKeyNameKey = new(DeviceFmtid, 11);
 
     [LibraryImport("cfgmgr32.dll")]
     private static partial uint CM_Get_Device_ID_List_SizeW(out uint length,
@@ -353,6 +354,7 @@ internal static partial class UsbPnpNative
         ClassGuid = ReadGuid(devInst, ClassGuidKey),
         DriverService = ReadString(devInst, ServiceKey),
         DriverInfPath = ReadString(devInst, DriverInfPathKey),
+        DriverKeyName = ReadString(devInst, DriverKeyNameKey),
         ProblemCode = ReadUInt32(devInst, ProblemCodeKey),
         ContainerId = ReadGuid(devInst, ContainerIdKey),
         HardwareIds = ReadStringList(devInst, HardwareIdsKey),

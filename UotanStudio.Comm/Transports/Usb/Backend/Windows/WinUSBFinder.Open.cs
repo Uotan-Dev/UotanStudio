@@ -176,6 +176,7 @@ internal static partial class WinUSBFinder
             DevicePath = path,
             VendorId = vid ?? 0,
             ProductId = pid ?? 0,
+            SerialNumber = serial,
             SessionOptions = options
         };
         if (winDev.CreateHandle() == 0)
@@ -254,6 +255,7 @@ internal static partial class WinUSBFinder
                         DevicePath = path,
                         VendorId = vid ?? 0,
                         ProductId = pid ?? 0,
+                        SerialNumber = serial,
                         SessionOptions = options
                     };
                     return winUsb.CreateHandle() == 0
@@ -278,6 +280,7 @@ internal static partial class WinUSBFinder
             DevicePath = path,
             VendorId = vid ?? 0,
             ProductId = pid ?? 0,
+            SerialNumber = serial,
             SessionOptions = options
         };
         if (dev.CreateHandle() == 0)
