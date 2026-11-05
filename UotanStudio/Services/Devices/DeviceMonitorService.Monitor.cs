@@ -58,8 +58,10 @@ public sealed partial class DeviceMonitorService
             return "listening:" + string.Join("\n", targets.OrderBy(t => t.Serial, StringComparer.Ordinal)
                 .Select(t => $"{t.Serial}:{t.State}"));
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Periodic adb server snapshot query failed: {ex.GetType().Name}: {ex.Message}");
             return "unavailable";
         }
     }
@@ -76,8 +78,10 @@ public sealed partial class DeviceMonitorService
             var response = await server.ExecuteAsync(string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false);
             return "listening:" + System.Text.Encoding.UTF8.GetString(response);
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Periodic HDC server snapshot query failed: {ex.GetType().Name}: {ex.Message}");
             return "unavailable";
         }
     }
