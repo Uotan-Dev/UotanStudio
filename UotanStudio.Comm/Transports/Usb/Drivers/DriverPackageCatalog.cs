@@ -13,6 +13,14 @@ namespace UotanStudio.Comm.Transports.Usb.Drivers;
 /// </summary>
 public static class DriverPackageCatalog
 {
+    /// <summary>The device-id coverage per package id, built lazily from the embedded INF files.
+    /// <para>按包标识缓存的设备 ID 覆盖表，从内嵌 INF 文件惰性构建。</para></summary>
+    private static readonly Dictionary<string, IReadOnlyList<string>> CoverageById =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Guards <see cref="CoverageById"/> construction. <para>守护 <see cref="CoverageById"/> 的构建。</para></summary>
+    private static readonly Lock CoverageSync = new();
+
     private static readonly DriverPackageDescriptor[] AllPackages =
     [
         Describe("rockusb", "Rockusb", "Rockchip", ["rockusb.inf"], null),
@@ -70,6 +78,86 @@ public static class DriverPackageCatalog
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds the first catalog package whose bundled INFs claim one of the given device ids, comparing
+    /// ordinal case-insensitively. The ids may be hardware ids or compatible ids, mirroring how PnP ranks a
+    /// staged driver; packages without bundled INFs never match. Coverage is parsed from the embedded INF
+    /// files once per package and cached for the process lifetime.
+    /// <para>查找其内置 INF 声明了给定设备 ID 中任意一个的首个目录包，按序数忽略大小写比较。这些 ID 可以是
+    /// 硬件 ID 或兼容 ID，与 PnP 为已暂存驱动排序的方式一致；没有内置 INF 的包绝不匹配。覆盖表从内嵌 INF
+    /// 解析一次并按包缓存到进程生命周期结束。</para>
+    /// </summary>
+    /// <param name="deviceIds">The device ids to match, for example the hardware and compatible ids of one
+    /// USB device node; null or empty matches nothing.
+    /// <para>要匹配的设备 ID，例如一个 USB 设备节点的硬件与兼容 ID；null 或空白不匹配任何包。</para></param>
+    /// <returns>The first matching package in catalog order, or <see langword="null"/> when no package
+    /// claims one of the ids.
+    /// <para>按目录顺序首个匹配的包；没有任何包声明这些 ID 时为 <see langword="null"/>。</para></returns>
+    public static DriverPackageDescriptor? FindMatch(IReadOnlyList<string>? deviceIds)
+    {
+        if (deviceIds is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        lock (CoverageSync)
+        {
+            foreach (var package in AllPackages)
+            {
+                if (package.InfFileNames.Count == 0)
+                {
+                    continue;
+                }
+
+                var coverage = GetCoverage(package);
+                foreach (var deviceId in deviceIds)
+                {
+                    if (coverage.Contains(deviceId, StringComparer.OrdinalIgnoreCase))
+                    {
+                        return package;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the device ids one package's bundled INFs claim, caching the result per package id. Packages
+    /// whose INFs cannot be read report an empty coverage and never match.
+    /// <para>读取一个包的内置 INF 声明的设备 ID，并按包标识缓存结果。无法读取 INF 的包上报空覆盖表，
+    /// 绝不参与匹配。</para>
+    /// </summary>
+    /// <param name="package">The package descriptor. <para>驱动包描述。</para></param>
+    /// <returns>The claimed device ids, possibly empty. <para>声明的设备 ID；可能为空。</para></returns>
+    private static IReadOnlyList<string> GetCoverage(DriverPackageDescriptor package)
+    {
+        if (CoverageById.TryGetValue(package.Id, out var cached))
+        {
+            return cached;
+        }
+
+        HashSet<string> claimed = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var infName in package.InfFileNames)
+        {
+            if (DriverPackageAssets.TryReadFile(package.Id, infName) is not { } inf ||
+                !DriverPackageInfReader.TryRead(inf, out var metadata) || metadata is null)
+            {
+                continue;
+            }
+
+            foreach (var hardwareId in metadata.HardwareIds)
+            {
+                claimed.Add(hardwareId);
+            }
+        }
+
+        IReadOnlyList<string> coverage = [.. claimed];
+        CoverageById.Add(package.Id, coverage);
+        return coverage;
     }
 
     private static DriverPackageDescriptor Describe(string id, string displayNameKey, string vendorNameKey,

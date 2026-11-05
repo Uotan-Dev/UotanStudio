@@ -129,6 +129,15 @@ public sealed class WinUsbDriverInstaller
     /// <para>接管期间两次绑定观测之间的间隔。</para></summary>
     private static readonly TimeSpan BindingPollInterval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>The wait shared by the takeover and vendor package installs for the PnP installation queue
+    /// to drain before they queue their own work.
+    /// <para>接管与厂商包安装在排入自己的工作前，共享的 PnP 安装队列排空等待上限。</para></summary>
+    internal static readonly TimeSpan PendingInstallWaitTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>The cap on how many of this application's staged packages one release may remove.
+    /// <para>一次解除最多可移除的本应用暂存包数量上限。</para></summary>
+    private const int MaximumOwnStagedRemovals = 64;
+
     /// <summary>
     /// Gets whether this platform supports the installer; always <see langword="true"/> on Windows.
     /// <para>获取当前平台是否支持安装器;Windows 上恒为 <see langword="true"/>。</para>
@@ -202,13 +211,16 @@ public sealed class WinUsbDriverInstaller
     /// it is published. A devnode whose install previously failed is bound through an asynchronous retry
     /// installation, every other present devnode needs a forced install that PnP completes inside this call,
     /// and both paths wait at most <see cref="BindingWaitTimeout"/> for the observed binding to become the
-    /// takeover package. A devnode that is pending removal is rejected before anything is staged.
+    /// takeover package. Before anything is staged, the PnP installation queue must drain within
+    /// <see cref="PendingInstallWaitTimeout"/>: queueing onto a busy queue blocks every other device
+    /// install, so a busy queue is refused. A devnode that is pending removal is rejected too.
     /// <para>通过暂存新生成的自签名 WinUSB 驱动包并请求 PnP 绑定来接管设备。需要管理员令牌；该包把系统内置
     /// <c>WinUSB</c> 服务绑定到 <paramref name="request"/> 中的单个硬件 ID，使设备可由 MediaTek 预加载器
     /// 与下载模式访问所用的 WinUSB 路径打开。证书会被加入本机 <c>Root</c> 与 <c>TrustedPublisher</c>
     /// 存储，并在发布前销毁私钥。此前安装失败的设备节点经异步重试安装完成绑定，其余在位节点必须经 PnP 在本次
     /// 调用内完成的强制安装，两条路径都最多等待 <see cref="BindingWaitTimeout"/> 观测绑定是否变为接管包。
-    /// 处于移除中的设备节点会在暂存任何内容之前被拒绝。</para>
+    /// 在暂存任何内容之前，PnP 安装队列必须在 <see cref="PendingInstallWaitTimeout"/> 内排空：向繁忙的
+    /// 队列排队会阻塞所有其他设备安装，因此队列繁忙时直接拒绝；处于移除中的设备节点同样会被拒绝。</para>
     /// </summary>
     /// <param name="request">The takeover parameters.<para>接管参数。</para></param>
     /// <returns>The operation result; never throws.<para>操作结果；绝不抛出。</para></returns>
@@ -243,6 +255,12 @@ public sealed class WinUsbDriverInstaller
                     $"The device instance '{request.InstanceId}' is pending removal (devnode status 0x{status:X8}); replug the device before taking it over.");
             }
 
+            if (!WinUsbDriverNativeMethods.WaitForNoPendingInstallation(PendingInstallWaitTimeout))
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    "Another device installation is pending; the takeover does not queue onto a busy PnP queue. Finish that installation or replug the device and retry.");
+            }
+
             var current = QueryState(request.InstanceId);
             if (current is { DevicePresent: true, IsTakeoverBinding: true } && problem == 0)
             {
@@ -262,18 +280,21 @@ public sealed class WinUsbDriverInstaller
             }
 
             var bound = current.IsTakeoverBinding;
-            if (!bound && RequestRebind(request.InstanceId))
+            if (!bound && ReadDevNodeStatus(request.InstanceId).Present)
             {
-                bound = WaitForTakeoverBinding(request.InstanceId);
-            }
-            else if (!bound && ReadDevNodeStatus(request.InstanceId).Present)
-            {
+                // libwdi order: the forced update is the only in-process primitive that binds a present
+                // device; re-enumeration alone is a no-op for a driverless devnode.
                 bound = WinUsbDriverNativeMethods.UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero,
                         request.HardwareId, package.InfPath,
                         WinUsbDriverNativeMethods.InstallFlagForce |
                         WinUsbDriverNativeMethods.InstallFlagNonInteractive,
                         out _) &&
                     WaitForTakeoverBinding(request.InstanceId);
+            }
+
+            if (!bound && RequestRebind(request.InstanceId))
+            {
+                bound = WaitForTakeoverBinding(request.InstanceId);
             }
 
             var (stillPresent, _, stillProblem) = ReadDevNodeStatus(request.InstanceId);
@@ -289,10 +310,13 @@ public sealed class WinUsbDriverInstaller
                     $"Staged and bound the self-signed WinUSB package for '{request.HardwareId}'; the device started.");
             }
 
+            var pendingNote = WinUsbDriverNativeMethods.WaitForNoPendingInstallation(TimeSpan.Zero)
+                ? string.Empty
+                : " The PnP installation queue still reports a pending install; unplug the device if Device Manager or other devices stop responding.";
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
                 bound
-                    ? $"Bound the self-signed WinUSB package for '{request.HardwareId}' but the device did not start (problem 0x{stillProblem:X})."
-                    : $"Staged the self-signed WinUSB package for '{request.HardwareId}' but the device did not bind (problem 0x{stillProblem:X}).");
+                    ? $"Bound the self-signed WinUSB package for '{request.HardwareId}' but the device did not start (problem 0x{stillProblem:X}).{pendingNote}"
+                    : $"Staged the self-signed WinUSB package for '{request.HardwareId}' but the device did not bind (problem 0x{stillProblem:X}).{pendingNote}");
         }
         catch (Exception ex)
         {
@@ -361,46 +385,103 @@ public sealed class WinUsbDriverInstaller
             ? WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverInfPathKey)
             : null;
 
-        if (!located && !WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores())
+        if (!located)
         {
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.DeviceNotFound,
-                $"No device instance matches '{instanceId}' and the takeover certificate could not be removed.");
+            // The device is gone (replug, hub reset): still clean up everything this application staged,
+            // otherwise a package whose certificate was just removed would fail signature validation on
+            // the next enumeration.
+            var certificateRemoved = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
+            var removed = RemoveOwnStagedPackages();
+            if (!certificateRemoved)
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.DeviceNotFound,
+                    $"No device instance matches '{instanceId}' and the takeover certificate could not be removed.");
+            }
+
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
+                $"No device instance matches '{instanceId}'; removed {removed.Count} staged takeover package(s)" +
+                (removed.Count > 0 ? $" ({string.Join(", ", removed)})" : string.Empty) +
+                " and the takeover certificate. The device binds no takeover driver on its next enumeration.");
         }
 
-        if (located && !IsTakeoverBindingState(service, provider))
+        if (!IsTakeoverBindingState(service, provider))
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
                 "The current driver was not installed by this application's takeover; removal is refused to protect other drivers.");
         }
 
-        if (located)
+        if (string.IsNullOrWhiteSpace(infName))
         {
-            if (string.IsNullOrWhiteSpace(infName))
-            {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    "The takeover binding does not expose the staged package name; removal is refused.");
-            }
-
-            if (!WinUsbDriverNativeMethods.SetupUninstallOEMInfW(infName,
-                    WinUsbDriverNativeMethods.SuoiForceDelete, IntPtr.Zero) &&
-                Marshal.GetLastWin32Error() != WinUsbDriverNativeMethods.ErrorFileNotFound)
-            {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupUninstallOEMInf failed"));
-            }
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                "The takeover binding does not expose the staged package name; removal is refused.");
         }
 
-        var certificateRemoved = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
-        if (located)
+        if (!WinUsbDriverNativeMethods.SetupUninstallOEMInfW(infName,
+                WinUsbDriverNativeMethods.SuoiForceDelete, IntPtr.Zero) &&
+            Marshal.GetLastWin32Error() != WinUsbDriverNativeMethods.ErrorFileNotFound)
         {
-            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupUninstallOEMInf failed"));
+        }
+
+        var certificateRemovedAfterUninstall = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
+        _ = WinUsbDriverNativeMethods.WaitForNoPendingInstallation(PendingInstallWaitTimeout);
+        _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+            WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+            WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
+        if (WinUsbDriverNativeMethods.CmGetParent(out var parent, devInst, 0) ==
+            WinUsbDriverNativeMethods.CrSuccess)
+        {
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(parent,
                 WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
                 WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
         }
         return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
-            certificateRemoved
-                ? $"Removed the takeover package '{infName}' and its certificate; the device returns to a system driver."
+            certificateRemovedAfterUninstall
+                ? $"Removed the takeover package '{infName}' and its certificate; the device returns to a system driver when it is re-enumerated."
                 : $"Removed the takeover package '{infName}' but the certificate stores could not be cleaned.");
+    }
+
+    /// <summary>
+    /// Removes every staged OEM INF whose provider matches the takeover package provider, so an absent
+    /// device still loses the packages this application staged. Packages of other providers are untouched.
+    /// <para>移除提供者与接管包相符的所有已暂存 OEM INF，使不在位的设备也失去本应用暂存的包。其他提供者的包
+    /// 一律不动。</para>
+    /// </summary>
+    /// <returns>The removed INF file names. <para>被移除的 INF 文件名。</para></returns>
+    private static List<string> RemoveOwnStagedPackages()
+    {
+        var removed = new List<string>();
+        var store = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "inf");
+        if (!Directory.Exists(store))
+        {
+            return removed;
+        }
+
+        foreach (var path in Directory.EnumerateFiles(store, "oem*.inf"))
+        {
+            if (removed.Count >= MaximumOwnStagedRemovals)
+            {
+                break;
+            }
+
+            if (!DriverPackageInfReader.TryReadFile(path, out var metadata) || metadata is null ||
+                !string.Equals(metadata.Provider, WinUsbSelfSignedDriverPackage.ProviderName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var name = Path.GetFileName(path);
+            if (WinUsbDriverNativeMethods.SetupUninstallOEMInfW(name,
+                    WinUsbDriverNativeMethods.SuoiForceDelete, IntPtr.Zero) ||
+                Marshal.GetLastWin32Error() == WinUsbDriverNativeMethods.ErrorFileNotFound)
+            {
+                removed.Add(name);
+            }
+        }
+
+        return removed;
     }
 
     /// <summary>
@@ -420,10 +501,13 @@ public sealed class WinUsbDriverInstaller
     /// Asks PnP to bind the freshly staged package without waiting for a device start. Only a present devnode
     /// that reports <see cref="WinUsbDriverNativeMethods.CmProbFailedInstall"/> is re-enumerated with the
     /// retry-installation flag, which lets PnP pick the staged package and start the device in place; the
-    /// caller observes the outcome instead of blocking on the PnP install.
+    /// caller observes the outcome instead of blocking on the PnP install. A leaf-level re-enumeration is a
+    /// no-op for a driverless USB devnode, so the parent hub is re-enumerated as well, which re-detects the
+    /// port and re-runs the installation without ever removing the devnode.
     /// <para>请求 PnP 绑定刚暂存的包且不等待设备启动。只有报告
     /// <see cref="WinUsbDriverNativeMethods.CmProbFailedInstall"/> 的在位设备节点才带重试安装标志重枚举，
-    /// 让 PnP 就地选用暂存的包并启动设备；调用方观测结果而不阻塞在 PnP 安装上。</para>
+    /// 让 PnP 就地选用暂存的包并启动设备；调用方观测结果而不阻塞在 PnP 安装上。leaf 级重枚举对无驱动的
+    /// USB 设备节点是 no-op，因此父集线器也会被重枚举：端口被重新检测、安装被重跑，而设备节点本身绝不被移除。</para>
     /// </summary>
     /// <param name="instanceId">The device instance id.<para>设备实例 ID。</para></param>
     /// <returns><see langword="true"/> when the re-enumeration was queued; <see langword="false"/> when the
@@ -446,9 +530,22 @@ public sealed class WinUsbDriverInstaller
             return false;
         }
 
-        return WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
-            WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
-            WinUsbDriverNativeMethods.CmReenumerateAsynchronous) == WinUsbDriverNativeMethods.CrSuccess;
+        if (WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+                WinUsbDriverNativeMethods.CmReenumerateAsynchronous) != WinUsbDriverNativeMethods.CrSuccess)
+        {
+            return false;
+        }
+
+        if (WinUsbDriverNativeMethods.CmGetParent(out var parent, devInst, 0) ==
+            WinUsbDriverNativeMethods.CrSuccess)
+        {
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(parent,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+                WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
+        }
+
+        return true;
     }
 
     /// <summary>

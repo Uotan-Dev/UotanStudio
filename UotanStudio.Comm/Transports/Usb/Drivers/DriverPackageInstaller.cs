@@ -7,16 +7,17 @@ namespace UotanStudio.Comm.Transports.Usb.Drivers;
 /// <summary>
 /// Installs and removes the vendor Windows driver packages listed by <see cref="DriverPackageCatalog"/>.
 /// The install path materializes the embedded package into a temporary directory, stages every INF with
-/// <c>SetupCopyOEMInf</c>, and asks PnP to retry installation on present device nodes that carry problem
-/// code 28 or have no driver bound, without waiting for the devices to start; the uninstall path removes
-/// only the staged OEM INFs whose provider and catalog file match the package INFs and refuses when that
-/// ownership cannot be established. Both mutating operations require an administrator token, never throw,
-/// and report failures through <see cref="WinUsbDriverOperationResult"/>.
+/// <c>SetupCopyOEMInf</c>, and asks PnP to retry installation on present USB device nodes that carry problem
+/// code 28 and whose hardware ids one of the staged INFs claims, without waiting for the devices to start;
+/// a busy PnP installation queue is never added to, so the install refuses while another installation is
+/// pending. The uninstall path removes only the staged OEM INFs whose provider and catalog file match the
+/// package INFs and refuses when that ownership cannot be established. Both mutating operations require an
+/// administrator token, never throw, and report failures through <see cref="WinUsbDriverOperationResult"/>.
 /// <para>安装与卸载 <see cref="DriverPackageCatalog"/> 列出的厂商 Windows 驱动包。安装路径把内嵌包物化到
-/// 临时目录、用 <c>SetupCopyOEMInf</c> 暂存每个 INF，并请求 PnP 对在位且问题码为 28 或无驱动绑定的设备节点
-/// 重试安装，而不等待设备启动；卸载路径只移除提供者与目录文件都与包内 INF 相符的已暂存 OEM INF，无法确认
-/// 归属时拒绝执行。两个变更操作都需要管理员令牌，绝不抛出，失败经
-/// <see cref="WinUsbDriverOperationResult"/> 返回。</para>
+/// 临时目录、用 <c>SetupCopyOEMInf</c> 暂存每个 INF，并请求 PnP 对在位、问题码为 28 且硬件 ID 与某个已暂存
+/// INF 声明相符的 USB 设备节点重试安装，而不等待设备启动；绝不向繁忙的 PnP 安装队列追加，因此仍有安装挂起时
+/// 直接拒绝。卸载路径只移除提供者与目录文件都与包内 INF 相符的已暂存 OEM INF，无法确认归属时拒绝执行。两个
+/// 变更操作都需要管理员令牌，绝不抛出，失败经 <see cref="WinUsbDriverOperationResult"/> 返回。</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class DriverPackageInstaller
@@ -50,15 +51,18 @@ public sealed class DriverPackageInstaller
     /// <summary>
     /// Installs one bundled driver package: the embedded payload is materialized and verified, every INF
     /// file of the package is staged into the driver store, and PnP is asked to retry installation on the
-    /// present USB device nodes that have no working driver. Retrying installation leaves both the
-    /// enumeration walk and the installation to the PnP service, so a device that stalls its own start
-    /// cannot block this call, which synchronous install APIs do not guarantee. Requires an administrator
-    /// token; the device binding completes asynchronously, so the caller observes devices through device
-    /// queries instead of waiting for this call.
+    /// present USB device nodes that have no working driver and whose hardware ids one of the staged INFs
+    /// claims. Retrying installation leaves both the enumeration walk and the installation to the PnP
+    /// service, so a device that stalls its own start cannot block this call, which synchronous install APIs
+    /// do not guarantee. The call refuses while the PnP installation queue reports a pending install,
+    /// because staging and retrying onto a busy queue would block every other device install. Requires an
+    /// administrator token; the device binding completes asynchronously, so the caller observes devices
+    /// through device queries instead of waiting for this call.
     /// <para>安装一个内置驱动包：物化并校验内嵌负载，把包内每个 INF 暂存到驱动仓库，并请求 PnP 对在位但无可用
-    /// 驱动的 USB 设备节点重试安装。重试安装把枚举与安装都交给 PnP 服务，因此自身启动卡住的设备不会阻塞本次
-    /// 调用，而同步安装 API 不保证这一点。需要管理员令牌；设备绑定异步完成，调用方应通过设备查询观察设备，
-    /// 而不是等待本次调用。</para>
+    /// 驱动、且硬件 ID 与某个已暂存 INF 声明相符的 USB 设备节点重试安装。重试安装把枚举与安装都交给 PnP 服务，
+    /// 因此自身启动卡住的设备不会阻塞本次调用，而同步安装 API 不保证这一点。PnP 安装队列仍有挂起安装时本次
+    /// 调用直接拒绝，因为向繁忙的队列暂存与重试会阻塞所有其他设备安装。需要管理员令牌；设备绑定异步完成，
+    /// 调用方应通过设备查询观察设备，而不是等待本次调用。</para>
     /// </summary>
     /// <param name="packageId">The package id from <see cref="DriverPackageCatalog"/>, for example <c>rockusb</c>.
     /// <para><see cref="DriverPackageCatalog"/> 中的包标识，例如 <c>rockusb</c>。</para></param>
@@ -87,6 +91,12 @@ public sealed class DriverPackageInstaller
         var workDirectory = Path.Combine(Path.GetTempPath(), WorkDirectoryName, Path.GetRandomFileName());
         try
         {
+            if (!WinUsbDriverNativeMethods.WaitForNoPendingInstallation(WinUsbDriverInstaller.PendingInstallWaitTimeout))
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    "Another device installation is pending; the package is not staged onto a busy PnP queue. Finish that installation or replug the device and retry.");
+            }
+
             var materialized = DriverPackageAssets.Materialize(package.Id, workDirectory);
             var staged = new List<string>(package.InfFileNames.Count);
             foreach (var infName in package.InfFileNames)
@@ -108,9 +118,22 @@ public sealed class DriverPackageInstaller
                 staged.Add(infName);
             }
 
-            var retried = RetryDriverlessDeviceInstallation();
+            var hardwareIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var infName in staged)
+            {
+                if (DriverPackageInfReader.TryReadFile(Path.Combine(workDirectory, infName), out var metadata) &&
+                    metadata is not null)
+                {
+                    foreach (var hardwareId in metadata.HardwareIds)
+                    {
+                        hardwareIds.Add(hardwareId);
+                    }
+                }
+            }
+
+            var retried = RetryDriverlessDeviceInstallation(hardwareIds);
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
-                $"Staged {staged.Count} INF file(s) of '{package.Id}' ({string.Join(", ", staged)}) and asked PnP to retry installation on {retried} device node(s); installation completes asynchronously.");
+                $"Staged {staged.Count} INF file(s) of '{package.Id}' ({string.Join(", ", staged)}) and asked PnP to retry installation on {retried} matching device node(s); installation completes asynchronously.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
             or ArgumentException or NotSupportedException or InvalidDataException)
@@ -282,7 +305,19 @@ public sealed class DriverPackageInstaller
         return null;
     }
 
-    private static int RetryDriverlessDeviceInstallation()
+    /// <summary>
+    /// Asks PnP to retry installation on the present USB device nodes that have no working driver and whose
+    /// hardware ids the staged INFs claim. Every re-enumeration is queued only while the PnP installation
+    /// queue is drained; a busy queue stops the walk, because queueing onto it would worsen the blockage all
+    /// device installs share.
+    /// <para>请求 PnP 对在位、无可用驱动且硬件 ID 与已暂存 INF 声明相符的 USB 设备节点重试安装。每次重枚举都只在
+    /// PnP 安装队列已排空时排队；队列繁忙时停止遍历，因为继续排队会加剧所有设备安装共享的堵塞。</para>
+    /// </summary>
+    /// <param name="hardwareIds">The hardware ids the staged INFs claim; an empty set keeps the retry
+    /// unrestricted for INFs that declare none.
+    /// <para>已暂存 INF 声明的硬件 ID；集合为空时对未声明硬件 ID 的 INF 保持不限定重试。</para></param>
+    /// <returns>The number of re-enumerations queued. <para>已排队的重枚举数量。</para></returns>
+    private static int RetryDriverlessDeviceInstallation(HashSet<string> hardwareIds)
     {
         if (WinUsbDriverNativeMethods.CmGetDeviceIdListSizeW(out var size, UsbEnumeratorFilter,
                 WinUsbDriverNativeMethods.CmGetIdListFilterPresent) != WinUsbDriverNativeMethods.CrSuccess ||
@@ -306,13 +341,18 @@ public sealed class DriverPackageInstaller
                 break;
             }
 
+            if (!WinUsbDriverNativeMethods.WaitForNoPendingInstallation(TimeSpan.Zero))
+            {
+                break;
+            }
+
             if (WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
                     WinUsbDriverNativeMethods.CmLocateDevnodeNormal) != WinUsbDriverNativeMethods.CrSuccess)
             {
                 continue;
             }
 
-            if (!HasNoWorkingDriver(devInst))
+            if (!HasNoWorkingDriver(devInst) || !MatchesStagedHardwareIds(devInst, hardwareIds))
             {
                 continue;
             }
@@ -327,6 +367,29 @@ public sealed class DriverPackageInstaller
         }
 
         return retried;
+    }
+
+    /// <summary>
+    /// Tests whether one driverless devnode is covered by the staged package: either the package INFs declare
+    /// no hardware id and every driverless node stays eligible, or the devnode's hardware ids intersect the
+    /// declared ones.
+    /// <para>判断一个无驱动设备节点是否被已暂存包覆盖：包内 INF 未声明硬件 ID 时所有无驱动节点仍然参与，否则
+    /// 设备节点的硬件 ID 必须与声明相交。</para>
+    /// </summary>
+    /// <param name="devInst">The devnode handle. <para>设备节点句柄。</para></param>
+    /// <param name="hardwareIds">The hardware ids the staged INFs claim.
+    /// <para>已暂存 INF 声明的硬件 ID。</para></param>
+    /// <returns><see langword="true"/> when the devnode may be re-enumerated for this package.
+    /// <para>该设备节点可为本包重枚举时为 <see langword="true"/>。</para></returns>
+    private static bool MatchesStagedHardwareIds(uint devInst, HashSet<string> hardwareIds)
+    {
+        if (hardwareIds.Count == 0)
+        {
+            return true;
+        }
+
+        return WinUsbDriverNativeMethods.ReadDevNodeStringList(devInst,
+            WinUsbDriverNativeMethods.DeviceHardwareIdsKey).Any(hardwareIds.Contains);
     }
 
     private static bool HasNoWorkingDriver(uint devInst)

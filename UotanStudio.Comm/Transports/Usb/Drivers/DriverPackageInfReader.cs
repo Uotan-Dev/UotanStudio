@@ -3,23 +3,33 @@ using System.Text;
 namespace UotanStudio.Comm.Transports.Usb.Drivers;
 
 /// <summary>
-/// The ownership facts one INF declares: the resolved <c>Provider</c> and the catalog file names from its
-/// <c>[Version]</c> section, used to recognize the OEM INF that staging this package created.
-/// <para>一个 INF 声明的归属事实：解析后的 <c>Provider</c> 与其 <c>[Version]</c> 段中的目录文件名，用于识别
-/// 暂存该包时生成的 OEM INF。</para>
+/// The facts one INF declares: the resolved <c>Provider</c>, the catalog file names from its
+/// <c>[Version]</c> section, and the hardware ids its model sections claim. The provider and catalog names
+/// recognize the OEM INF that staging this package created; the hardware ids limit device re-enumeration to
+/// the devices the package actually covers.
+/// <para>一个 INF 声明的事实：解析后的 <c>Provider</c>、其 <c>[Version]</c> 段中的目录文件名，以及其模型段声明的
+/// 硬件 ID。提供者与目录名用于识别暂存该包时生成的 OEM INF；硬件 ID 把设备重枚举限定到该包真正覆盖的设备。</para>
 /// </summary>
 /// <param name="Provider">The resolved provider name, for example <c>MediaTek Inc.</c>; empty when absent.
 /// <para>解析后的提供者名，例如 <c>MediaTek Inc.</c>；缺失时为空。</para></param>
 /// <param name="CatalogFileNames">The declared catalog file names, empty when the INF declares none.
 /// <para>声明的目录文件名；INF 未声明时为空。</para></param>
-internal sealed record DriverPackageInfMetadata(string Provider, IReadOnlyList<string> CatalogFileNames);
+/// <param name="HardwareIds">The hardware ids the model sections claim, deduplicated case-insensitively.
+/// <para>模型段声明的硬件 ID，按大小写不敏感去重。</para></param>
+internal sealed record DriverPackageInfMetadata(
+    string Provider,
+    IReadOnlyList<string> CatalogFileNames,
+    IReadOnlyList<string> HardwareIds);
 
 /// <summary>
-/// Reads the ownership facts of a driver INF without loading it into the driver store. The text is decoded
-/// from its byte order mark (UTF-16LE, UTF-8, or ANSI) and parsed with bounded size and line counts; string
-/// tokens such as <c>%Provider%</c> are resolved through the INF's own <c>[Strings]</c> section.
-/// <para>在不装入驱动仓库的前提下读取驱动 INF 的归属事实。文本按字节序标记（UTF-16LE、UTF-8 或 ANSI）解码，
-/// 解析过程受大小与行数上限约束；<c>%Provider%</c> 这类字符串记号经该 INF 自带的 <c>[Strings]</c> 段解析。</para>
+/// Reads the facts of a driver INF without loading it into the driver store: the provider and catalog names
+/// from its <c>[Version]</c> section, and the hardware ids its <c>[Manufacturer]</c>-referenced model
+/// sections claim. The text is decoded from its byte order mark (UTF-16LE, UTF-8, or ANSI) and parsed with
+/// bounded size and line counts; string tokens such as <c>%Provider%</c> are resolved through the INF's own
+/// <c>[Strings]</c> section.
+/// <para>在不装入驱动仓库的前提下读取驱动 INF 的事实：<c>[Version]</c> 段的提供者与目录文件名，以及
+/// <c>[Manufacturer]</c> 引用的模型段声明的硬件 ID。文本按字节序标记（UTF-16LE、UTF-8 或 ANSI）解码，解析
+/// 过程受大小与行数上限约束；<c>%Provider%</c> 这类字符串记号经该 INF 自带的 <c>[Strings]</c> 段解析。</para>
 /// </summary>
 internal static class DriverPackageInfReader
 {
@@ -29,6 +39,8 @@ internal static class DriverPackageInfReader
 
     private const int MaximumLines = 64 * 1024;
     private const int MaximumKeys = 4096;
+    private const int MaximumModelLines = 16 * 1024;
+    private const int MaximumHardwareIds = 1024;
 
     /// <summary>
     /// Reads the ownership facts of an INF file on disk.
@@ -80,6 +92,7 @@ internal static class DriverPackageInfReader
 
         var version = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var strings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var modelLines = new List<(string Section, string Line)>();
         string? section = null;
         var lines = 0;
         foreach (var rawLine in Decode(inf).Split('\n'))
@@ -101,28 +114,34 @@ internal static class DriverPackageInfReader
                 continue;
             }
 
-            if (section is null ||
-                (!section.Equals("Version", StringComparison.OrdinalIgnoreCase) &&
-                    !section.Equals("Strings", StringComparison.OrdinalIgnoreCase)))
+            if (section is null)
             {
                 continue;
             }
 
-            var separator = line.IndexOf('=', StringComparison.Ordinal);
-            if (separator <= 0)
+            if (section.Equals("Version", StringComparison.OrdinalIgnoreCase) ||
+                section.Equals("Strings", StringComparison.OrdinalIgnoreCase))
             {
-                continue;
-            }
+                var separator = line.IndexOf('=', StringComparison.Ordinal);
+                if (separator <= 0)
+                {
+                    continue;
+                }
 
-            var key = line[..separator].Trim();
-            var value = line[(separator + 1)..].Trim();
-            var target = section.Equals("Version", StringComparison.OrdinalIgnoreCase) ? version : strings;
-            if (target.Count >= MaximumKeys || key.Length == 0)
+                var key = line[..separator].Trim();
+                var value = Unquote(line[(separator + 1)..].Trim());
+                var target = section.Equals("Version", StringComparison.OrdinalIgnoreCase) ? version : strings;
+                if (target.Count >= MaximumKeys || key.Length == 0)
+                {
+                    continue;
+                }
+
+                target.TryAdd(key, value);
+            }
+            else if (modelLines.Count < MaximumModelLines)
             {
-                continue;
+                modelLines.Add((section, line));
             }
-
-            target.TryAdd(key, value);
         }
 
         if (!version.TryGetValue("Provider", out var provider))
@@ -151,9 +170,106 @@ internal static class DriverPackageInfReader
             }
         }
 
-        metadata = new DriverPackageInfMetadata(resolvedProvider, catalogs);
+        metadata = new DriverPackageInfMetadata(resolvedProvider, catalogs, CollectHardwareIds(modelLines, strings));
         return true;
     }
+
+    /// <summary>
+    /// Collects the hardware ids the model sections referenced from <c>[Manufacturer]</c> declare. Only
+    /// sections an entry of the manufacturer section names, decorated or not, are considered, so the ids of
+    /// unrelated model sections are never attributed to this package.
+    /// <para>收集 <c>[Manufacturer]</c> 引用的模型段声明的硬件 ID。只考虑制造商段条目点名的段（含平台装饰
+    /// 变体），其他模型段的硬件 ID 绝不计入本包。</para>
+    /// </summary>
+    /// <param name="modelLines">The lines of every non-<c>Version</c>/<c>Strings</c> section.
+    /// <para>除 <c>Version</c>/<c>Strings</c> 外所有段的行。</para></param>
+    /// <param name="strings">The resolved <c>[Strings]</c> values. <para>已解析的 <c>[Strings]</c> 值。</para></param>
+    /// <returns>The deduplicated hardware ids. <para>去重后的硬件 ID。</para></returns>
+    private static List<string> CollectHardwareIds(List<(string Section, string Line)> modelLines,
+        Dictionary<string, string> strings)
+    {
+        var bases = new List<string>();
+        foreach (var (section, line) in modelLines)
+        {
+            if (!section.Equals("Manufacturer", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var separator = line.IndexOf('=', StringComparison.Ordinal);
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var reference = Resolve(line[(separator + 1)..].Trim(), strings);
+            var baseName = reference.Split(',')[0].Trim();
+            if (baseName.Length > 0 && !baseName.StartsWith('@'))
+            {
+                bases.Add(baseName);
+            }
+        }
+
+        if (bases.Count == 0)
+        {
+            return [];
+        }
+
+        var hardwareIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (section, line) in modelLines)
+        {
+            if (hardwareIds.Count >= MaximumHardwareIds)
+            {
+                break;
+            }
+
+            if (!IsModelSection(section, bases))
+            {
+                continue;
+            }
+
+            var separator = line.IndexOf('=', StringComparison.Ordinal);
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var fields = line[(separator + 1)..].Split(',');
+            foreach (var field in fields.Skip(1))
+            {
+                var hardwareId = Resolve(field.Trim().Trim('"'), strings);
+                if (hardwareId.Contains('\\'))
+                {
+                    hardwareIds.Add(hardwareId);
+                }
+            }
+        }
+
+        return [.. hardwareIds];
+    }
+
+    /// <summary>
+    /// Tests whether a section is one of the manufacturer-referenced base sections or a platform-decorated
+    /// variant of one.
+    /// <para>判断一个段是否为制造商引用的基础段或其平台装饰变体。</para>
+    /// </summary>
+    /// <param name="section">The section name. <para>段名。</para></param>
+    /// <param name="bases">The referenced base section names. <para>引用的基础段名。</para></param>
+    /// <returns><see langword="true"/> when the section is a model section of this package.
+    /// <para>该段属于本包的模型段时为 <see langword="true"/>。</para></returns>
+    private static bool IsModelSection(string section, List<string> bases)
+        => bases.Any(baseName => section.Equals(baseName, StringComparison.OrdinalIgnoreCase) ||
+            (section.Length > baseName.Length + 1 && section.StartsWith(baseName + ".", StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Strips one pair of surrounding double quotes an INF string value carries, leaving unquoted values
+    /// untouched.
+    /// <para>剥除 INF 字符串值携带的一对外层双引号，未加引号的值原样保留。</para>
+    /// </summary>
+    private static string Unquote(string value)
+        => value.Length >= 2 && value.StartsWith('"') && value.EndsWith('"')
+            ? value[1..^1].Trim()
+            : value;
 
     private static string Decode(ReadOnlySpan<byte> inf)
     {

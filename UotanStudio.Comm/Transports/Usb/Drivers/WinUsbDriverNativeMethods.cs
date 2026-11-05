@@ -20,6 +20,18 @@ internal static partial class WinUsbDriverNativeMethods
 
     internal const uint DevPropTypeString = 0x00000012;
 
+    /// <summary>The <c>DEVPROP_TYPE_STRING_LIST</c> property type of multi-string properties such as the hardware ids.
+    /// <para>多字符串属性（如硬件 ID 列表）的 <c>DEVPROP_TYPE_STRING_LIST</c> 属性类型。</para></summary>
+    internal const uint DevPropTypeStringList = 0x00000013;
+
+    /// <summary>The <c>WAIT_OBJECT_0</c> result of <c>CMP_WaitNoPendingInstallEvents</c>: no device installation is pending.
+    /// <para><c>CMP_WaitNoPendingInstallEvents</c> 的 <c>WAIT_OBJECT_0</c> 结果：当前没有挂起的设备安装。</para></summary>
+    internal const uint WaitObject0 = 0x00000000;
+
+    /// <summary>The <c>WAIT_TIMEOUT</c> result of <c>CMP_WaitNoPendingInstallEvents</c>: a device installation is pending.
+    /// <para><c>CMP_WaitNoPendingInstallEvents</c> 的 <c>WAIT_TIMEOUT</c> 结果：仍有挂起的设备安装。</para></summary>
+    internal const uint WaitTimeout = 0x00000102;
+
     /// <summary>The <c>SPOST_PATH</c> source type for <c>SetupCopyOEMInf</c>: the INF is staged from a file path.
     /// <para><c>SetupCopyOEMInf</c> 的 <c>SPOST_PATH</c> 来源类型：从文件路径暂存 INF。</para></summary>
     internal const uint SpOemSourcePath = 0x00000000;
@@ -100,10 +112,25 @@ internal static partial class WinUsbDriverNativeMethods
     internal static readonly DevPropKey DriverProviderKey = new(DeviceDriverFmtid, 9);
     internal static readonly DevPropKey DriverServiceKey = new(DeviceFmtid, 6);
 
+    /// <summary>The <c>DEVPKEY_Device_HardwareIds</c> multi-string property.
+    /// <para><c>DEVPKEY_Device_HardwareIds</c> 多字符串属性。</para></summary>
+    internal static readonly DevPropKey DeviceHardwareIdsKey = new(DeviceFmtid, 3);
+
     private const int MaxPropertyBytes = 64 * 1024;
 
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Reenumerate_DevNode")]
     internal static partial uint CmReenumerateDevNode(uint devInst, uint flags);
+
+    /// <summary>
+    /// Returns the parent devnode of one devnode, used to re-detect a driverless USB device at its hub port.
+    /// <para>返回一个设备节点的父节点，用于在集线器端口上重新检测无驱动的 USB 设备。</para>
+    /// </summary>
+    /// <param name="parentDevInst">Receives the parent devnode handle. <para>接收父设备节点句柄。</para></param>
+    /// <param name="devInst">The child devnode handle. <para>子设备节点句柄。</para></param>
+    /// <param name="flags">Reserved; must be zero. <para>保留；必须为零。</para></param>
+    /// <returns>A <c>CONFIGRET</c> status code. <para><c>CONFIGRET</c> 状态码。</para></returns>
+    [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Get_Parent")]
+    internal static partial uint CmGetParent(out uint parentDevInst, uint devInst, uint flags);
 
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Get_DevNode_Status")]
     internal static partial uint CmGetDevNodeStatus(out uint status, out uint problemNumber, uint devInst, uint flags);
@@ -115,6 +142,18 @@ internal static partial class WinUsbDriverNativeMethods
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Get_Device_ID_ListW",
         StringMarshalling = StringMarshalling.Utf16)]
     internal static partial uint CmGetDeviceIdListW([Out] byte[] buffer, uint bufferLength, string filter, uint flags);
+
+    /// <summary>
+    /// Waits until the PnP manager has no pending device installation, or the timeout expires.
+    /// <para>等待 PnP 管理器没有挂起的设备安装，或超时返回。</para>
+    /// </summary>
+    /// <param name="timeoutMilliseconds">Wait bound in milliseconds; 0 polls once.
+    /// <para>等待上限（毫秒）；0 表示只探测一次。</para></param>
+    /// <returns><see cref="WaitObject0"/> when the queue is drained, <see cref="WaitTimeout"/> while an
+    /// installation is pending.
+    /// <para>队列已排空时为 <see cref="WaitObject0"/>；仍有挂起安装时为 <see cref="WaitTimeout"/>。</para></returns>
+    [LibraryImport("cfgmgr32.dll", EntryPoint = "CMP_WaitNoPendingInstallEvents")]
+    internal static partial uint CmpWaitNoPendingInstallEvents(uint timeoutMilliseconds);
 
     /// <summary>
     /// Installs a staged package on every present device matching one hardware id and lets PnP start those
@@ -169,6 +208,34 @@ internal static partial class WinUsbDriverNativeMethods
     /// <returns>The decoded string, or <see langword="null"/> on any failure.
     /// <para>解码后的字符串；任何失败时为 <see langword="null"/>。</para></returns>
     internal static string? ReadDevNodeString(uint devInst, in DevPropKey key)
+        => ReadDevNodeProperty(devInst, key, DevPropTypeString) is { Length: > 0 } data ? DecodeString(data) : null;
+
+    /// <summary>
+    /// Reads one <c>DEVPROP_TYPE_STRING_LIST</c> property of a devnode, degrading to an empty list when
+    /// the property is absent or cannot be read.
+    /// <para>读取设备节点的一个 <c>DEVPROP_TYPE_STRING_LIST</c> 属性；属性缺失或不可读时降级为空列表。</para>
+    /// </summary>
+    /// <param name="devInst">The devnode handle. <para>设备节点句柄。</para></param>
+    /// <param name="key">The property key. <para>属性键。</para></param>
+    /// <returns>The decoded strings, empty on any failure.
+    /// <para>解码后的字符串列表；任何失败时为空。</para></returns>
+    internal static string[] ReadDevNodeStringList(uint devInst, in DevPropKey key)
+        => ReadDevNodeProperty(devInst, key, DevPropTypeStringList) is { Length: > 0 } data
+            ? DecodeStringList(data)
+            : [];
+
+    /// <summary>
+    /// Reads one devnode property of the expected type, degrading to <see langword="null"/> when the
+    /// property is absent, oversized or typed differently.
+    /// <para>按预期类型读取一个设备节点属性；属性缺失、超限或类型不符时降级为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <param name="devInst">The devnode handle. <para>设备节点句柄。</para></param>
+    /// <param name="key">The property key. <para>属性键。</para></param>
+    /// <param name="expectedType">The <c>DEVPROP</c> type the payload must carry.
+    /// <para>负载必须携带的 <c>DEVPROP</c> 类型。</para></param>
+    /// <returns>The raw property bytes, or <see langword="null"/> on any failure.
+    /// <para>属性原始字节；任何失败时为 <see langword="null"/>。</para></returns>
+    private static byte[]? ReadDevNodeProperty(uint devInst, in DevPropKey key, uint expectedType)
     {
         var probe = key;
         var size = 0u;
@@ -195,11 +262,11 @@ internal static partial class WinUsbDriverNativeMethods
             return null;
         }
 
-        if ((type != DevPropTypeString) || (data is not { Length: > 0 }))
-        {
-            return null;
-        }
+        return type == expectedType ? data : null;
+    }
 
+    private static string? DecodeString(byte[] data)
+    {
         if ((data.Length % 2) == 1)
         {
             data = data[..^1];
@@ -207,6 +274,34 @@ internal static partial class WinUsbDriverNativeMethods
 
         var text = Encoding.Unicode.GetString(data).TrimEnd('\0');
         return text.Length == 0 ? null : text;
+    }
+
+    private static string[] DecodeStringList(byte[] data)
+    {
+        if ((data.Length % 2) == 1)
+        {
+            data = data[..^1];
+        }
+
+        return Encoding.Unicode.GetString(data).Split('\0',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>
+    /// Waits a bounded time for the PnP installation queue to drain. Queuing more device work onto a busy
+    /// queue worsens the blockage every device installer shares, so callers gate their own install behind it.
+    /// <para>在有限时间内等待 PnP 安装队列排空。向繁忙的队列继续排入设备工作会加剧所有安装器共享的堵塞，
+    /// 因此调用方用它给自己的安装把关。</para>
+    /// </summary>
+    /// <param name="timeout">The wait bound; a zero span polls once.<para>等待上限；零表示只探测一次。</para></param>
+    /// <returns><see langword="true"/> when no installation is pending or the API is unavailable;
+    /// <see langword="false"/> while an installation is pending.
+    /// <para>没有挂起安装或 API 不可用时为 <see langword="true"/>；仍有挂起安装时为
+    /// <see langword="false"/>。</para></returns>
+    internal static bool WaitForNoPendingInstallation(TimeSpan timeout)
+    {
+        var milliseconds = Math.Clamp((long)timeout.TotalMilliseconds, 0, int.MaxValue);
+        return CmpWaitNoPendingInstallEvents((uint)milliseconds) != WaitTimeout;
     }
 
     /// <summary>
