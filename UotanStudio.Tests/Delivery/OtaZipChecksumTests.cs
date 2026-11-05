@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

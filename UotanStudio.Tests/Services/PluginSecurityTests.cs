@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using UotanStudio.Mirroring;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;

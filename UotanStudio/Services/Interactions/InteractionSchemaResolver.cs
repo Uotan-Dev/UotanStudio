@@ -1,5 +1,5 @@
-using UotanStudio.Projects;
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects;
+using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Services.Projects;
 using UotanStudio.Workflow.Nodes;
 

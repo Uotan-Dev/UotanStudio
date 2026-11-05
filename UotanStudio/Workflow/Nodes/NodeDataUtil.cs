@@ -63,8 +63,8 @@ internal static class NodeDataUtil
             null => null,
             byte[] bytes when bytes.Length <= MaxInMemoryBytes => bytes,
             byte[] => throw new InvalidDataException("The in-memory node data limit was exceeded. Use a file artifact for large inputs."),
-            UotanStudio.Projects.FileArtifact artifact => ReadFileBytes(artifact.Path, cancellationToken),
-            UotanStudio.Projects.StreamArtifact artifact => ReadArtifactBytes(artifact, cancellationToken),
+            UotanStudio.Pipeline.Projects.FileArtifact artifact => ReadFileBytes(artifact.Path, cancellationToken),
+            UotanStudio.Pipeline.Projects.StreamArtifact artifact => ReadArtifactBytes(artifact, cancellationToken),
             string text when File.Exists(text) => ReadFileBytes(text, cancellationToken),
             string text => EncodeText(text),
             _ => EncodeText(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
@@ -89,8 +89,8 @@ internal static class NodeDataUtil
         return value switch
         {
             null => null,
-            UotanStudio.Projects.StreamArtifact artifact => artifact.OpenRead(),
-            UotanStudio.Projects.FileArtifact artifact => new FileStream(artifact.Path, FileMode.Open, FileAccess.Read,
+            UotanStudio.Pipeline.Projects.StreamArtifact artifact => artifact.OpenRead(),
+            UotanStudio.Pipeline.Projects.FileArtifact artifact => new FileStream(artifact.Path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 128 * 1024, FileOptions.SequentialScan),
             byte[] bytes => new MemoryStream(bytes, writable: false),
             ReadOnlyMemory<byte> memory => new MemoryStream(memory.ToArray(), writable: false),
@@ -102,7 +102,7 @@ internal static class NodeDataUtil
         };
     }
 
-    private static byte[] ReadArtifactBytes(UotanStudio.Projects.StreamArtifact artifact, CancellationToken cancellationToken)
+    private static byte[] ReadArtifactBytes(UotanStudio.Pipeline.Projects.StreamArtifact artifact, CancellationToken cancellationToken)
     {
         if (artifact.Length is { } length && length > MaxInMemoryBytes)
         {

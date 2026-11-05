@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;

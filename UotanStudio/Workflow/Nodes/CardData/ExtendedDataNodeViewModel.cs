@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using Avalonia;
 using UotanStudio.Compress;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Workflow.Execution;
 

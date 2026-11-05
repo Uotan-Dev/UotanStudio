@@ -1,4 +1,4 @@
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects.Interactions;
 
 namespace UotanStudio.Services.Interactions;
 

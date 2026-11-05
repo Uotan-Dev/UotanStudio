@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 
 namespace UotanStudio.Services.VisualPlugins;
 

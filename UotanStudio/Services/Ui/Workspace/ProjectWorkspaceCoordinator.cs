@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;

@@ -1429,9 +1429,9 @@ public sealed class FirmwareService
         {
             if (partitions is null || partitions.Count == 0)
                 return FirmwareOperationResult.Fail("No partitions supplied. 未提供任何分区。");
-            var files = partitions.Select(p => new UotanStudio.Delivery.DeliveryFile
+            var files = partitions.Select(p => new UotanStudio.Pipeline.Delivery.DeliveryFile
             { Partition = p.Name, SourcePath = p.Path }).ToArray();
-            await UotanStudio.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
+            await UotanStudio.Pipeline.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
             {
                 DeviceSize = deviceSize,
                 Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,

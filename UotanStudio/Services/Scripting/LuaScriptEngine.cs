@@ -3,8 +3,8 @@ using Lua;
 using Lua.IO;
 using Lua.Platforms;
 using Lua.Standard;
-using UotanStudio.Projects;
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects;
+using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Workflow.Execution;
 
 namespace UotanStudio.Services.Scripting;

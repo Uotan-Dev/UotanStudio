@@ -26,7 +26,7 @@ public sealed class CodecAuthorityGuardTests
 
     private static readonly IReadOnlyDictionary<string, string> RetainedEndRecordWriters = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["UotanStudio.Delivery/Build/Package.cs"] =
+        ["UotanStudio.Pipeline/Delivery/Build/Package.cs"] =
             "OTA finalization needs a ZIP64-aware stored-range reader and an in-place CRC repair, neither of which a streaming archive reader exposes.",
         ["UotanStudio.Firmware/AndroidMeta/Apk/ApkEntryStripper.cs"] =
             "APK member surgery rewrites stored members in place and cannot re-encode the archive.",
@@ -34,7 +34,7 @@ public sealed class CodecAuthorityGuardTests
             "APK repacking keeps original member offsets, so it works on the end record directly.",
         ["UotanStudio/Services/Firmware/RemoteRomService.cs"] =
             "Header sniffing over a remote HTTP response only inspects the end record signature.",
-        ["UotanStudio.Projects/ProjectPackageIndex.cs"] =
+        ["UotanStudio.Pipeline/Projects/ProjectPackageIndex.cs"] =
             "Project package indexing only sniffs the end record signature.",
     };
 

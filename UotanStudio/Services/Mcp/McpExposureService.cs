@@ -15,8 +15,8 @@ internal sealed class McpExposureService
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<IDeviceManagerGateway> _deviceManagerFactory;
-    private readonly Func<UotanStudio.Delivery.IDeliveryTools?> _deliveryToolsFactory;
-    private readonly Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?> _signingKeyFactory;
+    private readonly Func<UotanStudio.Pipeline.Delivery.IDeliveryTools?> _deliveryToolsFactory;
+    private readonly Func<UotanStudio.Pipeline.Delivery.IDeliverySigningKeyProvider?> _signingKeyFactory;
     private McpHttpServerHost? _host;
 
     /// <summary>Sandbox root live in <see cref="_host"/>; empty marks the unrestricted sandbox. <para>当前生效实例的沙箱根目录；空字符串表示不受限。</para></summary>
@@ -45,8 +45,8 @@ internal sealed class McpExposureService
     /// <para>创建签名交付计划使用的签名密钥供应器。</para></param>
     /// <exception cref="ArgumentNullException">Any factory is null. <para>任一工厂为 null。</para></exception>
     internal McpExposureService(Func<IDeviceManagerGateway> deviceManagerFactory,
-        Func<UotanStudio.Delivery.IDeliveryTools?> deliveryToolsFactory,
-        Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?> signingKeyFactory)
+        Func<UotanStudio.Pipeline.Delivery.IDeliveryTools?> deliveryToolsFactory,
+        Func<UotanStudio.Pipeline.Delivery.IDeliverySigningKeyProvider?> signingKeyFactory)
     {
         ArgumentNullException.ThrowIfNull(deviceManagerFactory);
         ArgumentNullException.ThrowIfNull(deliveryToolsFactory);

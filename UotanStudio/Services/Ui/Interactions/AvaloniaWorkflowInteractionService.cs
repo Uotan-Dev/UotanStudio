@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Services.Interactions;
 using UotanStudio.Views.Interactions;
 

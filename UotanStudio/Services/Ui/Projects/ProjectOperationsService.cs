@@ -1,9 +1,9 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Composition;
-using UotanStudio.Delivery;
 using UotanStudio.Messages;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Delivery;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;

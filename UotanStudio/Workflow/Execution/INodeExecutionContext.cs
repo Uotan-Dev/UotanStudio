@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Patching;

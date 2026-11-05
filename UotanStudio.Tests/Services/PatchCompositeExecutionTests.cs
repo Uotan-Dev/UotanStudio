@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Patching;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Patching;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.Workflow.Nodes;

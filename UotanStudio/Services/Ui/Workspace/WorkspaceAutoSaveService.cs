@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Dock.Model.Core;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.Workspace;

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Equivalence;
+using UotanStudio.Pipeline.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

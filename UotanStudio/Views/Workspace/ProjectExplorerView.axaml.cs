@@ -8,7 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui;

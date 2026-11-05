@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Workflow.Nodes;
 using UotanStudio.Workflow.Registry;
 

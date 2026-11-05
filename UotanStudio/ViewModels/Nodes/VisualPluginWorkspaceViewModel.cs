@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Plugins;
 using UotanStudio.Services.VisualPlugins;

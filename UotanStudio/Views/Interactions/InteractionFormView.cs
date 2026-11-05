@@ -7,7 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using SkiaSharp;
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Interactions;
 

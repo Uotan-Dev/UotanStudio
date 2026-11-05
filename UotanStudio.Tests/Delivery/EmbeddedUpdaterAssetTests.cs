@@ -1,5 +1,5 @@
-using UotanStudio.Delivery;
-using UotanStudio.Delivery.Build;
+using UotanStudio.Pipeline.Delivery;
+using UotanStudio.Pipeline.Delivery.Build;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

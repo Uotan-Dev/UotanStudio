@@ -3,7 +3,7 @@ using Avalonia.Controls.Notifications;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Composition;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Ui;

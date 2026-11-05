@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Plugins;
 using UotanStudio.Workflow.Execution;
 using UotanStudio.Workflow.Registry;

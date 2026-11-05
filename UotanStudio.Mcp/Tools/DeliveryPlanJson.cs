@@ -1,5 +1,5 @@
 using System.Text.Json;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 
 namespace UotanStudio.Mcp.Tools;
 

@@ -1,7 +1,7 @@
 using UotanStudio.Compress.Zip;
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Pipeline.Delivery;
 
 namespace UotanStudio.Services.Projects;
 

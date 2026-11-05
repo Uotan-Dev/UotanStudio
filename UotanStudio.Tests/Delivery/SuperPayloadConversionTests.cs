@@ -1,5 +1,5 @@
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

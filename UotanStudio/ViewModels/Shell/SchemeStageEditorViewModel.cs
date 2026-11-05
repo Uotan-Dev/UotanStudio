@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Projects;
-using UotanStudio.Projects.Schemes;
+using UotanStudio.Pipeline.Projects;
+using UotanStudio.Pipeline.Projects.Schemes;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Shell;

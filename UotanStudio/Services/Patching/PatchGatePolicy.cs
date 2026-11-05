@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.Workflow.Execution;
 using UotanStudio.Workflow.Nodes;

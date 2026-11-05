@@ -1,5 +1,5 @@
 using System.Text.Json;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Projects;

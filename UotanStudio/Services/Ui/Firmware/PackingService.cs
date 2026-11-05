@@ -6,7 +6,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;

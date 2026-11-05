@@ -1,6 +1,6 @@
 using System.Globalization;
 using UotanStudio.Hash.Digests;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.VisualPlugins;

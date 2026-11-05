@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using Xunit;
 
 namespace UotanStudio.Tests.Projects;

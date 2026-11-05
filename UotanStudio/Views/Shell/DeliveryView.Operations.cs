@@ -5,7 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;

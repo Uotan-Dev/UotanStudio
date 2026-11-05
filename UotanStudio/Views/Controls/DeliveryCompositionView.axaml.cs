@@ -3,7 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.ViewModels.Shell;
 using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 

@@ -4,7 +4,7 @@ using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;

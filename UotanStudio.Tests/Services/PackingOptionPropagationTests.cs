@@ -9,7 +9,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Ui.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Workspace;

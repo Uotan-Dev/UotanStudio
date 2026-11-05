@@ -6,7 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;

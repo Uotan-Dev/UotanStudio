@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Workflow.Registry;

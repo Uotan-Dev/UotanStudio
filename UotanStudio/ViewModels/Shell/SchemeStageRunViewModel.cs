@@ -1,5 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Projects.Schemes;
+using UotanStudio.Pipeline.Projects.Schemes;
 using UotanStudio.Services;
 using UotanStudio.Workflow.Execution;
 

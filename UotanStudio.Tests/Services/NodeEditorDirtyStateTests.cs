@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.Workflow.Nodes;
 using Xunit;

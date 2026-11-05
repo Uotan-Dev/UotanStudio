@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using UotanStudio.Projects;
-using UotanStudio.Projects.Schemes;
+using UotanStudio.Pipeline.Projects;
+using UotanStudio.Pipeline.Projects.Schemes;
 using UotanStudio.Services.Keys;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Shell;

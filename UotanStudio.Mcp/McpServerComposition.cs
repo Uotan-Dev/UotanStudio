@@ -30,11 +30,11 @@ public sealed record McpServerComposition
     /// <para>获取启用 <c>delivery_build</c> 的交付工具准备提供器。</para></summary>
     /// <value>The provider, or <see langword="null"/> to keep the delivery tool unavailable.
     /// <para>提供器；为 <see langword="null"/> 时交付工具不可用。</para></value>
-    public Func<UotanStudio.Delivery.IDeliveryTools?>? DeliveryTools { get; init; }
+    public Func<UotanStudio.Pipeline.Delivery.IDeliveryTools?>? DeliveryTools { get; init; }
 
     /// <summary>Gets the signing key provider used by signed delivery plans.
     /// <para>获取签名交付计划使用的签名密钥供应器。</para></summary>
     /// <value>The provider, or <see langword="null"/> so signed plans fail honestly.
     /// <para>供应器；为 <see langword="null"/> 时签名计划如实失败。</para></value>
-    public Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? SigningKeys { get; init; }
+    public Func<UotanStudio.Pipeline.Delivery.IDeliverySigningKeyProvider?>? SigningKeys { get; init; }
 }

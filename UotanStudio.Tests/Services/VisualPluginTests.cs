@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Tests.TestInfrastructure;
@@ -117,7 +117,7 @@ public sealed class VisualPluginTests
 
         await composite.ExecuteAsync(new TestExecutionContext(TestContext.Current.CancellationToken));
 
-        var element = Assert.IsType<UotanStudio.Projects.Interactions.InteractionElement>(Assert.Single(composite.Output).Data);
+        var element = Assert.IsType<UotanStudio.Pipeline.Projects.Interactions.InteractionElement>(Assert.Single(composite.Output).Data);
         Assert.Equal("Portable label", element.Label);
     }
 

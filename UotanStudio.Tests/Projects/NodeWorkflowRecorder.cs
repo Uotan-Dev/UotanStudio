@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 
 namespace UotanStudio.Tests.Projects;
 

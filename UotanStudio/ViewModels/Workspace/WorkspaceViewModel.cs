@@ -719,7 +719,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="dto">The document descriptor. <para>文档描述符。</para></param>
     /// <param name="rootDir">The project root directory. <para>工程根目录（用于拼接绝对路径）。</para></param>
-    public async Task RestoreOpenDocumentAsync(UotanStudio.Projects.OpenDocumentDto dto, string rootDir)
+    public async Task RestoreOpenDocumentAsync(UotanStudio.Pipeline.Projects.OpenDocumentDto dto, string rootDir)
     {
         if (dto.Kind == "Compare")
         {
@@ -762,7 +762,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
     }
 
-    internal async Task RestoreDocumentsAsync(IEnumerable<UotanStudio.Projects.OpenDocumentDto> documents, string rootDir)
+    internal async Task RestoreDocumentsAsync(IEnumerable<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents, string rootDir)
     {
         var snapshot = documents.ToList();
         foreach (var document in snapshot) await RestoreOpenDocumentAsync(document, rootDir);

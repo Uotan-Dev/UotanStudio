@@ -5,7 +5,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Ui.Firmware;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;

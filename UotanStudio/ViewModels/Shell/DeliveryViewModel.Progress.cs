@@ -1,5 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Shell;

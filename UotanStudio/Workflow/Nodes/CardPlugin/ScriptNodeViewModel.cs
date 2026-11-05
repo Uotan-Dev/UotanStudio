@@ -1,5 +1,5 @@
 using Lua;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Scripting;
 using UotanStudio.Workflow.Execution;
 using UotanStudio.Workflow.Registry;

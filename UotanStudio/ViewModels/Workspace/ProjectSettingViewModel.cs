@@ -5,7 +5,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Messages;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -140,7 +140,7 @@ internal partial class ProjectSettingViewModel : Tool
         Ext4ReadWrite = EXT4RW,
         SizeAuto = SizeAuto,
         Ext4Compress = HasExt4PolicyOverride
-            ? Ext4CapacityPolicy == global::UotanStudio.Projects.Ext4CapacityPolicy.Minimize
+            ? Ext4CapacityPolicy == global::UotanStudio.Pipeline.Projects.Ext4CapacityPolicy.Minimize
             : null,
         Ext4CapacityPolicy = HasExt4PolicyOverride ? Ext4CapacityPolicy : null,
         Ext4TargetSizeBytes = HasExt4PolicyOverride ? Ext4TargetSizeBytes : null,

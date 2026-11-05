@@ -1,6 +1,6 @@
 using System.Globalization;
 using Avalonia;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Workflow.Execution;
 

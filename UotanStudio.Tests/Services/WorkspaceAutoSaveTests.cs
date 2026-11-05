@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;

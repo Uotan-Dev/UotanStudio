@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

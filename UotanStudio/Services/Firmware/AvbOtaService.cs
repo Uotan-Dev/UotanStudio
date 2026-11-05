@@ -3,12 +3,12 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UotanStudio.Compress.Zip;
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Verification;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Services.Firmware;

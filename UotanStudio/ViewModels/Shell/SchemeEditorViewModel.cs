@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Projects;
-using UotanStudio.Projects.Schemes;
+using UotanStudio.Pipeline.Projects;
+using UotanStudio.Pipeline.Projects.Schemes;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Projects;

@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

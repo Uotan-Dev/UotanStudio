@@ -1,6 +1,6 @@
 using Dock.Model.Controls;
 using Dock.Model.Core;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;

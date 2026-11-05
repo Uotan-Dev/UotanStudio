@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Firmware;

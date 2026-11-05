@@ -10,7 +10,7 @@ using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.Workflow;
 using UotanStudio.Messages;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Network;

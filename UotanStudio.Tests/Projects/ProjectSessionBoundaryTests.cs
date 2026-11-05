@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

@@ -1,4 +1,4 @@
-using UotanStudio.Delivery;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

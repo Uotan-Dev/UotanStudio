@@ -1,5 +1,5 @@
 using Lua;
-using UotanStudio.Projects.Interactions;
+using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Services;
 using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Scripting;

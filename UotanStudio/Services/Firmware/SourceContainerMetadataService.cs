@@ -4,11 +4,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
 using UotanStudio.Compress.Zip;
-using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Firmware;

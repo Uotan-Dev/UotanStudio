@@ -15,8 +15,7 @@ public class NamespaceOwnershipGuardTests
         ["UotanStudio.Comm"] = "UotanStudio.Comm",
         ["UotanStudio.Mirroring"] = "UotanStudio.Mirroring",
         ["UotanStudio.Media"] = "UotanStudio.Media",
-        ["UotanStudio.Projects"] = "UotanStudio.Projects",
-        ["UotanStudio.Delivery"] = "UotanStudio.Delivery",
+        ["UotanStudio.Pipeline"] = "UotanStudio.Pipeline",
         ["UotanStudio.Mcp"] = "UotanStudio.Mcp",
         ["UotanStudio"] = "UotanStudio",
         ["UotanStudio.Desktop"] = "UotanStudio.Desktop",
@@ -35,8 +34,7 @@ public class NamespaceOwnershipGuardTests
         "UotanStudio.Comm",
         "UotanStudio.Mirroring",
         "UotanStudio.Media",
-        "UotanStudio.Projects",
-        "UotanStudio.Delivery",
+        "UotanStudio.Pipeline",
         "UotanStudio.Mcp",
         "UotanStudio.Desktop",
         "UotanStudio.Benchmarks",
@@ -81,8 +79,8 @@ public class NamespaceOwnershipGuardTests
     public void Namespaces_SyntheticSource_ReturnsEveryDeclaredNamespace()
     {
         Assert.Equal(
-            ["UotanStudio.Projects.Schemes", "UotanStudio.Projects.Legacy"],
-            RepositoryLayout.Namespaces("using X;\nnamespace UotanStudio.Projects.Schemes;\r\nnamespace UotanStudio.Projects.Legacy\n{\n}\n"));
+            ["UotanStudio.Pipeline.Projects.Schemes", "UotanStudio.Pipeline.Projects.Legacy"],
+            RepositoryLayout.Namespaces("using X;\nnamespace UotanStudio.Pipeline.Projects.Schemes;\r\nnamespace UotanStudio.Pipeline.Projects.Legacy\n{\n}\n"));
         Assert.Empty(RepositoryLayout.Namespaces("using X;\n"));
     }
 
@@ -90,6 +88,7 @@ public class NamespaceOwnershipGuardTests
     public void Solution_DeclaresTheExpectedProductionProjects()
     {
         var directories = RepositoryLayout.SolutionProjectDirectories();
+        Assert.Contains("UotanStudio.Pipeline", directories);
         Assert.Contains("UotanStudio.Net", directories);
         Assert.Contains("UotanStudio.Benchmarks", directories);
         Assert.Contains("UotanStudio.FilesystemFixture", directories);

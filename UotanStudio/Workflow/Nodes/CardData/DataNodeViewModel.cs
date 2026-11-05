@@ -163,7 +163,7 @@ public class DataNodeViewModel : FlowNodeViewModel
             return;
         }
 
-        var artifact = new UotanStudio.Projects.FileStreamArtifact(path);
+        var artifact = new UotanStudio.Pipeline.Projects.FileStreamArtifact(path);
         try
         {
             context.RegisterResource(artifact);

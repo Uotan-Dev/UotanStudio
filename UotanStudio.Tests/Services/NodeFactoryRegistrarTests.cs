@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Avalonia;
 using CommunityToolkit.Mvvm.Messaging;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Plugins;
 using UotanStudio.Services.Projects;

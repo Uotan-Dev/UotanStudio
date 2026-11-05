@@ -1,4 +1,4 @@
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.Workflow.Nodes;

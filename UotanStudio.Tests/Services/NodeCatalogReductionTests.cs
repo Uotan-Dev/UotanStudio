@@ -1,5 +1,5 @@
 using UotanStudio.Locale;
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.Workflow.Nodes;
