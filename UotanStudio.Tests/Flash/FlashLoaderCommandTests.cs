@@ -151,6 +151,79 @@ public sealed class FlashLoaderCommandTests : IDisposable
         Assert.Null(model.EffectiveRkLoaderPath);
     }
 
+    /// <remarks>
+    /// A multi-image manifest carries several Sahara image identifiers, not one programmer blob, so the row has to
+    /// accept it as its own form instead of reporting an unknown boot image.
+    /// <para>多镜像清单携带多个 Sahara 镜像标识而不是一个 programmer 块，因此该行必须把它当作自身形态接受，
+    /// 而不是报告为未知引导文件。</para>
+    /// </remarks>
+    [Fact]
+    public async Task CheckLoaderFileAsync_MultiImageManifestForAnEdlDevice_IsAcceptedWithTheImageCount()
+    {
+        var manifest = await WriteManifestAsync("qsahara_device_programmer.xml",
+            ("13", WriteFile("prog_firehose_ddr.elf", BuildElf())),
+            ("36", WriteFile("multi_image_qti.mbn", BuildMelf(components: 2))));
+        var log = new CapturingLog();
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, log);
+
+        var verdict = await model.CheckLoaderFileAsync(manifest, FlashViewModel.LoaderTarget.EdlProgrammer,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(verdict.Valid);
+        Assert.Equal(FlashViewModel.LoaderTarget.EdlProgrammer, verdict.Target);
+        Assert.Contains("2", verdict.Summary, StringComparison.Ordinal);
+        Assert.Contains(log.Lines, line => line.Contains("2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CheckLoaderFileAsync_ManifestWithMissingImage_IsRejectedAsAManifest()
+    {
+        var manifest = await WriteManifestAsync("broken.xml",
+            ("13", Path.Combine(_root, "absent_programmer.elf")));
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new CapturingLog());
+
+        var verdict = await model.CheckLoaderFileAsync(manifest, FlashViewModel.LoaderTarget.EdlProgrammer,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(verdict.Valid);
+        Assert.Equal("Flash_EdlLoaderManifestInvalid", verdict.ProblemKey);
+    }
+
+    [Fact]
+    public async Task ImportRkConfigAsync_ManifestLoaderRowWithoutADevice_ConfiguresTheProgrammer()
+    {
+        var manifest = await WriteManifestAsync("multi.xml",
+            ("13", WriteFile("prog_firehose_ddr.elf", BuildElf())),
+            ("21", WriteFile("xbl_sc.elf", BuildElf())));
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new CapturingLog());
+
+        await model.ImportRkConfigAsync(await WriteConfigAsync("manifest.cfg", manifest));
+        await model.SpecialFileRowCheck;
+
+        var row = Assert.Single(model.Partitions, entry => entry.Command == "loader");
+        Assert.Equal(LanguageService.Instance.GetString("Flash_LoaderManifestValid"), row.StatusText);
+        Assert.Equal(manifest, model.EffectiveEdlProgrammer);
+        Assert.Null(model.EffectiveRkLoaderPath);
+    }
+
+    private async Task<string> WriteManifestAsync(string name, params (string ImageId, string ImagePath)[] images)
+    {
+        var path = Path.Combine(_root, name);
+        var lines = new List<string>
+        {
+            "<?xml version=\"1.0\" ?>",
+            "<sahara_config>",
+            "\t<chipset>test</chipset>",
+            "\t<images>"
+        };
+        lines.AddRange(images.Select(image =>
+            $"\t\t<image image_id=\"{image.ImageId}\" image_path=\"{image.ImagePath}\" />"));
+        lines.Add("\t</images>");
+        lines.Add("</sahara_config>");
+        await File.WriteAllLinesAsync(path, lines, TestContext.Current.CancellationToken);
+        return path;
+    }
+
     private string WriteFile(string name, byte[] content)
     {
         var path = Path.Combine(_root, name);

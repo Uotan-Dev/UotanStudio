@@ -17,6 +17,10 @@ public class EdlProbeDetectionTests
     private const uint HelloCommand = EdlConstants.SaharaCmdHello;
     private const uint ResetStateCommand = EdlConstants.SaharaCmdResetState;
     private const uint ExecuteDataCommand = EdlConstants.SaharaCmdExecuteData;
+    private const int ResetStatePacketBytes = 8;
+    private const uint DeviceHelloVersion = 2;
+    private const uint DeviceHelloMinVersion = 1;
+    private const uint DeviceHelloMaxCommandLength = 0x400;
 
     [Fact]
     public async Task ProbeProtocol_SaharaHello_ReportsSaharaWithoutWriting()
@@ -69,8 +73,66 @@ public class EdlProbeDetectionTests
         var state = await session.ProbeProtocolAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(EdlProtocolState.Unknown, state);
-        var probe = Assert.Single(transport.Writes);
-        Assert.Contains("<nop", System.Text.Encoding.UTF8.GetString(probe), StringComparison.Ordinal);
+        var resets = ResetStateWrites(transport);
+        Assert.Single(resets);
+        Assert.Equal(ResetStatePacketBytes, resets[0].Length);
+        Assert.Equal(ResetStatePacketBytes, (int)BinaryPrimitives.ReadUInt32LittleEndian(resets[0].AsSpan(4)));
+        var nops = NopWrites(transport);
+        Assert.Single(nops);
+    }
+
+    [Fact]
+    public async Task ProbeProtocol_SilentSerialSaharaTarget_WakesWithResetStateMachineAndReportsSahara()
+    {
+        var transport = new ScriptedCommTransport
+        {
+            OnWrite = write => IsResetStateWrite(write) ? [Hello(SaharaMode.ImageTxPending)] : []
+        };
+        using var session = new EdlSession(transport);
+
+        var state = await session.ProbeProtocolAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlProtocolState.Sahara, state);
+        var resets = ResetStateWrites(transport);
+        Assert.Single(resets);
+        Assert.Equal(ResetStatePacketBytes, resets[0].Length);
+        Assert.Empty(NopWrites(transport));
+        var handshake = Assert.IsType<SaharaHandshakeInfo>(session.SaharaHandshake);
+        Assert.Equal(DeviceHelloVersion, handshake.ProtocolVersion);
+        Assert.Equal(DeviceHelloMinVersion, handshake.MinProtocolVersion);
+        Assert.Equal(DeviceHelloMaxCommandLength, handshake.MaxCommandLength);
+        Assert.Equal(SaharaMode.ImageTxPending, handshake.Mode);
+    }
+
+    [Fact]
+    public async Task ProbeProtocol_FirehoseTargetAfterResetState_StillReportsFirehose()
+    {
+        var ackDocument = System.Text.Encoding.UTF8.GetBytes(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<data><response value=\"ACK\" rawmode=\"false\"/></data>");
+        var transport = new ScriptedCommTransport
+        {
+            OnWrite = write => IsResetStateWrite(write) ? [] : [ackDocument]
+        };
+        using var session = new EdlSession(transport);
+
+        var state = await session.ProbeProtocolAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlProtocolState.Firehose, state);
+        Assert.Single(ResetStateWrites(transport));
+        Assert.Single(NopWrites(transport));
+        Assert.Equal(2, transport.Writes.Count);
+    }
+
+    [Fact]
+    public async Task ProbeProtocol_ResetStateWrite_IsNotIssuedTwice()
+    {
+        var transport = new ScriptedCommTransport();
+        using var session = new EdlSession(transport);
+
+        var state = await session.ProbeProtocolAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlProtocolState.Unknown, state);
+        Assert.Single(ResetStateWrites(transport));
     }
 
     [Fact]
@@ -163,8 +225,8 @@ public class EdlProbeDetectionTests
         => Assert.Equal(EdlProtocolState.Unknown, EdlProbeTransport.Classify(
             System.Text.Encoding.UTF8.GetBytes("<data><log value=\"startup\"/></data>")));
 
-    private static byte[] Hello(SaharaMode mode, uint version = 2, uint minVersion = 1,
-        uint maxCommandLength = 0)
+    private static byte[] Hello(SaharaMode mode, uint version = DeviceHelloVersion,
+        uint minVersion = DeviceHelloMinVersion, uint maxCommandLength = DeviceHelloMaxCommandLength)
     {
         var packet = new byte[48];
         BinaryPrimitives.WriteUInt32LittleEndian(packet, HelloCommand);
@@ -175,6 +237,19 @@ public class EdlProbeDetectionTests
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(20), (uint)mode);
         return packet;
     }
+
+    private static bool IsResetStateWrite(byte[] write)
+        => write.Length == ResetStatePacketBytes
+            && BinaryPrimitives.ReadUInt32LittleEndian(write) == ResetStateCommand;
+
+    private static bool IsNopWrite(byte[] write)
+        => System.Text.Encoding.UTF8.GetString(write).Contains("<nop", StringComparison.Ordinal);
+
+    private static List<byte[]> ResetStateWrites(ScriptedCommTransport transport)
+        => [.. transport.Writes.Where(IsResetStateWrite)];
+
+    private static List<byte[]> NopWrites(ScriptedCommTransport transport)
+        => [.. transport.Writes.Where(IsNopWrite)];
 
     private static byte[] Header(uint command, uint length)
     {

@@ -32,7 +32,7 @@ public class EdlSerialBundleServiceTests
         }, dir.Path, false, TestContext.Current.CancellationToken);
 
         Assert.Equal(1, connects);
-        var commands = Commands(transport);
+        var commands = FirehoseCommands(transport);
         Assert.Equal(new[] { "configure", "getstorageinfo", "getstorageinfo", "getstorageinfo", "program", "patch", "getstorageinfo", "program" },
             commands.Select(command => command.Name.LocalName));
         Assert.Equal(new[] { "1", "2" }, commands.Where(command => command.Name == "program")
@@ -53,7 +53,7 @@ public class EdlSerialBundleServiceTests
             token => OpenAsync(transport, token), dir.Path, false, TestContext.Current.CancellationToken));
 
         Assert.Equal(new[] { "configure", "getstorageinfo", "getstorageinfo" },
-            Commands(transport).Select(command => command.Name.LocalName));
+            FirehoseCommands(transport).Select(command => command.Name.LocalName));
         Assert.Equal(1, transport.DisposeCount);
         using var exclusive = File.Open(source, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
     }
@@ -71,7 +71,7 @@ public class EdlSerialBundleServiceTests
         await Assert.ThrowsAsync<InvalidDataException>(() => FlashEdlBundleService.FlashSerialCoreAsync(
             token => OpenAsync(transport, token), dir.Path, false, TestContext.Current.CancellationToken));
 
-        Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+        Assert.Equal("configure", Assert.Single(FirehoseCommands(transport)).Name.LocalName);
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -91,13 +91,13 @@ public class EdlSerialBundleServiceTests
         if (includeUfs)
         {
             await Assert.ThrowsAsync<InvalidDataException>(() => run);
-            Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+            Assert.Equal("configure", Assert.Single(FirehoseCommands(transport)).Name.LocalName);
         }
         else
         {
             await run;
-            Assert.Contains(Commands(transport), command => command.Name == "program");
-            Assert.DoesNotContain(Commands(transport), command => command.Name == "ufs");
+            Assert.Contains(FirehoseCommands(transport), command => command.Name == "program");
+            Assert.DoesNotContain(FirehoseCommands(transport), command => command.Name == "ufs");
         }
         Assert.Equal(1, transport.DisposeCount);
     }
@@ -114,7 +114,7 @@ public class EdlSerialBundleServiceTests
         await Assert.ThrowsAsync<IOException>(() => FlashEdlBundleService.FlashSerialCoreAsync(
             token => OpenAsync(transport, token), dir.Path, false, TestContext.Current.CancellationToken));
 
-        Assert.Single(Commands(transport), command => command.Name == "program");
+        Assert.Single(FirehoseCommands(transport), command => command.Name == "program");
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -141,13 +141,13 @@ public class EdlSerialBundleServiceTests
         if (rejectProgram)
         {
             await Assert.ThrowsAsync<IOException>(() => run);
-            Assert.DoesNotContain(Commands(transport), command => command.Name == "ufs");
+            Assert.DoesNotContain(FirehoseCommands(transport), command => command.Name == "ufs");
         }
         else
         {
             await run;
             Assert.Equal(new[] { "configure", "getstorageinfo", "getstorageinfo", "getstorageinfo", "program", "getstorageinfo", "program", "ufs", "ufs", "ufs" },
-                Commands(transport).Select(command => command.Name.LocalName));
+                FirehoseCommands(transport).Select(command => command.Name.LocalName));
         }
         Assert.Equal(1, transport.DisposeCount);
     }
@@ -165,7 +165,7 @@ public class EdlSerialBundleServiceTests
         await Assert.ThrowsAsync<InvalidDataException>(() => FlashEdlBundleService.FlashSerialCoreAsync(
             token => OpenAsync(transport, token), dir.Path, true, TestContext.Current.CancellationToken));
 
-        Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+        Assert.Equal("configure", Assert.Single(FirehoseCommands(transport)).Name.LocalName);
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -225,7 +225,7 @@ public class EdlSerialBundleServiceTests
                 WipeFirstSectors = 1
             });
 
-        var commands = Commands(transport);
+        var commands = FirehoseCommands(transport);
         var program = Assert.Single(commands, command => command.Name == "program"
             && (string?)command.Attribute("filename") == "first.img");
         Assert.Equal("2", (string?)program.Attribute("slot"));
@@ -245,7 +245,7 @@ public class EdlSerialBundleServiceTests
         await FlashEdlBundleService.FlashSerialCoreAsync(token => OpenAsync(transport, token),
             dir.Path, false, TestContext.Current.CancellationToken);
 
-        var commands = Commands(transport);
+        var commands = FirehoseCommands(transport);
         var program = Assert.Single(commands, command => command.Name == "program");
         Assert.Null((string?)program.Attribute("slot"));
         Assert.DoesNotContain(commands, command => command.Name == "program"
@@ -267,7 +267,7 @@ public class EdlSerialBundleServiceTests
                 OverrideSectorSize = 512
             });
 
-        var program = Assert.Single(Commands(transport), command => command.Name == "program");
+        var program = Assert.Single(FirehoseCommands(transport), command => command.Name == "program");
         Assert.Equal("512", (string?)program.Attribute("SECTOR_SIZE_IN_BYTES"));
         Assert.Equal(1, transport.DisposeCount);
     }
@@ -286,7 +286,7 @@ public class EdlSerialBundleServiceTests
                 dir.Path, false, TestContext.Current.CancellationToken));
 
         Assert.Contains("sector size", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+        Assert.Equal("configure", Assert.Single(FirehoseCommands(transport)).Name.LocalName);
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -306,7 +306,7 @@ public class EdlSerialBundleServiceTests
             return session;
         }, dir.Path, false, cancellation.Token));
 
-        Assert.Equal("configure", Assert.Single(Commands(transport)).Name.LocalName);
+        Assert.Equal("configure", Assert.Single(FirehoseCommands(transport)).Name.LocalName);
         Assert.Equal(1, transport.DisposeCount);
     }
 
@@ -318,9 +318,16 @@ public class EdlSerialBundleServiceTests
         return session;
     }
 
-    private static XElement[] Commands(ScriptedCommTransport transport) => transport.Writes
-        .Where(bytes => bytes.Length > 0 && bytes[0] == '<')
-        .Select(bytes => XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single()).ToArray();
+    private static XElement[] FirehoseCommands(ScriptedCommTransport transport)
+    {
+        var commands = transport.Writes
+            .Where(bytes => bytes.Length > 0 && bytes[0] == '<')
+            .Select(bytes => XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single()).ToArray();
+        Assert.NotEmpty(commands);
+        Assert.Equal("nop", commands[0].Name.LocalName);
+        Assert.Equal("ping", (string?)commands[0].Attribute("value"));
+        return commands.Where(command => command.Name != "nop").ToArray();
+    }
 
     private static ScriptedCommTransport Transport(bool rejectProgram = false)
     {
