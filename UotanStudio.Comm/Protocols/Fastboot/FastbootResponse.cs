@@ -126,6 +126,15 @@ public class FastbootResponse
     public byte[]? Data { get; set; }
 
     /// <summary>
+    /// Gets or sets whether this response ended on a terminal frame the device actually sent, as opposed to
+    /// a failure or timeout the parser synthesized on its own. Only a real frame proves that a command the
+    /// transport reported as unwritten did reach the device.
+    /// <para>获取或设置本响应是否结束于设备实际发送的终止帧，而不是解析器自行合成的失败或超时。只有真实帧
+    /// 才能证明“传输报告未写入”的命令确实抵达了设备。</para>
+    /// </summary>
+    internal bool ReceivedTerminalFrame { get; set; }
+
+    /// <summary>
     /// Gets or sets the accumulated INFO lines.
     /// <para>获取或设置累积的 INFO 行。</para>
     /// </summary>

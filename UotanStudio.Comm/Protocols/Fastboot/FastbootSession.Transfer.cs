@@ -123,7 +123,7 @@ public sealed partial class FastbootSession
                 $"download payload {length} exceeds max-download-size {maxDownloadSize}");
         }
 
-        SendCommand(FastbootConstants.CommandDownload + length.ToString("x8"));
+        SendCommand(FastbootConstants.CommandDownload + length.ToString("x8"), timeoutMs);
 
         var rawResponse = ReceiveResponse(timeoutMs, cancellationToken);
         if (rawResponse.State != FastbootResponseState.Data)

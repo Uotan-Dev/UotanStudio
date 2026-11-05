@@ -51,6 +51,20 @@ public sealed partial class FastbootSession : IProtocolSession
     private readonly PendingBuffer _pendingBytes = new();
 
     /// <summary>
+    /// Terminal reply a command-write probe already collected for the command now in flight, or
+    /// <see langword="null"/> when the caller must wait for a fresh one. A bulk write that the transport
+    /// reported as accepting nothing may still have delivered the frame, so the probe answers "did the
+    /// device already reply" before the frame is written a second time; when it did, that reply belongs to
+    /// the pending command and must be handed to the next <see cref="ReceiveResponse"/> instead of being
+    /// waited for all over again (the device will not answer twice).
+    /// <para>命令写入探测已为当前进行中的命令收集到的终止应答；调用方必须等待新应答时为
+    /// <see langword="null"/>。传输报告未接受任何字节的批量写入仍可能已送达该帧，因此探测在重写该帧之前回答
+    /// “设备是否已经应答”。若已应答，该应答属于当前命令，必须交给下一次 <see cref="ReceiveResponse"/>，
+    /// 而不是重新等待——设备不会应答两次。</para>
+    /// </summary>
+    private FastbootResponse? _preReadResponse;
+
+    /// <summary>
     /// Growable byte accumulator for wire framing. Appends copy a whole transport read at once and
     /// decoders slice the buffer directly, so no per-byte list append or whole-buffer copy per UTF-8
     /// decode occurs.
