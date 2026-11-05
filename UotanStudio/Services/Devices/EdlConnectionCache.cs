@@ -144,7 +144,15 @@ internal sealed class EdlConnectionCache(
             var session = RequireSession(sessionLease);
             var state = await session.ProbeProtocolAsync(cancellationToken).ConfigureAwait(false);
             Publish(entry, state);
-            await CollectDetailsAsync(entry, session, state, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await CollectDetailsAsync(entry, session, state, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                    $"EDL detail collection for '{device.Key}' was cancelled; the verified {state} state is kept.");
+            }
             return entry.Removed ? EdlProtocolState.Unknown : state;
         }
         catch

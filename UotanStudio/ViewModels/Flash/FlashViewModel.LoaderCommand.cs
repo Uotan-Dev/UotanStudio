@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia.Controls;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Firmware.Executable.Qualcomm;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
@@ -244,6 +245,11 @@ public sealed partial class FlashViewModel
     /// 匹配之后没有更深一层的检查会失败。</para></returns>
     private LoaderFileVerdict InspectEdlProgrammer(string path)
     {
+        if (SaharaProgrammerManifest.IsManifestPath(path))
+        {
+            return InspectEdlProgrammerManifest(path);
+        }
+
         if (new FileInfo(path).Length > MaximumProgrammerFileBytes)
         {
             return new(LoaderTarget.Any, false, false, "Flash_EdlProgrammerTooLarge", string.Empty);
@@ -263,6 +269,35 @@ public sealed partial class FlashViewModel
         return shape.Kind == QualcommProgrammerKind.Unknown
             ? new(LoaderTarget.Any, false, false, "Flash_EdlLoaderNotProgrammer", string.Empty)
             : new(LoaderTarget.EdlProgrammer, true, true, null, DescribeEdlProgrammer(shape));
+    }
+
+    /// <summary>
+    /// Reads one Qualcomm multi-image programmer manifest and counts the images it will upload, so the same
+    /// <c>loader</c> row can name either one programmer image or the manifest that spreads the programmer across
+    /// several Sahara image identifiers.
+    /// <para>读取一个高通多镜像 programmer 清单并统计它将上传的镜像数，使同一个 <c>loader</c> 行既可以指定单个
+    /// programmer 镜像，也可以指定把 programmer 分散在多个 Sahara 镜像标识上的清单。</para>
+    /// </summary>
+    /// <param name="path">Existing candidate manifest.<para>存在的候选清单。</para></param>
+    /// <returns>An accepted verdict carrying the image count when the manifest resolves every referenced image;
+    /// otherwise a rejection that is never marked as recognized, because a manifest whose references cannot be
+    /// resolved proves nothing about the images themselves.
+    /// <para>清单能解析出全部被引用镜像时返回带镜像数的接受结论；否则返回从不标记为“已识别”的拒绝结论，因为解析不出
+    /// 引用镜像的清单本身并不能证明任何镜像的有效性。</para></returns>
+    private LoaderFileVerdict InspectEdlProgrammerManifest(string path)
+    {
+        try
+        {
+            var images = SaharaProgrammerManifest.Read(path);
+            return new(LoaderTarget.EdlProgrammer, true, true, null,
+                string.Format(CultureInfo.InvariantCulture, _localizer.GetString("Flash_EdlLoaderManifest"),
+                    images.Count, string.Join(", ", images.Select(image => image.ImageId.ToString("X", CultureInfo.InvariantCulture)))));
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or ArgumentException
+            or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return new(LoaderTarget.Any, false, false, "Flash_EdlLoaderManifestInvalid", exception.Message);
+        }
     }
 
     /// <summary>
@@ -342,8 +377,10 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Publishes the verdict on the row, whose wording follows the grammar that produced it.
-    /// <para>把结论发布到该行，其措辞跟随产生该结论的语法。</para>
+    /// Publishes the verdict on the row, whose wording follows the grammar that produced it and, for the EDL
+    /// grammar, whether the row holds one image or the multi-image manifest that spreads the programmer.
+    /// <para>把结论发布到该行，其措辞跟随产生该结论的语法；EDL 语法下还会区分该行持有单个镜像还是把
+    /// programmer 分散开的多镜像清单。</para>
     /// </summary>
     /// <param name="row">Row carrying the verdict.<para>承载结论的行。</para></param>
     /// <param name="target">Grammar that produced it.<para>产生该结论的语法。</para></param>
@@ -351,7 +388,9 @@ public sealed partial class FlashViewModel
     private void PublishLoaderStatus(FlashPartitionEntry row, LoaderTarget target, bool valid)
         => row.StatusText = _localizer.GetString(target == LoaderTarget.Rockchip
             ? valid ? "Flash_RkLoaderValid" : "Flash_RkLoaderInvalidStatus"
-            : valid ? "Flash_LoaderValid" : "Flash_LoaderInvalidStatus");
+            : target == LoaderTarget.EdlProgrammer && SaharaProgrammerManifest.IsManifestPath(row.FilePath)
+                ? valid ? "Flash_LoaderManifestValid" : "Flash_LoaderManifestInvalidStatus"
+                : valid ? "Flash_LoaderValid" : "Flash_LoaderInvalidStatus");
 
     /// <summary>
     /// Hands an accepted loader file to the backend that consumes it, so checking the row also configures the flash.
