@@ -90,6 +90,7 @@ public partial class App : Application
     {
         UsbLogBridge.Install();
         FirstChanceExceptionLogger.Install();
+        UnhandledExceptionLogger.Install();
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 

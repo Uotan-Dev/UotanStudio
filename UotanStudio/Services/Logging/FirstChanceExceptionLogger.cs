@@ -1,27 +1,46 @@
+using System.IO;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 
 namespace UotanStudio.Services.Logging;
 
 /// <summary>
-/// First-chance exception logger: hooks <see cref="AppDomain.FirstChanceException"/> and, only when
-/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> is set, records the normally-caught socket, cancellation and timeout
-/// exceptions as throttled Debug-level global log entries that carry the throw-site call path. The hook is
-/// installed by default and stays silent until the switch is set.
-/// <para>首次机会异常记录器：挂接 <see cref="AppDomain.FirstChanceException"/>；仅当设置了
-/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> 时，才把被正常捕获的套接字、取消与超时异常记录为带抛出点调用路径的
-/// Debug 级别全局日志条目，并做节流。钩子默认安装，在设置该开关前保持静默。</para>
+/// First-chance exception logger: hooks <see cref="AppDomain.FirstChanceException"/> and records caught
+/// device- and transport-level exceptions (Win32, COM, I/O, socket, timeout) as throttled Debug-level global log
+/// entries carrying the throw-site call path, so failures swallowed inside subsystems stay diagnosable.
+/// Setting <c>UOTAN_FIRST_CHANCE_LOG=1</c> widens capture to every exception type and
+/// <c>UOTAN_FIRST_CHANCE_LOG=0</c> disables capture entirely; the hook is installed by default and the switch is
+/// read once at install.
+/// <para>首次机会异常记录器：挂接 <see cref="AppDomain.FirstChanceException"/>，把被捕获的设备与传输层异常
+/// （Win32、COM、I/O、套接字、超时）记录为带抛出点调用路径、按窗口节流的 Debug 级别全局日志条目，使子系统内部
+/// 被吞掉的故障仍可诊断。设置 <c>UOTAN_FIRST_CHANCE_LOG=1</c> 把捕获范围扩大到全部异常类型，
+/// <c>UOTAN_FIRST_CHANCE_LOG=0</c> 完全关闭捕获；钩子默认安装，开关在安装时读取一次。</para>
 /// </summary>
 public static class FirstChanceExceptionLogger
 {
     private const string EnableVariable = "UOTAN_FIRST_CHANCE_LOG";
     private const string Source = "Exception";
     private const int ThrottleWindowMs = 5000;
-    private const int MaxStackFrames = 10;
+    private const int MaxStackFrames = ExceptionLogText.FirstChanceStackFrames;
     private const int MaxThrottledKeys = 256;
 
+    /// <summary>Capture coverage read once at install. <para>安装时读取一次的捕获范围。</para></summary>
+    private enum CaptureMode
+    {
+        /// <summary>No entries are written. <para>不写出任何条目。</para></summary>
+        Off,
+
+        /// <summary>Device- and transport-level exception types are written.
+        /// <para>写出设备与传输层异常类型。</para></summary>
+        Diagnostic,
+
+        /// <summary>Every exception type is written. <para>写出全部异常类型。</para></summary>
+        All,
+    }
+
     private static volatile bool _installed;
-    private static volatile bool _logging;
+    private static volatile CaptureMode _mode;
     private static readonly Lock InstallLock = new();
     private static readonly Lock ThrottleLock = new();
     private static readonly Dictionary<string, (DateTime WindowStart, int Count)> Throttle = new(StringComparer.Ordinal);
@@ -44,7 +63,7 @@ public static class FirstChanceExceptionLogger
                 return;
             }
 
-            _logging = IsLoggingRequested();
+            _mode = ReadMode();
             AppDomain.CurrentDomain.FirstChanceException += OnFirstChanceException;
             _installed = true;
         }
@@ -65,30 +84,36 @@ public static class FirstChanceExceptionLogger
 
             AppDomain.CurrentDomain.FirstChanceException -= OnFirstChanceException;
             _installed = false;
-            _logging = false;
+            _mode = CaptureMode.Off;
         }
     }
 
     /// <summary>
-    /// Reads the opt-in switch: only the literal <c>1</c> enables first-chance logging.
-    /// <para>读取显式开关：只有字面量 <c>1</c> 才启用首次机会异常日志。</para>
+    /// Reads the capture switch: <c>1</c> captures every exception type, <c>0</c> disables capture and any other
+    /// value selects the default device- and transport-level set.
+    /// <para>读取捕获开关：<c>1</c> 捕获全部异常类型，<c>0</c> 关闭捕获，其他取值选择默认的设备与传输层集合。</para>
     /// </summary>
-    /// <returns><see langword="true"/> when the switch requests logging.
-    /// <para>开关要求写日志时为 <see langword="true"/>。</para></returns>
-    private static bool IsLoggingRequested()
+    /// <returns>The mode requested by the switch. <para>开关要求的捕获模式。</para></returns>
+    private static CaptureMode ReadMode()
     {
-        return string.Equals(Environment.GetEnvironmentVariable(EnableVariable), "1", StringComparison.Ordinal);
+        var value = Environment.GetEnvironmentVariable(EnableVariable);
+        if (string.Equals(value, "0", StringComparison.Ordinal))
+        {
+            return CaptureMode.Off;
+        }
+
+        return string.Equals(value, "1", StringComparison.Ordinal) ? CaptureMode.All : CaptureMode.Diagnostic;
     }
 
     private static void OnFirstChanceException(object? sender, FirstChanceExceptionEventArgs e)
     {
-        if (_reentrant || !_logging)
+        if (_reentrant || _mode == CaptureMode.Off)
         {
             return;
         }
 
         var exception = e.Exception;
-        if (exception is not (SocketException or OperationCanceledException or TimeoutException))
+        if (_mode == CaptureMode.Diagnostic && exception is not (ExternalException or IOException or TimeoutException))
         {
             return;
         }
@@ -116,7 +141,7 @@ public static class FirstChanceExceptionLogger
             return;
         }
 
-        var topFrame = DescribeTopFrame(exception);
+        var topFrame = ExceptionLogText.DescribeTopFrame(exception);
         var key = string.Concat(exception.GetType().Name, "|", exception.Message, "|", topFrame);
 
         int repeats;
@@ -143,75 +168,12 @@ public static class FirstChanceExceptionLogger
                 $"{exception.GetType().Name}: {exception.Message} (repeated {repeats} more times within {ThrottleWindowMs / 1000.0:0.#}s)");
         }
 
-        LogService.Instance.Write(LogLevel.Debug, Source, Format(exception, topFrame));
-    }
-
-    private static string Format(Exception exception, string topFrame)
-    {
-        var text = new System.Text.StringBuilder();
-        text.Append(exception.GetType().Name)
-            .Append(": ").Append(exception.Message)
-            .Append(" | thrown at: ").Append(topFrame);
-
-        if (exception is OperationCanceledException oce)
+        var text = ExceptionLogText.Format(exception, MaxStackFrames);
+        if (exception is OperationCanceledException canceled)
         {
-            text.Append(" | canceled=").Append(oce.CancellationToken.IsCancellationRequested);
+            text = text.Insert(0, $"[canceled={canceled.CancellationToken.IsCancellationRequested}] ");
         }
 
-        var stack = CaptureStack(exception);
-        if (stack.Length > 0)
-        {
-            text.Append(" | path: ").Append(stack);
-        }
-        return text.ToString();
-    }
-
-    /// <summary>
-    /// Captures the call path at the throw site (file and line in Debug builds), up to
-    /// <see cref="MaxStackFrames"/> frames; async/task infrastructure frames are skipped.
-    /// <para>捕获异常抛出点的调用路径（Debug 构建含文件与行号），最多
-    /// <see cref="MaxStackFrames"/> 帧；跳过 Async/Task 基础设施帧。</para>
-    /// </summary>
-    /// <param name="exception">The exception whose stack text is read. <para>待读取堆栈文本的异常。</para></param>
-    /// <returns>The joined call path, or an empty string when no usable frame remains.
-    /// <para>拼接后的调用路径；无可用帧时为空字符串。</para></returns>
-    private static string CaptureStack(Exception exception)
-    {
-        try
-        {
-            var lines = exception.StackTrace?
-                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(line => !IsInfrastructureLine(line))
-                .Take(MaxStackFrames)
-                .ToArray();
-            return lines is { Length: > 0 } ? string.Join(" <- ", lines) : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private static bool IsInfrastructureLine(string line)
-    {
-        return line.Contains("System.Threading.Tasks.Task", StringComparison.Ordinal)
-            || line.Contains("System.Runtime.CompilerServices.", StringComparison.Ordinal)
-            || line.Contains("System.Threading.ExecutionContext", StringComparison.Ordinal)
-            || line.Contains("System.Threading.ThreadPoolWorkQueue", StringComparison.Ordinal);
-    }
-
-    private static string DescribeTopFrame(Exception exception)
-    {
-        try
-        {
-            var line = exception.StackTrace?
-                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .FirstOrDefault(line => !IsInfrastructureLine(line));
-            return string.IsNullOrWhiteSpace(line) ? "unknown" : line;
-        }
-        catch
-        {
-            return "unknown";
-        }
+        LogService.Instance.Write(LogLevel.Debug, Source, text);
     }
 }

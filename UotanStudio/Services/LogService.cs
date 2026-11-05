@@ -54,7 +54,11 @@ public enum LogChannel
     Firmware,
 
     /// <summary>Node channel: workflow, node execution, packing and CLI tool logs. <para>节点通道：工作流、节点执行、打包与命令行工具日志。</para></summary>
-    Build
+    Build,
+
+    /// <summary>Diagnostics channel: exception records from the first-chance and unhandled exception loggers.
+    /// <para>诊断通道：来自首次机会与未处理异常记录器的异常记录。</para></summary>
+    Diagnostics
 }
 
 /// <summary>
@@ -530,6 +534,11 @@ public sealed class LogService : IUnifiedLog
 
     private static LogChannel Classify(string source)
     {
+        if (string.Equals(source, "Exception", StringComparison.OrdinalIgnoreCase))
+        {
+            return LogChannel.Diagnostics;
+        }
+
         if (ContainsAny(source, "Flash", "Fastboot", "EDL", "Firehose", "Sideload"))
         {
             return LogChannel.Flash;

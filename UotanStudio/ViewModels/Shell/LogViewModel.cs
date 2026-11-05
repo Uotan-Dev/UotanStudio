@@ -274,6 +274,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         new(LogChannel.Flash),
         new(LogChannel.Firmware),
         new(LogChannel.Build),
+        new(LogChannel.Diagnostics),
     ];
 
     /// <summary>
