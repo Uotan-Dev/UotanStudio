@@ -19,10 +19,9 @@ internal static class SunxiEfexConstants
     /// <summary>Bulk response magic the device returns after each request. <para>设备在每个请求后返回的批量响应魔数。</para></summary>
     public static ReadOnlySpan<byte> ResponseMagic => "AWUS"u8;
 
-    /// <summary>First eight bytes of the identity payload magic; the ninth character of the vendor string
-    /// never reaches the wire because the payload stores an 8-byte magic followed by the SoC id.
-    /// <para>身份负载魔数的前 8 字节；厂商字符串的第 9 个字符不会上线，因为负载存放的是 8 字节魔数加 SoC id。</para></summary>
-    public static ReadOnlySpan<byte> IdentityMagic => "AWUSBEFE"u8;
+    /// <summary>Eight-byte magic the boot ROM returns at the start of the identity payload; the SoC id follows it.
+    /// <para>boot ROM 在身份负载起始处返回的 8 字节魔数；随后是 SoC id。</para></summary>
+    public static ReadOnlySpan<byte> IdentityMagic => "AWUSBFEX"u8;
 
     /// <summary>Size of the bulk request header. <para>批量请求头的大小。</para></summary>
     public const int RequestHeaderSize = 32;
@@ -108,8 +107,29 @@ public enum SunxiEfexCommand : ushort
     /// <summary>FES: sets the tool mode and the mode that follows it. <para>FES：设置工具模式及其后续模式。</para></summary>
     ToolMode = 0x020F,
 
+    /// <summary>FES: verifies the U-Boot block a previous tagged transfer wrote.
+    /// <para>FES：校验前一次带标签传输写入的 U-Boot 块。</para></summary>
+    VerifyUbootBlk = 0x0214,
+
     /// <summary>FES: queries the secure-boot / boot-media mode word. <para>FES：查询安全启动与启动介质模式字。</para></summary>
-    QuerySecure = 0x0230
+    QuerySecure = 0x0230,
+
+    /// <summary>FES: queries the bitmask of the storage types the service exposes.
+    /// <para>FES：查询服务所暴露存储类型的位图。</para></summary>
+    QueryStorageList = 0x0232,
+
+    /// <summary>FES: switches the active storage the following transfers target.
+    /// <para>FES：切换后续传输所针对的活动存储。</para></summary>
+    FlashSwitch = 0x0233,
+
+    /// <summary>FES: reads raw NAND directly, byte-addressed. <para>FES：直读 raw NAND，按字节寻址。</para></summary>
+    FesNand = 0x0301,
+
+    /// <summary>FES: reads SPI NAND directly, byte-addressed. <para>FES：直读 SPI NAND，按字节寻址。</para></summary>
+    FesSpinand = 0x0302,
+
+    /// <summary>FES: reads SPI NOR directly, byte-addressed. <para>FES：直读 SPI NOR，按字节寻址。</para></summary>
+    FesNor = 0x0303
 }
 
 /// <summary>
@@ -140,9 +160,10 @@ public enum SunxiDeviceMode : ushort
 /// </summary>
 public enum SunxiFesDataTag : uint
 {
-    /// <summary>Untagged raw flash write whose address counts 512-byte sectors, which is how a partition
-    /// payload and the post-erase fill reach storage. <para>无标签的裸闪存写入，地址按 512 字节扇区计数；
-    /// 分区负载与擦除后的填充数据以该方式写入存储。</para></summary>
+    /// <summary>Untagged transfer whose address counts 512-byte sectors; the package plan writes partitions
+    /// under <see cref="Flash"/> and reserves this value for callers that need an untagged transfer.
+    /// <para>无标签传输，地址按 512 字节扇区计数；整包计划以 <see cref="Flash"/> 写入分区，本值保留给需要
+    /// 无标签传输的调用方。</para></summary>
     Raw = 0x0000,
 
     /// <summary>DRAM configuration blob. <para>DRAM 配置数据。</para></summary>
@@ -170,7 +191,63 @@ public enum SunxiFesDataTag : uint
     Ext4Ubifs = 0x7FF0,
 
     /// <summary>Logical flash access addressed in 512-byte sectors. <para>按 512 字节扇区寻址的逻辑闪存访问。</para></summary>
-    Flash = 0x8000
+    Flash = 0x8000,
+
+    /// <summary>eMMC physical boot0 partition, read back through <see cref="SunxiFesSession.UploadAsync"/>.
+    /// <para>eMMC 物理 boot0 分区，经 <see cref="SunxiFesSession.UploadAsync"/> 读回。</para></summary>
+    EmmcBoot0 = 0x8001,
+
+    /// <summary>eMMC physical boot1 partition, read back through <see cref="SunxiFesSession.UploadAsync"/>.
+    /// <para>eMMC 物理 boot1 分区，经 <see cref="SunxiFesSession.UploadAsync"/> 读回。</para></summary>
+    EmmcBoot1 = 0x8002,
+
+    /// <summary>Raw or SPI NAND boot0 partition, read through the storage-direct commands.
+    /// <para>raw 或 SPI NAND 的 boot0 分区，经存储直读命令读取。</para></summary>
+    NandBoot0 = 0x8010,
+
+    /// <summary>Raw or SPI NAND boot1 partition, read through the storage-direct commands.
+    /// <para>raw 或 SPI NAND 的 boot1 分区，经存储直读命令读取。</para></summary>
+    NandBoot1 = 0x8020,
+
+    /// <summary>SPI NOR boot0 partition, read through the storage-direct commands.
+    /// <para>SPI NOR 的 boot0 分区，经存储直读命令读取。</para></summary>
+    NorBoot0 = 0x8011,
+
+    /// <summary>SPI NOR boot1 partition, read through the storage-direct commands.
+    /// <para>SPI NOR 的 boot1 分区，经存储直读命令读取。</para></summary>
+    NorBoot1 = 0x8021,
+
+    /// <summary>Raw or SPI NAND boot0 size query; the storage-direct commands answer it with a 4-byte word.
+    /// <para>raw 或 SPI NAND 的 boot0 大小查询；存储直读命令以 4 字节字应答。</para></summary>
+    NandBoot0Size = 0x10001,
+
+    /// <summary>Raw or SPI NAND boot1 size query; the storage-direct commands answer it with a 4-byte word.
+    /// <para>raw 或 SPI NAND 的 boot1 大小查询；存储直读命令以 4 字节字应答。</para></summary>
+    NandBoot1Size = 0x10002,
+
+    /// <summary>SPI NOR boot0 size query; the storage-direct commands answer it with a 4-byte word.
+    /// <para>SPI NOR 的 boot0 大小查询；存储直读命令以 4 字节字应答。</para></summary>
+    NorBoot0Size = 0x10005,
+
+    /// <summary>SPI NOR boot1 size query; the storage-direct commands answer it with a 4-byte word.
+    /// <para>SPI NOR 的 boot1 大小查询；存储直读命令以 4 字节字应答。</para></summary>
+    NorBoot1Size = 0x10006
+}
+
+/// <summary>
+/// Erase flag the tool sends under the erase tag before a run; it selects how much storage the service erases.
+/// <para>工具在一次运行前以擦除标签发送的擦除标志，决定服务擦除多少存储。</para>
+/// </summary>
+public enum SunxiEraseFlag : uint
+{
+    /// <summary>Erase nothing. <para>不擦除。</para></summary>
+    None = 0x0,
+
+    /// <summary>Erase the selected partitions only. <para>只擦除所选分区。</para></summary>
+    Partition = 0x1,
+
+    /// <summary>Erase the whole storage. <para>擦除整片存储。</para></summary>
+    Full = 0x12
 }
 
 /// <summary>Identity and mode payload the device returns for <see cref="SunxiEfexCommand.VerifyDevice"/>.

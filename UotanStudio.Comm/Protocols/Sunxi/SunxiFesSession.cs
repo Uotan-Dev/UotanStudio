@@ -17,9 +17,6 @@ public sealed class SunxiFesSession : SunxiEfexSession
     /// <para>单次擦除确认在运行失败前允许的最长等待，单位为毫秒。</para></summary>
     public const int EraseTimeoutMilliseconds = 300_000;
 
-    /// <summary>First word of the erase request payload the service expects. <para>服务期望的擦除请求负载首字。</para></summary>
-    private const uint EraseRequest = 0x12;
-
     /// <summary>Length of the erase request payload. <para>擦除请求负载的长度。</para></summary>
     private const int EraseRequestSize = 16;
 
@@ -78,6 +75,21 @@ public sealed class SunxiFesSession : SunxiEfexSession
         ReceiveValueAsync(SunxiEfexCommand.FlashSizeProbe, cancellationToken);
 
     /// <summary>
+    /// Queries the bitmask of the storage types the service exposes: bit0 raw NAND, bit1 eMMC, bit2 SPI NOR,
+    /// bit3 UFS. The service answers with a single byte.
+    /// <para>查询服务所暴露存储类型的位图：bit0 raw NAND、bit1 eMMC、bit2 SPI NOR、bit3 UFS。服务以单字节应答。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the query. <para>取消本次查询。</para></param>
+    /// <returns>The storage bitmask. <para>存储类型位图。</para></returns>
+    public async Task<uint> QueryStorageListAsync(CancellationToken cancellationToken = default)
+    {
+        var mask = new byte[1];
+        await TransferAsync(SunxiEfexCommand.QueryStorageList, ReadOnlyMemory<byte>.Empty, null, mask,
+            cancellationToken).ConfigureAwait(false);
+        return mask[0];
+    }
+
+    /// <summary>
     /// Switches the flash controller on or off around a sequence of transfers.
     /// <para>在一组传输前后打开或关闭闪存控制器。</para>
     /// </summary>
@@ -96,6 +108,30 @@ public sealed class SunxiFesSession : SunxiEfexSession
         BinaryPrimitives.WriteUInt32LittleEndian(payload, storageType);
         return TransferAsync(on ? SunxiEfexCommand.FlashSetOn : SunxiEfexCommand.FlashSetOff, payload, null, null,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Switches the active storage the following transfers target, which is how a device that reports several
+    /// storage types selects the one a run operates on.
+    /// <para>切换后续传输所针对的活动存储；上报多种存储的设备借此选定一次运行所用的介质。</para>
+    /// </summary>
+    /// <param name="flashType">Storage type to switch to, as reported by <see cref="QueryStorageAsync"/> or
+    /// <see cref="QueryStorageListAsync"/>. <para>要切换到的存储类型；取
+    /// <see cref="QueryStorageAsync"/> 或 <see cref="QueryStorageListAsync"/> 上报的值。</para></param>
+    /// <param name="cancellationToken">Cancels the command. <para>取消本次命令。</para></param>
+    /// <returns>A task that completes when the device switched the storage.
+    /// <para>设备切换存储后完成的任务。</para></returns>
+    /// <remarks>
+    /// Like <see cref="SetFlashAsync"/>, the type word rides in the inline window; the reference client builds a
+    /// larger structure that its own frame drops, so both shapes still need a real-device confirmation.
+    /// <para>与 <see cref="SetFlashAsync"/> 相同，类型字放在内联窗口内；参考客户端构造的更大结构会被它自己的帧
+    /// 丢弃，两种形状都仍需真机确认。</para>
+    /// </remarks>
+    public Task FlashSwitchAsync(uint flashType, CancellationToken cancellationToken = default)
+    {
+        var payload = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, flashType);
+        return TransferAsync(SunxiEfexCommand.FlashSwitch, payload, null, null, cancellationToken);
     }
 
     /// <summary>
@@ -159,7 +195,90 @@ public sealed class SunxiFesSession : SunxiEfexSession
             throw new ArgumentException("A FES upload needs at least one byte.", nameof(destination));
         }
 
-        var byteAddressed = SunxiEfexFrames.IsByteAddressed(tag);
+        await UploadCoreAsync(SunxiEfexCommand.FesUp, address, destination, tag, alwaysByteAddressed: false,
+            cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads raw NAND directly into host bytes, which is how the boot partitions and their sizes are read back.
+    /// Unlike the tagged transfers this path always advances its address in bytes, whatever the tag implies.
+    /// <para>把 raw NAND 直读到主机字节，boot 分区与其大小都经此读回。与带标签传输不同，无论标签隐含什么单位，
+    /// 该路径的地址始终按字节推进。</para>
+    /// </summary>
+    /// <param name="address">First byte address on the raw NAND. <para>raw NAND 上的首个字节地址。</para></param>
+    /// <param name="destination">Buffer that the read fills. <para>由本次读取填满的缓冲区。</para></param>
+    /// <param name="tag">Data tag selecting the source, usually <see cref="SunxiFesDataTag.Raw"/>, a boot
+    /// partition tag or a size query tag. <para>选择来源的数据标签；通常为 <see cref="SunxiFesDataTag.Raw"/>、
+    /// boot 分区标签或大小查询标签。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <param name="timeoutMilliseconds">Read timeout per chunk, or <see langword="null"/> for the transport
+    /// default. <para>每个分块的读取超时；<see langword="null"/> 表示使用传输默认值。</para></param>
+    /// <returns>A task that completes when every chunk arrived. <para>所有分块都到达后完成的任务。</para></returns>
+    /// <exception cref="ArgumentException">The destination is empty. <para>目标缓冲区为空。</para></exception>
+    /// <exception cref="OverflowException">The address range passes the 32-bit address space.
+    /// <para>地址范围越过 32 位地址空间。</para></exception>
+    public Task UploadNandAsync(uint address, Memory<byte> destination, SunxiFesDataTag tag,
+        CancellationToken cancellationToken = default, int? timeoutMilliseconds = null) =>
+        UploadCoreAsync(SunxiEfexCommand.FesNand, address, RequireUploadDestination(destination), tag,
+            alwaysByteAddressed: true, cancellationToken, timeoutMilliseconds);
+
+    /// <summary>
+    /// Reads SPI NAND directly into host bytes; the address always advances in bytes.
+    /// <para>把 SPI NAND 直读到主机字节；地址始终按字节推进。</para>
+    /// </summary>
+    /// <param name="address">First byte address on the SPI NAND. <para>SPI NAND 上的首个字节地址。</para></param>
+    /// <param name="destination">Buffer that the read fills. <para>由本次读取填满的缓冲区。</para></param>
+    /// <param name="tag">Data tag selecting the source, usually <see cref="SunxiFesDataTag.Raw"/>, a boot
+    /// partition tag or a size query tag. <para>选择来源的数据标签；通常为 <see cref="SunxiFesDataTag.Raw"/>、
+    /// boot 分区标签或大小查询标签。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <param name="timeoutMilliseconds">Read timeout per chunk, or <see langword="null"/> for the transport
+    /// default. <para>每个分块的读取超时；<see langword="null"/> 表示使用传输默认值。</para></param>
+    /// <returns>A task that completes when every chunk arrived. <para>所有分块都到达后完成的任务。</para></returns>
+    /// <exception cref="ArgumentException">The destination is empty. <para>目标缓冲区为空。</para></exception>
+    /// <exception cref="OverflowException">The address range passes the 32-bit address space.
+    /// <para>地址范围越过 32 位地址空间。</para></exception>
+    public Task UploadSpinandAsync(uint address, Memory<byte> destination, SunxiFesDataTag tag,
+        CancellationToken cancellationToken = default, int? timeoutMilliseconds = null) =>
+        UploadCoreAsync(SunxiEfexCommand.FesSpinand, address, RequireUploadDestination(destination), tag,
+            alwaysByteAddressed: true, cancellationToken, timeoutMilliseconds);
+
+    /// <summary>
+    /// Reads SPI NOR directly into host bytes; the address always advances in bytes.
+    /// <para>把 SPI NOR 直读到主机字节；地址始终按字节推进。</para>
+    /// </summary>
+    /// <param name="address">First byte address on the SPI NOR. <para>SPI NOR 上的首个字节地址。</para></param>
+    /// <param name="destination">Buffer that the read fills. <para>由本次读取填满的缓冲区。</para></param>
+    /// <param name="tag">Data tag selecting the source, usually <see cref="SunxiFesDataTag.Raw"/>, a boot
+    /// partition tag or a size query tag. <para>选择来源的数据标签；通常为 <see cref="SunxiFesDataTag.Raw"/>、
+    /// boot 分区标签或大小查询标签。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <param name="timeoutMilliseconds">Read timeout per chunk, or <see langword="null"/> for the transport
+    /// default. <para>每个分块的读取超时；<see langword="null"/> 表示使用传输默认值。</para></param>
+    /// <returns>A task that completes when every chunk arrived. <para>所有分块都到达后完成的任务。</para></returns>
+    /// <exception cref="ArgumentException">The destination is empty. <para>目标缓冲区为空。</para></exception>
+    /// <exception cref="OverflowException">The address range passes the 32-bit address space.
+    /// <para>地址范围越过 32 位地址空间。</para></exception>
+    public Task UploadNorAsync(uint address, Memory<byte> destination, SunxiFesDataTag tag,
+        CancellationToken cancellationToken = default, int? timeoutMilliseconds = null) =>
+        UploadCoreAsync(SunxiEfexCommand.FesNor, address, RequireUploadDestination(destination), tag,
+            alwaysByteAddressed: true, cancellationToken, timeoutMilliseconds);
+
+    private static Memory<byte> RequireUploadDestination(Memory<byte> destination)
+    {
+        if (destination.IsEmpty)
+        {
+            throw new ArgumentException("A FES upload needs at least one byte.", nameof(destination));
+        }
+
+        return destination;
+    }
+
+    private async Task UploadCoreAsync(SunxiEfexCommand command, uint address, Memory<byte> destination,
+        SunxiFesDataTag tag, bool alwaysByteAddressed, CancellationToken cancellationToken,
+        int? timeoutMilliseconds)
+    {
+        var byteAddressed = alwaysByteAddressed || SunxiEfexFrames.IsByteAddressed(tag);
         var offset = 0;
         var current = address;
         while (offset < destination.Length)
@@ -168,7 +287,7 @@ public sealed class SunxiFesSession : SunxiEfexSession
             var last = offset + length == destination.Length;
             var flags = (uint)tag | (last ? SunxiEfexConstants.TransferFinishTag : 0u);
             var payload = SunxiEfexFrames.BuildFesTransferPayload(current, (uint)length, flags);
-            await TransferAsync(SunxiEfexCommand.FesUp, payload, null, destination.Slice(offset, length),
+            await TransferAsync(command, payload, null, destination.Slice(offset, length),
                 cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
             current = checked(current + (byteAddressed ? (uint)length : (uint)(length / SunxiEfexConstants.SectorSize)));
             offset += length;
@@ -176,22 +295,31 @@ public sealed class SunxiFesSession : SunxiEfexSession
     }
 
     /// <summary>
-    /// Erases the whole storage through the dedicated erase tag, which is the only erase the service offers
-    /// outside the per-partition erase the flashing flow performs.
-    /// <para>通过专用擦除标签擦除整片存储；除烧录流程按分区擦除外，这是服务提供的唯一擦除方式。</para>
+    /// Erases storage through the dedicated erase tag; the flag selects a full erase, a selected-partition
+    /// erase or no erase at all.
+    /// <para>通过专用擦除标签擦除存储；标志选择整片擦除、所选分区擦除或不擦除。</para>
     /// </summary>
+    /// <param name="flag">Erase scope the service must apply. <para>服务必须应用的擦除范围。</para></param>
     /// <param name="cancellationToken">Cancels the erase. <para>取消本次擦除。</para></param>
     /// <param name="timeoutMilliseconds">Acknowledgement timeout, or <see langword="null"/> for
     /// <see cref="EraseTimeoutMilliseconds"/>. <para>确认超时；<see langword="null"/> 表示使用
     /// <see cref="EraseTimeoutMilliseconds"/>。</para></param>
     /// <returns>A task that completes when the service acknowledged the erase.
     /// <para>服务确认擦除后完成的任务。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="flag"/> is not a defined erase flag.
+    /// <para><paramref name="flag"/> 不是已定义的擦除标志。</para></exception>
     /// <exception cref="SunxiEfexException">The device answered with a non-zero status.
     /// <para>设备以非零状态应答。</para></exception>
-    public Task EraseAsync(CancellationToken cancellationToken = default, int? timeoutMilliseconds = null)
+    public Task EraseAsync(SunxiEraseFlag flag, CancellationToken cancellationToken = default,
+        int? timeoutMilliseconds = null)
     {
+        if (!Enum.IsDefined(flag))
+        {
+            throw new ArgumentOutOfRangeException(nameof(flag), flag, "Unknown erase flag.");
+        }
+
         var request = new byte[EraseRequestSize];
-        BinaryPrimitives.WriteUInt32LittleEndian(request, EraseRequest);
+        BinaryPrimitives.WriteUInt32LittleEndian(request, (uint)flag);
         return DownloadAsync(0, request, SunxiFesDataTag.Erase, cancellationToken,
             timeoutMilliseconds ?? EraseTimeoutMilliseconds);
     }
@@ -221,6 +349,18 @@ public sealed class SunxiFesSession : SunxiEfexSession
             cancellationToken);
 
     /// <summary>
+    /// Verifies the U-Boot block a previous tagged transfer wrote, using the same reply shape as the status
+    /// verification.
+    /// <para>校验前一次带标签传输写入的 U-Boot 块，应答形状与状态校验相同。</para>
+    /// </summary>
+    /// <param name="tag">Tag stored in the transfer. <para>传输中记录的状态标签。</para></param>
+    /// <param name="cancellationToken">Cancels the verification. <para>取消本次校验。</para></param>
+    /// <returns>The flag and CRC words reported by the device. <para>设备上报的标志与 CRC 字。</para></returns>
+    public Task<SunxiFesVerifyResult> VerifyUbootBlkAsync(uint tag, CancellationToken cancellationToken = default) =>
+        VerifyAsync(SunxiEfexCommand.VerifyUbootBlk, SunxiEfexFrames.BuildFesVerifyStatusPayload(tag),
+            cancellationToken);
+
+    /// <summary>
     /// Reports the tool mode and the mode the firmware should switch to afterwards.
     /// <para>上报工具模式以及固件随后应切换到的模式。</para>
     /// </summary>
@@ -244,6 +384,23 @@ public sealed class SunxiFesSession : SunxiEfexSession
         await TransferAsync(command, ReadOnlyMemory<byte>.Empty, null, value, cancellationToken).ConfigureAwait(false);
         return BinaryPrimitives.ReadUInt32LittleEndian(value);
     }
+
+    /// <summary>
+    /// Sends one tagged download frame carrying caller-supplied flags, which is how the flasher streams a
+    /// package entry segment by segment while keeping the addressing and last-chunk marking under its control.
+    /// <para>发送一帧携带调用方所给标志的下载帧；烧录器借此逐段流出包内条目，同时把寻址与末块标记掌握在自己手里。</para>
+    /// </summary>
+    /// <param name="address">Address in the unit the tag implies. <para>标签所隐含单位下的地址。</para></param>
+    /// <param name="length">Chunk length in bytes. <para>分块字节长度。</para></param>
+    /// <param name="flags">Data tag combined with transfer flags. <para>与传输标志组合的数据标签。</para></param>
+    /// <param name="data">Chunk bytes. <para>分块字节。</para></param>
+    /// <param name="cancellationToken">Cancels the transfer. <para>取消本次传输。</para></param>
+    /// <param name="timeoutMilliseconds">Acknowledgement timeout, or <see langword="null"/> for the transport
+    /// default. <para>确认超时；<see langword="null"/> 表示使用传输默认值。</para></param>
+    internal Task DownloadChunkAsync(uint address, uint length, uint flags, ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken, int? timeoutMilliseconds = null) =>
+        TransferAsync(SunxiEfexCommand.FesDown, SunxiEfexFrames.BuildFesTransferPayload(address, length, flags),
+            data, null, cancellationToken, timeoutMilliseconds);
 
     private async Task<SunxiFesVerifyResult> VerifyAsync(SunxiEfexCommand command, byte[] payload,
         CancellationToken cancellationToken)

@@ -37,6 +37,25 @@ public readonly record struct SunxiUbootImage(uint RunAddress, uint Length, stri
 public readonly record struct SunxiDramStatus(bool InitialisationFailed, bool Updated);
 
 /// <summary>
+/// Images the host uploads over FEL before executing the service payload: the U-Boot image and the
+/// optional device tree, board configuration and compiled system configuration the service reads from
+/// fixed memory slots after the reserved U-Boot area.
+/// <para>主机在执行服务负载前经 FEL 上传的镜像：U-Boot 本体，以及服务从保留 U-Boot 区之后的固定内存槽位
+/// 读取的可选设备树、板级配置与编译后系统配置。</para>
+/// </summary>
+/// <param name="Uboot">U-Boot image, including its <c>u-boot</c> header; required.
+/// <para>U-Boot 镜像，含 <c>u-boot</c> 头部；必需。</para></param>
+/// <param name="DeviceTree">Device tree blob placed after the U-Boot slot, or empty when the image embeds one.
+/// <para>放在 U-Boot 槽位之后的设备树；镜像自带时为空。</para></param>
+/// <param name="SysConfig">Compiled <c>sys_config.bin</c> placed after the device-tree slot, or empty.
+/// <para>放在设备树槽位之后的编译后 <c>sys_config.bin</c>；可为空。</para></param>
+/// <param name="BoardConfig">Board configuration binary placed after the system-configuration slot, or empty.
+/// <para>放在系统配置槽位之后的板级配置二进制；可为空。</para></param>
+public readonly record struct SunxiServiceImages(ReadOnlyMemory<byte> Uboot,
+    ReadOnlyMemory<byte> DeviceTree = default, ReadOnlyMemory<byte> SysConfig = default,
+    ReadOnlyMemory<byte> BoardConfig = default);
+
+/// <summary>
 /// Reads the boot image headers that drive the FEL-to-FES transition.
 /// <para>读取驱动 FEL 到 FES 切换的引导镜像头部。</para>
 /// </summary>
@@ -155,6 +174,21 @@ public sealed class SunxiFesHandoff
     /// <para>让 U-Boot 停留在 USB 产品路径的工作模式，即 FES 服务所需的值。</para></summary>
     public const int UsbProductWorkMode = 0x10;
 
+    /// <summary>Memory reserved for the U-Boot image; the component slots start after it.
+    /// <para>为 U-Boot 镜像保留的内存；组件槽位从其后开始。</para></summary>
+    public const int UbootSlotLength = 2 * 1024 * 1024;
+
+    /// <summary>Largest device tree the service slot accepts. <para>服务槽位接受的设备树上限。</para></summary>
+    public const int DeviceTreeSlotLength = 1024 * 1024;
+
+    /// <summary>Largest compiled system configuration the service slot accepts.
+    /// <para>服务槽位接受的编译后系统配置上限。</para></summary>
+    public const int SysConfigSlotLength = 512 * 1024;
+
+    /// <summary>Largest board configuration the service slot accepts.
+    /// <para>服务槽位接受的板级配置上限。</para></summary>
+    public const int BoardConfigSlotLength = 512 * 1024;
+
     /// <summary>Offset of the initialization-failure flag inside the parameter area.
     /// <para>参数区中初始化失败标志的偏移。</para></summary>
     private const int DramInitFlagOffset = 0;
@@ -164,58 +198,64 @@ public sealed class SunxiFesHandoff
     private const int DramUpdateFlagOffset = 4;
 
     private readonly Func<CancellationToken, Task<SunxiFesSession>> _reopenService;
-    private readonly TimeSpan _dramSettleDelay;
+    private readonly TimeSpan _dramPollInterval;
+    private readonly TimeSpan _dramPollTimeout;
     private readonly TimeSpan _serviceRetryDelay;
 
     /// <summary>
-    /// Creates a handoff that waits one second after the first-stage loader and three seconds between service
-    /// reconnect attempts, matching the reference client.
-    /// <para>创建一次切换流程：一级加载器之后等待一秒，服务重连尝试之间等待三秒，与参考客户端一致。</para>
+    /// Creates a handoff that polls DRAM every second for one minute after the first-stage loader and waits
+    /// three seconds between service reconnect attempts, matching the reference client.
+    /// <para>创建一次切换流程：一级加载器之后每秒轮询 DRAM 持续一分钟，服务重连尝试之间等待三秒，与参考客户端一致。</para>
     /// </summary>
     /// <param name="reopenService">Releases the stale FEL transport, waits for the re-enumerated device and
     /// returns a session that already completed the FES handshake.
     /// <para>释放过期的 FEL 传输，等待重新枚举的设备，并返回已完成 FES 握手的会话。</para></param>
     public SunxiFesHandoff(Func<CancellationToken, Task<SunxiFesSession>> reopenService)
-        : this(reopenService, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3))
+        : this(reopenService, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(3))
     {
     }
 
     /// <summary>
-    /// Creates a handoff with explicit settle delays.
-    /// <para>以显式等待时间创建切换流程。</para>
+    /// Creates a handoff with explicit DRAM polling and reconnect delays.
+    /// <para>以显式 DRAM 轮询与重连等待创建切换流程。</para>
     /// </summary>
     /// <param name="reopenService">Releases the stale FEL transport, waits for the re-enumerated device and
     /// returns a session that already completed the FES handshake.
     /// <para>释放过期的 FEL 传输，等待重新枚举的设备，并返回已完成 FES 握手的会话。</para></param>
-    /// <param name="dramSettleDelay">Wait between executing the first-stage loader and reading the DRAM state
-    /// back. <para>执行一级加载器与回读 DRAM 状态之间的等待。</para></param>
+    /// <param name="dramPollInterval">Wait between DRAM state reads. <para>两次 DRAM 状态读取之间的等待。</para></param>
+    /// <param name="dramPollTimeout">Total time the DRAM state may stay pending.
+    /// <para>DRAM 状态允许保持未完成的总时长。</para></param>
     /// <param name="serviceRetryDelay">Wait between service reconnect attempts.
     /// <para>服务重连尝试之间的等待。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="reopenService"/> is <see langword="null"/>.
     /// <para><paramref name="reopenService"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">A delay is negative. <para>某个等待时间为负。</para></exception>
-    public SunxiFesHandoff(Func<CancellationToken, Task<SunxiFesSession>> reopenService, TimeSpan dramSettleDelay,
-        TimeSpan serviceRetryDelay)
+    /// <exception cref="ArgumentOutOfRangeException">A delay or the timeout is negative.
+    /// <para>某个等待时间或超时为负。</para></exception>
+    public SunxiFesHandoff(Func<CancellationToken, Task<SunxiFesSession>> reopenService, TimeSpan dramPollInterval,
+        TimeSpan dramPollTimeout, TimeSpan serviceRetryDelay)
     {
         ArgumentNullException.ThrowIfNull(reopenService);
-        ArgumentOutOfRangeException.ThrowIfLessThan(dramSettleDelay, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(dramPollInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(dramPollTimeout, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(serviceRetryDelay, TimeSpan.Zero);
         _reopenService = reopenService;
-        _dramSettleDelay = dramSettleDelay;
+        _dramPollInterval = dramPollInterval;
+        _dramPollTimeout = dramPollTimeout;
         _serviceRetryDelay = serviceRetryDelay;
     }
 
     /// <summary>
-    /// Uploads and executes the first-stage loader, which initialises DRAM and returns control to FEL. The DRAM
-    /// parameter area is cleared before the upload because a stale flag from an earlier run would otherwise be
-    /// read back as this run's result.
-    /// <para>上传并执行一级加载器，它初始化 DRAM 并把控制权交回 FEL。上传前先清空 DRAM 参数区，否则上一次运行
-    /// 遗留的标志会被当成本次结果读回。</para>
+    /// Uploads and executes the first-stage loader, then polls the parameter area until the loader reports a
+    /// completed DRAM initialisation. The area is cleared before the upload because a stale flag from an earlier
+    /// run would otherwise be read back as this run's result.
+    /// <para>上传并执行一级加载器，然后轮询参数区直到加载器报告 DRAM 初始化完成。上传前先清空参数区，否则上一次
+    /// 运行遗留的标志会被当成本次结果读回。</para>
     /// </summary>
     /// <param name="session">Open FEL session. <para>已打开的 FEL 会话。</para></param>
     /// <param name="fes1Image">First-stage loader image, including its <c>eGON.BT0</c> header.
     /// <para>一级加载器镜像，含其 <c>eGON.BT0</c> 头部。</para></param>
-    /// <param name="cancellationToken">Cancels the upload and the wait. <para>取消上传与等待。</para></param>
+    /// <param name="cancellationToken">Cancels the upload, the polling and the delays.
+    /// <para>取消上传、轮询与等待。</para></param>
     /// <returns>The DRAM state the loader reported. <para>加载器上报的 DRAM 状态。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
@@ -225,6 +265,8 @@ public sealed class SunxiFesHandoff
     /// <para>镜像不是 <c>eGON.BT0</c> 镜像。</para></exception>
     /// <exception cref="SunxiEfexException">The device rejected a stage, or the loader reported a failed DRAM
     /// initialisation. <para>设备拒绝了某个阶段，或加载器报告 DRAM 初始化失败。</para></exception>
+    /// <exception cref="TimeoutException">The loader never reported a completed initialisation.
+    /// <para>加载器始终没有报告初始化完成。</para></exception>
     public async Task<SunxiDramStatus> InitialiseDramAsync(SunxiFelSession session, ReadOnlyMemory<byte> fes1Image,
         CancellationToken cancellationToken = default)
     {
@@ -239,29 +281,58 @@ public sealed class SunxiFesHandoff
             .ConfigureAwait(false);
         await session.WriteAsync(header.RunAddress, fes1Image, cancellationToken).ConfigureAwait(false);
         await session.ExecuteAsync(header.RunAddress, cancellationToken).ConfigureAwait(false);
-        await Task.Delay(_dramSettleDelay, cancellationToken).ConfigureAwait(false);
 
-        var parameters = new byte[DramParameterLength];
-        await session.ReadAsync(header.ReturnAddress, parameters, cancellationToken).ConfigureAwait(false);
-        var status = new SunxiDramStatus(
-            BinaryPrimitives.ReadUInt32LittleEndian(parameters.AsSpan(DramInitFlagOffset)) == 1,
-            BinaryPrimitives.ReadUInt32LittleEndian(parameters.AsSpan(DramUpdateFlagOffset)) != 0);
-        if (status.InitialisationFailed)
+        var attempts = _dramPollInterval <= TimeSpan.Zero || _dramPollTimeout <= TimeSpan.Zero
+            ? 1
+            : (int)Math.Max(1, Math.Ceiling(_dramPollTimeout.TotalMilliseconds / _dramPollInterval.TotalMilliseconds));
+        Exception? lastReadFailure = null;
+        for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            throw new SunxiEfexException("The first-stage loader reported a failed DRAM initialisation.");
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(_dramPollInterval, cancellationToken).ConfigureAwait(false);
+
+            var parameters = new byte[DramParameterLength];
+            try
+            {
+                await session.ReadAsync(header.ReturnAddress, parameters, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or EndOfStreamException
+                or TimeoutException or SunxiEfexException)
+            {
+                lastReadFailure = exception;
+                continue;
+            }
+
+            var initFlag = BinaryPrimitives.ReadUInt32LittleEndian(parameters.AsSpan(DramInitFlagOffset));
+            if (initFlag == 0)
+            {
+                continue;
+            }
+
+            if (initFlag == 1)
+            {
+                throw new SunxiEfexException("The first-stage loader reported a failed DRAM initialisation.");
+            }
+
+            var updated = BinaryPrimitives.ReadUInt32LittleEndian(parameters.AsSpan(DramUpdateFlagOffset)) != 0;
+            return new SunxiDramStatus(InitialisationFailed: false, Updated: updated);
         }
 
-        return status;
+        throw new TimeoutException(
+            $"The first-stage loader did not report a completed DRAM initialisation within "
+            + $"{_dramPollTimeout.TotalMilliseconds:0} ms.", lastReadFailure);
     }
 
     /// <summary>
-    /// Uploads and executes the service payload, then waits for the re-enumerated device to answer the FES
-    /// handshake.
-    /// <para>上传并执行服务负载，然后等待重新枚举的设备应答 FES 握手。</para>
+    /// Uploads the device tree, system configuration and board configuration into the slots that follow the
+    /// reserved U-Boot area, then uploads and executes the service payload and waits for the re-enumerated
+    /// device to answer the FES handshake.
+    /// <para>把设备树、系统配置与板级配置上传到保留 U-Boot 区之后的槽位，然后上传并执行服务负载，等待重新枚举的
+    /// 设备应答 FES 握手。</para>
     /// </summary>
     /// <param name="session">Open FEL session. <para>已打开的 FEL 会话。</para></param>
-    /// <param name="ubootImage">Service payload, including its <c>u-boot</c> header.
-    /// <para>服务负载，含其 <c>u-boot</c> 头部。</para></param>
+    /// <param name="images">U-Boot image and the optional service components.
+    /// <para>U-Boot 镜像与可选的服务组件。</para></param>
     /// <param name="attempts">Reconnect attempts before the handoff fails; each attempt waits
     /// <c>serviceRetryDelay</c> first. <para>切换失败前的重连尝试次数；每次尝试先等待
     /// <c>serviceRetryDelay</c>。</para></param>
@@ -270,32 +341,42 @@ public sealed class SunxiFesHandoff
     /// <returns>The FES session the reconnect produced. <para>重连产生的 FES 会话。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="ubootImage"/> is empty or
-    /// <paramref name="attempts"/> is not positive. <para><paramref name="ubootImage"/> 为空或
-    /// <paramref name="attempts"/> 不是正数。</para></exception>
-    /// <exception cref="InvalidDataException">The image is not a <c>u-boot</c> image or is too short to carry the
-    /// work-mode field. <para>镜像不是 <c>u-boot</c> 镜像，或短于工作模式字段所在位置。</para></exception>
+    /// <exception cref="ArgumentException">The U-Boot image is empty or <paramref name="attempts"/> is not
+    /// positive. <para>U-Boot 镜像为空，或 <paramref name="attempts"/> 不是正数。</para></exception>
+    /// <exception cref="InvalidDataException">The U-Boot image is not a <c>u-boot</c> image, is too short to carry
+    /// the work-mode field, or a component exceeds its memory slot.
+    /// <para>U-Boot 镜像不是 <c>u-boot</c> 镜像、短于工作模式字段，或某个组件超出其内存槽位。</para></exception>
     /// <exception cref="TimeoutException">No attempt produced a device answering the FES handshake.
     /// <para>没有任何一次尝试得到应答 FES 握手的设备。</para></exception>
-    public async Task<SunxiFesSession> StartServiceAsync(SunxiFelSession session, ReadOnlyMemory<byte> ubootImage,
+    public async Task<SunxiFesSession> StartServiceAsync(SunxiFelSession session, SunxiServiceImages images,
         int attempts, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        if (ubootImage.IsEmpty)
+        if (images.Uboot.IsEmpty)
         {
-            throw new ArgumentException("The service payload is empty.", nameof(ubootImage));
+            throw new ArgumentException("The service payload is empty.", nameof(images));
         }
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(attempts);
-        var header = SunxiBootImageHeader.ReadUboot(ubootImage);
-        if (ubootImage.Length < WorkModeOffset + sizeof(uint))
+        var header = SunxiBootImageHeader.ReadUboot(images.Uboot);
+        if (images.Uboot.Length < WorkModeOffset + sizeof(uint))
         {
             throw new InvalidDataException(
                 $"A u-boot image carries the work mode at offset {WorkModeOffset} and must be at least "
                 + $"{WorkModeOffset + sizeof(uint)} bytes.");
         }
 
-        var image = ubootImage.ToArray();
+        var componentBase = checked(header.RunAddress + (uint)UbootSlotLength);
+        var systemConfigBase = checked(componentBase + (uint)DeviceTreeSlotLength);
+        var boardConfigBase = checked(systemConfigBase + (uint)SysConfigSlotLength);
+        await WriteComponentAsync(session, componentBase, images.DeviceTree, DeviceTreeSlotLength, "device tree",
+            cancellationToken).ConfigureAwait(false);
+        await WriteComponentAsync(session, systemConfigBase, images.SysConfig, SysConfigSlotLength,
+            "system configuration", cancellationToken).ConfigureAwait(false);
+        await WriteComponentAsync(session, boardConfigBase, images.BoardConfig, BoardConfigSlotLength,
+            "board configuration", cancellationToken).ConfigureAwait(false);
+
+        var image = images.Uboot.ToArray();
         BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(WorkModeOffset), UsbProductWorkMode);
         await session.WriteAsync(header.RunAddress, image, cancellationToken).ConfigureAwait(false);
         await ExecuteTolerantlyAsync(session, header.RunAddress, cancellationToken).ConfigureAwait(false);
@@ -317,6 +398,22 @@ public sealed class SunxiFesHandoff
 
         throw new TimeoutException(
             $"The device did not answer the FES handshake after {attempts} reconnect attempts.", lastFailure);
+    }
+
+    private static async Task WriteComponentAsync(SunxiFelSession session, uint address, ReadOnlyMemory<byte> data,
+        int slotLength, string name, CancellationToken cancellationToken)
+    {
+        if (data.IsEmpty)
+        {
+            return;
+        }
+
+        if (data.Length > slotLength)
+        {
+            throw new InvalidDataException($"The {name} is {data.Length} bytes, above its {slotLength}-byte slot.");
+        }
+
+        await session.WriteAsync(address, data, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
