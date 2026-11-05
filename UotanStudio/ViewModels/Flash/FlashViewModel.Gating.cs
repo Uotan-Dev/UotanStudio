@@ -8,16 +8,18 @@ namespace UotanStudio.ViewModels.Flash;
 /// <summary>
 /// Device awareness of the flash page: every control carries its own <see cref="FlashControlGate"/>, every enable
 /// decision goes through <see cref="SetControlEnabled"/>, and a control stays unusable until a device satisfying that
-/// control's own condition is selected.
+/// control's own condition is selected. A control the selected device does not offer is disabled, never removed, so the
+/// page keeps every action discoverable and only reports what the current device can do.
 /// <para>烧录页面的设备感知：每个控件自带 <see cref="FlashControlGate"/>，所有启用决定都经
-/// <see cref="SetControlEnabled"/> 作出，控件在选中满足其自身条件的设备之前保持不可用。</para>
+/// <see cref="SetControlEnabled"/> 作出，控件在选中满足其自身条件的设备之前保持不可用。所选设备不提供的控件只会被禁用而不会
+/// 被移除，因此页面仍保留每个动作入口，只表明当前设备能做什么。</para>
 /// </summary>
 /// <remarks>
 /// The page state stays authoritative for what it wants enabled; <see cref="RefreshDeviceUiGate"/> re-applies each
 /// control's own condition on top of that intent whenever the selected device changes, so a device swap neither leaves
-/// a hidden control enabled nor forgets what the page had enabled for the previous one.
+/// a disabled control enabled nor forgets what the page had enabled for the previous one.
 /// <para>页面状态仍然是“想要启用什么”的依据；选中设备变化时，<see cref="RefreshDeviceUiGate"/> 在该意图之上重新施加
-/// 每个控件自身的条件，因此换设备既不会留下被隐藏的可用控件，也不会丢掉页面对上一台设备的启用状态。</para>
+/// 每个控件自身的条件，因此换设备既不会留下被禁用的可用控件，也不会丢掉页面对上一台设备的启用状态。</para>
 /// </remarks>
 public sealed partial class FlashViewModel
 {
@@ -249,8 +251,9 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Writes one control's enable and, when its gate owns visibility, its visibility from the same snapshot.
-    /// <para>把一个控件的启用状态写入页面；门控声明了可见性时，用同一快照一并写入可见性。</para>
+    /// Writes one control's enable state; a control the selected device does not offer stays visible and only reports
+    /// itself unusable, so no device condition ever removes an entry from the page.
+    /// <para>写入一个控件的启用状态；所选设备不提供的控件保持可见并仅表明自身不可用，因此任何设备条件都不会把入口从页面上移除。</para>
     /// </summary>
     /// <param name="control">The control the gate belongs to. <para>门控所属的控件。</para></param>
     /// <param name="gate">The control's own gate, or <see langword="null"/> for an ungated control.
@@ -266,10 +269,6 @@ public sealed partial class FlashViewModel
         }
 
         control.IsEnabled = !(_busy && gate.BusyDisabled) && intent && gate.IsOffered(context);
-        if (gate.IsVisible is { } isVisible)
-        {
-            control.IsVisible = isVisible(context);
-        }
     }
 
     /// <summary>

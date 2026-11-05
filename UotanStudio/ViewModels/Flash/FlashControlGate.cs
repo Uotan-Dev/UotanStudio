@@ -20,19 +20,20 @@ internal readonly record struct FlashGateContext(
 /// <remarks>
 /// Each factory below states one policy in the place the control is declared, so a control's requirement travels with
 /// the control rather than with a name-keyed table. The condition receives only the device snapshot, which keeps it
-/// independent of the page state that owns the enable intent.
+/// independent of the page state that owns the enable intent. A gate never hides its control: a device that does not
+/// offer an action leaves that action visible and disabled, so every entry stays discoverable and only the section a
+/// device actually owns reports usable controls.
 /// <para>下面的每个工厂都在声明控件的地方给出对应策略，使控件的要求随控件本身而不是随按名称索引的表走。条件只接收设备快照，
-/// 因此与持有启用意图的页面状态保持独立。</para>
+/// 因此与持有启用意图的页面状态保持独立。门控从不隐藏控件：设备不提供某个动作时，该动作保持可见并置灰，使每个入口都能被
+/// 发现，只有设备真正拥有的分类才呈现可用控件。</para>
 /// </remarks>
 internal sealed class FlashControlGate
 {
-    private FlashControlGate(string name, Func<FlashGateContext, bool> isOffered, bool busyDisabled,
-        Func<FlashGateContext, bool>? isVisible = null)
+    private FlashControlGate(string name, Func<FlashGateContext, bool> isOffered, bool busyDisabled)
     {
         Name = name;
         IsOffered = isOffered;
         BusyDisabled = busyDisabled;
-        IsVisible = isVisible;
     }
 
     /// <summary>Name of the XAML control this gate belongs to. <para>该门控所属的 XAML 控件名。</para></summary>
@@ -43,13 +44,6 @@ internal sealed class FlashControlGate
 
     /// <summary>Whether the page operation turns this control off. <para>页面操作运行期间是否关闭该控件。</para></summary>
     internal bool BusyDisabled { get; }
-
-    /// <summary>
-    /// The visibility condition, when the control should disappear rather than stay disabled; <see langword="null"/>
-    /// keeps view-owned visibility untouched.
-    /// <para>控件应隐藏而不是仅置灰时的可见性条件；<see langword="null"/> 表示不改动视图自身的可见性。</para>
-    /// </summary>
-    internal Func<FlashGateContext, bool>? IsVisible { get; }
 
     /// <summary>
     /// The shared flash action: every selected device offers it except HDC and Allwinner endpoints, which have no image
@@ -153,34 +147,10 @@ internal sealed class FlashControlGate
         busyDisabled: true);
 
     /// <summary>
-    /// A protocol section header: the header stays usable, and it disappears once a device of another protocol is
-    /// selected; with no device selected it stays visible so the section can be prepared before plugging one in.
-    /// <para>协议分类表头：表头始终可用，并在选中其他协议设备后隐藏；未选中设备时保持可见，使分类可以在接入设备前先行准备。</para>
+    /// A protocol section header: the header names a section the page can always show, so it stays present and usable for
+    /// every selected device and only the section body reports whether the device offers that protocol's actions.
+    /// <para>协议分类表头：表头代表页面始终可以展示的分类，因此对任何已选设备都保持可见与可用，只有分类内容才表明设备是否
+    /// 提供该协议的动作。</para>
     /// </summary>
-    internal static FlashControlGate SectionHeader(string name, FlashDeviceMode owner) => new(name,
-        static _ => true,
-        busyDisabled: false,
-        isVisible: context => context.Mode == FlashDeviceMode.None || context.Mode == owner);
-
-    /// <summary>
-    /// The image-operations section header: visible while no device is selected and for protocols without a restricted
-    /// kind, hidden for ADB, fastboot, HDC and Allwinner endpoints whose image plan is unavailable.
-    /// <para>镜像操作分类表头：未选中设备与没有受限种类的协议下可见，对镜像计划不可用的 ADB、fastboot、HDC 与全志端点隐藏。</para>
-    /// </summary>
-    internal static FlashControlGate ImageSectionHeader(string name) => new(name,
-        static _ => true,
-        busyDisabled: false,
-        isVisible: static context => context.Mode == FlashDeviceMode.None ||
-            context.Kind == FlashDeviceKind.Unknown);
-
-    /// <summary>
-    /// The SpacemiT section header: visible while no device is selected and for the SpacemiT gadget itself, hidden for
-    /// every other endpoint because no other device answers that package's script.
-    /// <para>进迭时空分类表头：未选中设备与进迭时空 gadget 本身时可见，其他端点隐藏，因为其他设备不应答该包的脚本。</para>
-    /// </summary>
-    internal static FlashControlGate SpacemiTSectionHeader(string name) => new(name,
-        static _ => true,
-        busyDisabled: false,
-        isVisible: static context => context.Mode == FlashDeviceMode.None ||
-            (context.Kind == FlashDeviceKind.Fastboot && context.IsSpacemiTFastboot));
+    internal static FlashControlGate SectionHeader(string name) => new(name, static _ => true, busyDisabled: false);
 }

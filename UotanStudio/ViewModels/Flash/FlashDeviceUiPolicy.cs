@@ -69,8 +69,8 @@ internal enum FlashDeviceKind
     /// </summary>
     Hdc,
 
-    /// <summary>An Allwinner endpoint; only the Sunxi section is offered because no image plan drives the shared
-    /// flash actions yet. <para>全志端点；由于尚无镜像计划驱动通用烧录动作，只提供全志分类。</para>
+    /// <summary>An Allwinner endpoint; only the Sunxi section is offered because its package flash path is
+    /// protocol-specific. <para>全志端点；其整包烧录路径由该协议专用，因此只提供全志分类。</para>
     /// </summary>
     Sunxi
 }
