@@ -4,7 +4,7 @@
 
 ## 边界
 
-- 本项目是纯媒体库：csproj 没有任何 `PackageReference` 或 `ProjectReference`，不得引用 `UotanStudio.Comm`、`UotanStudio.Firmware`、`UotanStudio.Projects`、宿主 `UotanStudio` 或 Avalonia。平台后端全部在本项目内实现。
+- 本项目是纯媒体库：csproj 没有任何 `PackageReference` 或 `ProjectReference`，不得引用 `UotanStudio.Comm`、`UotanStudio.Firmware`、`UotanStudio.Pipeline`、宿主 `UotanStudio` 或 Avalonia。平台后端全部在本项目内实现。
 - 目录职责固定为 `Decoding/`、`Acceleration/Linux/`、`GStreamer/`、`Audio/`、`Native/Linux/`、`Encoding/`；新代码按现有职责落位，不造转发层。
 - 本项目启用 `AllowUnsafeBlocks`、`TreatWarningsAsErrors` 与 `GenerateDocumentationFile`；公共类型和成员缺中英双语 XML 注释会直接构建失败。
 - “零依赖”与“零 Comm 依赖”没有架构测试守护，只能靠评审；改 csproj 时不要为了省事引入新的项目或 NuGet 引用。

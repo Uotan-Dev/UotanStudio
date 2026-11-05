@@ -4,7 +4,7 @@
 
 ## 边界
 
-- 本项目只引用 `UotanStudio.Firmware`、`UotanStudio.Comm`、`UotanStudio.Delivery`、`UotanStudio.Projects` 与 `ModelContextProtocol`；不得引用 Avalonia 宿主 `UotanStudio` 或 `UotanStudio.Desktop`。依赖方向是宿主/Desktop 指向本项目。
+- 本项目只引用 `UotanStudio.Firmware`、`UotanStudio.Comm`、`UotanStudio.Pipeline` 与 `ModelContextProtocol`；不得引用 Avalonia 宿主 `UotanStudio` 或 `UotanStudio.Desktop`。依赖方向是宿主/Desktop 指向本项目。
 - 设备能力只经 `IDeviceManagerGateway`；无桌面宿主时 `HeadlessDeviceManagerGateway` 使用 Comm 的 `DeviceController`。不得在本项目自行打开 socket、串口或 USB 句柄。
 - 启动分发在 `UotanStudio.Desktop/Program.cs`：`--mcp-headless` 走 stdio 并在启动时注册固件格式处理器，`--mcp` 走桌面伴随模式；`McpServerConfig.Parse` 读取 `--mcp-root`（缺省为进程当前目录）与 `--allow-flash`。
 

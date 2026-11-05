@@ -38,11 +38,10 @@ flowchart TD
  Assets["UotanStudio.Assets<br/>内嵌二进制资源 · 清单 · 准备与抽取"]
  Firmware["UotanStudio.Firmware<br/>固件格式 · 文件系统 · 签名"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>魔术号表生成"]
- Projects["UotanStudio.Projects<br/>项目文件 · 解决方案快照"]
+ Pipeline["UotanStudio.Pipeline<br/>工程会话 · 持久化 · 交付输出"]
  Media["UotanStudio.Media<br/>音视频解码与呈现"]
  Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL<br/>USB · TCP · UDP · 串口"]
  Mirroring["UotanStudio.Mirroring<br/>scrcpy 投屏协议与会话"]
- Delivery["UotanStudio.Delivery<br/>交付计划 · Super / Payload / Recovery · 脚本 · ZIP"]
  Mcp["UotanStudio.Mcp<br/>内嵌 MCP 服务器"]
  Host["UotanStudio<br/>Avalonia 宿主：界面 · ViewModel · 应用服务"]
  Desktop["UotanStudio.Desktop<br/>桌面入口 · NativeAOT 发布"]
@@ -56,33 +55,31 @@ flowchart TD
  Firmware --> Assets
  Comm --> Firmware
  Comm --> Assets
- Delivery --> Firmware
- Delivery --> Assets
+ Pipeline --> Firmware
+ Pipeline --> Assets
  Mirroring --> Comm
  Mirroring --> Assets
  Mcp --> Firmware
  Mcp --> Comm
- Mcp --> Delivery
- Mcp --> Projects
+ Mcp --> Pipeline
  Host --> Firmware
  Host --> Comm
  Host --> Assets
- Host --> Delivery
+ Host --> Pipeline
  Host --> Mirroring
  Host --> Media
- Host --> Projects
  Host --> Mcp
  Desktop --> Host
  Desktop --> Mcp
  Tests -.-> Host
 ```
 
-- `UotanStudio.Hash` 与 `UotanStudio.Net` 是最底层叶子；`UotanStudio.Compress` 只依赖 `Hash` 并提供通用压缩与 ZIP/容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Projects` 依赖 `Hash` 与 `Compress`，`UotanStudio.Media` 不依赖其他业务项目。
-- `UotanStudio.Assets` 只依赖 `Hash` 与 `Compress`，是全部随包二进制资源的唯一存放点（字体、OpenHarmony 采集库、厂商驱动包、交付更新器、magic 规则表）；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主经 `AssetCatalog`/`AssetStore` 读取，任何项目都不自带内嵌资源。
+- `UotanStudio.Hash` 与 `UotanStudio.Net` 是最底层叶子；`UotanStudio.Compress` 只依赖 `Hash` 并提供通用压缩与 ZIP/容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Media` 不依赖其他业务项目。
+- `UotanStudio.Assets` 只依赖 `Hash` 与 `Compress`，是全部随包二进制资源的唯一存放点（字体、OpenHarmony 采集库、厂商驱动包、交付更新器、magic 规则表）；`Firmware`、`Comm`、`Mirroring`、`Pipeline` 与宿主经 `AssetCatalog`/`AssetStore` 读取，任何项目都不自带内嵌资源。
 - 厂商 Windows 驱动以 `drivers/<packageId>` 资源包随包，设置页的驱动安装器经 `AssetStore` 物化到临时目录后暂存到驱动仓库。
 - 测试宿主实际引用除 `UotanStudio.Desktop` 之外的全部项目，图中只画出一条代表性依赖。
 - 全部设备读写（USB 句柄、套接字、串口、adb/HDC server 协议）由 `UotanStudio.Comm` 持有，宿主只消费 `DeviceController`/`DeviceLease` 与协议客户端。
-- `UotanStudio.Delivery` 可引用固件层，但不得反向引用宿主 UI、项目服务或密钥库；签名能力通过 `IDeliverySigningKeyProvider` 注入。
+- `UotanStudio.Pipeline` 可引用固件层，但不得反向引用宿主 UI 或密钥库；签名能力通过 `IDeliverySigningKeyProvider` 注入。
 - `UotanStudio.Mirroring` 只引用 `UotanStudio.Comm`，`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。
 - `UotanStudio.Net` 是下载、GitHub 镜像与 Release/版本查询的叶子库，不引用任何其他项目。
 - `UotanStudio.Benchmarks` 是 BenchmarkDotNet 控制台程序，已在 `.slnx` 与 CI 构建门内；基准运行仍需单独 Release 执行。

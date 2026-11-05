@@ -38,11 +38,10 @@ flowchart TD
  Assets["UotanStudio.Assets<br/>Bundled binaries · manifest · prepare and extract"]
  Firmware["UotanStudio.Firmware<br/>Firmware formats · file systems · signing"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>Magic number table generation"]
- Projects["UotanStudio.Projects<br/>Project files · solution snapshots"]
+ Pipeline["UotanStudio.Pipeline<br/>Project sessions · persistence · delivery output"]
  Media["UotanStudio.Media<br/>Audio/video decoding and presentation"]
  Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL<br/>USB · TCP · UDP · serial"]
  Mirroring["UotanStudio.Mirroring<br/>scrcpy protocol and sessions"]
- Delivery["UotanStudio.Delivery<br/>Delivery plan · Super / Payload / Recovery · scripts · ZIP"]
  Mcp["UotanStudio.Mcp<br/>Embedded MCP server"]
  Host["UotanStudio<br/>Avalonia host: views · view models · app services"]
  Desktop["UotanStudio.Desktop<br/>Desktop entry point · NativeAOT publish"]
@@ -56,33 +55,31 @@ flowchart TD
  Firmware --> Assets
  Comm --> Firmware
  Comm --> Assets
- Delivery --> Firmware
- Delivery --> Assets
+ Pipeline --> Firmware
+ Pipeline --> Assets
  Mirroring --> Comm
  Mirroring --> Assets
  Mcp --> Firmware
  Mcp --> Comm
- Mcp --> Delivery
- Mcp --> Projects
+ Mcp --> Pipeline
  Host --> Firmware
  Host --> Comm
  Host --> Assets
- Host --> Delivery
+ Host --> Pipeline
  Host --> Mirroring
  Host --> Media
- Host --> Projects
  Host --> Mcp
  Desktop --> Host
  Desktop --> Mcp
  Tests -.-> Host
 ```
 
-- `UotanStudio.Hash` and `UotanStudio.Net` are the lowest leaves; `UotanStudio.Compress` depends only on `Hash` and provides general-purpose compression plus ZIP/container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Projects` depends on `Hash` and `Compress`; `UotanStudio.Media` depends on no other business project.
-- `UotanStudio.Assets` depends only on `Hash` and `Compress` and is the single home of every shipped binary asset (fonts, OpenHarmony capture libraries, vendor driver packages, the delivery updater and the magic rule table); `Firmware`, `Comm`, `Mirroring`, `Delivery` and the host read them through `AssetCatalog`/`AssetStore`, and no project embeds resources of its own.
+- `UotanStudio.Hash` and `UotanStudio.Net` are the lowest leaves; `UotanStudio.Compress` depends only on `Hash` and provides general-purpose compression plus ZIP/container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Media` depends on no other business project.
+- `UotanStudio.Assets` depends only on `Hash` and `Compress` and is the single home of every shipped binary asset (fonts, OpenHarmony capture libraries, vendor driver packages, the delivery updater and the magic rule table); `Firmware`, `Comm`, `Mirroring`, `Pipeline` and the host read them through `AssetCatalog`/`AssetStore`, and no project embeds resources of its own.
 - Vendor Windows drivers ship as `drivers/<packageId>` bundles; the settings page driver installer materializes them through `AssetStore` and stages them into the driver store.
 - The test host really references every project except `UotanStudio.Desktop`; the diagram draws one representative dashed edge for it.
 - `UotanStudio.Comm` owns every device access path (USB handles, sockets, serial ports, adb/HDC server protocols); the host only consumes `DeviceController`/`DeviceLease` and the protocol clients.
-- `UotanStudio.Delivery` may use the firmware layer but never references host UI, project services or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
+- `UotanStudio.Pipeline` may use the firmware layer but never references host UI or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
 - `UotanStudio.Mirroring` references only `UotanStudio.Comm`, while `UotanStudio.Media` keeps zero Comm dependencies and consumes frames through the decoding factory.
 - `UotanStudio.Net` is the leaf library for downloads, GitHub mirrors and release/version queries; it references no other project.
 - `UotanStudio.Benchmarks` is a BenchmarkDotNet console app included in the `.slnx` build and CI gates; benchmarks still run separately in Release.

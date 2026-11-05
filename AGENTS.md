@@ -22,8 +22,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Comm` | ADB/HDC/Fastboot/EDL/MTK/RKDL 与 USB/TCP/UDP/串口 | [AGENTS.md](UotanStudio.Comm/AGENTS.md) |
 | `UotanStudio.Mirroring` | scrcpy 投屏协议与会话管理 | [AGENTS.md](UotanStudio.Mirroring/AGENTS.md) |
 | `UotanStudio.Media` | 音视频解码、投屏呈现与平台媒体后端 | [AGENTS.md](UotanStudio.Media/AGENTS.md) |
-| `UotanStudio.Projects` | 工程/解决方案生命周期与持久化 | [AGENTS.md](UotanStudio.Projects/AGENTS.md) |
-| `UotanStudio.Delivery` | 交付计划校验与 Super/Payload/Recovery 输出 | [AGENTS.md](UotanStudio.Delivery/AGENTS.md) |
+| `UotanStudio.Pipeline` | 工程/解决方案生命周期与持久化；交付计划校验与 Super/Payload/Recovery 输出 | [AGENTS.md](UotanStudio.Pipeline/AGENTS.md) |
 | `UotanStudio.Mcp` | 内嵌 MCP 服务器与工具目录 | [AGENTS.md](UotanStudio.Mcp/AGENTS.md) |
 | `UotanStudio` | Avalonia 宿主：界面、ViewModel、项目会话与应用服务 | [AGENTS.md](UotanStudio/AGENTS.md) |
 | `UotanStudio.Desktop` | 桌面入口、平台启动与 NativeAOT 发布 | [AGENTS.md](UotanStudio.Desktop/AGENTS.md) |
@@ -36,8 +35,8 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 ## 全局不变量
 
-- 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`DD` 只引用 `Compress` 与 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
-- `Assets` 不引用 `Net`，也不做网络 I/O；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主可引用 `Assets`。
+- 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`DD` 只引用 `Compress` 与 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Pipeline` 引用 `Assets`、`Compress`、`Firmware`、`Hash` 与 `Net`，不引用宿主 UI 或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
+- `Assets` 不引用 `Net`，也不做网络 I/O；`Firmware`、`Comm`、`Mirroring`、`Pipeline` 与宿主可引用 `Assets`。
 - 校验和与摘要统一经 `UotanStudio.Hash` 计算，通用压缩统一经 `UotanStudio.Compress` 门面（`CompressionService`/`CompressionFile`），ZIP 容器统一经 `Zip/ZipContainer`：底层库之外不得构造 BCL 压缩流、不得使用 `System.IO.Hashing` 或 MD5/SHA 摘要入口、不得自带 CRC 多项式表。保留例外集中登记在 `HashBoundaryGuardTests` 与 `CompressionImplementationBoundaryTests` 的允许列表和 `UotanStudio.Compress/README.md` 的例外一节；格式域压缩（文件系统簇、boot 组件、OTA delta、厂商容器）留在所属固件上下文，不收进门面。
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。操作系统块设备（`\\.\PhysicalDriveN`、`/dev/*`）的整盘镜像烧录归 `UotanStudio.DD`，不经过 USB/串口协议层。
 - Apple 相关协议（usbmuxd、lockdownd、AFC、syslog 中继与受信隧道）不接设备扫描：`DeviceControllerFactory` 只注册 USB/adb/HDC 发现源，扫描不探 usbmuxd 守护进程、不生成 usbmuxd 端点，`CommDeviceTransportOpener` 也不识别 usbmuxd 路由。不要为扫描恢复 usbmuxd 探针、端点映射或新增 Apple 发现源。

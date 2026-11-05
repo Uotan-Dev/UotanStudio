@@ -1,13 +1,13 @@
-# UotanStudio.Projects
+# UotanStudio.Pipeline
 
-UotanStudio 工程／解决方案生命周期类库，面向 .NET 10，启用 NativeAOT 兼容分析。只引用 `UotanStudio.Hash` 与 `UotanStudio.Compress`，不依赖 Avalonia、Dock、Nodify、固件处理器及桌面全局状态。
+工程／解决方案生命周期与交付产出类库，面向 .NET 10，启用 NativeAOT 兼容分析。引用 `UotanStudio.Hash`、`UotanStudio.Compress`、`UotanStudio.Assets`、`UotanStudio.Firmware` 与 `UotanStudio.Net`，不依赖 Avalonia、Dock、Nodify、Comm 或桌面全局状态。
 
-模型与服务使用 `UotanStudio.Projects` 命名空间，程序集为同名 `UotanStudio.Projects`。JSON 字段、`.uotan`／`.uotanfw`／`.uotannode` 格式及目录约定构成当前持久化契约。本项目不提供类型转发，调用方直接引用本库。
+命名空间按源码分组：`Projects/` 承载工程会话、`.uotan`／`.uotanfw`／`.uotannode` 持久化、方案快照、Scheme 与 VisualPlugins（`UotanStudio.Pipeline.Projects`，含 `.Schemes` 与 `.Interactions`）；`Delivery/` 承载交付计划校验与 Super／Payload／Recovery、DAT/BR、脚本、ZIP 包、校验和与交付工具准备（`UotanStudio.Pipeline.Delivery`）。程序集为 `UotanStudio.Pipeline`，不提供类型转发，调用方直接引用本库。
 
-## 独立使用
+## 独立使用（工程部分）
 
 ```csharp
-using UotanStudio.Projects;
+using UotanStudio.Pipeline.Projects;
 
 var session = new ProjectSession();
 await session.CreateNewSolutionAsync(solutionPath, cancellationToken);
@@ -55,10 +55,6 @@ await session.CloseAsync(cancellationToken: cancellationToken);
 - 历史数据可在无执行工厂时加载和重存；此时不虚构可执行撤销动作。宿主工厂只负责重建动作。
 - 不提供跨进程锁、多桌面解决方案并行、崩溃恢复、物理工程目录重命名／永久删除或对外发布 SDK。桌面显式绑定单一 Shell 并校验释放归属；独立会话隔离不代表应用中的其他单例已经支持多窗口。
 
-## 验证
-
-`UotanStudio.Tests/Projects` 验证独立生命周期、另存为边界、取消、历史格式读取和路径身份，与桌面兼容测试统一由 `UotanStudio.Tests` 运行。测试使用独立会话和纯数据工作区，不初始化 Avalonia。真实 Avalonia 窗口验证见 `tools/ProjectLifecycleSmoke`。
-
 ## 边界与操作契约
 
 - `session.State` 返回只读目录快照。`CurrentProjectPath` 从上下文读取，其 `internal` setter 只作为兼容通道；宿主通过生命周期方法变更路径。目录解析完成后才发布字段，失败保留先前状态。
@@ -67,3 +63,14 @@ await session.CloseAsync(cancellationToken: cancellationToken);
 - 完整工程包包含顶层 `.uotan` 和同名数据目录。导入只接受不存在的目标目录，在旁边展开并验证后发布；中央目录预检上限 32 MiB、条目上限 100000、名称总量 8 Mi 字符、展开总量 64 GiB，拒绝越界／重复路径和链接。缺失或位于数据根外的子项目不能打包。工程包不携带 `.git`、`.deleted` 和源机器的可执行撤销历史；导入后历史清空。外部文档内容不保证包含在工程包内。
 - `ProjectHistory.RecordAsync`、`UndoAsync`、`RedoAsync` 和 `ReconstructAsyncOperation` 支持可等待动作；成功后才移动历史栈，异常或取消保留原栈。动作执行期间拒绝历史变更；历史对象由宿主的同一同步上下文访问，不提供任意线程并发保证。优先使用会话的撤销／重做入口，以共用项目操作门。同步 API 同样存在，遇到异步条目必须使用异步入口。
 - 本库的服务能力只经桌面 `ProjectOperationsService` 兼容门面暴露，不新增菜单项，也不改变编辑菜单的撤销目标。
+
+## 交付（Delivery 部分）
+
+- 交付策略与校验保留在本库：桌面视图只采集 `DeliveryPlan`、调用 `Delivery/Build/DeliveryService.cs` 并呈现进度；宿主通过 `UotanStudio/Services/Delivery/` 的小适配器提供界面与密钥关注点，签名私钥经 `IDeliverySigningKeyProvider` 加载。交付不依赖桌面应用、UI 或密钥库。
+- 源码分组：`Delivery/Models/` 计划、来源、分组与签名契约；`Delivery/Build/` 输出、打包、Payload、Super、Recovery、校验与容量估算；`Delivery/Scripts/` 脚本生成器及其 preflight/text 分部；`Delivery/Tools/` 交付工具准备与清理。
+- 固定版本的 arm64 原生 `update-binary` 回退作为 `UotanStudio.Assets` 的 `delivery` 资源包随包（`UotanStudio.Assets/Assets/delivery/`）。A/B `ota.zip` 含 `payload.bin`、`payload_properties.txt` 与 Android OTA 元数据，没有设备相关的 `update-binary`：TWRP 将其识别为 A/B OTA 并走自带的 update-engine 路径，安装要求 TWRP 构建支持 A/B OTA 且 payload 被目标设备接受；整包 ZIP 签名只有当公钥位于该 TWRP 构建的 `/res/keys` 时才被接受，`META-INF/com/android/otacert` 不为 TWRP 增加信任。
+- 文件名刻意保持短：`UotanStudio.Pipeline.Delivery` 命名空间已提供 `Delivery` 语境。
+
+## 验证
+
+`UotanStudio.Tests/Projects` 验证独立生命周期、另存为边界、取消、历史格式读取和路径身份；`UotanStudio.Tests/Delivery` 验证交付计划校验、输出与脚本。与桌面兼容测试统一由 `UotanStudio.Tests` 运行；测试使用独立会话和纯数据工作区，不初始化 Avalonia。真实 Avalonia 窗口验证属于宿主人工验证。

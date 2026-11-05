@@ -1,6 +1,6 @@
 # UotanStudio 宿主项目指令
 
-在本目录内改界面、ViewModel、项目会话或应用服务前读这份文件。仓库级规则、构建命令与 Git 纪律见根 `AGENTS.md`；交付后端规则见 `UotanStudio.Delivery/AGENTS.md`，测试写法见 `UotanStudio.Tests/AGENTS.md`。
+在本目录内改界面、ViewModel、项目会话或应用服务前读这份文件。仓库级规则、构建命令与 Git 纪律见根 `AGENTS.md`；工程与交付后端规则见 `UotanStudio.Pipeline/AGENTS.md`，测试写法见 `UotanStudio.Tests/AGENTS.md`。
 
 ## 边界与组合
 
@@ -11,8 +11,8 @@
 - 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常；ViewModel 层 async void 方法若方法体全程自捕获异常并送入统一日志，亦属合法形态。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
 - 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。`Register` 是应用级单例的完整目录，新增应用级单例要同时补注册，否则 `ServiceHub` 解析不到它。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities`、无工厂的 `AddSingleton<T>()` 与开放泛型注册：宿主视图模型的内部构造函数与公共无参构造函数并存，类型映射会静默选中无参重载而丢掉已注册依赖；开放泛型在 NativeAOT 下到运行时才失败且没有编译诊断。`BuildProvider` 仅在 Debug 下开 `ValidateOnBuild`，它只校验描述符级映射，工厂注册的依赖完整性由 `ServiceRegistrationTests.Register_EveryRegistration_Resolves` 覆盖，注册形态由 `DependencyInjectionBoundaryGuardTests` 冻结；发布验证仍按根 `AGENTS.md` 的命令执行。
 - 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回惰性默认实例；不启动容器的测试可直接运行，注册工厂不会递归。
-- USB 树的「启用接管」与设置页的厂商驱动安装都以管理员令牌执行：`Services/Devices/UsbDriverConfigService` 与 `Services/Devices/DriverPackageService` 在未提权时用 `runas` 重启自身进入 `--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall` 助手模式（参数与结果文件格式见 `UsbDriverElevatedCommand`），等待子进程并读回状态；UAC 被取消或宿主无法重启自身时返回 `ElevationRequired`，界面沿用原有提示。
-- USB 树只做接管，厂商驱动包只在设置页安装：接管走 Comm 的自签 WinUSB 包（设备级 INF、目录签名、证书写入 `LocalMachine` 的 Root 与 TrustedPublisher），宿主不生成证书也不持有私钥；取消接管按绑定的 provider 校验后卸载包并删除证书。任何一侧都不要复用另一侧的提权入口。
+- USB 树的「启用接管」「安装驱动」等驱动操作都以管理员令牌执行：`Services/Devices/UsbDriverConfigService` 在未提权时用 `runas` 重启自身进入 `--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall` 助手模式（参数与结果文件格式见 `UsbDriverElevatedCommand`），等待子进程并读回状态；UAC 被取消或宿主无法重启自身时返回 `ElevationRequired`，界面沿用原有提示。
+- 厂商驱动包只在 USB 树安装：行内「安装驱动」按钮由 `DriverPackageCatalog.FindMatch` 按设备硬件/兼容 ID 与包内 INF 声明的 ID 相交匹配，且仅在设备尚未绑定驱动时显示；安装走 Comm 的厂商包暂存入口，只对无驱动设备生效，不做危险确认。接管走 Comm 的自签 WinUSB 包（设备级 INF、目录签名、证书写入 `LocalMachine` 的 Root 与 TrustedPublisher），宿主不生成证书也不持有私钥；取消接管按绑定的 provider 校验后卸载包并删除证书。设置页不提供驱动安装界面，也不要把厂商包安装或移除加回设置页。
 - `ShellComposition.CreateAsync` 在 `App.Services` 可用时从容器解析 `MenuViewModel`/`NodeEditorViewModel`/`SettingsViewModel`/`WorkspaceViewModel`，容器不可用时按手工构造装配；`ShellComposition.Create(ProjectOperationsService)` 仍按传入服务显式装配，供测试与基准使用。
 
 ## 分层与依赖

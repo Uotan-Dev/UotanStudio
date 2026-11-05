@@ -4,7 +4,7 @@
 
 ## 边界
 
-- 命名空间是 `UotanStudio.Mirroring`；本项目只引用 `UotanStudio.Comm` 与 `UotanStudio.Assets`，不得引用 `UotanStudio.Media`、`UotanStudio.Firmware`、`UotanStudio.Projects` 或宿主 `UotanStudio`。scrcpy 不属于 Comm 协议层，也不得反向并入 Comm。
+- 命名空间是 `UotanStudio.Mirroring`；本项目只引用 `UotanStudio.Comm` 与 `UotanStudio.Assets`，不得引用 `UotanStudio.Media`、`UotanStudio.Firmware`、`UotanStudio.Pipeline` 或宿主 `UotanStudio`。scrcpy 不属于 Comm 协议层，也不得反向并入 Comm。
 - 设备 I/O 全部经 Comm 契约：`IAdbDeviceSession`（`OpenStream`/`OpenServiceStream`/`CreateSyncClient`）、`AdbServerServices`、`IHdcDeviceSession`、`DeviceLease`。本层不得自建 socket、USB 句柄或启动 adb/hdc 进程。
 - ADB server 复用由宿主决定：`DeviceMonitorService.StartMirror` 在目标由 server 管理时复用已运行的 server，不新起 server；否则使用原生 USB 会话。两种来源分别对应 `MirrorSessionFacade.StartScrcpyOverAdbServer` 与 `StartScrcpyOverUsbSession`，`ScrcpyClient` 只是内部实现。
 - server jar 的获取、长度与 SHA-256 校验、暂存后原子发布、缓存摘要复验与随包回退都在宿主 `ScrcpyServerService`；本层只接收本地路径并把 jar 推到 `/data/local/tmp/scrcpy-server.jar`。
