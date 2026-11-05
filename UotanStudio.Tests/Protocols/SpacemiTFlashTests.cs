@@ -923,6 +923,155 @@ public sealed class SpacemiTFlashTests : IDisposable
         ReEnumerateSettleMs = 0,
     };
 
+    [Fact]
+    public void SendCommand_ZeroByteWrite_SilentDeviceResetsAndRewritesOnce()
+    {
+        var transport = new ZeroWriteTransport(new Dictionary<string, string>())
+        {
+            RefuseAlways = true,
+            SilentWhenRefused = true,
+        };
+        using var session = new FastbootSession(transport, timeoutMs: 50);
+
+        var failure = Assert.Throws<FastbootException>(() => session.ExecuteCommand("getvar:version"));
+
+        Assert.Equal(2, transport.Commands.Count);
+        Assert.All(transport.Commands, command => Assert.Equal("getvar:version", command));
+        Assert.Equal(1, transport.ResetCount);
+        Assert.Contains("no byte", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("2 attempt(s)", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExecuteCommand_ZeroByteWriteWithDeliveredReply_ReturnsThatReplyWithoutRewriting()
+    {
+        var transport = new ZeroWriteTransport(new Dictionary<string, string>
+        {
+            ["getvar:version"] = "OKAY1.0",
+        })
+        {
+            RefuseCount = 1,
+        };
+        using var session = new FastbootSession(transport, timeoutMs: 50);
+
+        var response = session.ExecuteCommand("getvar:version");
+
+        Assert.Equal(FastbootResponseState.Success, response.State);
+        Assert.Equal("1.0", response.Info);
+        Assert.Single(transport.Commands);
+        Assert.Single(transport.Refused);
+        Assert.Equal(0, transport.ResetCount);
+    }
+
+    [Fact]
+    public void ExecuteCommand_ZeroByteWriteThenSilentProbe_RewritesAndSucceeds()
+    {
+        var transport = new ZeroWriteTransport(new Dictionary<string, string>
+        {
+            ["getvar:product"] = "OKAYorangepi-rv2",
+        })
+        {
+            RefuseCount = 1,
+            SilentWhenRefused = true,
+        };
+        using var session = new FastbootSession(transport, timeoutMs: 50);
+
+        var response = session.ExecuteCommand("getvar:product");
+
+        Assert.Equal(FastbootResponseState.Success, response.State);
+        Assert.Equal("orangepi-rv2", response.Info);
+        Assert.Equal(2, transport.Commands.Count);
+        Assert.Equal(1, transport.ResetCount);
+    }
+
+    [Fact]
+    public void StageZeroByteDownloadCommand_RecoversAndStagesPayload()
+    {
+        File.WriteAllText(Path.Combine(_root, "fastboot.yaml"), """
+        version: 1.0
+        actions:
+          - stage:
+              file: 'factory/FSBL.bin'
+              retry: 2
+        """);
+        Directory.CreateDirectory(Path.Combine(_root, "factory"));
+        var fsbl = Encoding.ASCII.GetBytes("FSBL-PAYLOAD");
+        File.WriteAllBytes(Path.Combine(_root, "factory", "FSBL.bin"), fsbl);
+
+        var transport = new ZeroWriteTransport(new Dictionary<string, string>
+        {
+            ["getvar:max-download-size"] = "OKAY0x00100000",
+        })
+        {
+            RefuseCount = 1,
+            SilentWhenRefused = true,
+        };
+        var session = new FastbootSession(transport, timeoutMs: 50);
+        new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), ConfirmedOptions()).Execute(
+            session, _ => session, cancellationToken: TestContext.Current.CancellationToken);
+
+        var download = Assert.Single(transport.Downloads);
+        Assert.Equal(fsbl, download);
+        Assert.Contains(transport.Commands, command => command.StartsWith("download:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SendCommand_PartialWrite_IsNeverReIssued()
+    {
+        var partial = new PartialCommandTransport(accepted: 5);
+        using var session = new FastbootSession(partial, timeoutMs: 50);
+
+        var failure = Assert.Throws<FastbootException>(() => session.SendCommand("download:0002d460"));
+
+        Assert.Equal(1, partial.WriteCount);
+        Assert.Equal(0, partial.ResetCount);
+        Assert.Contains("Short write: 5/17", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Transport that accepts a fixed prefix of every command write and reports it as the write result,
+    /// which is how a partial bulk transfer reaches the protocol layer.
+    /// <para>每次命令写入只接受固定前缀并以该数量作为写入结果，模拟部分完成的批量传输到达协议层的方式。</para>
+    /// </summary>
+    private sealed class PartialCommandTransport(int accepted) : ICommTransport
+    {
+        public int WriteCount { get; private set; }
+
+        public int ResetCount { get; private set; }
+
+        public bool IsConnected => true;
+
+        public void Dispose()
+        {
+        }
+
+        public void Connect()
+        {
+        }
+
+        public void Disconnect()
+        {
+        }
+
+        public void Reset() => ResetCount++;
+
+        public long Write(byte[] data, int offset, int length, int timeoutMs)
+        {
+            WriteCount++;
+            return Math.Min(accepted, length);
+        }
+
+        public int Read(byte[] buffer, int offset, int length, int timeoutMs) => 0;
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default) =>
+            Task.FromResult(0);
+
+        public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Write(data, offset, length, timeoutMs));
+
+        public Stream GetStream() => throw new NotSupportedException();
+    }
+
     private sealed class ThrowingTransport : ICommTransport
     {
         public bool IsConnected => false;
@@ -1019,6 +1168,129 @@ public sealed class SpacemiTFlashTests : IDisposable
             }
 
             return count;
+        }
+
+        public int Read(byte[] buffer, int offset, int count, int timeoutMs)
+        {
+            if (_replies.Count == 0)
+            {
+                return 0;
+            }
+
+            var reply = _replies.Dequeue();
+            reply.CopyTo(buffer, offset);
+            return reply.Length;
+        }
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int count, int timeoutMs, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Read(buffer, offset, count, timeoutMs));
+
+        public Task<long> WriteAsync(byte[] buffer, int offset, int count, int timeoutMs, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Write(buffer, offset, count, timeoutMs));
+
+        public Stream GetStream() => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Scripted fastboot peer that answers like <see cref="ScriptedTransport"/> but can report a write as
+    /// accepting no byte, which is how a USB bulk-OUT timeout surfaces to the protocol layer. Records the
+    /// command writes it refused so a test can assert the frame is re-issued exactly once.
+    /// </para>
+    /// </summary>
+    private sealed class ZeroWriteTransport(Dictionary<string, string> answers) : ICommTransport
+    {
+        private readonly Queue<byte[]> _replies = [];
+        private readonly List<byte> _payload = [];
+        private long _dataExpected;
+
+        public List<string> Commands { get; } = [];
+
+        public List<byte[]> Downloads { get; } = [];
+
+        public int ResetCount { get; private set; }
+
+        /// <summary>Command frames reported as accepting no byte, in write order.
+        /// <para>按写入顺序记录被报告为零字节接受的命令帧。</para></summary>
+        public List<string> Refused { get; } = [];
+
+        /// <summary>Number of command frames left to report as a zero-byte write; they are still delivered on the wire.
+        /// <para>接下来仍要报告为零字节写入的命令帧数量；这些帧在线路上仍会被送达。</para></summary>
+        public int RefuseCount { get; set; }
+
+        /// <summary>Whether the transport keeps refusing every command frame after <see cref="RefuseCount"/> is spent.
+        /// <para><see cref="RefuseCount"/> 用尽后是否继续拒绝每一个命令帧。</para></summary>
+        public bool RefuseAlways { get; set; }
+
+        /// <summary>
+        /// Whether a refused frame is also withheld from the device, so a probe finds nothing. The default
+        /// delivers the frame and only misreports its completion, which is the case the probe must detect.
+        /// <para>被拒绝的帧是否同时不送达设备，使探测一无所获。默认会送达该帧而只误报其完成，这正是探测必须
+        /// 识别的情形。</para>
+        /// </summary>
+        public bool SilentWhenRefused { get; set; }
+
+        public bool IsConnected => true;
+
+        public void Dispose()
+        {
+        }
+
+        public void Connect()
+        {
+        }
+
+        public void Disconnect()
+        {
+        }
+
+        public void Reset() => ResetCount++;
+
+        public long Write(byte[] buffer, int offset, int count, int timeoutMs)
+        {
+            if (_dataExpected > 0)
+            {
+                _payload.AddRange(buffer[offset..(offset + count)]);
+                if (_payload.Count >= _dataExpected)
+                {
+                    Downloads.Add([.. _payload]);
+                    _payload.Clear();
+                    _dataExpected = 0;
+                    _replies.Enqueue("OKAY"u8.ToArray());
+                }
+
+                return count;
+            }
+
+            var command = Encoding.UTF8.GetString(buffer, offset, count);
+            Commands.Add(command);
+            var refuse = RefuseAlways || RefuseCount > 0;
+            if (refuse)
+            {
+                RefuseCount = Math.Max(0, RefuseCount - 1);
+                Refused.Add(command);
+                if (SilentWhenRefused)
+                {
+                    return 0;
+                }
+            }
+
+            if (command.StartsWith("download:", StringComparison.Ordinal) &&
+                long.TryParse(command["download:".Length..], NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out var size))
+            {
+                _dataExpected = size;
+                _replies.Enqueue(Encoding.ASCII.GetBytes($"DATA{size:x8}"));
+            }
+            else if (answers.TryGetValue(command, out var answer))
+            {
+                _replies.Enqueue(Encoding.UTF8.GetBytes(answer));
+            }
+            else
+            {
+                _replies.Enqueue(Encoding.UTF8.GetBytes($"FAILno scripted answer for '{command}'"));
+            }
+
+            return refuse ? 0 : count;
         }
 
         public int Read(byte[] buffer, int offset, int count, int timeoutMs)

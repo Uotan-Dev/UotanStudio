@@ -181,13 +181,77 @@ public sealed class SunxiEfexProtocolTests
     }
 
     [Fact]
+    public async Task FesSession_Upload_AdvancesByteAddressForEmmcBootTags()
+    {
+        var transport = new FakeTransport();
+        transport.QueueUploadChunk(MaximumTransfer);
+        transport.QueueUploadChunk(8);
+        var session = new SunxiFesSession(transport);
+        var buffer = new byte[MaximumTransfer + 8];
+
+        await session.UploadAsync(0x1000, buffer, SunxiFesDataTag.EmmcBoot0, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, transport.Writes.Count);
+        Assert.Equal(0x0207, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
+        var lastFrame = transport.Writes[1];
+        Assert.Equal(0x1000u + (uint)MaximumTransfer, BinaryPrimitives.ReadUInt32LittleEndian(lastFrame.AsSpan(4)));
+    }
+
+    [Fact]
+    public async Task FesSession_UploadNand_AdvancesByteAddressAndMarksTheLastChunk()
+    {
+        var transport = new FakeTransport();
+        transport.QueueUploadChunk(MaximumTransfer);
+        transport.QueueUploadChunk(8);
+        var session = new SunxiFesSession(transport);
+        var buffer = new byte[MaximumTransfer + 8];
+
+        await session.UploadNandAsync(0x2000, buffer, SunxiFesDataTag.Raw, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, transport.Writes.Count);
+        var firstFrame = transport.Writes[0];
+        Assert.Equal(0x0301, BinaryPrimitives.ReadUInt16LittleEndian(firstFrame));
+        Assert.Equal(0x2000u, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(4)));
+        Assert.Equal((uint)MaximumTransfer, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(8)));
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(12)));
+        var lastFrame = transport.Writes[1];
+        Assert.Equal(0x2000u + (uint)MaximumTransfer, BinaryPrimitives.ReadUInt32LittleEndian(lastFrame.AsSpan(4)));
+        Assert.Equal(SunxiEfexConstants.TransferFinishTag,
+            BinaryPrimitives.ReadUInt32LittleEndian(lastFrame.AsSpan(12)));
+    }
+
+    [Fact]
+    public async Task FesSession_UploadSpinand_SendsTheSpinandCommandNumber()
+    {
+        var transport = new FakeTransport();
+        transport.QueueUploadChunk(8);
+        var session = new SunxiFesSession(transport);
+
+        await session.UploadSpinandAsync(0, new byte[8], SunxiFesDataTag.Raw, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0x0302, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
+    }
+
+    [Fact]
+    public async Task FesSession_UploadNor_SendsTheNorCommandNumber()
+    {
+        var transport = new FakeTransport();
+        transport.QueueUploadChunk(8);
+        var session = new SunxiFesSession(transport);
+
+        await session.UploadNorAsync(0, new byte[8], SunxiFesDataTag.Raw, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0x0303, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
+    }
+
+    [Fact]
     public async Task FesSession_Erase_SendsEraseTagAndRequestWord()
     {
         var transport = new FakeTransport();
         transport.QueueResponse();
         var session = new SunxiFesSession(transport);
 
-        await session.EraseAsync(TestContext.Current.CancellationToken);
+        await session.EraseAsync(SunxiEraseFlag.Full, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, transport.Writes.Count);
         var frame = transport.Writes[0];
@@ -198,6 +262,27 @@ public sealed class SunxiEfexProtocolTests
             BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(12)));
         Assert.Equal(0x12u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[1]));
         Assert.Equal(16, transport.Writes[1].Length);
+    }
+
+    [Theory]
+    [InlineData(SunxiEraseFlag.None, 0x0u)]
+    [InlineData(SunxiEraseFlag.Partition, 0x1u)]
+    [InlineData(SunxiEraseFlag.Full, 0x12u)]
+    public async Task FesSession_Erase_SendsTheSelectedEraseFlag(SunxiEraseFlag flag, uint expected)
+    {
+        var transport = new FakeTransport();
+        transport.QueueResponse();
+        var session = new SunxiFesSession(transport);
+
+        await session.EraseAsync(flag, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[1]));
+    }
+
+    [Fact]
+    public void IdentityMagic_MatchesTheBootRomSignature()
+    {
+        Assert.Equal("AWUSBFEX"u8.ToArray(), SunxiEfexConstants.IdentityMagic.ToArray());
     }
 
     [Fact]
@@ -212,6 +297,20 @@ public sealed class SunxiEfexProtocolTests
 
         Assert.Equal(8u, storage);
         Assert.Equal(0x0209, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
+    }
+
+    [Fact]
+    public async Task FesSession_QueryStorageList_ReturnsTheOneByteMask()
+    {
+        var transport = new FakeTransport();
+        transport.QueuePayload([0x0B]);
+        transport.QueueResponse();
+        var session = new SunxiFesSession(transport);
+
+        var mask = await session.QueryStorageListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0x0Bu, mask);
+        Assert.Equal(0x0232, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
     }
 
     [Fact]
@@ -252,6 +351,23 @@ public sealed class SunxiEfexProtocolTests
     }
 
     [Fact]
+    public async Task FesSession_VerifyUbootBlk_SendsTheTagWithZeroAddressAndSize()
+    {
+        var transport = new FakeTransport();
+        transport.QueueVerify(SunxiEfexConstants.CrcValidFlag, 0x2222, 0);
+        transport.QueueResponse();
+        var session = new SunxiFesSession(transport);
+
+        var result = await session.VerifyUbootBlkAsync(0x7F08, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsStatusOk);
+        var frame = transport.Writes[0];
+        Assert.Equal(0x0214, BinaryPrimitives.ReadUInt16LittleEndian(frame));
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(4)));
+        Assert.Equal(0x7F08u, BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(12)));
+    }
+
+    [Fact]
     public void FesVerifyResult_WithoutTheValidFlag_NeverReportsSuccess()
     {
         var result = new SunxiFesVerifyResult(0x01, 0, 0);
@@ -275,6 +391,19 @@ public sealed class SunxiEfexProtocolTests
         Assert.Equal(0x020A, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
         Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(4)));
         Assert.Equal(0x020B, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[1]));
+    }
+
+    [Fact]
+    public async Task FesSession_FlashSwitch_SendsTheStorageType()
+    {
+        var transport = new FakeTransport();
+        transport.QueueResponse();
+        var session = new SunxiFesSession(transport);
+
+        await session.FlashSwitchAsync(2, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0x0233, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(4)));
     }
 
     [Fact]
@@ -385,53 +514,95 @@ public sealed class SunxiEfexProtocolTests
     }
 
     [Fact]
-    public async Task Handoff_InitialiseDram_ClearsParametersRunsAndReadsStatus()
+    public async Task Handoff_InitialiseDram_ClearsParametersRunsAndPollsUntilCompleted()
     {
         var transport = new FakeTransport();
-        transport.QueueFelChunk();
-        transport.QueueFelChunk();
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
-        transport.QueueResponse();
-        transport.QueuePayload(new byte[SunxiFesHandoff.DramParameterLength]);
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
+        var parameters = new byte[SunxiFesHandoff.DramParameterLength];
+        BinaryPrimitives.WriteUInt32LittleEndian(parameters, 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(parameters.AsSpan(4), 0x5A);
+        transport.QueueFelWrite();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
+        transport.QueueFelRead(parameters);
         var session = new SunxiFelSession(transport);
-        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(), TimeSpan.Zero, TimeSpan.Zero);
+        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(), TimeSpan.Zero, TimeSpan.Zero,
+            TimeSpan.Zero);
+
+        var status = await handoff.InitialiseDramAsync(session,
+            BuildEgonImage(0x43000000, 0x40000000, 0x100, "sun50iw9"), TestContext.Current.CancellationToken);
+
+        Assert.False(status.InitialisationFailed);
+        Assert.True(status.Updated);
+        Assert.Equal(136, SunxiFesHandoff.DramParameterLength);
+        var cleared = transport.Writes.Single(frame => frame.Length == 16
+            && BinaryPrimitives.ReadUInt16LittleEndian(frame) == 0x0101
+            && BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(8)) == 136u);
+        Assert.Equal(0x43000000u, BinaryPrimitives.ReadUInt32LittleEndian(cleared.AsSpan(4)));
+        var loader = transport.Writes.Single(frame => frame.Length == 16
+            && BinaryPrimitives.ReadUInt16LittleEndian(frame) == 0x0101
+            && BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(8)) == 64u);
+        Assert.Equal(0x40000000u, BinaryPrimitives.ReadUInt32LittleEndian(loader.AsSpan(4)));
+    }
+
+    [Fact]
+    public async Task Handoff_InitialiseDram_PollsWhileTheLoaderReportsPending()
+    {
+        var transport = new FakeTransport();
+        var pending = new byte[SunxiFesHandoff.DramParameterLength];
+        var completed = new byte[SunxiFesHandoff.DramParameterLength];
+        BinaryPrimitives.WriteUInt32LittleEndian(completed, 3);
+        transport.QueueFelWrite();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
+        transport.QueueFelRead(pending);
+        transport.QueueFelRead(completed);
+        var session = new SunxiFelSession(transport);
+        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(),
+            TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         var status = await handoff.InitialiseDramAsync(session,
             BuildEgonImage(0x43000000, 0x40000000, 0x100, "sun50iw9"), TestContext.Current.CancellationToken);
 
         Assert.False(status.InitialisationFailed);
         Assert.False(status.Updated);
-        Assert.Equal(136, SunxiFesHandoff.DramParameterLength);
-        Assert.Equal(0x43000000u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[1].AsSpan(4)));
-        Assert.Equal(136u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[1].AsSpan(8)));
-        Assert.Equal(0x40000000u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[6].AsSpan(4)));
     }
 
     [Fact]
     public async Task Handoff_InitialiseDram_ReportsTheLoadersFailureFlag()
     {
         var transport = new FakeTransport();
-        transport.QueueFelChunk();
-        transport.QueueFelChunk();
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
-        transport.QueueResponse();
         var parameters = new byte[SunxiFesHandoff.DramParameterLength];
         BinaryPrimitives.WriteUInt32LittleEndian(parameters, 1);
-        transport.QueuePayload(parameters);
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
+        transport.QueueFelWrite();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
+        transport.QueueFelRead(parameters);
         var session = new SunxiFelSession(transport);
-        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(), TimeSpan.Zero, TimeSpan.Zero);
+        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(), TimeSpan.Zero, TimeSpan.Zero,
+            TimeSpan.Zero);
 
         await Assert.ThrowsAsync<SunxiEfexException>(() => handoff.InitialiseDramAsync(session,
+            BuildEgonImage(0x43000000, 0x40000000, 0x100, "sun50iw9"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Handoff_InitialiseDram_FailsWhenTheLoaderStaysPendingUntilTheTimeout()
+    {
+        var transport = new FakeTransport();
+        var pending = new byte[SunxiFesHandoff.DramParameterLength];
+        transport.QueueFelWrite();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            transport.QueueFelRead(pending);
+        }
+
+        var session = new SunxiFelSession(transport);
+        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(),
+            TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(3), TimeSpan.Zero);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => handoff.InitialiseDramAsync(session,
             BuildEgonImage(0x43000000, 0x40000000, 0x100, "sun50iw9"), TestContext.Current.CancellationToken));
     }
 
@@ -439,10 +610,8 @@ public sealed class SunxiEfexProtocolTests
     public async Task Handoff_StartService_SetsWorkModeAndRetriesUntilHandshakeAnswers()
     {
         var transport = new FakeTransport();
-        transport.QueueFelChunk();
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
         var session = new SunxiFelSession(transport);
         var attempts = 0;
         var service = new SunxiFesSession(new FakeTransport());
@@ -450,29 +619,84 @@ public sealed class SunxiEfexProtocolTests
         {
             attempts++;
             return attempts < 3 ? throw new IOException("not ready") : Task.FromResult(service);
-        }, TimeSpan.Zero, TimeSpan.Zero);
+        }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
 
-        var result = await handoff.StartServiceAsync(session, BuildUbootImage(0x4A000000, 0x200, "sun50iw9"), 3,
+        var result = await handoff.StartServiceAsync(session,
+            new SunxiServiceImages(BuildUbootImage(0x4A000000, 0x200, "sun50iw9")), 3,
             TestContext.Current.CancellationToken);
 
         Assert.Same(service, result);
         Assert.Equal(3, attempts);
+        var uboot = transport.Writes.Single(frame => frame.Length == 512);
         Assert.Equal(SunxiFesHandoff.UsbProductWorkMode,
-            BinaryPrimitives.ReadInt32LittleEndian(transport.Writes[3].AsSpan(UbootWorkModeOffset)));
-        Assert.Equal(0x4A000000u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[1].AsSpan(4)));
+            BinaryPrimitives.ReadInt32LittleEndian(uboot.AsSpan(UbootWorkModeOffset)));
+        var ubootHeader = transport.Writes.Single(frame => frame.Length == 16
+            && BinaryPrimitives.ReadUInt16LittleEndian(frame) == 0x0101
+            && BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(8)) == 512u);
+        Assert.Equal(0x4A000000u, BinaryPrimitives.ReadUInt32LittleEndian(ubootHeader.AsSpan(4)));
+    }
+
+    [Fact]
+    public async Task Handoff_StartService_UploadsComponentsIntoThePostUbootSlots()
+    {
+        var transport = new FakeTransport();
+        for (var index = 0; index < 4; index++)
+        {
+            transport.QueueFelWrite();
+        }
+
+        transport.QueueFelExec();
+        var session = new SunxiFelSession(transport);
+        var service = new SunxiFesSession(new FakeTransport());
+        var handoff = new SunxiFesHandoff(_ => Task.FromResult(service), TimeSpan.Zero, TimeSpan.Zero,
+            TimeSpan.Zero);
+
+        await handoff.StartServiceAsync(session,
+            new SunxiServiceImages(BuildUbootImage(0x4A000000, 0x200, "sun50iw9"), new byte[100],
+                new byte[200], new byte[300]), 1, TestContext.Current.CancellationToken);
+
+        uint AddressOf(int length) => BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes
+            .Single(frame => frame.Length == 16
+                && BinaryPrimitives.ReadUInt16LittleEndian(frame) == 0x0101
+                && BinaryPrimitives.ReadUInt32LittleEndian(frame.AsSpan(8)) == (uint)length).AsSpan(4));
+
+        Assert.Equal(0x4A000000u + (uint)SunxiFesHandoff.UbootSlotLength, AddressOf(100));
+        Assert.Equal(0x4A000000u + (uint)SunxiFesHandoff.UbootSlotLength
+            + (uint)SunxiFesHandoff.DeviceTreeSlotLength, AddressOf(200));
+        Assert.Equal(0x4A000000u + (uint)SunxiFesHandoff.UbootSlotLength
+            + (uint)SunxiFesHandoff.DeviceTreeSlotLength + (uint)SunxiFesHandoff.SysConfigSlotLength,
+            AddressOf(300));
+        Assert.Equal(0x4A000000u, AddressOf(512));
+    }
+
+    [Fact]
+    public async Task Handoff_StartService_RejectsAnOversizedComponent()
+    {
+        var transport = new FakeTransport();
+        var session = new SunxiFelSession(transport);
+        var handoff = new SunxiFesHandoff(_ => throw new NotSupportedException(), TimeSpan.Zero, TimeSpan.Zero,
+            TimeSpan.Zero);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => handoff.StartServiceAsync(session,
+            new SunxiServiceImages(BuildUbootImage(0x4A000000, 0x200, "sun50iw9"),
+                new byte[SunxiFesHandoff.DeviceTreeSlotLength + 1]), 1,
+            TestContext.Current.CancellationToken));
+        Assert.Empty(transport.Writes);
     }
 
     [Fact]
     public async Task Handoff_StartService_ToleratesAFailedExecutionStatus()
     {
         var transport = new FakeTransport();
-        transport.QueueFelChunk();
+        transport.QueueFelWrite();
         transport.QueueResponse(status: 0x04);
         var session = new SunxiFelSession(transport);
         var service = new SunxiFesSession(new FakeTransport());
-        var handoff = new SunxiFesHandoff(_ => Task.FromResult(service), TimeSpan.Zero, TimeSpan.Zero);
+        var handoff = new SunxiFesHandoff(_ => Task.FromResult(service), TimeSpan.Zero, TimeSpan.Zero,
+            TimeSpan.Zero);
 
-        var result = await handoff.StartServiceAsync(session, BuildUbootImage(0x4A000000, 0x200, "sun50iw9"), 1,
+        var result = await handoff.StartServiceAsync(session,
+            new SunxiServiceImages(BuildUbootImage(0x4A000000, 0x200, "sun50iw9")), 1,
             TestContext.Current.CancellationToken);
 
         Assert.Same(service, result);
@@ -482,16 +706,15 @@ public sealed class SunxiEfexProtocolTests
     public async Task Handoff_StartService_FailsWhenEveryAttemptStaysSilent()
     {
         var transport = new FakeTransport();
-        transport.QueueFelChunk();
-        transport.QueueResponse();
-        transport.QueueStatus();
-        transport.QueueResponse();
+        transport.QueueFelWrite();
+        transport.QueueFelExec();
         var session = new SunxiFelSession(transport);
         var handoff = new SunxiFesHandoff(_ => throw new TimeoutException("no device"), TimeSpan.Zero,
-            TimeSpan.Zero);
+            TimeSpan.Zero, TimeSpan.Zero);
 
         await Assert.ThrowsAsync<TimeoutException>(() => handoff.StartServiceAsync(session,
-            BuildUbootImage(0x4A000000, 0x200, "sun50iw9"), 2, TestContext.Current.CancellationToken));
+            new SunxiServiceImages(BuildUbootImage(0x4A000000, 0x200, "sun50iw9")), 2,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -575,6 +798,30 @@ public sealed class SunxiEfexProtocolTests
         public void QueueFelChunk()
         {
             QueueResponse();
+            QueueResponse();
+            QueueStatus();
+            QueueResponse();
+        }
+
+        public void QueueFelWrite()
+        {
+            QueueResponse();
+            QueueResponse();
+            QueueStatus();
+            QueueResponse();
+        }
+
+        public void QueueFelExec()
+        {
+            QueueResponse();
+            QueueStatus();
+            QueueResponse();
+        }
+
+        public void QueueFelRead(byte[] payload)
+        {
+            QueueResponse();
+            QueuePayload(payload);
             QueueResponse();
             QueueStatus();
             QueueResponse();
