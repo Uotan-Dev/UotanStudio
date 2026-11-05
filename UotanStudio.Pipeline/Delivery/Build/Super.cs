@@ -1,0 +1,191 @@
+using System.Text;
+using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Firmware.Core.Streams;
+
+namespace UotanStudio.Pipeline.Delivery;
+
+/// <summary><para>用绝对扇区地址与有界流构建实际的 LP 分区内容。</para>
+/// Builds actual LP partition contents using absolute sector addresses and bounded streams.</summary>
+public static class DeliverySuperBuilder
+{
+    /// <summary><para>展开 AutoZero 伴随分区并把分区名补全为 _a/_b 配对，同时校验名称合法且唯一。</para>
+    /// Expands AutoZero companion partitions into _a/_b pairs and validates that names are valid and unique.</summary>
+    public static List<DeliveryFile> ExpandPartitions(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options)
+    {
+        var result = files.Select(f => options.AutoZero && !f.Partition.EndsWith("_a", StringComparison.Ordinal)
+            && !f.Partition.EndsWith("_b", StringComparison.Ordinal) ? f with { Partition = f.Partition + "_a" } : f).ToList();
+        if (options.AutoZero)
+            foreach (var file in result.ToArray())
+                if (file.Partition.EndsWith("_a", StringComparison.Ordinal))
+                {
+                    var name = file.Partition[..^2] + "_b";
+                    if (result.All(f => f.Partition != name)) result.Add(new DeliveryFile { Partition = name });
+                }
+        if (result.Any(f => !DeliveryValidation.IsPartition(f.Partition)) || result.Select(f => f.Partition).Distinct().Count() != result.Count)
+            throw new InvalidDataException("Invalid or duplicate Super partition.");
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the LP metadata and writes the full Super image or the standalone super_empty.img, including optional Sparse
+    /// and Zstd stages. Capacity is pre-checked before allocating extents so an over-capacity error reports actual numbers
+    /// rather than a bare parameter name. Partition extents are allocated and non-overlapping before any data is written,
+    /// so partitions decode and write concurrently up to <see cref="FirmwareParallelism.Workers"/> and the final image bytes
+    /// are independent of completion order. The block-device name is taken straight from
+    /// <see cref="DeliverySuperOptions.DeviceName"/> and its representability is enforced by the LP writer's fixed 36-byte name
+    /// field, which is probed by the serialization pass below before any output file is created; this path therefore keeps no
+    /// second copy of that width rule.
+    /// <para>构建 LP 元数据并写出完整 Super 镜像或独立的 super_empty.img（含可选的稀疏与 Zstd 阶段）。
+    /// 在分配 extent 前先按容量预检，使容量超限的报错给出实际数值而不是裸参数名。
+    /// 分区 extent 在写入前已在 LP 元数据中分配且互不重叠，因此分区解码与写入按
+    /// <see cref="FirmwareParallelism.Workers"/> 并发执行，最终镜像字节与完成顺序无关。
+    /// 块设备名直接取自 <see cref="DeliverySuperOptions.DeviceName"/>，是否可表示由 LP 写入器的定宽 36 字节名称字段判定，
+    /// 并在任何输出文件创建之前由下方的序列化预检触发，因此本路径不再重复维护一套宽度规则。</para>
+    /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// The Super device name does not fit the LP block-device name field, the declared capacity is exceeded, or a partition
+    /// size changed while the image was being written.
+    /// <para>super 设备名放不进 LP 块设备名称字段、声明容量被超出，或写入镜像期间分区大小发生变化。</para>
+    /// </exception>
+    public static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
+        IProgress<double>? progress = null, CancellationToken token = default,
+        IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(async () =>
+    {
+        if (options.DeviceSize > long.MaxValue) throw new InvalidDataException("Super size exceeds stream limits.");
+        DeliverySuperCapacity.ValidateDeviceSize(options);
+        var partitions = ExpandPartitions(files, options);
+        var builder = MetadataBuilder.New(options.DeviceSize, options.MetadataSize, options.Slots, options.BlockSize);
+        var groups = DeliveryGroups.Parse(DeliveryGroups.Format(options.Groups));
+        if (groups.Count == 0) groups.Add(new() { Name = options.Group, Partitions = [.. partitions.Select(p => p.Partition)] });
+        foreach (var group in groups) builder.AddGroup(group.Name, group.Size);
+        var lengths = new List<long>();
+        foreach (var file in partitions)
+        {
+            token.ThrowIfCancellationRequested();
+            long length = 0;
+            if (file.SourcePath.Length > 0 && !options.Empty)
+            {
+                DeliveryValidation.CheckSource(file, options.AutoZero && file.Partition.EndsWith("_b", StringComparison.Ordinal));
+                using var source = SparseReader.ImportAuto(file.SourcePath);
+                length = checked((long)source.Header.TotalBlocks * source.Header.BlockSize);
+            }
+            lengths.Add(length);
+        }
+        DeliverySuperCapacity.Validate(lengths, options);
+        for (var i = 0; i < partitions.Count; i++)
+        {
+            var file = partitions[i];
+            var group = groups.SingleOrDefault(g => g.Partitions.Contains(file.Partition))
+                ?? throw new InvalidDataException("No Super group assignment for partition: " + file.Partition);
+            builder.AddPartition(file.Partition, group.Name, (ulong)lengths[i], 1);
+        }
+        var metadata = builder.Build();
+        metadata.Header = metadata.Header with { Flags = options.VirtualAb ? 1u : 0u, MinorVersion = options.VirtualAb ? (ushort)2 : (ushort)0 };
+        metadata.BlockDevices[0] = metadata.BlockDevices[0] with { PartitionName = Encoding.UTF8.GetBytes(options.DeviceName) };
+        _ = MetadataWriter.SerializeMetadata(metadata);
+        var raw = output + ".raw-" + Guid.NewGuid().ToString("N");
+        var temporary = TempFileHelper.CreateAdjacentPath(output);
+        try
+        {
+            if (options.Empty)
+            {
+                using var empty = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write);
+                empty.Write(MetadataWriter.SerializeGeometry(metadata.Geometry));
+                empty.Write(MetadataWriter.SerializeMetadata(metadata));
+            }
+            else
+            {
+                using (var stream = new FileStream(raw, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1024 * 1024))
+                {
+                    stream.SetLength((long)options.DeviceSize);
+                    MetadataWriter.WriteToImageStream(stream, metadata);
+                }
+                long done = 0;
+                var total = lengths.Sum();
+                detailProgress?.Report(new(0, "Building Super", (0, total), "Delivery_ProgressSuper"));
+                var workers = Math.Max(1, Math.Min(partitions.Count, FirmwareParallelism.Workers));
+                await Parallel.ForEachAsync(Enumerable.Range(0, partitions.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = workers, CancellationToken = token },
+                    (i, ct) =>
+                {
+                    if (lengths[i] == 0) return ValueTask.CompletedTask;
+                    var part = metadata.Partitions[i];
+                    var extent = metadata.Extents[(int)part.FirstExtentIndex];
+                    using var source = SparseReader.ImportAuto(partitions[i].SourcePath);
+                    using var partition = new FileStream(raw, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite, 1024 * 1024);
+                    partition.Position = checked((long)extent.TargetData * 512);
+                    long local = 0;
+                    using var bounded = new CountingWriteStream(partition, lengths[i], true, ct);
+                    using var tracked = new DeliveryWriteProgressStream(bounded, value =>
+                    {
+                        var cumulative = Interlocked.Add(ref done, value - local);
+                        local = value;
+                        var percent = cumulative * 75.0 / Math.Max(1, total);
+                        progress?.Report(percent);
+                        detailProgress?.Report(new(percent, "Building Super", (cumulative, total), "Delivery_ProgressSuper"));
+                    }, ct);
+                    source.WriteRawToStream(tracked);
+                    if (bounded.BytesWritten != lengths[i]) throw new InvalidDataException("Partition size changed during build.");
+                    return ValueTask.CompletedTask;
+                });
+                token.ThrowIfCancellationRequested();
+                detailProgress?.Report(new(75.0, "Building Super", (total, total), "Delivery_ProgressSuper"));
+                if (options.Sparse)
+                {
+                    using var input = File.OpenRead(raw);
+                    using var destination = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write);
+                    using var tracked = new DeliveryWriteProgressStream(destination,
+                        value =>
+                        {
+                            var percent = 75 + input.Position * 24.0 / Math.Max(1, input.Length);
+                            progress?.Report(percent);
+                            detailProgress?.Report(new(percent, "Converting Sparse", (input.Position, input.Length), "Delivery_ProgressSparse"));
+                        }, token);
+                    SparseImageConverter.ConvertRawToSparse(input, tracked, options.BlockSize, input.Length);
+                    var rawBytes = input.Length;
+                    var sparseBytes = destination.Length;
+                    var saved = rawBytes - sparseBytes;
+                    var ratio = rawBytes <= 0 ? 0d : saved * 100d / rawBytes;
+                    detailProgress?.Report(new(99, "Converting Sparse", (rawBytes, rawBytes), "Delivery_ProgressSparse",
+                        Detail: $"RAW {DeliverySuperCapacity.FormatSize(rawBytes)} → Sparse {DeliverySuperCapacity.FormatSize(sparseBytes)} ({(saved >= 0 ? "saved" : "larger")} {Math.Abs(ratio):0.##}%)"));
+                }
+                else File.Move(raw, temporary);
+            }
+            token.ThrowIfCancellationRequested();
+            File.Move(temporary, output, false);
+            progress?.Report(100);
+            detailProgress?.Report(new(100, "Building Super", Stage: "Delivery_ProgressSuper"));
+        }
+        finally { File.Delete(raw); File.Delete(temporary); }
+    }, token);
+
+}
+
+/// <summary><para>为同步编解码器提供有界频率进度与取消的非持有型写入适配器。</para>
+/// Non-owning write adapter providing bounded-frequency progress and cancellation for synchronous codecs.</summary>
+internal sealed class DeliveryWriteProgressStream(Stream inner, Action<long> progress, CancellationToken token) : Stream
+{
+    private long _written;
+    private long _last;
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => _written;
+    public override long Position { get => _written; set => throw new NotSupportedException(); }
+    public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        token.ThrowIfCancellationRequested();
+        inner.Write(buffer);
+        _written = checked(_written + buffer.Length);
+        if (Environment.TickCount64 - _last >= 100) { progress(_written); _last = Environment.TickCount64; }
+    }
+    public override void Flush() => inner.Flush();
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+}

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>UotanStudio.Pipeline</RootNamespace>
+    <AssemblyName>UotanStudio.Pipeline</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
+    <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+    <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="UotanStudio.Tests" />
+    <InternalsVisibleTo Include="UotanStudio.Benchmarks" />
+  </ItemGroup>
+</Project>
