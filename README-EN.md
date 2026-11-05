@@ -19,7 +19,7 @@
 
 - 🍀 Cross-platform: Windows, Linux and macOS on x64, ARM64, LoongArch64 and RVA23
 - 📦 Firmware parsing and rebuilding: file systems, partitions, OTA, boot images and vendor packages
-- 🔌 Device communication: ADB, HDC, Fastboot, Qualcomm EDL, MediaTek and Rockchip RKDL over USB/TCP/UDP/serial
+- 🔌 Device communication: ADB, HDC, Fastboot, Qualcomm EDL, MediaTek, Rockchip RKDL and Allwinner Sunxi (FEL/FES) over USB/TCP/UDP/serial
 - 🛠 Visual programming: node canvas, workflow templates, script nodes and plugin packages
 - 🤖 Embedded MCP server: companion mode inside the GUI and a headless mode for AI clients to invoke firmware and device capabilities
 - 🖥 Screen mirroring: scrcpy protocol with GPU presentation and a CPU bitmap fallback
@@ -40,7 +40,7 @@ flowchart TD
  MagicGen["UotanStudio.Firmware.MagicGen<br/>Magic number table generation"]
  Pipeline["UotanStudio.Pipeline<br/>Project sessions · persistence · delivery output"]
  Media["UotanStudio.Media<br/>Audio/video decoding and presentation"]
- Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL<br/>USB · TCP · UDP · serial"]
+ Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL / Sunxi<br/>USB · TCP · UDP · serial"]
  Mirroring["UotanStudio.Mirroring<br/>scrcpy protocol and sessions"]
  Mcp["UotanStudio.Mcp<br/>Embedded MCP server"]
  Host["UotanStudio<br/>Avalonia host: views · view models · app services"]
@@ -136,8 +136,8 @@ Device-side capabilities surface in the device panel, USB tree view, device log,
 Build, run and verify:
 
 ```bash
-dotnet restore UotanStudio.slnx
-dotnet build UotanStudio.slnx --no-restore --nologo
+dotnet restore UotanStudio.slnx -p:Configuration=Debug
+dotnet build UotanStudio.slnx --no-restore --nologo -c Debug
 dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes
 dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 dotnet test --solution UotanStudio.slnx --no-restore

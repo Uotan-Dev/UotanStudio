@@ -40,6 +40,8 @@
 - `UOTAN_MAGISKBOOT_ORACLE` 指向 magiskboot 可执行文件。
 - `UOTAN_SELINUX_POLICY_SAMPLE`、`UOTAN_ELF_FIREHOSE_SAMPLE`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 指向样例文件。
 - `UOTAN_SAMSUNG_DAT_MERGE_ORACLE`、`UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE`、`UOTAN_EROFS_CORPUS` 指向预言或语料目录。
+- `UOTAN_SAHARA_MANIFEST_SAMPLE` 指向厂商 `qsahara_device_programmer.xml` 多镜像清单，用于解析真实镜像表。
+- `UOTAN_FLASH_PACKAGE_CORPUS` 指向真实烧录包目录，用于布局语料用例。
 - `UOTAN_HDC_MIRROR_DIRECT` 指向 HDC connect key（例如 `5XM0225C18001159`）或直连 HDC 守护进程 `host:port`（例如 `127.0.0.1:5555`），用于启用 `OhscrcpyHdcIntegrationTests`；直连 USB 在 HDC server 运行时会被 Comm 的 fail-closed 策略拒绝，跳过/失败都不算通过。
 - `UOTAN_DEVICE_SHELL_TARGET` 指向 ADB `host:port` 目标，用于启用 `DeviceShellConnectionTests.Connection_RealAdbTarget_ProducesShellOutput`；目标在本机不可见时按未检测到跳过，进程内设备 shell 的其余用例只走假 relay，不需要设备。
 

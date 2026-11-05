@@ -28,6 +28,7 @@
 - `.resx` 只作为 `AdditionalFiles` 并从 SDK 默认 `EmbeddedResource` glob 移除，否则会生成 satellite assembly。UI 可见文本只走资源字典，不能在界面中拼接中英文。
 - 已生成脚本文本只在生成时确定语言；切换界面语言不得改写已生成内容。
 - 编辑器明确选择“按文本打开”时必须保持文本模式（`EditorOpenMode.Text`），即使文件含 NUL 或使用二进制扩展名；只有 `Auto` 才允许按扩展名或内容探测。
+- 烧录页面以**禁用**表达“当前设备不提供该动作”：`FlashControlGate` 只决定启用状态，不隐藏控件，也没有可见性条件；切换设备只展开该协议对应的分类，不收起其它分类，未选中设备时保留已持久化的展开状态。新增控件时按同样方式接入门控，不要用 `IsVisible` 表达设备条件。
 - MiSans 字形由 `UotanStudio.Assets` 的 `fonts` 资源包随包（`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，压缩帧与清单在 `UotanStudio.Assets/Assets/fonts`），字体帧只由 Assets 的 fonts 包提供；启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection.DecompressFaces` 经 `AssetStore.Read` 取已校验字节并注册到 `FontManager`。启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解码解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。
 - `.dat`、`.new.dat`、`.patch.dat`、`.br`、`.transfer.list` 的识别复用现有格式注册与判定（`ImageInputService`、`ImageOutputService`、`ProjectExplorerView`）；不要在 View 复制后缀判断。
 
@@ -36,7 +37,7 @@
 - 新建、打开、关闭、另存为必须经过 `ProjectOperationsService`。保存失败保留源上下文与原目标内容；另存为成功后才切换项目根目录。自动保存失败要放行项目操作门，不能静默卡住。
 - 解决方案快照中的交付计划、面板可见性与项目资源管理器展开状态只写 `SolutionSnapshot.State`（键 `delivery`/`panels`/`explorer`）；解决方案根目录不存放 `delivery.json`。子项目自己的 `.uotan/` 语义保持不变。
 - 交付页面保持现有控件与布局语义；新行为优先复用 `DeliveryViewModel`、`DeliveryCompositionView`、`DeliveryView.Operations.cs`，不要在 View 层维护第二套镜像归属、确认状态或输出集合。`DeliveryPlan` 仍是交付后端唯一输入。
-- 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。主窗口尺寸、位置与状态存为 `mainWindowPlacement`（`MainWindowPlacement`），烧录页面侧边分类（`edl`/`mtk`/`rockchip`/`spacemit`/`image`）的展开状态存为 `expandedFlashSections`；`SettingsViewModel.SaveSettings` 保存前必须从磁盘最新设置合并这两个键，窗口几何只存 `settings.json` 的 `mainWindowPlacement`。
+- 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。主窗口尺寸、位置与状态存为 `mainWindowPlacement`（`MainWindowPlacement`），烧录页面侧边分类（`edl`/`mtk`/`rockchip`/`spacemit`/`sunxi`/`image`）的展开状态存为 `expandedFlashSections`；`SettingsViewModel.SaveSettings` 保存前必须从磁盘最新设置合并这两个键，窗口几何只存 `settings.json` 的 `mainWindowPlacement`。
 - 渲染后端与合成模式是启动期设置：设置页只写 `renderingBackend`/`renderingCompositionMode` 并提示重启，桌面入口在下一次启动时转换平台选项；"自动"项展示当前进程实际使用的后端与合成宿主（`RenderingRuntimeProbe`，经保留的解析器反射读取），Wayland 下不提供可选项。
 - MCP 暴露由 `McpExposureService` 启动：只监听 `127.0.0.1`；沙箱根为空或无法规范化时回退不受限沙箱，并强制关闭刷写门控；签名经 `DeliveryKeyProvider`。
 - `KeyLibraryService`（`%AppData%/UotanStudio/keys`）是密钥生成/导入/导出的唯一路径；发布与导出使用不覆盖语义，不得覆盖已有密钥或证书。

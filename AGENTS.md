@@ -19,7 +19,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Assets` | 内嵌二进制资源的统一存储、清单与准备/抽取门面，叶子下层 | [AGENTS.md](UotanStudio.Assets/AGENTS.md) |
 | `UotanStudio.Firmware` | 固件格式、文件系统、Payload、启动镜像与签名 | [AGENTS.md](UotanStudio.Firmware/AGENTS.md) |
 | `UotanStudio.Firmware.MagicGen` | 构建期 magic(5) 规则表生成器 | [AGENTS.md](UotanStudio.Firmware.MagicGen/AGENTS.md) |
-| `UotanStudio.Comm` | ADB/HDC/Fastboot/EDL/MTK/RKDL 与 USB/TCP/UDP/串口 | [AGENTS.md](UotanStudio.Comm/AGENTS.md) |
+| `UotanStudio.Comm` | ADB/HDC/Fastboot/EDL/MTK/RKDL/Sunxi 与 USB/TCP/UDP/串口 | [AGENTS.md](UotanStudio.Comm/AGENTS.md) |
 | `UotanStudio.Mirroring` | scrcpy 投屏协议与会话管理 | [AGENTS.md](UotanStudio.Mirroring/AGENTS.md) |
 | `UotanStudio.Media` | 音视频解码、投屏呈现与平台媒体后端 | [AGENTS.md](UotanStudio.Media/AGENTS.md) |
 | `UotanStudio.Pipeline` | 工程/解决方案生命周期与持久化；交付计划校验与 Super/Payload/Recovery 输出 | [AGENTS.md](UotanStudio.Pipeline/AGENTS.md) |
@@ -84,7 +84,7 @@ dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes
 dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 ```
 
-日常改宿主或固件时用项目级构建，不必每次编全量 slnx：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 覆盖宿主与全部库（约 12 个项目），`dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo -c Debug` 只到固件层；全量 slnx 构建多出的尾段是 `UotanStudio.Tests`（650 个源文件）与 `UotanStudio.Benchmarks`。提交前与最终验证仍以全量 slnx 构建、`dotnet format` 与测试为准。
+日常改宿主或固件时用项目级构建，不必每次编全量 slnx：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 覆盖宿主与全部库（约 12 个项目），`dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo -c Debug` 只到固件层；全量 slnx 构建多出的尾段是 `UotanStudio.Tests`（771 个源文件）与 `UotanStudio.Benchmarks`。提交前与最终验证仍以全量 slnx 构建、`dotnet format` 与测试为准。
 
 Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug`：`UotanStudio.csproj` 中 `Dock.Avalonia.Diagnostics` 的 `IncludeAssets` 条件按 `$(Configuration)` 求值，还原阶段该属性为空会剔除编译资产，使 `#if DEBUG` 里的 `AttachDockDebugOverlay` 调用以 `CS1061` 失败。CI 的 Release 配置不受影响。
 

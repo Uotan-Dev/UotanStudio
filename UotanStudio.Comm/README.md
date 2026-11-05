@@ -201,21 +201,29 @@ SLA/DAA key material comes exclusively from an `IMtkDaaResourceProvider`
 
 FEL and FES (eFEX) share VID 0x1F3A / PID 0xEFE8. `Protocols/Sunxi` implements the wire protocol and the
 mode transition: `SunxiEfexFrames` builds the 32-byte `AWUC` request header, the 16-byte inner FEL request, the
-20-byte FES transfer header and parses the 13-byte `AWUS` response; `SunxiFelSession` covers identity, chunked
-memory read/write and execute at 64 KiB per stage; `SunxiFesSession` covers storage/secure/flash-size queries,
-tagged downloads and uploads (byte addressing for data tags, 512-byte sectors for the flash tag), whole-storage
-erase, CRC verification and the tool mode. A non-zero `AWUS` status raises `SunxiEfexException`.
+20-byte FES transfer header and parses the 13-byte `AWUS` response and the 32-byte `AWUSBFEX` identity;
+`SunxiFelSession` covers identity, chunked memory read/write and execute at 64 KiB per stage; `SunxiFesSession`
+covers storage, storage-list, secure and flash-size queries, storage switching, tagged downloads and uploads
+(byte addressing for data tags, 512-byte sectors for the flash tag), direct raw NAND, SPI NAND and SPI NOR
+readback with the boot-partition and size-query tags, erase with the none/partition/full flag, CRC verification
+including the U-Boot block check, and the tool mode. A non-zero `AWUS` status raises `SunxiEfexException`.
 
 `SunxiFesHandoff` drives the cold-device transition: it clears the DRAM parameter area, uploads and executes the
-`eGON.BT0` first-stage loader, uploads the `u-boot` service payload with its work mode forced to the USB product
-path, and waits for the re-enumerated device to answer the FES handshake. `SunxiDeviceSession` resolves FEL or FES
-from that handshake because both modes enumerate with the same ids; `SunxiEfexUsbTransport` adapts a leased USB
-session, and `DefaultDeviceSessionFactories` registers the `DeviceSessionKind.Sunxi` factory. Discovery classifies
-0x1F3A:0xEFE8 as `sunxi`.
+`eGON.BT0` first-stage loader, polls the parameter area until the loader reports a completed initialisation
+(0 pending, 1 failed, above 1 completed), uploads the device tree, compiled system configuration and board
+configuration into the slots that follow the 2 MiB U-Boot area, uploads the `u-boot` service payload with its work
+mode forced to the USB product path, and waits for the re-enumerated device to answer the FES handshake.
+`SunxiDeviceSession` resolves FEL or FES from that handshake because both modes enumerate with the same ids;
+`SunxiEfexUsbTransport` adapts a leased USB session, and `DefaultDeviceSessionFactories` registers the
+`DeviceSessionKind.Sunxi` factory. Discovery classifies 0x1F3A:0xEFE8 as `sunxi`.
 
-The page-side building blocks are wired: the host leases the endpoint, reads status, runs the FEL memory tools and
-starts the FES service. IMAGEWTY to FES download planning (MBR/`sys_partition` partition ranges and role-to-tag
-mapping) and FES flashing remain to be built, and no real device has been exercised.
+`SunxiFlashPlan` turns an IMAGEWTY package into a download plan: the MBR, the partitions resolved through the
+vendor `sys_partition.fex` file list, Android sparse partition payloads expanded through `SparseReader`, and every
+boot variant the package carries (preboot, TOC, normal/package boot1 and NAND/SD/SPI NOR/UFS boot0).
+`SunxiFlasher` selects the boot variant from the service security and storage answers, applies the selected erase
+mode, switches flash access around the partition writes, writes partitions under the flash tag, verifies table,
+partition and boot writes, and requests the completion tool mode. The page exposes the package picker, erase mode,
+partition scope and post-flash action behind a typed confirmation. No real device has been exercised.
 
 ## GPT observation options
 
@@ -304,6 +312,21 @@ hash. Only `EdlProgrammerMatchDecision.Matched` returns a descriptor, and `EdlSe
 re-measures the image hash before a single programmer byte reaches the transport, so a verdict alone never
 authorizes an upload.
 
+### Multi-image programmer manifests
+
+A single-image programmer answers the `Firehose` Sahara image id. Newer targets instead ask for several ids, so
+the same input can be a `qsahara_device_programmer.xml` manifest that names one file per `image_id`.
+`Protocols/Edl/Programmer/SaharaProgrammerManifest.cs` reads it into bounded `SaharaProgrammerImage` records and
+`EdlProgrammerImageSet.Open` normalizes a manifest or a plain programmer file into that one type. The reader
+bounds the document (512 KiB), depth (4), element count (4096), attributes (16), image count (64), per-image
+size (256 MiB) and total size (512 MiB), rejects duplicate ids, and resolves a relative `image_path` against the
+manifest directory with the vendor tool's as-given fallback.
+
+`EdlSession.InitializeFromImageSetAsync` / `EnsureInitializedFromImageSetAsync` open every image of a set, run
+one `SaharaProtocol.HandshakeAsync(IReadOnlyDictionary<uint, Stream>)` exchange that answers whichever id the
+target requests, and dispose the streams again. The single-image overload of `InitializeOwnedAsync` delegates
+through the same dictionary path keyed by the `Firehose` identifier, so one image traverses one code path.
+
 ## Implemented but deliberately not surfaced in the host
 
 A protocol method with no production caller is not automatically a gap. The following MTK entry points are
@@ -313,10 +336,12 @@ implemented and covered by tests, but the host deliberately exposes no control f
   fault the session on a refused exchange. The non-fatal `QueryBootIdentityOwnedAsync` path already collects the
   same two bytes during initialization, so no separate control surfaces them.
 
-Vendor exploit operations (VIP table operations, OnePlus/Xiaomi/Nothing auth bypass, EDL memory debug,
-DA patching, DA crash, DA memory write, preloader public write, SECCFG write, XML security resource upload,
-download-agent memory peek/poke and target-memory poke/memcpy) are absent from this library, including as
-unsurfaced methods.
+Vendor exploit operations (VIP table operations, OnePlus/Xiaomi/Nothing auth bypass, MediaTek DA crash,
+preloader public write and XML security resource upload) are absent from this library, including as unsurfaced
+methods. The bounded memory and security primitives the host does use are present: download-agent reads through
+`FirehoseProtocol.PeekAsync`, target-memory reads and writes through `StreamingProtocol.MemPeekAsync`,
+`MemPokeAsync` and `MemWriteAsync`, crash dumps through `Edl/Crash/CrashDumpCollector`, partition patches through
+`FirehoseProtocol.PatchAsync`, and `seccfg` inspection and rewriting through `MtkSecCfg`.
 
 Exposing any of them requires device evidence for the specific operation plus a dedicated dangerous-operation
 confirmation, not just a button.
@@ -346,7 +371,7 @@ downloads the runtime for the active RID, verifies its SHA-256 and registers the
 Use the solution build and xUnit v3 tests with a nonzero test guard:
 
 ```text
-dotnet build UotanStudio.slnx --no-restore --nologo
+dotnet build UotanStudio.slnx --no-restore --nologo -c Debug
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~UotanStudio.Tests.Comm" --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~UotanStudio.Tests.Devices|FullyQualifiedName~HeadlessControllerGatewayTests" --minimum-expected-tests 1
 ```
@@ -354,7 +379,8 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 Real-input tests are opt-in through an environment variable each, and skip with that variable named in the
 reason when it is unset: `UOTAN_SELINUX_POLICY_SAMPLE`, `UOTAN_ELF_FIREHOSE_SAMPLE`,
 `UOTAN_SAMSUNG_DAT_MERGE_ORACLE`, `UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE`, `UOTAN_HOS_UPDATE_APP_SAMPLE`,
-`UOTAN_MAGISKBOOT_ORACLE` (the upstream reference binary) and `UOTAN_EROFS_CORPUS` — the index and the oracle
+`UOTAN_MAGISKBOOT_ORACLE` (the upstream reference binary), `UOTAN_EROFS_CORPUS` and
+`UOTAN_SAHARA_MANIFEST_SAMPLE` (a vendor `qsahara_device_programmer.xml`) — the index and the oracle
 resolver live in `UotanStudio.Tests/TestInfrastructure/`. There is no environment switch that selects a live
 ADB or HDC target: a device test that finds no target skips, and hardware-side behaviour is therefore not part of
 the solution gate. Do not stop a server, claim its USB interface, deploy scrcpy, flash, install or reboot a

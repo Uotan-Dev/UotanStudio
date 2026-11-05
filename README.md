@@ -19,7 +19,7 @@
 
 - 🍀 跨平台：Windows、Linux、macOS，x64、ARM64、LoongArch64、RVA23
 - 📦 固件解析与重建：文件系统、分区、OTA、启动镜像、厂商包
-- 🔌 设备通信：ADB、HDC、Fastboot、高通 EDL、MTK、Rockchip RKDL，USB/TCP/UDP/串口全覆盖
+- 🔌 设备通信：ADB、HDC、Fastboot、高通 EDL、MTK、Rockchip RKDL、全志 Sunxi (FEL/FES)，USB/TCP/UDP/串口全覆盖
 - 🛠 可视化编程：节点画布、工作流模板、脚本节点与插件包
 - 🤖 内嵌 MCP 服务器：桌面伴随模式与无头模式，供 AI 客户端调用固件与设备能力
 - 🖥 设备投屏：scrcpy 协议，GPU 呈现 + CPU 位图回退
@@ -40,7 +40,7 @@ flowchart TD
  MagicGen["UotanStudio.Firmware.MagicGen<br/>魔术号表生成"]
  Pipeline["UotanStudio.Pipeline<br/>工程会话 · 持久化 · 交付输出"]
  Media["UotanStudio.Media<br/>音视频解码与呈现"]
- Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL<br/>USB · TCP · UDP · 串口"]
+ Comm["UotanStudio.Comm<br/>ADB / HDC / Fastboot / EDL / MTK / RKDL / Sunxi<br/>USB · TCP · UDP · 串口"]
  Mirroring["UotanStudio.Mirroring<br/>scrcpy 投屏协议与会话"]
  Mcp["UotanStudio.Mcp<br/>内嵌 MCP 服务器"]
  Host["UotanStudio<br/>Avalonia 宿主：界面 · ViewModel · 应用服务"]
@@ -136,8 +136,8 @@ flowchart TD
 构建、运行与验证：
 
 ```bash
-dotnet restore UotanStudio.slnx
-dotnet build UotanStudio.slnx --no-restore --nologo
+dotnet restore UotanStudio.slnx -p:Configuration=Debug
+dotnet build UotanStudio.slnx --no-restore --nologo -c Debug
 dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes
 dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 dotnet test --solution UotanStudio.slnx --no-restore
