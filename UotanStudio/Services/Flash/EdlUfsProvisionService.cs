@@ -30,8 +30,7 @@ internal static class EdlUfsProvisionService
         var profile = await UfsProvisionProfileLoader.LoadAsync(profilePath, ct).ConfigureAwait(false);
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             return await PreviewCoreAsync(RequireFirehose(session), profile, progress, ct).ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
     }
@@ -55,8 +54,7 @@ internal static class EdlUfsProvisionService
         var profile = await UfsProvisionProfileLoader.LoadAsync(profilePath, ct).ConfigureAwait(false);
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             return await ProvisionCoreAsync(RequireFirehose(session), profile, confirmed, progress, ct)
                 .ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
@@ -80,8 +78,7 @@ internal static class EdlUfsProvisionService
     {
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             return await ResetCoreAsync(RequireFirehose(session), confirmed, progress, ct).ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
     }
@@ -259,6 +256,4 @@ internal static class EdlUfsProvisionService
         ?? throw new InvalidOperationException(
             "EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
 
-    private static Stream? OpenProgrammer(string? programmerPath) =>
-        programmerPath is { } loader && File.Exists(loader) ? File.OpenRead(loader) : null;
 }

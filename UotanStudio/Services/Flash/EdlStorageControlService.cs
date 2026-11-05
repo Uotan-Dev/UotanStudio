@@ -94,8 +94,7 @@ internal static class EdlStorageControlService
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
         => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             return await SetBootableStorageDriveCoreAsync(firehose, value, ct).ConfigureAwait(false);
@@ -119,13 +118,10 @@ internal static class EdlStorageControlService
         CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
         => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             return await GetPartitionSha256CoreAsync(firehose, partition, lun, ct).ConfigureAwait(false);
         }, ct);
 
-    private static Stream? OpenProgrammer(string? programmerPath) =>
-        programmerPath is { } loader && File.Exists(loader) ? File.OpenRead(loader) : null;
 }

@@ -564,8 +564,7 @@ internal static class EdlStreamingNandService
     {
         ArgumentNullException.ThrowIfNull(session);
         var options = RequireStreamDloadInitialization(initialization);
-        using var programmer = EdlGptPartitionService.OpenProgrammer(programmerPath);
-        await session.EnsureInitializedAsync(programmer, options, ct).ConfigureAwait(false);
+        await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, options, ct).ConfigureAwait(false);
         return EdlStreamingFlashService.RequireStreamingSession(session);
     }
 

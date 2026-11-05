@@ -143,8 +143,7 @@ internal static class EdlGptPartitionService
         progress?.Report(new FlashProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             if (session.Backend == EdlDownloadBackend.StreamDload && session.Streaming is { } streaming)
             {
                 var entries = await EdlStreamingFlashService.ReadPartitionTableAsync(streaming,
@@ -195,8 +194,7 @@ internal static class EdlGptPartitionService
         progress?.Report(new FlashProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             var (snapshot, entry) = await ResolvePartitionSnapshotAsync(firehose, partition, lun, ct)
@@ -247,8 +245,7 @@ internal static class EdlGptPartitionService
             "Reading the device partition tables... 正在读取设备分区表..."));
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             var erased = new List<string>();
@@ -335,8 +332,7 @@ internal static class EdlGptPartitionService
         progress?.Report(new BackupProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
         await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             if (session.Backend == EdlDownloadBackend.StreamDload && session.Streaming is { } streaming)
             {
                 var entries = await EdlStreamingFlashService.ReadPartitionTableAsync(streaming,
@@ -394,8 +390,7 @@ internal static class EdlGptPartitionService
                     "Rewriting the GPT requires explicit confirmation. 重写分区表需要显式确认。");
             }
 
-            using var programmer = OpenProgrammer(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             return await RepairGptCoreAsync(firehose, progress, physicalPartition, ct).ConfigureAwait(false);
@@ -484,9 +479,6 @@ internal static class EdlGptPartitionService
                 extent.Bytes))
         ];
     }
-
-    internal static Stream? OpenProgrammer(string? programmerPath) =>
-        programmerPath is { } loader && File.Exists(loader) ? File.OpenRead(loader) : null;
 }
 
 /// <summary>

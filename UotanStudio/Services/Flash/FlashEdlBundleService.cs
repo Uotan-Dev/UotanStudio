@@ -46,8 +46,7 @@ internal static class FlashEdlBundleService
         return await App.DeviceMonitor.RunEdlAsync(device, async session =>
         {
             await InspectAllAsync(session, options, ct).ConfigureAwait(false);
-            using var programmer = File.OpenRead(programmerPath);
-            await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
             return await ExecuteAllAsync(session, options, progress, ct).ConfigureAwait(false);
         }, ct).ConfigureAwait(false);
     }

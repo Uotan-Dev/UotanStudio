@@ -630,8 +630,7 @@ public sealed class FlashService : IFlashService
         {
             throw new FileNotFoundException("Firehose programmer is missing.", programmerPath);
         }
-        using var programmer = programmerPath is null ? null : File.OpenRead(programmerPath);
-        await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
+        await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
         var firehose = session.Firehose
             ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
         return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
