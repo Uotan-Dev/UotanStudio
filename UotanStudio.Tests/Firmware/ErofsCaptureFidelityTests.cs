@@ -23,6 +23,7 @@ namespace UotanStudio.Tests.Firmware;
 /// 的字节比较，因此只保留 chunk 低 5 位或拒绝二进制 tag 的采集会在这里被报告，而不是以后以"无法重建的镜像"
 /// 的形式出现。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class ErofsCaptureFidelityTests
 {
     private const int BlockSize = 4096;

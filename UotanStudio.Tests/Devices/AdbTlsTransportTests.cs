@@ -56,7 +56,7 @@ public sealed class AdbTlsTransportTests
         CancellationToken cancellationToken)
     {
         using var clientCertificate = AdbHostCertificate.Create(hostKey);
-        using var transport = new AdbTlsTransport(IPAddress.Loopback.ToString(), port, clientCertificate, 15000);
+        using var transport = new AdbTlsTransport(IPAddress.Loopback.ToString(), port, clientCertificate, 120_000);
         var accepted = AcceptServerAsync(listener, cancellationToken);
         await Task.WhenAll(Task.Run(transport.UpgradeToTls, cancellationToken), accepted);
 

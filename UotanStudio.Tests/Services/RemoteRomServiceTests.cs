@@ -233,9 +233,12 @@ public sealed class RemoteRomServiceTests
 
     private sealed class RangeHandler(byte[] data) : HttpMessageHandler
     {
+        private readonly TaskCompletionSource _chunkOverlap =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _active;
         private int _maximumConcurrent;
         private int _rangedRequestCount;
+        private int _chunkArrivals;
         public int MaximumConcurrentRequests => _maximumConcurrent;
         public int RangedRequestCount => _rangedRequestCount;
         public ConcurrentBag<string> UserAgents { get; } = [];
@@ -253,13 +256,28 @@ public sealed class RemoteRomServiceTests
 
             try
             {
-                await Task.Delay(20, cancellationToken);
                 if (request.Headers.Range is not { } range)
                     return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
 
-                Interlocked.Increment(ref _rangedRequestCount);
                 var from = checked((int)(range.Ranges.First().From ?? 0));
                 var to = checked((int)(range.Ranges.First().To ?? (data.Length - 1)));
+                if (to > from)
+                {
+                    if (Interlocked.Increment(ref _chunkArrivals) >= 2)
+                    {
+                        _chunkOverlap.TrySetResult();
+                    }
+
+                    try
+                    {
+                        await _chunkOverlap.Task.WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken);
+                    }
+                    catch (TimeoutException)
+                    {
+                    }
+                }
+
+                Interlocked.Increment(ref _rangedRequestCount);
                 var bytes = data.AsSpan(from, to - from + 1).ToArray();
                 var response = new HttpResponseMessage(HttpStatusCode.PartialContent)
                 {

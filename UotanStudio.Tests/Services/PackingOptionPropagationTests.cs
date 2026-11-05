@@ -17,6 +17,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Workspace state")]
 public sealed class PackingOptionPropagationTests
 {
     private const ulong PinnedBuildTime = 1_700_000_000UL;

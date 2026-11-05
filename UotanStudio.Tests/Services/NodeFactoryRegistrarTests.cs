@@ -13,6 +13,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Node type registry")]
 public sealed class NodeFactoryRegistrarTests
 {
     [Fact]

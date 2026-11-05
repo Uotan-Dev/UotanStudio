@@ -11,6 +11,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Node type registry")]
 public sealed class ScriptNodeViewModelTests
 {
     private const string Script = "local out = tool.Device.Slot.Query('serial', 'S1')\nreturn out.slot";
