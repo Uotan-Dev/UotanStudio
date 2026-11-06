@@ -1378,7 +1378,8 @@ public sealed partial class FlashViewModel
             var images = new List<RockchipConfigEntry>();
             foreach (var entry in entries)
             {
-                AppendLog($"{entry.Name}: {entry.Path}");
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_Log_ConfigEntry"), entry.Name, entry.Path));
                 if (entry.Path.Length > 0 && RockchipConfigFile.LooksLike(entry.Path))
                 {
                     continue;

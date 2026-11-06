@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Globalization;
 using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -98,10 +99,43 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary>Whether this row has an image file name. <para>该行是否已有镜像文件名。</para></summary>
     public bool HasFileName => !string.IsNullOrEmpty(FileName);
 
+    /// <summary>
+    /// Whether this row's operation takes an image file, so a row without one may offer the choose-file prompt. A row
+    /// that erases, reboots, switches a slot or only names a partition has nothing to pick, so its file cell stays blank
+    /// instead of inviting a file the operation would ignore.
+    /// <para>该行的操作是否需要镜像文件，因此没有文件的行才可以提示选择文件。擦除、重启、切换槽位或仅列出分区的行没有可选的
+    /// 文件，其文件列保持空白，而不是提示一个操作根本不会使用的文件。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _acceptsFile = true;
+
+    /// <summary>
+    /// Whether the file cell offers the choose-file prompt: the operation takes a file and the row still has none.
+    /// <para>文件列是否显示选择文件提示：操作需要文件而该行还没有文件。</para>
+    /// </summary>
+    public bool CanChooseFile => AcceptsFile && !HasFileName;
+
+    /// <summary>
+    /// Whether a command needs an image file; the empty command falls back to <c>flash</c>, which does. A
+    /// <c>wipe_super</c> row is also checked for its <c>super_empty</c> image before it runs, so it needs one too.
+    /// <para>命令是否需要镜像文件；空命令回退为 <c>flash</c>，因此需要。<c>wipe_super</c> 行在执行前同样会校验
+    /// <c>super_empty</c> 镜像，因此也需要。</para>
+    /// </summary>
+    /// <param name="command">Command token from a script or package. <para>来自脚本或包的命令标记。</para></param>
+    /// <returns><see langword="true"/> for <c>flash</c>, <c>wipe_super</c> and the empty fallback.
+    /// <para><c>flash</c>、<c>wipe_super</c> 与空回退都为 <see langword="true"/>。</para></returns>
+    internal static bool CommandTakesFile(string? command) =>
+        string.IsNullOrWhiteSpace(command) ||
+        command.Equals("flash", StringComparison.OrdinalIgnoreCase) ||
+        command.Equals("wipe_super", StringComparison.OrdinalIgnoreCase);
+
     partial void OnFileNameChanged(string value)
     {
         OnPropertyChanged(nameof(HasFileName));
+        OnPropertyChanged(nameof(CanChooseFile));
     }
+
+    partial void OnAcceptsFileChanged(bool value) => OnPropertyChanged(nameof(CanChooseFile));
 
     /// <summary>The full image path, used by the row tooltip. <para>镜像完整路径，用于条目提示。</para></summary>
     [ObservableProperty]
@@ -114,6 +148,13 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary>The row progress percentage; -1 means there is no progress to show. <para>行内进度百分比，-1 表示当前没有可显示的进度。</para></summary>
     [ObservableProperty]
     private int _percent = -1;
+
+    /// <summary>
+    /// Whether the row's transfer has no measurable fraction, so its bar animates instead of showing a percentage.
+    /// <para>该行的传输没有可度量的比例，进度条改为滚动显示而不显示百分比。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isIndeterminate;
 
     /// <summary>The row status text, written by the flash run in the current language. <para>行内状态文本，由刷写流程按当前语言写入。</para></summary>
     [ObservableProperty]
@@ -294,6 +335,16 @@ public sealed partial class FlashViewModel : ObservableObject
     [ObservableProperty]
     private string _overallText = string.Empty;
 
+    /// <summary>
+    /// Whether the overall bar has no measurable fraction and should animate instead of holding a value; a transfer
+    /// whose total is unknown (a gzip source whose uncompressed length the package does not state) reports only bytes
+    /// sent, so the bar shows motion rather than a fake percentage.
+    /// <para>总体进度条没有可度量的比例、应改为滚动显示而非固定数值；总长度未知的传输（包未给出解压后长度的 gzip 源）只上报已
+    /// 发送字节，进度条显示运动而不是伪造的百分比。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isOverallIndeterminate;
+
     /// <summary>Whether the page is running an operation that changes the device or the list state. <para>页面是否正在执行会改变设备或列表状态的操作。</para></summary>
     [ObservableProperty]
     private bool _isBusy;
@@ -351,7 +402,9 @@ public sealed partial class FlashViewModel : ObservableObject
         var detail = exception.InnerException is { } inner
             ? $"{exception.Message} ({inner.Message})"
             : exception.Message;
-        AppendLog($"{exception.GetType().Name}: {detail}", LogLevel.Error);
+        var text = string.Format(CultureInfo.CurrentCulture, _localizer.GetString("Flash_Log_Failure"),
+            $"{exception.GetType().Name}: {detail}");
+        AppendLog(text, LogLevel.Error);
     }
 
     /// <summary>

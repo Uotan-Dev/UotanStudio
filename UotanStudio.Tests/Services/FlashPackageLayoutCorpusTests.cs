@@ -21,13 +21,16 @@ public sealed class FlashPackageLayoutCorpusTests
         Assert.True(FlashSpacemiTPackage.HasStructure(root));
         var contents = FlashSpacemiTPackage.Read(root)!;
 
-        Assert.Equal("gpt", contents.Partitions[0].TableFormat);
         Assert.Equal(
             ["bootinfo", "fsbl", "env", "opensbi", "uboot", "bootfs", "rootfs"],
             contents.Partitions.Select(entry => entry.Partition));
         Assert.All(contents.Partitions, entry => Assert.True(File.Exists(entry.FilePath), entry.Partition));
         Assert.True(contents.Partitions.Single(entry => entry.Partition == "rootfs").SizeBytes < 0);
         Assert.Equal(0, contents.Partitions[0].OffsetBytes);
+        Assert.Equal(["gpt", "mtd"], contents.Partitions[0].TableFormats);
+        Assert.Equal("eMMC/SD + SPI NOR", contents.Partitions[0].StorageMedium);
+        Assert.Equal("eMMC/SD", contents.Partitions.Single(entry => entry.Partition == "bootfs").StorageMedium);
+        Assert.Equal("eMMC/SD", contents.Partitions.Single(entry => entry.Partition == "rootfs").StorageMedium);
     }
 
     [Fact]
@@ -41,6 +44,8 @@ public sealed class FlashPackageLayoutCorpusTests
             ["env", "bootinfo", "fsbl", "esos", "opensbi", "uboot", "ESP", "bootfs", "rootfs"],
             contents.Partitions.Select(entry => entry.Partition));
         Assert.All(contents.Partitions, entry => Assert.True(File.Exists(entry.FilePath), entry.Partition));
+        Assert.Equal("eMMC/SD + SPI NOR", contents.Partitions.Single(entry => entry.Partition == "env").StorageMedium);
+        Assert.Equal("eMMC/SD", contents.Partitions.Single(entry => entry.Partition == "ESP").StorageMedium);
     }
 
     [Fact]
@@ -59,6 +64,13 @@ public sealed class FlashPackageLayoutCorpusTests
             entry => Assert.True(File.Exists(entry.FilePath), entry.Partition));
         Assert.Null(contents.Partitions.Single(entry => entry.Partition == "misc").FilePath);
         Assert.True(contents.Partitions.Single(entry => entry.Partition == "userdata").SizeBytes < 0);
+        Assert.All(contents.Partitions.Where(entry => entry.Partition != "misc"),
+            entry => Assert.Equal("eMMC/SD", entry.StorageMedium));
+
+        // `misc` is placed by the table without an image, so the run writes nothing there and the row reports no
+        // medium instead of claiming eMMC for a write that never happens.
+        // `misc` 被分区表列出位置但没有镜像，运行不会写入它，因此该行不上报介质，而不是为一次并不发生的写入宣称 eMMC。
+        Assert.Equal(string.Empty, contents.Partitions.Single(entry => entry.Partition == "misc").StorageMedium);
     }
 
     [Fact]

@@ -97,7 +97,7 @@ public sealed partial class FlashViewModel
         }
 
         _lastObservedDevice = SelectedDevice;
-        ExpandDeviceProtocolSection(SelectedDevice?.Protocol, IsSpacemiTSelected);
+        ExpandDeviceProtocolSection(SelectedDevice?.Protocol);
         UpdateObservedDeviceInfo();
         UpdateEdlButton();
         RefreshAdbSuGate();

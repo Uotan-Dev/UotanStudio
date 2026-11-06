@@ -318,9 +318,6 @@ public sealed partial class FlashViewModel
         _mtkRows.Clear();
         _mtkPartitions.Clear();
         _spacemiTPackage = null;
-        SpacemiTPackagePath = string.Empty;
-        SpacemiTStatusText = string.Empty;
-        SetControlEnabled("SpacemiTFlashButton", false);
         UpdateModeVisibility();
         _payloadPath = null;
         _remotePayloadUrl = null;
@@ -669,42 +666,53 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Applies a SpacemiT (titan flasher) package folder: registers it for the SpacemiT section's flash action
-    /// and lists the primary partition table's entries as rows; the SpacemiT run honours the rows the user
-    /// selected through <c>OnlyPartitions</c>.
-    /// <para>应用 SpacemiT（titan 烧录器）包目录：把它登记给 SpacemiT 分区的烧录动作，并把主分区表的条目
-    /// 列成行；SpacemiT 烧录会通过 <c>OnlyPartitions</c> 尊重用户勾选的行。</para>
+    /// Applies a SpacemiT (titan flasher) package folder: keeps its script for the shared boot-chain and flash actions
+    /// and lists the layout tables' entries as rows, so the flash action honours the rows the user selected through
+    /// <c>OnlyPartitions</c>. The package is chosen through the page's ordinary folder picker; no SpacemiT section exists.
+    /// <para>应用 SpacemiT（titan 烧录器）包目录：把其脚本交给通用的引导链与烧录动作，并把各布局表的条目列成行，
+    /// 使烧录动作通过 <c>OnlyPartitions</c> 尊重用户勾选的行。包由页面通用的目录选择入口选取，不再有进迭时空分类。</para>
     /// </summary>
     /// <param name="contents">Package contents read from the folder. <para>从目录读出的包内容。</para></param>
     private void ApplySpacemiTPackage(SpacemiTPackageContents contents)
     {
         var package = contents.Package;
         _spacemiTPackage = package;
-        SpacemiTPackagePath = package.RootPath;
-        SpacemiTStatusText = string.Empty;
-        SetControlEnabled("SpacemiTFlashButton", true);
         var rows = new List<FlashPartitionEntry>(contents.Partitions.Count);
         foreach (var partition in contents.Partitions)
         {
             var reference = partition.ImageReference;
+            var hasImage = reference.Length > 0 && !IsRegexImageReference(reference);
+            var size = hasImage
+                ? partition.SizeBytes > 0
+                    ? FormatByteSize(partition.SizeBytes)
+                    : partition.FileLength > 0 ? FormatByteSize(partition.FileLength) : string.Empty
+                : string.Empty;
             rows.Add(new FlashPartitionEntry
             {
                 Name = partition.Partition,
-                Command = "flash",
+                // A partition the package lists without an image is never written: claiming "flash" would promise a
+                // write the run does not perform, and the row would ask for a file the package deliberately omits.
+                // 包内没有镜像的分区不会被写入：写 "flash" 会承诺一次实际不会发生的写入，还会向用户索要包刻意省略的文件。
+                Command = hasImage ? "flash" : string.Empty,
                 FilePath = partition.FilePath ?? string.Empty,
-                FileName = partition.FilePath is { } file ? Path.GetFileName(file)
-                    : IsRegexImageReference(reference) ? string.Empty : reference,
-                Size = partition.SizeBytes > 0 ? FormatByteSize(partition.SizeBytes)
-                    : partition.FileLength > 0 ? FormatByteSize(partition.FileLength) : string.Empty,
-                Offset = partition.OffsetBytes > 0 ? FormatByteSize(partition.OffsetBytes) : string.Empty,
-                StorageMedium = partition.TableFormat.ToUpperInvariant(),
+                // The table's own spelling, not the resolved path: a file the package references but that is missing on
+                // disk still shows the name the user has to supply, and the cell never invents a name.
+                // 显示分区表自己的拼写而不是解析后的路径：包引用了但磁盘上缺失的文件仍显示用户需要提供的名字，单元格不会编造名称。
+                FileName = hasImage ? Path.GetFileName(reference) : string.Empty,
+                AcceptsFile = hasImage,
+                Size = size,
+                Offset = partition.OffsetBytes >= 0
+                    ? partition.OffsetBytes == 0 ? "0" : FormatByteSize(partition.OffsetBytes)
+                    : string.Empty,
+                StorageMedium = partition.StorageMedium,
                 IsSelected = false
             });
         }
 
         Partitions.Apply(0, rows);
-        AppendLog($"[SpacemiT] {Path.GetFileName(package.RootPath)}: v{package.Script.Version}, " +
-            $"{package.Script.Actions.Count} actions · {rows.Count} partitions");
+        AppendLog(string.Format(_localizer.GetString("Flash_SpacemiTPackageLoaded"),
+            Path.GetFileName(package.RootPath), package.Script.Version,
+            package.Script.Actions.Count, rows.Count));
     }
 
     /// <summary>
@@ -1185,7 +1193,7 @@ public sealed partial class FlashViewModel
                 entry.FileName = Path.GetFileName(path);
                 entry.Size = $"{new FileInfo(path).Length / 1024d / 1024d:F1} MiB";
             }
-            AppendLog(output);
+            AppendLog(string.Format(_localizer.GetString("Flash_ExtractOutputPath"), output));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -1215,7 +1223,7 @@ public sealed partial class FlashViewModel
         {
             var output = await FlashPayloadService.BuildPackageAsync(payload,
                 [.. Partitions.Select(entry => entry.Name)], parent, cancellation.Token);
-            AppendLog(output);
+            AppendLog(string.Format(_localizer.GetString("Flash_WiredPackageOutputPath"), output));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -1391,6 +1399,9 @@ public sealed partial class FlashViewModel
             case DeviceProtocolKind.Rkdl:
                 await ChooseRkLoaderAsync();
                 break;
+            case DeviceProtocolKind.Fastboot when IsSpacemiTSelected:
+                await SendSpacemiTBootChainAsync();
+                break;
             default:
                 AppendLog(_localizer.GetString("Flash_LoadBootUnsupported"));
                 break;
@@ -1477,7 +1488,8 @@ public sealed partial class FlashViewModel
             SetControlEnabled("AddRootBox", true);
             Field<CheckBox>("AddRootBox").IsChecked = true;
             ToolTip.SetTip(Field<Button>("ChooseRootPackageButton"), path);
-            AppendLog(Path.GetFileName(path));
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_Log_FileChosen"), Path.GetFileName(path)));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -1589,16 +1601,10 @@ public sealed partial class FlashViewModel
     /// </summary>
     /// <param name="protocol">Protocol of the selected device; <see langword="null"/> means nothing is selected.
     /// <para>所选设备的协议；<see langword="null"/> 表示未选中设备。</para></param>
-    /// <param name="spacemiTFastboot">Whether the selected fastboot endpoint is the SpacemiT gadget.
-    /// <para>所选 fastboot 端点是否为进迭时空 gadget。</para></param>
-    internal void ExpandDeviceProtocolSection(DeviceProtocolKind? protocol, bool spacemiTFastboot = false)
+    internal void ExpandDeviceProtocolSection(DeviceProtocolKind? protocol)
     {
         if (_surface is null) return;
-        if (protocol is DeviceProtocolKind.Fastboot && spacemiTFastboot)
-        {
-            Field<Expander>("SpacemiTExpander").IsExpanded = true;
-        }
-        else if (protocol is DeviceProtocolKind.Edl)
+        if (protocol is DeviceProtocolKind.Edl)
         {
             Field<Expander>("EdlExpander").IsExpanded = true;
         }
@@ -1625,8 +1631,12 @@ public sealed partial class FlashViewModel
                 _lastObservedDevice?.Protocol != currentDevice?.Protocol)
             {
                 _lastObservedDevice = currentDevice;
-                ExpandDeviceProtocolSection(currentDevice?.Protocol, IsSpacemiTSelected);
+                ExpandDeviceProtocolSection(currentDevice?.Protocol);
                 ResetRkStorageOptions();
+                // The status table describes one device, so a selection change swaps in that device's own rows: its
+                // cached read when it has one, and the empty state when it was never read.
+                // 设备状态表只描述一台设备，因此选择变化时换成该设备自己的行：读过就显示缓存，从未读过则显示空态。
+                RestoreDeviceStatus(currentDevice?.Key);
                 if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
                 {
                     RefreshSunxiDeviceStatus();
@@ -1847,7 +1857,8 @@ public sealed partial class FlashViewModel
         UpdateEdlProgrammerUiState();
         if (_edlProgrammerOverride is { } selected)
         {
-            AppendLog(Path.GetFileName(selected));
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_Log_ProgrammerChosen"), Path.GetFileName(selected)));
         }
         UpdateEdlButton();
     }
@@ -2056,6 +2067,7 @@ public sealed partial class FlashViewModel
     /// loader（usbplug）的瑞芯微设备将其禁用，因为引导下载无法再次执行。</para>
     /// </summary>
     internal bool CanLoadBoot => SelectedDevice is not { } device ||
+        IsSpacemiTSelected ||
         FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage, RkStage);
 
     /// <summary>
@@ -2067,7 +2079,6 @@ public sealed partial class FlashViewModel
     {
         var protocol = SelectedDevice?.Protocol;
         var isEdl = protocol is DeviceProtocolKind.Edl;
-        var isFastboot = protocol is DeviceProtocolKind.Fastboot;
         var isMtk = protocol is DeviceProtocolKind.Mtk;
         var isMtkUsb = isMtk && SelectedDevice is { Transport: DeviceTransportKind.Usb };
 
@@ -2086,6 +2097,12 @@ public sealed partial class FlashViewModel
         SetControlEnabled("DeleteCowBox", !_busy);
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
+        // The flash action's intent belongs to the page, not to a protocol flow: every device change and every exit
+        // from a run restates it, and each control's own gate decides whether the selected endpoint can use it. A
+        // protocol branch that turns it off for its own run can therefore never leave it dead afterwards.
+        // 烧录动作的启用意图属于页面而不是某个协议流程：每次换设备、每次结束运行都重新声明它，由控件自身的门控决定所选端点
+        // 能否使用。因此任何为自身运行关闭它的协议分支都不会在之后把它留在死状态。
+        SetControlEnabled("FlashSelectedButton", !_busy);
         SetControlEnabled("ReadbackSelectedButton", !_busy && (
             (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
             (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected))));
@@ -2147,6 +2164,7 @@ public sealed partial class FlashViewModel
         {
             row.State = FlashRowState.Queued;
             row.Percent = 0;
+            row.IsIndeterminate = false;
             row.StatusText = language.GetString("Flash_Status_Queued");
         }
 
@@ -2165,6 +2183,7 @@ public sealed partial class FlashViewModel
         var language = _localizer;
         row.State = success ? FlashRowState.Succeeded : FlashRowState.Failed;
         row.StatusText = language.GetString(success ? "Flash_Status_Succeeded" : "Flash_Status_Failed");
+        row.IsIndeterminate = false;
         if (success)
         {
             row.Percent = 100;
@@ -2190,10 +2209,15 @@ public sealed partial class FlashViewModel
         {
             OverallPercent = 0;
             OverallText = string.Empty;
+            // A section that reports no fraction at all (the boot-chain staging) has no rows to average; it keeps
+            // scrolling rather than stopping at the zero this branch would otherwise publish.
+            // 完全没有比例可报的段落（引导链暂存）没有行可平均；它保持滚动，而不是停在这个分支原本写下的 0。
+            IsOverallIndeterminate = _overallScrolls;
             return;
         }
 
         var finished = 0;
+        var indeterminate = false;
         double share = 0;
         foreach (var row in rows)
         {
@@ -2206,12 +2230,19 @@ public sealed partial class FlashViewModel
                     share += 1;
                     break;
                 case FlashRowState.Running:
+                    if (row.IsIndeterminate)
+                    {
+                        indeterminate = true;
+                        break;
+                    }
+
                     share += Math.Clamp((double)row.Percent / 100d, 0d, 1d);
                     break;
             }
         }
 
         OverallPercent = share / rows.Count * 100d;
+        IsOverallIndeterminate = indeterminate;
         OverallText = string.Format(_localizer.GetString("Flash_OverallProgress"), finished, rows.Count);
     }
 
@@ -2312,10 +2343,11 @@ public sealed partial class FlashViewModel
         }
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        var statusEpoch = BeginDeviceStatusRefresh();
         SetBusy(true);
         try
         {
-            var partitions = await FastbootPartitionReader.ReadAsync(device,
+            var info = await FastbootDeviceInfoService.ReadAsync(device,
                 Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, cancellation.Token);
             Partitions.Clear();
             _loadedPath = string.Empty;
@@ -2335,8 +2367,13 @@ public sealed partial class FlashViewModel
             SetControlEnabled("ExtractSelectedButton", false);
             SetControlEnabled("BuildWiredPackageButton", false);
             PackagePath = string.Empty;
-            var deviceRows = new List<FlashPartitionEntry>(partitions.Count);
-            foreach (var (name, size) in partitions)
+            AppendLog($"{_localizer.GetString("Flash_ReadInfo")}: {device.DisplayName}");
+            // The read result goes to the device status table, which is where device information belongs; the log keeps
+            // only the action and the partition count the list below actually received.
+            // 读取结果填进设备状态表，设备信息本就该在那里；日志只保留动作本身与下方列表实际收到的分区数。
+            PublishFastbootDeviceStatus(info, device.Key, statusEpoch);
+            var deviceRows = new List<FlashPartitionEntry>(info.Partitions.Count);
+            foreach (var (name, size) in info.Partitions)
             {
                 deviceRows.Add(new FlashPartitionEntry
                 {
@@ -2345,7 +2382,10 @@ public sealed partial class FlashViewModel
                 });
             }
             Partitions.Apply(0, deviceRows);
-            AppendLog($"{partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
+            if (info.Partitions.Count > 0)
+            {
+                AppendLog($"{info.Partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
+            }
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -2449,7 +2489,11 @@ public sealed partial class FlashViewModel
     /// </summary>
     internal async void OnFlashSelectedClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } && IsSpacemiTSelected && HasSpacemiTPackage)
+        {
+            await FlashSpacemiTPackageAsync();
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
         {
             OnMtkFlashClick(sender, e);
         }
@@ -3163,7 +3207,8 @@ public sealed partial class FlashViewModel
 
                 if (update.Percent is 0 or 100)
                 {
-                    AppendLog($"{update.Partition}: {update.Status}");
+                    AppendLog(string.Format(CultureInfo.InvariantCulture,
+                        _localizer.GetString("Flash_Log_PartitionStatus"), update.Partition, update.Status));
                 }
             });
             SetRowsQueued(selected);
@@ -3356,7 +3401,8 @@ public sealed partial class FlashViewModel
                     break;
                 }
 
-                AppendLog($"{command} {entry.Name}: {entry.FileName}");
+                AppendLog(string.Format(language.GetString("Flash_Log_CommandFile"), command, entry.Name,
+                    entry.FileName));
                 SetRowRunning(entry, erase ? "Flash_Status_Erasing" : "Flash_Status_Flashing");
                 if (command == "wipe_super")
                 {
@@ -3484,7 +3530,8 @@ public sealed partial class FlashViewModel
                     _localizer.GetString("Flash_MtkLoaderNoEntries"));
             }
 
-            AppendLog(Path.GetFileName(path));
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_Log_FileChosen"), Path.GetFileName(path)));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -3516,7 +3563,8 @@ public sealed partial class FlashViewModel
             _mtkEmi = ReadEmi(path);
             Field<TextBlock>("MtkEmiPathText").Text = Path.GetFileName(path);
             ToolTip.SetTip(Field<TextBlock>("MtkEmiPathText"), path);
-            AppendLog(Path.GetFileName(path));
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_Log_FileChosen"), Path.GetFileName(path)));
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -4032,7 +4080,8 @@ public sealed partial class FlashViewModel
         });
         if (files.Count != 1 || files[0].TryGetLocalPath() is not { Length: > 0 } path) return;
         Field<TextBox>("EdlBootImageBox").Text = path;
-        AppendLog(Path.GetFileName(path));
+        AppendLog(string.Format(CultureInfo.InvariantCulture,
+            _localizer.GetString("Flash_Log_FileChosen"), Path.GetFileName(path)));
     }
     /// <summary>
     /// Writes the bootloader control block the selected target needs and then resets, so recovery and
@@ -4270,7 +4319,8 @@ public sealed partial class FlashViewModel
                 await EdlReadbackManifestWriter.WriteAsync(
                     manifestPath, manifest, sectorSize, numDiskSectors, generalized,
                     cancellation.Token).ConfigureAwait(true);
-                AppendLog(Path.GetFileName(manifestPath));
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_Log_ManifestWritten"), Path.GetFileName(manifestPath)));
             }
         }
         catch (OperationCanceledException) { MarkUnfinishedSkipped(); }
@@ -5552,6 +5602,7 @@ public sealed partial class FlashViewModel
                 Step = step,
                 Name = cleanName.Length > 0 ? cleanName : command,
                 Command = command,
+                AcceptsFile = FlashPartitionEntry.CommandTakesFile(command),
                 Size = sizeStr,
                 FileName = fileName,
                 FilePath = fullPath,
@@ -5670,6 +5721,7 @@ public sealed partial class FlashViewModel
                 Name = cleanName,
                 Size = sizeStr,
                 Command = command.Replace(" ", ""),
+                AcceptsFile = FlashPartitionEntry.CommandTakesFile(command),
                 FileName = fileName,
                 FilePath = fullPath,
                 IsSelected = false

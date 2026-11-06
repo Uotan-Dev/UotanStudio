@@ -156,6 +156,7 @@
                                  Minimum="0" Maximum="100" Height="20" CornerRadius="4"
                                  ShowProgressText="True" FontSize="12"
                                  Value="{Binding OverallPercent}" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                 IsIndeterminate="{Binding IsOverallIndeterminate}"
                                  ToolTip.Tip="{Binding OverallText}" IsVisible="True" />
                 </Grid>
             </Border>
@@ -199,6 +200,7 @@
                                  Minimum="0" Maximum="100" Height="20" CornerRadius="4"
                                  ShowProgressText="True" FontSize="12"
                                  Value="{Binding OverallPercent}" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                 IsIndeterminate="{Binding IsOverallIndeterminate}"
                                  ToolTip.Tip="{Binding OverallText}" IsVisible="False" />
                     <Grid Grid.Row="2" Margin="12,0,12,12">
                         <DataGrid Name="PartitionGrid" ItemsSource="{Binding VisiblePartitions}"
@@ -255,7 +257,7 @@
                                                                  Padding="6,0" VerticalAlignment="Center"
                                                                  HorizontalAlignment="Left"
                                                                  Click="OnChoosePartitionImageClick"
-                                                                 IsVisible="{Binding !HasFileName}"
+                                                                 IsVisible="{Binding CanChooseFile}"
                                                                  ToolTip.Tip="{Binding FilePath}" />
                                             </Grid>
                                         </DataTemplate>
@@ -270,6 +272,7 @@
                                             <Grid ColumnDefinitions="Auto,*">
                                                 <ProgressBar Width="90" VerticalAlignment="Center"
                                                              Minimum="0" Maximum="100" Value="{Binding Percent}"
+                                                             IsIndeterminate="{Binding IsIndeterminate}"
                                                              IsVisible="{Binding IsRunning}" />
                                                 <TextBlock Grid.Column="1" Text="{Binding StatusText}"
                                                            Margin="6,0" VerticalAlignment="Center" />
@@ -1047,33 +1050,6 @@
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
                                 </controls:JustifiedWrapPanel>
-                            </StackPanel>
-                        </Expander>
-                        <!-- 进迭时空分类 -->
-                        <Expander Name="SpacemiTExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_SpacemiT}" IsExpanded="{Binding IsSpacemiTSectionExpanded, Mode=TwoWay}">
-                            <StackPanel Name="SpacemiTPane" Spacing="8">
-                                <TextBlock Text="{DynamicResource Flash_SpacemiTPackageHint}" FontSize="12" Opacity="0.8"
-                                           TextWrapping="Wrap" />
-                                <TextBox Name="SpacemiTPackageBox" Height="32" VerticalContentAlignment="Center"
-                                         IsReadOnly="True" Text="{Binding SpacemiTPackagePath}"
-                                         PlaceholderText="{DynamicResource Flash_SpacemiTPackageHint}"
-                                         AutomationProperties.Name="{DynamicResource Flash_SpacemiTPackagePath}" />
-                                <Button Name="SpacemiTChoosePackageButton" Classes="pane-action"
-                                        Click="OnSpacemiTChoosePackageClick"
-                                        Content="{DynamicResource Flash_SpacemiTChoosePackage}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SpacemiTChoosePackage}" />
-                                <CheckBox Name="SpacemiTRebootBox" Content="{DynamicResource Flash_SpacemiTRebootAfter}"
-                                          IsChecked="{Binding SpacemiTRebootAfter, Mode=TwoWay}"
-                                          FontSize="12" MinHeight="0" Padding="4,0,0,0"
-                                          HorizontalAlignment="Left"
-                                          AutomationProperties.Name="{DynamicResource Flash_SpacemiTRebootAfter}" />
-                                <TextBlock Name="SpacemiTStatusText" Text="{Binding SpacemiTStatusText}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
-                                <Button Name="SpacemiTFlashButton" Classes="pane-action"
-                                        Click="OnSpacemiTFlashClick"
-                                        Content="{DynamicResource Flash_SpacemiTFlash}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SpacemiTFlash}" />
                             </StackPanel>
                         </Expander>
                         <!-- 全志 Sunxi 分类 -->

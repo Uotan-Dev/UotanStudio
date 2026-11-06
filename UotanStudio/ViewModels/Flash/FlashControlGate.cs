@@ -1,3 +1,5 @@
+using UotanStudio.Comm.Protocols.SpacemiT;
+
 namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
@@ -10,7 +12,8 @@ internal readonly record struct FlashGateContext(
     RockchipStage Stage,
     bool IsSpacemiTFastboot,
     bool HasAdbSu,
-    bool HasSelectedPartitions = false);
+    bool HasSelectedPartitions = false,
+    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown);
 
 /// <summary>
 /// One control's own availability condition: the control holds this object, and the page asks that control whether
@@ -56,7 +59,30 @@ internal sealed class FlashControlGate
         static context => context.Mode != FlashDeviceMode.None &&
             context.Kind is not (FlashDeviceKind.Hdc or FlashDeviceKind.Sunxi) &&
             !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom) &&
+            !(context.Kind == FlashDeviceKind.Fastboot && context.IsSpacemiTFastboot &&
+                context.FastbootStage == SpacemiTBootStage.BromFdl) &&
             (context.Kind != FlashDeviceKind.Adb || context.HasAdbSu),
+        busyDisabled);
+
+    /// <summary>
+    /// An option of the shared flash action: offered on a fastboot endpoint, because that is the only transport whose
+    /// flash path reads it. An erase, a reboot or a slot switch has nothing for an AVB, root, data-erase or COW option
+    /// to act on, so those options close on every other device instead of pretending they would change the run.
+    /// <para>通用烧录动作的选项：只在 fastboot 端点上提供，因为只有该传输的烧录路径会读取它。擦除、重启或槽位切换没有可供
+    /// AVB、Root、清数据或 COW 选项作用的对象，因此这些选项在其它设备上关闭，而不是假装会改变运行。</para>
+    /// </summary>
+    internal static FlashControlGate FlashOption(string name, bool busyDisabled = false) => new(name,
+        static context => context.Kind == FlashDeviceKind.Fastboot,
+        busyDisabled);
+
+    /// <summary>
+    /// An option only the generic fastboot flash path honours: the SpacemiT package run writes the package's own tables
+    /// and never reads it, so it is offered only when the selected fastboot endpoint is not that gadget.
+    /// <para>只由通用 fastboot 烧录路径读取的选项：进迭时空烧录包运行写的是包内分区表，从不读取它，因此只在所选 fastboot
+    /// 端点不是该 gadget 时提供。</para>
+    /// </summary>
+    internal static FlashControlGate GenericFastbootOption(string name, bool busyDisabled = false) => new(name,
+        static context => context.Kind == FlashDeviceKind.Fastboot && !context.IsSpacemiTFastboot,
         busyDisabled);
 
     /// <summary>
@@ -67,6 +93,20 @@ internal sealed class FlashControlGate
     internal static FlashControlGate SharedStorage(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode != FlashDeviceMode.None &&
             context.Kind == FlashDeviceKind.Unknown &&
+            !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom),
+        busyDisabled);
+
+    /// <summary>
+    /// The device-info read: offered to every protocol whose information the page can actually read, which includes
+    /// fastboot — that endpoint answers over <c>getvar</c> rather than the storage commands the shared read uses, and its
+    /// read is split by boot stage. HDC has no information branch at all, and a Rockchip endpoint proven to be in mask
+    /// ROM cannot answer the storage probes.
+    /// <para>设备信息读取：提供给页面确实能读取其信息的每个协议，其中包含 fastboot——该端点用 <c>getvar</c> 而不是通用读取所用的
+    /// 存储命令应答，其读取还按启动阶段拆分。HDC 完全没有信息分支，被证实处于 mask ROM 的瑞芯微端点无法应答存储探测。</para>
+    /// </summary>
+    internal static FlashControlGate InfoRead(string name, bool busyDisabled = false) => new(name,
+        static context => context.Mode != FlashDeviceMode.None &&
+            context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Fastboot &&
             !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom),
         busyDisabled);
 
@@ -91,12 +131,18 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// The boot-loader download: offered only to the modes whose devices can load one, since no other transport accepts it.
-    /// <para>引导下载：只提供给设备可加载引导的模式，其余传输不接受该动作。</para>
+    /// The boot-loader download: offered to the modes whose devices can load one, plus the SpacemiT gadget while it is
+    /// still in the BootROM download mode. Once that gadget runs the U-Boot stage there is no boot chain left to send —
+    /// the vendor script's staging actions would be skipped — so the entry closes and the shared flash action opens.
+    /// No other transport accepts it.
+    /// <para>引导下载：提供给设备可加载引导的模式，外加仍处于 BootROM 下载模式的进迭时空 gadget。该 gadget 进入 U-Boot 阶段后
+    /// 已没有引导链可发（厂商脚本的暂存动作会被跳过），因此该入口关闭、通用烧录动作打开。其余传输不接受该动作。</para>
     /// </summary>
     internal static FlashControlGate LoaderOnly(string name, bool busyDisabled = false) => new(name,
-        static context => (context.Mode is FlashDeviceMode.Edl or FlashDeviceMode.Mtk or FlashDeviceMode.Rkdl) &&
-            context.Kind == FlashDeviceKind.Unknown,
+        static context => ((context.Mode is FlashDeviceMode.Edl or FlashDeviceMode.Mtk or FlashDeviceMode.Rkdl) &&
+                context.Kind == FlashDeviceKind.Unknown) ||
+            (context.Kind == FlashDeviceKind.Fastboot && context.IsSpacemiTFastboot &&
+                context.FastbootStage != SpacemiTBootStage.Uboot),
         busyDisabled);
 
     /// <summary>
@@ -110,15 +156,6 @@ internal sealed class FlashControlGate
                 (owner == FlashDeviceMode.Sunxi && context.Kind == FlashDeviceKind.Sunxi)) &&
             (owner != FlashDeviceMode.Rkdl || context.Stage != RockchipStage.Maskrom),
             busyDisabled);
-
-    /// <summary>
-    /// The SpacemiT section and its controls: offered only to the SpacemiT fastboot gadget itself, regardless of mode,
-    /// because no other endpoint answers that package's script.
-    /// <para>进迭时空分类及其控件：只提供给进迭时空 fastboot gadget 本身，与模式无关，因为其他端点不应答该包的脚本。</para>
-    /// </summary>
-    internal static FlashControlGate SpacemiT(string name, bool busyDisabled = false) => new(name,
-        static context => context.Kind == FlashDeviceKind.Fastboot && context.IsSpacemiTFastboot,
-        busyDisabled);
 
     /// <summary>
     /// The Allwinner section and its controls: offered only to an Allwinner endpoint, which owns the only action set

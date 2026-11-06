@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
@@ -16,8 +17,9 @@ public sealed class FlashControlGateTests
 
     private static FlashGateContext Context(FlashDeviceMode mode,
         FlashDeviceKind kind = FlashDeviceKind.Unknown, RockchipStage stage = RockchipStage.Unknown,
-        bool spacemiTFastboot = false, bool adbSu = false, bool hasSelectedPartitions = false) =>
-        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions);
+        bool spacemiTFastboot = false, bool adbSu = false, bool hasSelectedPartitions = false,
+        SpacemiTBootStage fastbootStage = SpacemiTBootStage.Unknown) =>
+        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions, fastbootStage);
 
     [Fact]
     public void ModeOf_SelectedProtocol_ReturnsModeThatOffersItsSection()
@@ -80,6 +82,33 @@ public sealed class FlashControlGateTests
         Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
         Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl)),
             "a board whose stage no evidence settles must still be flashable");
+    }
+
+    [Fact]
+    public void InfoRead_OpensOnFastbootBecauseThatEndpointAnswersGetvar()
+    {
+        var gate = FlashControlGate.InfoRead("ReadInfoButton");
+
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Edl)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Maskrom)));
+
+        // Both fastboot stages can be read: the generic gadget through the standard branch, the SpacemiT gadget through
+        // the branch its stage selects.
+        // 两个 fastboot 阶段都可读取：通用 gadget 走标准分支，进迭时空 gadget 走其阶段选定的分支。
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)));
+
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb, adbSu: true)),
+            "the page has no information branch for ADB");
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
     }
 
     [Fact]
@@ -151,6 +180,37 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
+    public void LoaderOnly_OffersTheBootChainToTheSpacemiTGadget()
+    {
+        var gate = FlashControlGate.LoaderOnly("LoadBootButton");
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)),
+            "a gadget already running U-Boot has no boot chain left to send");
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+    }
+
+    [Fact]
+    public void SharedFlash_ClosesWhileTheSpacemiTGadgetStillSitsInTheBootromMode()
+    {
+        var gate = FlashControlGate.SharedFlash("FlashSelectedButton");
+
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)),
+            "the U-Boot stage can still write partitions");
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true)),
+            "an unproven stage must not lock the flash action");
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+    }
+
+    [Fact]
     public void Section_IsOfferedOnlyToItsOwnMode()
     {
         var gates = new (FlashControlGate Gate, FlashDeviceMode Owner)[]
@@ -181,19 +241,6 @@ public sealed class FlashControlGateTests
         Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
         Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl)),
             "an unproven stage keeps the commands the device itself can refuse");
-    }
-
-    [Fact]
-    public void SpacemiT_OpensOnlyForTheGadgetItself()
-    {
-        var gate = FlashControlGate.SpacemiT("SpacemiTFlashButton");
-
-        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
-            spacemiTFastboot: true)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb, spacemiTFastboot: true)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc, spacemiTFastboot: true)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Edl, spacemiTFastboot: true)));
     }
 
     [Fact]

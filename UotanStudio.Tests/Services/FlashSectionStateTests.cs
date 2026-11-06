@@ -41,12 +41,10 @@ public sealed class FlashSectionStateTests
     [Fact]
     public void Capture_OnlyExpandedSections_AreListedInPresentationOrder()
     {
-        Assert.Equal(["mtk", "image"], FlashSectionState.Capture(edl: false, mtk: true, rockchip: false, spacemiT: false, image: true));
-        Assert.Empty(FlashSectionState.Capture(edl: false, mtk: false, rockchip: false, spacemiT: false, image: false));
+        Assert.Equal(["mtk", "image"], FlashSectionState.Capture(edl: false, mtk: true, rockchip: false, image: true));
+        Assert.Empty(FlashSectionState.Capture(edl: false, mtk: false, rockchip: false, image: false));
         Assert.Equal(["edl", "mtk", "rockchip", "image"],
-            FlashSectionState.Capture(edl: true, mtk: true, rockchip: true, spacemiT: false, image: true));
-        Assert.Equal(["edl", "mtk", "rockchip", "spacemit", "image"],
-            FlashSectionState.Capture(edl: true, mtk: true, rockchip: true, spacemiT: true, image: true));
+            FlashSectionState.Capture(edl: true, mtk: true, rockchip: true, image: true));
     }
 
     [Fact]

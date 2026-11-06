@@ -63,6 +63,20 @@ public sealed class FlashPackageParsingTests
 
             Assert.Equal("reboot", rows[4].Command);
             Assert.Equal("reboot", rows[4].Name);
+
+            // A write and a super wipe both take an image, so those two rows may offer the choose-file prompt when the
+            // image is missing; the other three keep their file cell blank rather than asking for a file their command
+            // never reads. None of them prompts here, because every row already names its file.
+            // 写入与 super 擦除都需要镜像，因此这两行在镜像缺失时才可能提示选择文件；其余三行的文件列保持空白，
+            // 而不是索要命令根本不会读取的文件。此处没有一行提示，因为它们都已经有文件名。
+            Assert.True(rows[1].AcceptsFile);
+            Assert.True(rows[2].AcceptsFile);
+            foreach (var row in new[] { rows[0], rows[3], rows[4] })
+            {
+                Assert.False(row.AcceptsFile, row.Name);
+            }
+
+            Assert.All(rows, row => Assert.False(row.CanChooseFile, row.Name));
         }
         finally
         {
@@ -155,6 +169,17 @@ public sealed class FlashPackageParsingTests
             Assert.Equal("flash", rows[3].Command);
             Assert.Equal("vendor_boot", rows[3].Name);
             Assert.Equal("vendor_boot.img", rows[3].FileName);
+
+            // A manifest row that names an image already shows that name even when the file is missing, so its cell
+            // never offers a prompt next to a size; the two structural commands offer no file at all.
+            // 清单行一旦给出镜像名，即使文件缺失也显示该名称，因此单元格不会在大小旁边再提示选择文件；两条结构性命令
+            // 则完全不提供文件。
+            Assert.True(rows[2].AcceptsFile);
+            Assert.False(rows[2].CanChooseFile);
+            Assert.True(rows[3].AcceptsFile);
+            Assert.False(rows[3].CanChooseFile);
+            Assert.False(rows[0].AcceptsFile);
+            Assert.False(rows[1].AcceptsFile);
         }
         finally
         {

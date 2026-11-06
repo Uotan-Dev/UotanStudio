@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Flash;
 using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Flash;
@@ -54,6 +55,12 @@ public static class FlashDeviceStatusRowKeys
 
     /// <summary>Another present medium and its geometry.<para>另一个存在的介质及其几何。</para></summary>
     public const string StorageProbe = "storage-probe";
+
+    /// <summary>
+    /// A fastboot endpoint's boot stage and the variables it answered, folded into one group.
+    /// <para>fastboot 端点的启动阶段与它应答的变量，合并为同一分组。</para>
+    /// </summary>
+    public const string Fastboot = "fastboot";
 }
 
 public sealed partial class FlashViewModel
@@ -70,6 +77,20 @@ public sealed partial class FlashViewModel
     /// <para>串行化设备状态发布：仅在没有更新的填充启动时才发布行，防止过期的点击覆盖新行。</para>
     /// </summary>
     private int _rkStatusRefreshEpoch;
+
+    /// <summary>
+    /// The last rows published for each device key, so switching to another device and back shows that device's own
+    /// read again instead of an empty table or the rows of the device the user just left.
+    /// <para>每个设备键最近一次发布的行，使切到别处再切回时仍显示该设备自己的读取结果，而不是空表或刚离开那台设备的行。</para>
+    /// </summary>
+    /// <remarks>
+    /// Only published reads are cached; nothing here opens a session. The cache follows the table rather than the
+    /// device list, so a device whose read failed keeps no rows and shows the empty state when selected again until it
+    /// is read successfully — a failure is not worth remembering.
+    /// <para>只缓存已发布的读取结果，这里不打开任何会话。缓存跟随表格而不跟随设备列表：读取失败的设备不留行，再次选中时显示
+    /// 空态，直到成功读取——失败不值得记住。</para>
+    /// </remarks>
+    private readonly Dictionary<string, FlashDeviceStatusEntry[]> _deviceStatusCache = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Cooperative bound for the read-only RKDL status query, so the table is never held up by a device.
@@ -113,7 +134,8 @@ public sealed partial class FlashViewModel
         }
 
         var language = _localizer;
-        var epoch = ++_rkStatusRefreshEpoch;
+        var epoch = BeginDeviceStatusRefresh();
+        var deviceKey = SelectedDevice?.Key;
         List<FlashDeviceStatusEntry> rows;
         List<int>? storages = null;
         var currentStorage = -1;
@@ -163,11 +185,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        DeviceStatus.Clear();
-        foreach (var row in rows)
-        {
-            DeviceStatus.Add(row);
-        }
+        ReplaceDeviceStatus(deviceKey, rows);
 
         if (storages is not null)
         {
@@ -177,6 +195,117 @@ public sealed partial class FlashViewModel
                 SelectRkStorage(currentStorage);
             }
         }
+    }
+
+    /// <summary>
+    /// Starts one device-status fill and returns its epoch: a publication whose epoch is no longer current is dropped, so
+    /// the rows always describe the newest read even when two reads overlap.
+    /// <para>开始一次设备状态填充并返回其世代号：世代号已过期的发布会被丢弃，因此即使两次读取重叠，表格也总是描述最新一次读取。</para>
+    /// </summary>
+    /// <returns>The epoch to pass back to the publisher. <para>要回传给发布方的世代号。</para></returns>
+    internal int BeginDeviceStatusRefresh() => ++_rkStatusRefreshEpoch;
+
+    /// <summary>
+    /// Replaces the device status table with the rows one read produced and keeps them for that device.
+    /// <para>用一次读取产生的行替换设备状态表，并为该设备留下这些行。</para>
+    /// </summary>
+    /// <param name="deviceKey">Key of the device the rows describe; <see langword="null"/> keeps them out of the cache.
+    /// <para>这些行所描述设备的键；为 <see langword="null"/> 时不写入缓存。</para></param>
+    /// <param name="rows">Rows in display order. <para>按显示顺序排列的行。</para></param>
+    private void ReplaceDeviceStatus(string? deviceKey, List<FlashDeviceStatusEntry> rows)
+    {
+        if (deviceKey is { Length: > 0 } key)
+        {
+            // An empty result means the read produced nothing worth remembering, so it drops any older rows instead of
+            // freezing them in place.
+            // 空结果说明该次读取没有值得记住的内容，因此删除旧行而不是把它们冻结在原地。
+            if (rows.Count == 0)
+            {
+                _deviceStatusCache.Remove(key);
+            }
+            else
+            {
+                _deviceStatusCache[key] = [.. rows];
+            }
+        }
+
+        DeviceStatus.Clear();
+        foreach (var row in rows)
+        {
+            DeviceStatus.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// Shows the device status of the newly selected device: the rows cached for it, or the empty state when it was
+    /// never read. Called on every selection change so the table never keeps describing the device the user just left.
+    /// <para>显示新选中设备的状态：有缓存时用它的行，从未读取过则显示空态。每次选择变化都调用，因此表格绝不会继续描述用户刚
+    /// 离开的那台设备。</para>
+    /// </summary>
+    /// <param name="deviceKey">Key of the selected device, or <see langword="null"/> when none is selected.
+    /// <para>所选设备的键；未选中设备时为 <see langword="null"/>。</para></param>
+    internal void RestoreDeviceStatus(string? deviceKey)
+    {
+        // A selection change invalidates every in-flight read: whatever it reports describes the device the user just
+        // left, so its publication must not land in the table of the new one.
+        // 选择变化会使所有进行中的读取失效：它上报的内容描述的是用户刚离开的设备，其发布不得落进新设备的表格。
+        _ = BeginDeviceStatusRefresh();
+        DeviceStatus.Clear();
+        if (deviceKey is not { Length: > 0 } key || !_deviceStatusCache.TryGetValue(key, out var rows))
+        {
+            return;
+        }
+
+        foreach (var row in rows)
+        {
+            DeviceStatus.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// Publishes what a fastboot read reported into the device status table: the boot stage it answered at, then one row
+    /// per variable the endpoint answered. The read result is the only source — nothing here writes to the log, because
+    /// the table is where device information belongs.
+    /// <para>把 fastboot 读取的上报填进设备状态表：先写应答时的启动阶段，再为端点应答的每个变量各写一行。读取结果是唯一来源
+    /// ——这里不写日志，因为设备信息本就该在表格里。</para>
+    /// </summary>
+    /// <param name="info">The read result. <para>读取结果。</para></param>
+    /// <param name="deviceKey">Key of the device the read described, which is what the rows are cached under.
+    /// <para>本次读取所描述设备的键，行按该键缓存。</para></param>
+    /// <param name="epoch">The epoch the read started with; a stale read publishes nothing.
+    /// <para>读取开始时的世代号；过期读取不发布任何内容。</para></param>
+    internal void PublishFastbootDeviceStatus(FastbootDeviceInfo info, string? deviceKey, int epoch)
+    {
+        if (epoch != _rkStatusRefreshEpoch)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        var rows = new List<FlashDeviceStatusEntry>(info.Facts.Count + 1);
+        if (info.Branch != FastbootInfoBranch.Generic)
+        {
+            rows.Add(new FlashDeviceStatusEntry
+            {
+                Key = FlashDeviceStatusRowKeys.Fastboot,
+                Name = language.GetString("Flash_FastbootInfo_Stage"),
+                Value = language.GetString(info.Branch == FastbootInfoBranch.SpacemiTFdl
+                    ? "Flash_FastbootInfo_StageFdl"
+                    : "Flash_FastbootInfo_StageUboot"),
+            });
+        }
+
+        foreach (var fact in info.Facts)
+        {
+            rows.Add(new FlashDeviceStatusEntry
+            {
+                Key = FlashDeviceStatusRowKeys.Fastboot,
+                Name = language.GetString(fact.LabelKey),
+                Value = fact.Value,
+            });
+        }
+
+        ReplaceDeviceStatus(deviceKey, rows);
     }
 
     /// <summary>

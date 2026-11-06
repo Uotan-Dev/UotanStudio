@@ -336,8 +336,6 @@ public partial class FlashView : UserControl
     private void OnRkLbaWriteClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaWriteClick(sender, e);
     private void OnRkEraseSectorsClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseSectorsClick(sender, e);
     private void OnRkReadPartitionsClick(object? sender, RoutedEventArgs e) => _model.OnRkReadPartitionsClick(sender, e);
-    private void OnSpacemiTChoosePackageClick(object? sender, RoutedEventArgs e) => _model.OnSpacemiTChoosePackageClick(sender, e);
-    private void OnSpacemiTFlashClick(object? sender, RoutedEventArgs e) => _model.OnSpacemiTFlashClick(sender, e);
     private void OnSunxiRefreshClick(object? sender, RoutedEventArgs e) => _model.OnSunxiRefreshClick(sender, e);
     private void OnSunxiChooseFes1Click(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseFes1Click(sender, e);
     private void OnSunxiChooseUbootClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseUbootClick(sender, e);

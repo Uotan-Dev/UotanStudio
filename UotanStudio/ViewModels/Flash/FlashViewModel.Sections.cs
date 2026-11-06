@@ -24,10 +24,6 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private bool _isRockchipSectionExpanded;
 
-    /// <summary>Whether the SpacemiT section is expanded. <para>进迭时空分类是否展开。</para></summary>
-    [ObservableProperty]
-    private bool _isSpacemiTSectionExpanded;
-
     /// <summary>Whether the Sunxi section is expanded. <para>全志分类是否展开。</para></summary>
     [ObservableProperty]
     private bool _isSunxiSectionExpanded;
@@ -42,8 +38,6 @@ public sealed partial class FlashViewModel
 
     partial void OnIsRockchipSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
-    partial void OnIsSpacemiTSectionExpandedChanged(bool value) => PersistSectionExpansion();
-
     partial void OnIsSunxiSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsImageSectionExpandedChanged(bool value) => PersistSectionExpansion();
@@ -57,7 +51,6 @@ public sealed partial class FlashViewModel
             IsEdlSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Edl);
             IsMtkSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Mtk);
             IsRockchipSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Rockchip);
-            IsSpacemiTSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.SpacemiT);
             IsSunxiSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Sunxi);
             IsImageSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Image);
         }
@@ -78,7 +71,6 @@ public sealed partial class FlashViewModel
             IsEdlSectionExpanded,
             IsMtkSectionExpanded,
             IsRockchipSectionExpanded,
-            IsSpacemiTSectionExpanded,
             IsImageSectionExpanded,
             IsSunxiSectionExpanded));
     }

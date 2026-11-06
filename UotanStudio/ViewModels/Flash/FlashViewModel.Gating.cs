@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
@@ -57,6 +58,13 @@ public sealed partial class FlashViewModel
     internal bool IsSpacemiTSelected => _deviceViewModel?.SelectedDevice?.IsSpacemiTFastboot == true;
 
     /// <summary>
+    /// The boot stage the selected SpacemiT gadget reports: the BootROM download mode cannot write partitions, so the
+    /// shared flash action stays closed until the boot chain has been sent.
+    /// <para>所选进迭时空 gadget 上报的启动阶段：BootROM 下载模式无法写分区，因此在发送引导链之前通用烧录动作保持关闭。</para>
+    /// </summary>
+    internal SpacemiTBootStage SelectedFastbootStage => SelectedDevice?.FastbootStage ?? SpacemiTBootStage.Unknown;
+
+    /// <summary>
     /// The last ADB root-shell verdict for the selected device key; <see langword="null"/> until a probe for
     /// that key completed, so an unprobed device never looks authorized.
     /// <para>所选设备键最近一次的 ADB root shell 结论；对该键的探测完成前为 <see langword="null"/>，
@@ -107,7 +115,8 @@ public sealed partial class FlashViewModel
     /// <para>每个控件自身条件求值所用的设备与页面快照。</para>
     /// </summary>
     private FlashGateContext GateContext =>
-        new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions);
+        new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions,
+            SelectedFastbootStage);
 
     /// <summary>
     /// Registers every control's own gate; called once when the page is attached, before any enable decision reads it.
@@ -120,7 +129,6 @@ public sealed partial class FlashViewModel
         RegisterEdlControlGates();
         RegisterMtkControlGates();
         RegisterRockchipControlGates();
-        RegisterSpacemiTControlGates();
         RegisterSunxiControlGates();
         RegisterImageControlGates();
     }
@@ -164,7 +172,7 @@ public sealed partial class FlashViewModel
     private void RegisterSharedControlGates()
     {
         RegisterGate("LoadBootButton", FlashControlGate.LoaderOnly("LoadBootButton", busyDisabled: true));
-        RegisterGate("ReadInfoButton", FlashControlGate.SharedStorage("ReadInfoButton", busyDisabled: true));
+        RegisterGate("ReadInfoButton", FlashControlGate.InfoRead("ReadInfoButton", busyDisabled: true));
         RegisterGate("ReadbackSelectedButton",
             FlashControlGate.SharedStorage("ReadbackSelectedButton", busyDisabled: true));
         RegisterGate("FlashSelectedButton",
@@ -173,15 +181,26 @@ public sealed partial class FlashViewModel
             FlashControlGate.SharedStorage("EraseSelectedButton", busyDisabled: true));
         RegisterGate("SwitchSlotButton", FlashControlGate.SlotSwitch("SwitchSlotButton", busyDisabled: true));
 
-        RegisterGate("DisableVbmetaBox", FlashControlGate.BusyOnly("DisableVbmetaBox"));
-        RegisterGate("AddRootBox", FlashControlGate.BusyOnly("AddRootBox"));
-        RegisterGate("EraseDataBox", FlashControlGate.BusyOnly("EraseDataBox"));
-        RegisterGate("RebootAfterBox", FlashControlGate.BusyOnly("RebootAfterBox"));
-        RegisterGate("ShowAllPartitionsBox", FlashControlGate.BusyOnly("ShowAllPartitionsBox"));
-        RegisterGate("DeleteCowBox", FlashControlGate.BusyOnly("DeleteCowBox"));
-        RegisterGate("AvbOptionsPanel", FlashControlGate.BusyOnly("AvbOptionsPanel"));
-        RegisterGate("RootOptionsPanel", FlashControlGate.BusyOnly("RootOptionsPanel"));
-        RegisterGate("ChooseRootPackageButton", FlashControlGate.BusyOnly("ChooseRootPackageButton"));
+        // The five write options are only read by the fastboot flash paths; the SpacemiT package run reads the reboot
+        // option alone, so the other four close on that gadget instead of sitting there without effect.
+        // 五个写入选项只由 fastboot 烧录路径读取；进迭时空烧录包运行只读取重启选项，因此其余四个在该 gadget 上关闭，
+        // 而不是毫无作用地留在界面上。
+        RegisterGate("DisableVbmetaBox",
+            FlashControlGate.GenericFastbootOption("DisableVbmetaBox", busyDisabled: true));
+        RegisterGate("AddRootBox", FlashControlGate.GenericFastbootOption("AddRootBox", busyDisabled: true));
+        RegisterGate("EraseDataBox", FlashControlGate.GenericFastbootOption("EraseDataBox", busyDisabled: true));
+        RegisterGate("RebootAfterBox", FlashControlGate.FlashOption("RebootAfterBox", busyDisabled: true));
+        RegisterGate("DeleteCowBox", FlashControlGate.GenericFastbootOption("DeleteCowBox", busyDisabled: true));
+        // The physical-partition switch only changes the device-info read, which no fastboot endpoint offers.
+        // 物理分区开关只影响设备信息读取，而没有任何 fastboot 端点提供该读取。
+        RegisterGate("ShowAllPartitionsBox",
+            FlashControlGate.SharedStorage("ShowAllPartitionsBox", busyDisabled: true));
+        RegisterGate("AvbOptionsPanel",
+            FlashControlGate.GenericFastbootOption("AvbOptionsPanel", busyDisabled: true));
+        RegisterGate("RootOptionsPanel",
+            FlashControlGate.GenericFastbootOption("RootOptionsPanel", busyDisabled: true));
+        RegisterGate("ChooseRootPackageButton",
+            FlashControlGate.GenericFastbootOption("ChooseRootPackageButton", busyDisabled: true));
     }
 
     /// <summary>
