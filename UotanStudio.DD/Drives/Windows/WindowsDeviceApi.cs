@@ -23,11 +23,27 @@ internal static class WindowsDeviceApi
 
     internal const uint IoctlVolumeGetDiskExtents = 0x00560000;
     internal const uint IoctlDiskGetLengthInfo = 0x0007405C;
+    internal const uint IoctlDiskGetDriveGeometryEx = 0x000700A0;
     internal const uint IoctlDiskIsWritable = 0x00070024;
     internal const uint IoctlStorageQueryProperty = 0x002D1400;
     internal const uint IoctlStorageMediaRemoval = 0x00202004;
     internal const uint FsctlLockVolume = 0x00090018;
     internal const uint FsctlDismountVolume = 0x00090020;
+
+    /// <summary>
+    /// Byte offset of <c>DiskSize</c> inside a <c>DISK_GEOMETRY_EX</c> reply: a 24-byte
+    /// <c>DISK_GEOMETRY</c> followed by the 8-byte logical size.
+    /// <para><c>DISK_GEOMETRY_EX</c> 回复中 <c>DiskSize</c> 的字节偏移：先是 24 字节的
+    /// <c>DISK_GEOMETRY</c>，随后是 8 字节的逻辑容量。</para>
+    /// </summary>
+    private const int DiskGeometryExSizeOffset = 24;
+
+    /// <summary>
+    /// Buffer size that always covers the fixed part of a <c>DISK_GEOMETRY_EX</c> reply, whose trailing
+    /// partition entries are not needed.
+    /// <para>足以覆盖 <c>DISK_GEOMETRY_EX</c> 固定部分的缓冲区大小；其尾部的分区条目并不需要。</para>
+    /// </summary>
+    private const int GeometryExtendedBufferBytes = DiskGeometryExSizeOffset + 8 + 128;
 
     private const int ErrorMoreData = 234;
     private const int ErrorWriteProtect = 19;
@@ -43,6 +59,19 @@ internal static class WindowsDeviceApi
     /// <returns>The handle, or <see langword="null"/> when Windows rejected the open.
     /// <para>句柄；Windows 拒绝打开时为 <see langword="null"/>。</para></returns>
     internal static SafeFileHandle? TryOpen(string path, uint desiredAccess)
+        => TryOpen(path, desiredAccess, out _);
+
+    /// <summary>
+    /// Opens a device path with the requested access and reports the Win32 error when the open failed.
+    /// <para>以请求的访问权限打开设备路径，并在打开失败时报告 Win32 错误。</para>
+    /// </summary>
+    /// <param name="path">Device or volume path.<para>设备或卷路径。</para></param>
+    /// <param name="desiredAccess">Win32 access mask.<para>Win32 访问掩码。</para></param>
+    /// <param name="errorCode">The Win32 error of the failed call, or zero on success.
+    /// <para>调用失败时的 Win32 错误；成功时为零。</para></param>
+    /// <returns>The handle, or <see langword="null"/> when Windows rejected the open.
+    /// <para>句柄；Windows 拒绝打开时为 <see langword="null"/>。</para></returns>
+    internal static SafeFileHandle? TryOpen(string path, uint desiredAccess, out int errorCode)
     {
         var raw = CreateFileW(
             path,
@@ -54,9 +83,11 @@ internal static class WindowsDeviceApi
             IntPtr.Zero);
         if (raw.ToInt64() == -1 || raw == IntPtr.Zero)
         {
+            errorCode = Marshal.GetLastPInvokeError();
             return null;
         }
 
+        errorCode = 0;
         return new SafeFileHandle(raw, ownsHandle: true);
     }
 
@@ -151,6 +182,15 @@ internal static class WindowsDeviceApi
     /// <param name="devicePath">Path such as <c>\\.\PhysicalDrive2</c>.<para>形如 <c>\\.\PhysicalDrive2</c> 的路径。</para></param>
     /// <returns>The capacity in bytes, or <see langword="null"/> when it cannot be queried.
     /// <para>容量（字节）；无法查询时为 <see langword="null"/>。</para></returns>
+    /// <remarks>
+    /// <c>IOCTL_DISK_GET_LENGTH_INFO</c> is refused with <c>ERROR_ACCESS_DENIED</c> whenever the process does
+    /// not hold a token that may write the disk, so the geometry-extended query is used as the fallback; it
+    /// reports the same physical length to an ordinary user.
+    /// <para>
+    /// 当进程不持有可写该磁盘的令牌时，<c>IOCTL_DISK_GET_LENGTH_INFO</c> 会以
+    /// <c>ERROR_ACCESS_DENIED</c> 被拒绝；因此回退到几何扩展查询，普通用户用它也能读到相同的物理容量。
+    /// </para>
+    /// </remarks>
     internal static long? TryGetDiskLength(string devicePath)
     {
         using var handle = TryOpen(devicePath, FileReadAttributes);
@@ -160,9 +200,16 @@ internal static class WindowsDeviceApi
         }
 
         var buffer = new byte[8];
-        return DeviceIoControl(handle, IoctlDiskGetLengthInfo, null, 0, buffer, (uint)buffer.Length, out var returned, IntPtr.Zero)
-            && returned >= 8
-            ? BinaryPrimitives.ReadInt64LittleEndian(buffer)
+        if (DeviceIoControl(handle, IoctlDiskGetLengthInfo, null, 0, buffer, (uint)buffer.Length, out var returned, IntPtr.Zero)
+            && returned >= 8)
+        {
+            return BinaryPrimitives.ReadInt64LittleEndian(buffer);
+        }
+
+        var geometry = new byte[GeometryExtendedBufferBytes];
+        return DeviceIoControl(handle, IoctlDiskGetDriveGeometryEx, null, 0, geometry, (uint)geometry.Length, out returned, IntPtr.Zero)
+            && returned >= DiskGeometryExSizeOffset + sizeof(long)
+            ? BinaryPrimitives.ReadInt64LittleEndian(geometry.AsSpan(DiskGeometryExSizeOffset))
             : null;
     }
 

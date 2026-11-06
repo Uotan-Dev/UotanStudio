@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
 using UotanStudio.DD.Drives;
 using UotanStudio.DD.Drives.Windows;
@@ -56,12 +57,16 @@ internal sealed class WindowsDiskTarget : IDiskTarget
             _volumeHandles.Add(WindowsDeviceApi.LockAndDismountVolume(root));
         }
 
-        var handle = WindowsDeviceApi.TryOpen(Drive.DevicePath, WindowsDeviceApi.GenericRead | WindowsDeviceApi.GenericWrite);
+        var handle = WindowsDeviceApi.TryOpen(
+            Drive.DevicePath,
+            WindowsDeviceApi.GenericRead | WindowsDeviceApi.GenericWrite,
+            out var errorCode);
         if (handle is null)
         {
-            throw new FlashException(
-                $"Windows could not open \"{Drive.DevicePath}\" for writing. Run with administrator rights.",
-                WindowsDeviceApi.LastError());
+            var message = $"Windows could not open \"{Drive.DevicePath}\" for writing. Run with administrator rights.";
+            throw FlashAccessClassifier.IsAccessDenied(errorCode)
+                ? new FlashAccessDeniedException(message, new Win32Exception(errorCode))
+                : new FlashException(message, new Win32Exception(errorCode));
         }
 
         _stream = new FileStream(handle, FileAccess.ReadWrite, 4096, isAsync: false);

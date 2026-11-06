@@ -65,7 +65,7 @@ internal sealed class LinuxDiskTarget : IDiskTarget
         }
         catch (UnauthorizedAccessException exception)
         {
-            throw new FlashException(
+            throw new FlashAccessDeniedException(
                 $"Linux could not open \"{Drive.DevicePath}\" for writing. Run with root privileges.",
                 exception);
         }
