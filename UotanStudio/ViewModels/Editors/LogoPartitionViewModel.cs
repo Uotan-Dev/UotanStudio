@@ -10,7 +10,6 @@ using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Services.Logging;
 using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Editors;

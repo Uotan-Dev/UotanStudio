@@ -3,7 +3,6 @@ using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 using UotanStudio.Comm.Transports.Usb.Backend.Linux;
 using UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 using UotanStudio.Comm.Transports.Usb.Backend.Windows;
-using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Shell;
 using Xunit;

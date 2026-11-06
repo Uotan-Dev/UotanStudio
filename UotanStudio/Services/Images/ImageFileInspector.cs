@@ -2,7 +2,6 @@ using Sdcb.SimdCodecs;
 using Sdcb.SimdCodecs.Abstractions;
 using Sdcb.SimdCodecs.Png;
 using UotanStudio.Firmware.Core.Magic;
-using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Services.Images;
 
