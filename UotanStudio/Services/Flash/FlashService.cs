@@ -63,12 +63,16 @@ public sealed class FlashService : IFlashService
                     DeviceProtocolKind.Edl => await FlashEdlAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false),
                     DeviceProtocolKind.Rkdl => await FlashRkdlAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false),
                     DeviceProtocolKind.Adb => await FlashAdbAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false),
-                    _ => new FlashResult { Success = false, Summary = $"Unsupported protocol for flashing: {device.Mode}" }
+                    _ => new FlashResult
+                    {
+                        Success = false,
+                        Summary = FlashLogText.Format("Flash_Service_UnsupportedFlashProtocol", device.Mode)
+                    }
                 };
         }
         catch (OperationCanceledException)
         {
-            return new FlashResult { Success = false, Summary = "Flash canceled." };
+            return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_Canceled") };
         }
         catch (Exception ex)
         {
@@ -107,27 +111,27 @@ public sealed class FlashService : IFlashService
 
             if (device.Protocol != DeviceProtocolKind.Fastboot)
             {
-                return new FlashResult { Success = false, Summary = "Erase only supported via fastboot. 擦除仅支持 fastboot 模式。" };
+                return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_EraseFastbootOnly") };
             }
 
-            Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+            Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_FastbootOpening"));
             return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
             {
                 ct.ThrowIfCancellationRequested();
-                Report(progress, partition, 30, $"Erasing {partition}... 正在擦除分区...");
+                Report(progress, partition, 30, FlashLogText.Format("Flash_Progress_Erasing", partition));
                 var response = session.ErasePartition(partition);
                 response.ThrowIfFailed();
-                Report(progress, partition, 100, $"Erase complete: {partition}. 分区擦除完成。");
+                Report(progress, partition, 100, FlashLogText.Format("Flash_Progress_EraseDone", partition));
                 return new FlashResult
                 {
                     Success = true,
-                    Summary = $"Erased partition '{partition}' via fastboot."
+                    Summary = FlashLogText.Format("Flash_Result_ErasedViaFastboot", partition)
                 };
             }, ct)).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            return new FlashResult { Success = false, Summary = "Flash canceled." };
+            return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_Canceled") };
         }
         catch (Exception ex)
         {
@@ -154,17 +158,17 @@ public sealed class FlashService : IFlashService
 
             if (device.Protocol != DeviceProtocolKind.Fastboot)
             {
-                return new FlashResult { Success = false, Summary = "Erase all only supported via fastboot. 整机擦除仅支持 fastboot 模式。" };
+                return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_EraseAllFastbootOnly") };
             }
 
-            Report(progress, null, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+            Report(progress, null, 0, FlashLogText.Get("Flash_Progress_FastbootOpening"));
             return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
             {
                 var partitions = EnumeratePartitions(session);
                 if (partitions.Count == 0)
                 {
                     throw new InvalidOperationException(
-                        "No partitions reported by getvar:all; cannot erase all. getvar:all 未返回分区列表，无法整机擦除。");
+                        FlashLogText.Get("Flash_Exception_NoPartitions"));
                 }
 
                 var erased = 0;
@@ -172,23 +176,23 @@ public sealed class FlashService : IFlashService
                 {
                     ct.ThrowIfCancellationRequested();
                     Report(progress, partition, (int)(erased * 100L / partitions.Count),
-                        $"Erasing {partition}... 正在擦除分区 {partition}...");
+                        FlashLogText.Format("Flash_Progress_Erasing", partition));
                     var response = session.ErasePartition(partition);
                     response.ThrowIfFailed();
                     erased++;
                 }
 
-                Report(progress, null, 100, "Erase-all complete. 整机擦除完成。");
+                Report(progress, null, 100, FlashLogText.Get("Flash_Progress_EraseAllDone"));
                 return new FlashResult
                 {
                     Success = true,
-                    Summary = $"Erased {erased} partitions via fastboot."
+                    Summary = FlashLogText.Format("Flash_Result_EraseAll", erased)
                 };
             }, ct)).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            return new FlashResult { Success = false, Summary = "Flash canceled." };
+            return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_Canceled") };
         }
         catch (Exception ex)
         {
@@ -221,27 +225,27 @@ public sealed class FlashService : IFlashService
 
             if (!File.Exists(otaPackagePath))
             {
-                throw new FileNotFoundException($"OTA image not found: {otaPackagePath} OTA 镜像不存在。", otaPackagePath);
+                throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_OtaMissing", otaPackagePath), otaPackagePath);
             }
 
-            Report(progress, "sideload", 0, "Opening ADB session... 正在打开 ADB 会话...");
+            Report(progress, "sideload", 0, FlashLogText.Get("Flash_Progress_AdbOpening"));
             return await App.DeviceMonitor.RunAdbAsync(device.Endpoint, async adb =>
             {
-                Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
+                Report(progress, "sideload", 5, FlashLogText.Get("Flash_Progress_SideloadReboot"));
                 RebootToSideload(adb);
                 await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
                 await PushSideloadFileAsync(adb, otaPackagePath, progress, ct).ConfigureAwait(false);
-                Report(progress, "sideload", 100, "Sideload complete. OTA 侧载完成。");
+                Report(progress, "sideload", 100, FlashLogText.Get("Flash_Progress_SideloadDone"));
                 return new FlashResult
                 {
                     Success = true,
-                    Summary = $"Sideloaded {Path.GetFileName(otaPackagePath)} via ADB."
+                    Summary = FlashLogText.Format("Flash_Result_Sideloaded", Path.GetFileName(otaPackagePath))
                 };
             }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            return new FlashResult { Success = false, Summary = "Flash canceled." };
+            return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_Canceled") };
         }
         catch (Exception ex)
         {
@@ -284,28 +288,28 @@ public sealed class FlashService : IFlashService
             {
                 if (device.Protocol == DeviceProtocolKind.Fastboot)
                 {
-                    Report(null, "fastboot", 0, $"Querying fastboot variable '{propertyName}'... 正在查询 fastboot 变量...");
+                    Report(null, "fastboot", 0, FlashLogText.Format("Flash_Progress_QueryFastboot", propertyName));
                     var fbValue = App.DeviceMonitor.RunFastboot(device.Endpoint,
                         fastboot => fastboot.GetVariable(propertyName, useCache: false), ct);
-                    Report(null, "fastboot", 100, $"Variable '{propertyName}' = '{fbValue}'. 变量查询完成。");
+                    Report(null, "fastboot", 100, FlashLogText.Format("Flash_Progress_FastbootVariable", propertyName, fbValue));
                     return new FlashResult { Success = true, Summary = $"{propertyName}={fbValue}" };
                 }
 
                 if (device.Protocol == DeviceProtocolKind.Adb)
                 {
-                    Report(null, "adb", 0, $"Querying property '{propertyName}'... 正在查询系统属性...");
+                    Report(null, "adb", 0, FlashLogText.Format("Flash_Progress_QueryProperty", propertyName));
                     var value = App.DeviceMonitor.RunAdb(device.Endpoint,
                         adb => adb.CreateDeviceServices().GetProp(propertyName), ct);
-                    Report(null, "adb", 100, $"Property '{propertyName}' = '{value}'. 属性查询完成。");
+                    Report(null, "adb", 100, FlashLogText.Format("Flash_Progress_Property", propertyName, value));
                     return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
                 }
 
-                return new FlashResult { Success = false, Summary = "Get property requires ADB, HDC or fastboot. 属性查询需要 ADB、HDC 或 fastboot。" };
+                return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_PropertyProtocol") };
             }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            return new FlashResult { Success = false, Summary = "Flash canceled." };
+            return new FlashResult { Success = false, Summary = FlashLogText.Get("Flash_Service_Canceled") };
         }
         catch (Exception ex)
         {
@@ -366,12 +370,12 @@ public sealed class FlashService : IFlashService
         DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
-        Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_FastbootOpening"));
         return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
         {
             var target = PrepareFlashTarget(session, partition, GetImageLogicalSize(imagePath), progress);
             var summary = FlashImageChunked(session, target, imagePath, progress, ct);
-            Report(progress, target, 100, "Flash complete. 刷写完成。");
+            Report(progress, target, 100, FlashLogText.Get("Flash_Progress_FlashDone"));
             return new FlashResult { Success = true, Summary = summary };
         }, ct)).ConfigureAwait(false);
     }
@@ -405,16 +409,16 @@ public sealed class FlashService : IFlashService
         if (imageSize <= 0)
         {
             LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                $"Cannot determine the size of the image for logical partition {target}; flashing without resize. 无法确定逻辑分区镜像尺寸，跳过分区调整。");
+                FlashLogText.Format("Flash_Exception_LogicalSizeUnknown", target));
             return target;
         }
 
-        Report(progress, target, 1, $"Resizing logical partition {target} to {imageSize} bytes... 正在把逻辑分区调整到镜像大小...");
+        Report(progress, target, 1, FlashLogText.Format("Flash_Progress_ResizingLogical", target, imageSize));
         var response = session.ResizeLogicalPartition(target, imageSize);
         if (!response.IsSuccess)
         {
             LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                $"Resize-logical-partition {target} to {imageSize} failed: {response.Info}; continuing flash. 逻辑分区大小调整失败，继续刷写。");
+                FlashLogText.Format("Flash_Log_ResizeFailed", target, imageSize, response.Info));
         }
 
         return target;
@@ -476,13 +480,14 @@ public sealed class FlashService : IFlashService
         if (imageLength <= maxDownloadSize)
         {
             using var image = File.OpenRead(imagePath);
-            Report(progress, partition, 5, "Uploading image... 正在上传镜像...");
+            Report(progress, partition, 5, FlashLogText.Get("Flash_Progress_Uploading"));
             var byteProgress = new Progress<long>(written =>
-                Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0, "Uploading image... 正在上传镜像..."));
+                Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0,
+                    FlashLogText.Get("Flash_Progress_Uploading")));
             var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct, resolveSlot: false,
                 options: FlashPartitionOptions.PreparedTarget);
             response.ThrowIfFailed();
-            return $"Flashed {partition} ({imageLength} bytes) via fastboot.";
+            return FlashLogText.Format("Flash_Result_FlashedViaFastboot", partition, imageLength);
         }
 
         var tempDir = Directory.CreateTempSubdirectory("uotan-flash-").FullName;
@@ -493,11 +498,11 @@ public sealed class FlashService : IFlashService
                 : Path.Combine(tempDir, "source.sparse");
             if (!string.Equals(sparsePath, imagePath, StringComparison.OrdinalIgnoreCase))
             {
-                Report(progress, partition, 2, "Converting to sparse... 正在转换为稀疏格式...");
+                Report(progress, partition, 2, FlashLogText.Get("Flash_Progress_ConvertingSparse"));
                 UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(imagePath, sparsePath);
             }
 
-            Report(progress, partition, 4, "Splitting sparse image... 正在拆分稀疏镜像...");
+            Report(progress, partition, 4, FlashLogText.Get("Flash_Progress_SplittingSparse"));
             UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ResparseImage(
                 sparsePath, Path.Combine(tempDir, "chunk_{0}.sparse"), maxDownloadSize);
 
@@ -518,14 +523,14 @@ public sealed class FlashService : IFlashService
                 var index = i;
                 var chunkProgress = new Progress<long>(written =>
                     Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, (bytesDone + written) * 100L / totalBytes) : 0,
-                        $"Uploading chunk {index + 1}/{chunks.Length}... 正在上传分片..."));
+                        FlashLogText.Format("Flash_Progress_UploadingChunk", index + 1, chunks.Length)));
                 var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false,
                     options: FlashPartitionOptions.PreparedSparseChunks);
                 chunkResponse.ThrowIfFailed();
                 bytesDone += chunkLength;
             }
 
-            return $"Flashed {partition} ({totalBytes} bytes in {chunks.Length} sparse chunk(s)) via fastboot.";
+            return FlashLogText.Format("Flash_Result_FlashedSparseChunks", partition, totalBytes, chunks.Length);
         }
         finally
         {
@@ -549,13 +554,12 @@ public sealed class FlashService : IFlashService
         DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
-        Report(progress, partition, 0, "Looking for EDL bundle... 正在查找 EDL 刷写包...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_EdlLookingBundle"));
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
         var rawProgramPath = Directory.EnumerateFiles(imageDir, "rawprogram*.xml", SearchOption.TopDirectoryOnly).FirstOrDefault();
         if (rawProgramPath is null)
         {
-            Report(progress, partition, 0,
-                "No rawprogram in the image directory; using the device partition table. 镜像目录无 rawprogram，改用设备分区表定位。");
+            Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_EdlNoRawprogram"));
             return await EdlGptPartitionService.FlashAsync(device, partition, imagePath, verify: false, progress, ct)
                 .ConfigureAwait(false);
         }
@@ -564,9 +568,12 @@ public sealed class FlashService : IFlashService
         var target = FindEdlTarget(entries, partition, imagePath);
         if (target is null)
         {
-            Report(progress, partition, 0,
-                $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。");
-            return new FlashResult { Success = false, Summary = $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。" };
+            Report(progress, partition, 0, FlashLogText.Format("Flash_Progress_EdlPartitionMissing", partition));
+            return new FlashResult
+            {
+                Success = false,
+                Summary = FlashLogText.Format("Flash_Progress_EdlPartitionMissing", partition)
+            };
         }
 
         return await App.DeviceMonitor.RunEdlAsync(device.Endpoint,
@@ -632,7 +639,7 @@ public sealed class FlashService : IFlashService
         }
         await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
         var firehose = session.Firehose
-            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+            ?? throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_NoFirehose"));
         return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
     }
 
@@ -672,31 +679,32 @@ public sealed class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(entry);
 
         var displayName = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
-        Report(progress, displayName, 10, $"EDL single-partition: {displayName}... EDL 单分区刷写：{displayName}...");
+        Report(progress, displayName, 10, FlashLogText.Format("Flash_Progress_EdlSinglePartition", displayName));
 
         if (string.IsNullOrEmpty(entry.Filename))
         {
             throw new InvalidOperationException(
-                $"rawprogram entry '{displayName}' has no image filename; erase-only entries cannot be flashed as a single partition. program 条目无镜像文件。");
+                FlashLogText.Format("Flash_Exception_EdlEntryNoImage", displayName));
         }
 
         var sourceFile = ResolveEntrySource(entry, imageDir);
         if (!File.Exists(sourceFile))
         {
-            throw new FileNotFoundException($"Image file not found for EDL partition '{displayName}': {sourceFile} 镜像文件不存在。", sourceFile);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_EdlImageMissing", displayName, sourceFile),
+                sourceFile);
         }
 
         var sectorSize = firehose.Configuration.SectorSize;
         if (sectorSize <= 0 || sectorSize > 65536)
         {
-            throw new InvalidOperationException("Single-partition flashing requires a configured sector size.");
+            throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_SectorSizeRequired"));
         }
 
         ArgumentOutOfRangeException.ThrowIfNegative(entry.SectorSizeInBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(entry.NumPartitionSectors);
         if (entry.SectorSizeInBytes > 0 && entry.SectorSizeInBytes != sectorSize)
         {
-            throw new InvalidDataException("The manifest sector size differs from the configured sector size.");
+            throw new InvalidDataException(FlashLogText.Get("Flash_Exception_SectorSizeMismatch"));
         }
 
         var startSector = entry.StartSector;
@@ -706,21 +714,21 @@ public sealed class FlashService : IFlashService
         string? verifySkipReason = null;
         var truncated = false;
 
-        Report(progress, displayName, 30, $"Sending program for {displayName}... 正在发送 program 命令...");
+        Report(progress, displayName, 30, FlashLogText.Format("Flash_Progress_EdlSendingProgram", displayName));
         using var stream = File.OpenRead(sourceFile);
         if (entry.IsSparse || IsAndroidSparseImage(stream))
         {
             verifySkipReason = "the image was programmed through the Android sparse path";
             if (entry.FileSectorOffset != 0)
             {
-                throw new InvalidOperationException("Sparse program entries cannot use a raw source-sector offset.");
+                throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_SparseOffset"));
             }
 
             stream.Position = 0;
             var geometry = await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (geometry.SectorSize != sectorSize)
             {
-                throw new InvalidDataException("The device sector size differs from the configured sector size.");
+                throw new InvalidDataException(FlashLogText.Get("Flash_Exception_DeviceSectorSize"));
             }
 
             var resolvedStart = geometry.ResolveRange(startSector, 1);
@@ -736,7 +744,8 @@ public sealed class FlashService : IFlashService
                 maximumSectors, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
-                throw new InvalidOperationException($"EDL sparse program failed for '{displayName}'. Response: {EdlFailureText.Describe(response)}");
+                throw new InvalidOperationException(FlashLogText.Format("Flash_Exception_EdlSparseFailed", displayName,
+                EdlFailureText.Describe(response)));
             }
         }
         else
@@ -744,7 +753,7 @@ public sealed class FlashService : IFlashService
             var sourceOffset = checked(entry.FileSectorOffset * sectorSize);
             if (sourceOffset < 0 || sourceOffset >= stream.Length)
             {
-                throw new InvalidOperationException("The source-sector offset is outside the image.");
+                throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_SourceOffset"));
             }
 
             stream.Position = sourceOffset;
@@ -752,7 +761,7 @@ public sealed class FlashService : IFlashService
             var numSectors = FlashProgramLength.ResolveSectors(lengthFromOffset, entry.NumPartitionSectors, sectorSize);
             if (numSectors <= 0)
             {
-                throw new InvalidOperationException($"Image for '{displayName}' is empty; nothing to program. 镜像为空。");
+                throw new InvalidOperationException(FlashLogText.Format("Flash_Exception_EmptyImage", displayName));
             }
 
             truncated = FlashProgramLength.IsTruncatedByDeclaration(lengthFromOffset, entry.NumPartitionSectors, sectorSize);
@@ -760,7 +769,7 @@ public sealed class FlashService : IFlashService
             var geometry = await firehose.GetStorageGeometryAsync(entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (geometry.SectorSize != sectorSize)
             {
-                throw new InvalidDataException("The device sector size differs from the configured sector size.");
+                throw new InvalidDataException(FlashLogText.Get("Flash_Exception_DeviceSectorSize"));
             }
 
             var resolvedStart = geometry.ResolveRange(startSector, numSectors);
@@ -768,7 +777,8 @@ public sealed class FlashService : IFlashService
                 stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
             if (!response.IsAck)
             {
-                throw new InvalidOperationException($"EDL program failed for '{displayName}'. Response: {EdlFailureText.Describe(response)}");
+                throw new InvalidOperationException(FlashLogText.Format("Flash_Exception_EdlProgramFailed", displayName,
+                    EdlFailureText.Describe(response)));
             }
 
             if (sourceOffset != 0)
@@ -793,41 +803,42 @@ public sealed class FlashService : IFlashService
         var summary = $"EDL partition '{displayName}' flashed via Firehose program.";
         if (truncated)
         {
-            summary += $" Only {entry.NumPartitionSectors} declared sectors were programmed; the image tail was not written (truncated). 仅写入声明的 {entry.NumPartitionSectors} 个扇区，镜像尾部未写入。";
+            summary += FlashLogText.Format("Flash_Progress_TruncatedNote", entry.NumPartitionSectors);
         }
 
         if (verify)
         {
             if (verifyNumSectors is null)
             {
-                summary += $" Read-back verification skipped ({verifySkipReason}). 已跳过回读校验。";
+                summary += FlashLogText.Format("Flash_Progress_VerifySkipped", verifySkipReason);
             }
             else
             {
-                Report(progress, displayName, 90, $"Verifying read-back for {displayName}... 正在回读校验...");
+                Report(progress, displayName, 90, FlashLogText.Format("Flash_Progress_VerifyingReadBack", displayName));
                 try
                 {
                     using var verificationStream = File.OpenRead(sourceFile);
                     await firehose.VerifyProgramAsync(
                         verificationStream, verifyStartSector, verifyNumSectors.Value,
                         entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
-                    summary += " Read-back verification passed. 回读校验通过。";
+                    summary += FlashLogText.Get("Flash_Progress_VerifyPassed");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     LogService.Instance.Write(LogLevel.Warn, "FlashService",
                         $"EDL read-back verification failed for '{displayName}': {ex.Message}");
-                    Report(progress, displayName, 100, $"EDL read-back mismatch for {displayName}. {displayName} 回读校验不一致。");
+                    Report(progress, displayName, 100, FlashLogText.Format("Flash_Progress_EdlReadBackMismatch", displayName));
                     return new FlashResult
                     {
                         Success = false,
-                        Summary = $"EDL partition '{displayName}' was programmed but read-back verification failed (readback mismatch): {ex.Message} EDL 回读校验不一致。"
+                        Summary = FlashLogText.Format("Flash_Result_EdlReadBackFailed", displayName,
+                            FlashLogText.Detail(ex.Message))
                     };
                 }
             }
         }
 
-        Report(progress, displayName, 100, $"EDL partition '{displayName}' flash complete. EDL 单分区刷写完成。");
+        Report(progress, displayName, 100, FlashLogText.Format("Flash_Progress_EdlPartitionDone", displayName));
         return new FlashResult
         {
             Success = true,
@@ -913,7 +924,7 @@ public sealed class FlashService : IFlashService
         DeviceTarget device, string partition, string imagePath, string? loaderPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false, string? parameterPath = null)
     {
-        Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_RkdlOpening"));
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
         return await App.DeviceMonitor.RunRkdlAsync<FlashResult>(device.Endpoint, async rkdl =>
         {
@@ -921,7 +932,7 @@ public sealed class FlashService : IFlashService
             if (rkdl.IsMaskromMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
+                    FlashLogText.Get("Flash_Exception_RkMaskRom"));
             }
 
             var tablePath = parameterPath is { Length: > 0 } provided && File.Exists(provided)
@@ -930,7 +941,7 @@ public sealed class FlashService : IFlashService
             if (tablePath is null)
             {
                 throw new InvalidOperationException(
-                    "No Rockchip parameter file (parameter / parameter.txt) was found next to the images and the caller supplied none; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表，调用方也没有提供。");
+                    FlashLogText.Get("Flash_Exception_RkParameterMissing"));
             }
 
             var partitions = RockchipParameterParser.Parse(tablePath);
@@ -939,7 +950,7 @@ public sealed class FlashService : IFlashService
             if (IsParameterTarget(partition, imageName, imageNameWithoutExt))
             {
                 Report(progress, partition, 15,
-                    $"Writing the partition table wrapped in the vendor PARM container at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X}... 正在把 PARM 容器封装的分区表写入固定地址...");
+                    FlashLogText.Format("Flash_Progress_RkdlParmWriting", RockchipParmContainer.FirmwareParameterStartLba));
                 return await Task.Run(
                     () => FlashRkdlParameter(rkdl, imagePath, progress, token), token).ConfigureAwait(false);
             }
@@ -952,10 +963,11 @@ public sealed class FlashService : IFlashService
             {
                 var available = string.Join(", ", partitions.Select(p => p.Name));
                 throw new InvalidOperationException(
-                    $"Partition '{partition}' not found in the Rockchip partition table. Available: {available} 分区不在 Rockchip 分区表中。");
+                    FlashLogText.Format("Flash_Exception_RkPartitionMissing", partition, available));
             }
 
-            Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
+            Report(progress, partition, 15, FlashLogText.Format("Flash_Progress_RkdlWritingTo",
+                Path.GetFileName(imagePath), target.Name, target.OffsetSectors));
             var result = await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, token), token).ConfigureAwait(false);
             if (!verify || !result.Success)
             {
@@ -965,11 +977,12 @@ public sealed class FlashService : IFlashService
             var imageLength = new FileInfo(imagePath).Length;
             if (imageLength <= 0)
             {
-                result.Summary += " Read-back verification skipped (the image is empty). 已跳过回读校验（镜像为空）。";
+                result.Summary += FlashLogText.Get("Flash_Progress_VerifySkippedEmpty");
                 return result;
             }
 
-            Report(progress, target.Name, 100, $"Verifying read-back for {target.Name} at LBA 0x{target.OffsetSectors:X}... 正在回读校验...");
+            Report(progress, target.Name, 100,
+                FlashLogText.Format("Flash_Progress_VerifyingReadBackAtLba", target.Name, target.OffsetSectors));
             try
             {
                 var matches = await Task.Run(async () =>
@@ -984,11 +997,11 @@ public sealed class FlashService : IFlashService
                     return new FlashResult
                     {
                         Success = false,
-                        Summary = $"RKDL wrote {imageLength} bytes to '{target.Name}' but read-back verification failed (readback mismatch). RKDL 回读校验不一致。"
+                        Summary = FlashLogText.Format("Flash_Result_RkdlReadBackMismatch", imageLength, target.Name)
                     };
                 }
 
-                result.Summary += " Read-back verification passed. 回读校验通过。";
+                result.Summary += FlashLogText.Get("Flash_Progress_VerifyPassed");
                 return result;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -998,7 +1011,7 @@ public sealed class FlashService : IFlashService
                 return new FlashResult
                 {
                     Success = false,
-                    Summary = $"RKDL wrote '{target.Name}' but read-back verification could not complete (possible readback mismatch): {ex.Message} RKDL 回读校验失败。"
+                    Summary = FlashLogText.Format("Flash_Result_RkdlReadBackFailed", target.Name, FlashLogText.Detail(ex.Message))
                 };
             }
         }, ct).ConfigureAwait(false);
@@ -1048,42 +1061,42 @@ public sealed class FlashService : IFlashService
         ArgumentOutOfRangeException.ThrowIfNegative(address);
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"Image not found: {imagePath} 镜像不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_ImageMissing", imagePath), imagePath);
         }
 
         var length = new FileInfo(imagePath).Length;
         if (length <= 0)
         {
-            throw new InvalidDataException($"The image is empty: {imagePath} 镜像为空。");
+            throw new InvalidDataException(FlashLogText.Format("Flash_Exception_ImageEmpty", imagePath));
         }
 
         var mediumIndex = storageId is { } id ? Array.IndexOf(RkdlStorage.WireBits, (byte)id) : -1;
         if (storageId is not null && mediumIndex < 0)
         {
             throw new InvalidOperationException(
-                $"Storage identifier {storageId} is not one the Rockchip protocol knows. 存储标识 {storageId} 不是瑞芯微协议已知的介质。");
+                FlashLogText.Format("Flash_Exception_RkStorageUnknown", storageId));
         }
 
         var medium = mediumIndex >= 0 ? RkdlStorage.Names[mediumIndex] : "current";
-        Report(progress, partition, 0,
-            $"Writing {Path.GetFileName(imagePath)} at LBA 0x{address:X} on {medium}... 正在按地址写入镜像...");
+        Report(progress, partition, 0, FlashLogText.Format("Flash_Progress_RkdlLbaWriting",
+            Path.GetFileName(imagePath), address, medium));
         return await App.DeviceMonitor.RunRkdlAsync(device.Endpoint, async rkdl =>
         {
             if (rkdl.IsMaskromMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
+                    FlashLogText.Get("Flash_Exception_RkMaskRom"));
             }
 
             if (storageId is { } target)
             {
-                Report(progress, partition, 0, $"Switching to {medium}... 正在切换到 {medium}...");
+                Report(progress, partition, 0, FlashLogText.Format("Flash_Progress_RkdlSwitchingMedium", medium));
                 rkdl.ChangeStorage((byte)target);
                 var mask = rkdl.ReadStorageMask();
                 if (RkdlStorage.IndexOfMask(mask) != mediumIndex)
                 {
                     throw new InvalidOperationException(
-                        $"The device switched to {RkdlStorage.DescribeMask(mask)} instead of {medium}, so nothing was written. 设备切换到了 {RkdlStorage.DescribeMask(mask)} 而不是 {medium}，未写入任何数据。");
+                        FlashLogText.Format("Flash_Exception_RkStorageSwitch", RkdlStorage.DescribeMask(mask), medium));
                 }
             }
 
@@ -1096,12 +1109,12 @@ public sealed class FlashService : IFlashService
                 var firstBlock = (uint)(address / blockSectors);
                 var blockCount = (uint)(((address % blockSectors) + sectors + blockSectors - 1) / blockSectors);
                 Report(progress, partition, 0,
-                    $"Erasing {blockCount} block(s) from block {firstBlock} on {medium}... 正在擦除目标块...");
+                    FlashLogText.Format("Flash_Progress_RkdlErasingBlocks", blockCount, firstBlock, medium));
                 var badBlocks = rkdl.EraseBlocks(firstBlock, blockCount, force: true);
                 if (badBlocks > 0)
                 {
                     Report(progress, partition, 0,
-                        $"{badBlocks} block(s) reported a bad-block status on {medium}. 有块返回坏块状态。");
+                        FlashLogText.Format("Flash_Progress_RkdlBadBlocks", badBlocks, medium));
                 }
             }
 
@@ -1109,14 +1122,16 @@ public sealed class FlashService : IFlashService
                 () => rkdl.WriteLBA(address, stream, length,
                     new Progress<long>(done => Report(progress, partition,
                         (int)Math.Clamp(done * 100 / length, 0, 100),
-                        $"Writing {Path.GetFileName(imagePath)} at LBA 0x{address:X}... 正在按地址写入镜像...")),
+                        FlashLogText.Format("Flash_Progress_RkdlLbaWriting",
+                            Path.GetFileName(imagePath), address, medium))),
                     ct),
                 ct).ConfigureAwait(false);
-            Report(progress, partition, 100, $"Wrote {written} bytes at LBA 0x{address:X} on {medium}. 已按地址写入。");
+            Report(progress, partition, 100, FlashLogText.Format("Flash_Progress_RkdlWroteAtLba", written, address, medium));
             return new FlashResult
             {
                 Success = true,
-                Summary = $"Wrote {written} bytes of {Path.GetFileName(imagePath)} at LBA 0x{address:X} on {medium}. 已按地址写入镜像。"
+                Summary = FlashLogText.Format("Flash_Result_RkdlWroteLba",
+                    written, Path.GetFileName(imagePath), address, medium)
             };
         }, ct).ConfigureAwait(false);
     }
@@ -1172,14 +1187,15 @@ public sealed class FlashService : IFlashService
         if (target is null && !IsParameterTarget(partition, partition, partition))
         {
             throw new InvalidOperationException(
-                $"Partition '{partition}' not found in the Rockchip partition table. Available: {string.Join(", ", partitions.Select(p => p.Name))} 分区不在 Rockchip 分区表中。");
+                FlashLogText.Format("Flash_Exception_RkPartitionMissing", partition,
+                    string.Join(", ", partitions.Select(p => p.Name))));
         }
         return await App.DeviceMonitor.RunRkdlAsync(device.Endpoint, rkdl =>
         {
             if (rkdl.IsMaskromMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is proven to be in mask ROM, which answers no storage command; use the shared load-boot action to run a loader first. 瑞芯微设备被证实处于 Mask ROM 模式，无法应答存储命令，请先用通用的发送引导程序动作启动 loader。");
+                    FlashLogText.Get("Flash_Exception_RkMaskRom"));
             }
 
             if (target is null)
@@ -1189,7 +1205,8 @@ public sealed class FlashService : IFlashService
                 return Task.FromResult(new FlashResult
                 {
                     Success = true,
-                    Summary = $"Erased the parameter window at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X} ({RockchipParmContainer.MaxParameterSectors} sectors). 已擦除 parameter 固定窗口。"
+                    Summary = FlashLogText.Format("Flash_Result_RkdlErasedParameterWindow",
+                        RockchipParmContainer.FirmwareParameterStartLba, RockchipParmContainer.MaxParameterSectors)
                 });
             }
 
@@ -1197,7 +1214,8 @@ public sealed class FlashService : IFlashService
             return Task.FromResult(new FlashResult
             {
                 Success = true,
-                Summary = $"Erased '{target.Name}' at LBA 0x{target.OffsetSectors:X} ({target.SizeSectors} sectors). 已擦除分区。"
+                Summary = FlashLogText.Format("Flash_Result_RkdlErasedPartition",
+                    target.Name, target.OffsetSectors, target.SizeSectors)
             });
         }, ct).ConfigureAwait(false);
     }
@@ -1225,7 +1243,7 @@ public sealed class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(partitionInfo);
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"Image file not found: {imagePath} 镜像文件不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_ImageFileMissing", imagePath), imagePath);
         }
 
         using var stream = File.OpenRead(imagePath);
@@ -1234,20 +1252,24 @@ public sealed class FlashService : IFlashService
         if (requiredSectors > partitionInfo.SizeSectors)
         {
             throw new InvalidOperationException(
-                $"Image '{Path.GetFileName(imagePath)}' needs {requiredSectors} sectors ({totalBytes} bytes), more than the {partitionInfo.SizeSectors} sectors declared for partition '{partitionInfo.Name}' in the Rockchip parameter table; nothing was written. 镜像超出 parameter 表中该分区声明的容量，未写入任何数据。");
+                FlashLogText.Format("Flash_Exception_RkImageTooLarge", Path.GetFileName(imagePath), requiredSectors,
+                totalBytes, partitionInfo.SizeSectors, partitionInfo.Name));
         }
 
-        Report(progress, partitionInfo.Name, 40, $"Writing image via RKDL WRITE_LBA at LBA 0x{partitionInfo.OffsetSectors:X}... 正在通过 RKDL 写入...");
+        Report(progress, partitionInfo.Name, 40,
+            FlashLogText.Format("Flash_Progress_RkdlWriteLbaAt", partitionInfo.OffsetSectors));
         var byteProgress = new Progress<long>(written =>
             Report(progress, partitionInfo.Name,
                 totalBytes > 0 ? 40 + (int)Math.Min(60, written * 60L / totalBytes) : 40,
-                "Writing image via RKDL WRITE_LBA... 正在通过 RKDL 写入..."));
+                FlashLogText.Get("Flash_Progress_RkdlWriteLba")));
         var written = session.WriteLBA(partitionInfo.OffsetSectors, stream, totalBytes, byteProgress, ct);
-        Report(progress, partitionInfo.Name, 100, $"RKDL flash complete: {partitionInfo.Name}. RKDL 刷写完成。");
+        Report(progress, partitionInfo.Name, 100,
+            FlashLogText.Format("Flash_Progress_RkdlPartitionDone", partitionInfo.Name));
         return new FlashResult
         {
             Success = true,
-            Summary = $"Wrote {written} bytes to '{partitionInfo.Name}' (LBA 0x{partitionInfo.OffsetSectors:X}) via RKDL."
+            Summary = FlashLogText.Format("Flash_Result_RkdlWrotePartition",
+                written, partitionInfo.Name, partitionInfo.OffsetSectors)
         };
     }
 
@@ -1267,12 +1289,12 @@ public sealed class FlashService : IFlashService
         DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
-        Report(progress, partition, 0, "Opening ADB session... 正在打开 ADB 会话...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_AdbOpening"));
         return await App.DeviceMonitor.RunAdbAsync(device.Endpoint, async adb =>
         {
             if (IsSideloadTarget(partition, imagePath))
             {
-                Report(progress, partition, 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
+                Report(progress, partition, 5, FlashLogText.Get("Flash_Progress_SideloadReboot"));
                 RebootToSideload(adb);
                 await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
                 await PushSideloadFileAsync(adb, imagePath, progress, ct).ConfigureAwait(false);
@@ -1282,11 +1304,11 @@ public sealed class FlashService : IFlashService
                 await InstallOnlineAsync(adb, imagePath, progress, ct).ConfigureAwait(false);
             }
 
-            Report(progress, partition, 100, "ADB flash complete. ADB 刷写完成。");
+            Report(progress, partition, 100, FlashLogText.Get("Flash_Progress_AdbDone"));
             return new FlashResult
             {
                 Success = true,
-                Summary = $"Flashed {Path.GetFileName(imagePath)} via ADB."
+                Summary = FlashLogText.Format("Flash_Result_AdbFlashed", Path.GetFileName(imagePath))
             };
         }, ct).ConfigureAwait(false);
     }
@@ -1328,14 +1350,15 @@ public sealed class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(session);
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"OTA image not found: {imagePath} OTA 镜像不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_OtaMissing", imagePath), imagePath);
         }
 
         await using var sync = session.CreateSyncClient();
         await using var fs = File.OpenRead(imagePath);
         var totalBytes = fs.Length;
         await using var reporting = new ProgressReportingStream(fs, totalBytes, written =>
-            Report(progress, "sideload", totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0, "Streaming OTA to /sideload/package.zip... 正在推送 OTA..."));
+            Report(progress, "sideload", totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0,
+                FlashLogText.Get("Flash_Progress_SideloadPushing")));
         await sync.PushStreamAsync(reporting, SideloadRemotePath, cancellationToken: ct).ConfigureAwait(false);
     }
 
@@ -1354,12 +1377,12 @@ public sealed class FlashService : IFlashService
         ct.ThrowIfCancellationRequested();
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"Image not found: {imagePath} 镜像不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_ImageMissing", imagePath), imagePath);
         }
 
         var fileName = Path.GetFileName(imagePath);
         var remotePath = "/data/local/tmp/" + fileName;
-        Report(progress, "adb", 30, $"Pushing {fileName} to /data/local/tmp... 正在推送镜像...");
+        Report(progress, "adb", 30, FlashLogText.Format("Flash_Progress_PushingToTemp", fileName));
         await using (var sync = session.CreateSyncClient())
         {
             await sync.PushAsync(imagePath, remotePath, cancellationToken: ct).ConfigureAwait(false);
@@ -1369,13 +1392,13 @@ public sealed class FlashService : IFlashService
         var command = isApk
             ? $"pm install -r \"{remotePath}\""
             : $"apply update \"{remotePath}\"";
-        Report(progress, "adb", 70, $"Running '{command}'... 正在执行安装命令...");
+        Report(progress, "adb", 70, FlashLogText.Format("Flash_Progress_RunningCommand", command));
         var result = await session.ExecuteCommandAsync(command, ct).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             var stderr = Encoding.UTF8.GetString(result.Stderr).Trim();
             throw new InvalidOperationException(
-                $"ADB install command failed (exit {result.ExitCode}): {stderr} ADB 安装命令失败。");
+                FlashLogText.Format("Flash_Exception_AdbInstallFailed", result.ExitCode, stderr));
         }
     }
 
@@ -1406,7 +1429,7 @@ public sealed class FlashService : IFlashService
         }
 
         throw new InvalidOperationException(
-            "Device did not reappear in sideload mode; enter recovery sideload manually and retry. 设备未在 sideload 模式下重新出现。");
+            FlashLogText.Get("Flash_Exception_SideloadMissing"));
     }
 
     /// <summary>
@@ -1464,7 +1487,7 @@ public sealed class FlashService : IFlashService
             long.TryParse(value[2..], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var hex)
             ? hex
             : throw new InvalidOperationException(
-            $"Invalid start_sector value: '{value}'; single-partition EDL flash requires a numeric start_sector. start_sector 值无效。");
+            FlashLogText.Format("Flash_Exception_StartSectorInvalid", value));
     }
 
     /// <summary>
@@ -1496,14 +1519,14 @@ public sealed class FlashService : IFlashService
         if (numDiskSectors <= 0)
         {
             throw new InvalidOperationException(
-                $"Relative start_sector '{value}' cannot be resolved without the LUN sector count. 相对 start_sector 需要该 LUN 的扇区总数。");
+                FlashLogText.Format("Flash_Exception_StartSectorNoLun", value));
         }
 
         var offset = ParseStartSectorValue(value.Trim().TrimEnd('.')["NUM_DISK_SECTORS-".Length..]);
         if (offset <= 0 || offset > numDiskSectors)
         {
             throw new InvalidOperationException(
-                $"Relative start_sector '{value}' falls outside a LUN of {numDiskSectors} sectors. 相对 start_sector 超出该 LUN 容量。");
+                FlashLogText.Format("Flash_Exception_StartSectorOutOfRange", value, numDiskSectors));
         }
 
         return numDiskSectors - offset;
@@ -1548,7 +1571,7 @@ public sealed class FlashService : IFlashService
             if (!File.Exists(loaderPath))
             {
                 throw new FileNotFoundException(
-                    $"The selected Rockchip loader is missing: {loaderPath}. 所选的瑞芯微 loader 已缺失：{loaderPath}。",
+                    FlashLogText.Format("Flash_Exception_RkLoaderMissing", loaderPath),
                     loaderPath);
             }
 
@@ -1615,7 +1638,7 @@ public sealed class FlashService : IFlashService
         ArgumentNullException.ThrowIfNull(session);
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"Parameter file not found: {imagePath} parameter 文件不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_ParameterMissing", imagePath), imagePath);
         }
 
         using var stream = File.OpenRead(imagePath);
@@ -1635,14 +1658,16 @@ public sealed class FlashService : IFlashService
         }
 
         var wrapped = RockchipParmContainer.Wrap(payloadSpan[..read]);
-        Report(progress, "parameter", 40, "Writing the PARM-wrapped partition table via RKDL WRITE_LBA... 正在通过 RKDL 写入 PARM 分区表...");
+        Report(progress, "parameter", 40, FlashLogText.Get("Flash_Progress_ParmWriting"));
         using var wrappedStream = new MemoryStream(wrapped, writable: false);
         session.WriteLBA(RockchipParmContainer.FirmwareParameterStartLba, wrappedStream, wrapped.Length, null, ct);
-        Report(progress, "parameter", 100, $"PARM parameter written at LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X}. PARM parameter 已写入固定地址。");
+        Report(progress, "parameter", 100, FlashLogText.Format("Flash_Progress_ParmWritten",
+            RockchipParmContainer.FirmwareParameterStartLba));
         return new FlashResult
         {
             Success = true,
-            Summary = $"Wrote {wrapped.Length} bytes of PARM-wrapped parameter to LBA 0x{RockchipParmContainer.FirmwareParameterStartLba:X} via RKDL."
+            Summary = FlashLogText.Format("Flash_Result_ParmWritten", wrapped.Length,
+                RockchipParmContainer.FirmwareParameterStartLba)
         };
     }
 
@@ -1732,7 +1757,7 @@ public sealed class FlashService : IFlashService
         }
 
         throw new InvalidOperationException(
-            $"No GPT or Rockchip parameter partition table found on the device: {string.Join("; ", failures)} 设备上未找到 GPT 或 Rockchip parameter 分区表。");
+            FlashLogText.Format("Flash_Exception_NoPartitionTable", string.Join("; ", failures)));
     }
 
     /// <summary>
@@ -1758,7 +1783,7 @@ public sealed class FlashService : IFlashService
 
         if (block.Length < RkfpHeaderLength)
         {
-            throw new InvalidDataException("The RKFP header is truncated before its entry layout fields. RKFP 头部在布局字段之前被截断。");
+            throw new InvalidDataException(FlashLogText.Get("Flash_Exception_RkfpHeaderTruncated"));
         }
 
         var entryArraySector = BinaryPrimitives.ReadUInt32LittleEndian(block[20..]);
@@ -1772,12 +1797,13 @@ public sealed class FlashService : IFlashService
         if (entrySize < RkfpEntryNameBytes + 12 || entrySize > RkdlConstants.SectorSize)
         {
             throw new InvalidDataException(
-                $"The RKFP entry size {entrySize} is outside the supported {RkfpEntryNameBytes + 12}..{RkdlConstants.SectorSize} range. RKFP 条目大小超出受支持范围。");
+                FlashLogText.Format("Flash_Exception_RkfpEntrySize", entrySize,
+                    RkfpEntryNameBytes + 12, RkdlConstants.SectorSize));
         }
 
         if (entryCount > MaxRkfpEntries)
         {
-            throw new InvalidDataException($"The RKFP entry count {entryCount} exceeds the {MaxRkfpEntries} bound. RKFP 条目数量超出上限。");
+            throw new InvalidDataException(FlashLogText.Format("Flash_Exception_RkfpEntryCount", entryCount, MaxRkfpEntries));
         }
 
         var partitions = new List<RockchipPartition>();
@@ -1787,7 +1813,7 @@ public sealed class FlashService : IFlashService
             if (entryOffset + entrySize > block.Length)
             {
                 throw new InvalidDataException(
-                    $"The RKFP entry array needs {entryOffset + entrySize} bytes, more than the {block.Length} bytes read. RKFP 条目数组超出已读取的数据块。");
+                    FlashLogText.Format("Flash_Exception_RkfpEntryArray", entryOffset + entrySize, block.Length));
             }
 
             var entry = block.Slice((int)entryOffset, (int)entrySize);

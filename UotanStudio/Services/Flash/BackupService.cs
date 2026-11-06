@@ -43,13 +43,14 @@ public static class BackupService
                     DeviceProtocolKind.Fastboot => await Task.Run(() => BackupFastbootDevice(device, partition, outPath, progress, ct), ct).ConfigureAwait(false),
                     DeviceProtocolKind.Edl => await EdlGptPartitionService.BackupAsync(device, partition, outPath, progress, ct).ConfigureAwait(false),
                     DeviceProtocolKind.Rkdl => throw new InvalidOperationException(
-                        "RKDL backup requires the Rockchip partition table; use RkdlSession.ReadLBA directly. RKDL 备份需自行提供分区表。"),
-                    _ => throw new InvalidOperationException($"Unsupported protocol for backup: {device.Mode}")
+                        FlashLogText.Get("Flash_Exception_RkBackupNeedsTable")),
+                    _ => throw new InvalidOperationException(
+                FlashLogText.Format("Flash_Exception_UnsupportedBackupProtocol", device.Mode))
                 };
         }
         catch (OperationCanceledException)
         {
-            return new BackupResult { Success = false, Summary = "Backup canceled." };
+            return new BackupResult { Success = false, Summary = FlashLogText.Get("Flash_Result_BackupCanceled") };
         }
         catch (Exception ex)
         {
@@ -93,12 +94,13 @@ public static class BackupService
                     DeviceProtocolKind.Fastboot => await Task.Run(() => RestoreFastbootDevice(device, partition, imagePath, progress, ct), ct).ConfigureAwait(false),
                     DeviceProtocolKind.Edl => MapEdlResult(await EdlGptPartitionService
                         .FlashAsync(device, partition, imagePath, verify: true, null, ct).ConfigureAwait(false)),
-                    _ => throw new InvalidOperationException($"Unsupported protocol for restore: {device.Mode}")
+                    _ => throw new InvalidOperationException(
+                FlashLogText.Format("Flash_Exception_UnsupportedRestoreProtocol", device.Mode))
                 };
         }
         catch (OperationCanceledException)
         {
-            return new BackupResult { Success = false, Summary = "Restore canceled." };
+            return new BackupResult { Success = false, Summary = FlashLogText.Get("Flash_Result_RestoreCanceled") };
         }
         catch (Exception ex)
         {
@@ -129,7 +131,7 @@ public static class BackupService
         DeviceTarget device, string partition, string outPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
-        Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_FastbootOpening"));
         return App.DeviceMonitor.RunFastboot(device.Endpoint,
             session => BackupFastbootPartition(session, partition, outPath, progress, ct), ct);
     }
@@ -160,18 +162,23 @@ public static class BackupService
         if (size <= 0)
         {
             throw new InvalidOperationException(
-                $"The device did not report a size for partition '{partition}'; fetch aborted. 设备未上报分区 '{partition}' 的大小。");
+                FlashLogText.Format("Flash_Exception_BackupSizeUnknown", partition));
         }
 
-        Report(progress, partition, 10, $"Fetching {partition} ({size} bytes)... 正在读取分区...");
+        Report(progress, partition, 10, FlashLogText.Format("Flash_Progress_Fetching", partition, size));
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)) ?? string.Empty);
         using var fs = File.Create(outPath);
         var byteProgress = new Progress<long>(read =>
-            Report(progress, partition, (int)Math.Min(100, read * 100L / size), "Fetching partition... 正在读取分区..."));
+            Report(progress, partition, (int)Math.Min(100, read * 100L / size), FlashLogText.Get("Flash_Progress_FetchingPartition")));
         var response = session.FetchToStream(partition, fs, 0, size, byteProgress, ct);
         response.ThrowIfFailed();
-        Report(progress, partition, 100, $"Backup complete: {partition}. 分区备份完成。");
-        return new BackupResult { Success = true, Summary = $"Backed up '{partition}' ({fs.Length} bytes) via fastboot fetch.", Bytes = fs.Length };
+        Report(progress, partition, 100, FlashLogText.Format("Flash_Progress_BackupDone", partition));
+        return new BackupResult
+        {
+            Success = true,
+            Summary = FlashLogText.Format("Flash_Result_BackedUpViaFastboot", partition, fs.Length),
+            Bytes = fs.Length
+        };
     }
 
     /// <summary>
@@ -190,7 +197,7 @@ public static class BackupService
         DeviceTarget device, string partition, string imagePath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
-        Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+        Report(progress, partition, 0, FlashLogText.Get("Flash_Progress_FastbootOpening"));
         return App.DeviceMonitor.RunFastboot(device.Endpoint,
             session => RestoreFastbootPartition(session, partition, imagePath, progress, ct), ct);
     }
@@ -212,18 +219,24 @@ public static class BackupService
         ArgumentNullException.ThrowIfNull(session);
         if (!File.Exists(imagePath))
         {
-            throw new FileNotFoundException($"Image file not found: {imagePath} 镜像文件不存在。", imagePath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_ImageFileMissing", imagePath), imagePath);
         }
 
         using var fs = File.OpenRead(imagePath);
         var totalBytes = fs.Length;
-        Report(progress, partition, 10, $"Restoring {partition} via fastboot flash... 正在通过 fastboot 还原...");
+        Report(progress, partition, 10, FlashLogText.Format("Flash_Progress_Restoring", partition));
         var byteProgress = new Progress<long>(written =>
-            Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0, "Restoring... 正在还原..."));
+            Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0,
+                FlashLogText.Get("Flash_Progress_RestoringProgress")));
         var response = session.FlashPartition(partition, fs, totalBytes, byteProgress, ct);
         response.ThrowIfFailed();
-        Report(progress, partition, 100, $"Restore complete: {partition}. 分区还原完成。");
-        return new BackupResult { Success = true, Summary = $"Restored '{partition}' ({totalBytes} bytes) via fastboot flash.", Bytes = totalBytes };
+        Report(progress, partition, 100, FlashLogText.Format("Flash_Progress_RestoreDone", partition));
+        return new BackupResult
+        {
+            Success = true,
+            Summary = FlashLogText.Format("Flash_Result_RestoredViaFastboot", partition, totalBytes),
+            Bytes = totalBytes
+        };
     }
 
     /// <summary>EDL device-level backup: resolves the target partition geometry from a rawprogram via <see cref="ResolveEdlPartitionGeometry"/>, opens a session and delegates to the geometry-based session-level overload.
@@ -274,7 +287,7 @@ public static class BackupService
 
         await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
         var firehose = session.Firehose
-            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+            ?? throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_NoFirehose"));
 
         var displayName = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
         var sectorSize = entry.SectorSizeInBytes > 0
@@ -283,7 +296,7 @@ public static class BackupService
         if (entry.NumPartitionSectors <= 0)
         {
             throw new InvalidOperationException(
-                $"rawprogram entry '{displayName}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
+                FlashLogText.Format("Flash_Exception_RawprogramNoSectors", displayName));
         }
 
         var startSector = FlashService.IsRelativeStartSector(entry.StartSector)
@@ -321,17 +334,17 @@ public static class BackupService
 
         if (startSector < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(startSector), "Start sector must not be negative. 起始扇区不能为负。");
+            throw new ArgumentOutOfRangeException(nameof(startSector), FlashLogText.Get("Flash_Exception_StartSectorNegative"));
         }
 
         if (sectorCount <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(sectorCount), "Sector count must be greater than zero. 扇区数必须大于 0。");
+            throw new ArgumentOutOfRangeException(nameof(sectorCount), FlashLogText.Get("Flash_Exception_SectorCount"));
         }
 
         await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
         var firehose = session.Firehose
-            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+            ?? throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_NoFirehose"));
         var sectorSize = firehose.Configuration.SectorSize > 0 ? firehose.Configuration.SectorSize : 4096;
 
         return await BackupEdlToFileAsync(
@@ -353,24 +366,25 @@ public static class BackupService
     {
         if (string.IsNullOrWhiteSpace(rawProgramPath) || !File.Exists(rawProgramPath))
         {
-            throw new FileNotFoundException($"rawprogram file not found: {rawProgramPath} rawprogram 文件不存在。", rawProgramPath);
+            throw new FileNotFoundException(FlashLogText.Format("Flash_Exception_RawprogramMissing", rawProgramPath),
+                rawProgramPath);
         }
 
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(rawProgramPath)) ?? string.Empty;
         var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
         var entry = FlashService.FindEdlTarget(entries, partition, imagePath: null)
             ?? throw new InvalidOperationException(
-                $"Partition '{partition}' not found in rawprogram: {rawProgramPath}. 分区 '{partition}' 未在 rawprogram 中匹配到。");
+                FlashLogText.Format("Flash_Exception_RawprogramPartitionMissing", partition, rawProgramPath));
         if (entry.NumPartitionSectors <= 0)
         {
             throw new InvalidOperationException(
-                $"rawprogram entry for '{partition}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
+                FlashLogText.Format("Flash_Exception_RawprogramNoSectors", partition));
         }
 
         if (FlashService.IsRelativeStartSector(entry.StartSector))
         {
             throw new InvalidOperationException(
-                $"rawprogram entry for '{partition}' uses a NUM_DISK_SECTORS-relative start_sector; resolve it against the live device geometry before restoring. 相对 start_sector 需先按设备几何解析后再还原。");
+                FlashLogText.Format("Flash_Exception_RawprogramRelativeStart", partition));
         }
 
         return (FlashService.ParseStartSectorValue(entry.StartSector), entry.NumPartitionSectors);
@@ -399,12 +413,12 @@ public static class BackupService
     {
         if (sectorCount <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(sectorCount), "Sector count must be greater than zero. 扇区数必须大于 0。");
+            throw new ArgumentOutOfRangeException(nameof(sectorCount), FlashLogText.Get("Flash_Exception_SectorCount"));
         }
 
         await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
 
-        Report(progress, displayName, 10, $"Reading {displayName} via Firehose read... 正在通过 Firehose 读取分区...");
+        Report(progress, displayName, 10, FlashLogText.Format("Flash_Progress_EdlReading", displayName));
         var fullPath = Path.GetFullPath(outPath);
         var directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
         Directory.CreateDirectory(directory);
@@ -414,11 +428,12 @@ public static class BackupService
             startSector, sectorCount, totalBytes, progress, ct).ConfigureAwait(false);
         File.Move(read.tempPath, fullPath, true);
 
-        Report(progress, displayName, 100, $"EDL backup complete: {displayName}. EDL 分区备份完成。");
+        Report(progress, displayName, 100, FlashLogText.Format("Flash_Progress_EdlBackupDone", displayName));
         return new BackupResult
         {
             Success = true,
-            Summary = $"Backed up EDL partition '{displayName}' ({read.result.BytesWritten} bytes, SHA-256 {read.result.Sha256Hex}).",
+            Summary = FlashLogText.Format("Flash_Result_EdlBackedUp", displayName,
+                read.result.BytesWritten, read.result.Sha256Hex),
             Bytes = read.result.BytesWritten,
             Sha256Hex = read.result.Sha256Hex
         };
@@ -452,7 +467,7 @@ public static class BackupService
                 physicalPartition, byteProgress, expectedSha256Hex: null, ct).ConfigureAwait(false);
             if (!result.DeviceAcknowledged)
             {
-                throw new IOException($"Firehose read of '{displayName}' completed without a device acknowledgement. 设备未确认本次读取。");
+                throw new IOException(FlashLogText.Format("Flash_Exception_ReadNotAcknowledged", displayName));
             }
 
             await fs.FlushAsync(ct).ConfigureAwait(false);
@@ -500,7 +515,8 @@ public static class BackupService
             }
 
             var percent = 10 + (int)Math.Clamp(value * 85 / totalBytes, 0, 85);
-            BackupService.Report(progress, displayName, percent, $"Read {value}/{totalBytes} bytes of {displayName}. 已读取 {displayName} 的 {value}/{totalBytes} 字节。");
+            BackupService.Report(progress, displayName, percent,
+                FlashLogText.Format("Flash_Progress_EdlReadBytes", value, totalBytes, displayName));
         }
     }
 
