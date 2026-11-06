@@ -4665,6 +4665,60 @@
   <data name="DiskFlash_ImageCompressed" xml:space="preserve">
     <value>{0} 压缩</value>
   </data>
+  <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
+    <value>一次仅限一个驱动器；选中新的驱动器会取消之前的选择。</value>
+  </data>
+  <data name="DiskFlash_ElevationTitle" xml:space="preserve">
+    <value>需要管理员权限</value>
+  </data>
+  <data name="DiskFlash_ElevationBody" xml:space="preserve">
+    <value>写入磁盘镜像需要管理员权限。选中的驱动器将由以该权限启动的独立进程写入；本窗口保持可用并继续显示进度。</value>
+  </data>
+  <data name="DiskFlash_ElevationDetail" xml:space="preserve">
+    <value>镜像：{0} / 目标：{1}</value>
+  </data>
+  <data name="DiskFlash_ElevationContinue" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="DiskFlash_ElevationCancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="DiskFlash_ElevationDeclined" xml:space="preserve">
+    <value>已取消特权写入，未写入任何内容。</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedTitle" xml:space="preserve">
+    <value>拒绝访问</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedBody" xml:space="preserve">
+    <value>本进程被拒绝写入该驱动器。是否在以管理员权限启动的进程中继续？</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedFailure" xml:space="preserve">
+    <value>提权进程仍被拒绝写入该驱动器，请检查驱动器是否写保护或被占用。</value>
+  </data>
+  <data name="DiskFlash_ElevationCancelled" xml:space="preserve">
+    <value>已取消管理员授权提示，未写入任何内容。</value>
+  </data>
+  <data name="DiskFlash_ElevationUnavailableTitle" xml:space="preserve">
+    <value>需要管理员权限</value>
+  </data>
+  <data name="DiskFlash_ElevationUnavailableBody" xml:space="preserve">
+    <value>本进程无权写入选中的驱动器，且无法为此启动管理员进程。请以管理员身份重新启动应用。</value>
+  </data>
+  <data name="DiskFlash_ElevationUnsupportedTitle" xml:space="preserve">
+    <value>当前平台不支持提权</value>
+  </data>
+  <data name="DiskFlash_ElevationUnsupportedBody" xml:space="preserve">
+    <value>仅在 Windows 上会把磁盘镜像交给独立的管理员进程写入。请在该平台上以管理员身份启动本应用。</value>
+  </data>
+  <data name="DiskFlash_ScanSizeUnknown" xml:space="preserve">
+    <value>有 {0} 个驱动器未能读取容量：读取物理磁盘容量需要管理员权限。开始烧录时会询问是否提权。</value>
+  </data>
+  <data name="DiskFlash_ScanSizeUnknownElevated" xml:space="preserve">
+    <value>即使具备管理员权限，仍有 {0} 个驱动器未能读取容量；设备未返回容量。</value>
+  </data>
+  <data name="DiskFlash_ScanFailedDetail" xml:space="preserve">
+    <value>驱动器扫描失败：{0}</value>
+  </data>
   <data name="DiskFlash_ImageSummary" xml:space="preserve">
     <value>{0} · {1}</value>
   </data>
@@ -4679,5 +4733,482 @@
   </data>
   <data name="Explorer_ViewLogoPartition" xml:space="preserve">
     <value>打开 Logo 分区</value>
+  </data>
+  <data name="Flash_DeviceNotSelected" xml:space="preserve">
+    <value>请先选择设备。</value>
+  </data>
+  <data name="Flash_Exception_AdbInstallFailed" xml:space="preserve">
+    <value>安装烧录包失败，退出码 {0}：{1}</value>
+  </data>
+  <data name="Flash_Exception_BackupSizeUnknown" xml:space="preserve">
+    <value>设备未给出分区 '{0}' 的大小。</value>
+  </data>
+  <data name="Flash_Exception_DeviceSectorSize" xml:space="preserve">
+    <value>设备未上报扇区大小。</value>
+  </data>
+  <data name="Flash_Exception_EdlEntryNoImage" xml:space="preserve">
+    <value>EDL 条目 '{0}' 未指定镜像文件。</value>
+  </data>
+  <data name="Flash_Exception_EdlImageMissing" xml:space="preserve">
+    <value>EDL 条目 '{0}' 的镜像缺失：{1}</value>
+  </data>
+  <data name="Flash_Exception_EdlProgramFailed" xml:space="preserve">
+    <value>烧写 '{0}' 失败：{1}</value>
+  </data>
+  <data name="Flash_Exception_EdlSparseFailed" xml:space="preserve">
+    <value>写入 '{0}' 的稀疏镜像失败：{1}</value>
+  </data>
+  <data name="Flash_Exception_EmptyImage" xml:space="preserve">
+    <value>'{0}' 的镜像为空。</value>
+  </data>
+  <data name="Flash_Exception_ImageEmpty" xml:space="preserve">
+    <value>镜像为空：{0}</value>
+  </data>
+  <data name="Flash_Exception_ImageFileMissing" xml:space="preserve">
+    <value>找不到镜像文件：{0}</value>
+  </data>
+  <data name="Flash_Exception_ImageMissing" xml:space="preserve">
+    <value>找不到镜像：{0}</value>
+  </data>
+  <data name="Flash_Exception_LogicalSizeUnknown" xml:space="preserve">
+    <value>设备未上报 '{0}' 的逻辑大小。</value>
+  </data>
+  <data name="Flash_Exception_NoFirehose" xml:space="preserve">
+    <value>EDL 会话没有可用的 firehose 通道。</value>
+  </data>
+  <data name="Flash_Exception_NoPartitions" xml:space="preserve">
+    <value>设备未列出可擦除的分区。</value>
+  </data>
+  <data name="Flash_Exception_NoPartitionTable" xml:space="preserve">
+    <value>无法读取分区表：{0}</value>
+  </data>
+  <data name="Flash_Exception_OtaMissing" xml:space="preserve">
+    <value>找不到 OTA 包：{0}</value>
+  </data>
+  <data name="Flash_Exception_ParameterMissing" xml:space="preserve">
+    <value>找不到参数文件：{0}</value>
+  </data>
+  <data name="Flash_Exception_RawprogramMissing" xml:space="preserve">
+    <value>找不到 rawprogram 清单：{0}</value>
+  </data>
+  <data name="Flash_Exception_RawprogramNoSectors" xml:space="preserve">
+    <value>分区 '{0}' 未声明扇区数。</value>
+  </data>
+  <data name="Flash_Exception_RawprogramPartitionMissing" xml:space="preserve">
+    <value>分区 '{0}' 未在 {1} 中声明。</value>
+  </data>
+  <data name="Flash_Exception_RawprogramRelativeStart" xml:space="preserve">
+    <value>分区 '{0}' 使用了本路径无法解析的相对起始扇区。</value>
+  </data>
+  <data name="Flash_Exception_ReadNotAcknowledged" xml:space="preserve">
+    <value>设备未确认对 '{0}' 的读取。</value>
+  </data>
+  <data name="Flash_Exception_RkBackupNeedsTable" xml:space="preserve">
+    <value>备份该瑞芯微设备需要其参数表。</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntryArray" xml:space="preserve">
+    <value>分区条目数组结束于 {0}，超出了 {1} 字节的表头区块。</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntryCount" xml:space="preserve">
+    <value>分区表声明了 {0} 个条目，超过上限 {1}。</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntrySize" xml:space="preserve">
+    <value>分区条目大小 {0} 超出预期范围 {1}..{2}。</value>
+  </data>
+  <data name="Flash_Exception_RkfpHeaderTruncated" xml:space="preserve">
+    <value>分区表表头被截断。</value>
+  </data>
+  <data name="Flash_Exception_RkImageTooLarge" xml:space="preserve">
+    <value>镜像 '{0}' 需要 {1} 个扇区，但分区 '{4}' 只有 {3} 个（{2} 字节）。</value>
+  </data>
+  <data name="Flash_Exception_RkLoaderMissing" xml:space="preserve">
+    <value>找不到 loader：{0}</value>
+  </data>
+  <data name="Flash_Exception_RkMaskRom" xml:space="preserve">
+    <value>设备处于 mask ROM 模式，请先加载 loader。</value>
+  </data>
+  <data name="Flash_Exception_RkParameterMissing" xml:space="preserve">
+    <value>该操作需要瑞芯微参数表。</value>
+  </data>
+  <data name="Flash_Exception_RkPartitionMissing" xml:space="preserve">
+    <value>分区 '{0}' 不在设备分区表中：{1}</value>
+  </data>
+  <data name="Flash_Exception_RkStorageSwitch" xml:space="preserve">
+    <value>无法切换到目标介质：{1}（掩码 {0}）。</value>
+  </data>
+  <data name="Flash_Exception_RkStorageUnknown" xml:space="preserve">
+    <value>存储 id {0} 不是已知介质。</value>
+  </data>
+  <data name="Flash_Exception_SectorCount" xml:space="preserve">
+    <value>扇区数必须为正。</value>
+  </data>
+  <data name="Flash_Exception_SectorSizeMismatch" xml:space="preserve">
+    <value>条目的扇区大小与设备的扇区大小不一致。</value>
+  </data>
+  <data name="Flash_Exception_SectorSizeRequired" xml:space="preserve">
+    <value>该条目需要给出扇区大小。</value>
+  </data>
+  <data name="Flash_Exception_SideloadMissing" xml:space="preserve">
+    <value>缺少 sideload 包。</value>
+  </data>
+  <data name="Flash_Exception_SourceOffset" xml:space="preserve">
+    <value>条目的源偏移无效。</value>
+  </data>
+  <data name="Flash_Exception_SparseOffset" xml:space="preserve">
+    <value>稀疏镜像表头偏移无效。</value>
+  </data>
+  <data name="Flash_Exception_StartSectorInvalid" xml:space="preserve">
+    <value>起始扇区值无效：{0}</value>
+  </data>
+  <data name="Flash_Exception_StartSectorNegative" xml:space="preserve">
+    <value>起始扇区不得为负。</value>
+  </data>
+  <data name="Flash_Exception_StartSectorNoLun" xml:space="preserve">
+    <value>起始扇区值未指定 LUN：{0}</value>
+  </data>
+  <data name="Flash_Exception_StartSectorOutOfRange" xml:space="preserve">
+    <value>起始扇区值 {0} 超出磁盘上的 {1} 个扇区。</value>
+  </data>
+  <data name="Flash_Exception_UnsupportedBackupProtocol" xml:space="preserve">
+    <value>无法通过 {0} 模式备份。</value>
+  </data>
+  <data name="Flash_Exception_UnsupportedRestoreProtocol" xml:space="preserve">
+    <value>无法通过 {0} 模式恢复。</value>
+  </data>
+  <data name="Flash_ExtractOutputPath" xml:space="preserve">
+    <value>已解压镜像至 {0}</value>
+  </data>
+  <data name="Flash_FastbootInfo_BlockSize" xml:space="preserve">
+    <value>块设备容量</value>
+  </data>
+  <data name="Flash_FastbootInfo_Bootloader" xml:space="preserve">
+    <value>引导程序</value>
+  </data>
+  <data name="Flash_FastbootInfo_BromVersion" xml:space="preserve">
+    <value>BootROM 版本</value>
+  </data>
+  <data name="Flash_FastbootInfo_MtdSize" xml:space="preserve">
+    <value>SPI 闪存容量</value>
+  </data>
+  <data name="Flash_FastbootInfo_Product" xml:space="preserve">
+    <value>产品</value>
+  </data>
+  <data name="Flash_FastbootInfo_Serial" xml:space="preserve">
+    <value>序列号</value>
+  </data>
+  <data name="Flash_FastbootInfo_Stage" xml:space="preserve">
+    <value>启动阶段</value>
+  </data>
+  <data name="Flash_FastbootInfo_StageFdl" xml:space="preserve">
+    <value>BootROM FDL</value>
+  </data>
+  <data name="Flash_FastbootInfo_StageUboot" xml:space="preserve">
+    <value>U-Boot fastboot</value>
+  </data>
+  <data name="Flash_FastbootInfo_UbootVersion" xml:space="preserve">
+    <value>U-Boot 版本</value>
+  </data>
+  <data name="Flash_Log_CommandFile" xml:space="preserve">
+    <value>命令 {0} → {1}（{2}）</value>
+  </data>
+  <data name="Flash_Log_ConfigEntry" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="Flash_Log_Failure" xml:space="preserve">
+    <value>错误：{0}</value>
+  </data>
+  <data name="Flash_Log_FileChosen" xml:space="preserve">
+    <value>已选择文件：{0}</value>
+  </data>
+  <data name="Flash_Log_ManifestWritten" xml:space="preserve">
+    <value>清单已写入：{0}</value>
+  </data>
+  <data name="Flash_Log_NoDetail" xml:space="preserve">
+    <value>（无详细信息）</value>
+  </data>
+  <data name="Flash_Log_PartitionStatus" xml:space="preserve">
+    <value>{0}：{1}</value>
+  </data>
+  <data name="Flash_Log_ProgrammerChosen" xml:space="preserve">
+    <value>已选择引导程序：{0}</value>
+  </data>
+  <data name="Flash_Log_ResizeFailed" xml:space="preserve">
+    <value>无法将 '{0}' 调整为 {1} 字节：{2}</value>
+  </data>
+  <data name="Flash_Progress_AdbDone" xml:space="preserve">
+    <value>ADB 烧录完成。</value>
+  </data>
+  <data name="Flash_Progress_AdbOpening" xml:space="preserve">
+    <value>正在打开 ADB 会话…</value>
+  </data>
+  <data name="Flash_Progress_BackupDone" xml:space="preserve">
+    <value>{0} 已备份。</value>
+  </data>
+  <data name="Flash_Progress_ConvertingSparse" xml:space="preserve">
+    <value>正在转换为稀疏镜像…</value>
+  </data>
+  <data name="Flash_Progress_EdlBackupDone" xml:space="preserve">
+    <value>{0} 已备份。</value>
+  </data>
+  <data name="Flash_Progress_EdlLookingBundle" xml:space="preserve">
+    <value>正在查找 EDL 包…</value>
+  </data>
+  <data name="Flash_Progress_EdlNoRawprogram" xml:space="preserve">
+    <value>未找到 rawprogram 清单，改用 GPT 路径。</value>
+  </data>
+  <data name="Flash_Progress_EdlPartitionDone" xml:space="preserve">
+    <value>{0} 已烧写。</value>
+  </data>
+  <data name="Flash_Progress_EdlPartitionMissing" xml:space="preserve">
+    <value>分区 {0} 在包中没有镜像。</value>
+  </data>
+  <data name="Flash_Progress_EdlReadBackMismatch" xml:space="preserve">
+    <value>{0} 的回读校验失败。</value>
+  </data>
+  <data name="Flash_Progress_EdlReadBytes" xml:space="preserve">
+    <value>{0} / {1} 字节（{2}）</value>
+  </data>
+  <data name="Flash_Progress_EdlReading" xml:space="preserve">
+    <value>正在读取 {0}…</value>
+  </data>
+  <data name="Flash_Progress_EdlSendingProgram" xml:space="preserve">
+    <value>正在为 {0} 发送引导程序…</value>
+  </data>
+  <data name="Flash_Progress_EdlSinglePartition" xml:space="preserve">
+    <value>正在烧写 {0}…</value>
+  </data>
+  <data name="Flash_Progress_EraseAllDone" xml:space="preserve">
+    <value>全部已擦除。</value>
+  </data>
+  <data name="Flash_Progress_EraseDone" xml:space="preserve">
+    <value>{0} 已擦除。</value>
+  </data>
+  <data name="Flash_Progress_Erasing" xml:space="preserve">
+    <value>正在擦除 {0}…</value>
+  </data>
+  <data name="Flash_Progress_FastbootOpening" xml:space="preserve">
+    <value>正在打开 fastboot 会话…</value>
+  </data>
+  <data name="Flash_Progress_FastbootVariable" xml:space="preserve">
+    <value>{0}={1}</value>
+  </data>
+  <data name="Flash_Progress_Fetching" xml:space="preserve">
+    <value>正在获取 {0}（{1} 字节）…</value>
+  </data>
+  <data name="Flash_Progress_FetchingPartition" xml:space="preserve">
+    <value>正在获取…</value>
+  </data>
+  <data name="Flash_Progress_FlashDone" xml:space="preserve">
+    <value>写入完成。</value>
+  </data>
+  <data name="Flash_Progress_ParmWriting" xml:space="preserve">
+    <value>正在写入参数表…</value>
+  </data>
+  <data name="Flash_Progress_ParmWritten" xml:space="preserve">
+    <value>参数表已写入 LBA {0}。</value>
+  </data>
+  <data name="Flash_Progress_Property" xml:space="preserve">
+    <value>{0}={1}</value>
+  </data>
+  <data name="Flash_Progress_PushingToTemp" xml:space="preserve">
+    <value>正在把 {0} 推送到临时存储…</value>
+  </data>
+  <data name="Flash_Progress_QueryFastboot" xml:space="preserve">
+    <value>正在查询 fastboot 变量 {0}…</value>
+  </data>
+  <data name="Flash_Progress_QueryProperty" xml:space="preserve">
+    <value>正在查询属性 {0}…</value>
+  </data>
+  <data name="Flash_Progress_ResizingLogical" xml:space="preserve">
+    <value>正在将 {0} 调整为 {1} 字节…</value>
+  </data>
+  <data name="Flash_Progress_RestoreDone" xml:space="preserve">
+    <value>{0} 已恢复。</value>
+  </data>
+  <data name="Flash_Progress_Restoring" xml:space="preserve">
+    <value>正在恢复 {0}…</value>
+  </data>
+  <data name="Flash_Progress_RestoringProgress" xml:space="preserve">
+    <value>正在写入…</value>
+  </data>
+  <data name="Flash_Progress_RkdlBadBlocks" xml:space="preserve">
+    <value>{1} 上有 {0} 个坏块。</value>
+  </data>
+  <data name="Flash_Progress_RkdlErasingBlocks" xml:space="preserve">
+    <value>正在擦除 {2} 上从 {1} 起的 {0} 个块…</value>
+  </data>
+  <data name="Flash_Progress_RkdlLbaWriting" xml:space="preserve">
+    <value>正在把 {0} 写入 {2} 的 LBA {1}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlOpening" xml:space="preserve">
+    <value>正在打开 RKDL 会话…</value>
+  </data>
+  <data name="Flash_Progress_RkdlParmWriting" xml:space="preserve">
+    <value>正在写入 LBA {0} 处的参数表…</value>
+  </data>
+  <data name="Flash_Progress_RkdlPartitionDone" xml:space="preserve">
+    <value>{0} 已写入。</value>
+  </data>
+  <data name="Flash_Progress_RkdlSwitchingMedium" xml:space="preserve">
+    <value>正在切换到 {0}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWriteLba" xml:space="preserve">
+    <value>正在写入…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWriteLbaAt" xml:space="preserve">
+    <value>正在写入 LBA {0}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWritingTo" xml:space="preserve">
+    <value>正在把 {0} 写入 {1}（LBA {2}）…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWroteAtLba" xml:space="preserve">
+    <value>已在 {2} 的 LBA {1} 上写入 {0} 字节。</value>
+  </data>
+  <data name="Flash_Progress_RunningCommand" xml:space="preserve">
+    <value>正在执行 {0}…</value>
+  </data>
+  <data name="Flash_Progress_SideloadDone" xml:space="preserve">
+    <value>Sideload 完成。</value>
+  </data>
+  <data name="Flash_Progress_SideloadPushing" xml:space="preserve">
+    <value>正在推送烧录包…</value>
+  </data>
+  <data name="Flash_Progress_SideloadReboot" xml:space="preserve">
+    <value>正在重启至 sideload…</value>
+  </data>
+  <data name="Flash_Progress_SplittingSparse" xml:space="preserve">
+    <value>正在拆分稀疏镜像…</value>
+  </data>
+  <data name="Flash_Progress_TruncatedNote" xml:space="preserve">
+    <value>（已截断至 {0} 个扇区）</value>
+  </data>
+  <data name="Flash_Progress_Uploading" xml:space="preserve">
+    <value>正在上传…</value>
+  </data>
+  <data name="Flash_Progress_UploadingChunk" xml:space="preserve">
+    <value>正在上传第 {0}/{1} 块…</value>
+  </data>
+  <data name="Flash_Progress_VerifyingReadBack" xml:space="preserve">
+    <value>正在校验 {0}…</value>
+  </data>
+  <data name="Flash_Progress_VerifyingReadBackAtLba" xml:space="preserve">
+    <value>正在校验 LBA {1} 处的 {0}…</value>
+  </data>
+  <data name="Flash_Progress_VerifyPassed" xml:space="preserve">
+    <value> 校验通过。</value>
+  </data>
+  <data name="Flash_Progress_VerifySkipped" xml:space="preserve">
+    <value> 已跳过校验：{0}</value>
+  </data>
+  <data name="Flash_Progress_VerifySkippedEmpty" xml:space="preserve">
+    <value> 已跳过校验：镜像为空。</value>
+  </data>
+  <data name="Flash_Result_AdbFlashed" xml:space="preserve">
+    <value>已烧录 {0}。</value>
+  </data>
+  <data name="Flash_Result_BackedUpViaFastboot" xml:space="preserve">
+    <value>已备份 {0}（{1} 字节）。</value>
+  </data>
+  <data name="Flash_Result_BackupCanceled" xml:space="preserve">
+    <value>备份已取消。</value>
+  </data>
+  <data name="Flash_Result_EdlBackedUp" xml:space="preserve">
+    <value>已备份 {0}：{1} 字节，SHA-256 {2}。</value>
+  </data>
+  <data name="Flash_Result_EdlReadBackFailed" xml:space="preserve">
+    <value>{0} 的回读校验失败：{1}</value>
+  </data>
+  <data name="Flash_Result_EraseAll" xml:space="preserve">
+    <value>已擦除 {0} 个分区。</value>
+  </data>
+  <data name="Flash_Result_ErasedViaFastboot" xml:space="preserve">
+    <value>{0} 已擦除。</value>
+  </data>
+  <data name="Flash_Result_FlashedSparseChunks" xml:space="preserve">
+    <value>已分 {2} 块烧录 {0}（{1} 字节）。</value>
+  </data>
+  <data name="Flash_Result_FlashedViaFastboot" xml:space="preserve">
+    <value>已烧录 {0}（{1} 字节）。</value>
+  </data>
+  <data name="Flash_Result_ParmWritten" xml:space="preserve">
+    <value>参数表已写入（{0} 字节，LBA {1}）。</value>
+  </data>
+  <data name="Flash_Result_RestoreCanceled" xml:space="preserve">
+    <value>恢复已取消。</value>
+  </data>
+  <data name="Flash_Result_RestoredViaFastboot" xml:space="preserve">
+    <value>已恢复 {0}（{1} 字节）。</value>
+  </data>
+  <data name="Flash_Result_RkdlErasedParameterWindow" xml:space="preserve">
+    <value>已擦除 LBA {0} 处的参数窗口（{1} 个扇区）。</value>
+  </data>
+  <data name="Flash_Result_RkdlErasedPartition" xml:space="preserve">
+    <value>已擦除 {0}（自 LBA {2} 起的 {1} 个扇区）。</value>
+  </data>
+  <data name="Flash_Result_RkdlReadBackFailed" xml:space="preserve">
+    <value>{0} 的回读校验失败：{1}</value>
+  </data>
+  <data name="Flash_Result_RkdlReadBackMismatch" xml:space="preserve">
+    <value>{1} 的回读与已写入的 {0} 字节不一致。</value>
+  </data>
+  <data name="Flash_Result_RkdlWroteLba" xml:space="preserve">
+    <value>已把 {1} 的 {0} 字节写入 {3} 的 LBA {2}。</value>
+  </data>
+  <data name="Flash_Result_RkdlWrotePartition" xml:space="preserve">
+    <value>已向 LBA {2} 处的 {1} 写入 {0} 字节。</value>
+  </data>
+  <data name="Flash_Result_Sideloaded" xml:space="preserve">
+    <value>已 sideload {0}。</value>
+  </data>
+  <data name="Flash_Service_Canceled" xml:space="preserve">
+    <value>操作已取消。</value>
+  </data>
+  <data name="Flash_Service_EraseAllFastbootOnly" xml:space="preserve">
+    <value>擦除全部分区需要 fastboot 设备。</value>
+  </data>
+  <data name="Flash_Service_EraseFastbootOnly" xml:space="preserve">
+    <value>擦除分区需要 fastboot 设备。</value>
+  </data>
+  <data name="Flash_Service_PropertyProtocol" xml:space="preserve">
+    <value>读取属性需要 ADB 或 fastboot 设备。</value>
+  </data>
+  <data name="Flash_Service_UnsupportedFlashProtocol" xml:space="preserve">
+    <value>无法通过 {0} 模式烧录。</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainAlreadyUboot" xml:space="preserve">
+    <value>板卡已在运行 U-Boot gadget，无需发送。</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainRunning" xml:space="preserve">
+    <value>正在发送引导程序</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainSent" xml:space="preserve">
+    <value>引导程序已发送，板卡现已运行 U-Boot gadget。</value>
+  </data>
+  <data name="Flash_SpacemiTFlashTitle" xml:space="preserve">
+    <value>烧录该烧录包？</value>
+  </data>
+  <data name="Flash_SpacemiTNeedsBootChain" xml:space="preserve">
+    <value>板卡仍处于 BootROM 下载模式，请先发送引导程序。</value>
+  </data>
+  <data name="Flash_SpacemiTNoPackage" xml:space="preserve">
+    <value>请先加载进迭时空烧录包。</value>
+  </data>
+  <data name="Flash_SpacemiTNoPartitions" xml:space="preserve">
+    <value>请至少选择一个要写入的分区。</value>
+  </data>
+  <data name="Flash_SpacemiTPackageLoaded" xml:space="preserve">
+    <value>烧录包 {0}（脚本 v{1}，{2} 个动作）列出了 {3} 个分区。</value>
+  </data>
+  <data name="Flash_SpacemiTStorageDone" xml:space="preserve">
+    <value>烧录包已写入板卡。</value>
+  </data>
+  <data name="Flash_SpacemiTStorageRunning" xml:space="preserve">
+    <value>正在写入烧录包</value>
+  </data>
+  <data name="Flash_SpacemiTWritingTable" xml:space="preserve">
+    <value>正在写入分区表</value>
+  </data>
+  <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
+    <value>线刷包已输出至 {0}</value>
   </data>
 </root>

@@ -4665,6 +4665,60 @@ Continue?</value>
   <data name="DiskFlash_ImageCompressed" xml:space="preserve">
     <value>{0} compressed</value>
   </data>
+  <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
+    <value>One drive at a time. Selecting a drive clears the previous choice.</value>
+  </data>
+  <data name="DiskFlash_ElevationTitle" xml:space="preserve">
+    <value>Administrator rights required</value>
+  </data>
+  <data name="DiskFlash_ElevationBody" xml:space="preserve">
+    <value>Writing a disk image needs administrator rights. The selected drive is written by a separate process started with those rights; this window stays available and keeps showing progress.</value>
+  </data>
+  <data name="DiskFlash_ElevationDetail" xml:space="preserve">
+    <value>Image: {0} / Target: {1}</value>
+  </data>
+  <data name="DiskFlash_ElevationContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="DiskFlash_ElevationCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="DiskFlash_ElevationDeclined" xml:space="preserve">
+    <value>The privileged write was declined; nothing was written.</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedTitle" xml:space="preserve">
+    <value>Access denied</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedBody" xml:space="preserve">
+    <value>This process was refused write access to the drive. Continue in a process started with administrator rights?</value>
+  </data>
+  <data name="DiskFlash_ElevationDeniedFailure" xml:space="preserve">
+    <value>The privileged process was still refused write access to the drive. Check whether the drive is write-protected or in use.</value>
+  </data>
+  <data name="DiskFlash_ElevationCancelled" xml:space="preserve">
+    <value>The administrator prompt was cancelled; nothing was written.</value>
+  </data>
+  <data name="DiskFlash_ElevationUnavailableTitle" xml:space="preserve">
+    <value>Administrator rights required</value>
+  </data>
+  <data name="DiskFlash_ElevationUnavailableBody" xml:space="preserve">
+    <value>This process may not write the selected drive and cannot start an administrator process for it. Restart the application as administrator.</value>
+  </data>
+  <data name="DiskFlash_ElevationUnsupportedTitle" xml:space="preserve">
+    <value>Elevation is not available</value>
+  </data>
+  <data name="DiskFlash_ElevationUnsupportedBody" xml:space="preserve">
+    <value>Disk images are written in a separate administrator process on Windows only. Start this application as administrator on this platform.</value>
+  </data>
+  <data name="DiskFlash_ScanSizeUnknown" xml:space="preserve">
+    <value>{0} drive(s) reported no capacity: reading the physical disk size needs administrator rights. Starting the flash asks for elevation.</value>
+  </data>
+  <data name="DiskFlash_ScanSizeUnknownElevated" xml:space="preserve">
+    <value>{0} drive(s) reported no capacity even with administrator rights; the device returned no size.</value>
+  </data>
+  <data name="DiskFlash_ScanFailedDetail" xml:space="preserve">
+    <value>The drive scan failed: {0}</value>
+  </data>
   <data name="DiskFlash_ImageSummary" xml:space="preserve">
     <value>{0} · {1}</value>
   </data>
@@ -4679,5 +4733,482 @@ Continue?</value>
   </data>
   <data name="Explorer_ViewLogoPartition" xml:space="preserve">
     <value>Open Logo Partition</value>
+  </data>
+  <data name="Flash_DeviceNotSelected" xml:space="preserve">
+    <value>Select a device first.</value>
+  </data>
+  <data name="Flash_Exception_AdbInstallFailed" xml:space="preserve">
+    <value>Installing the package failed with exit code {0}: {1}</value>
+  </data>
+  <data name="Flash_Exception_BackupSizeUnknown" xml:space="preserve">
+    <value>The device reported no size for partition '{0}'.</value>
+  </data>
+  <data name="Flash_Exception_DeviceSectorSize" xml:space="preserve">
+    <value>The device did not report its sector size.</value>
+  </data>
+  <data name="Flash_Exception_EdlEntryNoImage" xml:space="preserve">
+    <value>The EDL entry '{0}' names no image file.</value>
+  </data>
+  <data name="Flash_Exception_EdlImageMissing" xml:space="preserve">
+    <value>The image for EDL entry '{0}' is missing: {1}</value>
+  </data>
+  <data name="Flash_Exception_EdlProgramFailed" xml:space="preserve">
+    <value>Programming '{0}' failed: {1}</value>
+  </data>
+  <data name="Flash_Exception_EdlSparseFailed" xml:space="preserve">
+    <value>Writing the sparse image for '{0}' failed: {1}</value>
+  </data>
+  <data name="Flash_Exception_EmptyImage" xml:space="preserve">
+    <value>The image for '{0}' is empty.</value>
+  </data>
+  <data name="Flash_Exception_ImageEmpty" xml:space="preserve">
+    <value>The image is empty: {0}</value>
+  </data>
+  <data name="Flash_Exception_ImageFileMissing" xml:space="preserve">
+    <value>Image file not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_ImageMissing" xml:space="preserve">
+    <value>Image not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_LogicalSizeUnknown" xml:space="preserve">
+    <value>The device reported no logical size for '{0}'.</value>
+  </data>
+  <data name="Flash_Exception_NoFirehose" xml:space="preserve">
+    <value>The EDL session has no firehose channel.</value>
+  </data>
+  <data name="Flash_Exception_NoPartitions" xml:space="preserve">
+    <value>The device listed no partitions to erase.</value>
+  </data>
+  <data name="Flash_Exception_NoPartitionTable" xml:space="preserve">
+    <value>Could not read the partition table: {0}</value>
+  </data>
+  <data name="Flash_Exception_OtaMissing" xml:space="preserve">
+    <value>OTA package not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_ParameterMissing" xml:space="preserve">
+    <value>Parameter file not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_RawprogramMissing" xml:space="preserve">
+    <value>rawprogram manifest not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_RawprogramNoSectors" xml:space="preserve">
+    <value>Partition '{0}' declares no sector count.</value>
+  </data>
+  <data name="Flash_Exception_RawprogramPartitionMissing" xml:space="preserve">
+    <value>Partition '{0}' is not declared in {1}.</value>
+  </data>
+  <data name="Flash_Exception_RawprogramRelativeStart" xml:space="preserve">
+    <value>Partition '{0}' uses a relative start sector that this path cannot resolve.</value>
+  </data>
+  <data name="Flash_Exception_ReadNotAcknowledged" xml:space="preserve">
+    <value>The device did not acknowledge the read of '{0}'.</value>
+  </data>
+  <data name="Flash_Exception_RkBackupNeedsTable" xml:space="preserve">
+    <value>Backing up this Rockchip device requires its parameter table.</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntryArray" xml:space="preserve">
+    <value>The partition entry array ends at {0}, past the {1}-byte header block.</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntryCount" xml:space="preserve">
+    <value>The partition table declares {0} entries, above the limit of {1}.</value>
+  </data>
+  <data name="Flash_Exception_RkfpEntrySize" xml:space="preserve">
+    <value>Partition entry size {0} is outside the expected range {1}..{2}.</value>
+  </data>
+  <data name="Flash_Exception_RkfpHeaderTruncated" xml:space="preserve">
+    <value>The partition table header is truncated.</value>
+  </data>
+  <data name="Flash_Exception_RkImageTooLarge" xml:space="preserve">
+    <value>Image '{0}' needs {1} sectors but partition '{4}' holds {3} ({2} bytes).</value>
+  </data>
+  <data name="Flash_Exception_RkLoaderMissing" xml:space="preserve">
+    <value>Loader not found: {0}</value>
+  </data>
+  <data name="Flash_Exception_RkMaskRom" xml:space="preserve">
+    <value>The device is in mask ROM mode; load a loader first.</value>
+  </data>
+  <data name="Flash_Exception_RkParameterMissing" xml:space="preserve">
+    <value>This action requires the Rockchip parameter table.</value>
+  </data>
+  <data name="Flash_Exception_RkPartitionMissing" xml:space="preserve">
+    <value>Partition '{0}' is not in the device table: {1}</value>
+  </data>
+  <data name="Flash_Exception_RkStorageSwitch" xml:space="preserve">
+    <value>Could not switch to the target medium: {1} (mask {0}).</value>
+  </data>
+  <data name="Flash_Exception_RkStorageUnknown" xml:space="preserve">
+    <value>Storage id {0} is not a known medium.</value>
+  </data>
+  <data name="Flash_Exception_SectorCount" xml:space="preserve">
+    <value>The sector count must be positive.</value>
+  </data>
+  <data name="Flash_Exception_SectorSizeMismatch" xml:space="preserve">
+    <value>The entry sector size does not match the device sector size.</value>
+  </data>
+  <data name="Flash_Exception_SectorSizeRequired" xml:space="preserve">
+    <value>This entry needs a sector size.</value>
+  </data>
+  <data name="Flash_Exception_SideloadMissing" xml:space="preserve">
+    <value>The sideload package is missing.</value>
+  </data>
+  <data name="Flash_Exception_SourceOffset" xml:space="preserve">
+    <value>The entry's source offset is invalid.</value>
+  </data>
+  <data name="Flash_Exception_SparseOffset" xml:space="preserve">
+    <value>The sparse header offset is invalid.</value>
+  </data>
+  <data name="Flash_Exception_StartSectorInvalid" xml:space="preserve">
+    <value>Invalid start sector value: {0}</value>
+  </data>
+  <data name="Flash_Exception_StartSectorNegative" xml:space="preserve">
+    <value>The start sector must not be negative.</value>
+  </data>
+  <data name="Flash_Exception_StartSectorNoLun" xml:space="preserve">
+    <value>The start sector value names no LUN: {0}</value>
+  </data>
+  <data name="Flash_Exception_StartSectorOutOfRange" xml:space="preserve">
+    <value>Start sector value {0} exceeds the {1} sectors on the disk.</value>
+  </data>
+  <data name="Flash_Exception_UnsupportedBackupProtocol" xml:space="preserve">
+    <value>Backup is not supported over {0}.</value>
+  </data>
+  <data name="Flash_Exception_UnsupportedRestoreProtocol" xml:space="preserve">
+    <value>Restore is not supported over {0}.</value>
+  </data>
+  <data name="Flash_ExtractOutputPath" xml:space="preserve">
+    <value>Extracted images to {0}</value>
+  </data>
+  <data name="Flash_FastbootInfo_BlockSize" xml:space="preserve">
+    <value>Block storage size</value>
+  </data>
+  <data name="Flash_FastbootInfo_Bootloader" xml:space="preserve">
+    <value>Bootloader</value>
+  </data>
+  <data name="Flash_FastbootInfo_BromVersion" xml:space="preserve">
+    <value>BootROM version</value>
+  </data>
+  <data name="Flash_FastbootInfo_MtdSize" xml:space="preserve">
+    <value>SPI flash size</value>
+  </data>
+  <data name="Flash_FastbootInfo_Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Flash_FastbootInfo_Serial" xml:space="preserve">
+    <value>Serial number</value>
+  </data>
+  <data name="Flash_FastbootInfo_Stage" xml:space="preserve">
+    <value>Boot stage</value>
+  </data>
+  <data name="Flash_FastbootInfo_StageFdl" xml:space="preserve">
+    <value>BootROM FDL</value>
+  </data>
+  <data name="Flash_FastbootInfo_StageUboot" xml:space="preserve">
+    <value>U-Boot fastboot</value>
+  </data>
+  <data name="Flash_FastbootInfo_UbootVersion" xml:space="preserve">
+    <value>U-Boot version</value>
+  </data>
+  <data name="Flash_Log_CommandFile" xml:space="preserve">
+    <value>Command {0} → {1} ({2})</value>
+  </data>
+  <data name="Flash_Log_ConfigEntry" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="Flash_Log_Failure" xml:space="preserve">
+    <value>Error: {0}</value>
+  </data>
+  <data name="Flash_Log_FileChosen" xml:space="preserve">
+    <value>Selected file: {0}</value>
+  </data>
+  <data name="Flash_Log_ManifestWritten" xml:space="preserve">
+    <value>Manifest written: {0}</value>
+  </data>
+  <data name="Flash_Log_NoDetail" xml:space="preserve">
+    <value>(no detail)</value>
+  </data>
+  <data name="Flash_Log_PartitionStatus" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="Flash_Log_ProgrammerChosen" xml:space="preserve">
+    <value>Selected programmer: {0}</value>
+  </data>
+  <data name="Flash_Log_ResizeFailed" xml:space="preserve">
+    <value>Could not resize '{0}' to {1} bytes: {2}</value>
+  </data>
+  <data name="Flash_Progress_AdbDone" xml:space="preserve">
+    <value>ADB flash complete.</value>
+  </data>
+  <data name="Flash_Progress_AdbOpening" xml:space="preserve">
+    <value>Opening the ADB session…</value>
+  </data>
+  <data name="Flash_Progress_BackupDone" xml:space="preserve">
+    <value>{0} backed up.</value>
+  </data>
+  <data name="Flash_Progress_ConvertingSparse" xml:space="preserve">
+    <value>Converting the image to sparse…</value>
+  </data>
+  <data name="Flash_Progress_EdlBackupDone" xml:space="preserve">
+    <value>{0} backed up.</value>
+  </data>
+  <data name="Flash_Progress_EdlLookingBundle" xml:space="preserve">
+    <value>Looking for the EDL bundle…</value>
+  </data>
+  <data name="Flash_Progress_EdlNoRawprogram" xml:space="preserve">
+    <value>No rawprogram manifest found; using the GPT path.</value>
+  </data>
+  <data name="Flash_Progress_EdlPartitionDone" xml:space="preserve">
+    <value>{0} programmed.</value>
+  </data>
+  <data name="Flash_Progress_EdlPartitionMissing" xml:space="preserve">
+    <value>Partition {0} has no image in the package.</value>
+  </data>
+  <data name="Flash_Progress_EdlReadBackMismatch" xml:space="preserve">
+    <value>Read-back verification failed for {0}.</value>
+  </data>
+  <data name="Flash_Progress_EdlReadBytes" xml:space="preserve">
+    <value>{0} / {1} bytes ({2})</value>
+  </data>
+  <data name="Flash_Progress_EdlReading" xml:space="preserve">
+    <value>Reading {0}…</value>
+  </data>
+  <data name="Flash_Progress_EdlSendingProgram" xml:space="preserve">
+    <value>Sending the programmer for {0}…</value>
+  </data>
+  <data name="Flash_Progress_EdlSinglePartition" xml:space="preserve">
+    <value>Programming {0}…</value>
+  </data>
+  <data name="Flash_Progress_EraseAllDone" xml:space="preserve">
+    <value>All partitions erased.</value>
+  </data>
+  <data name="Flash_Progress_EraseDone" xml:space="preserve">
+    <value>{0} erased.</value>
+  </data>
+  <data name="Flash_Progress_Erasing" xml:space="preserve">
+    <value>Erasing {0}…</value>
+  </data>
+  <data name="Flash_Progress_FastbootOpening" xml:space="preserve">
+    <value>Opening the fastboot session…</value>
+  </data>
+  <data name="Flash_Progress_FastbootVariable" xml:space="preserve">
+    <value>{0}={1}</value>
+  </data>
+  <data name="Flash_Progress_Fetching" xml:space="preserve">
+    <value>Fetching {0} ({1} bytes)…</value>
+  </data>
+  <data name="Flash_Progress_FetchingPartition" xml:space="preserve">
+    <value>Fetching…</value>
+  </data>
+  <data name="Flash_Progress_FlashDone" xml:space="preserve">
+    <value>Flash complete.</value>
+  </data>
+  <data name="Flash_Progress_ParmWriting" xml:space="preserve">
+    <value>Writing the parameter table…</value>
+  </data>
+  <data name="Flash_Progress_ParmWritten" xml:space="preserve">
+    <value>Parameter table written at LBA {0}.</value>
+  </data>
+  <data name="Flash_Progress_Property" xml:space="preserve">
+    <value>{0}={1}</value>
+  </data>
+  <data name="Flash_Progress_PushingToTemp" xml:space="preserve">
+    <value>Pushing {0} to temporary storage…</value>
+  </data>
+  <data name="Flash_Progress_QueryFastboot" xml:space="preserve">
+    <value>Querying fastboot variable {0}…</value>
+  </data>
+  <data name="Flash_Progress_QueryProperty" xml:space="preserve">
+    <value>Querying property {0}…</value>
+  </data>
+  <data name="Flash_Progress_ResizingLogical" xml:space="preserve">
+    <value>Resizing {0} to {1} bytes…</value>
+  </data>
+  <data name="Flash_Progress_RestoreDone" xml:space="preserve">
+    <value>{0} restored.</value>
+  </data>
+  <data name="Flash_Progress_Restoring" xml:space="preserve">
+    <value>Restoring {0}…</value>
+  </data>
+  <data name="Flash_Progress_RestoringProgress" xml:space="preserve">
+    <value>Writing…</value>
+  </data>
+  <data name="Flash_Progress_RkdlBadBlocks" xml:space="preserve">
+    <value>{0} bad block(s) on {1}.</value>
+  </data>
+  <data name="Flash_Progress_RkdlErasingBlocks" xml:space="preserve">
+    <value>Erasing {0} blocks from {1} on {2}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlLbaWriting" xml:space="preserve">
+    <value>Writing {0} at LBA {1} on {2}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlOpening" xml:space="preserve">
+    <value>Opening the RKDL session…</value>
+  </data>
+  <data name="Flash_Progress_RkdlParmWriting" xml:space="preserve">
+    <value>Writing the parameter table at LBA {0}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlPartitionDone" xml:space="preserve">
+    <value>{0} written.</value>
+  </data>
+  <data name="Flash_Progress_RkdlSwitchingMedium" xml:space="preserve">
+    <value>Switching to {0}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWriteLba" xml:space="preserve">
+    <value>Writing…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWriteLbaAt" xml:space="preserve">
+    <value>Writing at LBA {0}…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWritingTo" xml:space="preserve">
+    <value>Writing {0} to {1} (LBA {2})…</value>
+  </data>
+  <data name="Flash_Progress_RkdlWroteAtLba" xml:space="preserve">
+    <value>Wrote {0} bytes at LBA {1} on {2}.</value>
+  </data>
+  <data name="Flash_Progress_RunningCommand" xml:space="preserve">
+    <value>Running {0}…</value>
+  </data>
+  <data name="Flash_Progress_SideloadDone" xml:space="preserve">
+    <value>Sideload complete.</value>
+  </data>
+  <data name="Flash_Progress_SideloadPushing" xml:space="preserve">
+    <value>Pushing the package…</value>
+  </data>
+  <data name="Flash_Progress_SideloadReboot" xml:space="preserve">
+    <value>Rebooting to sideload…</value>
+  </data>
+  <data name="Flash_Progress_SplittingSparse" xml:space="preserve">
+    <value>Splitting the sparse image into chunks…</value>
+  </data>
+  <data name="Flash_Progress_TruncatedNote" xml:space="preserve">
+    <value> (truncated to {0} sectors)</value>
+  </data>
+  <data name="Flash_Progress_Uploading" xml:space="preserve">
+    <value>Uploading…</value>
+  </data>
+  <data name="Flash_Progress_UploadingChunk" xml:space="preserve">
+    <value>Uploading chunk {0} of {1}…</value>
+  </data>
+  <data name="Flash_Progress_VerifyingReadBack" xml:space="preserve">
+    <value>Verifying {0}…</value>
+  </data>
+  <data name="Flash_Progress_VerifyingReadBackAtLba" xml:space="preserve">
+    <value>Verifying {0} at LBA {1}…</value>
+  </data>
+  <data name="Flash_Progress_VerifyPassed" xml:space="preserve">
+    <value> Verification passed.</value>
+  </data>
+  <data name="Flash_Progress_VerifySkipped" xml:space="preserve">
+    <value> Verification skipped: {0}</value>
+  </data>
+  <data name="Flash_Progress_VerifySkippedEmpty" xml:space="preserve">
+    <value> Verification skipped: the image is empty.</value>
+  </data>
+  <data name="Flash_Result_AdbFlashed" xml:space="preserve">
+    <value>Flashed {0}.</value>
+  </data>
+  <data name="Flash_Result_BackedUpViaFastboot" xml:space="preserve">
+    <value>Backed up {0} ({1} bytes).</value>
+  </data>
+  <data name="Flash_Result_BackupCanceled" xml:space="preserve">
+    <value>Backup cancelled.</value>
+  </data>
+  <data name="Flash_Result_EdlBackedUp" xml:space="preserve">
+    <value>Backed up {0}: {1} bytes, SHA-256 {2}.</value>
+  </data>
+  <data name="Flash_Result_EdlReadBackFailed" xml:space="preserve">
+    <value>Read-back verification failed for {0}: {1}</value>
+  </data>
+  <data name="Flash_Result_EraseAll" xml:space="preserve">
+    <value>Erased {0} partition(s).</value>
+  </data>
+  <data name="Flash_Result_ErasedViaFastboot" xml:space="preserve">
+    <value>Erased {0}.</value>
+  </data>
+  <data name="Flash_Result_FlashedSparseChunks" xml:space="preserve">
+    <value>Flashed {0} ({1} bytes) in {2} chunk(s).</value>
+  </data>
+  <data name="Flash_Result_FlashedViaFastboot" xml:space="preserve">
+    <value>Flashed {0} ({1} bytes).</value>
+  </data>
+  <data name="Flash_Result_ParmWritten" xml:space="preserve">
+    <value>Parameter table written ({0} bytes at LBA {1}).</value>
+  </data>
+  <data name="Flash_Result_RestoreCanceled" xml:space="preserve">
+    <value>Restore cancelled.</value>
+  </data>
+  <data name="Flash_Result_RestoredViaFastboot" xml:space="preserve">
+    <value>Restored {0} ({1} bytes).</value>
+  </data>
+  <data name="Flash_Result_RkdlErasedParameterWindow" xml:space="preserve">
+    <value>Erased the parameter window at LBA {0} ({1} sectors).</value>
+  </data>
+  <data name="Flash_Result_RkdlErasedPartition" xml:space="preserve">
+    <value>Erased {0} ({1} sectors from LBA {2}).</value>
+  </data>
+  <data name="Flash_Result_RkdlReadBackFailed" xml:space="preserve">
+    <value>Read-back verification failed for {0}: {1}</value>
+  </data>
+  <data name="Flash_Result_RkdlReadBackMismatch" xml:space="preserve">
+    <value>Read-back of {1} did not match the {0} bytes written.</value>
+  </data>
+  <data name="Flash_Result_RkdlWroteLba" xml:space="preserve">
+    <value>Wrote {0} bytes of {1} at LBA {2} on {3}.</value>
+  </data>
+  <data name="Flash_Result_RkdlWrotePartition" xml:space="preserve">
+    <value>Wrote {0} bytes to {1} at LBA {2}.</value>
+  </data>
+  <data name="Flash_Result_Sideloaded" xml:space="preserve">
+    <value>Sideloaded {0}.</value>
+  </data>
+  <data name="Flash_Service_Canceled" xml:space="preserve">
+    <value>Operation cancelled.</value>
+  </data>
+  <data name="Flash_Service_EraseAllFastbootOnly" xml:space="preserve">
+    <value>Erasing every partition requires a fastboot device.</value>
+  </data>
+  <data name="Flash_Service_EraseFastbootOnly" xml:space="preserve">
+    <value>Erasing a partition requires a fastboot device.</value>
+  </data>
+  <data name="Flash_Service_PropertyProtocol" xml:space="preserve">
+    <value>Reading a property requires an ADB or fastboot device.</value>
+  </data>
+  <data name="Flash_Service_UnsupportedFlashProtocol" xml:space="preserve">
+    <value>Flashing is not supported over {0}.</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainAlreadyUboot" xml:space="preserve">
+    <value>The board already runs the U-Boot gadget; nothing to send.</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainRunning" xml:space="preserve">
+    <value>Sending the boot program</value>
+  </data>
+  <data name="Flash_SpacemiTBootChainSent" xml:space="preserve">
+    <value>The boot program was sent; the board now runs the U-Boot gadget.</value>
+  </data>
+  <data name="Flash_SpacemiTFlashTitle" xml:space="preserve">
+    <value>Flash this package?</value>
+  </data>
+  <data name="Flash_SpacemiTNeedsBootChain" xml:space="preserve">
+    <value>The board is still in BootROM download mode; send the boot program first.</value>
+  </data>
+  <data name="Flash_SpacemiTNoPackage" xml:space="preserve">
+    <value>Load a SpacemiT package first.</value>
+  </data>
+  <data name="Flash_SpacemiTNoPartitions" xml:space="preserve">
+    <value>Select at least one partition to write.</value>
+  </data>
+  <data name="Flash_SpacemiTPackageLoaded" xml:space="preserve">
+    <value>Package {0} (script v{1}, {2} actions) listed {3} partition(s).</value>
+  </data>
+  <data name="Flash_SpacemiTStorageDone" xml:space="preserve">
+    <value>The package was written to the board.</value>
+  </data>
+  <data name="Flash_SpacemiTStorageRunning" xml:space="preserve">
+    <value>Writing the package to storage</value>
+  </data>
+  <data name="Flash_SpacemiTWritingTable" xml:space="preserve">
+    <value>Writing the partition table</value>
+  </data>
+  <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
+    <value>Wired-flash package written to {0}</value>
   </data>
 </root>
