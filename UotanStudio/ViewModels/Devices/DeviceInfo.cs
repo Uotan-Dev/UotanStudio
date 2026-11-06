@@ -99,7 +99,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(Mode), nameof(Protocol), nameof(Transport), nameof(DisplayName),
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
-                nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl), nameof(RkdlBadge),
+                nameof(IsFastboot), nameof(SupportsFastbootd), nameof(FastbootStage), nameof(FastbootBadge),
+                nameof(IsEdl), nameof(IsRkdl), nameof(RkdlBadge),
                 nameof(IsSunxi), nameof(SunxiMode), nameof(SunxiBadge),
                 nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
                 nameof(EdlProtocol), nameof(HasEdlProtocol), nameof(EdlBadge),
@@ -127,7 +128,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             var next = endpoints[index];
             if (current.Key != next.Key || current.Serial != next.Serial ||
                 current.State != next.State || current.Protocol != next.Protocol ||
-                current.Transport != next.Transport || current.EdlProtocol != next.EdlProtocol)
+                current.Transport != next.Transport || current.EdlProtocol != next.EdlProtocol ||
+                current.FastbootStage != next.FastbootStage)
                 return false;
         }
         return true;
@@ -443,10 +445,32 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     private const string RockchipLoaderSerialMarker = "ROCKCHIP";
 
     /// <summary>
-    /// Fastboot badge text: shows the SoC vendor "SpacemiT" for the K1/K3 gadget instead of the generic mode.
-    /// <para>Fastboot 徽章文本：K1/K3 gadget 显示 SoC 厂商 "SpacemiT"，其余显示通用模式名。</para>
+    /// Boot stage reported for a SpacemiT fastboot gadget, <see cref="SpacemiTBootStage.Unknown"/> for every other
+    /// endpoint or when only the descriptors were readable.
+    /// <para>进迭时空 fastboot gadget 上报的启动阶段；其它端点或只读到描述符时为
+    /// <see cref="SpacemiTBootStage.Unknown"/>。</para>
     /// </summary>
-    public string FastbootBadge => IsSpacemiTFastboot ? "SpacemiT" : "Fastboot";
+    public SpacemiTBootStage FastbootStage => Device.FastbootStage;
+
+    /// <summary>
+    /// Fastboot badge text: shows the SoC vendor "SpacemiT" for the K1/K3 gadget instead of the generic mode, and
+    /// appends the boot stage once the serial identifies it, so a board sitting in the BootROM download mode reads
+    /// as "SpacemiT · FDL" and one already handed over to U-Boot as "SpacemiT · U-Boot". The two stages flash
+    /// differently — FDL still needs FSBL and U-Boot staged into RAM — so the badge must not hide them behind one
+    /// label.
+    /// <para>Fastboot 徽章文本：K1/K3 gadget 显示 SoC 厂商 "SpacemiT" 而不是通用模式名，并在序列号能确定阶段时
+    /// 追加启动阶段，因此处于 BootROM 下载模式的板卡显示 "SpacemiT · FDL"，已移交给 U-Boot 的显示
+    /// "SpacemiT · U-Boot"。两个阶段的烧录方式不同——FDL 仍需把 FSBL 与 U-Boot 暂存进内存——所以徽章不能用一个
+    /// 标签把两者混为一谈。</para>
+    /// </summary>
+    public string FastbootBadge => !IsFastboot ? "Fastboot"
+        : !IsSpacemiTFastboot ? "Fastboot"
+        : Device.FastbootStage switch
+        {
+            SpacemiTBootStage.BromFdl => "SpacemiT · FDL",
+            SpacemiTBootStage.Uboot => "SpacemiT · U-Boot",
+            _ => "SpacemiT"
+        };
 
     /// <summary>
     /// Rockchip badge text: appends the USB stage from the device state, so a freshly scanned boot ROM reads as

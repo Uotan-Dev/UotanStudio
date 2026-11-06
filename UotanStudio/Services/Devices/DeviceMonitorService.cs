@@ -1,6 +1,7 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.SpacemiT;
 
 namespace UotanStudio.Services.Devices;
 
@@ -102,6 +103,19 @@ public sealed class DetectedDevice
     /// <summary>The observed EDL protocol, independent of USB presence.<para>观察到的 EDL 协议，与 USB 在位状态无关。</para></summary>
     /// <value>The EDL protocol state observed for this device.<para>为该设备观察到的 EDL 协议状态。</para></value>
     public EdlProtocolState EdlProtocol { get; set; }
+    /// <summary>
+    /// Boot stage of a SpacemiT fastboot gadget, inferred from the reported serial at enumeration time;
+    /// <see cref="SpacemiTBootStage.Unknown"/> for every other endpoint.
+    /// <para>进迭时空 fastboot gadget 的启动阶段，在枚举时依据上报的序列号推断；其它端点为
+    /// <see cref="SpacemiTBootStage.Unknown"/>。</para>
+    /// </summary>
+    /// <value>
+    /// <see cref="SpacemiTBootStage.BromFdl"/> for the BootROM download mode,
+    /// <see cref="SpacemiTBootStage.Uboot"/> for the U-Boot gadget, otherwise <see cref="SpacemiTBootStage.Unknown"/>.
+    /// <para>BootROM 下载模式为 <see cref="SpacemiTBootStage.BromFdl"/>，U-Boot gadget 为
+    /// <see cref="SpacemiTBootStage.Uboot"/>，其余为 <see cref="SpacemiTBootStage.Unknown"/>。</para>
+    /// </value>
+    public SpacemiTBootStage FastbootStage { get; init; }
     /// <summary>USB vendor ID, zero for non-USB endpoints.<para>USB 厂商 ID，非 USB 端点为 0。</para></summary>
     /// <value>The USB vendor identifier.<para>USB 厂商标识。</para></value>
     public ushort VendorId { get; init; }

@@ -4,6 +4,7 @@ using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -135,6 +136,9 @@ public sealed partial class DeviceMonitorService
                 ProductId = info.ProductId,
                 EdlProtocol = protocol == DeviceProtocolKind.Edl
                     ? _edlConnections.GetState(info.DeviceKey) : EdlProtocolState.Unknown,
+                FastbootStage = protocol == DeviceProtocolKind.Fastboot
+                    ? SpacemiTBootStageClassifier.FromIdentity(info.VendorId, info.ProductId, serial)
+                    : SpacemiTBootStage.Unknown,
             });
         }
 
