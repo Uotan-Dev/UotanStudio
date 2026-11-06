@@ -44,13 +44,22 @@ public sealed class SpacemiTFlashOptions
     public bool RebootAfterFlash { get; set; }
 
     /// <summary>
+    /// Gets or sets which part of the script this run executes. The boot-chain scope writes no storage, so it is the
+    /// only scope that does not need <see cref="FlashConfirmation"/>.
+    /// <para>获取或设置本次运行执行脚本的哪一部分。引导链范围不写入存储，因此它是唯一不需要
+    /// <see cref="FlashConfirmation"/> 的范围。</para>
+    /// </summary>
+    public SpacemiTFlashScope Scope { get; set; } = SpacemiTFlashScope.Full;
+
+    /// <summary>
     /// Validates the options before any device I/O; a rejected run never touches the wire.
     /// <para>在任何设备 I/O 之前校验选项；被拒绝的运行绝不触线。</para>
     /// </summary>
     /// <exception cref="InvalidOperationException">The confirmation phrase is missing or wrong, or the option values are out of range. <para>确认短语缺失或错误，或选项值越界。</para></exception>
     internal void Validate()
     {
-        if (!string.Equals(FlashConfirmation, RequiredConfirmation, StringComparison.Ordinal))
+        if (Scope != SpacemiTFlashScope.BootChain &&
+            !string.Equals(FlashConfirmation, RequiredConfirmation, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"SpacemiT flash requires FlashConfirmation to be exactly '{RequiredConfirmation}'.");

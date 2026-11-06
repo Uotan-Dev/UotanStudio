@@ -655,37 +655,8 @@ public sealed class SpacemiTFlashTests : IDisposable
     [Fact]
     public void Flasher_GzipChunkedFlashNeverExceedsMaxDownloadSize()
     {
-        File.WriteAllText(Path.Combine(_root, "fastboot.yaml"), """
-        version: 1.0
-        actions:
-          - getvar:
-              args: 'mtd-size'
-              set_var: 'size0'
-              skip_fail: true
-          - getvar:
-              args: 'blk-size'
-              set_var: 'size1'
-          - multi_flash:
-              timeout:
-                minutes: 5
-              retry: 1
-              relate_partition: ['partition_{size0}.json', 'partition_{size1}.json']
-        """);
         const long maxDownload = 2L * 1024 * 1024;
-        const string tableJson = """
-        {
-          "version": "1.0",
-          "format": "gpt",
-          "partitions": [
-            { "name": "big", "offset": "0", "size": "-", "image": "big.bin" }
-          ]
-        }
-        """;
-        File.WriteAllText(Path.Combine(_root, "partition_universal.json"), tableJson);
-
-        var payload = new byte[4L * 1024 * 1024];
-        RandomNumberGenerator.Fill(payload);
-        File.WriteAllBytes(Path.Combine(_root, "big.bin"), payload);
+        WriteChunkedGzipPackage();
 
         var transport = new ScriptedTransport(new Dictionary<string, string>
         {
@@ -711,6 +682,85 @@ public sealed class SpacemiTFlashTests : IDisposable
 
         Assert.Contains(transport.Downloads, download =>
             download.Length >= 3 && download[0] == 0x1f && download[1] == 0x8b && download[2] == 0x08);
+    }
+
+    /// <summary>
+    /// The chunked gzip path must report byte progress against the whole image instead of one text line per chunk: the
+    /// page binds that number to its progress bar, so a transfer that only says "chunk sent" leaves the bar at zero for
+    /// the entire image.
+    /// <para>gzip 分块路径必须按整幅镜像上报字节进度，而不是每个分块只给一行文本：页面把该数值绑定到进度条，只报“分块已发送”
+    /// 会让进度条在整幅镜像期间停在零。</para>
+    /// </summary>
+    [Fact]
+    public void Flasher_GzipChunkedFlashReportsByteProgressAgainstTheWholeImage()
+    {
+        var payload = WriteChunkedGzipPackage();
+        var transport = new ScriptedTransport(new Dictionary<string, string>
+        {
+            ["getvar:mtd-size"] = "OKAYNULL",
+            ["getvar:blk-size"] = "OKAYuniversal",
+            ["getvar:max-download-size"] = "OKAY0x00200000",
+            ["flash:gpt"] = "OKAY",
+            ["flash:big"] = "OKAY",
+        });
+        var progress = new RecordingFlashProgress();
+
+        new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), ConfirmedOptions()).Execute(
+            new FastbootSession(transport), _ => _, progress,
+            TestContext.Current.CancellationToken);
+
+        var reports = progress.Reports
+            .Where(report => report.Partition == "big" && report.BytesCompleted is not null)
+            .ToArray();
+        Assert.NotEmpty(reports);
+        Assert.All(reports, report => Assert.Equal(payload.LongLength, report.BytesTotal));
+
+        var completed = reports.Select(report => report.BytesCompleted!.Value).ToArray();
+        Assert.True(completed.SequenceEqual(completed.Order()), "progress must never move backwards");
+        Assert.True(completed[^1] >= payload.LongLength,
+            $"the last report covers {completed[^1]} of {payload.LongLength} bytes");
+        Assert.True(completed.Distinct().Count() > 1,
+            "progress must advance inside the chunked transfer, not jump once at the end");
+    }
+
+    /// <summary>
+    /// Writes the chunked-gzip fixture the two chunk tests share: a 4 MiB image larger than the 2 MiB max-download-size,
+    /// a table that leaves its size open-ended, and the vendor two-table flash action.
+    /// <para>写入两个分块用例共用的 gzip 夹具：大于 2 MiB 下载上限的 4 MiB 镜像、不限长度的分区表，以及厂商的双表刷写动作。</para>
+    /// </summary>
+    /// <returns>The image bytes written to the package. <para>写入包内的镜像字节。</para></returns>
+    private byte[] WriteChunkedGzipPackage()
+    {
+        File.WriteAllText(Path.Combine(_root, "fastboot.yaml"), """
+        version: 1.0
+        actions:
+          - getvar:
+              args: 'mtd-size'
+              set_var: 'size0'
+              skip_fail: true
+          - getvar:
+              args: 'blk-size'
+              set_var: 'size1'
+          - multi_flash:
+              timeout:
+                minutes: 5
+              retry: 1
+              relate_partition: ['partition_{size0}.json', 'partition_{size1}.json']
+        """);
+        File.WriteAllText(Path.Combine(_root, "partition_universal.json"), """
+        {
+          "version": "1.0",
+          "format": "gpt",
+          "partitions": [
+            { "name": "big", "offset": "0", "size": "-", "image": "big.bin" }
+          ]
+        }
+        """);
+
+        var payload = new byte[4L * 1024 * 1024];
+        RandomNumberGenerator.Fill(payload);
+        File.WriteAllBytes(Path.Combine(_root, "big.bin"), payload);
+        return payload;
     }
 
     /// <remarks>
@@ -917,6 +967,148 @@ public sealed class SpacemiTFlashTests : IDisposable
         return output.ToArray();
     }
 
+    [Fact]
+    public void Flasher_BootChainScope_StagesTheChainAndStopsBeforeAnyStorageWrite()
+    {
+        WriteBootChainPackage();
+        var transport = new ScriptedTransport(new Dictionary<string, string>
+        {
+            ["getvar:version-brom"] = "OKAY1.0",
+            ["getvar:max-download-size"] = "OKAY0x00100000",
+            ["continue"] = "OKAY",
+            ["getvar:mtd-size"] = "OKAYNULL",
+            ["getvar:blk-size"] = "OKAYuniversal",
+            ["flash:gpt"] = "OKAYparse gpt table okay",
+            ["flash:env"] = "OKAY",
+        });
+        var session = new FastbootSession(transport);
+        var options = ConfirmedOptions();
+        options.Scope = SpacemiTFlashScope.BootChain;
+
+        new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), options).Execute(
+            session, _ => session, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Single(transport.Downloads);
+        Assert.Contains("continue", transport.Commands);
+        Assert.DoesNotContain("getvar:mtd-size", transport.Commands);
+        Assert.DoesNotContain(transport.Commands, command => command.StartsWith("flash:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Flasher_BootChainScope_NeedsNoFlashConfirmation()
+    {
+        WriteBootChainPackage();
+        var transport = new ScriptedTransport(new Dictionary<string, string>
+        {
+            ["getvar:version-brom"] = "OKAY1.0",
+            ["getvar:max-download-size"] = "OKAY0x00100000",
+            ["continue"] = "OKAY",
+        });
+        var session = new FastbootSession(transport);
+        var options = new SpacemiTFlashOptions { Scope = SpacemiTFlashScope.BootChain, ReEnumerateSettleMs = 0 };
+
+        new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), options).Execute(
+            session, _ => session, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Single(transport.Downloads);
+    }
+
+    [Fact]
+    public void Flasher_StorageScope_SkipsStagingAndWritesTheTables()
+    {
+        WriteBootChainPackage();
+        var transport = new ScriptedTransport(new Dictionary<string, string>
+        {
+            ["getvar:version-brom"] = "FAILVariable not implemented",
+            ["getvar:version"] = "OKAY0.4",
+            ["getvar:mtd-size"] = "OKAYNULL",
+            ["getvar:blk-size"] = "OKAYuniversal",
+            ["getvar:max-download-size"] = "OKAY0x00100000",
+            ["flash:gpt"] = "OKAYparse gpt table okay",
+            ["flash:env"] = "OKAY",
+        });
+        var session = new FastbootSession(transport);
+        var options = ConfirmedOptions();
+        options.Scope = SpacemiTFlashScope.Storage;
+
+        new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), options).Execute(
+            session, _ => session, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("continue", transport.Commands);
+        Assert.Contains("flash:gpt", transport.Commands);
+        Assert.Contains("flash:env", transport.Commands);
+        Assert.Equal(2, transport.Downloads.Count);
+    }
+
+    [Fact]
+    public void Flasher_StorageScope_OnBootromFdl_RefusesBeforeWriting()
+    {
+        WriteBootChainPackage();
+        var transport = new ScriptedTransport(new Dictionary<string, string>
+        {
+            ["getvar:version-brom"] = "OKAY1.0",
+        });
+        var session = new FastbootSession(transport);
+        var options = ConfirmedOptions();
+        options.Scope = SpacemiTFlashScope.Storage;
+
+        Assert.Throws<FastbootException>(() => new SpacemiTFlasher(SpacemiTFlashPackage.Load(_root), options).Execute(
+            session, _ => session, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Empty(transport.Downloads);
+        Assert.DoesNotContain("continue", transport.Commands);
+    }
+
+    /// <summary>
+    /// Writes the vendor flow shape both scopes split at: a BootROM version probe, one staged payload, the handover, and
+    /// the storage actions behind it.
+    /// <para>写入两个范围所切分的厂商流程形态：BootROM 版本探测、一次暂存负载、移交，以及其后的存储动作。</para>
+    /// </summary>
+    private void WriteBootChainPackage()
+    {
+        File.WriteAllText(Path.Combine(_root, "fastboot.yaml"), """
+        version: 1.0
+        actions:
+          - getvar:
+              args: 'version-brom'
+              set: 'version'
+              skip_fail: true
+              timeout:
+                seconds: 1
+          - stage:
+              file: 'factory/FSBL.bin'
+              skip_when: "not temp.version"
+              timeout:
+                minutes: 2
+          - continue:
+              skip_when: "not temp.version"
+              timeout:
+                seconds: 1
+          - getvar:
+              args: 'mtd-size'
+              set_var: 'size0'
+              skip_fail: true
+          - getvar:
+              args: 'blk-size'
+              set_var: 'size1'
+          - multi_flash:
+              retry: 3
+              relate_partition: ['partition_{size0}.json', 'partition_{size1}.json']
+        """);
+        Directory.CreateDirectory(Path.Combine(_root, "factory"));
+        File.WriteAllBytes(Path.Combine(_root, "factory", "FSBL.bin"), "FSBL-PAYLOAD"u8.ToArray());
+        File.WriteAllText(Path.Combine(_root, "partition_universal.json"), """
+        {
+          "version": "1.0",
+          "format": "gpt",
+          "partitions": [
+            { "name": "env", "offset": "0", "size": "64K", "image": "env.bin" }
+          ]
+        }
+        """);
+        File.WriteAllBytes(Path.Combine(_root, "env.bin"), "ENV-PAYLOAD"u8.ToArray());
+    }
+
     private static SpacemiTFlashOptions ConfirmedOptions() => new()
     {
         FlashConfirmation = SpacemiTFlashOptions.RequiredConfirmation,
@@ -1095,6 +1287,35 @@ public sealed class SpacemiTFlashTests : IDisposable
     /// the scripted table (or by the DATA/OKAY download dance), so flasher decisions such as
     /// skip_when guards and multi_flash table selection can be asserted end to end.
     /// </summary>
+    /// <summary>
+    /// Collects progress reports synchronously so a test can read them once the run returns; <see cref="Progress{T}"/>
+    /// would post them to a thread pool and leave the assertions racing the callbacks.
+    /// <para>同步收集进度报告，使测试在运行返回后即可读取；<see cref="Progress{T}"/> 会把它们投递到线程池，使断言与回调竞争。</para>
+    /// </summary>
+    private sealed class RecordingFlashProgress : IProgress<SpacemiTFlashProgress>
+    {
+        private readonly List<SpacemiTFlashProgress> _reports = [];
+
+        public IReadOnlyList<SpacemiTFlashProgress> Reports
+        {
+            get
+            {
+                lock (_reports)
+                {
+                    return [.. _reports];
+                }
+            }
+        }
+
+        public void Report(SpacemiTFlashProgress value)
+        {
+            lock (_reports)
+            {
+                _reports.Add(value);
+            }
+        }
+    }
+
     private sealed class ScriptedTransport(Dictionary<string, string> answers) : ICommTransport
     {
         private readonly Queue<byte[]> _replies = [];

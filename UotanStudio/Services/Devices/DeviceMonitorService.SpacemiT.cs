@@ -83,6 +83,7 @@ public sealed partial class DeviceMonitorService
             var locationChain = currentLease.Endpoint.UsbInfo is { } info
                 ? DeviceController.CaptureUsbLocationChain(info)
                 : null;
+            ReportSpacemiTBootStage(session, options.Scope, progress);
             var flasher = new SpacemiTFlasher(package, options);
             await Task.Run(
                 () => flasher.Execute(session, ReopenSpacemiTGadget, progress, cancellationToken),
@@ -112,6 +113,47 @@ public sealed partial class DeviceMonitorService
         {
             CloseLease(currentLease);
         }
+    }
+
+    /// <summary>
+    /// Reports which boot stage the run starts on, because the two stages behave differently: the BootROM download
+    /// mode digests FSBL and U-Boot through <c>stage</c>/<c>continue</c> and re-enumerates, while the U-Boot gadget
+    /// writes partitions directly and keeps its USB node.
+    /// <para>报告本次运行起始所在的启动阶段，因为两个阶段行为不同：BootROM 下载模式通过
+    /// <c>stage</c>/<c>continue</c> 交给 FSBL 与 U-Boot 并重新枚举，而 U-Boot gadget 直接写分区并保持 USB 节点。</para>
+    /// </summary>
+    /// <param name="session">The leased fastboot session the flasher will drive.
+    /// <para>烧录器将要驱动的已租用 fastboot 会话。</para></param>
+    /// <param name="scope">The section this run executes. <para>本次运行执行的段落。</para></param>
+    /// <param name="progress">Optional progress sink that receives the stage line.
+    /// <para>接收阶段行的可选进度接收器。</para></param>
+    private static void ReportSpacemiTBootStage(FastbootSession session, SpacemiTFlashScope scope,
+        IProgress<SpacemiTFlashProgress>? progress)
+    {
+        if (progress is null)
+        {
+            return;
+        }
+
+        var stage = SpacemiTBootStageClassifier.Probe(session);
+        var message = scope == SpacemiTFlashScope.BootChain
+            ? stage switch
+            {
+                SpacemiTBootStage.BromFdl =>
+                    "Boot chain: the device is in BootROM FDL, staging FSBL and U-Boot and handing over with continue.",
+                SpacemiTBootStage.Uboot =>
+                    "Boot chain: the device already runs the U-Boot gadget, so the script stages nothing.",
+                _ => "Boot chain: the device did not report its stage; the script decides which actions run."
+            }
+            : stage switch
+            {
+                SpacemiTBootStage.BromFdl =>
+                    "Device is in BootROM FDL: FSBL and U-Boot are staged before any partition write.",
+                SpacemiTBootStage.Uboot =>
+                    "Device is already in U-Boot fastboot: staging is skipped and partitions are written directly.",
+                _ => "Device boot stage could not be read; the package script decides which actions run."
+            };
+        progress.Report(new SpacemiTFlashProgress("device", null, null, null, message));
     }
 
     /// <summary>

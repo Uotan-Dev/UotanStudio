@@ -98,12 +98,14 @@ public sealed class SpacemiTFlasher
     }
 
     /// <summary>
-    /// Runs the package script. The supplied re-open handler is invoked whenever the device
-    /// re-enumerates (after <c>continue</c> or an accepted super-speed switch): it must dispose
-    /// the stale session and return a session for the re-enumerated device, or
+    /// Runs the package script, or only the section <see cref="SpacemiTFlashOptions.Scope"/> selects: the boot-chain
+    /// section ends at the last <c>continue</c>, and the storage section never attempts a <c>stage</c> or <c>continue</c>.
+    /// The supplied re-open handler is invoked whenever the device re-enumerates (after <c>continue</c> or an accepted
+    /// super-speed switch): it must dispose the stale session and return a session for the re-enumerated device, or
     /// <see langword="null"/> when the device never re-appeared.
-    /// <para>执行包脚本。设备重新枚举时（<c>continue</c> 或被接受的 super speed 切换之后）
-    /// 调用传入的重开处理器：它必须释放过期会话并返回重新枚举设备的新会话；设备未重新出现时
+    /// <para>执行包脚本，或只执行 <see cref="SpacemiTFlashOptions.Scope"/> 选定的段落：引导链段落止于最后一个
+    /// <c>continue</c>，存储段落绝不尝试 <c>stage</c> 或 <c>continue</c>。设备重新枚举时（<c>continue</c> 或被接受的
+    /// super speed 切换之后）调用传入的重开处理器：它必须释放过期会话并返回重新枚举设备的新会话；设备未重新出现时
     /// 返回 <see langword="null"/>。</para>
     /// </summary>
     /// <param name="initialSession">Session for the device in its current mode (BootROM FDL or fastboot). <para>当前模式下（BootROM FDL 或 fastboot）设备的会话。</para></param>
@@ -125,10 +127,30 @@ public sealed class SpacemiTFlasher
 
         var session = initialSession;
         var actions = _package.Script.Actions;
+        var bootChainEnd = BootChainEnd(actions);
+        if (_options.Scope == SpacemiTFlashScope.BootChain && bootChainEnd == 0)
+        {
+            Report(progress, "skip", null, "the package script declares no boot-chain section (no continue action)");
+            Report(progress, "done", null, "boot chain finished");
+            return;
+        }
+
+        if (_options.Scope == SpacemiTFlashScope.Storage &&
+            SpacemiTBootStageClassifier.Probe(session) == SpacemiTBootStage.BromFdl)
+        {
+            throw new FastbootException(FastbootResponseState.Fail,
+                "the device is still in BootROM FDL, which cannot write partitions: send the boot chain first, " +
+                "then flash the selected partitions");
+        }
+
         for (var index = 0; index < actions.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var action = actions[index];
+            if (!RunsInScope(action, index, bootChainEnd))
+            {
+                continue;
+            }
             if (SpacemiTConditionEvaluator.ShouldSkip(action.SkipWhen, _variables))
             {
                 Report(progress, "skip", null, $"action #{index + 1} skipped by skip_when '{action.SkipWhen}'");
@@ -166,7 +188,7 @@ public sealed class SpacemiTFlasher
             }
         }
 
-        if (_options.RebootAfterFlash)
+        if (_options.RebootAfterFlash && _options.Scope != SpacemiTFlashScope.BootChain)
         {
             RunWithRetry("reboot", 1, skipFail: false, progress, null,
                 () =>
@@ -176,8 +198,51 @@ public sealed class SpacemiTFlasher
                 });
         }
 
-        Report(progress, "done", null, "flash script finished");
+        Report(progress, "done", null, _options.Scope == SpacemiTFlashScope.BootChain
+            ? "boot chain handed over"
+            : "flash script finished");
     }
+
+    /// <summary>
+    /// Index just past the last <c>continue</c> action, which is where the BootROM hands the board over to U-Boot and
+    /// therefore where the boot-chain section ends; zero when the script stages nothing.
+    /// <para>最后一个 <c>continue</c> 动作之后的位置：BootROM 在此把板卡交给 U-Boot，引导链段落也在此结束；脚本没有暂存
+    /// 任何内容时为零。</para>
+    /// </summary>
+    /// <param name="actions">The package script's actions. <para>包脚本的动作序列。</para></param>
+    /// <returns>The exclusive end index of the boot-chain section. <para>引导链段落的排他结束下标。</para></returns>
+    private static int BootChainEnd(IReadOnlyList<SpacemiTFlashAction> actions)
+    {
+        var end = 0;
+        for (var index = 0; index < actions.Count; index++)
+        {
+            if (actions[index] is SpacemiTContinueAction)
+            {
+                end = index + 1;
+            }
+        }
+
+        return end;
+    }
+
+    /// <summary>
+    /// Whether an action belongs to the requested scope: the boot-chain scope stops at the last <c>continue</c>, and the
+    /// storage scope never attempts a <c>stage</c> or <c>continue</c>, whose only purpose is to hand the board over to the
+    /// U-Boot gadget already running.
+    /// <para>判断动作是否属于所请求的范围：引导链范围在最后一个 <c>continue</c> 处结束；存储范围绝不尝试 <c>stage</c> 或
+    /// <c>continue</c>，因为它们唯一的作用是把板卡交给已经在运行的 U-Boot gadget。</para>
+    /// </summary>
+    /// <param name="action">The action under consideration. <para>待判断的动作。</para></param>
+    /// <param name="index">Its position in the script. <para>它在脚本中的位置。</para></param>
+    /// <param name="bootChainEnd">Exclusive end index of the boot-chain section. <para>引导链段落的排他结束下标。</para></param>
+    /// <returns><see langword="true"/> when the action runs in the current scope.
+    /// <para>该动作在当前范围内执行时为 <see langword="true"/>。</para></returns>
+    private bool RunsInScope(SpacemiTFlashAction action, int index, int bootChainEnd) => _options.Scope switch
+    {
+        SpacemiTFlashScope.BootChain => index < bootChainEnd,
+        SpacemiTFlashScope.Storage => action is not (SpacemiTStageAction or SpacemiTContinueAction),
+        _ => true
+    };
 
     /// <remarks>
     /// Each retry re-establishes the device connection, mirroring the vendor flasher which
@@ -644,7 +709,10 @@ public sealed class SpacemiTFlasher
                     $"gzip chunk for '{partition}' compressed to {compressed.Length} bytes, exceeding max-download-size {maxDownload}; the expansion bound was underestimated");
             }
 
-            session.DownloadData(compressed, compressed.Length, null, timeout, cancellationToken).ThrowIfFailed();
+            session.DownloadData(compressed, compressed.Length,
+                    CreateScaledByteProgress(progress, partition, sent - read, read, compressed.Length, totalBytes),
+                    timeout, cancellationToken)
+                .ThrowIfFailed();
             session.ExecuteCommand(FastbootConstants.CommandFlash + partition).ThrowIfFailed();
             Report(progress, "flash-partition", partition,
                 totalBytes >= 0 ? $"gzip chunk sent, {sent}/{totalBytes} bytes" : $"gzip chunk sent, {sent} bytes");
@@ -919,6 +987,56 @@ public sealed class SpacemiTFlasher
     private static IProgress<long>? CreateByteProgress(
         IProgress<SpacemiTFlashProgress>? progress, string phase, string? partition, long total) =>
         progress is null ? null : new ByteProgressAdapter(progress, phase, partition, total);
+
+    /// <summary>
+    /// Progress adapter for one gzip chunk: the device only sees the compressed payload, so the bytes it accepts are
+    /// mapped back onto the chunk's raw window and reported against the whole image. Without this the chunk loop runs
+    /// a 1.5 GB image through the transport without ever moving the page's progress bar.
+    /// <para>单个 gzip 分块的进度适配器：设备只看到压缩后的负载，因此把设备接受的字节映射回该分块的原始区间，并以整幅镜像为
+    /// 分母上报。没有它，1.5 GB 的镜像会整段经过传输而页面进度条一次都不动。</para>
+    /// </summary>
+    /// <param name="progress">The run's sink, or <see langword="null"/> to skip reporting.
+    /// <para>本次运行的进度接收器；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="partition">Partition the chunk belongs to. <para>该分块所属的分区。</para></param>
+    /// <param name="rawStart">Raw bytes of the image already written before this chunk.
+    /// <para>本分块之前已写入的镜像原始字节数。</para></param>
+    /// <param name="rawLength">Raw bytes this chunk decompresses to. <para>本分块解压后的原始字节数。</para></param>
+    /// <param name="compressedLength">Compressed payload length the device accepts.
+    /// <para>设备接受的压缩负载长度。</para></param>
+    /// <param name="total">Total raw bytes of the image; negative when the package does not state one.
+    /// <para>镜像的原始总字节数；包未给出时为负。</para></param>
+    /// <returns>The adapter, or <see langword="null"/> when nothing can be reported.
+    /// <para>适配器；无法上报时为 <see langword="null"/>。</para></returns>
+    private static IProgress<long>? CreateScaledByteProgress(
+        IProgress<SpacemiTFlashProgress>? progress, string partition,
+        long rawStart, long rawLength, long compressedLength, long total)
+    {
+        if (progress is null || compressedLength <= 0 || rawLength <= 0)
+        {
+            return null;
+        }
+
+        return new ScaledByteProgress(progress, "flash-partition", partition, rawStart, rawLength, compressedLength,
+            total);
+    }
+
+    /// <summary>
+    /// Maps the compressed bytes of one chunk onto the image's raw byte range; see
+    /// <see cref="CreateScaledByteProgress"/>.
+    /// <para>把单个分块的压缩字节映射到镜像的原始字节区间；见 <see cref="CreateScaledByteProgress"/>。</para>
+    /// </summary>
+    private sealed class ScaledByteProgress(
+        IProgress<SpacemiTFlashProgress> sink, string phase, string? partition,
+        long rawStart, long rawLength, long compressedLength, long total) : IProgress<long>
+    {
+        public void Report(long value)
+        {
+            var accepted = Math.Clamp(value, 0, compressedLength);
+            var raw = rawStart + (long)(accepted * (double)rawLength / compressedLength);
+            sink.Report(new SpacemiTFlashProgress(phase, partition, raw, total >= 0 ? total : null,
+                total >= 0 ? $"{raw * 100d / total:F1}%" : $"{raw} bytes"));
+        }
+    }
 
     private void Report(IProgress<SpacemiTFlashProgress>? progress, string phase, string? partition, string message) =>
         progress?.Report(new SpacemiTFlashProgress(phase, partition, null, null, message));
