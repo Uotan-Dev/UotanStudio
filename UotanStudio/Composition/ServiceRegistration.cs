@@ -62,7 +62,12 @@ internal static class ServiceRegistration
         services.AddTransient<UsbTreeViewModel>(_ => new UsbTreeViewModel());
         services.AddTransient<VisualPluginManagerViewModel>(_ => new VisualPluginManagerViewModel());
         services.AddTransient<RegexGeneratorViewModel>(_ => new RegexGeneratorViewModel());
-        services.AddTransient<DiskFlashViewModel>(_ => new DiskFlashViewModel());
+        services.AddSingleton<Services.Flash.IDiskFlashService>(_ => Services.Flash.DiskFlashService.Default);
+        services.AddSingleton<UiAbstractions.IDiskFlashDialogs>(_ =>
+            new Services.Ui.DiskFlashDialogs(() => windowService.OwnerWindow as Avalonia.Controls.Window));
+        services.AddTransient<DiskFlashViewModel>(sp => new DiskFlashViewModel(
+            sp.GetService<Services.Flash.IDiskFlashService>(),
+            sp.GetService<UiAbstractions.IDiskFlashDialogs>()));
         services.AddSingleton<ILocalizer>(_ => LanguageService.Instance);
         services.AddSingleton<LanguageService>(_ => LanguageService.Instance);
         services.AddSingleton<IUnifiedLog>(_ => LogService.Instance);

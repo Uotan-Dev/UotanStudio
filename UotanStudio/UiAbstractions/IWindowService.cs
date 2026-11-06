@@ -97,6 +97,12 @@ public interface IWindowService
     bool HasOwnerWindow { get; }
 
     /// <summary>
+    /// Gets the window modal dialogs should be parented to, or <see langword="null"/> when the shell has none.
+    /// <para>获取模态对话框的所有者窗口；Shell 尚无窗口时为 <see langword="null"/>。</para>
+    /// </summary>
+    object? OwnerWindow => null;
+
+    /// <summary>
     /// Creates (but does not show) a new-project form.
     /// <para>创建（但不显示）新建项目表单。</para>
     /// </summary>
@@ -156,6 +162,8 @@ internal sealed class NullWindowService : IWindowService
     internal static NullWindowService Instance { get; } = new();
 
     public bool HasOwnerWindow => false;
+
+    public object? OwnerWindow => null;
 
     public INewProjectDialog CreateNewProjectDialog(NewProjectWindowMode mode, string? baseDirectory,
         IEnumerable<string>? reservedNames) => throw new NotSupportedException("No host window service is attached.");

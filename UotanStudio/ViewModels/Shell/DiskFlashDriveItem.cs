@@ -6,8 +6,8 @@ using UotanStudio.Services;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// One selectable target drive row in the disk-image flashing window.
-/// <para>磁盘镜像烧录窗口中的一个可选目标驱动器行。</para>
+/// One selectable target drive row in the disk-image flashing window. Exactly one row can be selected.
+/// <para>磁盘镜像烧录窗口中的一个可选目标驱动器行；同一时刻只能选中一行。</para>
 /// </summary>
 public sealed partial class DiskFlashDriveItem : ObservableObject
 {
@@ -55,10 +55,11 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
         : Drive.DevicePath;
 
     /// <summary>
-    /// Gets or sets whether the row is selected as a flash target.
-    /// <para>获取或设置该行是否被选为烧录目标。</para>
+    /// Gets or sets whether the row is the flash target. Selecting a row clears every other row.
+    /// <para>获取或设置该行是否为烧录目标；选中一行会清除其它行。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWritable))]
     private bool _isSelected;
 
     /// <summary>
@@ -66,6 +67,7 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
     /// <para>获取或设置该行在当前镜像与选项下是否不可选。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWritable))]
     private bool _isBlocked;
 
     /// <summary>
@@ -88,6 +90,12 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _issueText = string.Empty;
+
+    /// <summary>
+    /// Gets whether the row may be picked as the target in the current state.
+    /// <para>获取该行在当前状态下是否可作为目标被选中。</para>
+    /// </summary>
+    public bool IsWritable => !IsBlocked;
 
     /// <summary>
     /// Re-evaluates the row against the current image and options.

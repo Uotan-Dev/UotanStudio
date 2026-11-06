@@ -6,13 +6,15 @@ using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using UotanStudio.Composition;
 using UotanStudio.Services;
+using UotanStudio.Services.Ui;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// Disk-image flashing window: image selection, target drive list, safety switches and progress.
-/// <para>磁盘镜像烧录窗口：镜像选择、目标驱动器列表、安全开关与进度。</para>
+/// Disk-image flashing window: image selection, the single target drive, safety switches and progress.
+/// <para>磁盘镜像烧录窗口：镜像选择、唯一目标驱动器、安全开关与进度。</para>
 /// </summary>
 public partial class DiskFlashWindow : Window
 {
@@ -23,7 +25,8 @@ public partial class DiskFlashWindow : Window
     public DiskFlashWindow()
     {
         InitializeComponent();
-        DataContext = ServiceHub.TryGet<DiskFlashViewModel>() ?? new DiskFlashViewModel();
+        var diagnostics = ServiceHub.TryGet<IDiskFlashDialogs>();
+        DataContext = ServiceHub.TryGet<DiskFlashViewModel>() ?? new DiskFlashViewModel(dialogs: diagnostics);
         Opened += OnOpened;
     }
 
@@ -33,16 +36,21 @@ public partial class DiskFlashWindow : Window
 
     private void OnDriveCardPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(sender as Visual).Properties.IsLeftButtonPressed &&
-            sender is Border { DataContext: DiskFlashDriveItem item } &&
-            !item.IsBlocked)
+        if (!e.GetCurrentPoint(sender as Visual).Properties.IsLeftButtonPressed ||
+            sender is not Border { DataContext: DiskFlashDriveItem item } ||
+            item.IsBlocked)
         {
-            if (e.Source is not CheckBox && (e.Source as Visual)?.FindAncestorOfType<CheckBox>() is null)
-            {
-                item.IsSelected = !item.IsSelected;
-                e.Handled = true;
-            }
+            return;
         }
+
+        // The checkbox handles its own click; a click anywhere else on the card selects that row exclusively.
+        if (e.Source is CheckBox || (e.Source as Visual)?.FindAncestorOfType<CheckBox>() is not null)
+        {
+            return;
+        }
+
+        ViewModel.SelectDrive(item);
+        e.Handled = true;
     }
 
     private async void OnChooseImageClick(object? sender, RoutedEventArgs e)
@@ -58,9 +66,17 @@ public partial class DiskFlashWindow : Window
                 ViewModel.SetImage(path);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            ViewModel.SetImage(null);
+            StatusError(ex.Message);
             LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Choose image failed: {ex.Message}");
         }
+    }
+
+    private void StatusError(string message)
+    {
+        ViewModel.StatusMessage = message;
+        ViewModel.StatusIsError = true;
     }
 }

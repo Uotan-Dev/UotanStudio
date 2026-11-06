@@ -40,6 +40,9 @@ public sealed class UiWindowService : IWindowService
     public bool HasOwnerWindow => DialogService.GetOwnerWindow() is not null;
 
     /// <inheritdoc />
+    public object? OwnerWindow => DialogService.GetOwnerWindow();
+
+    /// <inheritdoc />
     public INewProjectDialog CreateNewProjectDialog(NewProjectWindowMode mode, string? baseDirectory,
         IEnumerable<string>? reservedNames) => new NewProjectWindow(mode, baseDirectory, reservedNames);
 

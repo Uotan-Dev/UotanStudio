@@ -5,23 +5,36 @@ using CommunityToolkit.Mvvm.Input;
 using UotanStudio.DD;
 using UotanStudio.DD.Drives;
 using UotanStudio.DD.Images;
+using UotanStudio.DD.Writing;
 using UotanStudio.Services;
+using UotanStudio.Services.Flash;
+using UotanStudio.UiAbstractions;
+using DiskFlashProgress = UotanStudio.DD.FlashProgress;
 
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// Disk-image flashing window view model: image probing, target drive selection, safety switches and
-/// write/verify progress.
-/// <para>磁盘镜像烧录窗口视图模型：镜像探测、目标驱动器选择、安全开关与写入/校验进度。</para>
+/// Disk-image flashing window view model: image probing, the single target drive, safety switches, the
+/// privilege gate and write/verify progress.
+/// <para>磁盘镜像烧录窗口视图模型：镜像探测、唯一目标驱动器、安全开关、权限门控与写入/校验进度。</para>
 /// </summary>
+/// <remarks>
+/// The host process never needs an administrator token: when this process may not write the selected drive,
+/// <see cref="IDiskFlashService"/> asks the user and then runs the write in a process started for that purpose.
+/// <para>
+/// 宿主进程本身不需要管理员令牌：本进程无权写入选中驱动器时，<see cref="IDiskFlashService"/> 询问用户后再由
+/// 为此启动的进程执行写入。
+/// </para>
+/// </remarks>
 public sealed partial class DiskFlashViewModel : ObservableObject
 {
-    private readonly IDriveScanner _scanner;
-    private readonly ImageFlasher _flasher;
+    private readonly IDiskFlashService _flashService;
+    private readonly IDiskFlashDialogs _dialogs;
     private CancellationTokenSource? _operationCts;
     private FlashImage? _image;
     private ProgressMeter? _meter;
     private FlashStage? _meterStage;
+    private bool _isElevated;
 
     /// <summary>
     /// Identifies the current flash run so callbacks posted by <see cref="Progress{T}"/> after the run ended are
@@ -33,23 +46,24 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     private static LanguageService Language => LanguageService.Instance;
 
     /// <summary>
-    /// Creates the view model with the platform scanner and flasher unless alternatives are supplied.
-    /// <para>创建视图模型；未提供替代实现时使用平台扫描器与烧录器。</para>
+    /// Creates the view model with the platform flash service unless alternatives are supplied.
+    /// <para>创建视图模型；未提供替代实现时使用平台烧录服务。</para>
     /// </summary>
-    /// <param name="scanner">Drive scanner; <see langword="null"/> selects the platform scanner.
-    /// <para>驱动器扫描器；<see langword="null"/> 时选择平台扫描器。</para></param>
-    /// <param name="flasher">Image flasher; <see langword="null"/> creates the default flasher.
-    /// <para>镜像烧录器；<see langword="null"/> 时创建默认烧录器。</para></param>
-    public DiskFlashViewModel(IDriveScanner? scanner = null, ImageFlasher? flasher = null)
+    /// <param name="flashService">Flash service; <see langword="null"/> uses <see cref="DiskFlashService.Default"/>.
+    /// <para>烧录服务；<see langword="null"/> 时使用 <see cref="DiskFlashService.Default"/>。</para></param>
+    /// <param name="dialogs">Message windows; <see langword="null"/> uses the detached fallback.
+    /// <para>消息窗口；<see langword="null"/> 时使用脱离界面的回退实现。</para></param>
+    public DiskFlashViewModel(IDiskFlashService? flashService = null, IDiskFlashDialogs? dialogs = null)
     {
-        _scanner = scanner ?? DriveScanner.CreateDefault();
-        _flasher = flasher ?? new ImageFlasher();
+        _flashService = flashService ?? DiskFlashService.Default;
+        _dialogs = dialogs ?? NullDiskFlashDialogs.Instance;
+        _isElevated = _flashService.HasWriteAccess;
         ProgressStage = Language.GetString("DiskFlash_Ready");
     }
 
     /// <summary>
-    /// Gets the selectable target drives.
-    /// <para>获取可选的目标驱动器。</para>
+    /// Gets the scanned drives; at most one of them is selected.
+    /// <para>获取已扫描的驱动器；其中至多选中一个。</para>
     /// </summary>
     public ObservableCollection<DiskFlashDriveItem> Drives { get; } = new();
 
@@ -108,10 +122,11 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     private bool _allowLargeDrive;
 
     /// <summary>
-    /// Gets or sets whether the user accepted that every selected drive will be overwritten.
-    /// <para>获取或设置用户是否已接受所有选中驱动器都会被覆盖。</para>
+    /// Gets or sets whether the user accepted that the selected drive will be overwritten.
+    /// <para>获取或设置用户是否已接受选中驱动器将被覆盖。</para>
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFlash))]
     private bool _confirmOverwrite;
 
     /// <summary>
@@ -181,11 +196,14 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     public bool CanRefresh => !IsBusy;
 
     /// <summary>
-    /// Gets whether flashing can start.
-    /// <para>获取是否可以开始烧录。</para>
+    /// Gets whether flashing can start: an image is probed, one writable drive is selected and the overwrite
+    /// confirmation is ticked.
+    /// <para>获取是否可以开始烧录：镜像已探测、已选中一个可写驱动器且覆盖确认已勾选。</para>
     /// </summary>
-    public bool CanFlash => !IsBusy && _image is not null
-        && Drives.Any(item => item.IsSelected && !item.IsBlocked);
+    public bool CanFlash => !IsBusy
+        && _image is not null
+        && ConfirmOverwrite
+        && SelectedItem is { IsBlocked: false };
 
     /// <summary>
     /// Gets whether a running operation can be cancelled.
@@ -206,16 +224,47 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     public bool HasDrives => Drives.Count > 0;
 
     /// <summary>
-    /// Gets the number of selected, unblocked targets.
-    /// <para>获取已选中且未被阻止的目标数量。</para>
+    /// Gets the selected drive row, or <see langword="null"/> when nothing is selected.
+    /// <para>获取选中的驱动器行；未选中时为 <see langword="null"/>。</para>
     /// </summary>
-    public int SelectedCount => Drives.Count(item => item.IsSelected && !item.IsBlocked);
+    public DiskFlashDriveItem? SelectedItem => Drives.FirstOrDefault(item => item.IsSelected && !item.IsBlocked);
+
+    /// <summary>
+    /// Gets the number of selected drives; the window allows at most one.
+    /// <para>获取选中的驱动器数量；窗口最多允许一个。</para>
+    /// </summary>
+    public int SelectedCount => SelectedItem is null ? 0 : 1;
 
     /// <summary>
     /// Gets the localized selected-target count text.
     /// <para>获取本地化的已选目标数量文本。</para>
     /// </summary>
     public string SelectedCountText => string.Format(Language.GetString("DiskFlash_SelectedCount"), SelectedCount);
+
+    /// <summary>
+    /// Gets whether this process already holds the raw-disk write privilege.
+    /// <para>获取本进程是否已持有裸磁盘写权限。</para>
+    /// </summary>
+    public bool IsElevated
+    {
+        get => _isElevated;
+        private set => SetProperty(ref _isElevated, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the localized explanation of what the last scan could not read, such as a drive whose
+    /// capacity needs administrator rights.
+    /// <para>获取或设置上一次扫描未能读取的内容的本地化说明，例如需要管理员权限才能读取的驱动器容量。</para>
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasScanDetail))]
+    private string _scanDetail = string.Empty;
+
+    /// <summary>
+    /// Gets whether <see cref="ScanDetail"/> has something to show.
+    /// <para>获取 <see cref="ScanDetail"/> 是否有内容可显示。</para>
+    /// </summary>
+    public bool HasScanDetail => !string.IsNullOrEmpty(ScanDetail);
 
     /// <summary>
     /// Probes the given image path and refreshes drive compatibility.
@@ -238,7 +287,6 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             StatusMessage = string.Empty;
             StatusIsError = false;
             RefreshItems();
-            NotifyDerived();
             return;
         }
 
@@ -263,8 +311,29 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         finally
         {
             RefreshItems();
-            NotifyDerived();
         }
+    }
+
+    /// <summary>
+    /// Selects one drive row and clears every other row, keeping the selection exclusive.
+    /// <para>选中一个驱动器行并清除其它行，保持选择互斥。</para>
+    /// </summary>
+    /// <param name="item">The row to select; <see langword="null"/> or a blocked row clears the selection.
+    /// <para>要选中的行；<see langword="null"/> 或受限行会清空选择。</para></param>
+    public void SelectDrive(DiskFlashDriveItem? item)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var target = item is { IsBlocked: false } ? item : null;
+        foreach (var row in Drives)
+        {
+            row.IsSelected = ReferenceEquals(row, target);
+        }
+
+        NotifyDerived();
     }
 
     /// <summary>
@@ -279,10 +348,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             return;
         }
 
-        var previousSelection = Drives
-            .Where(item => item.IsSelected)
-            .Select(item => item.DevicePath)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var previousSelection = SelectedItem?.DevicePath;
 
         var cts = new CancellationTokenSource();
         _operationCts = cts;
@@ -299,19 +365,10 @@ public sealed partial class DiskFlashViewModel : ObservableObject
                 item.PropertyChanged -= OnDrivePropertyChanged;
             }
 
-            Drives.Clear();
-            var drives = await _scanner.ScanAsync(cts.Token).ConfigureAwait(true);
-            foreach (var drive in drives)
-            {
-                var item = new DiskFlashDriveItem(drive)
-                {
-                    IsSelected = previousSelection.Contains(drive.DevicePath),
-                };
-                item.PropertyChanged += OnDrivePropertyChanged;
-                Drives.Add(item);
-            }
-
+            var drives = await _flashService.ScanDrivesAsync(cts.Token).ConfigureAwait(true);
+            ReplaceDrives(drives, previousSelection);
             RefreshItems();
+            ScanDetail = DescribeOrdinaryScan();
         }
         catch (OperationCanceledException)
         {
@@ -320,6 +377,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = Language.GetString("DiskFlash_ScanFailed");
+            ScanDetail = string.Format(Language.GetString("DiskFlash_ScanFailedDetail"), ex.Message);
             StatusIsError = true;
             LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Scan failed: {ex.Message}");
         }
@@ -339,10 +397,10 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Writes the probed image to every selected target and optionally verifies the result.
-    /// <para>把已探测的镜像写入全部选中目标，并可选地校验结果。</para>
+    /// Writes the probed image to the selected drive, verifying the result when requested.
+    /// <para>把已探测的镜像写入选中驱动器，并按需校验结果。</para>
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanFlash))]
     public async Task FlashAsync()
     {
         if (IsBusy)
@@ -357,11 +415,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             return;
         }
 
-        var targets = Drives
-            .Where(item => item.IsSelected && !item.IsBlocked)
-            .Select(item => item.Drive)
-            .ToArray();
-        if (targets.Length == 0)
+        if (SelectedItem is not { } target)
         {
             StatusMessage = Language.GetString("DiskFlash_NoTarget");
             StatusIsError = true;
@@ -387,46 +441,45 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         ProgressStats = string.Empty;
         ProgressStage = Language.GetString("DiskFlash_StagePreparing");
         var generation = Interlocked.Increment(ref _progressGeneration);
-        var progress = new Progress<FlashProgress>(value => ApplyProgress(generation, value));
+        var progress = new Progress<DiskFlashProgress>(value => ApplyProgress(generation, value));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            var result = await _flasher.FlashAsync(
-                _image,
-                targets,
-                new FlashOptions
+            var failure = await _flashService.FlashAsync(
+                _image.Path,
+                [target.Drive],
+                new FlashJobOptions
                 {
-                    ConfirmOverwrite = true,
                     VerifyAfterWrite = VerifyAfterWrite,
                     AllowLargeDrive = AllowLargeDrive,
                 },
                 progress,
                 cts.Token).ConfigureAwait(true);
 
+            IsElevated = _flashService.HasWriteAccess;
+            if (failure is not null)
+            {
+                await ReportFailureAsync(failure).ConfigureAwait(true);
+                return;
+            }
+
+            watch.Stop();
             ProgressStage = Language.GetString("DiskFlash_StageCompleted");
             ProgressPercent = 100;
             IsProgressIndeterminate = false;
             StatusMessage = string.Format(
                 Language.GetString("DiskFlash_Success"),
-                result.Targets.Count,
-                ProgressMeter.FormatSize(result.BytesWritten),
-                $"{result.Elapsed.TotalSeconds:0.0} s");
-        }
-        catch (FlashValidationException ex)
-        {
-            StatusMessage = string.Format(Language.GetString("DiskFlash_ValidationFailed"), FormatFailures(ex.Failures));
-            StatusIsError = true;
-            LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Validation failed: {ex.Message}");
+                1,
+                ProgressMeter.FormatSize(_image.Size ?? _image.CompressedSize),
+                $"{watch.Elapsed.TotalSeconds:0.0} s");
         }
         catch (OperationCanceledException)
         {
             StatusMessage = Language.GetString("DiskFlash_Cancelled");
-            ProgressStage = Language.GetString("DiskFlash_Ready");
         }
         catch (Exception ex)
         {
-            StatusMessage = Language.GetString("DiskFlash_Failed");
-            StatusIsError = true;
-            ProgressStage = Language.GetString("DiskFlash_Ready");
+            await ReportFailureAsync(Language.GetString("DiskFlash_Failed")).ConfigureAwait(true);
             LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Flash failed: {ex}");
         }
         finally
@@ -458,7 +511,17 @@ public sealed partial class DiskFlashViewModel : ObservableObject
 
     partial void OnAllowLargeDriveChanged(bool value) => RefreshItems();
 
-    private void ApplyProgress(int generation, FlashProgress value)
+    partial void OnConfirmOverwriteChanged(bool value) => FlashCommand.NotifyCanExecuteChanged();
+
+    private async Task ReportFailureAsync(string message)
+    {
+        StatusMessage = message;
+        StatusIsError = true;
+        ProgressStage = Language.GetString("DiskFlash_Ready");
+        await _dialogs.ShowErrorAsync(Language.GetString("DiskFlash_Title"), message).ConfigureAwait(true);
+    }
+
+    private void ApplyProgress(int generation, DiskFlashProgress value)
     {
         if (Volatile.Read(ref _progressGeneration) != generation)
         {
@@ -487,6 +550,45 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         ProgressStats = meter.FormatStats(Language.GetString(template));
     }
 
+    private int ReplaceDrives(IReadOnlyList<FlashDrive> drives, string? previousSelection = null)
+    {
+        foreach (var item in Drives)
+        {
+            item.PropertyChanged -= OnDrivePropertyChanged;
+        }
+
+        Drives.Clear();
+        var reselect = true;
+        foreach (var drive in drives)
+        {
+            var item = new DiskFlashDriveItem(drive)
+            {
+                IsSelected = reselect && string.Equals(drive.DevicePath, previousSelection, StringComparison.OrdinalIgnoreCase),
+            };
+            reselect &= !item.IsSelected;
+            item.PropertyChanged += OnDrivePropertyChanged;
+            Drives.Add(item);
+        }
+
+        return Drives.Count;
+    }
+
+    private string DescribeOrdinaryScan()
+    {
+        var unknown = Drives.Count(item => item.Drive.Size <= 0);
+        if (unknown == 0)
+        {
+            return string.Empty;
+        }
+
+        return string.Format(
+            Language.GetString(IsElevated
+                ? "DiskFlash_ScanSizeUnknownElevated"
+                : "DiskFlash_ScanSizeUnknown"),
+            unknown);
+    }
+
+
     private void RefreshItems()
     {
         foreach (var item in Drives)
@@ -499,7 +601,19 @@ public sealed partial class DiskFlashViewModel : ObservableObject
 
     private void OnDrivePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DiskFlashDriveItem.IsSelected))
+        if (e.PropertyName == nameof(DiskFlashDriveItem.IsSelected) &&
+            sender is DiskFlashDriveItem { IsSelected: true } selected)
+        {
+            foreach (var row in Drives)
+            {
+                if (!ReferenceEquals(row, selected))
+                {
+                    row.IsSelected = false;
+                }
+            }
+        }
+
+        if (e.PropertyName is nameof(DiskFlashDriveItem.IsSelected) or nameof(DiskFlashDriveItem.IsBlocked))
         {
             NotifyDerived();
         }
@@ -507,11 +621,13 @@ public sealed partial class DiskFlashViewModel : ObservableObject
 
     private void NotifyDerived()
     {
+        FlashCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanFlash));
         OnPropertyChanged(nameof(CanRefresh));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(HasImage));
         OnPropertyChanged(nameof(HasDrives));
+        OnPropertyChanged(nameof(SelectedItem));
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(SelectedCountText));
         OnPropertyChanged(nameof(ProgressText));
@@ -539,9 +655,4 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         FlashStage.Completed => Language.GetString("DiskFlash_StageCompleted"),
         _ => Language.GetString("DiskFlash_Ready"),
     };
-
-    private static string FormatFailures(IReadOnlyList<DriveValidationFailure> failures) =>
-        string.Join("; ", failures.Select(failure =>
-            $"{failure.Drive.DisplayName} ({failure.Drive.DevicePath}): "
-            + string.Join(", ", failure.Issues.Select(issue => DiskFlashDriveItem.IssueLabel(issue.Issue)))));
 }

@@ -78,7 +78,7 @@
     <!-- 主内容区 -->
     <Grid Grid.Row="0"
           Margin="20,12,20,12"
-          RowDefinitions="Auto,*,Auto"
+          RowDefinitions="Auto,*,Auto,Auto"
           RowSpacing="10">
 
       <!-- 镜像文件 -->
@@ -114,7 +114,8 @@
           <TextBlock Grid.Column="1"
                      Text="{Binding SelectedCountText}"
                      Opacity="0.7"
-                     VerticalAlignment="Center" />
+                     VerticalAlignment="Center"
+                     ToolTip.Tip="{DynamicResource DiskFlash_SingleTargetHint}" />
           <Button Grid.Column="2"
                   Name="RefreshDrivesButton"
                   MinWidth="100" Height="32"
@@ -157,12 +158,12 @@
                         Classes.blocked="{Binding IsBlocked}"
                         PointerPressed="OnDriveCardPointerPressed">
                   <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12" VerticalAlignment="Center">
-                    <!-- 复选框 -->
+                    <!-- 单选复选框：视图模型保证全表仅一行选中 -->
                     <CheckBox Grid.Column="0"
                               VerticalAlignment="Center"
                               Margin="0"
                               IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                              IsEnabled="{Binding !IsBlocked}" />
+                              IsEnabled="{Binding IsWritable}" />
 
                     <!-- 驱动器类型图标 -->
                     <Grid Grid.Column="1" Width="28" Height="28" VerticalAlignment="Center">
@@ -231,20 +232,36 @@
         </Grid>
       </Grid>
 
-      <!-- 写入与确认选项（3个复选框一排，整体居中） -->
-      <StackPanel Grid.Row="2"
-                  Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="24">
-        <CheckBox Content="{DynamicResource DiskFlash_VerifyAfterWrite}"
-                  IsChecked="{Binding VerifyAfterWrite, Mode=TwoWay}"
-                  IsEnabled="{Binding IsIdle}" />
-        <CheckBox Content="{DynamicResource DiskFlash_AllowLargeDrive}"
-                  IsChecked="{Binding AllowLargeDrive, Mode=TwoWay}"
-                  IsEnabled="{Binding IsIdle}" />
-        <CheckBox Content="{DynamicResource DiskFlash_ConfirmOverwrite}"
-                  IsChecked="{Binding ConfirmOverwrite, Mode=TwoWay}"
-                  IsEnabled="{Binding IsIdle}" />
+      <!-- 扫描未能读取的详细信息（例如容量需要管理员权限） -->
+      <Border Grid.Row="2"
+              IsVisible="{Binding HasScanDetail}"
+              Margin="0,0,0,6"
+              Padding="10,6"
+              CornerRadius="4"
+              Background="{DynamicResource SemiColorWarningLight}"
+              BorderBrush="{DynamicResource SemiColorWarning}"
+              BorderThickness="1">
+        <TextBlock Text="{Binding ScanDetail}"
+                   FontSize="11"
+                   Foreground="{DynamicResource SemiColorWarning}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <!-- 写入与确认选项：整行居中，确认框是开始烧录的前置条件 -->
+      <StackPanel Grid.Row="3" Spacing="6" HorizontalAlignment="Center">
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Spacing="24">
+          <CheckBox Content="{DynamicResource DiskFlash_VerifyAfterWrite}"
+                    IsChecked="{Binding VerifyAfterWrite, Mode=TwoWay}"
+                    IsEnabled="{Binding IsIdle}" />
+          <CheckBox Content="{DynamicResource DiskFlash_AllowLargeDrive}"
+                    IsChecked="{Binding AllowLargeDrive, Mode=TwoWay}"
+                    IsEnabled="{Binding IsIdle}" />
+          <CheckBox Content="{DynamicResource DiskFlash_ConfirmOverwrite}"
+                    IsChecked="{Binding ConfirmOverwrite, Mode=TwoWay}"
+                    IsEnabled="{Binding IsIdle}" />
+        </StackPanel>
       </StackPanel>
     </Grid>
 
