@@ -4,9 +4,11 @@ using System.Text;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Text;
+using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using ZLinq;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -78,13 +80,13 @@ internal static class FileSystemMetadataGenerator
         Directory.CreateDirectory(metadataDirectory);
         List<string> warnings = [];
         var entries = parser.ListEntriesWithRoot();
-        WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
+        WriteFsConfig(metadataDirectory, partitionName, entries.AsValueEnumerable().Select(e => (
             e.Path,
             e.Uid,
             e.Gid,
             e.Mode,
             CapabilityOf(e.Xattrs))), warnings);
-        WriteFileContextsFromXattrs(metadataDirectory, partitionName, entries.Select(e => (
+        WriteFileContextsFromXattrs(metadataDirectory, partitionName, entries.AsValueEnumerable().Select(e => (
             e.Path,
             e.Xattrs)), warnings);
         WritePartitionInfo(metadataDirectory, partitionName, superblockConfig);
@@ -110,13 +112,13 @@ internal static class FileSystemMetadataGenerator
         ArgumentNullException.ThrowIfNull(parser);
         Directory.CreateDirectory(metadataDirectory);
         List<string> warnings = [];
-        var entries = parser.EnumerateEntries().ToList();
-        WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
+        var entries = parser.EnumerateEntries();
+        WriteFsConfig(metadataDirectory, partitionName, entries.AsValueEnumerable().Select(e => (
             e.Path,
             e.Uid,
             e.Gid,
             e.Mode,
-            e.Xattrs?.FirstOrDefault(x => x.Name == CapabilityXattrName)?.Value)), warnings);
+            FindCapability(e.Xattrs))), warnings);
         WriteFileContextsFromErofsXattrs(metadataDirectory, partitionName, entries, warnings);
         WritePartitionInfo(metadataDirectory, partitionName, superblockConfig);
         return warnings;
@@ -142,13 +144,13 @@ internal static class FileSystemMetadataGenerator
         Directory.CreateDirectory(metadataDirectory);
         List<string> warnings = [];
         var entries = parser.ListEntriesWithRoot();
-        WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
+        WriteFsConfig(metadataDirectory, partitionName, entries.AsValueEnumerable().Select(e => (
             e.Path,
             e.Uid,
             e.Gid,
             e.Mode,
             CapabilityOf(e.Xattrs))), warnings);
-        WriteFileContextsFromXattrs(metadataDirectory, partitionName, entries.Select(e => (e.Path, e.Xattrs)), warnings);
+        WriteFileContextsFromXattrs(metadataDirectory, partitionName, entries.AsValueEnumerable().Select(e => (e.Path, e.Xattrs)), warnings);
         WritePartitionInfo(metadataDirectory, partitionName, superblockConfig);
         return warnings;
     }
@@ -186,13 +188,13 @@ internal static class FileSystemMetadataGenerator
             }
         }
 
-        WriteFsConfig(metadataDirectory, partitionName, paths.Select(p => (
+        WriteFsConfig(metadataDirectory, partitionName, paths.AsValueEnumerable().Select(p => (
             p,
             (uint)0,
             (uint)0,
             (ushort)0,
             (byte[]?)null)), warnings);
-        WriteFileContextsWithDefaults(metadataDirectory, partitionName, paths, warnings);
+        WriteFileContextsWithDefaults(metadataDirectory, partitionName, paths.AsValueEnumerable(), warnings);
         WritePartitionInfo(metadataDirectory, partitionName, null);
         return warnings;
     }
@@ -247,9 +249,10 @@ internal static class FileSystemMetadataGenerator
     /// <param name="entries">Candidate rows in enumeration order. <para>按枚举顺序排列的候选行。</para></param>
     /// <param name="warnings">Sink for entries the grammar cannot express.
     /// <para>无法用该语法表达的条目写入此列表。</para></param>
-    private static void WriteFsConfig(string metadataDirectory, string partitionName,
-        IEnumerable<(string Path, uint Uid, uint Gid, ushort Mode, byte[]? Capability)> entries,
+    private static void WriteFsConfig<TEnumerator>(string metadataDirectory, string partitionName,
+        ValueEnumerable<TEnumerator, (string Path, uint Uid, uint Gid, ushort Mode, byte[]? Capability)> entries,
         List<string> warnings)
+        where TEnumerator : struct, IValueEnumerator<(string Path, uint Uid, uint Gid, ushort Mode, byte[]? Capability)>, allows ref struct
     {
         var fileName = GetMetadataFileName(partitionName, "fs_config");
         var path = Path.Combine(metadataDirectory, fileName);
@@ -294,7 +297,7 @@ internal static class FileSystemMetadataGenerator
     /// <returns>The reason text, or <see langword="null"/>. <para>原因说明，或 <see langword="null"/>。</para></returns>
     private static string? GetFsConfigSkipReason(string imagePath, ushort mode)
     {
-        if (imagePath.Any(char.IsWhiteSpace))
+        if (ContainsWhitespace(imagePath))
         {
             return "the space-delimited fs_config grammar defines no escaping for whitespace in a path";
         }
@@ -422,8 +425,9 @@ internal static class FileSystemMetadataGenerator
         return true;
     }
 
-    private static void WriteFileContextsFromXattrs(string metadataDirectory, string partitionName,
-        IEnumerable<(string Path, IReadOnlyDictionary<string, byte[]>? Xattrs)> entries, List<string> warnings)
+    private static void WriteFileContextsFromXattrs<TEnumerator>(string metadataDirectory, string partitionName,
+        ValueEnumerable<TEnumerator, (string Path, IReadOnlyDictionary<string, byte[]>? Xattrs)> entries, List<string> warnings)
+        where TEnumerator : struct, IValueEnumerator<(string, IReadOnlyDictionary<string, byte[]>?)>, allows ref struct
     {
         var fileName = GetMetadataFileName(partitionName, "file_contexts");
         var path = Path.Combine(metadataDirectory, fileName);
@@ -462,7 +466,7 @@ internal static class FileSystemMetadataGenerator
             string? label = null;
             if (entry.Xattrs is not null)
             {
-                var selinux = entry.Xattrs.FirstOrDefault(x => x.Name == SelinuxXattrName);
+                var selinux = entry.Xattrs.AsValueEnumerable().FirstOrDefault(x => x.Name == SelinuxXattrName);
                 if (selinux?.Name is not null)
                 {
                     var decoded = Encoding.UTF8.GetStringTrimNul(selinux.Value);
@@ -482,8 +486,9 @@ internal static class FileSystemMetadataGenerator
         WriteAtomic(path, sb.ToString());
     }
 
-    private static void WriteFileContextsWithDefaults(string metadataDirectory, string partitionName,
-        IEnumerable<string> paths, List<string> warnings)
+    private static void WriteFileContextsWithDefaults<TEnumerator>(string metadataDirectory, string partitionName,
+        ValueEnumerable<TEnumerator, string> paths, List<string> warnings)
+        where TEnumerator : struct, IValueEnumerator<string>, allows ref struct
     {
         var fileName = GetMetadataFileName(partitionName, "file_contexts");
         var path = Path.Combine(metadataDirectory, fileName);
@@ -510,7 +515,7 @@ internal static class FileSystemMetadataGenerator
     /// <para>无法用该语法表达的行写入此列表。</para></param>
     private static void WriteFileContextsRow(StringBuilder target, string imagePath, string label, List<string> warnings)
     {
-        if (imagePath.Any(char.IsWhiteSpace) || label.Any(char.IsWhiteSpace))
+        if (ContainsWhitespace(imagePath) || ContainsWhitespace(label))
         {
             warnings.Add($"file_contexts: {imagePath}: the whitespace-delimited file_contexts grammar defines no escaping for whitespace in a path or label; skipped.");
             return;
@@ -546,6 +551,24 @@ internal static class FileSystemMetadataGenerator
     private static byte[]? CapabilityOf(IReadOnlyDictionary<string, byte[]>? xattrs)
         => xattrs is not null && xattrs.TryGetValue(CapabilityXattrName, out var value) ? value : null;
 
+    private static byte[]? FindCapability(IReadOnlyList<ErofsXattrEntry>? xattrs)
+    {
+        if (xattrs is null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < xattrs.Count; i++)
+        {
+            if (xattrs[i].Name == CapabilityXattrName)
+            {
+                return xattrs[i].Value;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Reports whether a host path is a link rather than a plain file or directory. A stat that fails is read as
     /// a link because a dangling symbolic link cannot be statted through its target on Windows, and an entry the
@@ -567,6 +590,19 @@ internal static class FileSystemMetadataGenerator
         {
             return true;
         }
+    }
+
+    private static bool ContainsWhitespace(string value)
+    {
+        foreach (var character in value)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizePath(string path)

@@ -295,7 +295,7 @@ public static partial class Disassembler
                     sb.Append("    ").AppendLine(directive);
                 }
             }
-            if (insn.Operands.FirstOrDefault() is PayloadOperand)
+            if (insn.Operands.Count > 0 && insn.Operands[0] is PayloadOperand)
             {
                 AppendPayloadBlock(sb, insn, payloadOwners.Owners.TryGetValue(insn.Offset, out var owner) ? owner : null);
                 continue;
@@ -447,18 +447,16 @@ public static partial class Disassembler
             case EncodedValueType.Enum:
                 {
                     var field = dex.GetField(value.AsIndex());
-                    return field == null
-                        ? "?"
-                        : (value.Type == EncodedValueType.Enum ? ".enum " : string.Empty)
-                          + $"{dex.GetType(field.ClassIndex)}->{dex.GetString(field.NameIndex)}:{dex.GetType(field.TypeIndex)}";
+                    if (field == null) return "?";
+                    var descriptor = $"{dex.GetType(field.ClassIndex)}->{dex.GetString(field.NameIndex)}:{dex.GetType(field.TypeIndex)}";
+                    return value.Type == EncodedValueType.Enum ? ".enum " + descriptor : descriptor;
                 }
             case EncodedValueType.Method:
                 {
                     var method = dex.GetMethod(value.AsIndex());
                     if (method == null) return "?";
                     var mproto = dex.GetProto(method.ProtoIndex);
-                    var parameters = mproto == null ? string.Empty
-                        : string.Concat(mproto.ParameterTypeIndices.Select(dex.GetType));
+                    var parameters = mproto == null ? string.Empty : ConcatTypes(dex, mproto.ParameterTypeIndices);
                     var returnType = mproto == null ? "?" : dex.GetType(mproto.ReturnTypeIndex);
                     return $"{dex.GetType(method.ClassIndex)}->{dex.GetString(method.NameIndex)}({parameters}){returnType}";
                 }
@@ -466,8 +464,7 @@ public static partial class Disassembler
                 {
                     var proto = dex.GetProto(value.AsIndex());
                     if (proto == null) return "?";
-                    var parameters = string.Concat(proto.ParameterTypeIndices.Select(dex.GetType));
-                    return $"({parameters}){dex.GetType(proto.ReturnTypeIndex)}";
+                    return $"({ConcatTypes(dex, proto.ParameterTypeIndices)}){dex.GetType(proto.ReturnTypeIndex)}";
                 }
             case EncodedValueType.Array:
                 {
@@ -514,6 +511,53 @@ public static partial class Disassembler
         _ => c.ToString()
     };
 
+    /// <summary>
+    /// Concatenates the readable type of every parameter index in one pass over a preallocated string.
+    /// <para>对预分配字符串单趟拼接每个参数索引的可读类型。</para>
+    /// </summary>
+    private static string ConcatTypes(DexFile dex, int[] indices)
+    {
+        var total = 0;
+        for (var i = 0; i < indices.Length; i++)
+        {
+            total += dex.GetType(indices[i]).Length;
+        }
+        return string.Create(total, (dex, indices), static (span, state) =>
+        {
+            foreach (var index in state.indices)
+            {
+                var type = state.dex.GetType(index);
+                type.AsSpan().CopyTo(span);
+                span = span[type.Length..];
+            }
+        });
+    }
+
+    /// <summary>
+    /// Appends a value as uppercase hexadecimal with a minimum width of four digits, matching the
+    /// <c>X4</c> format used by smali labels.
+    /// <para>以大写十六进制追加值，最小宽度四位，与 smali 标签使用的 <c>X4</c> 格式一致。</para>
+    /// </summary>
+    private static void AppendHex(StringBuilder sb, uint value)
+    {
+        Span<char> digits = stackalloc char[8];
+        var written = 0;
+        do
+        {
+            digits[written++] = (char)(value % 16 < 10 ? '0' + value % 16 : 'A' + value % 16 - 10);
+            value /= 16;
+        }
+        while (value != 0);
+        for (var i = 4 - written; i > 0; i--)
+        {
+            sb.Append('0');
+        }
+        while (written > 0)
+        {
+            sb.Append(digits[--written]);
+        }
+    }
+
     private static void AppendOperands(StringBuilder sb, Instruction insn, DexFile dex)
     {
         if (insn.Operands.Count == 0) return;
@@ -558,7 +602,8 @@ public static partial class Disassembler
                 sb.Append("<null>");
                 break;
             case BranchTargetOperand target:
-                sb.Append(":label_").Append(target.Offset.ToString("X4"));
+                sb.Append(":label_");
+                AppendHex(sb, (uint)target.Offset);
                 break;
             case LiteralOperand literal:
                 AppendNumber(sb, literal.Value);
@@ -641,7 +686,8 @@ public static partial class Disassembler
                 default:
                     if (c < 0x20)
                     {
-                        sb.Append("\\u").Append(((int)c).ToString("X4"));
+                        sb.Append("\\u");
+                        AppendHex(sb, (uint)c);
                     }
                     else
                     {

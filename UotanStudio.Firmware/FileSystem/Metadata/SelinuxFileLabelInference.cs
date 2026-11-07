@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
@@ -158,7 +159,7 @@ internal sealed class SelinuxFileLabelInference
     private static bool IsObjectContext(string label) => Regex.IsMatch(label,
         @"\A[A-Za-z0-9_]+:object_r:[A-Za-z0-9_]+:s[0-9]+(?:[,:\-A-Za-z0-9_.]*)\z",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static byte[] Encode(string label) => Encoding.UTF8.GetBytes(label + '\0');
+    private static byte[] Encode(string label) => Utf8String.Format($"{label}\0");
     private static string Parent(string path) => path.LastIndexOf('/') is var i && i >= 0 ? path[..i] : "";
 
     /// <summary>

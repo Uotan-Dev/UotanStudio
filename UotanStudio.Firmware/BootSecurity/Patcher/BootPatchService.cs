@@ -12,6 +12,7 @@ using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.BootSecurity.Workflow;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
@@ -350,12 +351,21 @@ public sealed class BootPatchService
         }
         if (detection.Kind == BootPatchKind.Magisk)
         {
-            var config = Encoding.UTF8.GetBytes($"KEEPVERITY={(options.KeepVerity ? "true" : "false")}\n" +
-                $"KEEPFORCEENCRYPT={(options.KeepForceEncryption ? "true" : "false")}\n" +
-                $"RECOVERYMODE={(options.RecoveryMode ? "true" : "false")}\n" +
-                "VENDORBOOT=false\n" +
-                (string.IsNullOrWhiteSpace(options.PreInitDevice) ? string.Empty : $"PREINITDEVICE={options.PreInitDevice.Trim()}\n") +
-                (string.IsNullOrWhiteSpace(stockBootSha1) ? string.Empty : $"SHA1={stockBootSha1}\n"));
+            using var configBuffer = Utf8String.CreateWriter(out var configWriter);
+            configWriter.Append($"KEEPVERITY={(options.KeepVerity ? "true" : "false")}\n");
+            configWriter.Append($"KEEPFORCEENCRYPT={(options.KeepForceEncryption ? "true" : "false")}\n");
+            configWriter.Append($"RECOVERYMODE={(options.RecoveryMode ? "true" : "false")}\n");
+            configWriter.Append("VENDORBOOT=false\n");
+            if (!string.IsNullOrWhiteSpace(options.PreInitDevice))
+            {
+                configWriter.Append($"PREINITDEVICE={options.PreInitDevice.Trim()}\n");
+            }
+            if (!string.IsNullOrWhiteSpace(stockBootSha1))
+            {
+                configWriter.Append($"SHA1={stockBootSha1}\n");
+            }
+            configWriter.Flush();
+            var config = configBuffer.ToArray();
             if (editor.Exists(".backup/.magisk")) editor.Remove(".backup/.magisk");
             editor.AddOrReplace(".backup", [], new ArchiveEntryMetadata
             {

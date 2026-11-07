@@ -74,6 +74,49 @@ internal sealed class MethodContext
     /// <para><see cref="Class"/> 为 <see langword="null"/> 时本值也为 <see langword="null"/>。</para></value>
     public string? ClassName { get; init; }
 
+    private string[]? _localNames;
+    private string[]? _argumentNames;
+
+    /// <summary>
+    /// Returns the readable name for a register, reusing per-method name tables instead of formatting
+    /// a fresh string for every instruction operand. Names outside the tables fall back to formatting,
+    /// which covers out-of-range registers from corrupted code items.
+    /// <para>返回寄存器的可读名称，复用按方法构建的名称表，而不是为每条指令操作数格式化新串；
+    /// 表外编号回退为格式化，以覆盖损坏代码项带来的越界寄存器。</para>
+    /// </summary>
+    /// <param name="reg">Raw Dalvik register number. <para>原始 Dalvik 寄存器编号。</para></param>
+    /// <param name="argStart">First argument slot, <c>RegistersSize - InsSize</c>.
+    /// <para>首个参数槽位，即 <c>RegistersSize - InsSize</c>。</para></param>
+    /// <returns><c>this</c> for the lowest argument slot of an instance method, <c>pN</c> for other
+    /// argument slots, otherwise <c>vN</c>.
+    /// <para>实例方法最低参数槽位返回 <c>this</c>，其余参数槽位返回 <c>pN</c>，否则返回 <c>vN</c>。</para></returns>
+    internal string GetRegisterName(int reg, int argStart)
+    {
+        if (reg >= argStart)
+        {
+            var j = reg - argStart;
+            if (!IsStatic && j == 0)
+            {
+                return "this";
+            }
+            var arguments = _argumentNames ??= BuildNames(InsSize, 'p');
+            return (uint)j < (uint)arguments.Length ? arguments[j] : $"p{j}";
+        }
+
+        var locals = _localNames ??= argStart <= 0 ? [] : BuildNames(argStart, 'v');
+        return (uint)reg < (uint)locals.Length ? locals[reg] : $"v{reg}";
+    }
+
+    private static string[] BuildNames(int count, char prefix)
+    {
+        var names = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            names[i] = $"{prefix}{i}";
+        }
+        return names;
+    }
+
     /// <summary>
     /// Builds a method context from the model.
     /// <para>从模型构造方法上下文。</para>
@@ -235,14 +278,7 @@ internal static class RegisterAnalyzer
     public static string RegisterName(MethodContext ctx, int reg)
     {
         var argStart = ctx.RegistersSize - ctx.InsSize;
-        if (reg >= argStart)
-        {
-            var j = reg - argStart;
-            if (!ctx.IsStatic && j == 0) return "this";
-            return $"p{j}";
-        }
-
-        return $"v{reg}";
+        return ctx.GetRegisterName(reg, argStart);
     }
 
     /// <summary>

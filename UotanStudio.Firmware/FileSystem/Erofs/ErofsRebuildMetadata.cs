@@ -5,6 +5,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using ZLinq;
 using UnifiedChunkIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsChunkIdata;
 using UnifiedCompressedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsCompressedIdata;
 using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
@@ -101,16 +102,16 @@ internal static class ErofsRebuildMetadata
 
         if (options.SourceXattrPrefixes is { Count: > 0 } prefixes)
         {
-            parameters.XattrPrefixes = [.. prefixes.Select(prefix => new ErofsRebuildXattrPrefix
+            parameters.XattrPrefixes = prefixes.AsValueEnumerable().Select(prefix => new ErofsRebuildXattrPrefix
             {
                 BaseIndex = prefix.BaseIndex,
                 Infix = prefix.Infix,
-            })];
+            }).ToList();
         }
 
         if (options.SourceCompressionOptions is { } codecs)
         {
-            foreach (var codec in codecs.OrderBy(pair => pair.Key))
+            foreach (var codec in codecs.AsValueEnumerable().OrderBy(pair => pair.Key))
             {
                 parameters.Codecs.Add(new ErofsRebuildCodec
                 {
@@ -142,7 +143,7 @@ internal static class ErofsRebuildMetadata
 
         if (options.SourceInodes is { } inodes)
         {
-            foreach (var inode in inodes.OrderBy(pair => pair.Key))
+            foreach (var inode in inodes.AsValueEnumerable().OrderBy(pair => pair.Key))
             {
                 var source = inode.Value;
                 var extentState = source.Idata as UnifiedCompressedIdata;
@@ -171,12 +172,12 @@ internal static class ErofsRebuildMetadata
                     Compacted2B = (source.ZAdvise & ZErofsMapHeader.AdviseCompacted2B) != 0,
                     InterlacedPcluster = (source.ZAdvise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0,
                     Xattrs = source.XattrEntries is { Count: > 0 } attributes
-                        ? [.. attributes.Select(attribute => new ErofsRebuildXattr
+                        ? attributes.AsValueEnumerable().Select(attribute => new ErofsRebuildXattr
                         {
                             NameIndex = attribute.NameIndex,
                             Name = attribute.Name,
                             Value = Convert.ToBase64String(attribute.Value),
-                        })]
+                        }).ToList()
                         : null,
                 });
             }
@@ -221,14 +222,14 @@ internal static class ErofsRebuildMetadata
                 Algorithm = estimate.Options.Algorithm.ToString(),
                 Samples = estimate.Samples,
                 SampleBytes = estimate.SampleBytes,
-                Candidates = [.. estimate.Candidates.Select(candidate => new ErofsRebuildCompressionCandidate
+                Candidates = estimate.Candidates.AsValueEnumerable().Select(candidate => new ErofsRebuildCompressionCandidate
                 {
                     Level = candidate.Level,
                     HighCompression = candidate.HighCompression,
                     Bytes = candidate.Bytes,
                     Error = double.IsFinite(candidate.Error) ? candidate.Error : double.MaxValue,
                     ExactMatches = candidate.ExactMatches,
-                })],
+                }).ToList(),
             });
         }
 
@@ -341,19 +342,19 @@ internal static class ErofsRebuildMetadata
 
         if (parameters.XattrPrefixes is { Count: > 0 } prefixes)
         {
-            options.SourceXattrPrefixes = [.. prefixes.Select(prefix => (prefix.BaseIndex, prefix.Infix))];
+            options.SourceXattrPrefixes = prefixes.AsValueEnumerable().Select(prefix => (prefix.BaseIndex, prefix.Infix)).ToArray();
         }
 
         if (parameters.SourceDevices is { Count: > 0 } devices)
         {
             if (devices.Count > ushort.MaxValue)
                 throw new FileSystemCorruptedException("EROFS source device table exceeds the on-disk limit.");
-            options.SourceDeviceTable = [.. devices.Select(device =>
+            options.SourceDeviceTable = devices.AsValueEnumerable().Select(device =>
             {
                 if (device is null || device.Blocks == 0 || device.Blocks >= 1UL << 48 || device.UniAddr >= 1UL << 48)
                     throw new FileSystemCorruptedException("Invalid EROFS source device descriptor.");
                 return new ErofsSourceDevice(PadDeviceTag(ReadDeviceTagBytes(device)), device.Blocks, device.UniAddr);
-            })];
+            }).ToArray();
         }
 
         if (parameters.ExtraDeviceCount > 0)
@@ -384,7 +385,7 @@ internal static class ErofsRebuildMetadata
             options.SourceCompressionOptions = codecs;
             if (!codecs.ContainsKey(options.Algorithm))
             {
-                options.Algorithm = codecs.Keys.OrderBy(algorithm => algorithm).First();
+                options.Algorithm = codecs.Keys.AsValueEnumerable().OrderBy(algorithm => algorithm).First();
             }
         }
 
@@ -451,12 +452,12 @@ internal static class ErofsRebuildMetadata
                     SecondaryAlgorithm = ParseSecondaryAlgorithm(inode.SecondaryAlgorithm),
                     MetadataCreationType = ParseMetadataCreationType(inode.MetadataCreationType),
                     XattrEntries = inode.Xattrs is { Count: > 0 } stored
-                        ? [.. stored.Select(attribute => new ErofsXattrEntry
+                        ? stored.AsValueEnumerable().Select(attribute => new ErofsXattrEntry
                         {
                             NameIndex = attribute.NameIndex,
                             Name = attribute.Name,
                             Value = Convert.FromBase64String(attribute.Value),
-                        })]
+                        }).ToList()
                         : null,
                 };
                 inodes[inode.Nid] = node;

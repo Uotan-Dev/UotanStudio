@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 using UotanStudio.Hash.Digests;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
@@ -26,7 +27,7 @@ internal static partial class DexWriter
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
         var headerStart = (int)ms.Position;
-        w.Write(Encoding.ASCII.GetBytes("dex\n" + version + "\0"));
+        w.Write(Utf8String.Format($"dex\n{version}\0"));
         w.Write(0u);
         w.Write(new byte[20]);
         w.Write(0u);

@@ -5,6 +5,8 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Hash.Crc32Register;
 using UotanStudio.Hash.Digests;
+using Utf8StringInterpolation;
+using ZLinq;
 
 namespace UotanStudio.Firmware.VendorFirmware.Amlogic;
 
@@ -93,7 +95,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             var image = await ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
             return FirmwareOpResult.Ok(
                 $"AMLogic ampack v{(uint)image.Version} metadata confirmed ({image.Items.Count} items).",
-                entries: [.. image.Items.Where(item => !item.IsVerify).Select(GetEntryName)],
+                entries: image.Items.AsValueEnumerable().Where(item => !item.IsVerify).Select(GetEntryName).ToArray(),
                 metadata: new Dictionary<string, string>
                 {
                     ["MagicOffset"] = "8",
@@ -138,18 +140,19 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             await VerifyImageAsync(filePath, image, verifyPartitionHashes: true, cancellationToken).ConfigureAwait(false);
 
             var selected = options.CreateSelectedEntrySet();
-            var payloadItems = image.Items.Where(item => !item.IsVerify &&
+            var payloadItems = image.Items.AsValueEnumerable().Where(item => !item.IsVerify &&
                 (selected is null || selected.Contains(GetEntryName(item)))).ToArray();
             if (selected is not null)
             {
-                var missing = selected.Except(payloadItems.Select(GetEntryName), StringComparer.OrdinalIgnoreCase).ToArray();
+                var missing = selected.AsValueEnumerable()
+                    .Except(payloadItems.AsValueEnumerable().Select(GetEntryName), StringComparer.OrdinalIgnoreCase).ToArray();
                 if (missing.Length > 0)
                 {
                     throw new InvalidDataException($"AMLogic entries were not found: {string.Join(", ", missing)}.");
                 }
             }
 
-            var outputs = payloadItems.Select(item =>
+            var outputs = payloadItems.AsValueEnumerable().Select(item =>
             {
                 if (item.Size > options.MaximumOutputBytes)
                 {
@@ -159,7 +162,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 return (Item: item, Path: FileExtraction.ResolvePath(outputDirectory, GetEntryName(item)));
             }).ToArray();
 
-            if (!options.Overwrite && outputs.Any(output => File.Exists(output.Path)))
+            if (!options.Overwrite && outputs.AsValueEnumerable().Any(output => File.Exists(output.Path)))
             {
                 throw new IOException("One or more AMLogic output files already exist and overwrite is disabled.");
             }
@@ -178,7 +181,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
 
             return FirmwareOpResult.Ok(
                 $"Extracted {outputs.Length} AMLogic items after CRC and VERIFY validation.",
-                entries: [.. outputs.Select(output => GetEntryName(output.Item))]);
+                entries: outputs.AsValueEnumerable().Select(output => GetEntryName(output.Item)).ToArray());
         }
         catch (OperationCanceledException)
         {
@@ -233,6 +236,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 ? []
                 : new(options.VerifiedEntries, StringComparer.OrdinalIgnoreCase);
             var sources = Directory.EnumerateFiles(inputPath, "*", SearchOption.TopDirectoryOnly)
+                .AsValueEnumerable()
                 .Where(path => !Path.GetFileName(path).Equals("image.cfg", StringComparison.OrdinalIgnoreCase))
                 .Order(StringComparer.Ordinal)
                 .Select(path => CreateFileSource(path, verified.Contains(Path.GetFileName(path))))
@@ -242,7 +246,8 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 throw new InvalidDataException("AMLogic pack input contains no items.");
             }
 
-            var unknownVerified = verified.Except(sources.Select(GetEntryName), StringComparer.OrdinalIgnoreCase).ToArray();
+            var unknownVerified = verified.AsValueEnumerable()
+                .Except(sources.AsValueEnumerable().Select(GetEntryName), StringComparer.OrdinalIgnoreCase).ToArray();
             if (unknownVerified.Length > 0)
             {
                 throw new InvalidDataException($"AMLogic verified entries were not found: {string.Join(", ", unknownVerified)}.");
@@ -260,7 +265,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
 
             return FirmwareOpResult.Ok(
                 $"Packed {sources.Length} AMLogic items as v{(uint)options.Version} with {options.Alignment}-byte alignment.",
-                entries: [.. sources.Select(GetEntryName)]);
+                entries: sources.AsValueEnumerable().Select(GetEntryName).ToArray());
         }
         catch (OperationCanceledException)
         {
@@ -296,16 +301,16 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             ValidatePackOptions(options);
             var image = await ParseAsync(inputPath, cancellationToken).ConfigureAwait(false);
             await VerifyImageAsync(inputPath, image, verifyPartitionHashes: true, cancellationToken).ConfigureAwait(false);
-            var verifiedSubTypes = image.Items.Where(item => item.IsVerify).Select(item => item.SubType)
+            var verifiedSubTypes = image.Items.AsValueEnumerable().Where(item => item.IsVerify).Select(item => item.SubType)
                 .ToHashSet(StringComparer.Ordinal);
-            var sources = image.Items.Where(item => !item.IsVerify)
+            var sources = image.Items.AsValueEnumerable().Where(item => !item.IsVerify)
                 .Select(item => new AmlogicSource(inputPath, item.Offset, item.Size, item.MainType, item.SubType,
                     verifiedSubTypes.Contains(item.SubType)))
                 .ToArray();
             await WriteImageAsync(sources, outputPath, options, cancellationToken).ConfigureAwait(false);
             return FirmwareOpResult.Ok(
                 $"Converted AMLogic v{(uint)image.Version} to v{(uint)options.Version} with {options.Alignment}-byte alignment.",
-                entries: [.. sources.Select(GetEntryName)]);
+                entries: sources.AsValueEnumerable().Select(GetEntryName).ToArray());
         }
         catch (OperationCanceledException)
         {
@@ -457,7 +462,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             FileExtraction.ValidateRange(item.Offset, item.Size, image.Length, $"AMLogic item '{GetEntryName(item)}'");
         }
 
-        var ranges = image.Items.OrderBy(item => item.Offset).ThenBy(item => item.Size).ToArray();
+        var ranges = image.Items.AsValueEnumerable().OrderBy(item => item.Offset).ThenBy(item => item.Size).ToArray();
         for (var index = 1; index < ranges.Length; index++)
         {
             var previous = ranges[index - 1];
@@ -482,10 +487,11 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             return;
         }
 
-        var payloadBySubType = image.Items.Where(item => !item.IsVerify)
+        var payloadBySubType = image.Items.AsValueEnumerable().Where(item => !item.IsVerify)
             .GroupBy(item => item.SubType, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        foreach (var verifyItem in image.Items.Where(item => item.IsVerify))
+        var verifyItems = image.Items.AsValueEnumerable().Where(item => item.IsVerify).ToArray();
+        foreach (var verifyItem in verifyItems)
         {
             if (verifyItem.Size != VerifyDataSize)
             {
@@ -522,7 +528,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             throw new InvalidDataException("AMLogic input item count is outside the limit.");
         }
 
-        var itemCount = checked(sources.Count + sources.Count(source => source.Verify));
+        var itemCount = checked(sources.Count + sources.AsValueEnumerable().Count(source => source.Verify));
         if (itemCount > MaximumItems)
         {
             throw new InvalidDataException("AMLogic input item count is outside the limit after VERIFY records are added.");
@@ -583,7 +589,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 if (item.IsVerify)
                 {
                     var digest = hashes[item.Source.SubType];
-                    var text = Encoding.ASCII.GetBytes($"sha1sum {Convert.ToHexStringLower(digest)}");
+                    var text = Utf8String.Format($"sha1sum {Convert.ToHexStringLower(digest)}");
                     await output.WriteAsync(text, cancellationToken).ConfigureAwait(false);
                     crcState.Append(text);
                     var padding = VerifyDataSize - text.Length;

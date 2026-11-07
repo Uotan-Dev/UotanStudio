@@ -14,6 +14,7 @@
     <PackageReference Include="LTRData.DiscUtils.Fat" />
     <PackageReference Include="Sdcb.SimdCodecs" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="Utf8StringInterpolation" />
     <PackageReference Include="YamlDotNet" />
     <!-- Value-enumerable LINQ over the per-class/per-inode arrays the Smali and EROFS writers walk. -->
     <PackageReference Include="ZLinq" />

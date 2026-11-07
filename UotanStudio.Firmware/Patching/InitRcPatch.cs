@@ -1,4 +1,5 @@
 using System.Text;
+using ZLinq;
 
 namespace UotanStudio.Firmware.Patching;
 
@@ -102,17 +103,47 @@ public static partial class InitRcPatch
             throw new InvalidDataException("Header argument editing requires exactly one selected section.");
         }
         var wordIndex = argumentIndex + 1;
-        var encoded = value.Length == 0 ? "\"\"" : string.Concat(value.Select(character => character switch
+        string encoded;
+        if (value.Length == 0)
         {
-            '\n' => "\\n",
-            '\r' => "\\r",
-            '\t' => "\\t",
-            ' ' => "\\ ",
-            '\\' => "\\\\",
-            '"' => "\\\"",
-            '#' => "\\#",
-            _ => character.ToString()
-        }));
+            encoded = "\"\"";
+        }
+        else
+        {
+            var escaped = new StringBuilder(value.Length);
+            foreach (var character in value)
+            {
+                switch (character)
+                {
+                    case '\n':
+                        escaped.Append("\\n");
+                        break;
+                    case '\r':
+                        escaped.Append("\\r");
+                        break;
+                    case '\t':
+                        escaped.Append("\\t");
+                        break;
+                    case ' ':
+                        escaped.Append("\\ ");
+                        break;
+                    case '\\':
+                        escaped.Append("\\\\");
+                        break;
+                    case '"':
+                        escaped.Append("\\\"");
+                        break;
+                    case '#':
+                        escaped.Append("\\#");
+                        break;
+                    default:
+                        escaped.Append(character);
+                        break;
+                }
+            }
+
+            encoded = escaped.ToString();
+        }
         var output = new StringBuilder();
         var position = 0;
         foreach (var line in matches)
@@ -189,9 +220,9 @@ public static partial class InitRcPatch
             throw new InvalidDataException("Init header does not match the expected old source text.");
         }
         var desired = supplied[0].Header.Words;
-        if (Parse(text, token).Any(section => section.Header.Start != selected.Start
+        if (Parse(text, token).AsValueEnumerable().Any(section => section.Header.Start != selected.Start
             && section.Header.Words[0] == desired[0]
-            && (kind == InitRcSection.Action ? section.Header.Words.Skip(1).SequenceEqual(desired.Skip(1))
+            && (kind == InitRcSection.Action ? section.Header.Words.AsSpan(1).SequenceEqual(desired.AsSpan(1))
                 : section.Header.Words[1] == desired[1])))
         {
             throw new InvalidDataException("The new init header identity conflicts with another section.");
@@ -235,8 +266,8 @@ public static partial class InitRcPatch
         }
         var desired = supplied[0];
         var header = desired.Header.Words;
-        var existing = Parse(text, token).Where(section => section.Header.Words[0] == header[0]
-            && (header[0] == "on" ? section.Header.Words.Skip(1).SequenceEqual(header.Skip(1))
+        var existing = Parse(text, token).AsValueEnumerable().Where(section => section.Header.Words[0] == header[0]
+            && (header[0] == "on" ? section.Header.Words.AsSpan(1).SequenceEqual(header.AsSpan(1))
                 : section.Header.Words[1] == header[1])).ToArray();
         if (existing.Length > 1)
         {
@@ -245,8 +276,9 @@ public static partial class InitRcPatch
         if (existing.Length == 1)
         {
             var current = existing[0];
-            if (!current.Header.Words.SequenceEqual(header) || current.Body.Count != desired.Body.Count
-                || current.Body.Where((line, index) => !line.Words.SequenceEqual(desired.Body[index].Words)).Any())
+            if (!current.Header.Words.AsSpan().SequenceEqual(header) || current.Body.Count != desired.Body.Count
+                || current.Body.AsValueEnumerable()
+                    .Where((line, index) => !line.Words.AsSpan().SequenceEqual(desired.Body[index].Words)).Any())
             {
                 throw new InvalidDataException("An existing init section has different header arguments or ordered body statements.");
             }
@@ -320,8 +352,8 @@ public static partial class InitRcPatch
             anchorWords = anchors[0].Words;
         }
         var headers = Select(text, kind, selector, "", expectedSections, expectedSections, token)
-            .Select(header => header.Start).ToHashSet();
-        var sections = Parse(text, token).Where(section => headers.Contains(section.Header.Start));
+            .AsValueEnumerable().Select(header => header.Start).ToHashSet();
+        var sections = Parse(text, token).AsValueEnumerable().Where(section => headers.Contains(section.Header.Start));
         var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var output = new StringBuilder();
         var position = 0;
@@ -332,15 +364,15 @@ public static partial class InitRcPatch
             Statement? anchorLine = null;
             if (placement != InitRcInsertion.End)
             {
-                var anchors = section.Body.Where(line => line.Words.SequenceEqual(anchorWords)).ToArray();
+                var anchors = section.Body.AsValueEnumerable().Where(line => line.Words.AsSpan().SequenceEqual(anchorWords)).ToArray();
                 if (anchors.Length != 1)
                 {
                     throw new InvalidDataException("Each selected section must contain exactly one matching anchor statement.");
                 }
                 anchorLine = anchors[0];
             }
-            var matches = section.Body.Where(line => line.Words.Length > identityArguments
-                && line.Words.Take(identityArguments + 1).SequenceEqual(desired.Take(identityArguments + 1))).ToArray();
+            var matches = section.Body.AsValueEnumerable().Where(line => line.Words.Length > identityArguments
+                && line.Words.AsSpan(0, identityArguments + 1).SequenceEqual(desired.AsSpan(0, identityArguments + 1))).ToArray();
             if (matches.Length > 1 || matches.Length == 1 && !matches[0].Words.SequenceEqual(desired))
             {
                 throw new InvalidDataException("Existing init statement identity is duplicated or has different arguments.");
@@ -404,7 +436,8 @@ public static partial class InitRcPatch
     /// <para><paramref name="token"/> 已发出取消信号。</para></exception>
     public static IReadOnlyList<string> Read(string text, InitRcSection kind, string selector, string directive,
         int expectedSections, int expectedMatches, CancellationToken token)
-        => [.. Select(text, kind, selector, directive, expectedSections, expectedMatches, token).Select(line => text[line.Start..line.End])];
+        => Select(text, kind, selector, directive, expectedSections, expectedMatches, token)
+            .AsValueEnumerable().Select(line => text[line.Start..line.End]).ToArray();
 
     /// <summary>Replaces or deletes matching body statements; headers are read-only in this API.
     /// <para>替换或删除匹配的正文语句；在本 API 中段头只能读取。</para></summary>
@@ -503,21 +536,37 @@ public static partial class InitRcPatch
         {
             throw new InvalidDataException("Selector must contain one service name, one import path, or one action trigger expression.");
         }
-        if (directive.Length > 16384 || directive.Any(char.IsWhiteSpace) || directive.Contains('\0'))
+        if (directive.Length > 16384 || ContainsWhitespace(directive) || directive.Contains('\0'))
         {
             throw new InvalidDataException("Directive must be a single literal name or empty for a header query.");
         }
         var keyword = kind switch { InitRcSection.Service => "service", InitRcSection.Action => "on", _ => "import" };
-        var sections = Parse(text, token).Where(section => section.Header.Words[0] == keyword
+        var sections = Parse(text, token).AsValueEnumerable().Where(section => section.Header.Words[0] == keyword
             && (kind == InitRcSection.Action
-                ? section.Header.Words.Skip(1).SequenceEqual(selection[0].Words)
+                ? section.Header.Words.AsSpan(1).SequenceEqual(selection[0].Words)
                 : section.Header.Words[1] == selection[0].Words[0])).ToArray();
         if (sections.Length != expectedSections)
         {
             throw new InvalidDataException($"Expected {expectedSections} init sections, found {sections.Length}.");
         }
-        var matches = sections.SelectMany(section => directive.Length == 0
-            ? [section.Header] : section.Body.Where(line => line.Words[0] == directive)).ToList();
+        var matches = new List<Statement>();
+        foreach (var section in sections)
+        {
+            if (directive.Length == 0)
+            {
+                matches.Add(section.Header);
+                continue;
+            }
+
+            foreach (var line in section.Body)
+            {
+                if (line.Words[0] == directive)
+                {
+                    matches.Add(line);
+                }
+            }
+        }
+
         if (matches.Count != expectedMatches)
         {
             throw new InvalidDataException($"Expected {expectedMatches} init statements, found {matches.Count}.");
@@ -526,6 +575,19 @@ public static partial class InitRcPatch
     }
 
     private static bool IsHeader(string word) => word is "service" or "on" or "import";
+
+    private static bool ContainsWhitespace(string value)
+    {
+        foreach (var character in value)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static List<Section> Parse(string text, CancellationToken token)
     {

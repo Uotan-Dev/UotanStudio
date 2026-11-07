@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
 using UotanStudio.Firmware.FileSystem.Metadata;
+using ZLinq;
 
 namespace UotanStudio.Firmware.FileSystem.Ext4;
 
@@ -476,7 +477,7 @@ public sealed class Ext4Parser : IDisposable
         var entries = ListFiles();
         var totalCount = entries.Count;
         var hostPaths = new Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
-        var totalBytes = entries.Where(e => e.Kind != Ext4EntryKind.Directory
+        var totalBytes = entries.AsValueEnumerable().Where(e => e.Kind != Ext4EntryKind.Directory
                 && (e.Kind == Ext4EntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
             .Sum(e => e.Kind == Ext4EntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
                 : (e.Mode & 0xF000) == 0x8000 ? e.Size : 0L);

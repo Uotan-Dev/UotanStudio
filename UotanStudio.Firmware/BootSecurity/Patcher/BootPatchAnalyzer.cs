@@ -6,6 +6,7 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 using UotanStudio.Firmware.Core.Magic;
+using ZLinq;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
@@ -36,9 +37,10 @@ public static class BootPatchAnalyzer
         stream.Position = 0;
         using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
         var assets = new List<KernelSuKmiAsset>();
-        foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
+        var embedded = zip.Entries.AsValueEnumerable().Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
             || e.Name.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase)
-            || e.Name.EndsWith("libsu.so", StringComparison.OrdinalIgnoreCase)))
+            || e.Name.EndsWith("libsu.so", StringComparison.OrdinalIgnoreCase)).ToArray();
+        foreach (var entry in embedded)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try { assets.AddRange(KernelSuEmbeddedExtractor.ExtractDetailed(await ReadBoundedAsync(entry.Open(), cancellationToken).ConfigureAwait(false))); }
@@ -244,29 +246,29 @@ public static class BootPatchAnalyzer
         }
 
         using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
-        var names = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
-        var abis = names.Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var hasMagisk = names.Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagisk.", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagisk32", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagisk64", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagiskpolicy", StringComparison.OrdinalIgnoreCase));
-        var hasKsu = names.Any(n => n.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("libksud", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("ksuinit", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("kernelsu.ko", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("ksu.ko", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("susfs.ko", StringComparison.OrdinalIgnoreCase));
-        var hasApatch = names.Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        var hasKpatchLibrary = names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        var hasBootPatchScript = names.Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+        var names = zip.Entries.AsValueEnumerable().Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
+        var abis = names.AsValueEnumerable().Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var hasMagisk = names.AsValueEnumerable().Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.Contains("libmagisk.", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.Contains("libmagisk32", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.Contains("libmagisk64", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.Contains("libmagiskpolicy", StringComparison.OrdinalIgnoreCase));
+        var hasKsu = names.AsValueEnumerable().Any(n => n.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("libksud", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("ksuinit", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("kernelsu.ko", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("ksu.ko", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("susfs.ko", StringComparison.OrdinalIgnoreCase));
+        var hasApatch = names.AsValueEnumerable().Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
+        var hasKpatchLibrary = names.AsValueEnumerable().Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
+        var hasBootPatchScript = names.AsValueEnumerable().Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
         if (!hasApatch && hasBootPatchScript)
         {
-            var script = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+            var script = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (script is not null)
             {
                 using var reader = new StreamReader(script.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: false);
@@ -277,19 +279,19 @@ public static class BootPatchAnalyzer
             }
         }
         var hasApatchScript = hasKpatchLibrary || (hasBootPatchScript && hasApatch);
-        var hasKernelPatchImage = names.Any(n => n.Equals("assets/kpimg", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("/kpm/kpimg", StringComparison.OrdinalIgnoreCase));
+        var hasKernelPatchImage = names.AsValueEnumerable().Any(n => n.Equals("assets/kpimg", StringComparison.OrdinalIgnoreCase))
+            || names.AsValueEnumerable().Any(n => n.EndsWith("/kpm/kpimg", StringComparison.OrdinalIgnoreCase));
         var kind = !hasKsu && !hasMagisk && hasKernelPatchImage && !hasApatchScript
             ? BootPatchKind.KernelPatch
             : hasApatch ? BootPatchKind.APatch : hasKsu ? BootPatchKind.KernelSu : hasMagisk ? BootPatchKind.Magisk : BootPatchKind.Unknown;
-        if (!hasApatch && !hasKsu && !hasMagisk && names.Any(IsLegacyMagiskEntry))
+        if (!hasApatch && !hasKsu && !hasMagisk && names.AsValueEnumerable().Any(IsLegacyMagiskEntry))
         {
             kind = BootPatchKind.Magisk;
         }
         var kmiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (kind == BootPatchKind.Unknown)
         {
-            var kernelEntry = zip.Entries.FirstOrDefault(e => GkiKernelEntryNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase));
+            var kernelEntry = zip.Entries.AsValueEnumerable().FirstOrDefault(e => GkiKernelEntryNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase));
             if (kernelEntry is not null)
             {
                 var bytes = await ReadBoundedAsync(kernelEntry.Open(), cancellationToken).ConfigureAwait(false);
@@ -307,9 +309,10 @@ public static class BootPatchAnalyzer
         var unsupportedReason = ResolveUnsupportedReason(kind, names);
         if (kind == BootPatchKind.KernelSu)
         {
-            foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
+            var ksudEntries = zip.Entries.AsValueEnumerable().Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
                 || e.Name.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase)
-                || e.Name.EndsWith("libsu.so", StringComparison.OrdinalIgnoreCase)))
+                || e.Name.EndsWith("libsu.so", StringComparison.OrdinalIgnoreCase)).ToArray();
+            foreach (var entry in ksudEntries)
             {
                 try
                 {
@@ -319,14 +322,15 @@ public static class BootPatchAnalyzer
                 }
                 catch { }
             }
-            foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)))
+            var koEntries = zip.Entries.AsValueEnumerable().Where(e => e.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)).ToArray();
+            foreach (var entry in koEntries)
                 if (KernelSuEmbeddedExtractor.TryGetKmi(entry.FullName, out var kmi)) kmiNames.Add(kmi!);
         }
         string? version = null;
         var supportedOptions = new HashSet<BootPatchOption>();
         if (kind == BootPatchKind.Magisk)
         {
-            var util = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("util_functions.sh", StringComparison.OrdinalIgnoreCase));
+            var util = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("util_functions.sh", StringComparison.OrdinalIgnoreCase));
             if (util is not null)
             {
                 using var reader = new StreamReader(util.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
@@ -334,7 +338,7 @@ public static class BootPatchAnalyzer
                 var match = Regex.Match(body, "(?m)^\\s*MAGISK_VER\\s*=\\s*['\\\"]([^'\\\"]+)", RegexOptions.CultureInvariant);
                 version = match.Success ? match.Groups[1].Value : null;
             }
-            var patchScript = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+            var patchScript = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (patchScript is not null)
             {
                 using var scriptReader = new StreamReader(patchScript.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
@@ -350,7 +354,8 @@ public static class BootPatchAnalyzer
         }
         if (abis.Count == 0)
         {
-            foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith(".so", StringComparison.OrdinalIgnoreCase) || e.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)))
+            var nativeEntries = zip.Entries.AsValueEnumerable().Where(e => e.Name.EndsWith(".so", StringComparison.OrdinalIgnoreCase) || e.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)).ToArray();
+            foreach (var entry in nativeEntries)
             {
                 await using var es = entry.Open();
                 var headerBuffer = new byte[128];
@@ -365,7 +370,7 @@ public static class BootPatchAnalyzer
             }
         }
         return new(kind, abis, version, kind == BootPatchKind.Magisk ? supportedOptions : null,
-            [.. kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)],
+            kmiNames.AsValueEnumerable().OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
             kind == BootPatchKind.KernelPatch || hasKernelPatchImage, unsupportedReason);
     }
 
@@ -374,12 +379,12 @@ public static class BootPatchAnalyzer
         if (kind == BootPatchKind.Magisk)
         {
             if (MagiskPackageLayout.HasRuntimePayload(names)) return null;
-            return names.Any(IsLegacyMagiskEntry)
+            return names.AsValueEnumerable().Any(IsLegacyMagiskEntry)
                 ? "The Magisk package uses the v21.4 and earlier ZIP layout; select a v22.0 or newer APK to patch a boot image."
                 : "The Magisk package carries no installable runtime payload (libmagiskinit, libmagisk32/libmagisk64 or libmagisk), so the boot image cannot be patched from it.";
         }
 
-        if (kind == BootPatchKind.Unknown && names.Any(IsSukiSuManagerOnlyEntry))
+        if (kind == BootPatchKind.Unknown && names.AsValueEnumerable().Any(IsSukiSuManagerOnlyEntry))
         {
             return "The SukiSU build is a manager-only bundle without a boot-image payload; select a build that ships libksud, ksuinit, .ko modules or kpimg.";
         }

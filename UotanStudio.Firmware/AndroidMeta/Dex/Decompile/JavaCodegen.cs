@@ -145,7 +145,7 @@ internal static class JavaCodegen
             for (var i = 0; i < ctx.ParameterTypes.Length; i++)
             {
                 if (i > 0) sb.Append(", ");
-                sb.Append(ctx.ParameterTypes[i]).Append(' ').Append(ctx.IsStatic ? $"p{i}" : $"p{i + 1}");
+                sb.Append(ctx.ParameterTypes[i]).Append(' ').Append('p').Append(ctx.IsStatic ? i : i + 1);
             }
 
             sb.Append(')');
