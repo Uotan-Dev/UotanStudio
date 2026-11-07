@@ -51,7 +51,7 @@ public sealed partial class MtkSession
     /// 此处复现的每个自定义码都由本客户端的二阶段扩展发出，而该扩展仅在 DA2 启动后可达，
     /// 因此阶段一会被拒绝而不是被尝试。
     /// </remarks>
-    /// <returns>The live XFlash channel. 当前存活的 XFlash 通道。</returns>
+    /// <returns>The live XFlash channel. <para>当前存活的 XFlash 通道。</para></returns>
     /// <exception cref="InvalidOperationException">DA2 has not started, the transport is disconnected
     /// or the channel is gone. <para>DA2 未启动、传输已断开或通道已失效。</para></exception>
     private MtkXFlashChannel RequireXFlashSecurityCustomStage()
@@ -74,8 +74,8 @@ public sealed partial class MtkSession
     /// status, writes the control code and waits for a second status before any payload exchange.
     /// 这里与分发器一致：先写器件控制命令并等待状态，再写控制码并等待第二个状态，之后才交换载荷。
     /// </remarks>
-    /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
-    /// <param name="controlCode">The control code to select. 要选择的控制码。</param>
+    /// <param name="channel">The live XFlash channel. <para>当前存活的 XFlash 通道。</para></param>
+    /// <param name="controlCode">The control code to select. <para>要选择的控制码。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     private async Task SendXFlashSecurityControlCodeAsync(MtkXFlashChannel channel, uint controlCode,
@@ -90,12 +90,12 @@ public sealed partial class MtkSession
 
     /// <summary>Reads one protocol payload frame and rejects any other frame type.
     /// <para>读取一个协议载荷帧，并拒绝其他帧类型。</para></summary>
-    /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
+    /// <param name="channel">The live XFlash channel. <para>当前存活的 XFlash 通道。</para></param>
     /// <param name="maximumPayload">The ceiling checked before the frame is buffered.
     /// <para>在缓存帧之前校验的上限。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The payload bytes exactly as reported. 按上报原样返回的载荷字节。</returns>
+    /// <returns>The payload bytes exactly as reported. <para>按上报原样返回的载荷字节。</para></returns>
     /// <exception cref="MtkProtocolException">The frame is not a protocol frame.
     /// <para>该帧不是协议帧。</para></exception>
     private async Task<byte[]> ReadXFlashSecurityPayloadAsync(MtkXFlashChannel channel, int maximumPayload,
@@ -117,11 +117,11 @@ public sealed partial class MtkSession
     /// little-endian address frame, one payload frame and a completion status.
     /// 帧结构即已记载的寄存器读取：器件控制选择器、控制码、一个小端地址帧、一个载荷帧与完成状态。
     /// </remarks>
-    /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
-    /// <param name="address">The register address. 寄存器地址。</param>
+    /// <param name="channel">The live XFlash channel. <para>当前存活的 XFlash 通道。</para></param>
+    /// <param name="address">The register address. <para>寄存器地址。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The four reply bytes. 四个回复字节。</returns>
+    /// <returns>The four reply bytes. <para>四个回复字节。</para></returns>
     /// <exception cref="MtkProtocolException">The reply is not the documented doubleword width.
     /// <para>回复不是已记载的双字宽度。</para></exception>
     private async Task<byte[]> ReadXFlashSecurityRegisterAsync(MtkXFlashChannel channel, uint address,
@@ -148,10 +148,10 @@ public sealed partial class MtkSession
     /// reads four big-endian value bytes followed by a single acknowledge byte.
     /// 已记载的交互写入寄存器读命令字节与大端地址，然后读取 4 个大端值字节与 1 个确认字节。
     /// </remarks>
-    /// <param name="address">The register address. 寄存器地址。</param>
+    /// <param name="address">The register address. <para>寄存器地址。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The register value. 寄存器取值。</returns>
+    /// <returns>The register value. <para>寄存器取值。</para></returns>
     /// <exception cref="MtkProtocolException">The acknowledgement byte is missing or negative.
     /// <para>确认字节缺失或为否定确认。</para></exception>
     private async Task<uint> ReadLegacySecurityRegisterAsync(uint address, CancellationToken cancellationToken)
@@ -185,8 +185,8 @@ public sealed partial class MtkSession
     /// 本客户端精确选择名为 <c>seccfg</c> 的条目，不存在时中止；共用的解析器另有歧义检查，因此重名会被拒绝，
     /// 而不是读取首个匹配项。
     /// </remarks>
-    /// <param name="table">The validated partition table. 已校验的分区表。</param>
-    /// <returns>The single entry carrying the documented name. 唯一携带该已记载名称的条目。</returns>
+    /// <param name="table">The validated partition table. <para>已校验的分区表。</para></param>
+    /// <returns>The single entry carrying the documented name. <para>唯一携带该已记载名称的条目。</para></returns>
     /// <exception cref="KeyNotFoundException">No entry is named <c>seccfg</c>.
     /// <para>没有条目名为 <c>seccfg</c>。</para></exception>
     /// <exception cref="InvalidDataException">More than one entry carries the name.

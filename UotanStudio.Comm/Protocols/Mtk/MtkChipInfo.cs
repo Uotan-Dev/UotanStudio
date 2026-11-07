@@ -68,8 +68,8 @@ public enum MtkXFlashRawControlCode
 /// <para>器件控制内存信息查询上报的一个 RAM 区域。</para></summary>
 /// <param name="Type">The region type as reported; zero means the region is treated as
 /// absent. <para>按上报原样保留的区域类型；0 表示该区域被视为不存在。</para></param>
-/// <param name="BaseAddress">The region base address. 区域基地址。</param>
-/// <param name="Size">The region size in bytes. 区域字节大小。</param>
+/// <param name="BaseAddress">The region base address. <para>区域基地址。</para></param>
+/// <param name="Size">The region size in bytes. <para>区域字节大小。</para></param>
 public sealed record MtkXFlashRamRegion(ulong Type, ulong BaseAddress, ulong Size);
 
 /// <summary>The SRAM and DRAM regions reported by the device-control RAM-info query.
@@ -81,8 +81,8 @@ public sealed record MtkXFlashRamRegion(ulong Type, ulong BaseAddress, ulong Siz
 /// <para>回复为六个小端双字或六个小端四字，按 SRAM 类型、SRAM 基址、SRAM 大小、DRAM 类型、DRAM 基址、
 /// DRAM 大小解码。其他回复宽度在这里都会被拒绝，而不是被静默截断。</para>
 /// </remarks>
-/// <param name="Sram">The SRAM region. SRAM 区域。</param>
-/// <param name="Dram">The DRAM region. DRAM 区域。</param>
+/// <param name="Sram">The SRAM region. <para>SRAM 区域。</para></param>
+/// <param name="Dram">The DRAM region. <para>DRAM 区域。</para></param>
 /// <param name="ReplyHex">The exact reply bytes as uppercase hex.
 /// <para>回复字节的大写十六进制表示。</para></param>
 public sealed record MtkXFlashRamInfo(MtkXFlashRamRegion Sram, MtkXFlashRamRegion Dram, string ReplyHex)

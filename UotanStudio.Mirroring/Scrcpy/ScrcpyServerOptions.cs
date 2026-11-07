@@ -117,8 +117,8 @@ public sealed class ScrcpyServerOptions
     /// </value>
     public bool Control { get; init; } = true;
 
-    /// <summary>是否把设备复制操作自动同步到客户端剪贴板。
-    /// <para>Whether the device automatically pushes clipboard copies to the client.</para></summary>
+    /// <summary>Whether the device automatically pushes clipboard copies to the client.
+    /// <para>是否把设备复制操作自动同步到客户端剪贴板。</para></summary>
     /// <value>
     /// Defaults to <see langword="true"/>, matching the scrcpy server default; the option is only sent when
     /// disabled so the default argument list stays unchanged.

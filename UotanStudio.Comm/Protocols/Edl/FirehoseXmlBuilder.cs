@@ -402,8 +402,8 @@ public static partial class FirehoseXmlBuilder
     /// Escapes XML special characters in the specified value.
     /// <para>转义指定值中的 XML 特殊字符。</para>
     /// </summary>
-    /// <param name="value">The value to escape. 待转义的值。</param>
-    /// <returns>The escaped value. 转义后的值。</returns>
+    /// <param name="value">The value to escape. <para>待转义的值。</para></param>
+    /// <returns>The escaped value. <para>转义后的值。</para></returns>
     private static string EscapeXml(string? value) => value == null ? string.Empty : System.Security.SecurityElement.Escape(value) ?? value;
 }
 

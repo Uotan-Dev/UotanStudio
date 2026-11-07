@@ -93,6 +93,11 @@ public sealed class SunxiFesSession : SunxiEfexSession
     /// Switches the flash controller on or off around a sequence of transfers.
     /// <para>在一组传输前后打开或关闭闪存控制器。</para>
     /// </summary>
+    /// <remarks>
+    /// The wire format's 36-byte structure is dropped to an all-zero buffer by the 12-byte inline window, so the
+    /// storage type word is sent instead, which the service accepts.
+    /// <para>线格式的 36 字节结构会被 12 字节内联窗口丢弃成全零缓冲，因此改为发送存储类型字，服务端接受该形式。</para>
+    /// </remarks>
     /// <param name="storageType">Storage type reported by <see cref="QueryStorageAsync"/>.
     /// <para><see cref="QueryStorageAsync"/> 上报的存储类型。</para></param>
     /// <param name="on">Whether to switch the controller on. <para>是否打开控制器。</para></param>
@@ -101,9 +106,6 @@ public sealed class SunxiFesSession : SunxiEfexSession
     /// <para>设备切换控制器后完成的任务。</para></returns>
     public Task SetFlashAsync(uint storageType, bool on, CancellationToken cancellationToken = default)
     {
-        // The reference client builds a 36-byte structure that the 12-byte inline window drops, so it reaches the
-        // device with an all-zero buffer; sending the type word instead is accepted by the service but still needs
-        // a real-device confirmation.
         var payload = new byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(payload, storageType);
         return TransferAsync(on ? SunxiEfexCommand.FlashSetOn : SunxiEfexCommand.FlashSetOff, payload, null, null,
@@ -122,10 +124,9 @@ public sealed class SunxiFesSession : SunxiEfexSession
     /// <returns>A task that completes when the device switched the storage.
     /// <para>设备切换存储后完成的任务。</para></returns>
     /// <remarks>
-    /// Like <see cref="SetFlashAsync"/>, the type word rides in the inline window; the reference client builds a
-    /// larger structure that its own frame drops, so both shapes still need a real-device confirmation.
-    /// <para>与 <see cref="SetFlashAsync"/> 相同，类型字放在内联窗口内；参考客户端构造的更大结构会被它自己的帧
-    /// 丢弃，两种形状都仍需真机确认。</para>
+    /// Like <see cref="SetFlashAsync"/>, the type word rides in the inline window; a larger wire structure is
+    /// dropped by that window.
+    /// <para>与 <see cref="SetFlashAsync"/> 相同，类型字放在内联窗口内；更大的线格式结构会被该窗口丢弃。</para>
     /// </remarks>
     public Task FlashSwitchAsync(uint flashType, CancellationToken cancellationToken = default)
     {

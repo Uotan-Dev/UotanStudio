@@ -74,7 +74,7 @@ public static class MtkSecCfg
 
     /// <summary>Selects the layout from the image header without decoding the body.
     /// <para>仅依据镜像头部选择布局，不解码主体。</para></summary>
-    /// <param name="image">The exact partition bytes. 分区原始字节。</param>
+    /// <param name="image">The exact partition bytes. <para>分区原始字节。</para></param>
     /// <returns>The detected layout, or <see langword="null"/> when neither documented header
     /// matches. <para>检测到的布局；两个已记载头部都不匹配时为 <see langword="null"/>。</para></returns>
     public static MtkSecCfgFormat? DetectFormat(ReadOnlySpan<byte> image)
@@ -201,7 +201,7 @@ public static class MtkSecCfg
     /// <para>双字取值及其顺序、摘要位置与补零由版本 4 布局固定。只有存储摘要已被证实使用软件变换的报告才能被重写，因为其他变体由目标的 SEJ 引擎处理。</para></remarks>
     /// <param name="report">A report decoded by <see cref="TryReadVersion4"/>.
     /// <para>由 <see cref="TryReadVersion4"/> 解码得到的报告。</para></param>
-    /// <param name="intent">The requested state transition. 请求的状态转换。</param>
+    /// <param name="intent">The requested state transition. <para>请求的状态转换。</para></param>
     /// <returns>The padded image, exactly a multiple of <see cref="ImageAlignment"/> bytes.
     /// <para>补白后的镜像，长度恰为 <see cref="ImageAlignment"/> 的整数倍。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="report"/> is null.
@@ -282,7 +282,7 @@ public static class MtkSecCfg
     /// <para>试探顺序为：先软件，再不带遗留启动序列的版本 3 引擎变体、带遗留启动序列的同一变体，最后是第一代引擎变体。</para></remarks>
     /// <param name="image">The exact partition bytes read from the device.
     /// <para>从设备读取的分区原始字节。</para></param>
-    /// <param name="engine">The optional target-driven engine. 可选的目标驱动引擎。</param>
+    /// <param name="engine">The optional target-driven engine. <para>可选的目标驱动引擎。</para></param>
     /// <param name="cancellationToken">Cancellation for every target exchange.
     /// <para>每次目标交换的取消令牌。</para></param>
     /// <returns>The decoded report, or <see langword="null"/> when neither documented header matches or no transform explained the stored hash.
@@ -330,7 +330,7 @@ public static class MtkSecCfg
     /// <para>校验调用方提供的镜像带有已记载的头部之一，且按已记载写入器的方式对齐。</para></summary>
     /// <param name="image">The exact bytes intended for the <c>seccfg</c> partition.
     /// <para>计划写入 <c>seccfg</c> 分区的精确字节。</para></param>
-    /// <returns>The layout the header identifies. 头部标识的布局。</returns>
+    /// <returns>The layout the header identifies. <para>头部标识的布局。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="image"/> is empty, not a multiple of
     /// <see cref="ImageAlignment"/>, or has no documented header.
     /// <para><paramref name="image"/> 为空、不是 <see cref="ImageAlignment"/> 的整数倍，或不含已记载头部。</para></exception>
@@ -349,7 +349,7 @@ public static class MtkSecCfg
     /// <summary>Applies the software integrity transform documented for the version 4 hash and the
     /// version 3 software body.
     /// <para>对版本 4 摘要与版本 3 软件主体应用已记载的软件完整性变换。</para></summary>
-    /// <param name="data">The block-aligned input bytes. 按块对齐的输入字节。</param>
+    /// <param name="data">The block-aligned input bytes. <para>按块对齐的输入字节。</para></param>
     /// <param name="encrypt"><see langword="true"/> to apply the forward transform, <see langword="false"/>
     /// to apply the inverse used by the documented reader.
     /// <para><see langword="true"/> 表示正向变换，<see langword="false"/> 表示已记载读取器使用的逆变换。</para></param>

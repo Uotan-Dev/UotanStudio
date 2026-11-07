@@ -70,8 +70,8 @@ internal sealed class PatchEntry
     /// Decodes the hex string <see cref="Value"/> property into a byte array.
     /// <para>将十六进制字符串 <see cref="Value"/> 属性解码为字节数组。</para>
     /// </summary>
-    /// <returns>The decoded byte array from the hex string value. 从十六进制字符串值解码得到的字节数组。</returns>
-    /// <exception cref="EdlException">Thrown when the hex string is invalid or empty. 十六进制字符串无效或为空时抛出。</exception>
+    /// <returns>The decoded byte array from the hex string value. <para>从十六进制字符串值解码得到的字节数组。</para></returns>
+    /// <exception cref="EdlException">Thrown when the hex string is invalid or empty. <para>十六进制字符串无效或为空时抛出。</para></exception>
     public byte[] GetDecodedValue()
     {
         var hex = (Value ?? string.Empty).Trim();
@@ -108,7 +108,7 @@ internal sealed class PatchEntry
     /// Returns a string representation of the patch entry.
     /// <para>返回 patch 条目的字符串表示。</para>
     /// </summary>
-    /// <returns>A string describing the patch entry. 描述 patch 条目的字符串。</returns>
+    /// <returns>A string describing the patch entry. <para>描述 patch 条目的字符串。</para></returns>
     public override string ToString() =>
         $"Patch[File={Filename}, StartSector={StartSector}, ByteOffset={ByteOffset}, Value={Value}]";
 }

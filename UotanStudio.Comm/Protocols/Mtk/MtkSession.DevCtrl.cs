@@ -73,7 +73,7 @@ public sealed partial class MtkSession
     /// 本实现把该回复保持为不透明字节，因此这里返回并记录精确字节 作为证据而不作解释；回复在分配前被限制在 256
     /// 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -95,7 +95,7 @@ public sealed partial class MtkSession
     /// 本实现解开一个小端双字，并且对该分发器而言异常地不检查完成状态；
     /// 此处保留共享器件控制帧结构的严格状态检查，被拒绝的状态表现为协议 fault。回复在分配前被限制在已记载的 双字宽度。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The reported life-cycle value. 上报的寿命取值。</returns>
+    /// <returns>The reported life-cycle value. <para>上报的寿命取值。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected, the reply was oversized or its width is not one doubleword; the XFlash family faults.
@@ -115,7 +115,7 @@ public sealed partial class MtkSession
     /// reply is bounded to 256 bytes before allocation.
     /// 本实现把该回复保留为原始字节交由主机渲染，因此这里不作任何 日历解释；回复在分配前被限制在 256 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -137,7 +137,7 @@ public sealed partial class MtkSession
     /// PMT，其余取值仅上报 0；此处对无法映射的取值或错误宽度会让家族进入 fault。回复
     /// 在分配前被限制在已记载的双字宽度。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The documented category. 已记载的类别。</returns>
+    /// <returns>The documented category. <para>已记载的类别。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected, the reply was oversized, its width is not one doubleword or the category is unknown; the XFlash family faults.
@@ -182,7 +182,7 @@ public sealed partial class MtkSession
     /// 本实现只定义了该控制码，没有任何调用点或布局说明，因此这里 返回并记录精确字节作为证据；回复在分配前被限制在 256
     /// 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -203,7 +203,7 @@ public sealed partial class MtkSession
     /// 本实现只定义了该控制码，没有任何调用点或布局说明，因此这里 返回并记录精确字节作为证据；回复在分配前被限制在 256
     /// 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -224,7 +224,7 @@ public sealed partial class MtkSession
     /// 本实现只定义了该控制码，没有任何调用点或布局说明，因此这里
     /// 返回并记录精确字节作为证据，不做单位解释；回复在分配前被限制在 256 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -245,7 +245,7 @@ public sealed partial class MtkSession
     /// 处于注释状态并把回复保留为原始字节，因此这里 不猜测任何类型枚举，原样返回精确字节；回复在分配前被限制在
     /// 256 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -266,7 +266,7 @@ public sealed partial class MtkSession
     /// 本实现只定义了该控制码，没有任何调用点或布局说明，因此这里 返回并记录精确字节作为证据；回复在分配前被限制在 256
     /// 字节以内。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply exceeds the bound; the XFlash family faults.
@@ -324,8 +324,8 @@ public sealed partial class MtkSession
 
     /// <summary>Decodes one device-control reply as the UTF-8 text this path renders.
     /// <para>按本路径的渲染方式把一个器件控制回复解码为 UTF-8 文本。</para></summary>
-    /// <param name="reply">The exact reply bytes. 精确的回复字节。</param>
-    /// <returns>The decoded text. 解码后的文本。</returns>
+    /// <param name="reply">The exact reply bytes. <para>精确的回复字节。</para></param>
+    /// <returns>The decoded text. <para>解码后的文本。</para></returns>
     private static string DecodeXFlashText(byte[] reply) => Encoding.UTF8.GetString(reply);
 
     private static MtkPartitionTableCategory DecodeXFlashPartitionTableCategory(byte[] reply)

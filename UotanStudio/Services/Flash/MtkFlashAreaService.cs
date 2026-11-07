@@ -12,9 +12,8 @@ namespace UotanStudio.Services.Flash;
 internal static class MtkFlashAreaService
 {
     /// <summary>
-    /// Walks the whole ordinary storage area the family reported into one file, matching the reference tool's
-    /// <c>rf</c>.
-    /// <para>遍历该家族上报的整片普通存储区域并写入一个文件，对应参考工具的 <c>rf</c>。</para>
+    /// Walks the whole ordinary storage area the family reported into one file.
+    /// <para>遍历该家族上报的整片普通存储区域并写入一个文件。</para>
     /// </summary>
     /// <param name="session">A session whose geometry the named family already discovered. <para>已由该家族发现几何信息的会话。</para></param>
     /// <param name="family">The explicitly selected agent family. <para>显式选定的代理家族，不回退到其他家族。</para></param>
@@ -31,9 +30,9 @@ internal static class MtkFlashAreaService
     }
 
     /// <summary>
-    /// Reads an arbitrary start sector and sector count, matching the reference tool's <c>rs</c>; the sector
+    /// Reads an arbitrary start sector and sector count; the sector
     /// numbers are multiplied by the transfer unit the family reported.
-    /// <para>读取任意起始扇区与扇区数，对应参考工具的 <c>rs</c>；扇区数乘以该家族上报的传输单位。</para>
+    /// <para>读取任意起始扇区与扇区数；扇区数乘以该家族上报的传输单位。</para>
     /// </summary>
     /// <param name="session">A session whose geometry the named family already discovered. <para>已由该家族发现几何信息的会话。</para></param>
     /// <param name="family">The explicitly selected agent family. <para>显式选定的代理家族。</para></param>
@@ -54,9 +53,9 @@ internal static class MtkFlashAreaService
     }
 
     /// <summary>
-    /// Reads by absolute byte offset and length, matching the reference tool's <c>ro</c>; the offset and length
+    /// Reads by absolute byte offset and length; the offset and length
     /// still have to satisfy the family's transfer alignment.
-    /// <para>按绝对字节偏移与长度读取，对应参考工具的 <c>ro</c>；偏移与长度仍须满足该家族的传输对齐。</para>
+    /// <para>按绝对字节偏移与长度读取；偏移与长度仍须满足该家族的传输对齐。</para>
     /// </summary>
     /// <param name="session">A session whose geometry the named family already discovered. <para>已由该家族发现几何信息的会话。</para></param>
     /// <param name="family">The explicitly selected agent family. <para>显式选定的代理家族。</para></param>

@@ -161,7 +161,7 @@ public sealed class RawProgramEntry
     /// Returns a string representation of the raw program entry.
     /// <para>返回 rawprogram 条目的字符串表示。</para>
     /// </summary>
-    /// <returns>A string describing the program entry. 描述 program 条目的字符串。</returns>
+    /// <returns>A string describing the program entry. <para>描述 program 条目的字符串。</para></returns>
     public override string ToString() =>
         $"RawProgram[Label={Label}, File={Filename}, StartSector={StartSector}, Sectors={NumPartitionSectors}]";
 }

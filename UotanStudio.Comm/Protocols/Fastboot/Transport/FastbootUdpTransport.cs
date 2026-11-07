@@ -44,10 +44,10 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// Initializes a new <see cref="FastbootUdpTransport"/> and performs the fastboot UDP handshake.
     /// <para>初始化新的 <see cref="FastbootUdpTransport"/> 并执行 fastboot UDP 握手。</para>
     /// </summary>
-    /// <param name="host">IP address of the device. 设备的 IP 地址。</param>
-    /// <param name="port">UDP port of the fastboot service; defaults to 5554. fastboot 服务的 UDP 端口，默认 5554。</param>
-    /// <param name="timeoutMs">Per-transmission timeout in milliseconds; defaults to 1000. 单次传输超时（毫秒），默认 1000。</param>
-    /// <param name="maxTransmissionAttempts">Maximum transmission attempts per packet; defaults to 10. 每包最大传输尝试次数，默认 10。</param>
+    /// <param name="host">IP address of the device. <para>设备的 IP 地址。</para></param>
+    /// <param name="port">UDP port of the fastboot service; defaults to 5554. <para>fastboot 服务的 UDP 端口，默认 5554。</para></param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds; defaults to 1000. <para>单次传输超时（毫秒），默认 1000。</para></param>
+    /// <param name="maxTransmissionAttempts">Maximum transmission attempts per packet; defaults to 10. <para>每包最大传输尝试次数，默认 10。</para></param>
     public FastbootUdpTransport(string host, int port = 5554, int timeoutMs = 1000, int maxTransmissionAttempts = 10)
     {
         if (string.IsNullOrWhiteSpace(host))
@@ -164,7 +164,7 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
     /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
-    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. 单次传输超时（毫秒）。</param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. <para>单次传输超时（毫秒）。</para></param>
     /// <returns>The number of bytes read. <para>实际读取的字节数。</para></returns>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
     {
@@ -194,8 +194,8 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
     /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
-    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. 单次传输超时（毫秒）。</param>
-    /// <param name="cancellationToken">A cancellation token. 取消令牌。</param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. <para>单次传输超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns>A task that resolves to the number of bytes read. <para>返回实际读取字节数的任务。</para></returns>
     public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
         => Task.Run(() => Read(buffer, offset, length, timeoutMs), cancellationToken);
@@ -207,7 +207,7 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// <param name="data">The data to write. <para>待写入数据。</para></param>
     /// <param name="offset">The offset into <paramref name="data"/> at which to start. <para><paramref name="data"/> 中的起始偏移量。</para></param>
     /// <param name="length">The number of bytes to write. <para>写入字节数。</para></param>
-    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. 单次传输超时（毫秒）。</param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. <para>单次传输超时（毫秒）。</para></param>
     /// <returns>The number of bytes written. <para>实际写入的字节数。</para></returns>
     public long Write(byte[] data, int offset, int length, int timeoutMs)
     {
@@ -233,8 +233,8 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// <param name="data">The data to write. <para>待写入数据。</para></param>
     /// <param name="offset">The offset into <paramref name="data"/> at which to start. <para><paramref name="data"/> 中的起始偏移量。</para></param>
     /// <param name="length">The number of bytes to write. <para>写入字节数。</para></param>
-    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. 单次传输超时（毫秒）。</param>
-    /// <param name="cancellationToken">A cancellation token. 取消令牌。</param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. <para>单次传输超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns>A task that resolves to the number of bytes written. <para>返回实际写入字节数的任务。</para></returns>
     public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
         => Task.Run(() => Write(data, offset, length, timeoutMs), cancellationToken);
@@ -243,8 +243,8 @@ internal sealed class FastbootUdpTransport : ICommTransport
     /// The UDP transport has no byte stream; a <see cref="Stream"/> adapter is not supported.
     /// <para>UDP 传输没有字节流，不支持 <see cref="Stream"/> 适配器。</para>
     /// </summary>
-    /// <returns>A stream adapter over the transport. 传输上的流适配器。</returns>
-    /// <exception cref="NotSupportedException">UDP transports cannot expose a stream. UDP 传输无法提供流。</exception>
+    /// <returns>A stream adapter over the transport. <para>传输上的流适配器。</para></returns>
+    /// <exception cref="NotSupportedException">UDP transports cannot expose a stream. <para>UDP 传输无法提供流。</para></exception>
     public Stream GetStream() => throw new NotSupportedException("Fastboot UDP transport does not support a byte stream.");
 
     /// <summary>

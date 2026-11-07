@@ -99,7 +99,7 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     /// Logs a Message via the <see cref="LogMessage"/> event.
     /// <para>通过 <see cref="LogMessage"/> 事件记录消息。</para>
     /// </summary>
-    /// <param name="msg">The Message to log. 要记录的消息。</param>
+    /// <param name="msg">The Message to log. <para>要记录的消息。</para></param>
     private void Log(string msg) => LogMessage?.Invoke(this, msg);
 
     /// <summary>

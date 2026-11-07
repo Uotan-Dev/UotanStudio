@@ -12,9 +12,9 @@ internal static class PatchParser
     /// Parses a patch XML file from the specified file path.
     /// <para>从指定文件路径解析 patch XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the patch XML file. patch XML 文件路径。</param>
-    /// <returns>A list of <see cref="PatchEntry"/> objects parsed from the file. 从文件中解析的 <see cref="PatchEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the patch XML file. <para>patch XML 文件路径。</para></param>
+    /// <returns>A list of <see cref="PatchEntry"/> objects parsed from the file. <para>从文件中解析的 <see cref="PatchEntry"/> 对象列表。</para></returns>
+    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. <para>文件无法加载或解析时抛出。</para></exception>
     public static List<PatchEntry> Parse(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -41,9 +41,9 @@ internal static class PatchParser
     /// Parses a patch XML from the specified stream.
     /// <para>从指定流解析 patch XML。</para>
     /// </summary>
-    /// <param name="stream">The stream containing the patch XML data. 包含 patch XML 数据的流。</param>
-    /// <returns>A list of <see cref="PatchEntry"/> objects parsed from the stream. 从流中解析的 <see cref="PatchEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when the stream cannot be parsed. 流无法解析时抛出。</exception>
+    /// <param name="stream">The stream containing the patch XML data. <para>包含 patch XML 数据的流。</para></param>
+    /// <returns>A list of <see cref="PatchEntry"/> objects parsed from the stream. <para>从流中解析的 <see cref="PatchEntry"/> 对象列表。</para></returns>
+    /// <exception cref="EdlException">Thrown when the stream cannot be parsed. <para>流无法解析时抛出。</para></exception>
     public static List<PatchEntry> Parse(Stream stream)
     {
         if (stream == null)
@@ -70,19 +70,19 @@ internal static class PatchParser
     /// Asynchronously parses a patch XML file from the specified file path.
     /// <para>从指定文件路径异步解析 patch XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the patch XML file. patch XML 文件路径。</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation. 用于取消异步操作的令牌。</param>
-    /// <returns>A task whose result contains the parsed <see cref="PatchEntry"/> objects. 任务结果包含解析出的 <see cref="PatchEntry"/> 对象。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the patch XML file. <para>patch XML 文件路径。</para></param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation. <para>用于取消异步操作的令牌。</para></param>
+    /// <returns>A task whose result contains the parsed <see cref="PatchEntry"/> objects. <para>任务结果包含解析出的 <see cref="PatchEntry"/> 对象。</para></returns>
+    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. <para>文件无法加载或解析时抛出。</para></exception>
     public static async Task<List<PatchEntry>> ParseAsync(string filePath, CancellationToken cancellationToken = default) => await Task.Run(() => Parse(filePath), cancellationToken).ConfigureAwait(false);
 
     /// <summary>
     /// Parses multiple patch XML files and combines all entries into a single list.
     /// <para>解析多个 patch XML 文件，将所有条目合并为单个列表。</para>
     /// </summary>
-    /// <param name="filePaths">The list of patch XML file paths to parse. 待解析的 patch XML 文件路径列表。</param>
-    /// <returns>A combined list of <see cref="PatchEntry"/> objects from all files. 来自所有文件的合并 <see cref="PatchEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. 任一文件无法加载或解析时抛出。</exception>
+    /// <param name="filePaths">The list of patch XML file paths to parse. <para>待解析的 patch XML 文件路径列表。</para></param>
+    /// <returns>A combined list of <see cref="PatchEntry"/> objects from all files. <para>来自所有文件的合并 <see cref="PatchEntry"/> 对象列表。</para></returns>
+    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. <para>任一文件无法加载或解析时抛出。</para></exception>
     public static List<PatchEntry> ParseAll(IEnumerable<string> filePaths)
     {
         if (filePaths == null)
@@ -104,10 +104,10 @@ internal static class PatchParser
     /// list.
     /// <para>异步解析多个 patch XML 文件，将所有条目合并为单个列表。</para>
     /// </summary>
-    /// <param name="filePaths">The list of patch XML file paths to parse. 待解析的 patch XML 文件路径列表。</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation. 用于取消异步操作的令牌。</param>
-    /// <returns>A task whose result contains a combined list of <see cref="PatchEntry"/> objects. 任务结果包含合并的 <see cref="PatchEntry"/> 对象列表。</returns>
-    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. 任一文件无法加载或解析时抛出。</exception>
+    /// <param name="filePaths">The list of patch XML file paths to parse. <para>待解析的 patch XML 文件路径列表。</para></param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation. <para>用于取消异步操作的令牌。</para></param>
+    /// <returns>A task whose result contains a combined list of <see cref="PatchEntry"/> objects. <para>任务结果包含合并的 <see cref="PatchEntry"/> 对象列表。</para></returns>
+    /// <exception cref="EdlException">Thrown when any file cannot be loaded or parsed. <para>任一文件无法加载或解析时抛出。</para></exception>
     public static async Task<List<PatchEntry>> ParseAllAsync(IEnumerable<string> filePaths, CancellationToken cancellationToken = default) => await Task.Run(() => ParseAll(filePaths), cancellationToken).ConfigureAwait(false);
 
     private static List<PatchEntry> ParseDocument(XDocument doc)

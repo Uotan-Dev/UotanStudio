@@ -18,7 +18,7 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// <para>初始化新的通信层。</para>
 /// </remarks>
 /// <param name="registry">Optional registry to use. <para>可选注册表实例。</para></param>
-/// <param name="configuration">Optional isolated configuration; otherwise uses the process configuration.</param>
+/// <param name="configuration">Optional isolated configuration; otherwise uses the process configuration.<para>可选的隔离配置；缺省时使用进程级配置。</para></param>
 internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, DeviceCommunicationConfiguration? configuration = null)
 {
     private readonly UsbApiRegistry _registry = registry ?? UsbApiRegistry.CreateDefault();

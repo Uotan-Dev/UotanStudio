@@ -21,13 +21,13 @@ internal sealed record QsbProgram(string Label, string Filename, long StartSecto
     long FileSectorOffset, long SectorSizeInBytes);
 
 /// <summary>
-/// Bounded parser for the Lenovo/ZUK QSB rawprogram XML and the chunk-merge layout proven by the
-/// reference merger: chunk files named <c>{prefix}_{n}.{ext}</c> are ordered by <c>n</c>, written at
+/// Bounded parser for the Lenovo/ZUK QSB rawprogram XML and its chunk-merge layout: chunk files
+/// named <c>{prefix}_{n}.{ext}</c> are ordered by <c>n</c>, written at
 /// <c>start_sector * SECTOR_SIZE_IN_BYTES</c> with zero-filled sector gaps and per-file
 /// <c>file_sector_offset</c> padding, and the first chunk is probed for an ext4 superblock
 /// (magic 0xEF53 at byte 1080, block count at 1028, log block size at 1048) to extend the merged
 /// image to the filesystem's declared total size.
-/// <para>Lenovo/ZUK QSB rawprogram XML 的有界解析器，及其参考合并器证实的分块合并布局：
+/// <para>Lenovo/ZUK QSB rawprogram XML 的有界解析器，及其分块合并布局：
 /// 名为 <c>{prefix}_{n}.{ext}</c> 的分块按 <c>n</c> 排序，写入 <c>start_sector * SECTOR_SIZE_IN_BYTES</c>
 /// 处，扇区间隙与每文件的 <c>file_sector_offset</c> 用零填充；并探测首分块的 ext4 超级块
 /// （0xEF53 魔数位于字节 1080，块数位于 1028，对数块大小位于 1048），把合并镜像扩展到文件系统声明的总大小。</para>

@@ -22,7 +22,7 @@ public static class MtkSecStatusCode
 
     /// <summary>Names a download-agent status code, or null when the evidence has no entry for it.
     /// <para>为下载代理状态码命名；证据中没有该条目时返回 null。</para></summary>
-    /// <param name="status">The raw status value reported by the agent. 代理上报的原始状态值。</param>
+    /// <param name="status">The raw status value reported by the agent. <para>代理上报的原始状态值。</para></param>
     /// <returns>The documented name, or <see langword="null"/> when the value is not catalogued.
     /// <para>已记载的名称；取值未被编目时为 <see langword="null"/>。</para></returns>
     public static string? TryDescribe(uint status) => status switch
@@ -47,8 +47,8 @@ public static class MtkSecStatusCode
 
     /// <summary>Formats a status value with its documented name when one exists.
     /// <para>在存在已记载名称时，连同该名称一起格式化状态值。</para></summary>
-    /// <param name="status">The raw status value reported by the agent. 代理上报的原始状态值。</param>
-    /// <returns>A localization-neutral description of the status. 与本地化无关的状态描述。</returns>
+    /// <param name="status">The raw status value reported by the agent. <para>代理上报的原始状态值。</para></param>
+    /// <returns>A localization-neutral description of the status. <para>与本地化无关的状态描述。</para></returns>
     public static string Describe(uint status) =>
         TryDescribe(status) is { } name ? $"0x{status:X8} ({name})" : $"0x{status:X8}";
 }
@@ -70,7 +70,7 @@ public static class MtkSecRpmbStatusCode
 
     /// <summary>Names a replay-protected block reply code, or null when the table has no entry.
     /// <para>为重放保护回复码命名；表中没有该条目时返回 null。</para></summary>
-    /// <param name="status">The raw reply word. 原始回复字。</param>
+    /// <param name="status">The raw reply word. <para>原始回复字。</para></param>
     /// <returns>The documented text, or <see langword="null"/> for an uncatalogued value.
     /// <para>已记载的文本；未编目取值返回 <see langword="null"/>。</para></returns>
     public static string? TryDescribe(ushort status) => status switch
@@ -88,8 +88,8 @@ public static class MtkSecRpmbStatusCode
 
     /// <summary>Formats a replay-protected block reply code with its documented name when available.
     /// <para>在存在已记载名称时，连同该名称一起格式化重放保护回复码。</para></summary>
-    /// <param name="status">The raw reply word. 原始回复字。</param>
-    /// <returns>A localization-neutral description of the reply. 与本地化无关的回复描述。</returns>
+    /// <param name="status">The raw reply word. <para>原始回复字。</para></param>
+    /// <returns>A localization-neutral description of the reply. <para>与本地化无关的回复描述。</para></returns>
     public static string Describe(ushort status) =>
         TryDescribe(status) is { } name ? $"0x{status:X4} ({name})" : $"0x{status:X4}";
 }

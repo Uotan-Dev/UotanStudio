@@ -216,9 +216,6 @@ public sealed partial class FlashViewModel
     {
         if (deviceKey is { Length: > 0 } key)
         {
-            // An empty result means the read produced nothing worth remembering, so it drops any older rows instead of
-            // freezing them in place.
-            // 空结果说明该次读取没有值得记住的内容，因此删除旧行而不是把它们冻结在原地。
             if (rows.Count == 0)
             {
                 _deviceStatusCache.Remove(key);
@@ -246,9 +243,6 @@ public sealed partial class FlashViewModel
     /// <para>所选设备的键；未选中设备时为 <see langword="null"/>。</para></param>
     internal void RestoreDeviceStatus(string? deviceKey)
     {
-        // A selection change invalidates every in-flight read: whatever it reports describes the device the user just
-        // left, so its publication must not land in the table of the new one.
-        // 选择变化会使所有进行中的读取失效：它上报的内容描述的是用户刚离开的设备，其发布不得落进新设备的表格。
         _ = BeginDeviceStatusRefresh();
         DeviceStatus.Clear();
         if (deviceKey is not { Length: > 0 } key || !_deviceStatusCache.TryGetValue(key, out var rows))

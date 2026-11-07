@@ -43,7 +43,6 @@ public partial class DiskFlashWindow : Window
             return;
         }
 
-        // The checkbox handles its own click; a click anywhere else on the card selects that row exclusively.
         if (e.Source is CheckBox || (e.Source as Visual)?.FindAncestorOfType<CheckBox>() is not null)
         {
             return;

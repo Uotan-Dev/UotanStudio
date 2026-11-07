@@ -36,7 +36,7 @@ internal readonly struct HdcUsbHead
     /// Serializes this USB header into the destination span in big-endian order.
     /// <para>以大端序将此 USB 头部序列化到目标 span。</para>
     /// </summary>
-    /// <param name="destination">Target span of at least 11 bytes. 至少 11 字节的目标 span。</param>
+    /// <param name="destination">Target span of at least 11 bytes. <para>至少 11 字节的目标 span。</para></param>
     public void WriteTo(Span<byte> destination)
     {
         destination[0] = Flag0;
@@ -50,9 +50,9 @@ internal readonly struct HdcUsbHead
     /// Parses a <see cref="HdcUsbHead"/> from the given span.
     /// <para>从给定 span 解析 <see cref="HdcUsbHead"/>。</para>
     /// </summary>
-    /// <param name="data">Source span of at least 11 bytes. 至少 11 字节的源 span。</param>
-    /// <returns>The parsed USB header. 解析后的 USB 头部。</returns>
-    /// <exception cref="InvalidDataException">Thrown when the span is too short. span 长度不足时抛出。</exception>
+    /// <param name="data">Source span of at least 11 bytes. <para>至少 11 字节的源 span。</para></param>
+    /// <returns>The parsed USB header. <para>解析后的 USB 头部。</para></returns>
+    /// <exception cref="InvalidDataException">Thrown when the span is too short. <para>span 长度不足时抛出。</para></exception>
     public static HdcUsbHead Parse(ReadOnlySpan<byte> data)
     {
         if (data.Length < Size)

@@ -11,10 +11,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>宿主可捕获该类型以区分"目标拒绝"与"传输失败"：存在已记载名称时消息会带上该名称，
 /// <see cref="Status"/> 保留原始值，供调用方原样记录或展示设备返回值。</para>
 /// </remarks>
-/// <param name="message">A description of the failed exchange. 失败交换的描述。</param>
-/// <param name="status">The optional target status, in host byte order. 可选的目标状态，主机字节序。</param>
+/// <param name="message">A description of the failed exchange. <para>失败交换的描述。</para></param>
+/// <param name="status">The optional target status, in host byte order. <para>可选的目标状态，主机字节序。</para></param>
 /// <param name="inner">The exception that caused this failure, when a lower layer already reported one.
-/// 导致本次失败的底层异常；底层已上报异常时填写。</param>
+/// <para>导致本次失败的底层异常；底层已上报异常时填写。</para></param>
 public sealed class MtkProtocolException(string message, uint? status = null, Exception? inner = null)
     : IOException(message, inner)
 {
@@ -34,8 +34,8 @@ public sealed class MtkProtocolException(string message, uint? status = null, Ex
     /// Builds a rejection message that names the status when the catalog has an entry for it.
     /// <para>在目录中存在对应条目时为拒绝消息附上状态名称。</para>
     /// </summary>
-    /// <param name="operation">The neutral operation name. 与本地化无关的操作名。</param>
-    /// <param name="status">The raw target status. 目标原始状态码。</param>
+    /// <param name="operation">The neutral operation name. <para>与本地化无关的操作名。</para></param>
+    /// <param name="status">The raw target status. <para>目标原始状态码。</para></param>
     /// <returns>A message ending with the raw status and, when known, its name.
     /// <para>以原始状态码结尾、并在已知时附上名称的消息。</para></returns>
     public static string DescribeRejection(string operation, uint status) =>

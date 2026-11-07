@@ -33,7 +33,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// The refusal recorded when a digest-bound entry declares no signature for its digest.
     /// <para>摘要绑定条目声明了摘要却没有为其声明签名时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the missing signature.</value>
+    /// <value>Stable refusal text naming the missing signature.<para>命名缺失签名的稳定拒绝文本。</para></value>
     internal const string MissingSignatureReason =
         "A digest-bound program entry must declare digest_signature and signature_size; nothing was written.";
 
@@ -41,7 +41,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// The refusal recorded when the declared digest does not equal the bytes the program path would send.
     /// <para>声明的摘要与编程路径即将发送的字节不一致时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the digest mismatch.</value>
+    /// <value>Stable refusal text naming the digest mismatch.<para>命名摘要不匹配的稳定拒绝文本。</para></value>
     internal const string DigestMismatchReason =
         "The declared write digest does not match the bytes this program entry would write; nothing was written.";
 
@@ -51,7 +51,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// <para>写入序列所需包摘要数量超过摘要表容量
     ///（<see cref="EdlConstants.MaximumPacketDigestCount"/>）时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the digest-table capacity.</value>
+    /// <value>Stable refusal text naming the digest-table capacity.<para>命名摘要表容量不足的稳定拒绝文本。</para></value>
     internal const string PacketCapacityReason =
         "The write sequence exceeds the packet digests one signed digest table set can carry; nothing was written.";
 
@@ -59,7 +59,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// The refusal recorded when the range, the chunk bound or the address grammar is out of bounds.
     /// <para>范围、写入块上限或地址文法越界时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the rejected range.</value>
+    /// <value>Stable refusal text naming the rejected range.<para>命名被拒绝范围的稳定拒绝文本。</para></value>
     internal const string RangeReason =
         "The digest-bound program range is outside the validated write bounds; nothing was written.";
 
@@ -67,7 +67,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// The refusal recorded when the declared digest is not one SHA-256 width in hexadecimal.
     /// <para>声明的摘要不是十六进制表示的单个 SHA-256 宽度时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the malformed digest.</value>
+    /// <value>Stable refusal text naming the malformed digest.<para>命名畸形摘要的稳定拒绝文本。</para></value>
     internal const string DigestFormatReason =
         "The declared write digest is not 64 hexadecimal characters; nothing was written.";
 
@@ -75,7 +75,7 @@ internal sealed record FlashBundleDigestCommand(byte[] Digest, string DigestHex,
     /// The refusal recorded when the declared signature is not well-formed base64 of the declared size.
     /// <para>声明的签名不是与声明大小相符的合法 Base64 时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the malformed signature.</value>
+    /// <value>Stable refusal text naming the malformed signature.<para>命名畸形签名的稳定拒绝文本。</para></value>
     internal const string SignatureFormatReason =
         "The declared digest signature does not decode to the declared signature size; nothing was written.";
 

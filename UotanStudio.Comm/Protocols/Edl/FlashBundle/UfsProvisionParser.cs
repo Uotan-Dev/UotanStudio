@@ -12,9 +12,9 @@ internal static class UfsProvisionParser
     /// Parses a UFS provisioning XML file from the specified file path.
     /// <para>从指定文件路径解析 UFS 配置 XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the UFS provisioning XML file. UFS 配置 XML 文件路径。</param>
-    /// <returns>A <see cref="UfsProvisionFile"/> containing the parsed entries. 包含解析条目的 <see cref="UfsProvisionFile"/>。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the UFS provisioning XML file. <para>UFS 配置 XML 文件路径。</para></param>
+    /// <returns>A <see cref="UfsProvisionFile"/> containing the parsed entries. <para>包含解析条目的 <see cref="UfsProvisionFile"/>。</para></returns>
+    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. <para>文件无法加载或解析时抛出。</para></exception>
     public static UfsProvisionFile Parse(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -41,9 +41,9 @@ internal static class UfsProvisionParser
     /// Parses a UFS provisioning XML from the specified stream.
     /// <para>从指定流解析 UFS 配置 XML。</para>
     /// </summary>
-    /// <param name="stream">The stream containing the UFS provisioning XML data. 包含 UFS 配置 XML 数据的流。</param>
-    /// <returns>A <see cref="UfsProvisionFile"/> containing the parsed entries. 包含解析条目的 <see cref="UfsProvisionFile"/>。</returns>
-    /// <exception cref="EdlException">Thrown when the stream cannot be parsed. 流无法解析时抛出。</exception>
+    /// <param name="stream">The stream containing the UFS provisioning XML data. <para>包含 UFS 配置 XML 数据的流。</para></param>
+    /// <returns>A <see cref="UfsProvisionFile"/> containing the parsed entries. <para>包含解析条目的 <see cref="UfsProvisionFile"/>。</para></returns>
+    /// <exception cref="EdlException">Thrown when the stream cannot be parsed. <para>流无法解析时抛出。</para></exception>
     public static UfsProvisionFile Parse(Stream stream)
     {
         if (stream == null)
@@ -70,10 +70,10 @@ internal static class UfsProvisionParser
     /// Asynchronously parses a UFS provisioning XML file from the specified file path.
     /// <para>从指定文件路径异步解析 UFS 配置 XML 文件。</para>
     /// </summary>
-    /// <param name="filePath">The path to the UFS provisioning XML file. UFS 配置 XML 文件路径。</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation. 用于取消异步操作的令牌。</param>
-    /// <returns>A task whose result contains the parsed <see cref="UfsProvisionFile"/>. 任务结果包含解析出的 <see cref="UfsProvisionFile"/>。</returns>
-    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. 文件无法加载或解析时抛出。</exception>
+    /// <param name="filePath">The path to the UFS provisioning XML file. <para>UFS 配置 XML 文件路径。</para></param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation. <para>用于取消异步操作的令牌。</para></param>
+    /// <returns>A task whose result contains the parsed <see cref="UfsProvisionFile"/>. <para>任务结果包含解析出的 <see cref="UfsProvisionFile"/>。</para></returns>
+    /// <exception cref="EdlException">Thrown when the file cannot be loaded or parsed. <para>文件无法加载或解析时抛出。</para></exception>
     public static async Task<UfsProvisionFile> ParseAsync(string filePath, CancellationToken cancellationToken = default) => await Task.Run(() => Parse(filePath), cancellationToken).ConfigureAwait(false);
 
     private static UfsProvisionFile ParseDocument(XDocument doc)

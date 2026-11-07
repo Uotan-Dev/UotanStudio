@@ -15,12 +15,12 @@ public sealed partial class RkdlSession
     /// and <c>FlashHead</c> is optional. With a head entry the new-ID-block layout is used, which additionally requires
     /// the device to answer READ_CAPABILITY with bit 0 of the second capability byte set (<c>capability[1] &amp; 1</c>);
     /// without it the legacy four-header-sector layout is built. Both layouts store the entries' <c>ucRc4Flag</c>
-    /// verbatim as <c>uiRc4Flag</c> and RC4-encrypt the payloads when that flag is non-zero. The device is not reset
-    /// afterwards, matching the commented-out reset in the reference.
+    /// verbatim as <c>uiRc4Flag</c> and RC4-encrypt the payloads when that flag is non-zero. The device is not
+    /// reset afterwards.
     /// <para>镜像先解析并通过 CRC 校验，随后要求存在 <c>FlashBoot</c> 与 <c>FlashData</c> 条目，<c>FlashHead</c> 为可选。
     /// 存在头部条目时使用新 ID block 布局，该布局还要求设备在 READ_CAPABILITY 应答中把第二个能力字节的 bit 0 置位
     /// （<c>capability[1] &amp; 1</c>）；否则构建旧版四个头部扇区的布局。两种布局都把条目的 <c>ucRc4Flag</c> 原样写入
-    /// <c>uiRc4Flag</c>，并在该标志非 0 时对载荷施加 RC4。完成后不复位设备，与参考实现中被注释掉的复位一致。</para>
+    /// <c>uiRc4Flag</c>，并在该标志非 0 时对载荷施加 RC4。完成后不复位设备。</para>
     /// </remarks>
     /// <param name="loaderImage">The complete RKBOOT loader image (the .bin a mask ROM device is loaded with).
     /// <para>完整的 RKBOOT loader 镜像（用于加载 Mask ROM 设备的 .bin）。</para></param>

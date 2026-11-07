@@ -94,9 +94,9 @@ internal sealed class FastbootTcpTransport : ICommTransport
     /// Initializes a new <see cref="FastbootTcpTransport"/> and performs the fastboot TCP handshake.
     /// <para>初始化新的 <see cref="FastbootTcpTransport"/> 并执行 fastboot TCP 握手。</para>
     /// </summary>
-    /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
-    /// <param name="port">TCP port of the fastboot service; defaults to 5554. fastboot 服务的 TCP 端口，默认 5554。</param>
-    /// <param name="connectTimeoutMs">Connection timeout in milliseconds. 连接超时（毫秒）。</param>
+    /// <param name="host">Host name or IP address of the device. <para>设备的主机名或 IP 地址。</para></param>
+    /// <param name="port">TCP port of the fastboot service; defaults to 5554. <para>fastboot 服务的 TCP 端口，默认 5554。</para></param>
+    /// <param name="connectTimeoutMs">Connection timeout in milliseconds. <para>连接超时（毫秒）。</para></param>
     public FastbootTcpTransport(string host, int port = 5554, int connectTimeoutMs = HandshakeTimeoutMs)
     {
         if (string.IsNullOrWhiteSpace(host))
@@ -334,7 +334,7 @@ internal sealed class FastbootTcpTransport : ICommTransport
     /// read through this stream bypass the length-prefix framing.
     /// <para>返回底层原始 <see cref="NetworkStream"/>。注意通过该流读写会绕过长度前缀帧封装。</para>
     /// </summary>
-    /// <returns>The live network stream. 活动的网络流。</returns>
+    /// <returns>The live network stream. <para>活动的网络流。</para></returns>
     public Stream GetStream() => GetConnectedStream();
 
     /// <summary>

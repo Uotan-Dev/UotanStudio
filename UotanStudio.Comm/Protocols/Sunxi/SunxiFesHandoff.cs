@@ -152,10 +152,10 @@ public static class SunxiBootImageHeader
 /// <summary>
 /// Drives the two FEL uploads that move a cold Allwinner device from the USB boot ROM into the FES service:
 /// the first-stage loader that initialises DRAM and returns to FEL, then the payload that starts the service
-/// and makes the device re-enumerate. Both reference clients follow the same order, and no FES command works
+/// and makes the device re-enumerate. No FES command works
 /// until the second upload completed and the host reconnected to the re-enumerated device.
 /// <para>驱动把冷启动的全志设备从 USB boot ROM 带进 FES 服务的两次 FEL 上传：先上传初始化 DRAM 并返回 FEL 的
-/// 一级加载器，再上传启动服务并使设备重新枚举的负载。两份参考客户端都遵循同一顺序；第二次上传完成且主机
+/// 一级加载器，再上传启动服务并使设备重新枚举的负载。第二次上传完成且主机
 /// 重连到重新枚举的设备之前，没有任何 FES 命令可用。</para>
 /// </summary>
 public sealed class SunxiFesHandoff
@@ -204,8 +204,8 @@ public sealed class SunxiFesHandoff
 
     /// <summary>
     /// Creates a handoff that polls DRAM every second for one minute after the first-stage loader and waits
-    /// three seconds between service reconnect attempts, matching the reference client.
-    /// <para>创建一次切换流程：一级加载器之后每秒轮询 DRAM 持续一分钟，服务重连尝试之间等待三秒，与参考客户端一致。</para>
+    /// three seconds between service reconnect attempts.
+    /// <para>创建一次切换流程：一级加载器之后每秒轮询 DRAM 持续一分钟，服务重连尝试之间等待三秒。</para>
     /// </summary>
     /// <param name="reopenService">Releases the stale FEL transport, waits for the re-enumerated device and
     /// returns a session that already completed the FES handshake.
@@ -432,7 +432,6 @@ public sealed class SunxiFesHandoff
         catch (Exception exception) when (exception is IOException or EndOfStreamException or TimeoutException
             or SunxiEfexException)
         {
-            // The jump already happened; the reconnect below decides whether the service came up.
         }
     }
 

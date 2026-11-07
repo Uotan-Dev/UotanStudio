@@ -337,8 +337,8 @@ public sealed partial class FastbootSession
     /// <para>在当前位置追加载负载的流；所有权由调用方保留。</para></param>
     /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
     /// <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload.
-    /// <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
+    /// <param name="cancellationToken">Checked before the DATA-frame wait and before every payload read; cancelling aborts the upload before or mid-payload.
+    /// <para>在等待 DATA 帧之前与每次负载读取之前检查；取消会在负载开始前或传输中途终止上传。</para></param>
     /// <returns>The trailing OKAY/FAIL response after the payload.
     /// <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
     /// <exception cref="FastbootException">The command did not answer with a DATA response.
@@ -353,7 +353,7 @@ public sealed partial class FastbootSession
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
-        var response = ExecuteCommand(command);
+        var response = ExecuteCommand(command, cancellationToken);
         if (response.State != FastbootResponseState.Data)
         {
             throw new FastbootException(response.State, $"Unexpected response for upload: expected DATA, got {response.State}");

@@ -34,8 +34,8 @@ public sealed partial class EdlSession : IProtocolSession
     /// Creates a new EDL session over the specified device transport.
     /// <para>在指定设备传输上创建新的 EDL 会话。</para>
     /// </summary>
-    /// <param name="transport">The device transport. 设备传输。</param>
-    /// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
+    /// <param name="transport">The device transport. <para>设备传输。</para></param>
+    /// <param name="firehoseConfig">Optional Firehose configuration. <para>可选的 Firehose 配置。</para></param>
     internal EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null)
     {
         ArgumentNullException.ThrowIfNull(transport);
@@ -749,7 +749,6 @@ public sealed partial class EdlSession : IProtocolSession
                         $"The programmer image is missing: {image.Path}.");
                 }
 
-                // FileShare.Read keeps one upload from blocking another reader of the same image.
                 streams[image.ImageId] = File.Open(image.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
             }
 

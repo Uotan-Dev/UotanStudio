@@ -24,7 +24,7 @@ public sealed record MtkScatterFlashStep(string PartitionIndex, MtkFlashStepKind
 public sealed partial class MtkFlashPlan
 {
     /// <summary>Reconciles selected ordinary Scatter entries with GPT before opening any sources. Platform/loader authorization and explicit source selection remain caller responsibilities.
-    /// <para> 在打开任何源之前，将选定的普通 Scatter 条目与 GPT 进行核对。平台/引导加载程序的授权以及 显式的源选择仍由调用方负责。 </para></summary>
+    /// <para>在打开任何源之前，将选定的普通 Scatter 条目与 GPT 进行核对。平台/引导加载程序的授权以及 显式的源选择仍由调用方负责。 </para></summary>
     /// <remarks>Only user-region UPDATE entries with matching linear/physical/GPT addresses and exact
     /// partition capacity are accepted. Bootloader, reserved, protected and unknown policy operations
     /// require dedicated support; no manifest flag disables range validation. Scatter block-size hints

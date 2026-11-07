@@ -19,7 +19,7 @@ internal static class UsbProviderProjection
     /// <param name="devices">The list of backend devices. <para>后端设备列表。</para></param>
     /// <param name="filter">An optional filter to apply. <para>可选的过滤器。</para></param>
     /// <returns>A read-only list of sessions that match the filter. <para>匹配过滤器的会话只读列表。</para></returns>
-    /// <param name="ensureDirect">Checks server ownership before opening the matching USB device.</param>
+    /// <param name="ensureDirect">Checks server ownership before opening the matching USB device.<para>打开匹配的 USB 设备前检查 server 归属。</para></param>
     public static IReadOnlyList<IUsbDeviceSession> ToSessions(
         string apiName,
         UsbApiKind apiKind,

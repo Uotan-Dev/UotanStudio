@@ -238,7 +238,7 @@ public sealed class FlashBundleResult
     /// Returns a string representation of the result.
     /// <para>返回结果的字符串表示。</para>
     /// </summary>
-    /// <returns>A string representation of the result. 结果的字符串表示。</returns>
+    /// <returns>A string representation of the result. <para>结果的字符串表示。</para></returns>
     public override string ToString() =>
         $"FlashBundleResult(Success={IsSuccess}, Program={ProgramEntriesProcessed}/{ProgramEntriesProcessed + ProgramEntriesSkipped}, " +
         $"Erase={EraseEntriesProcessed}, Patch={PatchEntriesProcessed}/{PatchEntriesProcessed + PatchEntriesSkipped}, " +

@@ -20,8 +20,8 @@ internal sealed class HdcFactory : IProtocolFactory
 
     /// <summary>Creates a new HDC factory that matches a specific VID/PID.
     /// <para>创建匹配指定 VID/PID 的新 HDC 工厂。</para></summary>
-    /// <param name="vendorId">The vendor identifier. 厂商 ID。</param>
-    /// <param name="productId">The product identifier. 产品 ID。</param>
+    /// <param name="vendorId">The vendor identifier. <para>厂商 ID。</para></param>
+    /// <param name="productId">The product identifier. <para>产品 ID。</para></param>
     public HdcFactory(ushort vendorId, ushort productId)
     {
         _vendorId = vendorId;
@@ -38,9 +38,9 @@ internal sealed class HdcFactory : IProtocolFactory
     /// Tries to create an HDC session over the specified USB transport session.
     /// <para>尝试在指定 USB 传输会话上创建 HDC 会话。</para>
     /// </summary>
-    /// <param name="transport">The underlying transport session. 底层传输会话。</param>
-    /// <param name="session">The created protocol session, or <c>null</c> when the transport is not compatible. 创建的协议会话；传输不兼容时返回 <c>null</c>。</param>
-    /// <returns><c>true</c> when the protocol session was created. 协议会话创建成功返回 <c>true</c>。</returns>
+    /// <param name="transport">The underlying transport session. <para>底层传输会话。</para></param>
+    /// <param name="session">The created protocol session, or <c>null</c> when the transport is not compatible. <para>创建的协议会话；传输不兼容时返回 <c>null</c>。</para></param>
+    /// <returns><c>true</c> when the protocol session was created. <para>协议会话创建成功返回 <c>true</c>。</para></returns>
     public bool TryCreate(IUsbDeviceSession transport, out IProtocolSession? session)
     {
         session = null;

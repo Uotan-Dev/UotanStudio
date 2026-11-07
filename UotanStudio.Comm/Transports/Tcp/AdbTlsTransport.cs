@@ -96,11 +96,11 @@ internal sealed class AdbTlsTransport : ICommTransport
 
     /// <summary>Initializes a new TLS ADB transport and opens only the plaintext TCP connection; the A_STLS/TLS upgrade happens later, when the protocol layer receives the peer's A_STLS after its own A_CNXN.
     /// <para>初始化新的 TLS ADB 传输，只打开明文 TCP 连接；A_STLS/TLS 升级稍后进行，由协议层在收到对端针对自身 A_CNXN 的 A_STLS 后触发。</para></summary>
-    /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
-    /// <param name="port">TCP port of the secure adbd service. adbd 安全服务的 TCP 端口。</param>
+    /// <param name="host">Host name or IP address of the device. <para>设备的主机名或 IP 地址。</para></param>
+    /// <param name="port">TCP port of the secure adbd service. <para>adbd 安全服务的 TCP 端口。</para></param>
     /// <param name="clientCertificate">The certificate derived from the host identity key for this handshake.
     /// <para>本次握手由主机身份密钥派生的证书。</para></param>
-    /// <param name="connectTimeoutMs">Connection timeout in milliseconds. 连接超时（毫秒）。</param>
+    /// <param name="connectTimeoutMs">Connection timeout in milliseconds. <para>连接超时（毫秒）。</para></param>
     /// <exception cref="ArgumentException">The host is empty.<para>主机为空。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The port or timeout is out of range.
     /// <para>端口或超时超出范围。</para></exception>

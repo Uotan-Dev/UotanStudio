@@ -21,10 +21,10 @@ public sealed record RelatedPartitionItem(
 
 /// <summary>
 /// Names and sibling-file discovery for the boot/display partition group that accompanies a logo
-/// partition. The list is derived from the reference tools' unpack lists; it is a discovery aid, not a
+/// partition. The list is a curated discovery aid, not a
 /// partition table, so missing entries are reported instead of invented.
-/// <para>与 Logo 分区同属启动/显示链的分区名清单与同目录发现逻辑。清单来自参考工具的解包列表，
-/// 仅作发现辅助而非分区表，缺失项如实上报而不虚构。</para>
+/// <para>与 Logo 分区同属启动/显示链的分区名清单与同目录发现逻辑。清单仅作发现辅助而非分区表，
+/// 缺失项如实上报而不虚构。</para>
 /// </summary>
 internal static class LogoPartitionCatalog
 {

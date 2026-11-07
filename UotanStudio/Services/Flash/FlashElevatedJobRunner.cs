@@ -211,7 +211,6 @@ public static class FlashElevatedJobRunner
                     pending.Append(chars, 0, charCount);
                     DrainLines(pending, line =>
                     {
-                        // A report is only accepted once the whole line arrived.
                         var report = FlashProgressFormat.TryParse(line);
                         if (report is null)
                         {

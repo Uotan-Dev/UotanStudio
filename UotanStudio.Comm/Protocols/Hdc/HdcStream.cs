@@ -78,8 +78,8 @@ public sealed class HdcStream : IDisposable, IHdcTaskChannel
     /// Initializes a new instance of the <see cref="HdcStream"/> class.
     /// <para>初始化 <see cref="HdcStream"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="connection">The HDC connection. HDC 连接。</param>
-    /// <param name="channelId">The local channel identifier. 本地通道标识。</param>
+    /// <param name="connection">The HDC connection. <para>HDC 连接。</para></param>
+    /// <param name="channelId">The local channel identifier. <para>本地通道标识。</para></param>
     internal HdcStream(HdcConnection connection, uint channelId)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
@@ -90,7 +90,7 @@ public sealed class HdcStream : IDisposable, IHdcTaskChannel
     /// Sets the remote channel id and signals readiness.
     /// <para>设置远端通道 ID 并触发就绪信号。</para>
     /// </summary>
-    /// <param name="remoteChannelId">The remote channel identifier. 远端通道标识。</param>
+    /// <param name="remoteChannelId">The remote channel identifier. <para>远端通道标识。</para></param>
     internal void SetRemoteId(uint remoteChannelId)
     {
         RemoteChannelId = remoteChannelId;
@@ -101,15 +101,15 @@ public sealed class HdcStream : IDisposable, IHdcTaskChannel
     /// Blocks until the stream is ready (peer acknowledged the channel).
     /// <para>阻塞至流就绪（对端确认通道）。</para>
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns><c>true</c> if the stream became ready; otherwise, <c>false</c>. 流是否就绪。</returns>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <returns><c>true</c> if the stream became ready; otherwise, <c>false</c>. <para>流是否就绪。</para></returns>
     internal bool WaitReady(int timeoutMs) => _ready.Wait(timeoutMs);
 
     /// <summary>
     /// Enqueues incoming data from the peer.
     /// <para>将来自对端的数据入队。</para>
     /// </summary>
-    /// <param name="message">The command envelope. 数据负载。</param>
+    /// <param name="message">The command envelope. <para>数据负载。</para></param>
     internal void EnqueueData(HdcMessage message)
     {
         var payload = message.Payload ?? [];
@@ -147,7 +147,7 @@ public sealed class HdcStream : IDisposable, IHdcTaskChannel
     /// Marks the stream as faulted, stores the exception, and releases waiting threads.
     /// <para>将流标记为故障，保存异常并释放等待线程。</para>
     /// </summary>
-    /// <param name="ex">The exception that caused the fault. 导致故障的异常。</param>
+    /// <param name="ex">The exception that caused the fault. <para>导致故障的异常。</para></param>
     internal void MarkFaulted(Exception ex)
     {
         lock (_lock)

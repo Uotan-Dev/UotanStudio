@@ -57,9 +57,9 @@ public sealed partial class MtkSession : IProtocolSession
     private volatile bool _disposed;
 
     /// <summary>Creates a session which takes ownership of the selected transport.</summary>
-    /// <param name="transport">An open transport for one explicitly selected device.</param>
-    /// <param name="timeoutMs">The time budget for each command field or data transfer.</param>
-    /// <param name="handshakeTimeoutMs">The short per-byte handshake budget for transient preloader ports.</param>
+    /// <param name="transport">An open transport for one explicitly selected device.<para>一台显式选定设备的已打开传输。</para></param>
+    /// <param name="timeoutMs">The time budget for each command field or data transfer.<para>每条命令字段或数据传输的时间预算。</para></param>
+    /// <param name="handshakeTimeoutMs">The short per-byte handshake budget for transient preloader ports.<para>瞬态 preloader 端口的较短逐字节握手预算。</para></param>
     internal MtkSession(ICommTransport transport, int timeoutMs = 5000, int handshakeTimeoutMs = 100)
     {
         ArgumentNullException.ThrowIfNull(transport);
@@ -216,10 +216,10 @@ public sealed partial class MtkSession : IProtocolSession
     /// 协议字节前依据已观测描述符进行校验。</para>
     /// </summary>
     /// <param name="session">An opened USB device session bound to the command interface.
-    /// 已打开并绑定命令接口的 USB 设备会话。</param>
-    /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
+    /// <para>已打开并绑定命令接口的 USB 设备会话。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>取消令牌。</para></param>
     /// <returns>An initialized bootloader session which owns the USB transport.
-    /// 拥有 USB 传输的已初始化 bootloader 会话。</returns>
+    /// <para>拥有 USB 传输的已初始化 bootloader 会话。</para></returns>
     internal static async Task<MtkSession> OpenUsbAsync(IUsbDeviceSession session,
         CancellationToken cancellationToken = default)
     {
@@ -231,12 +231,12 @@ public sealed partial class MtkSession : IProtocolSession
     /// <summary>Opens a session over a transport already bound to the command endpoints of the described USB device, verifying the descriptor-level mode and command-interface selection before any protocol byte is exchanged. Ambiguous or unexpected interfaces are rejected without device I/O.
     /// <para>在已绑定到所描述 USB 设备命令端点的传输上开会话，在任何协议字节交互之前先校验描述符层面的模式与命令接口选择。接口歧义或不符合预期时直接拒绝，不进行设备 I/O。</para></summary>
     /// <param name="transport">An open transport bound to the caller-selected endpoints.
-    /// 已绑定到调用方所选端点的打开传输。</param>
-    /// <param name="device">The observed descriptors of the device behind the transport. 传输之后设备的已观测描述符。</param>
+    /// <para>已绑定到调用方所选端点的打开传输。</para></param>
+    /// <param name="device">The observed descriptors of the device behind the transport. <para>传输之后设备的已观测描述符。</para></param>
     /// <param name="options">Optional expectations; <see langword="null"/>keeps compatible behaviour.
-    /// 可选的期望条件；为 <see langword="null"/>时保持兼容行为。</param>
-    /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
-    /// <returns>An initialized bootloader session which owns the transport. 拥有该传输的已初始化 bootloader 会话。</returns>
+    /// <para>可选的期望条件；为 <see langword="null"/>时保持兼容行为。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>取消令牌。</para></param>
+    /// <returns>An initialized bootloader session which owns the transport. <para>拥有该传输的已初始化 bootloader 会话。</para></returns>
     /// <exception cref="InvalidOperationException">The endpoint presents a logging-only or otherwise unusable command interface, or the classified mode contradicts <see cref="MtkOpenOptions.ExpectedMode"/>; no protocol byte was exchanged.
     /// <para>端点仅呈现日志接口或其他不可用命令接口，或分类模式与 <see cref="MtkOpenOptions.ExpectedMode"/> 矛盾；未交换任何协议字节。</para></exception>
     public static Task<MtkSession> OpenUsbAsync(ICommTransport transport, UsbDeviceInfo device,
@@ -322,8 +322,8 @@ public sealed partial class MtkSession : IProtocolSession
     /// <summary>Runs the boot handshake and identity queries while the caller already holds the operation gate.
     /// <para>在调用方已持有操作闸门的情况下执行引导握手与身份查询。</para>
     /// </summary>
-    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
-    /// <returns>The queried identity. 查询到的身份信息。</returns>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
+    /// <returns>The queried identity. <para>查询到的身份信息。</para></returns>
     private async Task<MtkDeviceInfo> InitializeOwnedAsync(CancellationToken cancellationToken)
     {
         RequireState(MtkSessionState.Created);
@@ -465,7 +465,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// enumerated commonly drops the first byte; the relaxed path keeps its bare 0xA0 warm-up instead.
     /// <para>两条路径都做有界重试，并在不匹配后从首字节重启。Boot ROM 路径在两次尝试之间加入短暂退避并清空陈旧
     /// 输入，因为刚枚举完成的端口常常丢掉首字节；宽松路径保留其单独的 0xA0 预热。</para></remarks>
-    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
     private async Task RunBootHandshakeOwnedAsync(CancellationToken cancellationToken)
     {
         if (!UsesRelaxedBootHandshake)
@@ -504,7 +504,7 @@ public sealed partial class MtkSession : IProtocolSession
 
     /// <summary>Runs one strict four-byte handshake attempt.
     /// <para>执行一次严格的四字节握手尝试。</para></summary>
-    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
     /// <returns><see langword="true"/> when all four echoes matched.
     /// <para>四个回显全部匹配时为 <see langword="true"/>。</para></returns>
     private async Task<bool> TryRunStrictBootHandshakeAttemptOwnedAsync(CancellationToken cancellationToken)
@@ -844,10 +844,10 @@ public sealed partial class MtkSession : IProtocolSession
 
     /// <summary>Writes one buffer slice with the shared incomplete-write guard.
     /// <para>使用共用的不完整写入守卫写出一个缓冲区切片。</para></summary>
-    /// <param name="bytes">The source buffer. 源缓冲区。</param>
-    /// <param name="offset">The slice start. 切片起始。</param>
-    /// <param name="count">The slice length. 切片长度。</param>
-    /// <param name="timeoutMs">The time budget. 时间预算。</param>
+    /// <param name="bytes">The source buffer. <para>源缓冲区。</para></param>
+    /// <param name="offset">The slice start. <para>切片起始。</para></param>
+    /// <param name="count">The slice length. <para>切片长度。</para></param>
+    /// <param name="timeoutMs">The time budget. <para>时间预算。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     private async Task WriteAsync(byte[] bytes, int offset, int count, int timeoutMs,
@@ -882,7 +882,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// 因此先校验上限，其值等于各协议族协商的最大有界代理或存储包。
     /// </para>
     /// </summary>
-    /// <param name="count">The requested byte count. 请求的字节数。</param>
+    /// <param name="count">The requested byte count. <para>请求的字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative or above
     /// <see cref="MaximumBootReadLength"/>. <para><paramref name="count"/> 为负或超过
     /// <see cref="MaximumBootReadLength"/>。</para></exception>
@@ -955,7 +955,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// <para>推进记录的启动阶段；阶段单调递增，因此后续协议族不会回退早期尝试的定格失败上下文。
     /// </para>
     /// </summary>
-    /// <param name="stage">The stage being entered. 正在进入的阶段。</param>
+    /// <param name="stage">The stage being entered. <para>正在进入的阶段。</para></param>
     internal void NoteUploadStage(MtkDaUploadStage stage)
     {
         if (stage > _uploadStage)
@@ -970,7 +970,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// <para>在调用方转入故障状态之前，把当前阶段与按异常分类的结果定格进 <see cref="LastUploadResult"/>。
     /// </para>
     /// </summary>
-    /// <param name="error">The observed failure. 观察到的失败。</param>
+    /// <param name="error">The observed failure. <para>观察到的失败。</para></param>
     internal void CaptureUploadFailure(Exception error)
     {
         var pending = _uploadCompletionPending;
@@ -1019,7 +1019,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// 结果仅作为证据保留，绝不按枚举位置升级或降级。
     /// </para>
     /// </summary>
-    /// <param name="classification">The classification with its reason. 带原因的分类结果。</param>
+    /// <param name="classification">The classification with its reason. <para>带原因的分类结果。</para></param>
     internal void NoteModeDiscovery(MtkModeClassification classification)
     {
         ArgumentNullException.ThrowIfNull(classification);
@@ -1054,7 +1054,7 @@ public sealed partial class MtkSession : IProtocolSession
     /// <see cref="MtkCommandInterfaceStatus.Selected"/> 与 <see cref="MtkCommandInterfaceStatus.NoMetadata"/>，
     /// 因此仅日志或不匹配的绑定会被记录为拒绝证据。</para>
     /// </summary>
-    /// <param name="selection">The selection with its reason. 带原因的选择结果。</param>
+    /// <param name="selection">The selection with its reason. <para>带原因的选择结果。</para></param>
     internal void NoteCommandInterfaceSelection(MtkCommandInterfaceResult selection)
     {
         ArgumentNullException.ThrowIfNull(selection);

@@ -28,8 +28,8 @@ internal sealed class SamsungIncrementalMergeOptions
     /// <value>Defaults to 1 TiB; must be positive. <para>默认 1 TiB；必须为正数。</para></value>
     public long MaximumDatMemberBytes { get; set; } = 1L << 40;
 
-    /// <summary>Skips the vendor <c>prism</c> partition in DAT mode, mirroring the reference merger.
-    /// <para>在 DAT 模式下跳过厂商 <c>prism</c> 分区，与参考合并器一致。</para></summary>
+    /// <summary>Skips the vendor <c>prism</c> partition in DAT mode.
+    /// <para>在 DAT 模式下跳过厂商 <c>prism</c> 分区。</para></summary>
     /// <value>Defaults to <see langword="true"/>; skipped stems are reported in the merge result.
     /// <para>默认 <see langword="true"/>；被跳过的词干会记入合并结果。</para></value>
     public bool SkipPrismPartition { get; set; } = true;
@@ -41,8 +41,8 @@ internal sealed class SamsungIncrementalMergeOptions
     /// <para>默认 <see langword="true"/>；为 <see langword="false"/> 时任何已存在的目标都会在重建任何镜像之前中止合并。</para></value>
     public bool Overwrite { get; set; } = true;
 
-    /// <summary>Callback invoked once per published merged image; the reference tool's optional auto-extract step
-    /// is deliberately left to the caller. <para>每个已发布合并镜像调用一次的回调；参考工具可选的自动提取步骤由调用方决定。</para></summary>
+    /// <summary>Callback invoked once per published merged image; any optional auto-extract step is left to
+    /// the caller. <para>每个已发布合并镜像调用一次的回调；可选的自动提取步骤由调用方决定。</para></summary>
     /// <value>An optional async hook receiving the merged image descriptor; <see langword="null"/> by default.
     /// <para>可选的异步钩子，接收合并镜像描述符；默认为 <see langword="null"/>。</para></value>
     public Func<SamsungMergedPartitionImage, CancellationToken, Task>? OnPartitionMerged { get; set; }

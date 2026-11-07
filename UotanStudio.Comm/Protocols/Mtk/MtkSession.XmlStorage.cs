@@ -116,7 +116,7 @@ public sealed partial class MtkSession
     /// <para>在 XML 读、写、擦除发送任何线上字节之前，拒绝统一存储快照标记为需认证或重放保护的区域。
     /// </para>
     /// </summary>
-    /// <param name="regionName">The exact XML region token. 精确的 XML 区域标记。</param>
+    /// <param name="regionName">The exact XML region token. <para>精确的 XML 区域标记。</para></param>
     private void RequireXmlOrdinaryRegionSnapshot(string regionName)
     {
         var snapshot = StorageCapability;
@@ -146,10 +146,10 @@ public sealed partial class MtkSession
     /// 宿主选定的目标标识完全相同。
     /// </para>
     /// </summary>
-    /// <param name="request">The parsed device command message. 已解析的设备命令消息。</param>
-    /// <param name="destination">The host-declared destination identifier. 宿主声明的目标标识。</param>
-    /// <param name="maximumPacketLength">The inclusive packet length bound. 包长包含式上限。</param>
-    /// <returns>The validated packet length in bytes. 校验通过的包长（字节）。</returns>
+    /// <param name="request">The parsed device command message. <para>已解析的设备命令消息。</para></param>
+    /// <param name="destination">The host-declared destination identifier. <para>宿主声明的目标标识。</para></param>
+    /// <param name="maximumPacketLength">The inclusive packet length bound. <para>包长包含式上限。</para></param>
+    /// <returns>The validated packet length in bytes. <para>校验通过的包长（字节）。</para></returns>
     private static int ValidateXmlUploadRequest(MtkXmlMessage request, string destination, int maximumPacketLength)
     {
         RequireXmlCommand(request, "CMD:UPLOAD-FILE");

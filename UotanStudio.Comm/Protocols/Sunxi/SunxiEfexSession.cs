@@ -42,9 +42,9 @@ public abstract class SunxiEfexSession
     /// </summary>
     /// <remarks>
     /// The identity stage is a read stage like any other: the host announces the request with a 0x11
-    /// header before the device sends the 32 bytes, and both reference clients do the same. A bare read
+    /// header before the device sends the 32 bytes. A bare read
     /// leaves host and device waiting for each other until the transport times out.
-    /// <para>身份阶段与其它读阶段相同：主机在设备送出 32 字节之前先用 0x11 头声明请求，两份参考客户端都如此。
+    /// <para>身份阶段与其它读阶段相同：主机在设备送出 32 字节之前先用 0x11 头声明请求。
     /// 裸读会让主机与设备互相等待直至传输超时。</para>
     /// </remarks>
     /// <param name="cancellationToken">Cancels the exchange. <para>取消本次交互。</para></param>

@@ -192,7 +192,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Validates a window length destined for a paged bulk capture.
     /// <para>校验用于分页批量采集的窗口长度。</para></summary>
-    /// <param name="lengthBytes">The requested byte count. 请求的字节数。</param>
+    /// <param name="lengthBytes">The requested byte count. <para>请求的字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive or
     /// exceeds <see cref="MaximumRegionCaptureBytes"/>.
     /// <para><paramref name="lengthBytes"/> 非正，或超过 <see cref="MaximumRegionCaptureBytes"/>。</para></exception>
@@ -211,8 +211,8 @@ public static class MtkDaMemoryAccess
     /// <para>该 eFuse 窗口是唯一用普通下载代理读取寻址的 OTP 相邻范围，且仅在 <c>da memdump</c> 中如此。
     /// 其他所有路径都必须把它视为禁区，这与 RPMB 命令所持的纪律相同：重放保护区域只经其专用命令寻址，
     /// 而不走普通存储路径。</para></remarks>
-    /// <param name="startAddress">The inclusive first address of the window. 起始（含）地址。</param>
-    /// <param name="endAddress">The exclusive last address of the window. 结束（不含）地址。</param>
+    /// <param name="startAddress">The inclusive first address of the window. <para>起始（含）地址。</para></param>
+    /// <param name="endAddress">The exclusive last address of the window. <para>结束（不含）地址。</para></param>
     /// <returns><see langword="true"/> when the window shares any byte with the eFuse span.
     /// <para>窗口与 eFuse 范围有任何字节重叠时为 <see langword="true"/>。</para></returns>
     public static bool IntersectsEfuseWindow(long startAddress, long endAddress) =>
@@ -220,8 +220,8 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Reports whether a window lies wholly inside the documented eFuse capture window.
     /// <para>报告某个窗口是否完全位于已记载的 eFuse 采集窗口之内。</para></summary>
-    /// <param name="startAddress">The inclusive first address of the window. 起始（含）地址。</param>
-    /// <param name="endAddress">The exclusive last address of the window. 结束（不含）地址。</param>
+    /// <param name="startAddress">The inclusive first address of the window. <para>起始（含）地址。</para></param>
+    /// <param name="endAddress">The exclusive last address of the window. <para>结束（不含）地址。</para></param>
     /// <returns><see langword="true"/> when the window is contained in the eFuse span.
     /// <para>窗口被 eFuse 范围完全包含时为 <see langword="true"/>。</para></returns>
     public static bool IsInsideEfuseWindow(long startAddress, long endAddress) =>
@@ -229,7 +229,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Validates a length destined for a single-frame read exchange.
     /// <para>校验用于单帧读取交换的长度。</para></summary>
-    /// <param name="lengthBytes">The requested byte count. 请求的字节数。</param>
+    /// <param name="lengthBytes">The requested byte count. <para>请求的字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive or
     /// exceeds <see cref="MaximumBulkReadBytes"/>.
     /// <para><paramref name="lengthBytes"/> 非正，或超过 <see cref="MaximumBulkReadBytes"/>。</para></exception>
@@ -241,7 +241,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Validates a length destined for a read issued one doubleword at a time.
     /// <para>校验用于逐双字读取的长度。</para></summary>
-    /// <param name="lengthBytes">The requested byte count. 请求的字节数。</param>
+    /// <param name="lengthBytes">The requested byte count. <para>请求的字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive or
     /// exceeds <see cref="MaximumWordLoopReadBytes"/>.
     /// <para><paramref name="lengthBytes"/> 非正，或超过 <see cref="MaximumWordLoopReadBytes"/>。</para></exception>
@@ -253,7 +253,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Validates a payload destined for a single-frame write exchange.
     /// <para>校验用于单帧写入交换的载荷。</para></summary>
-    /// <param name="lengthBytes">The payload byte count. 载荷字节数。</param>
+    /// <param name="lengthBytes">The payload byte count. <para>载荷字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive or
     /// exceeds <see cref="MaximumBulkWriteBytes"/>.
     /// <para><paramref name="lengthBytes"/> 非正，或超过 <see cref="MaximumBulkWriteBytes"/>。</para></exception>
@@ -265,7 +265,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Validates a payload destined for a write issued one doubleword at a time.
     /// <para>校验用于逐双字写入的载荷。</para></summary>
-    /// <param name="lengthBytes">The payload byte count. 载荷字节数。</param>
+    /// <param name="lengthBytes">The payload byte count. <para>载荷字节数。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive or
     /// exceeds <see cref="MaximumWordLoopWriteBytes"/>.
     /// <para><paramref name="lengthBytes"/> 非正，或超过 <see cref="MaximumWordLoopWriteBytes"/>。</para></exception>
@@ -277,7 +277,7 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Counts the doublewords needed to cover a byte length, rounding the tail up.
     /// <para>计算覆盖某字节长度所需的双字数量，尾数向上取整。</para></summary>
-    /// <param name="lengthBytes">A positive byte count. 正的字节数。</param>
+    /// <param name="lengthBytes">A positive byte count. <para>正的字节数。</para></param>
     /// <returns>The number of register accesses the reader issues.
     /// <para>读取器发出的寄存器访问次数。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="lengthBytes"/> is not positive.
@@ -300,7 +300,7 @@ public static class MtkDaMemoryAccess
     /// </remarks>
     /// <param name="hardwareCode">The hardware code returned by the boot handshake.
     /// <para>boot 握手返回的硬件码。</para></param>
-    /// <returns>The documented file name. 已记载的文件名。</returns>
+    /// <returns>The documented file name. <para>已记载的文件名。</para></returns>
     public static string GetBromDumpFileName(ushort hardwareCode) => $"brom_{hardwareCode:x}.bin";
 }
 
@@ -344,7 +344,7 @@ public enum MtkDaMemoryRegion
 /// <param name="StartAddress">The inclusive first address of the window.
 /// <para>窗口的起始（含）地址。</para></param>
 /// <param name="LengthBytes">The positive byte count; a whole multiple of the capture step for the
-/// boot-ROM walk. boot-ROM 步进遍历要求正数且为采集步长整数倍的字节数。</param>
+/// boot-ROM walk. <para>boot-ROM 步进遍历要求正数且为采集步长整数倍的字节数。</para></param>
 /// <param name="Region">The documented span the window belongs to; the boot-ROM region is the default so
 /// an unlabelled window keeps the meaning it had before regions existed.
 /// <para>窗口所属的已记载范围；未标记时默认为 boot-ROM 区域，使无标签窗口保持其原有含义。</para></param>
@@ -388,9 +388,9 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
     /// <para>构造动态 RAM 区域内一个带标签的窗口。</para></summary>
     /// <remarks>No whole-memory default fits this window model: the fallback dynamic-RAM length is <c>0x100000000 - dramaddr</c>, that is <c>0xC0000000</c> bytes, which exceeds both the ceiling of a paged capture and the width of a 32-bit signed length. A caller who wants dynamic RAM therefore names a bounded sub-window, or takes the agent-reported geometry through <see cref="ForReportedRegion"/>.
     /// <para>没有能适配本窗口模型的整存默认值：其动态 RAM 回退长度为 <c>0x100000000 - dramaddr</c>， 即 <c>0xC0000000</c> 字节，既超过分页采集上限，也超过 32 位有符号长度宽度。因此需要读取动态 RAM 的调用方必须指定有界子窗口， 或通过 <see cref="ForReportedRegion"/> 采用代理上报的几何信息。</para></remarks>
-    /// <param name="startAddress">The inclusive first address. 起始（含）地址。</param>
-    /// <param name="lengthBytes">The positive byte count. 正数字节数。</param>
-    /// <returns>A window labelled with the dynamic-RAM region. 标记为动态 RAM 区域的窗口。</returns>
+    /// <param name="startAddress">The inclusive first address. <para>起始（含）地址。</para></param>
+    /// <param name="lengthBytes">The positive byte count. <para>正数字节数。</para></param>
+    /// <returns>A window labelled with the dynamic-RAM region. <para>标记为动态 RAM 区域的窗口。</para></returns>
     public static MtkDaMemoryRange ForDramWindow(uint startAddress, int lengthBytes) =>
         new(startAddress, lengthBytes, MtkDaMemoryRegion.Dram);
 
@@ -404,11 +404,11 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
     /// them. 只有 XFlash 家族会应答内存信息器件控制查询，其以六个小端双字或四字携带静态与动态区域的类型、基址与大小。XML 客户端的对应调用位于 <c>reinit</c>
     /// 的注释块之内，Legacy 客户端则完全没有，因此这两个家族 沿用已记载的默认值，也无法使用本工厂方法。</remarks>
     /// <param name="reported">One reported region, as decoded by <see cref="MtkXFlashRamInfo"/>.
-    /// 已解码的单个上报区域。</param>
+    /// <para>已解码的单个上报区域。</para></param>
     /// <param name="region">The region label to apply; only <see cref="MtkDaMemoryRegion.Sram"/>and
-    /// <see cref="MtkDaMemoryRegion.Dram"/>are reported. 要应用的区域标签；仅
-    /// <see cref="MtkDaMemoryRegion.Sram"/>与 <see cref="MtkDaMemoryRegion.Dram"/>会被上报。</param>
-    /// <returns>The window the agent itself declared. 代理自行声明的窗口。</returns>
+    /// <see cref="MtkDaMemoryRegion.Dram"/>are reported. <para>要应用的区域标签；仅
+    /// <see cref="MtkDaMemoryRegion.Sram"/>与 <see cref="MtkDaMemoryRegion.Dram"/>会被上报。</para></param>
+    /// <returns>The window the agent itself declared. <para>代理自行声明的窗口。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="region"/> is not a reported region, the reported base does not fit the 32-bit agent address space, or the reported size is zero or wider than <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>.
     /// <para><paramref name="region"/> 不是会上报的区域、上报基址无法容纳于 32 位代理地址空间，或上报大小 为零或超过 <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>。</para></exception>
     public static MtkDaMemoryRange ForReportedRegion(MtkXFlashRamRegion reported, MtkDaMemoryRegion region)

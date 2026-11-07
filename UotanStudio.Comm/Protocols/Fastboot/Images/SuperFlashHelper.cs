@@ -15,8 +15,8 @@ namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 /// Initializes a new instance of the <see cref="SuperFlashHelper"/> class.
 /// <para>初始化 <see cref="SuperFlashHelper"/> 类的新实例。</para>
 /// </remarks>
-/// <param name="session">The fastboot session. fastboot 会话。</param>
-/// <param name="mainPartition">The super partition name. super 分区名称。</param>
+/// <param name="session">The fastboot session. <para>fastboot 会话。</para></param>
+/// <param name="mainPartition">The super partition name. <para>super 分区名称。</para></param>
 internal sealed class SuperFlashHelper(FastbootSession session, string mainPartition = "super")
 {
     private readonly FastbootSession _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -31,15 +31,15 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Queries the super partition size in bytes via <c>getvar:partition-size:&lt;super&gt;</c>.
     /// <para>通过 <c>getvar:partition-size:&lt;super&gt;</c> 查询 super 分区大小（字节）。</para>
     /// </summary>
-    /// <returns>The partition size in bytes, or 0 when the device does not report it. 分区大小（字节）；设备未报告时返回 0。</returns>
+    /// <returns>The partition size in bytes, or 0 when the device does not report it. <para>分区大小（字节）；设备未报告时返回 0。</para></returns>
     public long GetSuperSize() => _session.GetPartitionSizeLong(MainPartition);
 
     /// <summary>
     /// Returns whether the file is a super partition image.
     /// <para>返回文件是否为 super 分区镜像。</para>
     /// </summary>
-    /// <param name="superImagePath">The super image file path. super 镜像文件路径。</param>
-    /// <returns><c>true</c> when the file is a super image. 文件为 super 镜像时返回 <c>true</c>。</returns>
+    /// <param name="superImagePath">The super image file path. <para>super 镜像文件路径。</para></param>
+    /// <returns><c>true</c> when the file is a super image. <para>文件为 super 镜像时返回 <c>true</c>。</para></returns>
     public bool IsSuperImage(string superImagePath)
         => new SuperImageBuilder().IsSuperImage(superImagePath);
 
@@ -47,9 +47,9 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Enumerates the logical partitions described by a super image file.
     /// <para>枚举 super 镜像文件描述的逻辑分区。</para>
     /// </summary>
-    /// <param name="superImagePath">The super image file path. super 镜像文件路径。</param>
-    /// <param name="slot">The metadata slot index (0-based). 元数据槽位索引（从 0 开始）。</param>
-    /// <returns>The logical partitions. 逻辑分区列表。</returns>
+    /// <param name="superImagePath">The super image file path. <para>super 镜像文件路径。</para></param>
+    /// <param name="slot">The metadata slot index (0-based). <para>元数据槽位索引（从 0 开始）。</para></param>
+    /// <returns>The logical partitions. <para>逻辑分区列表。</para></returns>
     public IReadOnlyList<SuperLogicalPartition> ReadLogicalPartitions(string superImagePath, int slot = 0)
         => new SuperImageBuilder().GetLogicalPartitions(superImagePath, slot);
 
@@ -57,9 +57,9 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Updates the super partition metadata from a metadata image (without wiping by default).
     /// <para>从元数据镜像更新 super 分区元数据（默认不擦除）。</para>
     /// </summary>
-    /// <param name="metadataImagePath">The LP metadata image file path. LP 元数据镜像文件路径。</param>
-    /// <param name="wipe">Whether to wipe the super partition before updating. 更新前是否擦除 super 分区。</param>
-    /// <returns>The fastboot response. fastboot 响应。</returns>
+    /// <param name="metadataImagePath">The LP metadata image file path. <para>LP 元数据镜像文件路径。</para></param>
+    /// <param name="wipe">Whether to wipe the super partition before updating. <para>更新前是否擦除 super 分区。</para></param>
+    /// <returns>The fastboot response. <para>fastboot 响应。</para></returns>
     public FastbootResponse UpdateSuperMetadata(string metadataImagePath, bool wipe = false)
         => _session.UpdateSuper(MainPartition, metadataImagePath, wipe);
 
@@ -67,9 +67,9 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Creates a logical partition (requires userspace fastboot mode).
     /// <para>创建逻辑分区（需要用户空间 fastboot 模式）。</para>
     /// </summary>
-    /// <param name="name">The logical partition name. 逻辑分区名称。</param>
-    /// <param name="size">The partition size in bytes. 分区大小（字节）。</param>
-    /// <returns>The fastboot response. fastboot 响应。</returns>
+    /// <param name="name">The logical partition name. <para>逻辑分区名称。</para></param>
+    /// <param name="size">The partition size in bytes. <para>分区大小（字节）。</para></param>
+    /// <returns>The fastboot response. <para>fastboot 响应。</para></returns>
     public FastbootResponse CreateLogicalPartition(string name, long size)
         => _session.CreateLogicalPartition(name, size);
 
@@ -77,8 +77,8 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Deletes a logical partition (requires userspace fastboot mode).
     /// <para>删除逻辑分区（需要用户空间 fastboot 模式）。</para>
     /// </summary>
-    /// <param name="name">The logical partition name. 逻辑分区名称。</param>
-    /// <returns>The fastboot response. fastboot 响应。</returns>
+    /// <param name="name">The logical partition name. <para>逻辑分区名称。</para></param>
+    /// <returns>The fastboot response. <para>fastboot 响应。</para></returns>
     public FastbootResponse DeleteLogicalPartition(string name)
         => _session.DeleteLogicalPartition(name);
 
@@ -86,9 +86,9 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Resizes a logical partition (requires userspace fastboot mode).
     /// <para>调整逻辑分区大小（需要用户空间 fastboot 模式）。</para>
     /// </summary>
-    /// <param name="name">The logical partition name. 逻辑分区名称。</param>
-    /// <param name="size">The new partition size in bytes. 新分区大小（字节）。</param>
-    /// <returns>The fastboot response. fastboot 响应。</returns>
+    /// <param name="name">The logical partition name. <para>逻辑分区名称。</para></param>
+    /// <param name="size">The new partition size in bytes. <para>新分区大小（字节）。</para></param>
+    /// <returns>The fastboot response. <para>fastboot 响应。</para></returns>
     public FastbootResponse ResizeLogicalPartition(string name, long size)
         => _session.ResizeLogicalPartition(name, size);
 
@@ -96,31 +96,31 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// Wipes the super partition through <c>update-super:&lt;partition&gt;:wipe</c>.
     /// <para>通过 <c>update-super:&lt;分区&gt;:wipe</c> 清除 super 分区。</para>
     /// </summary>
-    /// <returns>The fastboot response. fastboot 响应。</returns>
+    /// <returns>The fastboot response. <para>fastboot 响应。</para></returns>
     public FastbootResponse WipeSuper() => _session.WipeSuper(MainPartition);
 
     /// <summary>Flashes a prebuilt super image (LP metadata + logical partition data) to the device.
     /// <para>将预构建的 super 镜像（LP 元数据 + 逻辑分区数据）刷写到设备。</para></summary>
     /// <remarks>A compact metadata image (one geometry block followed by one metadata table) is applied first through <c>update-super</c>, which recreates the logical partitions on the device; each logical partition's data is then streamed with <c>download</c> + <c>flash</c>, reading linear extents directly out of the image (zero extents are zero-filled).
-    /// <para>先通过 <c>update-super</c> 应用精简元数据镜像（一块 geometry 后接一份元数据表）， 由设备重建逻辑分区；随后将每个逻辑分区的数据通过 <c>download</c> + <c>flash</c> 流式刷写，线性 extent 直接从镜像中读取（零 extent 补零）。</para><para> The <c>update-super</c> payload is the compact <c>SerializeGeometry ‖ SerializeMetadata</c> pair: a single 4096-byte geometry slot at offset 0 immediately followed by the metadata header and tables, with no reserved prefix and no backup geometry. The full raw super image layout that <c>MetadataWriter.WriteToImageStream</c> produces (4096 reserved zero bytes at offset 0, the primary geometry at 4096, its backup at 8192, then each primary metadata slot and its backup near the end of the device) describes a complete partition image and is not sent here. </para><para> 交给 <c>update-super</c> 的负载是精简形态 <c>SerializeGeometry ‖ SerializeMetadata</c>：偏移 0 处是单个 4096 字节的 geometry 槽，紧随其后是元数据头与表，既无保留前缀也无备份 geometry。 <c>MetadataWriter.WriteToImageStream</c> 写出的完整 super 裸镜像布局（偏移 0 处 4096 字节保留零、4096 处主 geometry、8192 处备份 geometry，随后是各主元数据槽及其位于设备末尾附近的备份）描述的是一整个分区镜像，此处不发送。 </para><para> Every check that can be answered without mutating the device runs before <c>update-super</c>: extent bounds against the image, the device's super capacity against the image and its block device, and each logical partition's expanded size against <c>max-download-size</c>. Committing the metadata first and discovering an unflashable partition afterwards would leave the device with declared-but-empty partitions, which does not boot, and the protocol offers no rollback. </para><para>所有无需改动设备即可回答的检查都在 <c>update-super</c> 之前完成：extent 相对镜像的边界、 设备 super 容量相对镜像及其块设备、以及每个逻辑分区的展开尺寸相对 <c>max-download-size</c>。 若先提交元数据、之后才发现某个分区无法刷写，设备就会留下“已声明但为空”的分区而无法启动， 且协议不提供回滚。</para></remarks>
-    /// <param name="superImagePath">The prebuilt super image file path. 预构建的 super 镜像文件路径。</param>
-    /// <param name="wipe">Whether to wipe the super partition before updating its metadata. 更新元数据前是否擦除
-    /// super 分区。</param>
+    /// <para>先通过 <c>update-super</c> 应用精简元数据镜像（一块 geometry 后接一份元数据表）， 由设备重建逻辑分区；随后将每个逻辑分区的数据通过 <c>download</c> + <c>flash</c> 流式刷写，线性 extent 直接从镜像中读取（零 extent 补零）。</para><para>The <c>update-super</c> payload is the compact <c>SerializeGeometry ‖ SerializeMetadata</c> pair: a single 4096-byte geometry slot at offset 0 immediately followed by the metadata header and tables, with no reserved prefix and no backup geometry. The full raw super image layout that <c>MetadataWriter.WriteToImageStream</c> produces (4096 reserved zero bytes at offset 0, the primary geometry at 4096, its backup at 8192, then each primary metadata slot and its backup near the end of the device) describes a complete partition image and is not sent here. </para><para>交给 <c>update-super</c> 的负载是精简形态 <c>SerializeGeometry ‖ SerializeMetadata</c>：偏移 0 处是单个 4096 字节的 geometry 槽，紧随其后是元数据头与表，既无保留前缀也无备份 geometry。 <c>MetadataWriter.WriteToImageStream</c> 写出的完整 super 裸镜像布局（偏移 0 处 4096 字节保留零、4096 处主 geometry、8192 处备份 geometry，随后是各主元数据槽及其位于设备末尾附近的备份）描述的是一整个分区镜像，此处不发送。 </para><para>Every check that can be answered without mutating the device runs before <c>update-super</c>: extent bounds against the image, the device's super capacity against the image and its block device, and each logical partition's expanded size against <c>max-download-size</c>. Committing the metadata first and discovering an unflashable partition afterwards would leave the device with declared-but-empty partitions, which does not boot, and the protocol offers no rollback. </para><para>所有无需改动设备即可回答的检查都在 <c>update-super</c> 之前完成：extent 相对镜像的边界、 设备 super 容量相对镜像及其块设备、以及每个逻辑分区的展开尺寸相对 <c>max-download-size</c>。 若先提交元数据、之后才发现某个分区无法刷写，设备就会留下“已声明但为空”的分区而无法启动， 且协议不提供回滚。</para></remarks>
+    /// <param name="superImagePath">The prebuilt super image file path. <para>预构建的 super 镜像文件路径。</para></param>
+    /// <param name="wipe">Whether to wipe the super partition before updating its metadata. <para>更新元数据前是否擦除
+    /// super 分区。</para></param>
     /// <param name="progress">Optional progress reporter for download/upload byte counts.
-    /// 可选的进度报告器（下载/上传字节数）。</param>
-    /// <param name="cancellationToken">The cancellation token. 取消令牌。</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="superImagePath"/>is null or
-    /// empty. <paramref name="superImagePath"/>为 null 或空时抛出。</exception>
-    /// <exception cref="FileNotFoundException">Thrown when the super image file does not exist. super
-    /// 镜像文件不存在时抛出。</exception>
+    /// <para>可选的进度报告器（下载/上传字节数）。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="superImagePath"/> is null or
+    /// empty. <para><paramref name="superImagePath"/>为 null 或空时抛出。</para></exception>
+    /// <exception cref="FileNotFoundException">Thrown when the super image file does not exist. <para>super
+    /// 镜像文件不存在时抛出。</para></exception>
     /// <exception cref="InvalidDataException">Thrown when the file is not a readable super image, when
     /// its extents fall outside the image, or when its declared super capacity disagrees with the
-    /// device. 文件不是可读的 super 镜像、其 extent 落在镜像之外，或其声明的 super 容量与设备不一致时抛出。</exception>
+    /// device. <para>文件不是可读的 super 镜像、其 extent 落在镜像之外，或其声明的 super 容量与设备不一致时抛出。</para></exception>
     /// <exception cref="FastbootException">Thrown when a fastboot command fails, or when a logical
-    /// partition is larger than the device's max-download-size and could never be streamed. fastboot
-    /// 命令失败，或某逻辑分区大于设备 max-download-size 因而永远无法流式传输时抛出。</exception>
+    /// partition is larger than the device's max-download-size and could never be streamed. <para>fastboot
+    /// 命令失败，或某逻辑分区大于设备 max-download-size 因而永远无法流式传输时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/>is
-    /// cancelled. <paramref name="cancellationToken"/>被取消时抛出。</exception>
+    /// cancelled. <para><paramref name="cancellationToken"/>被取消时抛出。</para></exception>
     public void FlashSuper(
         string superImagePath,
         bool wipe = false,
@@ -195,15 +195,15 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// <para>在 <c>update-super</c> 提交任何元数据之前执行设备侧的容量与传输上限检查，使设备永远无法接受
     /// 的 super 镜像在设备仍未被触碰时就被拒绝。</para>
     /// </summary>
-    /// <param name="imageLength">Length of the raw super image on disk. 磁盘上 super 裸镜像的长度。</param>
-    /// <param name="metadata">Metadata parsed from that image. 从该镜像解析出的元数据。</param>
-    /// <param name="cancellationToken">Checked before each device query. 每次设备查询前检查。</param>
+    /// <param name="imageLength">Length of the raw super image on disk. <para>磁盘上 super 裸镜像的长度。</para></param>
+    /// <param name="metadata">Metadata parsed from that image. <para>从该镜像解析出的元数据。</para></param>
+    /// <param name="cancellationToken">Checked before each device query. <para>每次设备查询前检查。</para></param>
     /// <exception cref="InvalidDataException">The device reports no super size, or its super capacity disagrees with the image.
-    /// 设备未上报 super 大小，或其 super 容量与镜像不一致。</exception>
+    /// <para>设备未上报 super 大小，或其 super 容量与镜像不一致。</para></exception>
     /// <exception cref="FastbootException">A logical partition's expanded size exceeds max-download-size.
-    /// 某逻辑分区的展开尺寸超过 max-download-size。</exception>
+    /// <para>某逻辑分区的展开尺寸超过 max-download-size。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
-    /// <paramref name="cancellationToken"/> 被取消。</exception>
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     private void ValidateAgainstDevice(long imageLength, SuperImageMetadata metadata, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

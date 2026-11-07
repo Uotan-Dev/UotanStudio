@@ -814,7 +814,7 @@ public sealed class HdcConnection : IDisposable
     /// <para>处理来自对端的握手消息。当 <c>ChannelId == 0</c> 时为会话级重握手；
     /// 否则为通道打开确认。</para>
     /// </summary>
-    /// <param name="message">The handshake message. 握手消息。</param>
+    /// <param name="message">The handshake message. <para>握手消息。</para></param>
     private void HandleHandshake(HdcMessage message)
     {
         throw new InvalidDataException("Unexpected authentication message on an established HDC session.");
@@ -824,7 +824,7 @@ public sealed class HdcConnection : IDisposable
     /// Handles an echo message from the peer (diagnostic / debug output).
     /// <para>处理来自对端的 Echo 消息（诊断 / 调试输出）。</para>
     /// </summary>
-    /// <param name="message">The echo message. Echo 消息。</param>
+    /// <param name="message">The echo message. <para>Echo 消息。</para></param>
     private void HandleEcho(HdcMessage message)
     {
         if (message.Command == HdcCommand.EchoRaw) { HandleData(message); return; }
@@ -844,7 +844,7 @@ public sealed class HdcConnection : IDisposable
     /// Handles a channel close message from the peer.
     /// <para>处理来自对端的通道关闭消息。</para>
     /// </summary>
-    /// <param name="message">The channel close message. 通道关闭消息。</param>
+    /// <param name="message">The channel close message. <para>通道关闭消息。</para></param>
     private void HandleChannelClose(HdcMessage message)
     {
         HdcStream? stream;
@@ -866,7 +866,7 @@ public sealed class HdcConnection : IDisposable
     /// Handles incoming data and dispatches it to the corresponding stream.
     /// <para>处理传入数据并将其分发到对应的流。</para>
     /// </summary>
-    /// <param name="message">The data message. 数据消息。</param>
+    /// <param name="message">The data message. <para>数据消息。</para></param>
     private void HandleData(HdcMessage message)
     {
         lock (_streamsLock)
@@ -882,7 +882,7 @@ public sealed class HdcConnection : IDisposable
     /// Faults all open streams due to an error.
     /// <para>因错误将所有打开的流标记为故障。</para>
     /// </summary>
-    /// <param name="ex">The exception. 异常。</param>
+    /// <param name="ex">The exception. <para>异常。</para></param>
     private void FaultAllStreams(Exception ex)
     {
         HdcStream[] streams;
@@ -903,8 +903,8 @@ public sealed class HdcConnection : IDisposable
     /// Infers the appropriate data command for a channel based on the command string prefix.
     /// <para>根据命令字符串前缀推断通道的适当数据命令。</para>
     /// </summary>
-    /// <param name="command">The channel command string. 通道命令字符串。</param>
-    /// <returns>The inferred data command. 推断出的数据命令。</returns>
+    /// <param name="command">The channel command string. <para>通道命令字符串。</para></param>
+    /// <returns>The inferred data command. <para>推断出的数据命令。</para></returns>
     private static HdcCommand InferDataCommand(string command)
     {
         if (command.StartsWith("shell", StringComparison.OrdinalIgnoreCase))
@@ -930,9 +930,9 @@ public sealed class HdcConnection : IDisposable
     /// Reads an exact number of bytes from the transport.
     /// <para>从传输读取精确数量的字节。</para>
     /// </summary>
-    /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The read bytes. 读取到的字节。</returns>
+    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <returns>The read bytes. <para>读取到的字节。</para></returns>
     private byte[] ReadExact(int length, int timeoutMs)
     {
         var buffer = new byte[length];
@@ -944,9 +944,9 @@ public sealed class HdcConnection : IDisposable
     /// allocating per frame.
     /// <para>向给定缓冲区精确读取填满其长度的字节，复用缓冲区而不是每帧分配。</para>
     /// </summary>
-    /// <param name="buffer">The destination buffer sized to the exact read length. 长度恰为读取长度的目标缓冲区。</param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The same buffer instance, for call-site ergonomics. 同一缓冲区实例。</returns>
+    /// <param name="buffer">The destination buffer sized to the exact read length. <para>长度恰为读取长度的目标缓冲区。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <returns>The same buffer instance, for call-site ergonomics. <para>同一缓冲区实例。</para></returns>
     private byte[] ReadExact(byte[] buffer, int timeoutMs)
     {
         var totalRead = 0;

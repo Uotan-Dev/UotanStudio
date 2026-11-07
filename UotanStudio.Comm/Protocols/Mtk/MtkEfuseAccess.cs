@@ -50,7 +50,7 @@ public static class MtkEfuseAccess
     /// <para><see cref="MtkEfuseFieldTable.TryGetCells"/> 返回的一个取值。</para></param>
     /// <param name="efuseBase">The peripheral base address of the eFuse block.
     /// <para>eFuse 外设块的基地址。</para></param>
-    /// <returns>The resolved cell. 解析后的单元。</returns>
+    /// <returns>The resolved cell. <para>解析后的单元。</para></returns>
     /// <exception cref="OverflowException">The base plus a relative offset would leave the 32-bit
     /// address space. <para>基址加相对偏移会超出 32 位地址空间。</para></exception>
     public static MtkEfuseCell ResolveCell(ulong cell, uint efuseBase)
@@ -67,9 +67,9 @@ public static class MtkEfuseAccess
 
     /// <summary>Validates a cell range before any device request is built.
     /// <para>在构造任何设备请求之前校验单元范围。</para></summary>
-    /// <param name="cells">The encoded table to index. 要索引的编码表。</param>
-    /// <param name="startIndex">The first requested cell index. 请求的首个单元索引。</param>
-    /// <param name="count">The requested cell count. 请求的单元数量。</param>
+    /// <param name="cells">The encoded table to index. <para>要索引的编码表。</para></param>
+    /// <param name="startIndex">The first requested cell index. <para>请求的首个单元索引。</para></param>
+    /// <param name="count">The requested cell count. <para>请求的单元数量。</para></param>
     /// <exception cref="ArgumentOutOfRangeException">The range is empty, exceeds
     /// <see cref="MaximumRequestedCells"/>, or runs past the end of <paramref name="cells"/>;
     /// an unknown index is refused rather than clamped.
@@ -91,7 +91,7 @@ public static class MtkEfuseAccess
     /// <para>格式化读取器为非地址单元上报的 4 个字节。</para></summary>
     /// <param name="address">The resolved value below <see cref="NonAddressThreshold"/>.
     /// <para>解析后小于 <see cref="NonAddressThreshold"/> 的取值。</para></param>
-    /// <returns>Four little-endian bytes. 4 个小端字节。</returns>
+    /// <returns>Four little-endian bytes. <para>4 个小端字节。</para></returns>
     public static byte[] EncodeReportedValue(uint address)
     {
         var bytes = new byte[CellLength];

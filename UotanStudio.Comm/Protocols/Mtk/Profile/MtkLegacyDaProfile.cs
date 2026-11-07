@@ -60,8 +60,8 @@ public sealed record MtkLegacyDaProfile
     /// Freezes the profile identity from explicit caller options and the selected storage family.
     /// <para>从显式调用方选项与选定的存储家族冻结配置身份。</para>
     /// </summary>
-    /// <param name="options">The validated Legacy options. 已校验的 Legacy 选项。</param>
-    /// <param name="storageKind">The explicitly selected family. 显式选择的家族。</param>
+    /// <param name="options">The validated Legacy options. <para>已校验的 Legacy 选项。</para></param>
+    /// <param name="storageKind">The explicitly selected family. <para>显式选择的家族。</para></param>
     /// <param name="observedStageOneResponseHex">The DA1 response bytes reported by the agent.
     /// <para>代理上报的 DA1 响应字节。</para></param>
     /// <returns>

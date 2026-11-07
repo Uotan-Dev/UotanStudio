@@ -144,14 +144,11 @@ public static class OhscrcpyConstants
     /// <para>OpenHarmony <c>KEYCODE_TAB</c>，本路径为投屏「多任务」按钮注入的任务切换组合键所用的键。</para>
     /// </summary>
     /// <remarks>
-    /// The value comes from the <c>keycode/KeyCodeMapBundle.properties</c> key map shipped by the DevEco Studio
-    /// screen-mirroring plugin, where AWT <c>VK_TAB</c> (9) maps to <c>KEYCODE_TAB</c> (2049), and from its
-    /// <c>DeviceController.recentApplication()</c> handler, which sends
-    /// <c>uinput -K -d 2076 -d 2049 -u 2076 -u 2049</c> for its own Recent Apps button.
-    /// <para>该值来自 DevEco Studio 投屏插件随附的 <c>keycode/KeyCodeMapBundle.properties</c> 键码表（AWT
-    /// <c>VK_TAB</c>（9）映射为 <c>KEYCODE_TAB</c>（2049）），以及其
-    /// <c>DeviceController.recentApplication()</c> 处理函数——该函数为自己的「最近应用」按钮发送
-    /// <c>uinput -K -d 2076 -d 2049 -u 2076 -u 2049</c>。</para>
+    /// The value follows the device-side key map that pairs the desktop <c>TAB</c> code (9) with
+    /// <c>KEYCODE_TAB</c> (2049); the device's task-switcher handler injects the chord with
+    /// <c>uinput -K -d 2076 -d 2049 -u 2076 -u 2049</c>.
+    /// <para>取值与设备端键码表一致：桌面 <c>TAB</c> 键码（9）对应 <c>KEYCODE_TAB</c>（2049）；设备端任务切换
+    /// 处理器经 <c>uinput -K -d 2076 -d 2049 -u 2076 -u 2049</c> 注入组合键。</para>
     /// </remarks>
     public const int KeyCodeTab = 2049;
 
@@ -161,11 +158,11 @@ public static class OhscrcpyConstants
     /// <para>OpenHarmony <c>KEYCODE_META_LEFT</c>，本路径为投屏「多任务」按钮注入的任务切换组合键的修饰键。</para>
     /// </summary>
     /// <remarks>
-    /// The value comes from the same DevEco Studio key map, where AWT <c>VK_META</c> (157) maps to
+    /// The value follows the same device-side key map, where the desktop <c>META</c> code (157) maps to
     /// <c>KEYCODE_META_LEFT</c> (2076); the device opens the recent-tasks view for the <c>META</c> + <c>TAB</c>
     /// chord, not for a dedicated single key.
-    /// <para>该值来自同一份 DevEco Studio 键码表（AWT <c>VK_META</c>（157）映射为
-    /// <c>KEYCODE_META_LEFT</c>（2076））；设备为 <c>META</c> + <c>TAB</c> 组合键打开最近任务视图，而不是为某个
+    /// <para>取值与同一份设备端键码表一致：桌面 <c>META</c> 键码（157）映射为
+    /// <c>KEYCODE_META_LEFT</c>（2076）；设备为 <c>META</c> + <c>TAB</c> 组合键打开最近任务视图，而不是为某个
     /// 单独的键。</para>
     /// </remarks>
     public const int KeyCodeMetaLeft = 2076;

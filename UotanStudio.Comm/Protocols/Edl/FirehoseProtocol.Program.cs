@@ -424,16 +424,16 @@ public sealed partial class FirehoseProtocol
     /// <para>把原始 program 载荷从数据流发送到设备，并带每存储写入超时。写入失败绝不重放，因为其被接受的长度未知。
     /// 末尾的 <paramref name="tailPaddingBytes"/> 字节以零发送，使最后一个扇区仅部分填充的源文件也能覆盖完整编程范围。</para>
     /// </summary>
-    /// <param name="dataStream">The data stream to write. 要写入的数据流。</param>
-    /// <param name="totalBytes">The total number of bytes to send. 待发送的总字节数。</param>
+    /// <param name="dataStream">The data stream to write. <para>要写入的数据流。</para></param>
+    /// <param name="totalBytes">The total number of bytes to send. <para>待发送的总字节数。</para></param>
     /// <param name="tailPaddingBytes">The trailing byte count supplied as zeros, always below one sector.
-    /// 以零补齐的尾部字节数，恒小于一个扇区。</param>
-    /// <param name="maxPayload">The validated, sector-aligned transfer size.</param>
+    /// <para>以零补齐的尾部字节数，恒小于一个扇区。</para></param>
+    /// <param name="maxPayload">The validated, sector-aligned transfer size.<para>校验后按扇区对齐的传输大小。</para></param>
     /// <param name="digest">Optional accumulator receiving every byte accepted by the transport, including the
     /// trailing zero padding, so the target digest can be compared without reading the source again.
-    /// 可选的累加器；接收传输层接受的每个字节（含尾部补零），使目标摘要无需再次读取源即可比对。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <para>可选的累加器；接收传输层接受的每个字节（含尾部补零），使目标摘要无需再次读取源即可比对。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload,
         DigestAccumulator? digest, CancellationToken cancellationToken)
     {
@@ -513,9 +513,9 @@ public sealed partial class FirehoseProtocol
     /// <summary>
     /// Receives and validates the final response after a raw transfer.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <param name="errorCode">The operation-specific failure code.</param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="errorCode">The operation-specific failure code.<para>操作特定的失败码。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     private async Task<FirehoseResponse> ReceiveTransferCompletionAsync(EdlErrorCode errorCode, CancellationToken cancellationToken)
     {
         var response = await ReceiveResponseAsync(cancellationToken);

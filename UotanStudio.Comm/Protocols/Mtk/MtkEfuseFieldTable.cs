@@ -206,7 +206,7 @@ public static class MtkEfuseFieldTable
 
     /// <summary>Gets whether a cell table exists for the hardware code.
     /// <para>获取该硬件代码是否存在单元表。</para></summary>
-    /// <param name="hardwareCode">The hardware code to look up. 要查找的硬件代码。</param>
+    /// <param name="hardwareCode">The hardware code to look up. <para>要查找的硬件代码。</para></param>
     /// <returns>
     /// <see langword="true"/> when a transcribed table covers <paramref name="hardwareCode"/>.
     /// <para>转录的表覆盖 <paramref name="hardwareCode"/> 时为 <see langword="true"/>。</para>
@@ -220,7 +220,7 @@ public static class MtkEfuseFieldTable
     /// neighbouring chip's table.
     /// <para>没有对应分组的硬件代码上报为查找失败，而不用相邻芯片的表近似。</para>
     /// </remarks>
-    /// <param name="hardwareCode">The hardware code to look up. 要查找的硬件代码。</param>
+    /// <param name="hardwareCode">The hardware code to look up. <para>要查找的硬件代码。</para></param>
     /// <param name="cells">Receives the encoded cells, in table order, when the lookup succeeds.
     /// <para>查找成功时按表顺序接收编码单元。</para></param>
     /// <returns>
@@ -253,7 +253,7 @@ public static class MtkEfuseFieldTable
 
     /// <summary>Reports whether an encoded cell carries the absolute-address marker.
     /// <para>报告编码单元是否带有绝对地址标记。</para></summary>
-    /// <param name="cell">One value from <see cref="TryGetCells"/>. <see cref="TryGetCells"/> 返回的一个取值。</param>
+    /// <param name="cell">One value from <see cref="TryGetCells"/>. <para><see cref="TryGetCells"/> 返回的一个取值。</para></param>
     /// <returns>
     /// <see langword="true"/> when the cell is an absolute address rather than a base-relative offset.
     /// <para>单元为绝对地址而非基准相对偏移时为 <see langword="true"/>。</para>

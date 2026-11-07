@@ -17,8 +17,8 @@ internal static class FastbootDeviceProfileLoader
     /// <para>从指定 JSON 文件加载设备档案。缺少厂商 ID 或产品 ID、格式错误的条目以及缺失的
     /// 文件会被跳过，因此部分损坏的清单不会破坏设备发现。</para>
     /// </summary>
-    /// <param name="path">Path to the JSON manifest. JSON 清单路径。</param>
-    /// <returns>The loaded profiles. 加载到的设备档案。</returns>
+    /// <param name="path">Path to the JSON manifest. <para>JSON 清单路径。</para></param>
+    /// <returns>The loaded profiles. <para>加载到的设备档案。</para></returns>
     public static List<FastbootDeviceProfile> LoadFromFile(string path)
     {
         var profiles = new List<FastbootDeviceProfile>();
@@ -77,8 +77,8 @@ internal static class FastbootDeviceProfileLoader
     /// when the manifest is missing, unreadable or contains no usable entries.
     /// <para>从 JSON 清单加载设备档案并返回；清单缺失、不可读或无可用条目时返回内置默认档案。</para>
     /// </summary>
-    /// <param name="path">Path to the JSON manifest. JSON 清单路径。</param>
-    /// <returns>The profiles to use. 要使用的设备档案。</returns>
+    /// <param name="path">Path to the JSON manifest. <para>JSON 清单路径。</para></param>
+    /// <returns>The profiles to use. <para>要使用的设备档案。</para></returns>
     public static IReadOnlyList<FastbootDeviceProfile> LoadOrDefault(string path)
     {
         var loaded = LoadFromFile(path);

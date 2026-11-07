@@ -278,7 +278,7 @@ public sealed partial class FirehoseProtocol
         /// <summary>Disposes the view without closing the underlying source.
         /// 释放视图但不关闭底层源流。</summary>
         /// <param name="disposing">Whether managed resources are being released.
-        /// 是否正在释放托管资源。</param>
+        /// <para>是否正在释放托管资源。</para></param>
         protected override void Dispose(bool disposing)
         {
         }

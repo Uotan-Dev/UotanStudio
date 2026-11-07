@@ -282,8 +282,6 @@ public sealed class WinUsbDriverInstaller
             var bound = current.IsTakeoverBinding;
             if (!bound && ReadDevNodeStatus(request.InstanceId).Present)
             {
-                // libwdi order: the forced update is the only in-process primitive that binds a present
-                // device; re-enumeration alone is a no-op for a driverless devnode.
                 bound = WinUsbDriverNativeMethods.UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero,
                         request.HardwareId, package.InfPath,
                         WinUsbDriverNativeMethods.InstallFlagForce |
@@ -387,9 +385,6 @@ public sealed class WinUsbDriverInstaller
 
         if (!located)
         {
-            // The device is gone (replug, hub reset): still clean up everything this application staged,
-            // otherwise a package whose certificate was just removed would fail signature validation on
-            // the next enumeration.
             var certificateRemoved = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
             var removed = RemoveOwnStagedPackages();
             if (!certificateRemoved)

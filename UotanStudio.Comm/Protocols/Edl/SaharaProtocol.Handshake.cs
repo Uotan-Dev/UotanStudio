@@ -534,8 +534,8 @@ public sealed partial class SaharaProtocol
     /// Probes whether the device is already running Firehose by sending a NOP.
     /// <para>通过发送 NOP 探测设备是否已在运行 Firehose。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns><c>true</c> if Firehose is detected. 如果检测到 Firehose 则返回 <c>true</c>。</returns>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns><c>true</c> if Firehose is detected. <para>如果检测到 Firehose 则返回 <c>true</c>。</para></returns>
     private async Task<bool> ProbeFirehoseNopAsync(CancellationToken cancellationToken)
     {
         try
@@ -602,8 +602,8 @@ public sealed partial class SaharaProtocol
     /// whitespace a target emits before its document.
     /// <para>在跳过目标在文档之前输出的 NUL 包填充与 ASCII 空白后，检查数据是否看起来像 Firehose XML 响应。</para>
     /// </summary>
-    /// <param name="d">The data to check. 要检查的数据。</param>
-    /// <returns><c>true</c> if the first non-padding bytes are &lt;?xml. 如果首个非填充字节起为 &lt;?xml 则返回 <c>true</c>。</returns>
+    /// <param name="d">The data to check. <para>要检查的数据。</para></param>
+    /// <returns><c>true</c> if the first non-padding bytes are &lt;?xml. <para>如果首个非填充字节起为 &lt;?xml 则返回 <c>true</c>。</para></returns>
     private static bool LooksLikeFirehoseXml(byte[] d)
     {
         if (d is null)

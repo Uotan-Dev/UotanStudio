@@ -34,11 +34,11 @@ public sealed partial class MtkSession
     /// <para>用于选择单元表的硬件代码。</para></param>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
     /// <para>由设备配置提供的 eFuse 基址。</para></param>
-    /// <param name="startIndex">The first cell index to read. 要读取的首个单元索引。</param>
+    /// <param name="startIndex">The first cell index to read. <para>要读取的首个单元索引。</para></param>
     /// <param name="count">The number of cells to read, at most <see cref="MtkEfuseAccess.MaximumRequestedCells"/>.
     /// <para>要读取的单元数量，最多 <see cref="MtkEfuseAccess.MaximumRequestedCells"/>。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The per-cell readings in table order. 按表顺序排列的逐单元读取结果。</returns>
+    /// <returns>The per-cell readings in table order. <para>按表顺序排列的逐单元读取结果。</para></returns>
     /// <exception cref="NotSupportedException"><paramref name="hardwareCode"/> has no transcribed cell table; the nearest chip's table is not substituted.
     /// <para><paramref name="hardwareCode"/> 没有转录的单元表；不会用最近芯片的表替代。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The requested range is empty, oversized or outside the table.

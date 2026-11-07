@@ -200,11 +200,11 @@ public static class MtkModeClassifier
         return (device.VendorId, device.ProductId) switch
         {
             (LgVid, 0x6000) => new MtkModeClassification(MtkUsbMode.Preloader,
-                $"The LG download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is recorded as a preloader port in the reference product table (usb_ids.py, line 8)."),
+                $"The LG download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is a documented preloader port."),
             (OppoVid, 0x0006) => new MtkModeClassification(MtkUsbMode.Preloader,
-                $"The OPPO download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is recorded as a preloader port in the reference product table (usb_ids.py, line 9)."),
+                $"The OPPO download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is a documented preloader port."),
             (SonyVid, 0xF200 or 0xD1E9 or 0xD1E2 or 0xD1EC or 0xD1DD) => new MtkModeClassification(MtkUsbMode.BootRom,
-                $"The Sony download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is recorded among the bootrom ports in the reference product table (usb_ids.py, lines 10-14)."),
+                $"The Sony download port 0x{device.VendorId:X4}:0x{device.ProductId:X4} is a documented boot ROM port."),
             _ => new MtkModeClassification(MtkUsbMode.Unknown,
                 $"The vendor id 0x{device.VendorId:X4} is an OEM MediaTek rebranding vendor, but the product id 0x{device.ProductId:X4} is not a documented OEM download port (LG 0x6000, OPPO 0x0006, Sony 0xF200, 0xD1E9, 0xD1E2, 0xD1EC, 0xD1DD).")
         };

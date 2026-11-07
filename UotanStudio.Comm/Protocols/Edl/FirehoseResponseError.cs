@@ -174,8 +174,8 @@ public static class FirehoseErrorClassifier
     /// <para>同一文档内该响应之前最后一条目标日志的 <c>value</c> 文本；无可用日志时为 <see langword="null"/>。</para></param>
     /// <returns>The classification, or <see langword="null"/> when the response carries no rejection to classify (an acknowledgement, a raw-mode indication, or a log-only block).
     /// <para>分类结果；响应不含需要分类的拒绝（确认应答、原始模式指示或仅含日志的块）时为 <see langword="null"/>。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="response"/>is <see langword="null"/>.
-    /// <paramref name="response"/>为 <see langword="null"/>。</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="response"/> is <see langword="null"/>.
+    /// <para><paramref name="response"/>为 <see langword="null"/>。</para></exception>
     public static FirehoseResponseError? Classify(FirehoseResponse response, string? lastLogValue = null)
     {
         ArgumentNullException.ThrowIfNull(response);

@@ -27,7 +27,6 @@ internal static class ImageFileCatalog
         }
         catch (Exception)
         {
-            // A missing optional codec must not break extension routing for other file types.
         }
     }
 
@@ -43,7 +42,6 @@ internal static class ImageFileCatalog
     private static readonly FrozenDictionary<string, ImageFormat> _formats =
         new Dictionary<string, ImageFormat>(StringComparer.OrdinalIgnoreCase)
         {
-            // JPEG (baseline, progressive, Ultra HDR gain maps).
             [".jpg"] = ImageFormat.Jpeg,
             [".jpeg"] = ImageFormat.Jpeg,
             [".jpe"] = ImageFormat.Jpeg,
@@ -53,35 +51,26 @@ internal static class ImageFileCatalog
             [".pjpeg"] = ImageFormat.Jpeg,
             [".pjp"] = ImageFormat.Jpeg,
             [".mpo"] = ImageFormat.Jpeg,
-            // PNG and APNG.
             [".png"] = ImageFormat.Png,
             [".apng"] = ImageFormat.Png,
-            // WebP (still and animated).
             [".webp"] = ImageFormat.Webp,
-            // GIF.
             [".gif"] = ImageFormat.Gif,
-            // BMP / DIB variants.
             [".bmp"] = ImageFormat.Bmp,
             [".dib"] = ImageFormat.Bmp,
             [".rle"] = ImageFormat.Bmp,
-            // Icons and cursors.
             [".ico"] = ImageFormat.Ico,
             [".cur"] = ImageFormat.Cur,
-            // TIFF (multi-page, tiled, float).
             [".tif"] = ImageFormat.Tiff,
             [".tiff"] = ImageFormat.Tiff,
             [".ptif"] = ImageFormat.Tiff,
             [".ptiff"] = ImageFormat.Tiff,
-            // QOI.
             [".qoi"] = ImageFormat.Qoi,
-            // Netpbm: PBM/PGM/PPM/PAM/PFN plus PFM float variants.
             [".pbm"] = ImageFormat.Pnm,
             [".pgm"] = ImageFormat.Pnm,
             [".ppm"] = ImageFormat.Pnm,
             [".pnm"] = ImageFormat.Pnm,
             [".pam"] = ImageFormat.Pnm,
             [".pfm"] = ImageFormat.Pfm,
-            // JPEG 2000.
             [".jp2"] = ImageFormat.Jpeg2000,
             [".j2k"] = ImageFormat.Jpeg2000,
             [".jpf"] = ImageFormat.Jpeg2000,
@@ -90,12 +79,10 @@ internal static class ImageFileCatalog
             [".j2c"] = ImageFormat.Jpeg2000,
             [".jpc"] = ImageFormat.Jpeg2000,
             [".jpt"] = ImageFormat.Jpeg2000,
-            // JBIG2.
             [".jb2"] = ImageFormat.Jbig2,
             [".jbig2"] = ImageFormat.Jbig2,
             [".jbig"] = ImageFormat.Jbig2,
             [".bid"] = ImageFormat.Jbig2,
-            // HEIF / HEIC (registered above).
             [".heic"] = ImageFormat.Heif,
             [".heif"] = ImageFormat.Heif,
             [".hif"] = ImageFormat.Heif,
@@ -103,7 +90,6 @@ internal static class ImageFileCatalog
             [".hevc"] = ImageFormat.Heif,
             [".heim"] = ImageFormat.Heif,
             [".heis"] = ImageFormat.Heif,
-            // Recognised by signature but not decodable; the viewer reports them explicitly.
             [".avif"] = ImageFormat.Avif,
             [".avifs"] = ImageFormat.Avif,
             [".jxl"] = ImageFormat.JpegXl,

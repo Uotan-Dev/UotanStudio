@@ -209,8 +209,8 @@ internal static class MtkFullDumpService
                 destination, progress: null, cancellationToken: token));
     }
 
-    /// <summary>Names the user area the reference tool addresses for one observed block-storage family.
-    /// <para>为某个已观测块存储家族命名参考工具所寻址的用户区。</para></summary>
+    /// <summary>Names the user-area region for one observed block-storage family.
+    /// <para>为某个已观测块存储家族命名用户区区域。</para></summary>
     /// <param name="kind">The storage family reported by the agent. <para>代理所上报的存储家族。</para></param>
     /// <returns>The canonical region token. <para>规范区域标记。</para></returns>
     private static string UserAreaName(MtkXFlashStorageKind kind) => kind == MtkXFlashStorageKind.Nor

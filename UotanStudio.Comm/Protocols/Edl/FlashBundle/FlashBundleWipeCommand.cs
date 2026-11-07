@@ -13,7 +13,7 @@ public sealed record WipeConfirmation(string Phrase)
     /// for both the caller that builds the confirmation and the bundle that checks it.
     /// <para>唯一可授权擦写的短语，按区分大小写的序数方式比较；构造确认的调用方与校验它的刷写包共用此一定义。</para>
     /// </summary>
-    /// <value>The literal <c>WIPE</c>.</value>
+    /// <value>The literal <c>WIPE</c>.<para>字面量 <c>WIPE</c>。</para></value>
     public const string RequiredPhrase = "WIPE";
 }
 
@@ -31,56 +31,56 @@ public sealed record FlashWipePreview
     /// Gets the display name of the wipe request, taken from its manifest label.
     /// <para>获取擦写请求的显示名称，取自清单标签。</para>
     /// </summary>
-    /// <value>The label, or the zeros payload filename when the element carries no label.</value>
+    /// <value>The label, or the zeros payload filename when the element carries no label.<para>标签文本；元素未带标签时为零值负载文件名。</para></value>
     public required string Name { get; init; }
 
     /// <summary>
     /// Gets the physical partition or LUN the request addresses.
     /// <para>获取本请求针对的物理分区或 LUN。</para>
     /// </summary>
-    /// <value>The literal physical_partition_number value.</value>
+    /// <value>The literal physical_partition_number value.<para>字面量 physical_partition_number 取值。</para></value>
     public required int PhysicalPartitionNumber { get; init; }
 
     /// <summary>
     /// Gets the resolved absolute starting sector of the region that would be overwritten.
     /// <para>获取即将被覆盖区域的绝对起始扇区。</para>
     /// </summary>
-    /// <value>The resolved start, or <see langword="null"/> when the region could not be resolved.</value>
+    /// <value>The resolved start, or <see langword="null"/> when the region could not be resolved.<para>解析出的起始值；区域无法解析时为 <see langword="null"/>。</para></value>
     public long? StartSector { get; init; }
 
     /// <summary>
     /// Gets the number of sectors that would be overwritten.
     /// <para>获取即将被覆盖的扇区数。</para>
     /// </summary>
-    /// <value>The resolved count, or <see langword="null"/> when the region could not be resolved.</value>
+    /// <value>The resolved count, or <see langword="null"/> when the region could not be resolved.<para>解析出的数量；区域无法解析时为 <see langword="null"/>。</para></value>
     public long? SectorCount { get; init; }
 
     /// <summary>
     /// Gets the number of storage bytes that would be overwritten.
     /// <para>获取即将被覆盖的存储字节数。</para>
     /// </summary>
-    /// <value>The checked byte total, or <see langword="null"/> when the region could not be resolved.</value>
+    /// <value>The checked byte total, or <see langword="null"/> when the region could not be resolved.<para>校验的字节总量；区域无法解析时为 <see langword="null"/>。</para></value>
     public long? BytesToOverwrite { get; init; }
 
     /// <summary>
     /// Gets the exact command document the bundle would send.
     /// <para>获取本包即将发送的精确命令文档。</para>
     /// </summary>
-    /// <value>The program-with-zeros document, or <see langword="null"/> for a refused request.</value>
+    /// <value>The program-with-zeros document, or <see langword="null"/> for a refused request.<para>零值写入文档；请求被拒绝时为 <see langword="null"/>。</para></value>
     public string? CommandXml { get; init; }
 
     /// <summary>
     /// Gets the reason the request was refused.
     /// <para>获取本请求被拒绝的理由。</para>
     /// </summary>
-    /// <value>The refusal text, or <see langword="null"/> when the request passed every gate.</value>
+    /// <value>The refusal text, or <see langword="null"/> when the request passed every gate.<para>拒绝文本；请求通过全部门控时为 <see langword="null"/>。</para></value>
     public string? RefusalReason { get; init; }
 
     /// <summary>
     /// Gets whether the request passed every gate and therefore has a command document.
     /// <para>获取本请求是否已通过全部门控并因此拥有命令文档。</para>
     /// </summary>
-    /// <value><see langword="true"/> when <see cref="CommandXml"/> is present.</value>
+    /// <value><see langword="true"/> when <see cref="CommandXml"/> is present.<para>存在 <see cref="CommandXml"/> 时为 <see langword="true"/>。</para></value>
     public bool IsAuthorized => CommandXml is not null;
 }
 
@@ -112,14 +112,14 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The only phrase that authorises a wipe, compared with ordinal case sensitivity.
     /// <para>唯一可授权擦写的短语，按区分大小写的序数方式比较。</para>
     /// </summary>
-    /// <value>The literal <c>WIPE</c>.</value>
+    /// <value>The literal <c>WIPE</c>.<para>字面量 <c>WIPE</c>。</para></value>
     internal const string RequiredPhrase = WipeConfirmation.RequiredPhrase;
 
     /// <summary>
     /// The refusal recorded when no confirmation, or a different phrase, was supplied.
     /// <para>未提供确认或所提供短语不同时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text ending in the no-write guarantee.</value>
+    /// <value>Stable refusal text ending in the no-write guarantee.<para>以不写入保证结尾的稳定拒绝文本。</para></value>
     internal const string MissingConfirmationReason =
         "A wipe requires the caller-supplied WIPE confirmation; nothing was written.";
 
@@ -127,7 +127,7 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The refusal recorded for an entire-storage wipe without the second explicit flag.
     /// <para>整段存储擦写未附带第二项显式开关时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming <c>AllowEntireStorageWipe</c>.</value>
+    /// <value>Stable refusal text naming <c>AllowEntireStorageWipe</c>.<para>命名 <c>AllowEntireStorageWipe</c> 的稳定拒绝文本。</para></value>
     internal const string AmbiguousEntireStorageReason =
         "An entire-storage wipe also requires AllowEntireStorageWipe; nothing was written.";
 
@@ -135,7 +135,7 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The refusal recorded when the target never reported geometry for the partition.
     /// <para>目标从未为该分区上报几何信息时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the missing geometry.</value>
+    /// <value>Stable refusal text naming the missing geometry.<para>命名缺失几何信息的稳定拒绝文本。</para></value>
     internal const string MissingGeometryReason =
         "The wipe target cannot be resolved without reported storage geometry; nothing was written.";
 
@@ -143,7 +143,7 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The refusal recorded when the requested region does not resolve against the reported geometry.
     /// <para>所请求区域无法依据上报几何解析时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the unresolvable region.</value>
+    /// <value>Stable refusal text naming the unresolvable region.<para>命名无法解析区域的稳定拒绝文本。</para></value>
     internal const string UnresolvableRegionReason =
         "The wipe target region is outside the reported storage geometry; nothing was written.";
 
@@ -151,7 +151,7 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The refusal recorded when the manifest sector size contradicts the reported one.
     /// <para>清单扇区大小与上报扇区大小矛盾时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the sector-size contradiction.</value>
+    /// <value>Stable refusal text naming the sector-size contradiction.<para>命名扇区大小矛盾的稳定拒绝文本。</para></value>
     internal const string SectorSizeConflictReason =
         "The wipe element declares a sector size the target does not report; nothing was written.";
 
@@ -159,7 +159,7 @@ internal sealed record FlashBundleWipeCommand(long StartSector, long SectorCount
     /// The refusal recorded when range validation rejected the command document.
     /// <para>范围校验拒绝该命令文档时应记录的拒绝理由。</para>
     /// </summary>
-    /// <value>Stable refusal text naming the rejected range.</value>
+    /// <value>Stable refusal text naming the rejected range.<para>命名被拒绝范围的稳定拒绝文本。</para></value>
     internal const string CommandBuildReason =
         "The wipe command was rejected by range validation; nothing was written.";
 

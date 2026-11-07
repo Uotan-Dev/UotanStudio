@@ -897,12 +897,12 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Sends an XML command and waits for its response.
     /// <para>发送 XML 命令并等待响应。</para>
     /// </summary>
-    /// <param name="xml">The XML command. XML 命令。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <param name="responseTimeoutMs">Optional response timeout in milliseconds. 可选的响应超时（毫秒）。</param>
-    /// <param name="writeTimeoutMs">Optional write timeout in milliseconds. 可选的写入超时（毫秒）。</param>
-    /// <param name="logObserver">Optional bounded collector for logs belonging to this command.</param>
-    /// <param name="blockObserver">Optional bounded collector for structured authentication fields.</param>
+    /// <param name="xml">The XML command. <para>XML 命令。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="responseTimeoutMs">Optional response timeout in milliseconds. <para>可选的响应超时（毫秒）。</para></param>
+    /// <param name="writeTimeoutMs">Optional write timeout in milliseconds. <para>可选的写入超时（毫秒）。</para></param>
+    /// <param name="logObserver">Optional bounded collector for logs belonging to this command.<para>可选的属于该命令的有界日志采集器。</para></param>
+    /// <param name="blockObserver">Optional bounded collector for structured authentication fields.<para>可选的结构化认证字段有界采集器。</para></param>
     /// <param name="skipResponseAcknowledgement">When non-<see langword="null"/> (mirrors <c>--skipresponse</c>
     /// for loaders that never acknowledge reads or writes), only the command bytes are written and this
     /// synthetic acknowledgement is returned instead of reading any target response. Its raw-mode bit must
@@ -915,7 +915,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// the session. Only the configure negotiation uses this, because its retries send the same idempotent command.
     /// <para>为 <see langword="true"/> 时，响应超时不使会话失效，而是原样向上抛出，交由有界重试循环处理；
     /// 其他失败仍会使会话失效。只有 configure 协商使用它，因为其重试发送的是同一个幂等命令。</para></param>
-    /// <returns>The Firehose response. Firehose 响应。</returns>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken,
         int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null,
         Action<FirehoseDataBlock>? blockObserver = null, FirehoseResponse? skipResponseAcknowledgement = null,
@@ -962,7 +962,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Gets the write (ZLP) timeout for the configured storage type.
     /// <para>获取按配置存储类型的写入（ZLP）超时。</para>
     /// </summary>
-    /// <returns>The write timeout in milliseconds. 写入超时（毫秒）。</returns>
+    /// <returns>The write timeout in milliseconds. <para>写入超时（毫秒）。</para></returns>
     private int GetZlpTimeoutMs()
     {
         return Configuration.WriteTimeoutMs > 0
@@ -980,7 +980,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Gets the erase timeout for the configured storage type.
     /// <para>获取按配置存储类型的擦除超时。</para>
     /// </summary>
-    /// <returns>The erase timeout in milliseconds. 擦除超时（毫秒）。</returns>
+    /// <returns>The erase timeout in milliseconds. <para>擦除超时（毫秒）。</para></returns>
     private int GetEraseTimeoutMs()
     {
         return Configuration.EraseTimeoutMs > 0
@@ -1014,10 +1014,10 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Writes data to the transport.
     /// <para>将数据写入传输。</para>
     /// </summary>
-    /// <param name="data">The data to write. 要写入的数据。</param>
-    /// <param name="timeoutMs">The write timeout in milliseconds. 写入超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <param name="data">The data to write. <para>要写入的数据。</para></param>
+    /// <param name="timeoutMs">The write timeout in milliseconds. <para>写入超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     /// <exception cref="EdlException">Thrown when the transport accepted only part of the payload, because a partial write cannot be replayed.
     /// <para>传输只接受了部分载荷时抛出，因为部分写入无法重放。</para></exception>
     private async Task WriteDataAsync(byte[] data, int timeoutMs, CancellationToken cancellationToken)
@@ -1043,7 +1043,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Logs a Message via the <see cref="LogMessage"/> event.
     /// <para>通过 <see cref="LogMessage"/> 事件记录消息。</para>
     /// </summary>
-    /// <param name="msg">The Message to log. 要记录的消息。</param>
+    /// <param name="msg">The Message to log. <para>要记录的消息。</para></param>
     private void Log(string msg) => LogMessage?.Invoke(this, msg);
 
     /// <summary>
@@ -1051,7 +1051,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// events.
     /// <para>通过 <see cref="LogMessage"/> 与 <see cref="TargetLogReceived"/> 事件上报目标日志。</para>
     /// </summary>
-    /// <param name="value">The target log value. 目标日志值。</param>
+    /// <param name="value">The target log value. <para>目标日志值。</para></param>
     private void OnTargetLog(string value)
     {
         Log($"TARGET: {value}");

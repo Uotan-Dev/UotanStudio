@@ -152,8 +152,6 @@ public static class FastbootDeviceInfoService
             var stage = isSpacemiT ? SpacemiTBootStageClassifier.Probe(session) : SpacemiTBootStage.Unknown;
             if (stage == SpacemiTBootStage.Unknown && isSpacemiT)
             {
-                // The probe could not tell the stages apart; the enumeration hint is the only remaining evidence.
-                // 探测无法区分两个阶段；枚举线索是剩下的唯一证据。
                 stage = device.FastbootStage;
             }
 
@@ -165,8 +163,6 @@ public static class FastbootDeviceInfoService
             }
             catch (FastbootException exception)
             {
-                // "Variable not implemented" is an answer, not a broken link: it says this gadget has no variable dump.
-                // “Variable not implemented” 是一种应答而不是链路故障：它说明该 gadget 没有变量转储。
                 variables = null;
                 refusal = exception;
             }
@@ -180,9 +176,6 @@ public static class FastbootDeviceInfoService
             var branch = ResolveBranch(isSpacemiT, stage);
             if (branch == FastbootInfoBranch.SpacemiTFdl)
             {
-                // The FDL dump, when one answers at all, carries no partition-size keys; the boot-chain facts are what
-                // this stage is read for.
-                // FDL 即使在有变量转储时也不带分区容量键；读取该阶段就是为了那些引导链事实。
                 return new FastbootDeviceInfo(branch, stage, BuildFacts(branch, variables), []);
             }
 
@@ -215,8 +208,6 @@ public static class FastbootDeviceInfoService
     {
         if (stage == SpacemiTBootStage.Unknown)
         {
-            // Only the wire separates the two stages, and a gadget with no variable dump is exactly the FDL case.
-            // 只有线路能区分两个阶段，而没有变量转储的 gadget 正是 FDL 的情形。
             stage = SpacemiTBootStageClassifier.Probe(session);
             if (stage == SpacemiTBootStage.Unknown && isSpacemiT)
             {
@@ -229,8 +220,6 @@ public static class FastbootDeviceInfoService
         var answered = ProbeVariables(session, fdl ? FdlVariables : StandardVariables, ct);
         if (answered.Count == 0)
         {
-            // Nothing answered either way, so the original failure is the honest result.
-            // 两种方式都无人应答，因此原始失败才是诚实的结果。
             throw refusal ?? new FastbootException(FastbootResponseState.Fail,
                 "The device answered neither 'getvar all' nor the individual fastboot variables.");
         }
@@ -300,8 +289,6 @@ public static class FastbootDeviceInfoService
             catch (Exception exception) when (exception is FastbootException or IOException or TimeoutException
                 or InvalidOperationException or NotSupportedException)
             {
-                // A variable the endpoint refuses must not abort the read of the others.
-                // 端点拒绝的变量不得中断对其余变量的读取。
             }
         }
 

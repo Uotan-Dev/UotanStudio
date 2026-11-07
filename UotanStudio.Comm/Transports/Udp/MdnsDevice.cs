@@ -8,16 +8,16 @@ namespace UotanStudio.Comm.Transports.Udp;
 /// Initializes a new discovered device.
 /// <para>初始化一个新的发现设备。</para>
 /// </remarks>
-/// <param name="instance">The full service instance name. 完整服务实例名。</param>
-/// <param name="hostName">The SRV target host name. SRV 目标主机名。</param>
-/// <param name="port">The service TCP port. 服务 TCP 端口。</param>
-/// <param name="addresses">The resolved IP addresses. 解析出的 IP 地址。</param>
-/// <param name="properties">The TXT-record properties. TXT 记录属性。</param>
+/// <param name="instance">The full service instance name. <para>完整服务实例名。</para></param>
+/// <param name="hostName">The SRV target host name. <para>SRV 目标主机名。</para></param>
+/// <param name="port">The service TCP port. <para>服务 TCP 端口。</para></param>
+/// <param name="addresses">The resolved IP addresses. <para>解析出的 IP 地址。</para></param>
+/// <param name="properties">The TXT-record properties. <para>TXT 记录属性。</para></param>
 /// <param name="serviceType">The service type the instance was advertised under, when known.
-/// 广播该实例的服务类型（已知时）。</param>
+/// <para>广播该实例的服务类型（已知时）。</para></param>
 /// <param name="lastSeenUtc">When the instance's SRV record was last received, so a re-advertised service
 /// outranks a stale one the responder still lists.
-/// 该实例的 SRV 记录最后被收到的时刻，使重新广播的服务优先于应答方仍列出的旧服务。</param>
+/// <para>该实例的 SRV 记录最后被收到的时刻，使重新广播的服务优先于应答方仍列出的旧服务。</para></param>
 internal sealed class MdnsDevice(
     string instance,
     string? hostName,

@@ -322,13 +322,13 @@ public sealed record MtkSecCfgView(
 /// <para>安全启动配置镜像写入某分区后的回执。</para></summary>
 /// <remarks>The receipt records what the host submitted and where. It does not claim the target accepted the new lock state semantically: this client treats a successful write as an acknowledgement only, so verifying the result requires a separate read.
 /// <para>回执只记录主机提交了什么以及写到哪里，并不声称目标在语义上接受了新的锁定状态：本客户端把成功 写入仅当作一次确认，因此验证结果需要另行读取。</para></remarks>
-/// <param name="PartitionName">The exact GPT partition name written. 被写入的精确 GPT 分区名。</param>
+/// <param name="PartitionName">The exact GPT partition name written. <para>被写入的精确 GPT 分区名。</para></param>
 /// <param name="PartitionIndex">The zero-based GPT entry index written.
 /// <para>被写入条目的从零开始 GPT 索引。</para></param>
 /// <param name="ByteOffset">The region-relative offset of the write.
 /// <para>本次写入相对于区域起点的字节偏移。</para></param>
-/// <param name="ByteLength">The byte length written. 写入的字节长度。</param>
-/// <param name="Format">The layout the submitted image declares. 提交镜像声明的布局。</param>
+/// <param name="ByteLength">The byte length written. <para>写入的字节长度。</para></param>
+/// <param name="Format">The layout the submitted image declares. <para>提交镜像声明的布局。</para></param>
 /// <param name="ImageSha256Hex">The SHA-256 digest of the exact bytes submitted.
 /// <para>提交字节的 SHA-256 摘要。</para></param>
 public sealed record MtkSecCfgWriteResult(

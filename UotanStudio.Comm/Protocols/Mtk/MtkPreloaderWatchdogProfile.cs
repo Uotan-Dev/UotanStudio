@@ -25,8 +25,8 @@ public enum MtkPreloaderWatchdogOperation
 /// One ordered register step of a preloader watchdog-disable sequence.
 /// <para>preloader 看门狗禁用序列中的一个有序寄存器步骤。</para>
 /// </summary>
-/// <param name="Operation">The access kind the step performs. 该步骤执行的访问种类。</param>
-/// <param name="Address">The register address the step reads or writes. 该步骤读或写的寄存器地址。</param>
+/// <param name="Operation">The access kind the step performs. <para>该步骤执行的访问种类。</para></param>
+/// <param name="Address">The register address the step reads or writes. <para>该步骤读或写的寄存器地址。</para></param>
 /// <param name="Value">The word written, or the OR mask for a read-modify-write step.
 /// <para>写入的字，或读-改-写步骤的按位或掩码。</para></param>
 public sealed record MtkPreloaderWatchdogRule(
@@ -175,7 +175,7 @@ public static class MtkPreloaderWatchdogTable
     /// <para>preloader 初始化对 <c>Chipconfig.has64bit</c> 为 true 的芯片完全跳过看门狗，因此本集合列出
     /// 这些硬件码，而不是根据存储家族推断 64 位支持。</para>
     /// </remarks>
-    /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
+    /// <param name="hardwareCode">The hardware code reported by command FD. <para>命令 FD 报告的硬件码。</para></param>
     /// <returns><see langword="true"/> for a hardware code the table marks as 64-bit.
     /// <para>芯片表标记为 64 位的硬件码返回 <see langword="true"/>。</para></returns>
     public static bool Is64BitHardware(ushort hardwareCode) => SixtyFourBitHardwareCodes.Contains(hardwareCode);
@@ -195,7 +195,7 @@ public static class MtkPreloaderWatchdogTable
     /// RGU 清零；MT6575/MT6577 使用十六位 I/O；MT6592 追加 <c>0x10000500</c> 寄存器。
     /// 其余已记录芯片走三十二位默认分支，使用每芯片基址与 <c>MtkConfig.get_watchdog_addr</c> 的取值表。</para>
     /// </remarks>
-    /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
+    /// <param name="hardwareCode">The hardware code reported by command FD. <para>命令 FD 报告的硬件码。</para></param>
     /// <param name="hardwareVersion">The hardware revision reported by the boot identity query.
     /// <para>boot 身份查询报告的硬件修订。</para></param>
     /// <returns>The steps in send order, or an empty list when the table records no sequence for the chip.
@@ -254,7 +254,7 @@ public static class MtkPreloaderWatchdogTable
     /// <see langword="false"/> so the caller can refuse rather than guess an address.
     /// <para>解锁序列的其它地址均由 <c>chipconfig.misc_lock</c> 推导；这里的取值来自芯片表中的
     /// <c>misc_lock=</c> 条目。未提供该字段的芯片返回 <see langword="false"/>，让调用方可以拒绝而不是猜测地址。</para></remarks>
-    /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
+    /// <param name="hardwareCode">The hardware code reported by command FD. <para>命令 FD 报告的硬件码。</para></param>
     /// <param name="miscLockAddress">The recorded register base, or <c>0</c> when unknown.
     /// <para>记录的寄存器基址，未知时为 <c>0</c>。</para></param>
     /// <returns><see langword="true"/> when the chip table records the register.

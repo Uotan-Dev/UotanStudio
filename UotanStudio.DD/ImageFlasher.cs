@@ -164,7 +164,6 @@ public sealed class ImageFlasher
                 }
                 catch when (!completed)
                 {
-                    // Preserve the original failure instead of masking it with a cleanup error.
                 }
             }
         }

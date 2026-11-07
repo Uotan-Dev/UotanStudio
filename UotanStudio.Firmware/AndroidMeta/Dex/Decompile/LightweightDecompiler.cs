@@ -33,7 +33,7 @@ public static class LightweightDecompiler
 
         var resolver = new MethodResolver(dex);
         var sb = new StringBuilder(4096);
-        sb.Append("// Decompiled by UotanStudio lightweight DEX decompiler (jadx-inspired)\n")
+        sb.Append("// Decompiled by UotanStudio lightweight DEX decompiler\n")
           .Append("// DEX v").Append(dex.Header.Version)
           .Append(" | classes: ").Append(dex.Classes.Count)
           .Append(" | methods: ").Append(dex.Methods.Count)

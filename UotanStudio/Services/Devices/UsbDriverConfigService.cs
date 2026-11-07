@@ -153,9 +153,6 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, "Windows only");
         }
 
-        // The takeover can fall back to UpdateDriverForPlugAndPlayDevices, which only the elevated helper
-        // may call, so the install always relaunches even when this process already holds an administrator
-        // token.
         List<string> arguments =
         [
             UsbDriverElevatedCommand.TakeoverSwitch, request.InstanceId, request.HardwareId

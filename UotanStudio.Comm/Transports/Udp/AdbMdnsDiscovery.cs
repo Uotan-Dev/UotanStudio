@@ -115,9 +115,9 @@ internal static class AdbMdnsDiscovery
     /// answers until the timeout elapses, and returns the discovered devices.
     /// <para>发送 adb 服务类型的 mDNS PTR 查询，在超时前收集组播应答，并返回发现的设备。</para>
     /// </summary>
-    /// <param name="timeout">Collection window; defaults to 3 seconds. 收集窗口，默认 3 秒。</param>
-    /// <param name="ct">Cancellation token. 取消令牌。</param>
-    /// <returns>The discovered devices. 发现的设备列表。</returns>
+    /// <param name="timeout">Collection window; defaults to 3 seconds. <para>收集窗口，默认 3 秒。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The discovered devices. <para>发现的设备列表。</para></returns>
     public static async Task<IReadOnlyList<MdnsDevice>> DiscoverAdbDevicesAsync(
         TimeSpan? timeout = null, CancellationToken ct = default)
         => await BrowseAsync([AdbTlsService, AdbLegacyService], timeout ?? DefaultTimeout,
@@ -128,7 +128,7 @@ internal static class AdbMdnsDiscovery
     /// <param name="instanceName">The expected instance label, i.e. the QR "S" field.
     /// <para>期望的实例标签，即二维码的 "S" 字段。</para></param>
     /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
-    /// <param name="ct">Cancellation token. 取消令牌。</param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The pairing service instance, or <c>null</c> on timeout.
     /// <para>配对服务实例；超时返回 <c>null</c>。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="instanceName"/> is blank.
@@ -153,7 +153,7 @@ internal static class AdbMdnsDiscovery
     /// <param name="address">The device IP address discovered during pairing.
     /// <para>配对阶段发现的设备 IP 地址。</para></param>
     /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
-    /// <param name="ct">Cancellation token. 取消令牌。</param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="instanceName">The instance label adbd registered, i.e. its <c>persist.adb.wifi.guid</c>; when
     /// given, that exact SRV name is queried and an instance carrying the label counts without an address match.
     /// <para>adbd 注册的实例标签，即其 <c>persist.adb.wifi.guid</c>；给出时会直接查询该 SRV 名称，携带该标签的实例
@@ -702,8 +702,7 @@ internal static class AdbMdnsDiscovery
     /// 且仅 IPv6 链路属于例外而非普遍情况。</para>
     /// </summary>
     /// <param name="address">The accumulated address text. <para>已累积的地址文本。</para></param>
-    /// <returns><para>该文本为 IPv4 字面量时为 <see langword="true"/>。</para>
-    /// <see langword="true"/> when the text is an IPv4 literal.</returns>
+    /// <returns>/// <see langword="true"/> when the text is an IPv4 literal.<para>该文本为 IPv4 字面量时为 <see langword="true"/>。</para></returns>
     private static bool IsIpv4Literal(string address) =>
         IPAddress.TryParse(address, out var ip) && ip.AddressFamily == AddressFamily.InterNetwork;
 

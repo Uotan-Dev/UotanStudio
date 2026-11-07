@@ -39,9 +39,9 @@ internal sealed class AdbTcpTransport : ICommTransport
     /// Initializes a new TCP ADB transport and connects to adbd eagerly.
     /// <para>初始化新的 TCP ADB 传输并立即连接 adbd。</para>
     /// </summary>
-    /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
-    /// <param name="port">TCP port of the adbd service; defaults to 5555. adbd 服务的 TCP 端口，默认 5555。</param>
-    /// <param name="connectTimeoutMs">Connection timeout in milliseconds; defaults to 5000. 连接超时（毫秒），默认 5000。</param>
+    /// <param name="host">Host name or IP address of the device. <para>设备的主机名或 IP 地址。</para></param>
+    /// <param name="port">TCP port of the adbd service; defaults to 5555. <para>adbd 服务的 TCP 端口，默认 5555。</para></param>
+    /// <param name="connectTimeoutMs">Connection timeout in milliseconds; defaults to 5000. <para>连接超时（毫秒），默认 5000。</para></param>
     public AdbTcpTransport(string host, int port = 5555, int connectTimeoutMs = 5000)
     {
         if (string.IsNullOrWhiteSpace(host))
@@ -293,7 +293,7 @@ internal sealed class AdbTcpTransport : ICommTransport
     /// Returns the underlying <see cref="NetworkStream"/> of the TCP connection.
     /// <para>返回 TCP 连接底层的 <see cref="NetworkStream"/>。</para>
     /// </summary>
-    /// <returns>The live network stream. 活动的网络流。</returns>
+    /// <returns>The live network stream. <para>活动的网络流。</para></returns>
     public Stream GetStream() => GetConnectedStream();
 
     /// <summary>

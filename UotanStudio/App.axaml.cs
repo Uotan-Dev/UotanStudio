@@ -104,8 +104,6 @@ public partial class App : Application
         LanguageService.Instance.Initialize();
         LanguageService.Instance.InitializeFromSystemLanguage();
 
-        // The disk flasher runs a privileged write in a child process; the prompt and its message windows need
-        // an owner window, so they are installed once the desktop lifetime exists.
         global::UotanStudio.Services.Flash.IFlashElevationPromptProvider.Set(
             new global::UotanStudio.Services.Ui.FlashElevationPrompt(
                 () => Views.UiWindowService.Shared.OwnerWindow as Avalonia.Controls.Window));

@@ -306,7 +306,7 @@ public sealed partial class MtkSession
     /// <para>写入 bootloader 版本探测并返回单个回复字节。</para></summary>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The reply byte; 0xFE marks Boot ROM mode. 回复字节；0xFE 标记 Boot ROM 模式。</returns>
+    /// <returns>The reply byte; 0xFE marks Boot ROM mode. <para>回复字节；0xFE 标记 Boot ROM 模式。</para></returns>
     private async Task<byte> ReadBootLoaderVersionOwnedAsync(CancellationToken cancellationToken)
     {
         await WriteAsync([BootIdentityProbeCommand], _timeoutMs, cancellationToken).ConfigureAwait(false);
@@ -317,7 +317,7 @@ public sealed partial class MtkSession
     /// <para>写入 Boot ROM 版本命令并返回单个回复字节。</para></summary>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The reply byte. 回复字节。</returns>
+    /// <returns>The reply byte. <para>回复字节。</para></returns>
     private async Task<byte> ReadBromVersionOwnedAsync(CancellationToken cancellationToken)
     {
         await WriteAsync([BootIdentityBromVersionCommand], _timeoutMs, cancellationToken).ConfigureAwait(false);
@@ -359,7 +359,7 @@ public sealed partial class MtkSession
     /// <para>错误信息中使用的与本地化无关的操作名。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The identifier bytes exactly as delivered. 按交付原样返回的标识字节。</returns>
+    /// <returns>The identifier bytes exactly as delivered. <para>按交付原样返回的标识字节。</para></returns>
     private async Task<byte[]> ReadBootIdentityBlobOwnedAsync(byte identityCommand, string operation,
         CancellationToken cancellationToken)
     {
@@ -394,8 +394,8 @@ public sealed partial class MtkSession
 
     /// <summary>Builds the neutral evidence line for one identifier query outcome.
     /// <para>为一次标识查询结果构造与本地化无关的证据行。</para></summary>
-    /// <param name="payload">The answered bytes, or null. 已应答的字节，可为 null。</param>
-    /// <returns>The evidence detail text. 证据详情文本。</returns>
+    /// <param name="payload">The answered bytes, or null. <para>已应答的字节，可为 null。</para></param>
+    /// <returns>The evidence detail text. <para>证据详情文本。</para></returns>
     private static string DescribeIdentityBlob(byte[]? payload) => payload is null
         ? "The target does not report the identifier."
         : $"Identifier {Convert.ToHexString(payload)} ({payload.Length} byte(s)).";

@@ -1633,9 +1633,6 @@ public sealed partial class FlashViewModel
                 _lastObservedDevice = currentDevice;
                 ExpandDeviceProtocolSection(currentDevice?.Protocol);
                 ResetRkStorageOptions();
-                // The status table describes one device, so a selection change swaps in that device's own rows: its
-                // cached read when it has one, and the empty state when it was never read.
-                // 设备状态表只描述一台设备，因此选择变化时换成该设备自己的行：读过就显示缓存，从未读过则显示空态。
                 RestoreDeviceStatus(currentDevice?.Key);
                 if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
                 {
@@ -2209,9 +2206,6 @@ public sealed partial class FlashViewModel
         {
             OverallPercent = 0;
             OverallText = string.Empty;
-            // A section that reports no fraction at all (the boot-chain staging) has no rows to average; it keeps
-            // scrolling rather than stopping at the zero this branch would otherwise publish.
-            // 完全没有比例可报的段落（引导链暂存）没有行可平均；它保持滚动，而不是停在这个分支原本写下的 0。
             IsOverallIndeterminate = _overallScrolls;
             return;
         }
@@ -3735,10 +3729,10 @@ public sealed partial class FlashViewModel
             (firehose, cancellationToken) => firehose.ResetAsync(cancellationToken));
 
     /// <summary>
-    /// Normalises the slot text to a lowercase identifier that may be sent: the reference lineages emit
+    /// Normalises the slot text to a lowercase identifier that may be sent: the two slot lineages emit
     /// either <c>slot="a"</c> or <c>slot="1"</c>, so both a/b and 0/1 are accepted here and the value the
     /// user wrote is forwarded unchanged, with no conversion.
-    /// <para>把槽位文本归一化为可发送的小写标识：参考实现两种谱系分别以 <c>slot="a"</c> 与
+    /// <para>把槽位文本归一化为可发送的小写标识：两种设备谱系分别以 <c>slot="a"</c> 与
     /// <c>slot="1"</c> 的形式下发，因此这里同时接受 a/b 与 0/1，并按用户所写的值原样发送，不做任何换算。</para>
     /// </summary>
     /// <param name="text">The raw box text. <para>输入框原文。</para></param>
@@ -4871,12 +4865,12 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// <para>为所选家族补齐启动设置：Legacy 用主机操作系统与默认包长且不预设 DA1 响应断言，XML 用参考工具的
-    /// 默认运行时策略且不预设属性信封名；XML 家族不接受 EMI 参数，因此这里把它清空，避免启动中途被拒绝。</para>
     /// Completes the startup settings for the selected family: Legacy uses the host operating system and
-    /// default packet sizes without a DA1 response assertion, and XML uses the reference tool's default runtime
+    /// default packet sizes without a DA1 response assertion, and XML uses the XML stage's default runtime
     /// policy without a preset property envelope. The XML family takes no EMI parameters, so they are cleared
     /// here instead of being rejected halfway through startup.
+    /// <para>为所选家族补齐启动设置：Legacy 用主机操作系统与默认包长且不预设 DA1 响应断言，XML 用 XML 阶段默认的
+    /// 运行时策略且不预设属性信封名；XML 家族不接受 EMI 参数，因此这里把它清空，避免启动中途被拒绝。</para>
     /// </summary>
     /// <param name="startup">The identity-matched startup to extend. <para>待补充的身份匹配启动配置。</para></param>
     /// <returns>The startup configuration for the selected family. <para>所选家族的启动配置。</para></returns>

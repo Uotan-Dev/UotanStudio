@@ -106,7 +106,6 @@ public static class FlashAfterSalesPackage
         var programsByPath = new Dictionary<string, RawProgramEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var program in programs)
         {
-            // Manifests may reference images the package does not ship, such as an unmerged super.img.
             if (program.Filename.Length > 0 && program.SourceFile.Length > 0 &&
                 File.Exists(program.SourceFile))
             {

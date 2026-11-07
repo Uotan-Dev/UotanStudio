@@ -46,7 +46,7 @@ public sealed partial class MtkSession
     /// <c>..</c> 片段、控制字符以及超长名称。真正的包含式判定仍由主机存储负责；此处只从不可信输入中
     /// 剔除明显的越界形式。</para>
     /// </summary>
-    /// <param name="token">The device-authored file token. 设备提供的主机文件令牌。</param>
+    /// <param name="token">The device-authored file token. <para>设备提供的主机文件令牌。</para></param>
     /// <exception cref="MtkProtocolException">The token is not a bounded relative file name.
     /// <para>该令牌不是有界的相对文件名。</para></exception>
     internal static void ValidateXmlHostFileToken(string token)

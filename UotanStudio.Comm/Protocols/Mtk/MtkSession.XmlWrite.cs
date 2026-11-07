@@ -137,8 +137,8 @@ public sealed partial class MtkSession
     /// 包长由设备决定，因此极小的协商值无法把有界传输变成无限次应答交换。
     /// </para>
     /// </summary>
-    /// <param name="length">The declared transfer byte count. 声明的传输字节数。</param>
-    /// <param name="packetLength">The negotiated packet length in bytes. 协商出的包长（字节）。</param>
+    /// <param name="length">The declared transfer byte count. <para>声明的传输字节数。</para></param>
+    /// <param name="packetLength">The negotiated packet length in bytes. <para>协商出的包长（字节）。</para></param>
     /// <exception cref="MtkProtocolException">The negotiated packet count exceeds
     /// <see cref="MaximumXmlSourcePackets"/>. <para>协商出的包数超过
     /// <see cref="MaximumXmlSourcePackets"/>。</para></exception>

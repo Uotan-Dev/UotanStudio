@@ -9,10 +9,10 @@ public sealed partial class SaharaProtocol
     /// Reads up to <paramref name="length"/> bytes, returning only the bytes actually received.
     /// <para>读取最多 <paramref name="length"/> 个字节，仅返回实际收到的字节。</para>
     /// </summary>
-    /// <param name="length">The maximum number of bytes to read. 最多读取的字节数。</param>
-    /// <param name="timeoutMs">The timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The bytes actually read. 实际读取的字节。</returns>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The bytes actually read. <para>实际读取的字节。</para></returns>
     private async Task<byte[]> ReadChunkAsync(int length, int timeoutMs, CancellationToken cancellationToken)
     {
         var buffer = new byte[length];
@@ -48,11 +48,11 @@ public sealed partial class SaharaProtocol
     /// Reads an exact number of bytes from the transport.
     /// <para>从传输中读取精确数量的字节。</para>
     /// </summary>
-    /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
-    /// <param name="timeoutMs">The timeout in milliseconds. 超时（毫秒）。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>The read bytes. 读取的字节。</returns>
-    /// <exception cref="EdlException">Thrown on timeout. 超时时抛出。</exception>
+    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The read bytes. <para>读取的字节。</para></returns>
+    /// <exception cref="EdlException">Thrown on timeout. <para>超时时抛出。</para></exception>
     private async Task<byte[]> ReadExactAsync(int length, int timeoutMs, CancellationToken cancellationToken)
     {
         var buf = ArrayPool<byte>.Shared.Rent(length);
@@ -103,9 +103,9 @@ public sealed partial class SaharaProtocol
     /// Writes data to the transport.
     /// <para>将数据写入传输。</para>
     /// </summary>
-    /// <param name="data">The data to write. 要写入的数据。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <param name="data">The data to write. <para>要写入的数据。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     private async Task WriteDataAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
     {
         var buf = ArrayPool<byte>.Shared.Rent(data.Length);
@@ -133,18 +133,18 @@ public sealed partial class SaharaProtocol
     /// Writes a struct to the transport.
     /// <para>将结构体写入传输。</para>
     /// </summary>
-    /// <param name="p">The struct to write. 要写入的结构体。</param>
-    /// <param name="ct">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    /// <param name="p">The struct to write. <para>要写入的结构体。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     private async Task WriteStructAsync<T>(T p, CancellationToken ct) where T : struct => await WriteDataAsync(StructToBytes(p), ct);
 
     /// <summary>
     /// Reads the remaining bytes of a packet after the header.
     /// <para>读取包头之后的剩余字节。</para>
     /// </summary>
-    /// <param name="hd">The header bytes. 包头字节。</param>
-    /// <param name="ct">Cancellation token. 取消令牌。</param>
-    /// <returns>The complete packet bytes. 完整的包字节。</returns>
+    /// <param name="hd">The header bytes. <para>包头字节。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The complete packet bytes. <para>完整的包字节。</para></returns>
     private async Task<byte[]> ReadRemainingPacket<T>(byte[] hd, CancellationToken ct) where T : struct
     {
         var sz = Marshal.SizeOf<T>();
@@ -168,11 +168,11 @@ public sealed partial class SaharaProtocol
     /// Validates that the actual command and length match expected values.
     /// <para>验证实际命令和长度是否与预期值匹配。</para>
     /// </summary>
-    /// <param name="act">The actual command. 实际命令。</param>
-    /// <param name="exp">The expected command. 预期命令。</param>
-    /// <param name="len">The actual length. 实际长度。</param>
-    /// <param name="expLen">The expected length. 预期长度。</param>
-    /// <exception cref="SaharaException">Thrown on mismatch. 不匹配时抛出。</exception>
+    /// <param name="act">The actual command. <para>实际命令。</para></param>
+    /// <param name="exp">The expected command. <para>预期命令。</para></param>
+    /// <param name="len">The actual length. <para>实际长度。</para></param>
+    /// <param name="expLen">The expected length. <para>预期长度。</para></param>
+    /// <exception cref="SaharaException">Thrown on mismatch. <para>不匹配时抛出。</para></exception>
     private static void ValidateCommand(SaharaCommand act, SaharaCommand exp, uint len, uint expLen)
     {
         if (act != exp)
@@ -190,9 +190,9 @@ public sealed partial class SaharaProtocol
     /// Converts a byte array to a struct.
     /// <para>将字节数组转换为结构体。</para>
     /// </summary>
-    /// <param name="d">The byte array. 字节数组。</param>
-    /// <returns>The converted struct. 转换后的结构体。</returns>
-    /// <exception cref="SaharaException">Thrown if data is too short. 数据太短时抛出。</exception>
+    /// <param name="d">The byte array. <para>字节数组。</para></param>
+    /// <returns>The converted struct. <para>转换后的结构体。</para></returns>
+    /// <exception cref="SaharaException">Thrown if data is too short. <para>数据太短时抛出。</para></exception>
     private static T BytesToStruct<T>(byte[] d) where T : struct
     {
         return d.Length < Marshal.SizeOf<T>()
@@ -204,8 +204,8 @@ public sealed partial class SaharaProtocol
     /// Converts a struct to a byte array.
     /// <para>将结构体转换为字节数组。</para>
     /// </summary>
-    /// <param name="s">The struct to convert. 要转换的结构体。</param>
-    /// <returns>The byte array. 字节数组。</returns>
+    /// <param name="s">The struct to convert. <para>要转换的结构体。</para></param>
+    /// <returns>The byte array. <para>字节数组。</para></returns>
     private static byte[] StructToBytes<T>(T s) where T : struct
     {
         var size = Marshal.SizeOf<T>();

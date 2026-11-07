@@ -68,8 +68,8 @@ public sealed partial class MtkSession
     /// <param name="address">The first register address; words walk upward by two bytes.
     /// <para>起始寄存器地址；字按两字节向上递增。</para></param>
     /// <param name="wordCount">The positive word count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. <para>正数字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The values exactly as the big-endian wire delivered them.
     /// <para>与大端线路交付一致的取值。</para></returns>
@@ -127,8 +127,8 @@ public sealed partial class MtkSession
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
     /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数双字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. <para>正数双字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The values exactly as the big-endian wire delivered them.
     /// <para>与大端线路交付一致的取值。</para></returns>
@@ -418,8 +418,8 @@ public sealed partial class MtkSession
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
     /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数双字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. <para>正数双字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The payload bytes exactly as the wire delivered them.
     /// <para>与线路交付一致的载荷字节。</para></returns>
@@ -544,8 +544,8 @@ public sealed partial class MtkSession
 
     /// <summary>Runs the documented send-partition-data exchange after the caller confirmed the push.
     /// <para>在调用方确认推送后执行已记载的 send-partition-data 交互。</para></summary>
-    /// <param name="partitionName">The validated partition name. 已校验的分区名称。</param>
-    /// <param name="data">The validated payload. 已校验的载荷。</param>
+    /// <param name="partitionName">The validated partition name. <para>已校验的分区名称。</para></param>
+    /// <param name="data">The validated payload. <para>已校验的载荷。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     private async Task SendPreloaderPartitionDataOwnedAsync(string partitionName, ReadOnlyMemory<byte> data,
@@ -589,8 +589,8 @@ public sealed partial class MtkSession
     /// the single <c>InitializeAsync</c> state machine intact instead of initializing the session twice.
     /// <para>preloader 初始化在硬件码已知之后、下载代理上传之前执行该写入。由引导流程调用它可以保持唯一的
     /// <c>InitializeAsync</c> 状态机，而不需要二次初始化会话。</para></remarks>
-    /// <param name="device">The identity already queried from the target. 已从目标查询到的身份信息。</param>
-    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    /// <param name="device">The identity already queried from the target. <para>已从目标查询到的身份信息。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
     internal async Task DisablePreloaderWatchdogForBootRomAsync(MtkDeviceInfo device,
         CancellationToken cancellationToken = default)
     {
@@ -779,10 +779,10 @@ public sealed partial class MtkSession
     /// or short chunk is a protocol fault here rather than an empty or short result. preloader 的
     /// <c>peek</c> 处理程序每条 READ32 命令最多请求 512
     /// 字节，解码大端回复后把每个双字按小端重新打包；线路上的尾部向上取整到完整双字并在 之后裁剪，与 Legacy DA 读取器一致。被拒绝或过短的分块在这里是协议错误，而不是空或短结果。</remarks>
-    /// <param name="address">The start address of the window. 窗口起始地址。</param>
+    /// <param name="address">The start address of the window. <para>窗口起始地址。</para></param>
     /// <param name="length">The positive byte count, limited to
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>. 正数字节数，上限为
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>。</param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>. <para>正数字节数，上限为
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>Exactly <paramref name="length"/> little-endian bytes.
     /// <para>恰好 <paramref name="length"/> 字节的小端内容。</para></returns>
@@ -908,13 +908,13 @@ public sealed partial class MtkSession
 
     /// <summary>Runs one documented READ exchange and returns the raw big-endian payload.
     /// <para>执行一次已记载的 READ 交换并返回原始大端载荷。</para></summary>
-    /// <param name="command">The READ opcode. READ 操作码。</param>
-    /// <param name="address">The start address. 起始地址。</param>
-    /// <param name="words">The word count announced to the device. 向设备声明的字数。</param>
-    /// <param name="wordBytes">The width of one word. 单字宽度。</param>
+    /// <param name="command">The READ opcode. <para>READ 操作码。</para></param>
+    /// <param name="address">The start address. <para>起始地址。</para></param>
+    /// <param name="words">The word count announced to the device. <para>向设备声明的字数。</para></param>
+    /// <param name="wordBytes">The width of one word. <para>单字宽度。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
-    /// <returns>The payload bytes exactly as delivered. 按交付原样返回的载荷字节。</returns>
+    /// <returns>The payload bytes exactly as delivered. <para>按交付原样返回的载荷字节。</para></returns>
     private async Task<byte[]> ReadPreloaderWordsOwnedAsync(byte command, uint address, int words, int wordBytes,
         CancellationToken cancellationToken)
     {
@@ -930,8 +930,8 @@ public sealed partial class MtkSession
 
     /// <summary>Runs one documented WRITE16 exchange after the caller confirmed the write.
     /// <para>在调用方确认写入后执行一次已记载的 WRITE16 交换。</para></summary>
-    /// <param name="address">The start address. 起始地址。</param>
-    /// <param name="values">The big-endian-encoded words. 按大端编码的字。</param>
+    /// <param name="address">The start address. <para>起始地址。</para></param>
+    /// <param name="values">The big-endian-encoded words. <para>按大端编码的字。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     private async Task WritePreloader16OwnedAsync(uint address, ReadOnlyMemory<ushort> values,
@@ -954,8 +954,8 @@ public sealed partial class MtkSession
 
     /// <summary>Runs one documented WRITE32 exchange after the caller confirmed the write.
     /// <para>在调用方确认写入后执行一次已记载的 WRITE32 交换。</para></summary>
-    /// <param name="address">The start address. 起始地址。</param>
-    /// <param name="values">The big-endian-encoded doublewords. 按大端编码的双字。</param>
+    /// <param name="address">The start address. <para>起始地址。</para></param>
+    /// <param name="values">The big-endian-encoded doublewords. <para>按大端编码的双字。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     private async Task WritePreloader32OwnedAsync(uint address, ReadOnlyMemory<uint> values,
@@ -976,7 +976,7 @@ public sealed partial class MtkSession
 
     /// <summary>Applies the write gate: values may only follow an opening status at or below
     /// <c>0x0003</c>. <para>应用写入门：只有在首个状态不超过 <c>0x0003</c> 之后才允许发送值。</para></summary>
-    /// <param name="status">The opening status word. 首个状态字。</param>
+    /// <param name="status">The opening status word. <para>首个状态字。</para></param>
     /// <exception cref="MtkProtocolException">The status is a hard error or the value-window
     /// status, which sends no value bytes. <para>状态为硬错误，或是值窗口状态，此时不发送任何值字节。</para></exception>
     private static void RequirePreloaderWriteAccepted(ushort status)
@@ -990,7 +990,7 @@ public sealed partial class MtkSession
 
     /// <summary>Truncates or null-pads a partition name to the exact 64-byte wire field.
     /// <para>把分区名称截断或用 NUL 补齐到精确的 64 字节线路字段。</para></summary>
-    /// <param name="partitionName">The non-empty partition name. 非空分区名称。</param>
+    /// <param name="partitionName">The non-empty partition name. <para>非空分区名称。</para></param>
     /// <returns>Exactly <see cref="PreloaderPartitionNameBytes"/> bytes.
     /// <para>恰好 <see cref="PreloaderPartitionNameBytes"/> 字节。</para></returns>
     private static byte[] EncodePreloaderPartitionName(string partitionName)
@@ -1003,10 +1003,10 @@ public sealed partial class MtkSession
 
     /// <summary>Composes the USBDL flag word of the reset-to-BROM sequence.
     /// <para>组合 reset-to-BROM 序列的 USBDL 标志字。</para></summary>
-    /// <param name="enable">Whether the download-enable bit is set. 是否置位下载使能位。</param>
+    /// <param name="enable">Whether the download-enable bit is set. <para>是否置位下载使能位。</para></param>
     /// <param name="timeoutMs">The timeout in milliseconds; <c>0</c> selects the no-timeout maximum.
     /// <para>毫秒超时；<c>0</c> 选择无超时最大值。</para></param>
-    /// <returns>The flag word to store in the USBDL register. 要存入 USBDL 寄存器的标志字。</returns>
+    /// <returns>The flag word to store in the USBDL register. <para>要存入 USBDL 寄存器的标志字。</para></returns>
     private static uint ComputeUsbdlRegister(bool enable, int timeoutMs)
     {
         var seconds = timeoutMs == 0 ? UsbdlTimeoutMax : (uint)(timeoutMs / 1000);

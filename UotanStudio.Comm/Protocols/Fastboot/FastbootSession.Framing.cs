@@ -318,13 +318,13 @@ public sealed partial class FastbootSession
     /// 已完成响应的关键：<see cref="FastbootResponseState.Success"/> 是枚举的默认成员，因此不触碰状态的帧
     /// 会被读成终止的 OKAY，从而截断所有携带多于一行 INFO 的应答（getvar:all、snapshot-update 提示）。</para>
     /// </summary>
-    /// <param name="pending">Session-held pending byte buffer. 会话持有的待解析字节缓冲区。</param>
-    /// <param name="offset">Parse position inside <paramref name="pending"/>. <paramref name="pending"/> 内的解析位置。</param>
-    /// <param name="response">Response being assembled. 正在组装的响应。</param>
-    /// <param name="textBuffer">Accumulated TEXT content. 累积的 TEXT 内容。</param>
-    /// <param name="textBytes">Total TEXT bytes accumulated so far. 目前累积的 TEXT 字节总数。</param>
+    /// <param name="pending">Session-held pending byte buffer. <para>会话持有的待解析字节缓冲区。</para></param>
+    /// <param name="offset">Parse position inside <paramref name="pending"/>. <para><paramref name="pending"/> 内的解析位置。</para></param>
+    /// <param name="response">Response being assembled. <para>正在组装的响应。</para></param>
+    /// <param name="textBuffer">Accumulated TEXT content. <para>累积的 TEXT 内容。</para></param>
+    /// <param name="textBytes">Total TEXT bytes accumulated so far. <para>目前累积的 TEXT 字节总数。</para></param>
     /// <returns>The number of bytes consumed by the frame, or 0 when more input is required.
-    /// 该帧消费的字节数；需要更多输入时为 0。</returns>
+    /// <para>该帧消费的字节数；需要更多输入时为 0。</para></returns>
     private static int ConsumeFrame(ReadOnlySpan<byte> pending, int offset, FastbootResponse response,
         ref StringBuilder? textBuffer, ref int textBytes)
     {
@@ -453,8 +453,8 @@ public sealed partial class FastbootSession
     /// <para>越过刚解析帧所属的 NUL/CR/LF 填充，并在第一个非填充字节处停止。停在该处可把下一条
     /// 响应的首字节留在待解析缓冲区中，因此不带填充的连续帧（精确的 TCP 流）绝不会被当作填充吞掉。</para>
     /// </summary>
-    /// <param name="pending">Session-held pending byte buffer. 会话持有的待解析字节缓冲区。</param>
-    /// <param name="position">First byte after the parsed frame content. 已解析帧内容之后的第一个字节。</param>
+    /// <param name="pending">Session-held pending byte buffer. <para>会话持有的待解析字节缓冲区。</para></param>
+    /// <param name="position">First byte after the parsed frame content. <para>已解析帧内容之后的第一个字节。</para></param>
     /// <returns>The first position at or after <paramref name="position"/> that is not padding.
     /// <para>从 <paramref name="position"/> 起首个不是填充字节的位置。</para></returns>
     private static int SkipFramePadding(ReadOnlySpan<byte> pending, int position)

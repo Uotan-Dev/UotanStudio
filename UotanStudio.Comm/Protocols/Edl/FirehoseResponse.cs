@@ -146,9 +146,9 @@ internal static class FirehoseResponseParser
     /// Parses a complete <c>&lt;data&gt;</c> XML block into a <see cref="FirehoseResponse"/>.
     /// <para>将完整的 <c>&lt;data&gt;</c> XML 块解析为 <see cref="FirehoseResponse"/>。</para>
     /// </summary>
-    /// <param name="xml">The complete XML block. 完整的 XML 块。</param>
-    /// <returns>The parsed response. 解析后的响应。</returns>
-    /// <exception cref="FirehoseException">Thrown when the XML is empty or malformed. XML 为空或畸形时抛出。</exception>
+    /// <param name="xml">The complete XML block. <para>完整的 XML 块。</para></param>
+    /// <returns>The parsed response. <para>解析后的响应。</para></returns>
+    /// <exception cref="FirehoseException">Thrown when the XML is empty or malformed. <para>XML 为空或畸形时抛出。</para></exception>
     public static FirehoseResponse Parse(string xml)
     {
         if (string.IsNullOrWhiteSpace(xml))
@@ -207,10 +207,10 @@ internal static class FirehoseResponseParser
     /// Some targets send log and response within the same block; node-level parsing prevents a block containing a response from being discarded wholesale as a log.
     /// <para>某些设备会在同一块内同时发送 log 与 response；节点级解析可避免把含 response 的块整体当作 log 丢弃。</para>
     /// </remarks>
-    /// <param name="xml">The complete <c>&lt;data&gt;</c>XML block. 完整的 <c>&lt;data&gt;</c>XML 块。</param>
-    /// <param name="capturePayloads">Whether to retain and validate scalar vendor payload attributes.</param>
-    /// <returns>A <see cref="FirehoseDataBlock"/>with any logs and/or the response found. 包含所提取 log 及/或
-    /// response 的 <see cref="FirehoseDataBlock"/>。</returns>
+    /// <param name="xml">The complete <c>&lt;data&gt;</c>XML block. <para>完整的 <c>&lt;data&gt;</c>XML 块。</para></param>
+    /// <param name="capturePayloads">Whether to retain and validate scalar vendor payload attributes.<para>是否保留并校验标量厂商负载属性。</para></param>
+    /// <returns>A <see cref="FirehoseDataBlock"/>with any logs and/or the response found. <para>包含所提取 log 及/或
+    /// response 的 <see cref="FirehoseDataBlock"/>。</para></returns>
     public static FirehoseDataBlock ParseDataBlock(string xml, bool capturePayloads = false)
     {
         var block = new FirehoseDataBlock();
@@ -300,12 +300,12 @@ internal static class FirehoseResponseParser
     /// <para>将 <c>&lt;response&gt;</c> 元素节点解析为 <see cref="FirehoseResponse"/>，并为被拒绝的
     /// 响应附加基于证据的分类。</para>
     /// </summary>
-    /// <param name="responseNode">The response element node. response 元素节点。</param>
-    /// <param name="xml">The containing XML text (stored as RawXml). 所在 XML 文本（存为 RawXml）。</param>
+    /// <param name="responseNode">The response element node. <para>response 元素节点。</para></param>
+    /// <param name="xml">The containing XML text (stored as RawXml). <para>所在 XML 文本（存为 RawXml）。</para></param>
     /// <param name="lastLogValue">The value text of the last log node preceding this response within
     /// the same document, or <see langword="null"/> when there is none.
-    /// 同一文档中位于该响应之前的最后一条 log 节点的文本；没有时为 <see langword="null"/>。</param>
-    /// <returns>The parsed response. 解析后的响应。</returns>
+    /// <para>同一文档中位于该响应之前的最后一条 log 节点的文本；没有时为 <see langword="null"/>。</para></param>
+    /// <returns>The parsed response. <para>解析后的响应。</para></returns>
     private static FirehoseResponse ParseResponseNode(XmlNode responseNode, string xml, string? lastLogValue)
     {
         var response = new FirehoseResponse { RawXml = xml };

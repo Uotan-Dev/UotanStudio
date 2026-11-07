@@ -31,7 +31,7 @@ public enum ImageWtyVersion : uint
 /// <param name="StoredLength">Stored payload size in bytes, including any padding. <para>已存储负载的字节大小，含填充。</para></param>
 /// <param name="OriginalLength">Declared unpacked size; zero means the record declares none. <para>声明的解包后大小；为 0 时表示记录未声明。</para></param>
 /// <param name="Attributes">Raw attribute word, reported uninterpreted. <para>原始属性字，原样报告不做解释。</para></param>
-/// <param name="Checksum">Raw checksum word; the format reference does not define its coverage, so it is reported uninterpreted. <para>原始校验字；参考实现未定义其覆盖范围，因此原样报告。</para></param>
+/// <param name="Checksum">Raw checksum word; the format does not define its coverage, so it is reported uninterpreted. <para>原始校验字；格式未定义其覆盖范围，因此原样报告。</para></param>
 /// <param name="Item">Vendor role resolved from the declared types. <para>由声明类型解析出的厂商角色。</para></param>
 public sealed record ImageWtyEntry(string Name, string MainType, string SubType,
     long Offset, long StoredLength, long OriginalLength,

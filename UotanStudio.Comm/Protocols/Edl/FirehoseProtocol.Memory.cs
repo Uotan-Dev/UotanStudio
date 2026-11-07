@@ -267,11 +267,11 @@ public sealed partial class FirehoseProtocol
     /// <para>读取请求不会超过目标设备为“自目标方向”协商的负载大小，因此单次传输读取保持在目标的
     /// 一个数据包之内。</para>
     /// </summary>
-    /// <param name="destination">The destination stream. 目标流。</param>
-    /// <param name="totalBytes">The number of raw bytes to read. 待读取的原始字节数。</param>
-    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
-    /// <param name="progress">Optional cumulative raw bytes; not evidence of final completion.</param>
+    /// <param name="destination">The destination stream. <para>目标流。</para></param>
+    /// <param name="totalBytes">The number of raw bytes to read. <para>待读取的原始字节数。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
+    /// <param name="progress">Optional cumulative raw bytes; not evidence of final completion.<para>可选的累计原始字节数；不能作为最终完成的证据。</para></param>
     private async Task ReadRawPayloadToStreamAsync(Stream destination, long totalBytes, CancellationToken cancellationToken,
         IProgress<long>? progress = null)
     {

@@ -92,8 +92,7 @@ public enum MtkFlashPlanState
 /// <summary>
 /// A bounded preflight result retaining all selected image handles. Preparation performs no
 /// device I/O. Dispose after execution or an abandoned preview; source contents are not immutable snapshots.
-/// <para>
-/// 有界的预检结果，保留全部选定的镜像句柄。准备阶段不执行任何设备 I/O。执行结束或放弃预览后应调用
+/// <para>有界的预检结果，保留全部选定的镜像句柄。准备阶段不执行任何设备 I/O。执行结束或放弃预览后应调用
 /// <c>Dispose</c>；源内容并非不可变快照。
 /// </para>
 /// </summary>
@@ -320,9 +319,9 @@ public sealed partial class MtkFlashPlan : IDisposable
     /// Claims one byte range on a partition and rejects a range that another step already covers.
     /// <para>在某分区上占用一段字节范围，并拒绝已被其他步骤覆盖的范围。</para>
     /// </summary>
-    /// <param name="partitionId">The target partition. 目标分区。</param>
-    /// <param name="offset">The range start. 范围起点。</param>
-    /// <param name="length">The positive range length. 正数范围长度。</param>
+    /// <param name="partitionId">The target partition. <para>目标分区。</para></param>
+    /// <param name="offset">The range start. <para>范围起点。</para></param>
+    /// <param name="length">The positive range length. <para>正数范围长度。</para></param>
     /// <remarks>Extents are kept sorted per partition, so a duplicate or partially overlapping write is
     /// detected in logarithmic time instead of being executed twice on the device.
     /// <para>每个分区的范围按序保存，因此重复或部分重叠的写入能在对数时间内被发现，而不是在设备上执行两次。</para>

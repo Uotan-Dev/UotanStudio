@@ -25,8 +25,8 @@ internal class EdlException : Exception
     /// Initializes a new instance of the <see cref="EdlException"/> class.
     /// <para>初始化 <see cref="EdlException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="errorCode">The error code. 错误码。</param>
-    /// <param name="message">The error message. 错误消息。</param>
+    /// <param name="errorCode">The error code. <para>错误码。</para></param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
     public EdlException(EdlErrorCode errorCode, string message)
         : base(message)
     {
@@ -37,9 +37,9 @@ internal class EdlException : Exception
     /// Initializes a new instance of the <see cref="EdlException"/> class.
     /// <para>初始化 <see cref="EdlException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="errorCode">The error code. 错误码。</param>
-    /// <param name="message">The error message. 错误消息。</param>
-    /// <param name="innerException">The inner exception. 内部异常。</param>
+    /// <param name="errorCode">The error code. <para>错误码。</para></param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
+    /// <param name="innerException">The inner exception. <para>内部异常。</para></param>
     public EdlException(EdlErrorCode errorCode, string message, Exception innerException)
         : base(message, innerException)
     {
@@ -50,7 +50,7 @@ internal class EdlException : Exception
     /// Initializes a new instance of the <see cref="EdlException"/> class with a default message.
     /// <para>使用默认消息初始化 <see cref="EdlException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="errorCode">The error code. 错误码。</param>
+    /// <param name="errorCode">The error code. <para>错误码。</para></param>
     public EdlException(EdlErrorCode errorCode)
         : base(GetDefaultMessage(errorCode))
     {
@@ -61,8 +61,8 @@ internal class EdlException : Exception
     /// Returns the default message for a given error code.
     /// <para>返回给定错误码的默认消息。</para>
     /// </summary>
-    /// <param name="code">The error code. 错误码。</param>
-    /// <returns>The default message. 默认消息。</returns>
+    /// <param name="code">The error code. <para>错误码。</para></param>
+    /// <returns>The default message. <para>默认消息。</para></returns>
     private static string GetDefaultMessage(EdlErrorCode code) => code switch
     {
         EdlErrorCode.Success => "Operation completed successfully.",
@@ -105,15 +105,15 @@ internal class SaharaException : EdlException
     /// Initializes a new instance of the <see cref="SaharaException"/> class.
     /// <para>初始化 <see cref="SaharaException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="message">The error message. 错误消息。</param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
     public SaharaException(string message) : base(EdlErrorCode.SaharaProtocolError, message) { }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SaharaException"/> class.
     /// <para>初始化 <see cref="SaharaException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="message">The error message. 错误消息。</param>
-    /// <param name="inner">The inner exception. 内部异常。</param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
+    /// <param name="inner">The inner exception. <para>内部异常。</para></param>
     public SaharaException(string message, Exception inner) : base(EdlErrorCode.SaharaProtocolError, message, inner) { }
 }
 
@@ -127,14 +127,14 @@ internal class FirehoseException : EdlException
     /// Initializes a new instance of the <see cref="FirehoseException"/> class.
     /// <para>初始化 <see cref="FirehoseException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="message">The error message. 错误消息。</param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
     public FirehoseException(string message) : base(EdlErrorCode.FirehoseProtocolError, message) { }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FirehoseException"/> class.
     /// <para>初始化 <see cref="FirehoseException"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="message">The error message. 错误消息。</param>
-    /// <param name="inner">The inner exception. 内部异常。</param>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
+    /// <param name="inner">The inner exception. <para>内部异常。</para></param>
     public FirehoseException(string message, Exception inner) : base(EdlErrorCode.FirehoseProtocolError, message, inner) { }
 }

@@ -11,12 +11,12 @@ namespace UotanStudio.Comm.Protocols.Sunxi;
 /// </summary>
 public sealed class SunxiFlasher
 {
-    /// <summary>Status-verification attempts before an inconclusive verification is reported as such, matching
-    /// the reference retry budget. <para>无法判定的校验在上报前的重试次数上限，与参考的重试预算一致。</para></summary>
+    /// <summary>Status-verification attempts before an inconclusive verification is reported as such.
+    /// <para>无法判定的校验在上报前的重试次数上限。</para></summary>
     private const int VerifyAttempts = 5;
 
-    /// <summary>Delay between verification attempts, matching the reference client's settle time.
-    /// <para>两次校验尝试之间的等待，与参考客户端的稳定时间一致。</para></summary>
+    /// <summary>Delay between two verification attempts.
+    /// <para>两次校验尝试之间的等待。</para></summary>
     private static readonly TimeSpan VerifyRetryDelay = TimeSpan.FromMilliseconds(100);
 
     private static readonly string[] UserDataPartitions = ["udisk", "private", "reserve"];

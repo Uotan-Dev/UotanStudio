@@ -155,7 +155,7 @@ public sealed class HdcAuthentication : IDisposable
     /// <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 初始化认证。</para>
     /// </summary>
     /// <param name="rsa">The RSA key to use. <para>待使用的 RSA 密钥。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.<para><paramref name="rsa"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="ArgumentException">The key width is not in <see cref="SupportedKeyBits"/>. <para>密钥位数不在 <see cref="SupportedKeyBits"/> 中。</para></exception>
     public HdcAuthentication(RSA rsa)
         : this(rsa, HdcAuthVerifyType.Rsa3072Sha512)
@@ -169,7 +169,7 @@ public sealed class HdcAuthentication : IDisposable
     /// </summary>
     /// <param name="rsa">The RSA key to use. <para>待使用的 RSA 密钥。</para></param>
     /// <param name="verifyType">The authentication verification algorithm. <para>认证验证算法。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.<para><paramref name="rsa"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="ArgumentException">The key width is not in <see cref="SupportedKeyBits"/>. <para>密钥位数不在 <see cref="SupportedKeyBits"/> 中。</para></exception>
     public HdcAuthentication(RSA rsa, HdcAuthVerifyType verifyType)
     {
@@ -463,8 +463,8 @@ public sealed class HdcAuthentication : IDisposable
     /// .NET 10 的 <see cref="FileStreamOptions.UnixCreateMode"/> 原子创建 0600 文件，
     /// 消除"先 0644 再 chmod"暴露窗口。Windows 下继承父目录 ACL。</para>
     /// </summary>
-    /// <param name="path">Destination file path. 目标文件路径。</param>
-    /// <param name="contents">The text contents to write. 待写入的文本内容。</param>
+    /// <param name="path">Destination file path. <para>目标文件路径。</para></param>
+    /// <param name="contents">The text contents to write. <para>待写入的文本内容。</para></param>
     private static void WriteKeyFile(string path, string contents)
     {
         var bytes = new UTF8Encoding(false).GetBytes(contents);
@@ -477,8 +477,8 @@ public sealed class HdcAuthentication : IDisposable
     /// <para>以创建即受限的权限将密钥字节写入 <paramref name="path"/>
     /// （见 <see cref="WriteKeyFile(string, string)"/>）。</para>
     /// </summary>
-    /// <param name="path">Destination file path. 目标文件路径。</param>
-    /// <param name="bytes">The bytes to write. 待写入的字节。</param>
+    /// <param name="path">Destination file path. <para>目标文件路径。</para></param>
+    /// <param name="bytes">The bytes to write. <para>待写入的字节。</para></param>
     private static void WriteKeyFile(string path, byte[] bytes)
     {
         if (OperatingSystem.IsWindows())

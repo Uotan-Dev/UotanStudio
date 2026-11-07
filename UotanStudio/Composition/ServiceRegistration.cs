@@ -114,8 +114,11 @@ internal static class ServiceRegistration
 
     /// <summary>
     /// Builds the provider without eager activation so startup still constructs nothing until a service
-    /// is first resolved; Debug builds additionally validate the descriptor graph at build time.
-    /// <para>构建提供程序时不急切激活服务，启动期仍不构造任何服务；Debug 构建额外在构建期校验描述符图。</para>
+    /// is first resolved; Debug builds additionally validate the descriptor graph at build time, which
+    /// covers descriptor-level type mappings only, while the dependency completeness of factory
+    /// registrations is covered by tests.
+    /// <para>构建提供程序时不急切激活服务，启动期仍不构造任何服务；Debug 构建额外在构建期校验描述符图，
+    /// 该校验只覆盖描述符级类型映射，工厂注册的依赖完整性由测试覆盖。</para>
     /// </summary>
     /// <param name="services">The populated service collection. <para>已注册的服务集合。</para></param>
     /// <returns>The composed provider. <para>组合得到的提供程序。</para></returns>
@@ -125,8 +128,6 @@ internal static class ServiceRegistration
         ArgumentNullException.ThrowIfNull(services);
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
-            // 工厂注册的构造过程对容器不可见，构建期校验只覆盖描述符级的类型映射；工厂自身的依赖
-            // 完整性由 ServiceRegistrationTests.Register_EveryRegistration_Resolves 兜住。
             ValidateOnBuild = ValidateRegisteredGraph,
             ValidateScopes = false
         });

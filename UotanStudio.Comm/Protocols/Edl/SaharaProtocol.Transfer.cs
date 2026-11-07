@@ -10,10 +10,10 @@ public sealed partial class SaharaProtocol
     /// Validates that a READ_DATA/READ_DATA64 offset and length fall within the image length.
     /// <para>验证 READ_DATA/READ_DATA64 的偏移与长度是否落在镜像长度范围内。</para>
     /// </summary>
-    /// <param name="offset">The requested data offset. 请求的数据偏移。</param>
-    /// <param name="length">The requested data length. 请求的数据长度。</param>
-    /// <param name="imageLength">The total image length. 镜像总长度。</param>
-    /// <param name="command">The command name (for diagnostics). 命令名（用于诊断）。</param>
+    /// <param name="offset">The requested data offset. <para>请求的数据偏移。</para></param>
+    /// <param name="length">The requested data length. <para>请求的数据长度。</para></param>
+    /// <param name="imageLength">The total image length. <para>镜像总长度。</para></param>
+    /// <param name="command">The command name (for diagnostics). <para>命令名（用于诊断）。</para></param>
     private static void ValidateReadRange(long offset, long length, long imageLength, string command)
     {
         if (offset < 0 || length < 0 || imageLength < 0 || offset > imageLength || length > imageLength - offset)

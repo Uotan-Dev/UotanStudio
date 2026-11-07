@@ -20,7 +20,7 @@ public enum MtkXFlashUsbSpeedKind
 
 /// <summary>The USB speed the XFlash agent reports after a speed switch.
 /// <para>XFlash 代理在速度切换后上报的 USB 速度。</para></summary>
-/// <param name="Kind">The decoded speed. 解码后的速度。</param>
+/// <param name="Kind">The decoded speed. <para>解码后的速度。</para></param>
 /// <param name="Text">The exact ASCII speed token returned by the agent.
 /// <para>代理返回的精确 ASCII 速度标记。</para></param>
 public sealed record MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind Kind, string Text);

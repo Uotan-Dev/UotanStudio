@@ -540,12 +540,12 @@ internal sealed class SuperImageBuilder
     /// Builds a zero-filled raw super image with standard LP metadata in a seekable stream.
     /// <para>在可定位流中构建含标准 LP 元数据、分区数据区填零的原始 super 镜像。</para>
     /// </summary>
-    /// <param name="output">Writable seekable destination; its existing contents are replaced. 可写且可定位的目标流，替换其原有内容。</param>
-    /// <param name="partitions">Logical partition definitions. 逻辑分区定义。</param>
-    /// <param name="deviceSize">Total device size in bytes. 设备总字节数。</param>
-    /// <param name="metadataMaxSize">Maximum bytes per metadata slot. 每个元数据槽的最大字节数。</param>
-    /// <param name="metadataSlotCount">Number of primary and backup metadata slots. 主、备份元数据各自的槽数。</param>
-    /// <param name="blockSize">Logical block size in bytes. 逻辑块字节数。</param>
+    /// <param name="output">Writable seekable destination; its existing contents are replaced. <para>可写且可定位的目标流，替换其原有内容。</para></param>
+    /// <param name="partitions">Logical partition definitions. <para>逻辑分区定义。</para></param>
+    /// <param name="deviceSize">Total device size in bytes. <para>设备总字节数。</para></param>
+    /// <param name="metadataMaxSize">Maximum bytes per metadata slot. <para>每个元数据槽的最大字节数。</para></param>
+    /// <param name="metadataSlotCount">Number of primary and backup metadata slots. <para>主、备份元数据各自的槽数。</para></param>
+    /// <param name="blockSize">Logical block size in bytes. <para>逻辑块字节数。</para></param>
     public void Build(
         Stream output,
         IReadOnlyList<SuperBuildPartition> partitions,

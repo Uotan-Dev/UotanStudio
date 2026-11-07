@@ -58,7 +58,7 @@ public sealed partial class MtkSession
     /// bytes of boot mode, connection type and interface id, where UART and USB select meta boot and
     /// <see cref="MtkXFlashMetaBootMode.Off"/>restores the normal boot flags. 载荷复现 <c>set_meta</c>：启动模式、连接类型与接口 id 三个字节，UART 与 USB 选择 meta 启动，
     /// <see cref="MtkXFlashMetaBootMode.Off"/>恢复正常启动标志。</remarks>
-    /// <param name="mode">The boot mode to request. 要请求的启动模式。</param>
+    /// <param name="mode">The boot mode to request. <para>要请求的启动模式。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the agent acknowledged the flag triple.
     /// <para>在代理确认标志三元组后完成的任务。</para></returns>
@@ -122,7 +122,7 @@ public sealed partial class MtkSession
     /// 本实现唯一的调用处于注释状态，因此本路径遵循已确立的无参数器件
     /// 控制交互并把回复字节保持为不透明内容；该标记本身不改变任何存储内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
@@ -141,7 +141,7 @@ public sealed partial class MtkSession
     /// established parameterless device-control exchange and keeps the reply bytes opaque.
     /// 本实现只定义了该控制码而没有调用点，因此本路径遵循已确立的无参数器件控制交互，并把回复字节保持为 不透明内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
@@ -161,7 +161,7 @@ public sealed partial class MtkSession
     /// device-control exchange and keeps the reply bytes opaque.
     /// 本实现只定义了该控制码而没有调用点，因此本路径遵循已确立的 无参数器件控制交互，并把回复字节保持为不透明内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
-    /// <returns>The exact reply bytes. 精确的回复字节。</returns>
+    /// <returns>The exact reply bytes. <para>精确的回复字节。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
@@ -177,10 +177,10 @@ public sealed partial class MtkSession
 
     /// <summary>Sends one SET device-control exchange carrying a little-endian word parameter.
     /// <para>发送一个携带小端字参数的 SET 器件控制交互。</para></summary>
-    /// <param name="controlCode">The SET control code. SET 控制码。</param>
-    /// <param name="value">The parameter word. 参数字。</param>
-    /// <param name="evidencePhase">The neutral evidence phase name. 与本地化无关的证据阶段名。</param>
-    /// <param name="describe">The neutral completion description. 与本地化无关的完成描述。</param>
+    /// <param name="controlCode">The SET control code. <para>SET 控制码。</para></param>
+    /// <param name="value">The parameter word. <para>参数字。</para></param>
+    /// <param name="evidencePhase">The neutral evidence phase name. <para>与本地化无关的证据阶段名。</para></param>
+    /// <param name="describe">The neutral completion description. <para>与本地化无关的完成描述。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the completion status was accepted.
@@ -196,10 +196,10 @@ public sealed partial class MtkSession
 
     /// <summary>Sends one SET device-control exchange: selector, control code, parameter packet and
     /// completion status. <para>发送一个 SET 器件控制交互：选择器、控制码、参数包与完成状态。</para></summary>
-    /// <param name="controlCode">The SET control code. SET 控制码。</param>
-    /// <param name="parameter">The parameter packet payload. 参数包载荷。</param>
-    /// <param name="evidencePhase">The neutral evidence phase name. 与本地化无关的证据阶段名。</param>
-    /// <param name="describe">The neutral completion description. 与本地化无关的完成描述。</param>
+    /// <param name="controlCode">The SET control code. <para>SET 控制码。</para></param>
+    /// <param name="parameter">The parameter packet payload. <para>参数包载荷。</para></param>
+    /// <param name="evidencePhase">The neutral evidence phase name. <para>与本地化无关的证据阶段名。</para></param>
+    /// <param name="describe">The neutral completion description. <para>与本地化无关的完成描述。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the completion status was accepted.

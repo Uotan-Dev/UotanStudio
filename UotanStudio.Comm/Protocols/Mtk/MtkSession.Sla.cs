@@ -21,11 +21,11 @@ public sealed partial class MtkSession
     /// 同时携带 SLA 分类。
     /// </para>
     /// </summary>
-    /// <param name="flow">The authorization flow. 授权流程。</param>
-    /// <param name="stage">The observation point. 观测点。</param>
-    /// <param name="challengeDigest">The challenge SHA-256 hex digest, when one was read. 已读到挑战的十六进制摘要。</param>
-    /// <param name="outcome">The observed outcome. 观测结果。</param>
-    /// <param name="detail">Neutral detail text, carrying the classification token on failures. 中性详情文本；失败时携带分类标记。</param>
+    /// <param name="flow">The authorization flow. <para>授权流程。</para></param>
+    /// <param name="stage">The observation point. <para>观测点。</para></param>
+    /// <param name="challengeDigest">The challenge SHA-256 hex digest, when one was read. <para>已读到挑战的十六进制摘要。</para></param>
+    /// <param name="outcome">The observed outcome. <para>观测结果。</para></param>
+    /// <param name="detail">Neutral detail text, carrying the classification token on failures. <para>中性详情文本；失败时携带分类标记。</para></param>
     private void RecordSlaEvidence(MtkSlaFlowKind flow, MtkSlaEvidenceStage stage,
         string? challengeDigest, CommandOutcomeKind outcome, string? detail)
     {
