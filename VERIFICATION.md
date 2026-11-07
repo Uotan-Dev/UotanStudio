@@ -15,6 +15,9 @@
 - 全量门禁（2026-11-05，Debug）：构建 0 警告 0 错误 → format `whitespace`/`style` 双门零报告 → `dotnet test --solution` 8823 用例/8796 通过/27 跳过/0 失败/1m18s（同条件另一次运行出现 1 个并发计时瞬时失败，立即复跑全绿）；NativeAOT win-x64 发布成功，ILC 警告仍只来自第三方程序集（Avalonia XAML trampoline、Dock、YamlDotNet、Common.Logging、LTRData.Extensions），无全志代码引入的裁剪/AOT 警告。
 - 全量四轮连跑（2026-11-05，Debug）：增量构建 0 警告 0 错误后以 `--no-build` 连跑四轮，均 8918 用例/8874 通过/44 跳过/0 失败，耗时 1m23s、1m24s、1m35s、1m41s。此前一轮全量暴露的 9 例 `EdlSerialBundleServiceTests`、1 例 `FlashControlGateTests` 与随后复现的 2 例 `SunxiFlashTests` 已修复，修复点见“已知不稳定用例与环境门控”。
 - NativeAOT win-x64（2026-11-05，Release）：发布成功，exe 167.5 MB；`warning` 共 12 条，全部来自第三方程序集（Avalonia DataGrid、Dock、Ursa、Semi、YamlDotNet、Common.Logging、LTRData.Extensions）与 SDK 的 `Satori GC is experimental` 提示，本仓库程序集 0 条，无新增裁剪/AOT 告警。
+- GC 行为一致性（2026-11-07，Release）：`PublishWithSatoriGC 10.0.15-satori.40994390316.1` 下 Desktop NativeAOT win-x64 发布成功（exe 168.2 MB，publish 目录 323 MB，exe 内嵌 `SatoriGC` 配置），警告 39 条全部来自第三方程序集（Avalonia XAML trampoline、Dock.Model trampoline、Ursa/Semi、YamlDotNet、Common.Logging、LTRData.Extensions）加 1 条 SDK 的 `Satori GC is experimental` 提示，本仓库程序集 0 条。测试宿主以同一编译快照背靠背两轮全量：默认 GC（framework-dependent）与 Satori GC（自包含发布，其 coreclr 为 Satori 构建 42.0.1426.52326）均为 9070 用例/9033 通过/0 失败/37 跳过，耗时 1m25s 与 1m27s，37 个跳过逐条一致（全部环境门控）。`UotanStudio.Tests.csproj` 引用同版本 SDK，framework-dependent 构建不受影响；两轮的工作树含另一会话的 Utf8String/ZLinq 性能重构改动。GC 延迟与吞吐特性仍未测量。
+- 零分配包铺开第二批（2026-11-07，Debug，工作树含两批未提交的 ZLinq/Utf8 改动）：restore（Debug 配置）→ 全量 slnx 构建 0 错误 → style 门首查发现 3 个文件的 using 顺序违规（第一批遗留 2 个 + 本轮 1 个），`dotnet format style` 修复后 `whitespace`/`style` 双门 verify 零报告 → `dotnet test --solution` 9070 用例/9033 通过/0 失败/37 跳过/1m50s（跳过全部为环境门控）→ NativeAOT win-x64 发布成功，警告 39 条全部来自第三方程序集与 SDK Satori 提示，无本次改动引入的裁剪/AOT 警告。基准数字见"性能实测"。
+- 零警告门禁与旧构建 API 下线（2026-11-07，Debug）：移除 `UotanStudio.Tests.csproj` 与 `UotanStudio.Benchmarks.csproj` 的 `CS0618` 抑制后，测试与基准中 302 处（ext4/erofs/f2fs）与 4 处（基准）对整镜像内存型构建 API 的调用全部改经 `InMemoryImage` 帮助类或文件路径/流式重载；`BuilderStreamingTests` 改为流式重载对路径重载的逐字节等价校验（参照镜像置于源目录树之外，避免被打进镜像）；`SpacemiTFlashTests` 的 3 处 xUnit1051 改传 `TestContext.Current.CancellationToken`。此后全量 slnx 构建 0 警告 0 错误，两个项目文件已无 `NoWarn` 项 → `whitespace`/`style` 双门 verify 零报告 → `dotnet test --solution` 9070 用例/9033 通过/0 失败/37 跳过/1m29s（跳过全部为环境门控）→ NativeAOT win-x64 发布成功（exe 168.2 MB），警告 39 条全部来自第三方程序集与 SDK Satori 提示，本仓库程序集 0 条；发布产物启动验证通过（进程存活、无错误输出）。
 - format 双门：`whitespace` 与 `style` 全解 `--verify-no-changes` 零报告（2026-11-03）。
 - NativeAOT win-x64（2026-11-03）：发布成功，产物约 172.3 MB；ILC 警告 38–39 条全部来自第三方（Avalonia XAML trampoline/Dock、YamlDotNet、Common.Logging、LTRData.Extensions、Makaretu.Dns 的 Tmds.LibC 提示）与 SDK 预期的 `Satori GC is experimental` 提示。
 - `LNK1181 无法打开输入文件"Synchronization.lib"`：未设置 `LIB`（MSVC 与 Windows SDK 的 `lib\x64` 路径）时原生链接失败，属环境事实，非代码或裁剪问题。
@@ -22,6 +25,14 @@
 - 完整门禁序列（restore → 构建 → format 双门 → `dotnet test --solution`（Debug）→ AOT 发布（Release））本机一次跑通：8224 用例/8202 通过/22 跳过（全部环境门控）/0 失败，1m38s（2026-11-01）。
 
 ## 性能实测
+
+GC 特性（2026-11-07，Release，专用测量宿主 `%TEMP%` 单进程单模式，16 逻辑 CPU，机器另有并行负载；Satori 为 `10.0.15-satori.40994390316.1` 自包含发布，默认 GC 参考为 framework-dependent 10.0.14 workstation）：
+
+- 负载与口径：`churn` 2 亿次小对象分配（21.4 GB，仅 gen0）；`survival` 5000 万次分配带 20 万活窗口（13.4 GB，gen2 压力）；`loh` 3 万次 2 MB LOH 分配进 64 槽环（57.2 GB）。延迟取分配线程检查点间隙直方图（含 OS 抢占噪声，max 列仅供参考），暂停占比取 `GC.GetGCMemoryInfo().PauseTimePercentage`（窗口化指标，`PauseDurations` 仅暴露最近窗口 n=2，不可作累计停顿结论）。每组合 2 轮，两轮内数字一致。
+- Satori Interactive：完成时间 churn 1.70–1.81s / survival 2.57–2.66s / loh 2.64–2.66s（分配吞吐 11.8–12.5 GB/s）；survival 间隙 p99 54µs、p999 424–441µs、max 2.2–3.2ms；累计暂停占比 3.65–4.00%；稳态堆 124–126 MB、峰值堆 256–360 MB、峰值工作集 571–642 MB。
+- Satori LowLatency：吞吐与 Interactive 持平（差 ±3% 内）；尾延迟显著更低——survival 间隙 p99 50–52µs、p999 181–182µs（Interactive 的 ~2.4 倍改善）、max 741–815µs（~3 倍），loh p999 453–469µs、max 1.16–1.39ms；累计暂停占比 1.60–2.08%；代价是稳态堆 252–256 MB（约为 Interactive 的 2 倍，回收/归还被推迟），强制 GC 后堆地板同为 0.1 MB。
+- 默认 GC（workstation Interactive，参考）：gen0 纯分配吞吐与 Satori 持平（114.9–115.1M ops/s）；survival 负载完成 11.8–12.2s（Satori 的 ~4.5 倍）、间隙 p99 2.3ms、p999 4.1ms、累计暂停占比 30.1–31.1%；稳态堆 151–208 MB（碎片 21–82 MB）。为合成分配压测下的 blocking gen2 表现，不代表应用真实混合负载。
+- 模式切换：`GCSettings.LatencyMode` 设为 `LowLatency` 后读回即生效并全程保持，行为差异（尾延迟与稳态堆）逐轮可复现。
 
 测试套分层（2026-11-03，Release，同一 worktree 直接执行测试宿主）：
 
@@ -43,6 +54,12 @@
 - ADB server 路由：僵尸监听行（`OwningProcess 0`）存在时 `IsListening` 首次约 2s 内判定 False、之后 0–1ms，`AdbServerOwns` 0–1ms；`host:version` 60s 内复用，一次目标枚举只连一次 server（2026-11-03）。
 - USB 探针（Qualcomm ADB 真机，接口 MI_05）：`interfaceNumber=5`、class FF/42/01、`resetReenumerates=False`；ADB 握手后 `echo` 返回 `__PROBE_OK__`；`WatchUsb(fireInitialSnapshot: true)` 5s 内投递 48 条初始 Added（2026-11-03）。
 - 日志定容预算（`MaxQueueCharacters` 默认 64 Mi 字符、`MaxQueueSize` 默认 250,000 条，超限从队首淘汰，调试模式跳过预算）与默认落盘（`%AppData%/UotanStudio/logs` 的 JSON Lines 单会话文件，不滚动）经 `LogServiceRetentionTests`/`LogViewModelRetentionTests`/`LogFileSinkTests`/`LogServiceFileLoggingTests` 验证（2026-11-03）。
+
+包级性能基准（2026-11-07，Release，BenchmarkDotNet 0.15.8，Ryzen 7 8845HS，`ZLinqAdoptionBenchmarks` 为 `IterationCount=3/WarmupCount=1` 短作业，误差较宽，看方向不看绝对值）：
+
+- ZLinq 形状对照（LINQ vs ZLinq 同作业直比）：`PclusterBlockSum` 46.10→10.51 µs（4.4×）且分配 64 KB→0；`FieldDuplicateGuard` 476.30→162.14 µs（2.9×）且分配 1.55 MB→0.11 MB；本轮新增的 `XattrCapabilityLookup`（元数据生成器每 inode 形态）12.99→15.84 µs，双侧均零分配，差异在噪声内，无回退。
+- 已知取舍：`InterfaceRelocation`（第一批 SmaliAssembler 的 `Select→Distinct→Order→ToArray` 形态）ZLinq 分配 1.216 MB→0.480 MB（-61%）但耗时 318.93→441.46 µs（+39%，每类约 +60 ns），已采纳（分配收益换微小时间成本），保持现状不改回。
+- HotPathBenchmarks 首次基线（本批改动后测得，改动前数字因两批改动同树未提交而不可分离）：`ErofsCompressedExtract` 2649.4 µs/8.32 MB、`Ext4MetadataWalk` 244.8 µs/938 KB、`DeliveryShaChecksumLoop` 44572.9 µs/1.08 MB、`ByteEquivalenceScan` 8202.1 µs/64.5 KB。后续同类改动以此对照。
 
 ## 已知不稳定用例与环境门控
 
