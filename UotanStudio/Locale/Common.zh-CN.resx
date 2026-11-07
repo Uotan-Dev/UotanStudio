@@ -4354,7 +4354,7 @@
     <value>烧录包将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作不可撤销。</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
-    <value>全志</value>
+    <value>全志 Allwinner</value>
   </data>
   <data name="Flash_SunxiHint" xml:space="preserve">
     <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。设备进入 FES 后可烧录 IMAGEWTY 整包。</value>
