@@ -14,13 +14,24 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// <param name="Images">Image file paths to flash, in order; empty when the entry has no image reference. <para>按顺序刷写的镜像文件路径；条目未引用镜像时为空。</para></param>
 /// <param name="Compress">Vendor compression hint (e.g. "gzip-5"); a <c>gzip-N</c> hint overrides the per-run gzip level for this partition's chunked transfer. <para>厂商压缩提示（如 "gzip-5"）；<c>gzip-N</c> 提示会覆盖该分区分块传输所用的全局 gzip 级别。</para></param>
 /// <param name="Hidden">Whether the partition is marked hidden in the table. <para>分区在表中是否标记为隐藏。</para></param>
+/// <param name="VolumeImages">
+/// Images for the entry's NAND volumes ("volume_images" JSON object mapping a volume name such as
+/// "bootfs" to an image reference); each volume is flashed as the synthesized target
+/// <c>&lt;partition name&gt;-&lt;volume name&gt;</c> (e.g. "user-bootfs"), mirroring the device flow
+/// that writes a volume with <c>fastboot flash &lt;partition&gt;-&lt;volume&gt; &lt;image&gt;</c>.
+/// Empty when the entry declares no volume images.
+/// <para>条目各 NAND 卷的镜像（"volume_images" JSON 对象，卷名如 "bootfs" 映射到镜像引用）；每卷按合成目标
+/// <c>&lt;分区名&gt;-&lt;卷名&gt;</c>（如 "user-bootfs"）刷写，对应设备端以
+/// <c>fastboot flash &lt;分区&gt;-&lt;卷&gt; &lt;镜像&gt;</c> 写卷的流程。条目未声明卷镜像时为空。</para>
+/// </param>
 public sealed record SpacemiTPartitionEntry(
     string Name,
     long Offset,
     long Size,
     IReadOnlyList<string> Images,
     string? Compress,
-    bool Hidden);
+    bool Hidden,
+    IReadOnlyDictionary<string, string> VolumeImages);
 
 /// <summary>
 /// A parsed SpacemiT partition table: a format (GPT or MTD) and an ordered partition list.
@@ -30,6 +41,7 @@ public sealed class SpacemiTPartitionTable
 {
     private const int MaxPartitions = 512;
     private const int MaxImagesPerPartition = 64;
+    private const int MaxVolumesPerPartition = 64;
 
     /// <summary>
     /// Gets the table format sent to the device as <c>flash:&lt;format&gt;</c> when writing
@@ -138,7 +150,8 @@ public sealed class SpacemiTPartitionTable
                 TryParseSize(entry["size"]),
                 images,
                 TryGetString(entry, "compress")?.Trim(),
-                GetHiddenFlag(entry));
+                GetHiddenFlag(entry),
+                ParseVolumeImages(entry["volume_images"]));
             partitions.Add(partition);
         }
 
@@ -181,6 +194,43 @@ public sealed class SpacemiTPartitionTable
         JsonArray array => ParseImageArray(array),
         _ => [],
     };
+
+    /// <summary>
+    /// Parses the <c>volume_images</c> object the way the device parser treats optional fields:
+    /// a missing or wrong-typed value yields no volumes, string values are trimmed and blank
+    /// entries are dropped.
+    /// <para>按设备端解析器对可选字段的处理方式解析 <c>volume_images</c> 对象：缺失或类型不符的值
+    /// 得到空卷表，字符串值去除首尾空白，空白条目被丢弃。</para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ParseVolumeImages(JsonNode? node)
+    {
+        if (node is not JsonObject obj || obj.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
+
+        if (obj.Count > MaxVolumesPerPartition)
+        {
+            throw new InvalidDataException($"Partition volume_images object declares {obj.Count} volumes, above the {MaxVolumesPerPartition} limit.");
+        }
+
+        var volumes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (volume, value) in obj)
+        {
+            var name = volume.Trim();
+            if (name.Length == 0 ||
+                value is not JsonValue jsonValue ||
+                !jsonValue.TryGetValue<string>(out var image) ||
+                image.Trim().Length == 0)
+            {
+                continue;
+            }
+
+            volumes[name] = image.Trim();
+        }
+
+        return volumes;
+    }
 
     private static IReadOnlyList<string> ParseImageArray(JsonArray array)
     {

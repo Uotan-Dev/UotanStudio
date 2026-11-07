@@ -116,6 +116,45 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// Runs one partition read-back against the SpacemiT U-Boot fastboot gadget while holding a single fastboot lease
+    /// for the whole run: the session is opened through the controller (never a host-owned USB or socket handle), the
+    /// caller's operation receives it, and the lease is released afterwards even when the operation fails or is cancelled.
+    /// <para>在跨越整个运行的一条 fastboot 租约上对进迭时空 U-Boot fastboot gadget 执行一次分区回读：会话经控制器打开
+    /// （绝不由宿主自己持有 USB 或套接字句柄），交给调用方的操作使用，并在操作失败或被取消时同样释放租约。</para>
+    /// </summary>
+    /// <param name="device">The selected SpacemiT fastboot device row. <para>所选进迭时空 fastboot 设备行。</para></param>
+    /// <param name="operation">Read-back work run against the connected fastboot session.
+    /// <para>在已连接 fastboot 会话上执行的回读工作。</para></param>
+    /// <param name="cancellationToken">Cancels the lease and the operation. <para>取消租约与操作。</para></param>
+    /// <exception cref="IOException">The device does not expose a fastboot session.
+    /// <para>设备不提供 fastboot 会话。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    internal async Task RunSpacemiTReadbackAsync(DetectedDevice device,
+        Func<FastbootSession, CancellationToken, Task> operation, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(operation);
+        CancelBackgroundEndpointWork(device);
+        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot,
+            cancellationToken: cancellationToken);
+        try
+        {
+            if (!lease.TryGetSession<FastbootSession>(out var session))
+            {
+                throw new IOException("The selected device does not expose Fastboot.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            await operation(session, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            CloseLease(lease);
+        }
+    }
+
+    /// <summary>
     /// Reports which boot stage the run starts on, because the two stages behave differently: the BootROM download
     /// mode digests FSBL and U-Boot through <c>stage</c>/<c>continue</c> and re-enumerates, while the U-Boot gadget
     /// writes partitions directly and keeps its USB node.

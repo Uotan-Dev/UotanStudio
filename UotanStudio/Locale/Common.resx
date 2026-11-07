@@ -4350,29 +4350,8 @@ Continue?</value>
   <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
     <value>Generated regular expression will appear here</value>
   </data>
-  <data name="Flash_SpacemiT" xml:space="preserve">
-    <value>SpacemiT</value>
-  </data>
-  <data name="Flash_SpacemiTPackageHint" xml:space="preserve">
-    <value>Select the unpacked flash package folder that contains fastboot.yaml; the device must show up as a SpacemiT fastboot device (BootROM or U-Boot).</value>
-  </data>
-  <data name="Flash_SpacemiTPackagePath" xml:space="preserve">
-    <value>Flash package folder</value>
-  </data>
-  <data name="Flash_SpacemiTChoosePackage" xml:space="preserve">
-    <value>Choose package folder</value>
-  </data>
-  <data name="Flash_SpacemiTRebootAfter" xml:space="preserve">
-    <value>Reboot after flashing</value>
-  </data>
-  <data name="Flash_SpacemiTFlash" xml:space="preserve">
-    <value>Flash package</value>
-  </data>
   <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
     <value>The flash package rewrites the partition table and every image it references on the selected SpacemiT device. This cannot be undone.</value>
-  </data>
-  <data name="Flash_SpacemiTPackageMissing" xml:space="preserve">
-    <value>The selected folder is not a valid SpacemiT flash package (fastboot.yaml missing or unreadable).</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
     <value>Allwinner</value>
@@ -4617,6 +4596,9 @@ Continue?</value>
   <data name="DiskFlash_StagePreparing" xml:space="preserve">
     <value>Preparing targets...</value>
   </data>
+  <data name="DiskFlash_StageSynthesizing" xml:space="preserve">
+    <value>Synthesizing card image</value>
+  </data>
   <data name="DiskFlash_StageWriting" xml:space="preserve">
     <value>Writing...</value>
   </data>
@@ -4664,6 +4646,9 @@ Continue?</value>
   </data>
   <data name="DiskFlash_ImageCompressed" xml:space="preserve">
     <value>{0} compressed</value>
+  </data>
+  <data name="DiskFlash_ImageCard" xml:space="preserve">
+    <value>SpacemiT card package · {0} partitions · synthesized ≈ {1}</value>
   </data>
   <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
     <value>One drive at a time. Selecting a drive clears the previous choice.</value>
@@ -5196,6 +5181,9 @@ Continue?</value>
   <data name="Flash_SpacemiTNoPartitions" xml:space="preserve">
     <value>Select at least one partition to write.</value>
   </data>
+  <data name="Flash_SpacemiTNoImageSkipped" xml:space="preserve">
+    <value>Partitions with no package image and no picked file were skipped: {0}.</value>
+  </data>
   <data name="Flash_SpacemiTPackageLoaded" xml:space="preserve">
     <value>Package {0} (script v{1}, {2} actions) listed {3} partition(s).</value>
   </data>
@@ -5207,6 +5195,12 @@ Continue?</value>
   </data>
   <data name="Flash_SpacemiTWritingTable" xml:space="preserve">
     <value>Writing the partition table</value>
+  </data>
+  <data name="Flash_SpacemiTVerify" xml:space="preserve">
+    <value>Verify after flash</value>
+  </data>
+  <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
+    <value>Backed up partition {0} to {1}</value>
   </data>
   <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
     <value>Wired-flash package written to {0}</value>

@@ -113,11 +113,30 @@ public sealed class SpacemiTFlashScript
     /// <summary>Gets the ordered actions to execute. <para>获取要执行的有序动作。</para></summary>
     public IReadOnlyList<SpacemiTFlashAction> Actions { get; }
 
+    /// <summary>
+    /// Gets the position just past the last <c>continue</c> action: the BootROM hands the board over to U-Boot there,
+    /// so the boot-chain section ends and the storage section begins; zero when the script declares no
+    /// <c>continue</c> and therefore has no boot-chain section.
+    /// <para>获取最后一个 <c>continue</c> 动作之后的位置：BootROM 在此把板卡交给 U-Boot，引导链段落到此结束、
+    /// 存储段落由此开始；脚本没有 <c>continue</c>、因此没有引导链段落时为零。</para>
+    /// </summary>
+    public int BootChainEnd { get; }
+
     private SpacemiTFlashScript(string version, IReadOnlyList<string> support, IReadOnlyList<SpacemiTFlashAction> actions)
     {
         Version = version;
         Support = support;
         Actions = actions;
+        var bootChainEnd = 0;
+        for (var index = 0; index < actions.Count; index++)
+        {
+            if (actions[index] is SpacemiTContinueAction)
+            {
+                bootChainEnd = index + 1;
+            }
+        }
+
+        BootChainEnd = bootChainEnd;
     }
 
     /// <summary>

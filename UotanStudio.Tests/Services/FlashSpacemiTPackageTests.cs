@@ -81,10 +81,10 @@ public sealed class FlashSpacemiTPackageTests
             Assert.Null(misc.FilePath);
             Assert.Equal(string.Empty, misc.ImageReference);
             Assert.Equal(["gpt"], misc.TableFormats);
-            // The table gives this partition a place but no image, so the row writes nothing to storage and reports no
-            // medium: naming one would describe a write the run never performs.
-            // 分区表给该分区位置却不给镜像，因此该行不向存储写入任何内容，也不上报介质：标上介质等于描述一次运行不会执行的写入。
-            Assert.Equal(string.Empty, misc.StorageMedium);
+            // The table places misc on the block device and the run writes it from the file picked in its own cell,
+            // so the row reports the medium its layout gives it.
+            // 分区表把 misc 放在块设备上，运行会以用户在其文件列选择的文件写入，因此该行上报其布局给出的介质。
+            Assert.Equal("eMMC/SD", misc.StorageMedium);
         }
         finally
         {
@@ -209,12 +209,232 @@ public sealed class FlashSpacemiTPackageTests
             Assert.Null(contents.Partitions[1].FilePath);
             Assert.Equal("/partition_.+.json$/", contents.Partitions[1].ImageReference);
 
-            // A missing file still has the place the table gives it, so the medium stays; a vendor regex marker names
-            // no file at all — the vendor tool builds that content in memory — so it reports no medium.
-            // 缺失的文件仍占有分区表给定的位置，因此保留介质；厂商正则标记不指向任何文件——那类内容由厂商工具在内存中生成
-            // ——因此不上报介质。
+            // A missing file still has the place the table gives it, so the medium stays; a vendor regex marker is
+            // resolved to a package file before the run writes it, so it reports the same medium.
+            // 缺失的文件仍占有分区表给定的位置，因此保留介质；厂商正则标记在运行写入前解析为包内文件，因此上报同样的介质。
             Assert.Equal("eMMC/SD", contents.Partitions[0].StorageMedium);
-            Assert.Equal(string.Empty, contents.Partitions[1].StorageMedium);
+            Assert.Equal("eMMC/SD", contents.Partitions[1].StorageMedium);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Read_NandUserVolumeImages_ListsSynthesizedVolumeRows()
+    {
+        var root = CreatePackageFolder();
+        try
+        {
+            WriteScript(root);
+            File.WriteAllBytes(Path.Combine(root, "env.bin"), [1]);
+            File.WriteAllBytes(Path.Combine(root, "bootfs.img"), [2, 2]);
+            File.WriteAllBytes(Path.Combine(root, "rootfs.img"), [3, 3, 3]);
+            File.WriteAllText(Path.Combine(root, "partition_universal.json"),
+                """
+                {
+                  "version": "1.0",
+                  "format": "gpt",
+                  "partitions": [
+                    { "name": "env", "offset": "384K", "size": "64K", "image": "env.bin" },
+                    { "name": "user", "offset": "1M", "size": "-", "volume_images": { "bootfs": "bootfs.img", "rootfs": "rootfs.img" } }
+                  ]
+                }
+                """);
+
+            var contents = FlashSpacemiTPackage.Read(root);
+
+            Assert.NotNull(contents);
+            Assert.Equal(["env", "user", "user-bootfs", "user-rootfs"],
+                contents.Partitions.Select(entry => entry.Partition));
+
+            var env = contents.Partitions.Single(entry => entry.Partition == "env");
+            Assert.Equal("env.bin", env.ImageReference);
+            Assert.NotNull(env.FilePath);
+
+            var user = contents.Partitions.Single(entry => entry.Partition == "user");
+            Assert.Equal(string.Empty, user.ImageReference);
+            Assert.Null(user.FilePath);
+
+            var bootfs = contents.Partitions.Single(entry => entry.Partition == "user-bootfs");
+            Assert.Equal("bootfs.img", bootfs.ImageReference);
+            Assert.Equal("bootfs.img", Path.GetFileName(bootfs.FilePath));
+            Assert.Equal(2, bootfs.FileLength);
+            Assert.Equal("eMMC/SD", bootfs.StorageMedium);
+
+            var rootfs = contents.Partitions.Single(entry => entry.Partition == "user-rootfs");
+            Assert.Equal("rootfs.img", rootfs.ImageReference);
+            Assert.Equal("rootfs.img", Path.GetFileName(rootfs.FilePath));
+            Assert.Equal(3, rootfs.FileLength);
+            Assert.Equal("eMMC/SD", rootfs.StorageMedium);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Read_ScriptSteps_DeriveStageTransfersAndStoragePhaseOem()
+    {
+        var root = CreatePackageFolder();
+        try
+        {
+            // The vendor K3 shape: two staging phases, a boot-phase speed switch, then the EC write that runs in the
+            // storage phase after the last continue.
+            // 厂商 K3 形态：两个暂存阶段、引导段落的速率切换，然后是最后一个 continue 之后在存储段落执行的 EC 写入。
+            File.WriteAllText(Path.Combine(root, "fastboot.yaml"),
+                """
+                version: 1.0
+                support:
+                  - 'k3'
+                actions:
+                  - getvar:
+                      args: 'version-brom'
+                      set: 'version'
+                      skip_fail: true
+                  - stage:
+                      file: 'factory/FSBL.bin'
+                      skip_when: "not temp.version"
+                  - continue:
+                      skip_when: "not temp.version"
+                  - oem:
+                      args: 'speed:super-speed'
+                      skip_when: "not temp.version"
+                      skip_fail: true
+                  - stage:
+                      file: 'u-boot.itb'
+                  - continue: {}
+                  - stage:
+                      file: 'ec.bin'
+                      skip_fail: true
+                  - oem:
+                      args: 'ec:flash'
+                      skip_fail: true
+                  - getvar:
+                      args: 'mtd-size'
+                      set_var: 'size0'
+                      skip_fail: true
+                  - multi_flash:
+                      relate_partition: ['partition_{size0}.json']
+                """);
+            File.WriteAllText(Path.Combine(root, "partition_universal.json"),
+                """{"version":"1.0","format":"gpt","partitions":[{"name":"bootfs","offset":"4M","size":"256M","image":"bootfs.ext4"}]}""");
+            Directory.CreateDirectory(Path.Combine(root, "factory"));
+            File.WriteAllBytes(Path.Combine(root, "factory", "FSBL.bin"), [1]);
+            File.WriteAllBytes(Path.Combine(root, "u-boot.itb"), [2, 2]);
+            File.WriteAllBytes(Path.Combine(root, "ec.bin"), [3, 3, 3]);
+            File.WriteAllBytes(Path.Combine(root, "bootfs.ext4"), [4]);
+
+            var contents = FlashSpacemiTPackage.Read(root);
+
+            Assert.NotNull(contents);
+            Assert.Equal(4, contents.ScriptSteps.Count);
+
+            var fsbl = contents.ScriptSteps[0];
+            Assert.Equal("stage", fsbl.Command);
+            Assert.Equal("factory/FSBL.bin", fsbl.FileReference);
+            Assert.NotNull(fsbl.FilePath);
+            Assert.Equal(1, fsbl.FileLength);
+            // A stage transfer lands in device RAM, never in storage.
+            // stage 传输落在设备内存，绝不写存储。
+            Assert.Equal("MEMORY", fsbl.StorageMedium);
+
+            var uboot = contents.ScriptSteps[1];
+            Assert.Equal("stage", uboot.Command);
+            Assert.Equal("u-boot.itb", uboot.FileReference);
+            Assert.Equal(2, uboot.FileLength);
+            Assert.Equal("MEMORY", uboot.StorageMedium);
+
+            // The boot-phase speed switch is not a device-facing write and stays out of the rows.
+            // 引导段落的速率切换不是面向设备的写入，不进入行列表。
+            var ec = contents.ScriptSteps[2];
+            Assert.Equal("stage", ec.Command);
+            Assert.Equal("ec.bin", ec.FileReference);
+            Assert.Equal(3, ec.FileLength);
+            Assert.Equal("MEMORY", ec.StorageMedium);
+
+            var ecFlash = contents.ScriptSteps[3];
+            // The OEM body is part of the command itself and has no column of its own.
+            // OEM 命令体是命令本身的一部分，没有属于自己的列。
+            Assert.Equal("oem ec:flash", ecFlash.Command);
+            Assert.Equal(string.Empty, ecFlash.FileReference);
+            Assert.Null(ecFlash.FilePath);
+            Assert.Equal(0, ecFlash.FileLength);
+            Assert.Equal("EC", ecFlash.StorageMedium);
+
+            Assert.Single(contents.Partitions);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Read_ScriptWithoutContinue_KeepsEveryOemStep()
+    {
+        var root = CreatePackageFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "fastboot.yaml"),
+                """
+                version: 1.0
+                support:
+                  - 'k1x'
+                actions:
+                  - stage:
+                      file: 'u-boot.itb'
+                  - oem:
+                      args: 'ec:flash'
+                """);
+
+            var contents = FlashSpacemiTPackage.Read(root);
+
+            Assert.NotNull(contents);
+            // Without a continue the whole script is the storage phase, so the oem command is a step too.
+            // 没有 continue 时整个脚本都是存储段落，因此 oem 命令同样是步骤。
+            Assert.Equal(["stage", "oem ec:flash"],
+                contents.ScriptSteps.Select(step => step.Command));
+            Assert.Equal(["MEMORY", "EC"],
+                contents.ScriptSteps.Select(step => step.StorageMedium));
+            Assert.All(contents.ScriptSteps, step => Assert.Null(step.FilePath));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Read_EntryWithPlainImage_KeepsSingleRowAndIgnoresVolumeImages()
+    {
+        var root = CreatePackageFolder();
+        try
+        {
+            WriteScript(root);
+            File.WriteAllBytes(Path.Combine(root, "system.img"), [1, 1]);
+            File.WriteAllBytes(Path.Combine(root, "bootfs.img"), [2]);
+            File.WriteAllText(Path.Combine(root, "partition_universal.json"),
+                """
+                {
+                  "version": "1.0",
+                  "format": "mtd",
+                  "partitions": [
+                    { "name": "system", "offset": "0", "size": "256M", "image": "system.img", "volume_images": { "bootfs": "bootfs.img" } }
+                  ]
+                }
+                """);
+
+            var contents = FlashSpacemiTPackage.Read(root);
+
+            Assert.NotNull(contents);
+            Assert.Equal(["system"], contents.Partitions.Select(entry => entry.Partition));
+            var system = contents.Partitions[0];
+            Assert.Equal("system.img", system.ImageReference);
+            Assert.Equal("system.img", Path.GetFileName(system.FilePath));
+            Assert.Equal("SPI NOR", system.StorageMedium);
         }
         finally
         {

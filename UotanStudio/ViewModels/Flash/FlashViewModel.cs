@@ -45,6 +45,16 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <para>导入脚本行所表示的显式操作；没有则为空。</para>
     /// </summary>
     public FlashStep? Step { get; set; }
+    /// <summary>
+    /// Whether the row is a package script step — a boot-chain <c>stage</c> transfer or a storage-phase OEM write —
+    /// rather than a storage partition target. Its check box is disabled and the storage selection sets skip it,
+    /// because no action runs a step individually; the row exists to show what the package's own commands do and
+    /// where they land.
+    /// <para>该行是否为包脚本步骤——引导链 <c>stage</c> 传输或存储段落 OEM 写入——而不是存储分区目标。其复选框禁用、
+    /// 存储选择集合跳过它，因为没有任何动作会单独执行步骤；该行用于展示包自身命令的行为与落点。</para>
+    /// </summary>
+    public bool IsScriptStep { get; set; }
+
     /// <summary>Whether the row is selected. <para>是否勾选该分区。</para></summary>
     [ObservableProperty]
     private bool _isSelected;
@@ -79,6 +89,13 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary>The formatted image size. <para>已格式化的镜像大小。</para></summary>
     [ObservableProperty]
     private string _size = string.Empty;
+
+    /// <summary>
+    /// The partition size in bytes declared by the package layout; 0 or negative when the table leaves the size
+    /// open-ended, so a read-back of this row cannot bound its transfer at a known size.
+    /// <para>包布局声明的分区字节大小；分区表未给出确定大小时为 0 或负数，此时该行的回读无法按已知大小限定传输长度。</para>
+    /// </summary>
+    public long SizeBytes { get; set; }
 
     /// <summary>The partition offset or sector offset. <para>分区偏移量或扇区偏移。</para></summary>
     [ObservableProperty]
@@ -349,6 +366,15 @@ public sealed partial class FlashViewModel : ObservableObject
     [ObservableProperty]
     private bool _isBusy;
 
+    /// <summary>
+    /// Whether the SpacemiT package flash run reads every written partition back and compares it against the source
+    /// image; bound to the SpacemiT-only option check box and passed to the flasher as its verification switch.
+    /// <para>进迭时空烧录包烧录运行是否把每个写入的分区回读并与源镜像比对；绑定到进迭时空专属选项复选框，
+    /// 并作为校验开关传给烧录器。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _verifyAfterFlash;
+
     partial void OnSearchTextChanged(string value) => RefreshVisiblePartitions();
 
     partial void OnIsSelectAllCheckedChanged(bool value)
@@ -361,9 +387,14 @@ public sealed partial class FlashViewModel : ObservableObject
         _updatingSelectAll = true;
         try
         {
+            // Script-step rows carry no individually runnable action, so select-all leaves their disabled boxes alone.
+            // 脚本步骤行没有可单独执行的动作，因此全选不触碰其禁用的复选框。
             foreach (var entry in VisiblePartitions)
             {
-                entry.IsSelected = value;
+                if (!entry.IsScriptStep)
+                {
+                    entry.IsSelected = value;
+                }
             }
         }
         finally
@@ -633,7 +664,10 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         SelectedCount = Partitions.Count(entry => entry.IsSelected);
         HasSelectedPartitions = SelectedCount > 0;
-        var allVisibleSelected = VisiblePartitions.Count > 0 && VisiblePartitions.All(entry => entry.IsSelected);
+        // Select-all reflects the rows a user can actually check; the disabled script-step rows never count.
+        // 全选反映用户真正能勾选的行；禁用的脚本步骤行不参与判断。
+        var selectable = VisiblePartitions.Where(entry => !entry.IsScriptStep).ToArray();
+        var allVisibleSelected = selectable.Length > 0 && selectable.All(entry => entry.IsSelected);
         _updatingSelectAll = true;
         try
         {

@@ -3,9 +3,9 @@ using System.Diagnostics;
 namespace UotanStudio.Comm.Protocols.SpacemiT;
 
 /// <summary>
-/// Parses SpacemiT partition-table and package size strings ("640K", "4M", "2G",
+/// Parses SpacemiT partition-table and package size strings ("640K", "4M", "2G", "80B",
 /// plain byte counts) into byte sizes; "-" means "until end of storage".
-/// <para>把 SpacemiT 分区表与烧录包中的尺寸字符串（"640K"、"4M"、"2G"、纯字节数）
+/// <para>把 SpacemiT 分区表与烧录包中的尺寸字符串（"640K"、"4M"、"2G"、"80B"、纯字节数）
 /// 解析为字节大小；"-" 表示“直到存储末尾”。</para>
 /// </summary>
 public static class SpacemiTSizeParser
@@ -14,7 +14,7 @@ public static class SpacemiTSizeParser
     /// Parses a size string into bytes.
     /// <para>把尺寸字符串解析为字节数。</para>
     /// </summary>
-    /// <param name="value">Size text from an untrusted package file; leading/trailing whitespace is ignored. <para>来自不可信包文件的尺寸文本；忽略首尾空白。</para></param>
+    /// <param name="value">Size text from an untrusted package file; leading/trailing whitespace is ignored, and an optional "K"/"M"/"G"/"B" unit suffix selects the multiplier. <para>来自不可信包文件的尺寸文本；忽略首尾空白，可选的 "K"/"M"/"G"/"B" 单位后缀选择乘数。</para></param>
     /// <returns>The size in bytes, or -1 when the value is "-" (until end of storage). <para>以字节计的大小；值为 "-" 时返回 -1（直到存储末尾）。</para></returns>
     /// <exception cref="FormatException">The value is empty, exceeds 15 characters, or is not a supported size form. <para>值为空、超过 15 个字符或不是受支持的尺寸形式。</para></exception>
     public static long Parse(string value)
@@ -49,6 +49,7 @@ public static class SpacemiTSizeParser
             'K' or 'k' => 1024L,
             'M' or 'm' => 1024L * 1024,
             'G' or 'g' => 1024L * 1024 * 1024,
+            'B' or 'b' => 1L,
             _ => 0L,
         };
         if (multiplier == 0)

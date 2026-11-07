@@ -215,7 +215,11 @@
                                     </DataGridTemplateColumn.Header>
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FlashPartitionEntry">
+                                            <!-- Script-step rows stage their own file and run through the package
+                                                 actions, so their box is display-only. -->
+                                            <!-- 脚本步骤行自带暂存文件并随包动作执行，其复选框仅作展示。 -->
                                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      IsEnabled="{Binding !IsScriptStep}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       MinWidth="0" Padding="0"
                                                       AutomationProperties.Name="{Binding Name}" />
@@ -384,7 +388,7 @@
                                 </DropDownButton>
                             </controls:JustifiedWrapPanel>
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
-                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,*"
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                   RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
                                 <CheckBox Grid.Row="0" Grid.Column="0" Name="DisableVbmetaBox"
                                           Content="{DynamicResource Flash_DisableVbmeta}" HorizontalAlignment="Left" />
@@ -402,6 +406,11 @@
                                           Content="{DynamicResource Flash_DeleteCow}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
+                                <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Name="SpacemiTVerifyBox"
+                                          IsChecked="{Binding VerifyAfterFlash, Mode=TwoWay}"
+                                          Content="{DynamicResource Flash_SpacemiTVerify}"
+                                          HorizontalAlignment="Left"
+                                          AutomationProperties.Name="{DynamicResource Flash_SpacemiTVerify}" />
                             </Grid>
                             <!-- AVB 选项组常驻：未勾选“禁用 AVB”时只把命令选择框置灰，组本身不消失。 -->
                             <!-- The AVB option group stays on the page: with AVB disabling unchecked only the command

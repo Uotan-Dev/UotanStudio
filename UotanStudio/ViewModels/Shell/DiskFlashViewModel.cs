@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.DD;
 using UotanStudio.DD.Drives;
 using UotanStudio.DD.Images;
@@ -32,6 +33,8 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     private readonly IDiskFlashDialogs _dialogs;
     private CancellationTokenSource? _operationCts;
     private FlashImage? _image;
+    private SpacemiTCardPackage? _cardPackage;
+    private volatile bool _synthesizing;
     private ProgressMeter? _meter;
     private FlashStage? _meterStage;
     private bool _isElevated;
@@ -196,12 +199,12 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     public bool CanRefresh => !IsBusy;
 
     /// <summary>
-    /// Gets whether flashing can start: an image is probed, one writable drive is selected and the overwrite
-    /// confirmation is ticked.
-    /// <para>获取是否可以开始烧录：镜像已探测、已选中一个可写驱动器且覆盖确认已勾选。</para>
+    /// Gets whether flashing can start: an image is probed or a card package is recognized, one writable drive
+    /// is selected and the overwrite confirmation is ticked.
+    /// <para>获取是否可以开始烧录：镜像已探测或卡包已识别、已选中一个可写驱动器且覆盖确认已勾选。</para>
     /// </summary>
     public bool CanFlash => !IsBusy
-        && _image is not null
+        && HasImage
         && ConfirmOverwrite
         && SelectedItem is { IsBlocked: false };
 
@@ -212,10 +215,10 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     public bool CanCancel => IsBusy;
 
     /// <summary>
-    /// Gets whether an image has been probed successfully.
-    /// <para>获取是否已成功探测镜像。</para>
+    /// Gets whether an image has been probed or a card package has been recognized.
+    /// <para>获取是否已成功探测镜像或已识别卡包。</para>
     /// </summary>
-    public bool HasImage => _image is not null;
+    public bool HasImage => _image is not null || _cardPackage is not null;
 
     /// <summary>
     /// Gets whether any scanned drive is available.
@@ -279,6 +282,8 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             return;
         }
 
+        _cardPackage = null;
+
         if (string.IsNullOrWhiteSpace(path))
         {
             _image = null;
@@ -301,16 +306,48 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is FlashException or IOException or UnauthorizedAccessException)
         {
-            _image = null;
-            ImagePath = path;
-            ImageSummary = string.Empty;
-            StatusMessage = string.Format(Language.GetString("DiskFlash_ImageInvalid"), Path.GetFileName(path));
-            StatusIsError = true;
-            LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Probe failed: {ex.Message}");
+            if (!TryAdoptCardPackage(path))
+            {
+                _image = null;
+                ImagePath = path;
+                ImageSummary = string.Empty;
+                StatusMessage = string.Format(Language.GetString("DiskFlash_ImageInvalid"), Path.GetFileName(path));
+                StatusIsError = true;
+                LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Probe failed: {ex.Message}");
+            }
         }
         finally
         {
             RefreshItems();
+        }
+    }
+
+    private bool TryAdoptCardPackage(string path)
+    {
+        try
+        {
+            var card = SpacemiTCardPackage.TryOpen(path);
+            if (card is null)
+            {
+                return false;
+            }
+
+            _image = null;
+            _cardPackage = card;
+            ImagePath = card.PackagePath;
+            ImageSummary = string.Format(
+                Language.GetString("DiskFlash_ImageCard"),
+                card.PartitionCount,
+                ProgressMeter.FormatSize(card.EstimatedImageSizeBytes));
+            StatusMessage = string.Empty;
+            StatusIsError = false;
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException
+                                   or ArgumentException or FormatException)
+        {
+            LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Card package recognition failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -408,7 +445,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             return;
         }
 
-        if (_image is null)
+        if (_image is null && _cardPackage is null)
         {
             StatusMessage = string.Format(Language.GetString("DiskFlash_ImageInvalid"), Path.GetFileName(ImagePath));
             StatusIsError = true;
@@ -443,10 +480,44 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         var generation = Interlocked.Increment(ref _progressGeneration);
         var progress = new Progress<DiskFlashProgress>(value => ApplyProgress(generation, value));
         var watch = System.Diagnostics.Stopwatch.StartNew();
+        string? temporaryImage = null;
+        var imageSize = _image?.Size ?? _image?.CompressedSize ?? 0L;
         try
         {
+            string flashPath;
+            if (_cardPackage is { } card)
+            {
+                temporaryImage = CreateTemporaryImagePath();
+                ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+                _synthesizing = true;
+                var synthesisProgress = new Progress<SpacemiTCardImageProgress>(
+                    value => ApplySynthesisProgress(generation, value));
+                SpacemiTCardImageResult synthesis;
+                try
+                {
+                    synthesis = await Task.Run(
+                        () => card.Synthesize(temporaryImage, synthesisProgress, cts.Token),
+                        cts.Token).ConfigureAwait(true);
+                }
+                finally
+                {
+                    _synthesizing = false;
+                }
+
+                imageSize = synthesis.ImageSizeBytes;
+                flashPath = temporaryImage;
+                ProgressStage = Language.GetString("DiskFlash_StagePreparing");
+                ProgressPercent = 0;
+                IsProgressIndeterminate = true;
+                ProgressStats = string.Empty;
+            }
+            else
+            {
+                flashPath = _image!.Path;
+            }
+
             var failure = await _flashService.FlashAsync(
-                _image.Path,
+                flashPath,
                 [target.Drive],
                 new FlashJobOptions
                 {
@@ -470,7 +541,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             StatusMessage = string.Format(
                 Language.GetString("DiskFlash_Success"),
                 1,
-                ProgressMeter.FormatSize(_image.Size ?? _image.CompressedSize),
+                ProgressMeter.FormatSize(imageSize),
                 $"{watch.Elapsed.TotalSeconds:0.0} s");
         }
         catch (OperationCanceledException)
@@ -493,8 +564,10 @@ public sealed partial class DiskFlashViewModel : ObservableObject
             Interlocked.Increment(ref _progressGeneration);
             _meter = null;
             _meterStage = null;
+            _synthesizing = false;
             IsBusy = false;
             IsProgressIndeterminate = false;
+            DeleteTemporaryImage(temporaryImage);
             NotifyDerived();
         }
     }
@@ -519,6 +592,63 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         StatusIsError = true;
         ProgressStage = Language.GetString("DiskFlash_Ready");
         await _dialogs.ShowErrorAsync(Language.GetString("DiskFlash_Title"), message).ConfigureAwait(true);
+    }
+
+    private void ApplySynthesisProgress(int generation, SpacemiTCardImageProgress value)
+    {
+        if (Volatile.Read(ref _progressGeneration) != generation || !_synthesizing)
+        {
+            return;
+        }
+
+        ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+        var meter = _meter;
+        if (meter is null)
+        {
+            return;
+        }
+
+        var total = value.BytesTotal;
+        var completed = value.BytesCompleted;
+        if (total.HasValue && total.Value > 0 && completed.HasValue)
+        {
+            var totalBytes = total.Value;
+            var done = completed.Value;
+            ProgressPercent = Math.Clamp(done * 100.0 / totalBytes, 0, 100);
+            IsProgressIndeterminate = false;
+            meter.Report(done, totalBytes);
+            var template = meter.EstimatedRemaining is null ? "Progress_StatsNoEta" : "Progress_Stats";
+            ProgressStats = meter.FormatStats(Language.GetString(template));
+        }
+        else
+        {
+            IsProgressIndeterminate = true;
+        }
+    }
+
+    private static string CreateTemporaryImagePath() =>
+        Path.Combine(Path.GetTempPath(), $"uotan-spacemit-card-{Guid.NewGuid():N}.img");
+
+    private static void DeleteTemporaryImage(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private void ApplyProgress(int generation, DiskFlashProgress value)

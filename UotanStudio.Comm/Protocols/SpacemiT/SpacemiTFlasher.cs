@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.SpacemiT;
 
@@ -13,10 +14,16 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// table write (<c>flash:gpt</c>/<c>flash:mtd</c>) and per-partition image flashing with
 /// gzip-chunked oversized images; an oversized image that is itself gzip is decompressed
 /// first so the chunked stream carries the same content a single-shot transfer would write.
+/// When <see cref="SpacemiTFlashOptions.VerifyAfterFlash"/> is set, each non-sparse partition
+/// is additionally read back and compared against the source image by SHA-256, except <c>env</c>
+/// (re-persisted by U-Boot, per the vendor verify_board script) and hidden block-device partitions
+/// (no device GPT entry to read back).
 /// <para>对 fastboot 会话执行 SpacemiT 烧录包，复刻厂商烧录器流程：可选的 BootROM
 /// FSBL/U-Boot 暂存拉起、super speed 切换、分区表写入（<c>flash:gpt</c>/<c>flash:mtd</c>）
 /// 与逐分区镜像刷写（超大镜像按 gzip 分块传输）；本身即为 gzip 的超大镜像会先解压，
-/// 使分块流承载的内容与单次传输写入的内容一致。</para>
+/// 使分块流承载的内容与单次传输写入的内容一致。设置 <see cref="SpacemiTFlashOptions.VerifyAfterFlash"/>
+/// 时，每个非 sparse 分区会额外回读并与源镜像做 SHA-256 比对，<c>env</c>（U-Boot 会重存，
+/// 厂商 verify_board 脚本同款跳过）与块设备上的 hidden 分区（设备 GPT 无条目可回读）除外。</para>
 /// </summary>
 /// <remarks>
 /// Device contract (verified against SpacemiT U-Boot <c>fb_spacemit.c</c>/<c>fb_mmc.c</c>/<c>fb_blk.c</c>):
@@ -35,8 +42,7 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// 分区起始处写入。设备端会把解压后的追加偏移向下取整到存储块大小，并把每次 raw 写入
 /// 向上取整到块边界，因此每个 gzip 分块必须解压为该块大小（eMMC/SD 上为 512 字节）的
 /// 倍数，且每个分块序列必须以一次 raw 块写入开头以清零追加偏移。</para>
-/// <para>
-/// Host strategy per the decompiled vendor flasher (<c>goflash.exe</c> <c>flashWithGzip</c>/
+/// <para>Host strategy per the decompiled vendor flasher (<c>goflash.exe</c> <c>flashWithGzip</c>/
 /// <c>compressReader</c>/<c>FlashFile</c>/<c>initTransport</c>): the vendor chunks raw images
 /// at the device max-download-size verbatim with no expansion budget and no explicit block
 /// alignment, compresses every file on non-super-speed USB regardless of size at level 2,
@@ -83,6 +89,25 @@ public sealed class SpacemiTFlasher
     private readonly SpacemiTFlashOptions _options;
     private readonly Dictionary<string, string> _variables = new(StringComparer.Ordinal);
 
+    /// <summary>SHA-256 over the verified bytes of each source image, cached per target so a retried or repeated verify does not re-hash the file. <para>每个源镜像被校验字节的 SHA-256，按目标缓存，使重试或重复的校验不必重新哈希文件。</para></summary>
+    private readonly Dictionary<string, byte[]> _sourceDigests = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Targets whose content the host cannot meaningfully verify by read-back even though the partition is readable:
+    /// <c>env</c> is re-persisted by U-Boot with runtime state, so partition bytes never match the staged file — the
+    /// vendor <c>verify_board</c> script skips exactly this one. A block-device partition the tables mark hidden is
+    /// skipped by the per-target rule in <see cref="FlashPartition"/> instead: it has no device GPT entry, so its
+    /// read-back probe answers "no such partition" (and the device rebuilds <c>bootinfo</c>/<c>fsbl</c> boot-area
+    /// content itself), while on an MTD table every partition including <c>bootinfo</c> is verified, matching the
+    /// vendor NOR flow.
+    /// <para>分区可读、但宿主无法通过回读有效校验内容的目标：<c>env</c> 会被 U-Boot 以运行时状态重存，分区字节
+    /// 永远不会与暂存文件一致——厂商 <c>verify_board</c> 脚本恰好只跳过它。布局表标记为 hidden 的块设备分区改由
+    /// <see cref="FlashPartition"/> 的逐目标规则跳过：它在设备 GPT 中没有条目，回读探测会应答 "no such
+    /// partition"（且 <c>bootinfo</c>/<c>fsbl</c> 的 boot 区内容由设备端自行重建）；而 MTD 表上包括
+    /// <c>bootinfo</c> 在内的每个分区都会被校验，与厂商 NOR 流程一致。</para>
+    /// </summary>
+    private static readonly HashSet<string> VerifySkippedTargets = new(StringComparer.Ordinal) { "env" };
+
     private const string VariableBagTempPrefix = "temp.";
 
     /// <summary>
@@ -127,7 +152,7 @@ public sealed class SpacemiTFlasher
 
         var session = initialSession;
         var actions = _package.Script.Actions;
-        var bootChainEnd = BootChainEnd(actions);
+        var bootChainEnd = _package.Script.BootChainEnd;
         if (_options.Scope == SpacemiTFlashScope.BootChain && bootChainEnd == 0)
         {
             Report(progress, "skip", null, "the package script declares no boot-chain section (no continue action)");
@@ -201,28 +226,6 @@ public sealed class SpacemiTFlasher
         Report(progress, "done", null, _options.Scope == SpacemiTFlashScope.BootChain
             ? "boot chain handed over"
             : "flash script finished");
-    }
-
-    /// <summary>
-    /// Index just past the last <c>continue</c> action, which is where the BootROM hands the board over to U-Boot and
-    /// therefore where the boot-chain section ends; zero when the script stages nothing.
-    /// <para>最后一个 <c>continue</c> 动作之后的位置：BootROM 在此把板卡交给 U-Boot，引导链段落也在此结束；脚本没有暂存
-    /// 任何内容时为零。</para>
-    /// </summary>
-    /// <param name="actions">The package script's actions. <para>包脚本的动作序列。</para></param>
-    /// <returns>The exclusive end index of the boot-chain section. <para>引导链段落的排他结束下标。</para></returns>
-    private static int BootChainEnd(IReadOnlyList<SpacemiTFlashAction> actions)
-    {
-        var end = 0;
-        for (var index = 0; index < actions.Count; index++)
-        {
-            if (actions[index] is SpacemiTContinueAction)
-            {
-                end = index + 1;
-            }
-        }
-
-        return end;
     }
 
     /// <summary>
@@ -459,7 +462,7 @@ public sealed class SpacemiTFlasher
         IProgress<SpacemiTFlashProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var targets = CollectTargets(table, progress);
+        var targets = CollectTargets(table, progress, cancellationToken);
         if (targets.Count == 0)
         {
             Report(progress, "skip", null, "no target partitions in this table");
@@ -477,55 +480,80 @@ public sealed class SpacemiTFlasher
         foreach (var target in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            FlashPartition(session, target, action.Retry, action.Timeout, progress, cancellationToken);
+            FlashPartition(session, target, table.Format, action.Retry, action.Timeout, progress, cancellationToken);
         }
     }
 
     /// <remarks>
-    /// A vendor regex image marker (<c>/…/</c>) names no concrete file; silently skipping it would
-    /// drop a partition without any signal, so it surfaces as a hard failure until regex resolution
-    /// is implemented.
-    /// <para>厂商的正则镜像标记（<c>/…/</c>）不指向任何具体文件；静默跳过会让分区在无任何信号的情况下
-    /// 丢失，因此在实现正则解析之前一律作为硬失败抛出。</para>
+    /// A vendor regex image marker (<c>/…/</c>) is resolved against every file's package-relative
+    /// path: zero matches keeps the "missing from the package" failure, and two or more matches fail
+    /// the run because an ambiguous target must never be flashed silently. An entry whose
+    /// <c>volume_images</c> object maps NAND volumes to images is flashed one volume at a time as the
+    /// synthesized target <c>&lt;partition&gt;-&lt;volume&gt;</c>, matching the device flow that
+    /// writes a volume with <c>fastboot flash &lt;partition&gt;-&lt;volume&gt;</c>. An entry the
+    /// tables leave without any image is flashed from <see cref="SpacemiTFlashOptions.PartitionImageOverrides"/>
+    /// when the run carries one, and skipped otherwise — the table write alone created that partition.
+    /// <para>厂商的正则镜像标记（<c>/…/</c>）按包内每个文件的包相对路径解析：零命中保持"missing from
+    /// the package"失败语义；命中两个及以上时整个运行失败，因为歧义目标绝不能被静默刷写。条目的
+    /// <c>volume_images</c> 对象把 NAND 卷映射到镜像时，逐卷按合成目标
+    /// <c>&lt;分区&gt;-&lt;卷&gt;</c> 刷写，对应设备端以 <c>fastboot flash &lt;分区&gt;-&lt;卷&gt;</c>
+    /// 写卷的流程。布局表完全未给镜像的条目在运行携带
+    /// <see cref="SpacemiTFlashOptions.PartitionImageOverrides"/> 时以覆盖文件刷写，否则跳过——仅写表
+    /// 时该分区只是被创建。</para>
     /// </remarks>
-    private List<(SpacemiTPartitionEntry Entry, string ImagePath, long Length)> CollectTargets(
+    private List<(SpacemiTPartitionEntry Entry, string TargetName, string ImagePath, long Length)> CollectTargets(
         SpacemiTPartitionTable table,
-        IProgress<SpacemiTFlashProgress>? progress)
+        IProgress<SpacemiTFlashProgress>? progress,
+        CancellationToken cancellationToken)
     {
-        var targets = new List<(SpacemiTPartitionEntry, string, long)>();
+        var targets = new List<(SpacemiTPartitionEntry, string, string, long)>();
         foreach (var entry in table.Partitions)
         {
-            if (entry.Images.Count == 0)
+            if (entry.Images.Count > 0)
             {
-                continue;
-            }
-
-            if (_options.OnlyPartitions is { Count: > 0 } only && !only.Contains(entry.Name, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            if (_options.SkipPartitions.Contains(entry.Name, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            foreach (var image in entry.Images)
-            {
-                if (SpacemiTFlashPackage.IsRegexReference(image))
+                if (!RunsForTarget(entry.Name))
                 {
-                    throw new FastbootException(FastbootResponseState.Fail,
-                        $"partition '{entry.Name}' references a regex image '{image}' that is not resolved; the partition would be silently skipped");
+                    continue;
                 }
 
-                var resolved = _package.ResolveFile(image)
-                    ?? throw new FastbootException(FastbootResponseState.Fail,
-                        $"partition '{entry.Name}' references image '{image}' which is missing from the package");
-                var fileSize = new FileInfo(resolved).Length;
-                var length = entry.Size > 0 ? Math.Min(fileSize, entry.Size) : fileSize;
-                if (length > 0)
+                foreach (var image in entry.Images)
                 {
-                    targets.Add((entry, resolved, length));
+                    AddImageTarget(targets, entry, entry.Name, image, progress, cancellationToken);
+                }
+            }
+            else if (entry.VolumeImages.Count > 0)
+            {
+                foreach (var (volume, image) in entry.VolumeImages)
+                {
+                    var targetName = $"{entry.Name}-{volume}";
+                    if (!RunsForTarget(targetName))
+                    {
+                        continue;
+                    }
+
+                    Report(progress, "flash-table", targetName, $"volume '{volume}' of partition '{entry.Name}' maps to '{image}'");
+                    AddImageTarget(targets, entry, targetName, image, progress, cancellationToken);
+                }
+            }
+            else if (RunsForTarget(entry.Name) &&
+                _options.PartitionImageOverrides.TryGetValue(entry.Name, out var overrideImage))
+            {
+                // A partition the package leaves without an image (a reserved slot such as misc) is written from the
+                // host-picked file instead; the table write alone created it empty.
+                // 包内未给镜像的分区（如 misc 这样的保留槽位）改写宿主选择的文件；仅写表时它只是空分区。
+                if (!File.Exists(overrideImage))
+                {
+                    throw new FastbootException(FastbootResponseState.Fail,
+                        $"partition '{entry.Name}' maps to host image '{overrideImage}' which does not exist");
+                }
+
+                var overrideSize = new FileInfo(overrideImage).Length;
+                var overrideLength = entry.Size > 0 ? Math.Min(overrideSize, entry.Size) : overrideSize;
+                Report(progress, "flash-table", entry.Name,
+                    $"partition '{entry.Name}' has no package image; flashing the host-picked file ({overrideLength} bytes)");
+                if (overrideLength > 0)
+                {
+                    targets.Add((entry, entry.Name, overrideImage, overrideLength));
                 }
             }
         }
@@ -533,39 +561,88 @@ public sealed class SpacemiTFlasher
         return targets;
     }
 
+    /// <summary>Reports whether a target name passes the <see cref="SpacemiTFlashOptions.OnlyPartitions"/> and <see cref="SpacemiTFlashOptions.SkipPartitions"/> filters, matched ordinally. <para>判断目标名是否通过 <see cref="SpacemiTFlashOptions.OnlyPartitions"/> 与 <see cref="SpacemiTFlashOptions.SkipPartitions"/> 过滤，按 Ordinal 匹配。</para></summary>
+    private bool RunsForTarget(string targetName)
+    {
+        if (_options.OnlyPartitions is { Count: > 0 } only && !only.Contains(targetName, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        return !_options.SkipPartitions.Contains(targetName, StringComparer.Ordinal);
+    }
+
+    /// <summary>Resolves one image reference for a target and appends it when it yields bytes to write; a regex reference must match exactly one package file. <para>为目标解析一个镜像引用并在其产生可写字节时追加；正则引用必须恰好命中一个包内文件。</para></summary>
+    private void AddImageTarget(
+        List<(SpacemiTPartitionEntry Entry, string TargetName, string ImagePath, long Length)> targets,
+        SpacemiTPartitionEntry entry,
+        string targetName,
+        string image,
+        IProgress<SpacemiTFlashProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var matches = _package.ResolveImageMatches(image, cancellationToken);
+        if (matches.Count == 0)
+        {
+            throw new FastbootException(FastbootResponseState.Fail,
+                $"partition '{entry.Name}' references image '{image}' which is missing from the package");
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new FastbootException(FastbootResponseState.Fail,
+                $"partition '{entry.Name}' references image '{image}' which matches {matches.Count} files in the package; the target '{targetName}' is ambiguous");
+        }
+
+        var resolved = matches[0];
+        var fileSize = new FileInfo(resolved).Length;
+        var length = entry.Size > 0 ? Math.Min(fileSize, entry.Size) : fileSize;
+        if (length > 0)
+        {
+            targets.Add((entry, targetName, resolved, length));
+        }
+        else
+        {
+            Report(progress, "skip", targetName, $"image '{image}' contributes no bytes for target '{targetName}'");
+        }
+    }
+
     private void FlashPartition(
         FastbootSession session,
-        (SpacemiTPartitionEntry Entry, string ImagePath, long Length) target,
+        (SpacemiTPartitionEntry Entry, string TargetName, string ImagePath, long Length) target,
+        string tableFormat,
         int retry,
         TimeSpan? timeout,
         IProgress<SpacemiTFlashProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var (entry, imagePath, length) = target;
-        RunWithRetry($"flash {entry.Name}", retry, skipFail: false, progress, entry.Name, () =>
+        var (entry, targetName, imagePath, length) = target;
+        var wroteSparse = false;
+        RunWithRetry($"flash {targetName}", retry, skipFail: false, progress, targetName, () =>
         {
             using var stream = File.OpenRead(imagePath);
             var maxDownload = session.GetMaxDownloadSize();
             if (HasSparseHeader(stream))
             {
+                wroteSparse = true;
                 if (length > maxDownload)
                 {
-                    FlashResparseChunks(session, imagePath, entry.Name, maxDownload, timeout, progress, cancellationToken);
+                    FlashResparseChunks(session, imagePath, targetName, maxDownload, timeout, progress, cancellationToken);
                     return true;
                 }
 
-                Report(progress, "flash-partition", entry.Name, $"flashing sparse image ({length} bytes)");
-                session.DownloadData(stream, length, CreateByteProgress(progress, "flash-partition", entry.Name, length), timeout, cancellationToken)
+                Report(progress, "flash-partition", targetName, $"flashing sparse image ({length} bytes)");
+                session.DownloadData(stream, length, CreateByteProgress(progress, "flash-partition", targetName, length), timeout, cancellationToken)
                     .ThrowIfFailed();
-                session.ExecuteCommand(FastbootConstants.CommandFlash + entry.Name).ThrowIfFailed();
+                session.ExecuteCommand(FastbootConstants.CommandFlash + targetName).ThrowIfFailed();
                 return true;
             }
 
             if (HasGzipHeader(stream) && length > maxDownload)
             {
-                ResetChunkedWriteState(session, entry.Name, timeout, cancellationToken);
+                ResetChunkedWriteState(session, targetName, timeout, cancellationToken);
                 using var decompressed = CompressionService.CreateDecompressionStream(stream, CompressionFormat.Gzip);
-                FlashGzipChunks(session, entry.Name, decompressed, entry.Size > 0 ? entry.Size : -1,
+                FlashGzipChunks(session, targetName, decompressed, entry.Size > 0 ? entry.Size : -1,
                     expectFullLength: false, maxDownload,
                     TryParseGzipLevel(entry.Compress) ?? _options.GzipLevel, timeout, progress, cancellationToken);
                 return true;
@@ -573,18 +650,183 @@ public sealed class SpacemiTFlasher
 
             if (length <= maxDownload)
             {
-                Report(progress, "flash-partition", entry.Name, $"flashing {length} bytes");
-                session.DownloadData(stream, length, CreateByteProgress(progress, "flash-partition", entry.Name, length), timeout, cancellationToken)
+                Report(progress, "flash-partition", targetName, $"flashing {length} bytes");
+                session.DownloadData(stream, length, CreateByteProgress(progress, "flash-partition", targetName, length), timeout, cancellationToken)
                     .ThrowIfFailed();
-                session.ExecuteCommand(FastbootConstants.CommandFlash + entry.Name).ThrowIfFailed();
+                session.ExecuteCommand(FastbootConstants.CommandFlash + targetName).ThrowIfFailed();
                 return true;
             }
 
-            ResetChunkedWriteState(session, entry.Name, timeout, cancellationToken);
-            FlashGzipChunks(session, entry.Name, stream, length, expectFullLength: true, maxDownload,
+            ResetChunkedWriteState(session, targetName, timeout, cancellationToken);
+            FlashGzipChunks(session, targetName, stream, length, expectFullLength: true, maxDownload,
                 TryParseGzipLevel(entry.Compress) ?? _options.GzipLevel, timeout, progress, cancellationToken);
             return true;
         });
+
+        // A hidden block-device partition has no device GPT entry, so its read-back probe answers "no such
+        // partition" (and boot-area content is rebuilt by the device itself); an MTD partition is always readable,
+        // which is how the vendor NOR flow verifies bootinfo. The env skip is the vendor script's own.
+        // 块设备上的 hidden 分区在设备 GPT 中没有条目，回读探测会应答 "no such partition"（且 boot 区内容由设备端
+        // 自行重建）；MTD 分区始终可读，厂商 NOR 流程正是如此校验 bootinfo。env 跳过来自厂商脚本本身。
+        if (_options.VerifyAfterFlash && !wroteSparse && !VerifySkippedTargets.Contains(targetName) &&
+            !(tableFormat == SpacemiTConstants.PartitionFormatGpt && target.Entry.Hidden))
+        {
+            VerifyFlash(session, targetName, imagePath, length, progress, cancellationToken);
+        }
+    }
+
+    /// <remarks>
+    /// The comparison covers exactly the bytes the transfer wrote (the source image's first
+    /// <c>length</c> bytes versus the read-back's first <c>length</c> bytes), because a partition
+    /// larger than the image still holds erased content beyond the written region. Read-back is not
+    /// wrapped in <see cref="RunWithRetry"/>: retrying a content mismatch cannot change the digest,
+    /// so transport failures surface to the caller directly.
+    /// <para>比对只覆盖传输实际写入的字节（源镜像前 <c>length</c> 字节对回读前 <c>length</c> 字节），
+    /// 因为比分区小的镜像之外的区域仍是擦除内容。回读不经过 <see cref="RunWithRetry"/>：重试内容不匹配
+    /// 不会改变摘要，传输异常直接抛给调用方。</para>
+    /// </remarks>
+    private void VerifyFlash(
+        FastbootSession session,
+        string targetName,
+        string imagePath,
+        long length,
+        IProgress<SpacemiTFlashProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var sourceDigest = SourceImageDigest(targetName, imagePath, length);
+        var readDigest = Sha256.CreateAccumulator();
+        byte[] readDigestBytes;
+        try
+        {
+            using var hashing = new DigestPrefixStream(readDigest, length);
+            Report(progress, "verify-partition", targetName, $"verifying {targetName} against '{Path.GetFileName(imagePath)}' by reading back {length} bytes");
+            SpacemiTPartitionReader.Read(session, targetName, hashing, length,
+                CreateByteProgress(progress, "verify-partition", targetName, length), cancellationToken);
+            readDigestBytes = readDigest.GetHashAndReset();
+        }
+        finally
+        {
+            readDigest.Dispose();
+        }
+
+        if (!readDigestBytes.AsSpan().SequenceEqual(sourceDigest))
+        {
+            throw new FastbootException(FastbootResponseState.Fail,
+                $"verify mismatch for partition '{targetName}': read-back content does not match image '{Path.GetFileName(imagePath)}'");
+        }
+
+        Report(progress, "verify-partition", targetName, $"verified {targetName} ({length} bytes match)");
+    }
+
+    /// <summary>Computes the SHA-256 over the first <paramref name="length"/> bytes of a source image, streaming and cached per target so repeated verify runs do not re-hash. <para>对源镜像前 <paramref name="length"/> 字节流式计算 SHA-256，按目标缓存，使重复校验不必重新哈希。</para></summary>
+    private byte[] SourceImageDigest(string targetName, string imagePath, long length)
+    {
+        if (_sourceDigests.TryGetValue(targetName, out var cached))
+        {
+            return cached;
+        }
+
+        byte[] digest;
+        using (var stream = File.OpenRead(imagePath))
+        {
+            if (stream.Length <= length)
+            {
+                digest = Sha256.ComputeHash(stream);
+            }
+            else
+            {
+                var accumulator = Sha256.CreateAccumulator();
+                try
+                {
+                    var buffer = new byte[64 * 1024];
+                    long hashed = 0;
+                    while (hashed < length)
+                    {
+                        var want = (int)Math.Min(buffer.Length, length - hashed);
+                        var read = 0;
+                        while (read < want)
+                        {
+                            var filled = stream.Read(buffer, read, want - read);
+                            if (filled <= 0)
+                            {
+                                throw new EndOfStreamException($"image '{imagePath}' ended early at {hashed + read}/{length}");
+                            }
+
+                            read += filled;
+                        }
+
+                        accumulator.Append(buffer.AsSpan(0, read));
+                        hashed += read;
+                    }
+
+                    digest = accumulator.GetHashAndReset();
+                }
+                finally
+                {
+                    accumulator.Dispose();
+                }
+            }
+        }
+
+        _sourceDigests[targetName] = digest;
+        return digest;
+    }
+
+    /// <summary>
+    /// Stream wrapper that feeds only the first N bytes into a digest accumulator and silently
+    /// discards anything beyond, so read-back padding the device adds (block-aligned NOR reads
+    /// round the staged length up) never enters the comparison.
+    /// <para>流包装：只把前 N 字节送入摘要累加器，超出部分静默丢弃，使设备端因块对齐 NOR 读取向上
+    /// 取整而多送的回读填充不进入比对。</para>
+    /// </summary>
+    private sealed class DigestPrefixStream(DigestAccumulator accumulator, long hashedBytes) : Stream
+    {
+        private long _accepted;
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => _accepted;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            var remaining = hashedBytes - _accepted;
+            if (remaining <= 0 || count <= 0)
+            {
+                return;
+            }
+
+            var take = (int)Math.Min(count, remaining);
+            accumulator.Append(buffer.AsSpan(offset, take));
+            _accepted += take;
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Write(buffer.ToArray(), 0, buffer.Length);
+            return ValueTask.CompletedTask;
+        }
     }
 
     private static int? TryParseGzipLevel(string? compress)

@@ -22,6 +22,15 @@ public sealed class SpacemiTFlashOptions
     /// <summary>Gets or sets the partition names to flash exclusively; <see langword="null"/> or empty flashes every partition the tables reference. <para>获取或设置独占刷写的分区名集合；为 <see langword="null"/> 或空时刷写分区表引用的全部分区。</para></summary>
     public IReadOnlyList<string>? OnlyPartitions { get; set; }
 
+    /// <summary>
+    /// Gets or sets per-partition image overrides: a target name mapped to a host-side file written when the layout
+    /// tables leave that partition without an image. A partition the tables do give an image for ignores its override
+    /// — the package stays authoritative for it.
+    /// <para>获取或设置按分区的镜像覆盖：目标名到宿主侧文件的映射，当布局表未给该分区镜像时写入该文件。布局表已给
+    /// 镜像的分区忽略覆盖——包内镜像对它们保持权威。</para></summary>
+    public IReadOnlyDictionary<string, string> PartitionImageOverrides { get; set; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>Gets or sets partition names never flashed, applied after <see cref="OnlyPartitions"/>. <para>获取或设置永不刷写的分区名集合，在 <see cref="OnlyPartitions"/> 之后生效。</para></summary>
     public IReadOnlyList<string> SkipPartitions { get; set; } = [];
 
@@ -42,6 +51,21 @@ public sealed class SpacemiTFlashOptions
 
     /// <summary>Gets or sets whether a plain <c>reboot</c> is issued after the script completes. <para>获取或设置脚本执行完成后是否发送普通 <c>reboot</c>。</para></summary>
     public bool RebootAfterFlash { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether every flashed partition is read back over the device's
+    /// <c>oem read</c> protocol and compared against the source image's first N bytes by SHA-256.
+    /// Sparse-image writes are never verified (the expanded content differs from the file bytes);
+    /// <c>env</c> is always skipped because U-Boot re-persists it with runtime state (the vendor
+    /// verify_board script skips exactly this one), and a block-device partition the tables mark
+    /// hidden is skipped because it has no device GPT entry to read back — an MTD table has no
+    /// hidden concept, so there every partition including <c>bootinfo</c> is verified.
+    /// <para>获取或设置是否在烧写后对每个分区走设备端 <c>oem read</c> 回读，并与源镜像前 N 字节做
+    /// SHA-256 比对。sparse 镜像写入永不校验（展开后的内容与文件字节不同）；<c>env</c> 一律跳过，
+    /// 因为 U-Boot 会以运行时状态重存它（厂商 verify_board 脚本恰好只跳过它）；布局表标记 hidden 的
+    /// 块设备分区也被跳过，因为设备 GPT 中没有可回读的条目——MTD 表没有 hidden 概念，那里包括
+    /// <c>bootinfo</c> 在内的每个分区都会被校验。</para></summary>
+    public bool VerifyAfterFlash { get; set; }
 
     /// <summary>
     /// Gets or sets which part of the script this run executes. The boot-chain scope writes no storage, so it is the

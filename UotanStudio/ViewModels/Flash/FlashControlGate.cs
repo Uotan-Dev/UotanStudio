@@ -86,14 +86,59 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// The shared read, read-back and erase actions: offered only to protocols without their own restricted kind, and a
-    /// Rockchip endpoint proven to be in mask ROM cannot answer the storage commands they use.
-    /// <para>通用读取、回读与擦除动作：只提供给没有受限种类的协议；被证实处于 mask ROM 的瑞芯微端点无法应答它们使用的存储命令。</para>
+    /// Whether the selected SpacemiT fastboot gadget can answer an <c>oem read</c>: the U-Boot gadget does, an
+    /// unproven stage stays allowed, and the BootROM download mode has no U-Boot command set to read with.
+    /// <para>所选进迭时空 fastboot gadget 能否应答 <c>oem read</c>：U-Boot gadget 可以，未确定的阶段保持允许，
+    /// BootROM 下载模式没有可供回读的 U-Boot 命令集。</para>
+    /// </summary>
+    private static bool IsSpacemiTReadCapable(FlashGateContext context) =>
+        context.Kind == FlashDeviceKind.Fastboot &&
+        context.IsSpacemiTFastboot &&
+        context.FastbootStage != SpacemiTBootStage.BromFdl;
+
+    /// <summary>
+    /// An option only the SpacemiT package flash path honours: offered on the SpacemiT U-Boot fastboot gadget,
+    /// whose flasher reads a partition back after writing it, and closed on every other endpoint — including a gadget
+    /// still sitting in the BootROM download mode, which can neither flash nor read a partition yet.
+    /// <para>只由进迭时空烧录包烧录路径读取的选项：在进迭时空 U-Boot fastboot gadget 上提供（其烧录器会在写入后回读分区），
+    /// 在其它端点上一律关闭——包括仍处于 BootROM 下载模式、尚不能烧写或回读分区的 gadget。</para>
+    /// </summary>
+    internal static FlashControlGate SpacemiTOption(string name, bool busyDisabled = false) => new(name,
+        static context => IsSpacemiTReadCapable(context),
+        busyDisabled);
+
+    /// <summary>
+    /// The shared storage predicate: offered only to protocols without their own restricted kind, and a Rockchip
+    /// endpoint proven to be in mask ROM cannot answer the storage commands they use.
+    /// <para>通用存储判定：只提供给没有受限种类的协议；被证实处于 mask ROM 的瑞芯微端点无法应答它们使用的存储命令。</para>
+    /// </summary>
+    private static bool IsSharedStorageOffered(FlashGateContext context) =>
+        context.Mode != FlashDeviceMode.None &&
+        context.Kind == FlashDeviceKind.Unknown &&
+        !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom);
+
+    /// <summary>
+    /// The shared storage, erase and show-all actions: offered only to protocols without their own restricted kind, and
+    /// a Rockchip endpoint proven to be in mask ROM cannot answer the storage commands they use. The read-back action
+    /// has its own <see cref="Readback"/> gate that extends this policy for the SpacemiT gadget.
+    /// <para>通用存储、擦除与显示全部动作：只提供给没有受限种类的协议；被证实处于 mask ROM 的瑞芯微端点无法应答它们使用的
+    /// 存储命令。回读动作另有 <see cref="Readback"/> 门控，在此策略之上为进迭时空 gadget 做了扩展。</para>
     /// </summary>
     internal static FlashControlGate SharedStorage(string name, bool busyDisabled = false) => new(name,
-        static context => context.Mode != FlashDeviceMode.None &&
-            context.Kind == FlashDeviceKind.Unknown &&
-            !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom),
+        static context => IsSharedStorageOffered(context),
+        busyDisabled);
+
+    /// <summary>
+    /// The read-back action, extended for the SpacemiT gadget: every protocol without its own restricted kind still
+    /// offers it, and a SpacemiT fastboot endpoint offers it too once at least one partition row is selected, because
+    /// the read-back run then has a partition to pull with the device's <c>oem read</c>. Other devices keep the exact
+    /// shared-storage behaviour.
+    /// <para>回读动作，并为进迭时空 gadget 扩展：没有受限种类的协议照旧提供；进迭时空 fastboot 端点在至少勾选一行分区时
+    /// 也提供，因为此时回读运行才有可用 <c>oem read</c> 拉取的分区。其它设备保持与通用存储完全一致的行为。</para>
+    /// </summary>
+    internal static FlashControlGate Readback(string name, bool busyDisabled = false) => new(name,
+        static context => IsSharedStorageOffered(context) ||
+            (IsSpacemiTReadCapable(context) && context.HasSelectedPartitions),
         busyDisabled);
 
     /// <summary>

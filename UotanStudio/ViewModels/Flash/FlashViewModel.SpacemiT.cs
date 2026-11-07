@@ -110,9 +110,6 @@ public sealed partial class FlashViewModel
 
         if (!Partitions.Any(row => row.IsSelected && row.Name.Length > 0))
         {
-            // Every other protocol's flash action treats an empty selection as "nothing to do"; flashing the whole
-            // package instead would turn a stray click into a full rewrite of the board.
-            // 其它协议的烧录动作都把空选择当作“无事可做”；改为烧录整包会让一次误点变成整块板卡的重写。
             AppendLog(_localizer.GetString("Flash_SpacemiTNoPartitions"));
             return;
         }
@@ -175,21 +172,60 @@ public sealed partial class FlashViewModel
                 ? string.Empty
                 : SpacemiTFlashOptions.RequiredConfirmation,
             RebootAfterFlash = scope == SpacemiTFlashScope.Storage &&
-                Field<CheckBox>("RebootAfterBox").IsChecked == true
+                Field<CheckBox>("RebootAfterBox").IsChecked == true,
+            VerifyAfterFlash = scope == SpacemiTFlashScope.Storage && this.VerifyAfterFlash
         };
         if (scope == SpacemiTFlashScope.Storage)
         {
-            var partitionCount = Partitions.Count(entry => entry.Name.Length > 0);
-            var chosen = Partitions.Where(entry => entry.IsSelected && entry.Name.Length > 0)
+            // Script-step rows never enter the storage selection: they have no individually runnable write, and a
+            // staged file's name is not a partition the device would honour.
+            // 脚本步骤行绝不进入存储选择：它们没有可单独执行的写入，且暂存文件名也不是设备认可的分区。
+            var partitionCount = Partitions.Count(entry => entry.Name.Length > 0 && !entry.IsScriptStep);
+            var chosen = Partitions.Where(entry => entry.IsSelected && entry.Name.Length > 0 && !entry.IsScriptStep)
                 .Select(entry => entry.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             if (chosen.Length > 0 && chosen.Length < partitionCount)
             {
                 options.OnlyPartitions = chosen;
             }
+
+            // A row the package gives no image for flashes the file picked in its own cell; its file path is the
+            // override the flasher writes for exactly that partition. The flasher applies overrides only to
+            // partitions the tables leave without an image, so a package-image row's path here is inert. Rows with
+            // neither a package image nor a picked file are skipped and said so.
+            // 包内未给镜像的行刷其文件列选择的文件；该文件路径就是烧录器为此分区写入的覆盖。烧录器只对布局表未给
+            // 镜像的分区应用覆盖，因此包内镜像行在此处的路径不会生效。既无包内镜像也未选文件的行被跳过并记录。
+            var overrides = new Dictionary<string, string>(StringComparer.Ordinal);
+            var skipped = new List<string>();
+            foreach (var row in Partitions.Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep))
+            {
+                if (row.FilePath.Length > 0)
+                {
+                    overrides.TryAdd(row.Name, row.FilePath);
+                }
+                else if (row.FileName.Length == 0 && row.AcceptsFile)
+                {
+                    skipped.Add(row.Name);
+                }
+            }
+
+            if (overrides.Count > 0)
+            {
+                options.PartitionImageOverrides = overrides;
+            }
+
+            if (skipped.Count > 0)
+            {
+                AppendLog(string.Format(_localizer.GetString("Flash_SpacemiTNoImageSkipped"),
+                    string.Join(", ", skipped)));
+            }
         }
 
         var targetRows = scope == SpacemiTFlashScope.Storage
-            ? Partitions.Where(row => row.Name.Length > 0 &&
+            ? Partitions.Where(row => row.Name.Length > 0 && !row.IsScriptStep &&
+                    // A selected row without a package image and without a picked file is logged as skipped above and
+                    // never queues: marking it successful would describe a write the run did not perform.
+                    // 有勾选但既无包内镜像也未选文件的行已在上方日志记为跳过，绝不排队：标成成功等于描述一次未发生的写入。
+                    !(row.AcceptsFile && row.FileName.Length == 0 && row.FilePath.Length == 0) &&
                     (options.OnlyPartitions is not { Count: > 0 } chosenNames ||
                         chosenNames.Contains(row.Name, StringComparer.OrdinalIgnoreCase)))
                 .ToArray()
@@ -209,9 +245,6 @@ public sealed partial class FlashViewModel
         {
             _overallRows = [];
             OverallPercent = 0;
-            // Staging FSBL and then U-Boot gives the bar two unrelated transfers plus two hand-overs, so it scrolls for
-            // the whole section instead of showing a percentage that restarts at each file.
-            // 暂存 FSBL 与 U-Boot 是两次互不相关的传输加两次移交，因此整个段落滚动显示，而不是显示会在每个文件上重新开始的百分比。
             IsOverallIndeterminate = true;
             OverallText = _localizer.GetString("Flash_SpacemiTBootChainRunning");
         }
@@ -269,9 +302,6 @@ public sealed partial class FlashViewModel
         }
         finally
         {
-            // A cancelled or failed boot chain leaves the bar scrolling; it stops here so a finished failure does not
-            // keep animating. A successful one already reported 100% and is left as it is.
-            // 被取消或失败的引导链会让进度条持续滚动；这里让它停下，使已结束的失败不再继续动画。成功的运行已上报 100%，保持原样。
             _overallScrolls = false;
             if (IsOverallIndeterminate && scope == SpacemiTFlashScope.BootChain)
             {
@@ -313,17 +343,12 @@ public sealed partial class FlashViewModel
 
             if (update.BytesCompleted is null)
             {
-                // A phase line ("flashing …", "gzip chunk sent") carries no fraction; letting it touch the bar would
-                // flip a row that already has a percentage back into the indeterminate state after every chunk.
-                // 阶段行（“flashing …”“gzip chunk sent”）不带比例；让它碰进度条会使已有百分比的行在每个分块之后退回不确定态。
                 return;
             }
 
             var indeterminate = percent < 0;
             if (row.IsIndeterminate == indeterminate && (indeterminate || percent == row.Percent))
             {
-                // The transport reports once per transfer chunk; only a visible change is worth a layout pass.
-                // 传输按每块上报；只有可见的变化才值得一次布局。
                 return;
             }
 
@@ -341,10 +366,6 @@ public sealed partial class FlashViewModel
         {
             if (scrolls)
             {
-                // Each staged file restarts its own byte count, so publishing that fraction would make the bar run
-                // backwards between FSBL and U-Boot. The section keeps scrolling and its caption unchanged.
-                // 每个暂存文件重新开始自己的字节计数，发布这个比例会让进度条在 FSBL 与 U-Boot 之间倒退。该段落保持滚动，
-                // 说明文本也不变。
                 return;
             }
 

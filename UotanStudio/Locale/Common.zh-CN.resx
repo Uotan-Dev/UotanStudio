@@ -4350,29 +4350,8 @@
   <data name="RegexGenerator_PatternPlaceholder" xml:space="preserve">
     <value>生成的正则表达式将在此显示</value>
   </data>
-  <data name="Flash_SpacemiT" xml:space="preserve">
-    <value>进迭时空</value>
-  </data>
-  <data name="Flash_SpacemiTPackageHint" xml:space="preserve">
-    <value>选择解包后根目录含 fastboot.yaml 的烧录包文件夹；设备需以进迭时空 fastboot 设备（BootROM 或 U-Boot）出现。</value>
-  </data>
-  <data name="Flash_SpacemiTPackagePath" xml:space="preserve">
-    <value>烧录包目录</value>
-  </data>
-  <data name="Flash_SpacemiTChoosePackage" xml:space="preserve">
-    <value>选择烧录包目录</value>
-  </data>
-  <data name="Flash_SpacemiTRebootAfter" xml:space="preserve">
-    <value>烧录完成后重启</value>
-  </data>
-  <data name="Flash_SpacemiTFlash" xml:space="preserve">
-    <value>烧录整包</value>
-  </data>
   <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
     <value>烧录包将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作不可撤销。</value>
-  </data>
-  <data name="Flash_SpacemiTPackageMissing" xml:space="preserve">
-    <value>所选目录不是有效的进迭时空烧录包（缺少 fastboot.yaml 或无法读取）。</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
     <value>全志</value>
@@ -4617,6 +4596,9 @@
   <data name="DiskFlash_StagePreparing" xml:space="preserve">
     <value>正在准备目标…</value>
   </data>
+  <data name="DiskFlash_StageSynthesizing" xml:space="preserve">
+    <value>正在合成卡镜像</value>
+  </data>
   <data name="DiskFlash_StageWriting" xml:space="preserve">
     <value>正在写入…</value>
   </data>
@@ -4664,6 +4646,9 @@
   </data>
   <data name="DiskFlash_ImageCompressed" xml:space="preserve">
     <value>{0} 压缩</value>
+  </data>
+  <data name="DiskFlash_ImageCard" xml:space="preserve">
+    <value>进迭时空卡刷包 · {0} 个分区 · 合成后约 {1}</value>
   </data>
   <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
     <value>一次仅限一个驱动器；选中新的驱动器会取消之前的选择。</value>
@@ -5196,6 +5181,9 @@
   <data name="Flash_SpacemiTNoPartitions" xml:space="preserve">
     <value>请至少选择一个要写入的分区。</value>
   </data>
+  <data name="Flash_SpacemiTNoImageSkipped" xml:space="preserve">
+    <value>以下分区没有包内镜像也未选择文件，已跳过：{0}。</value>
+  </data>
   <data name="Flash_SpacemiTPackageLoaded" xml:space="preserve">
     <value>烧录包 {0}（脚本 v{1}，{2} 个动作）列出了 {3} 个分区。</value>
   </data>
@@ -5207,6 +5195,12 @@
   </data>
   <data name="Flash_SpacemiTWritingTable" xml:space="preserve">
     <value>正在写入分区表</value>
+  </data>
+  <data name="Flash_SpacemiTVerify" xml:space="preserve">
+    <value>烧写后回读校验</value>
+  </data>
+  <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
+    <value>已备份分区 {0} 到 {1}</value>
   </data>
   <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
     <value>线刷包已输出至 {0}</value>

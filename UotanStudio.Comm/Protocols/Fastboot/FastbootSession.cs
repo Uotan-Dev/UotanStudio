@@ -166,11 +166,24 @@ public sealed partial class FastbootSession : IProtocolSession
     /// <returns>The parsed terminal response; INFO frames encountered while waiting are consumed into its status lines. <para>解析后的终态响应；等待期间遇到的 INFO 帧会被消费进其状态行。</para></returns>
     /// <exception cref="ArgumentException">The encoded command exceeds the fastboot frame length limit. <para>编码后的命令超过 fastboot 帧长度上限。</para></exception>
     /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
-    public FastbootResponse ExecuteCommand(string command)
+    public FastbootResponse ExecuteCommand(string command) => ExecuteCommand(command, CancellationToken.None);
+
+    /// <summary>
+    /// Sends a raw fastboot command and returns the parsed response, observing a cancellation token while
+    /// waiting for the terminal frame.
+    /// <para>发送原始 fastboot 命令并返回解析后的响应；等待终止帧期间会响应取消令牌。</para>
+    /// </summary>
+    /// <param name="command">Raw command text as sent on the wire (e.g. <c>getvar:product</c>); no validation or framing is added. <para>线上原样发送的命令文本（如 <c>getvar:product</c>）；不追加校验或成帧。</para></param>
+    /// <param name="cancellationToken">Cancels the wait for the terminal frame between transport reads; the command frame write itself is bounded by the transfer timeout only. <para>在传输读取之间取消对终止帧的等待；命令帧写入本身仅受传输超时约束。</para></param>
+    /// <returns>The parsed terminal response; INFO frames encountered while waiting are consumed into its status lines. <para>解析后的终态响应；等待期间遇到的 INFO 帧会被消费进其状态行。</para></returns>
+    /// <exception cref="ArgumentException">The encoded command exceeds the fastboot frame length limit. <para>编码后的命令超过 fastboot 帧长度上限。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    public FastbootResponse ExecuteCommand(string command, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
         SendCommand(command);
-        return ReceiveResponse();
+        return ReceiveResponse(cancellationToken: cancellationToken);
     }
 
     /// <summary>

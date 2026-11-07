@@ -10,6 +10,7 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Services;
@@ -667,40 +668,69 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Applies a SpacemiT (titan flasher) package folder: keeps its script for the shared boot-chain and flash actions
-    /// and lists the layout tables' entries as rows, so the flash action honours the rows the user selected through
-    /// <c>OnlyPartitions</c>. The package is chosen through the page's ordinary folder picker; no SpacemiT section exists.
-    /// <para>应用 SpacemiT（titan 烧录器）包目录：把其脚本交给通用的引导链与烧录动作，并把各布局表的条目列成行，
-    /// 使烧录动作通过 <c>OnlyPartitions</c> 尊重用户勾选的行。包由页面通用的目录选择入口选取，不再有进迭时空分类。</para>
+    /// and lists two kinds of rows — the script's own steps first, then the layout tables' entries. The step rows are
+    /// the boot chain that only loads images into RAM (<c>stage</c>) and the storage-phase OEM writes such as the K3
+    /// <c>oem ec:flash</c>; each names the file it stages, carries the command it runs and the physical place the
+    /// payload lands (<c>MEMORY</c> for a stage, <c>EC</c> for the EC write), takes no file and cannot be selected —
+    /// no action runs a step individually. Partition rows carry the <c>flash</c> command and the medium derived from
+    /// the layout tables; an entry the package gives no image for shows the file-cell picker and flashes the file the
+    /// user picks there, so the flash action honours the rows the user selected through <c>OnlyPartitions</c>. The
+    /// package is chosen through the page's ordinary folder picker; no SpacemiT section exists.
+    /// <para>应用 SpacemiT（titan 烧录器）包目录：把其脚本交给通用的引导链与烧录动作，并列出两类行——先是脚本自身的
+    /// 步骤，再是各布局表的条目。步骤行是只把镜像载入内存的引导链（<c>stage</c>）与存储段落的 OEM 写入（如 K3 的
+    /// <c>oem ec:flash</c>）；每行以暂存文件为名，携带所执行的命令与负载的物理落点（stage 为 <c>MEMORY</c>，EC 写入为
+    /// <c>EC</c>），不接受文件、也不可勾选——没有任何动作会单独执行步骤。分区行携带 <c>flash</c> 命令与按布局表推导的
+    /// 介质；包内未给镜像的条目显示文件列选择提示并烧写用户在那里选择的文件，使烧录动作通过 <c>OnlyPartitions</c>
+    /// 尊重用户勾选的行。包由页面通用的目录选择入口选取，不再有进迭时空分类。</para>
     /// </summary>
     /// <param name="contents">Package contents read from the folder. <para>从目录读出的包内容。</para></param>
     private void ApplySpacemiTPackage(SpacemiTPackageContents contents)
     {
         var package = contents.Package;
         _spacemiTPackage = package;
-        var rows = new List<FlashPartitionEntry>(contents.Partitions.Count);
+        var rows = new List<FlashPartitionEntry>(contents.ScriptSteps.Count + contents.Partitions.Count);
+        foreach (var step in contents.ScriptSteps)
+        {
+            rows.Add(new FlashPartitionEntry
+            {
+                Name = step.FileReference.Length > 0 ? Path.GetFileName(step.FileReference) : string.Empty,
+                Command = step.Command,
+                FilePath = step.FilePath ?? string.Empty,
+                FileName = step.FilePath is { } stepPath ? Path.GetFileName(stepPath)
+                    : Path.GetFileName(step.FileReference),
+                AcceptsFile = false,
+                Size = step.FileLength > 0 ? FormatByteSize(step.FileLength) : string.Empty,
+                StorageMedium = step.StorageMedium,
+                IsScriptStep = true,
+                IsSelected = false
+            });
+        }
+
         foreach (var partition in contents.Partitions)
         {
             var reference = partition.ImageReference;
             var hasImage = reference.Length > 0 && !IsRegexImageReference(reference);
-            var size = hasImage
-                ? partition.SizeBytes > 0
-                    ? FormatByteSize(partition.SizeBytes)
-                    : partition.FileLength > 0 ? FormatByteSize(partition.FileLength) : string.Empty
-                : string.Empty;
+            var isRegex = IsRegexImageReference(reference);
+            // The size is the declared partition size when the table gives one, whether or not the entry carries a
+            // package image; an image-only length fills in when the table leaves the size open.
+            // 大小在分区表给出时是声明的分区容量，与条目是否带包内镜像无关；表未给容量时才回退到镜像文件长度。
+            var size = partition.SizeBytes > 0
+                ? FormatByteSize(partition.SizeBytes)
+                : hasImage && partition.FileLength > 0 ? FormatByteSize(partition.FileLength) : string.Empty;
             rows.Add(new FlashPartitionEntry
             {
                 Name = partition.Partition,
-                // A partition the package lists without an image is never written: claiming "flash" would promise a
-                // write the run does not perform, and the row would ask for a file the package deliberately omits.
-                // 包内没有镜像的分区不会被写入：写 "flash" 会承诺一次实际不会发生的写入，还会向用户索要包刻意省略的文件。
-                Command = hasImage ? "flash" : string.Empty,
+                // Every layout row runs as flash: entries the package gives an image for flash that file, and entries
+                // without one flash the file the user picks in their own cell — only a regex marker stays
+                // command-less, because its file is resolved by the vendor rule and cannot be picked.
+                // 每个布局行都以 flash 执行：包内给镜像的条目刷该文件；未给镜像的条目刷用户在其文件列选择的文件——
+                // 只有正则标记保持无命令，因为其文件由厂商规则解析、不可选择。
+                Command = isRegex ? string.Empty : "flash",
                 FilePath = partition.FilePath ?? string.Empty,
-                // The table's own spelling, not the resolved path: a file the package references but that is missing on
-                // disk still shows the name the user has to supply, and the cell never invents a name.
-                // 显示分区表自己的拼写而不是解析后的路径：包引用了但磁盘上缺失的文件仍显示用户需要提供的名字，单元格不会编造名称。
                 FileName = hasImage ? Path.GetFileName(reference) : string.Empty,
-                AcceptsFile = hasImage,
+                AcceptsFile = !isRegex,
                 Size = size,
+                SizeBytes = partition.SizeBytes,
                 Offset = partition.OffsetBytes >= 0
                     ? partition.OffsetBytes == 0 ? "0" : FormatByteSize(partition.OffsetBytes)
                     : string.Empty,
@@ -712,7 +742,7 @@ public sealed partial class FlashViewModel
         Partitions.Apply(0, rows);
         AppendLog(string.Format(_localizer.GetString("Flash_SpacemiTPackageLoaded"),
             Path.GetFileName(package.RootPath), package.Script.Version,
-            package.Script.Actions.Count, rows.Count));
+            package.Script.Actions.Count, contents.Partitions.Count));
     }
 
     /// <summary>
@@ -1304,12 +1334,138 @@ public sealed partial class FlashViewModel
         {
             OnRkLbaReadClick(sender, e);
         }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Fastboot && IsSpacemiTSelected)
+        {
+            _ = RunSpacemiTReadbackAsync();
+        }
         else
         {
             AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
+    /// <summary>
+    /// Reads the selected SpacemiT partitions back into a user-chosen directory: each selected row is pulled from the
+    /// U-Boot fastboot gadget with the device's <c>oem read</c> + <c>upload</c> protocol and written to one PC file.
+    /// A row whose package layout declares a partition size bounds the read at that size, because the U-Boot gadget
+    /// answers a partition missing from the device GPT by reading the whole storage instead of failing. The folder
+    /// picker, file naming, per-row progress, cancellation and failure handling follow the other read-back
+    /// actions on this page; the fastboot session is leased by the device monitor for the whole run.
+    /// <para>把所选进迭时空分区回读到用户目录：每个勾选行用设备端 <c>oem read</c> + <c>upload</c> 协议从 U-Boot
+    /// fastboot gadget 拉取并写入一个 PC 文件。包布局声明了分区大小的行按该大小限定回读长度，因为 gadget 对设备 GPT
+    /// 中不存在的分区的应答是读整盘而不是报错。目录选择、文件命名、逐行进度、取消与失败处理都沿用本页其它回读动作；
+    /// fastboot 会话由设备监视器在整个运行期间租用。</para>
+    /// </summary>
+    private async Task RunSpacemiTReadbackAsync()
+    {
+        if (_busy || _confirming ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device ||
+            !IsSpacemiTSelected ||
+            TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        // Script-step rows are display-only: a staged file's name is not a partition, and asking the device to read
+        // one would hit its whole-disk fallback for unknown names.
+        // 脚本步骤行仅用于展示：暂存文件名不是分区，向设备请求读取它会命中设备对未知分区名的整盘回退。
+        var selected = Partitions.Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep).ToArray();
+        if (selected.Length == 0)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = language.GetString("Flash_ReadbackSelected"),
+            AllowMultiple = false
+        }).ConfigureAwait(true);
+        if (_busy || _confirming || folders.Count != 1 ||
+            folders[0].TryGetLocalPath() is not { } destination)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        SetRowsQueued(selected);
+        try
+        {
+            await App.DeviceMonitor.RunSpacemiTReadbackAsync(device, async (session, token) =>
+            {
+                foreach (var row in selected)
+                {
+                    token.ThrowIfCancellationRequested();
+                    SetRowRunning(row, "Flash_Status_Flashing");
+                    var totalBytes = row.SizeBytes;
+                    var progress = new Progress<long>(done =>
+                    {
+                        if (totalBytes > 0)
+                        {
+                            var percent = (int)Math.Clamp(done * 100d / totalBytes, 0d, 100d);
+                            if (row.IsIndeterminate)
+                            {
+                                row.IsIndeterminate = false;
+                            }
+
+                            if (percent == row.Percent)
+                            {
+                                return;
+                            }
+
+                            row.Percent = percent;
+                            UpdateOverall();
+                            return;
+                        }
+
+                        if (row.IsIndeterminate)
+                        {
+                            return;
+                        }
+
+                        row.IsIndeterminate = true;
+                        UpdateOverall();
+                    });
+                    var outputPath = Path.Combine(destination,
+                        row.FileName.Length > 0 ? row.FileName : $"{row.Name}.img");
+                    using (var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await Task.Run(
+                            () => SpacemiTPartitionReader.Read(session, row.Name, output,
+                                totalBytes > 0 ? totalBytes : null, progress, token),
+                            token).ConfigureAwait(true);
+                    }
+
+                    AppendLog(string.Format(CultureInfo.InvariantCulture,
+                        language.GetString("Flash_SpacemiTReadbackDone"), row.Name, outputPath));
+                    SetRowFinished(row, success: true);
+                }
+            }, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            MarkUnfinishedSkipped();
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception ex)
+        {
+            AppendError(ex);
+            foreach (var row in selected.Where(row => row.State == FlashRowState.Running))
+            {
+                SetRowFinished(row, success: false);
+            }
+        }
+        finally
+        {
+            MarkUnfinishedSkipped();
+            UpdateOverall();
+            SetBusy(false);
+            _flashCancellation = null;
+            UpdateEdlButton();
+        }
+    }
 
     /// <summary>
     /// Reboots an RKDL device through one DEVICE_RESET transaction after an explicit confirmation;
@@ -1508,6 +1664,11 @@ public sealed partial class FlashViewModel
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || sender is not Control { DataContext: FlashPartitionEntry entry } ||
+            // Package-intrinsic rows (a SpacemiT boot-chain step stages its own file) name a file the run resolves
+            // itself, so their cell is display-only; loader and parameter rows pick their file through this handler.
+            // 包固有行（SpacemiT 引导链步骤自带文件）的文件列仅用于展示，运行自行解析；loader 与 parameter 行
+            // 仍经此处理器选择文件。
+            !(entry.AcceptsFile || entry.Command is LoaderCommand or ParameterCommand) ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel)
         {
             return;
@@ -2092,17 +2253,20 @@ public sealed partial class FlashViewModel
         SetControlEnabled("RebootAfterBox", !_busy);
         SetControlEnabled("ShowAllPartitionsBox", !_busy);
         SetControlEnabled("DeleteCowBox", !_busy);
+        SetControlEnabled("SpacemiTVerifyBox", !_busy);
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
-        // The flash action's intent belongs to the page, not to a protocol flow: every device change and every exit
-        // from a run restates it, and each control's own gate decides whether the selected endpoint can use it. A
-        // protocol branch that turns it off for its own run can therefore never leave it dead afterwards.
-        // 烧录动作的启用意图属于页面而不是某个协议流程：每次换设备、每次结束运行都重新声明它，由控件自身的门控决定所选端点
-        // 能否使用。因此任何为自身运行关闭它的协议分支都不会在之后把它留在死状态。
-        SetControlEnabled("FlashSelectedButton", !_busy);
+        // The flash action runs on the rows the user picked: the EDL bundle needs a writable entry ticked (an empty
+        // selection otherwise means "the whole package") and every other dispatch path flashes selected rows only.
+        // 烧录动作作用于用户勾选的行：EDL 整包需要勾选可写条目（否则空选意味着"整个包"），其余派发路径都只烧写勾选行。
+        SetControlEnabled("FlashSelectedButton", !_busy && (
+            protocol == DeviceProtocolKind.Edl
+                ? HasSelectedEdlEntries()
+                : HasSelectedPartitions));
         SetControlEnabled("ReadbackSelectedButton", !_busy && (
             (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
-            (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected))));
+            (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected)) ||
+            (IsSpacemiTSelected && HasSelectedPartitions)));
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk && mtkStage != MtkStageLogging;
         SetControlEnabled("MtkXmlPropertyBox", mtkProtocolReady);
         SetControlEnabled("MtkXmlPropertyQueryButton", mtkProtocolReady);
@@ -2343,42 +2507,51 @@ public sealed partial class FlashViewModel
         {
             var info = await FastbootDeviceInfoService.ReadAsync(device,
                 Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, cancellation.Token);
-            Partitions.Clear();
-            _loadedPath = string.Empty;
-            _requiredCodeName = null;
-            _requiresFastbootd = false;
-            _payloadPath = null;
-            _remotePayloadUrl = null;
-            _superPath = null;
-            _vendorPath = null;
-            _vendorEntries.Clear();
-            _oppoPath = null;
-            _oppoEntries.Clear();
-            _mtkResolution = null;
-            _mtkRows.Clear();
-            _mtkPartitions.Clear();
-            UpdateModeVisibility();
-            SetControlEnabled("ExtractSelectedButton", false);
-            SetControlEnabled("BuildWiredPackageButton", false);
-            PackagePath = string.Empty;
-            AppendLog($"{_localizer.GetString("Flash_ReadInfo")}: {device.DisplayName}");
-            // The read result goes to the device status table, which is where device information belongs; the log keeps
-            // only the action and the partition count the list below actually received.
-            // 读取结果填进设备状态表，设备信息本就该在那里；日志只保留动作本身与下方列表实际收到的分区数。
-            PublishFastbootDeviceStatus(info, device.Key, statusEpoch);
-            var deviceRows = new List<FlashPartitionEntry>(info.Partitions.Count);
-            foreach (var (name, size) in info.Partitions)
+            // A loaded SpacemiT package survives the read: its folder and rows drive the boot-chain and storage
+            // actions, so the read only fills the device status table and never replaces the partition list.
+            // 已加载的进迭时空包在读取后保留：其目录与行驱动引导链和烧录动作，读取只填充设备状态表，绝不替换分区列表。
+            var preserveSpacemiTPackage = IsSpacemiTSelected && HasSpacemiTPackage;
+            if (!preserveSpacemiTPackage)
             {
-                deviceRows.Add(new FlashPartitionEntry
-                {
-                    Name = name,
-                    Size = $"{size / 1024d / 1024d:F1} MiB"
-                });
+                Partitions.Clear();
+                _loadedPath = string.Empty;
+                _requiredCodeName = null;
+                _requiresFastbootd = false;
+                _payloadPath = null;
+                _remotePayloadUrl = null;
+                _superPath = null;
+                _vendorPath = null;
+                _vendorEntries.Clear();
+                _oppoPath = null;
+                _oppoEntries.Clear();
+                _mtkResolution = null;
+                _mtkRows.Clear();
+                _mtkPartitions.Clear();
+                UpdateModeVisibility();
+                SetControlEnabled("ExtractSelectedButton", false);
+                SetControlEnabled("BuildWiredPackageButton", false);
+                PackagePath = string.Empty;
             }
-            Partitions.Apply(0, deviceRows);
-            if (info.Partitions.Count > 0)
+
+            AppendLog($"{_localizer.GetString("Flash_ReadInfo")}: {device.DisplayName}");
+            PublishFastbootDeviceStatus(info, device.Key, statusEpoch);
+            if (!preserveSpacemiTPackage)
             {
-                AppendLog($"{info.Partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
+                var deviceRows = new List<FlashPartitionEntry>(info.Partitions.Count);
+                foreach (var (name, size) in info.Partitions)
+                {
+                    deviceRows.Add(new FlashPartitionEntry
+                    {
+                        Name = name,
+                        Size = FormatByteSize(size)
+                    });
+                }
+
+                Partitions.Apply(0, deviceRows);
+                if (info.Partitions.Count > 0)
+                {
+                    AppendLog($"{info.Partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
+                }
             }
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }

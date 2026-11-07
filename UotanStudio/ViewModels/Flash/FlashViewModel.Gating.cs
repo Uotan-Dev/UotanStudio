@@ -174,25 +174,21 @@ public sealed partial class FlashViewModel
         RegisterGate("LoadBootButton", FlashControlGate.LoaderOnly("LoadBootButton", busyDisabled: true));
         RegisterGate("ReadInfoButton", FlashControlGate.InfoRead("ReadInfoButton", busyDisabled: true));
         RegisterGate("ReadbackSelectedButton",
-            FlashControlGate.SharedStorage("ReadbackSelectedButton", busyDisabled: true));
+            FlashControlGate.Readback("ReadbackSelectedButton", busyDisabled: true));
         RegisterGate("FlashSelectedButton",
             FlashControlGate.SharedFlash("FlashSelectedButton", busyDisabled: true));
         RegisterGate("EraseSelectedButton",
             FlashControlGate.SharedStorage("EraseSelectedButton", busyDisabled: true));
         RegisterGate("SwitchSlotButton", FlashControlGate.SlotSwitch("SwitchSlotButton", busyDisabled: true));
 
-        // The five write options are only read by the fastboot flash paths; the SpacemiT package run reads the reboot
-        // option alone, so the other four close on that gadget instead of sitting there without effect.
-        // 五个写入选项只由 fastboot 烧录路径读取；进迭时空烧录包运行只读取重启选项，因此其余四个在该 gadget 上关闭，
-        // 而不是毫无作用地留在界面上。
         RegisterGate("DisableVbmetaBox",
             FlashControlGate.GenericFastbootOption("DisableVbmetaBox", busyDisabled: true));
         RegisterGate("AddRootBox", FlashControlGate.GenericFastbootOption("AddRootBox", busyDisabled: true));
         RegisterGate("EraseDataBox", FlashControlGate.GenericFastbootOption("EraseDataBox", busyDisabled: true));
         RegisterGate("RebootAfterBox", FlashControlGate.FlashOption("RebootAfterBox", busyDisabled: true));
         RegisterGate("DeleteCowBox", FlashControlGate.GenericFastbootOption("DeleteCowBox", busyDisabled: true));
-        // The physical-partition switch only changes the device-info read, which no fastboot endpoint offers.
-        // 物理分区开关只影响设备信息读取，而没有任何 fastboot 端点提供该读取。
+        RegisterGate("SpacemiTVerifyBox",
+            FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true));
         RegisterGate("ShowAllPartitionsBox",
             FlashControlGate.SharedStorage("ShowAllPartitionsBox", busyDisabled: true));
         RegisterGate("AvbOptionsPanel",

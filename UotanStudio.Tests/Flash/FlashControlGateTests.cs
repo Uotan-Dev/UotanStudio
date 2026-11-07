@@ -211,6 +211,68 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
+    public void SpacemiTOption_IsOfferedOnlyToTheSpacemiTUbootGadget()
+    {
+        var gate = FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true);
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, spacemiTFastboot: true)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
+        Assert.True(gate.BusyDisabled);
+    }
+
+    [Fact]
+    public void Readback_OffersSpacemiTFastbootOnlyWithSelectedRows()
+    {
+        var gate = FlashControlGate.Readback("ReadbackSelectedButton", busyDisabled: true);
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, hasSelectedPartitions: true)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, hasSelectedPartitions: true, fastbootStage: SpacemiTBootStage.Uboot)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, hasSelectedPartitions: false)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, hasSelectedPartitions: true, fastbootStage: SpacemiTBootStage.BromFdl)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            hasSelectedPartitions: true)));
+    }
+
+    [Fact]
+    public void Readback_KeepsSharedStorageBehaviorForOtherDevices()
+    {
+        var gate = FlashControlGate.Readback("ReadbackSelectedButton", busyDisabled: true);
+
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Edl)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Maskrom)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb, adbSu: true)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.True(gate.BusyDisabled);
+    }
+
+    [Fact]
+    public void SpacemiTGates_CloseWhileThePageIsBusy()
+    {
+        Assert.True(FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true).BusyDisabled);
+        Assert.True(FlashControlGate.Readback("ReadbackSelectedButton", busyDisabled: true).BusyDisabled);
+        Assert.False(FlashControlGate.SpacemiTOption("SpacemiTVerifyBox").BusyDisabled);
+        Assert.False(FlashControlGate.Readback("ReadbackSelectedButton").BusyDisabled);
+    }
+
+    [Fact]
     public void Section_IsOfferedOnlyToItsOwnMode()
     {
         var gates = new (FlashControlGate Gate, FlashDeviceMode Owner)[]
