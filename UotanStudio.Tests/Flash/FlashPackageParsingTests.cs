@@ -10,9 +10,10 @@ public sealed class FlashPackageParsingTests
     {
         Assert.Equal(string.Empty, FlashViewModel.FormatByteSize(0));
         Assert.Equal("512 B", FlashViewModel.FormatByteSize(512));
-        Assert.Equal("2.0 KiB", FlashViewModel.FormatByteSize(2048));
-        Assert.Equal("10.0 MiB", FlashViewModel.FormatByteSize(10 * 1024 * 1024));
-        Assert.Equal("2.50 GiB", FlashViewModel.FormatByteSize((long)(2.5 * 1024 * 1024 * 1024)));
+        Assert.Equal("2.0 KB", FlashViewModel.FormatByteSize(2048));
+        Assert.Equal("10.0 MB", FlashViewModel.FormatByteSize(10 * 1024 * 1024));
+        Assert.Equal("1.00 GB", FlashViewModel.FormatByteSize(1024L * 1024 * 1024));
+        Assert.Equal("2.50 GB", FlashViewModel.FormatByteSize((long)(2.5 * 1024 * 1024 * 1024)));
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public sealed class FlashPackageParsingTests
             Assert.Equal("boot", rows[1].Name);
             Assert.Equal("boot.img", rows[1].FileName);
             Assert.Equal(bootImg, rows[1].FilePath);
-            Assert.Equal("1.0 KiB", rows[1].Size);
+            Assert.Equal("1.0 KB", rows[1].Size);
 
             Assert.Equal("wipe_super", rows[2].Command);
             Assert.Equal("super_empty", rows[2].Name);
@@ -164,7 +165,7 @@ public sealed class FlashPackageParsingTests
             Assert.Equal("boot", rows[2].Name);
             Assert.Equal("boot.img", rows[2].FileName);
             Assert.Equal(bootImg, rows[2].FilePath);
-            Assert.Equal("4.0 KiB", rows[2].Size);
+            Assert.Equal("4.0 KB", rows[2].Size);
 
             Assert.Equal("flash", rows[3].Command);
             Assert.Equal("vendor_boot", rows[3].Name);
@@ -244,9 +245,9 @@ public sealed class FlashPackageParsingTests
 
             Assert.Equal(["boot_a", "boot_b", "dtbo"], rows.Select(row => row.Name));
             Assert.All(rows, row => Assert.Equal("LUN 0", row.StorageMedium));
-            Assert.Equal("3.9 MiB", rows[0].Offset);
-            Assert.Equal("7.8 MiB", rows[1].Offset);
-            Assert.Equal("11.7 MiB", rows[2].Offset);
+            Assert.Equal("3.9 MB", rows[0].Offset);
+            Assert.Equal("7.8 MB", rows[1].Offset);
+            Assert.Equal("11.7 MB", rows[2].Offset);
         }
         finally
         {

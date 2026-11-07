@@ -810,7 +810,7 @@ public sealed partial class FlashViewModel
         var geometry = session.ReadFlashInfo();
         if (geometry.SectorCount > 0)
         {
-            lines.Add($"{storage}[{medium}]={geometry.Size / (1024 * 1024)} MiB ({geometry.SectorCount} × {geometry.SectorSize} B)");
+            lines.Add($"{storage}[{medium}]={FormatByteSize(geometry.Size)} ({geometry.SectorCount} × {geometry.SectorSize} B)");
         }
 
         List<(string Name, long OffsetSectors, long SizeSectors)> partitions;
@@ -915,7 +915,7 @@ public sealed partial class FlashViewModel
         var lines = new List<string>(4);
         if (info.SectorCount > 0)
         {
-            lines.Add(language.GetString("Flash_RkStorageSize", info.Size / (1024 * 1024), info.SectorCount,
+            lines.Add(language.GetString("Flash_RkStorageSize", FormatByteSize(info.Size), info.SectorCount,
                 info.SectorSize));
         }
 

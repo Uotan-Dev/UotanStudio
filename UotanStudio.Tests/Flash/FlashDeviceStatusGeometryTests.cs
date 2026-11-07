@@ -28,7 +28,7 @@ public sealed class FlashDeviceStatusGeometryTests
         var lines = FlashViewModel.DescribeRkFlashGeometry(info, language);
 
         Assert.Equal(4, lines.Count);
-        Assert.Equal(language.GetString("Flash_RkStorageSize", 16L, 32768L, 512), lines[0]);
+        Assert.Equal(language.GetString("Flash_RkStorageSize", "16.0 MB", 32768L, 512), lines[0]);
         Assert.Equal(language.GetString("Flash_RkEraseBlockSize", 64L), lines[1]);
         Assert.Equal(language.GetString("Flash_RkPageSizeBytes", 2048L), lines[2]);
         Assert.Equal(language.GetString("Flash_RkFlashVendor", "SAMSUNG"), lines[3]);
@@ -43,7 +43,7 @@ public sealed class FlashDeviceStatusGeometryTests
         var lines = FlashViewModel.DescribeRkFlashGeometry(info, language);
 
         Assert.Single(lines);
-        Assert.Equal(language.GetString("Flash_RkStorageSize", 32L, 65536L, 512), lines[0]);
+        Assert.Equal(language.GetString("Flash_RkStorageSize", "32.0 MB", 65536L, 512), lines[0]);
     }
 
     [Fact]
@@ -51,9 +51,9 @@ public sealed class FlashDeviceStatusGeometryTests
     {
         var media = new (string Key, int Ordinal, IReadOnlyList<string> Geometry)[]
         {
-            (FlashDeviceStatusRowKeys.Storage, 1, ["存储容量：238552 MiB（488554496 个扇区 × 512 B）"]),
+            (FlashDeviceStatusRowKeys.Storage, 1, ["存储容量：232.96 GB（488554496 个扇区 × 512 B）"]),
             (FlashDeviceStatusRowKeys.StorageProbe, 2, []),
-            (FlashDeviceStatusRowKeys.StorageProbe, 4, ["存储容量：16 MiB（32768 个扇区 × 512 B）"]),
+            (FlashDeviceStatusRowKeys.StorageProbe, 4, ["存储容量：16.0 MB（32768 个扇区 × 512 B）"]),
         };
         var rows = new List<FlashDeviceStatusEntry>();
 

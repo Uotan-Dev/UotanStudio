@@ -75,7 +75,7 @@ public sealed partial class FlashViewModel
     {
         if (!SaharaProgrammerManifest.IsManifestPath(path))
         {
-            return $"{length / 1024d / 1024d:F1} MiB";
+            return FormatByteSize(length);
         }
 
         try
@@ -87,7 +87,7 @@ public sealed partial class FlashViewModel
         catch (Exception exception) when (exception is IOException or InvalidDataException or ArgumentException
             or UnauthorizedAccessException or System.Xml.XmlException)
         {
-            return $"{length / 1024d / 1024d:F1} MiB";
+            return FormatByteSize(length);
         }
     }
 
@@ -351,7 +351,7 @@ public sealed partial class FlashViewModel
                     remoteRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
-                        Size = $"{size / 1024d / 1024d:F1} MiB"
+                        Size = FormatByteSize(size)
                     });
                 }
                 Partitions.Apply(0, remoteRows);
@@ -395,7 +395,7 @@ public sealed partial class FlashViewModel
                         superRows.Add(new FlashPartitionEntry
                         {
                             Name = partitionName,
-                            Size = $"{size / 1024d / 1024d:F1} MiB"
+                            Size = FormatByteSize(size)
                         });
                     }
                     Partitions.Apply(0, superRows);
@@ -417,7 +417,7 @@ public sealed partial class FlashViewModel
                     Command = "flash",
                     FilePath = path,
                     FileName = Path.GetFileName(path),
-                    Size = $"{length / 1024d / 1024d:F1} MiB"
+                    Size = FormatByteSize(length)
                 });
                 return;
             }
@@ -470,7 +470,7 @@ public sealed partial class FlashViewModel
                     payloadRows.Add(new FlashPartitionEntry
                     {
                         Name = name,
-                        Size = $"{size / 1024d / 1024d:F1} MiB"
+                        Size = FormatByteSize(size)
                     });
                 }
                 Partitions.Apply(0, payloadRows);
@@ -657,7 +657,7 @@ public sealed partial class FlashViewModel
             oppoRows.Add(new FlashPartitionEntry
             {
                 Name = name,
-                Size = $"{size / 1024d / 1024d:F1} MiB"
+                Size = FormatByteSize(size)
             });
         }
         Partitions.Apply(0, oppoRows);
@@ -931,7 +931,7 @@ public sealed partial class FlashViewModel
                 Command = "flash",
                 FilePath = imagePath,
                 FileName = Path.GetFileName(imagePath),
-                Size = $"{length / 1024d / 1024d:F1} MiB",
+                Size = FormatByteSize(length),
                 StorageMedium = resolution.StorageLabel,
                 Offset = DescribeAddressOffset(partition.LinearStartAddress)
             };
@@ -954,7 +954,7 @@ public sealed partial class FlashViewModel
             {
                 Name = partition.Name,
                 Command = "erase",
-                Size = $"{partition.Size / 1024d / 1024d:F1} MiB",
+                Size = FormatByteSize(partition.Size),
                 StorageMedium = resolution.StorageLabel,
                 Offset = DescribeAddressOffset(partition.LinearStartAddress)
             };
@@ -988,7 +988,7 @@ public sealed partial class FlashViewModel
             rows.Add(new FlashPartitionEntry
             {
                 Name = name,
-                Size = $"{size / 1024d / 1024d:F1} MiB"
+                Size = FormatByteSize(size)
             });
         }
 
@@ -1191,7 +1191,7 @@ public sealed partial class FlashViewModel
                 var path = Path.Combine(output, filename);
                 entry.FilePath = path;
                 entry.FileName = Path.GetFileName(path);
-                entry.Size = $"{new FileInfo(path).Length / 1024d / 1024d:F1} MiB";
+                entry.Size = FormatByteSize(new FileInfo(path).Length);
             }
             AppendLog(string.Format(_localizer.GetString("Flash_ExtractOutputPath"), output));
         }
@@ -1538,7 +1538,7 @@ public sealed partial class FlashViewModel
             var length = new FileInfo(path).Length;
             entry.Size = entry.Command == LoaderCommand
                 ? DescribeLoaderRowSize(path, length)
-                : $"{length / 1024d / 1024d:F1} MiB";
+                : FormatByteSize(length);
             if (entry.Step is { } step)
             {
                 entry.Step = step with { ImagePath = path, ImageLength = length };
@@ -5482,14 +5482,21 @@ public sealed partial class FlashViewModel
     internal static string FormatByteSize(long size)
     {
         if (size <= 0) return string.Empty;
+        if (size >= 1024L * 1024 * 1024 * 1024)
+            return $"{size / 1024d / 1024d / 1024d / 1024d:F2} TB";
         if (size >= 1024L * 1024 * 1024)
-            return $"{size / 1024d / 1024d / 1024d:F2} GiB";
+            return $"{size / 1024d / 1024d / 1024d:F2} GB";
         if (size >= 1024L * 1024)
-            return $"{size / 1024d / 1024d:F1} MiB";
+            return $"{size / 1024d / 1024d:F1} MB";
         if (size >= 1024)
-            return $"{size / 1024d:F1} KiB";
+            return $"{size / 1024d:F1} KB";
         return $"{size} B";
     }
+
+    internal static string FormatByteSize(ulong size)
+        => size <= (ulong)long.MaxValue
+            ? FormatByteSize((long)size)
+            : $"{size / 1024d / 1024d / 1024d / 1024d:F2} TB";
 
     internal static List<FlashPartitionEntry> ParseScript(string path, string[] lines)
     {
