@@ -1,7 +1,7 @@
-using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Hash.Digests;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.SpacemiT;
 
@@ -446,7 +446,7 @@ public static class SpacemiTCardImageWriter
     /// </summary>
     private static Guid DeriveUniqueId(string name)
     {
-        var digest = Md5.ComputeHash(Encoding.UTF8.GetBytes(UniqueIdDomainPrefix + name));
+        var digest = Md5.ComputeHash(Utf8String.Format($"{UniqueIdDomainPrefix}{name}"));
         digest[7] = (byte)((digest[7] & 0x0F) | 0x50);
         digest[8] = (byte)((digest[8] & 0x3F) | 0x80);
         return new Guid(digest);

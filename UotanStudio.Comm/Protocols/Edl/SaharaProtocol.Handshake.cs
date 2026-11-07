@@ -540,8 +540,7 @@ public sealed partial class SaharaProtocol
     {
         try
         {
-            var nopBytes = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen + "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
-            await WriteDataAsync(nopBytes, cancellationToken);
+            await WriteDataAsync(EdlConstants.NopProbeFrame, cancellationToken);
 
             var document = new byte[64 * 1024];
             var length = 0;

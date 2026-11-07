@@ -70,7 +70,7 @@ public sealed partial class MtkSession
                 var reading = new MtkEfuseReading(hardwareCode, efuseBase, readings);
                 RecordSecurityEvidence("legacy-efuse-read", CommandOutcomeKind.Completed,
                     $"{readings.Count} cells requested, {reading.ReadCellCount} read from the target.",
-                    string.Concat(readings.Select(cell => cell.BytesHex)));
+                    ConcatCellHexEvidence(readings));
                 return reading;
             }
             catch
@@ -83,6 +83,29 @@ public sealed partial class MtkSession
         {
             _operation.Release();
         }
+    }
+
+    /// <summary>
+    /// Concatenates the hex text of every efuse cell reading in one pass over a preallocated string.
+    /// <para>对预分配字符串单趟拼接每条 efuse 单元读取的十六进制文本。</para>
+    /// </summary>
+    /// <param name="readings">Ordered cell readings. <para>按顺序排列的单元读取。</para></param>
+    /// <returns>The joined evidence text. <para>拼接后的证据文本。</para></returns>
+    private static string ConcatCellHexEvidence(List<MtkEfuseCellReading> readings)
+    {
+        var totalLength = 0;
+        for (var i = 0; i < readings.Count; i++)
+        {
+            totalLength += readings[i].BytesHex.Length;
+        }
+        return string.Create(totalLength, readings, static (span, list) =>
+        {
+            foreach (var reading in list)
+            {
+                reading.BytesHex.AsSpan().CopyTo(span);
+                span = span[reading.BytesHex.Length..];
+            }
+        });
     }
 
     /// <summary>Reads the boot public key window through the Legacy agent register command.

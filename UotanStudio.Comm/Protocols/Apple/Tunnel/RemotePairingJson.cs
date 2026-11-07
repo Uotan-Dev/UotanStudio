@@ -118,6 +118,7 @@ public static class RemotePairingJson
     {
         output.WriteByte((byte)'"');
         var utf8 = Encoding.UTF8.GetBytes(text);
+        Span<byte> escape = stackalloc byte[6];
         foreach (var octet in utf8)
         {
             switch (octet)
@@ -138,7 +139,13 @@ public static class RemotePairingJson
                     output.Write("\\t"u8);
                     break;
                 case < 0x20:
-                    output.Write(Encoding.ASCII.GetBytes($"\\u{octet:x4}"));
+                    escape[0] = (byte)'\\';
+                    escape[1] = (byte)'u';
+                    escape[2] = (byte)'0';
+                    escape[3] = (byte)'0';
+                    escape[4] = ToHexDigit(octet >> 4);
+                    escape[5] = ToHexDigit(octet & 0xF);
+                    output.Write(escape);
                     break;
                 default:
                     output.WriteByte(octet);
@@ -148,6 +155,8 @@ public static class RemotePairingJson
 
         output.WriteByte((byte)'"');
     }
+
+    private static byte ToHexDigit(int value) => (byte)(value < 10 ? '0' + value : 'a' + (value - 10));
 
     private ref struct Parser(ReadOnlySpan<byte> payload)
     {

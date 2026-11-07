@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using UotanStudio.Comm.Routing;
+using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -719,7 +720,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     {
         using Stream stream = Open("sync:");
         using var input = File.OpenRead(localPath);
-        Send(stream, "SEND", Encoding.UTF8.GetBytes(remotePath + ",33188"));
+        Send(stream, "SEND", Utf8String.Format($"{remotePath},33188"));
         var buffer = new byte[65536];
         int count;
         while ((count = input.Read(buffer)) != 0) Send(stream, "DATA", buffer.AsSpan(0, count));

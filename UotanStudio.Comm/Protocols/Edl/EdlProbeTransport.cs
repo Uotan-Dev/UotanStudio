@@ -153,8 +153,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             }
             if (canProbe)
             {
-                var nop = Encoding.UTF8.GetBytes(EdlConstants.XmlHeader + EdlConstants.DataOpen +
-                    "<nop value=\"ping\"/>\n" + EdlConstants.DataClose);
+                var nop = EdlConstants.NopProbeFrame;
                 cancellationToken.ThrowIfCancellationRequested();
                 if (await inner.WriteAsync(nop, 0, nop.Length, remaining, cancellationToken).ConfigureAwait(false) != nop.Length)
                 {

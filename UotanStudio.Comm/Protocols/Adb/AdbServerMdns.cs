@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Udp;
+using ZLinq;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -205,7 +206,7 @@ internal static class AdbServerMdns
         foreach (var entry in entries)
         {
             var serviceType = NormalizeAliasText(entry.ServiceType);
-            if (!connectServiceTypes.Any(candidate => string.Equals(
+            if (!connectServiceTypes.AsValueEnumerable().Any(candidate => string.Equals(
                     serviceType, NormalizeAliasText(candidate), StringComparison.OrdinalIgnoreCase)))
             {
                 continue;

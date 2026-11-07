@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -263,6 +264,16 @@ internal static class EdlConstants
     /// <para>&lt;/data&gt; 结束标签。</para>
     /// </summary>
     public const string DataClose = "</data>\n";
+
+    /// <summary>
+    /// Pre-encoded nop probe frame: the XML header, one <c>data</c> block wrapping a ping nop and the
+    /// closing tag, UTF-8 encoded once at type initialization. Treat the array as read-only; every
+    /// caller only writes it to the transport.
+    /// <para>预编码的 nop 探测帧：XML 头、包着一个 ping nop 的 <c>data</c> 块与结束标签，类型初始化时
+    /// 一次性 UTF-8 编码。数组按只读对待；所有调用方仅将其写向传输层。</para>
+    /// </summary>
+    public static readonly byte[] NopProbeFrame =
+        Encoding.UTF8.GetBytes(XmlHeader + DataOpen + "<nop value=\"ping\"/>\n" + DataClose);
 
     /// <summary>
     /// Bytes an EDL text parser skips before a Firehose document: NUL padding that fills a USB packet

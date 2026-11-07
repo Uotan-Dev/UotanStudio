@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Makaretu.Dns;
+using ZLinq;
 
 namespace UotanStudio.Comm.Transports.Udp;
 
@@ -539,7 +540,7 @@ internal static class AdbMdnsDiscovery
         ConcurrentDictionary<string, DeviceAccumulator> byInstance,
         ConcurrentDictionary<string, string> addressesByHost)
     {
-        foreach (var pending in byInstance
+        foreach (var pending in byInstance.AsValueEnumerable()
                      .Where(entry => !IsFullyResolved(entry.Key, entry.Value, addressesByHost)).ToArray())
         {
             if (pending.Value.Port == 0)

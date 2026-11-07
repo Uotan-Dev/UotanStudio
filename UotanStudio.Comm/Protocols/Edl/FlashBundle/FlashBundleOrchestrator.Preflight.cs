@@ -1,5 +1,7 @@
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
+using ZLinq;
+
 public sealed partial class FlashBundleOrchestrator
 {
     private static void ValidateOptions(FlashBundleOptions options)
@@ -38,61 +40,55 @@ public sealed partial class FlashBundleOrchestrator
     private static List<RawProgramEntry> FilterProgramEntries(
         List<RawProgramEntry> entries, FlashBundleOptions options)
     {
-        IEnumerable<RawProgramEntry> filtered = entries;
-
-        if (options.Labels is { Count: > 0 })
+        HashSet<string>? labelSet = options.Labels is { Count: > 0 } labels
+            ? new HashSet<string>(labels, StringComparer.OrdinalIgnoreCase) : null;
+        HashSet<string>? notLabelSet = options.NotLabels is { Count: > 0 } notLabels
+            ? new HashSet<string>(notLabels, StringComparer.OrdinalIgnoreCase) : null;
+        if (labelSet is null && notLabelSet is null)
         {
-            var labelSet = new HashSet<string>(options.Labels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => !string.IsNullOrEmpty(e.Label) && labelSet.Contains(e.Label));
+            return entries;
         }
 
-        if (options.NotLabels is { Count: > 0 })
-        {
-            var notLabelSet = new HashSet<string>(options.NotLabels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => string.IsNullOrEmpty(e.Label) || !notLabelSet.Contains(e.Label));
-        }
-
-        return [.. filtered];
+        return entries.AsValueEnumerable()
+            .Where(e => (labelSet is null || (!string.IsNullOrEmpty(e.Label) && labelSet.Contains(e.Label)))
+                && (notLabelSet is null || string.IsNullOrEmpty(e.Label) || !notLabelSet.Contains(e.Label)))
+            .ToList();
     }
 
     private static List<PatchEntry> FilterPatchEntries(
         List<PatchEntry> entries, FlashBundleOptions options)
     {
-        IEnumerable<PatchEntry> filtered = entries;
-
-        if (options.Labels is { Count: > 0 })
+        HashSet<string>? labelSet = options.Labels is { Count: > 0 } labels
+            ? new HashSet<string>(labels, StringComparer.OrdinalIgnoreCase) : null;
+        HashSet<string>? notLabelSet = options.NotLabels is { Count: > 0 } notLabels
+            ? new HashSet<string>(notLabels, StringComparer.OrdinalIgnoreCase) : null;
+        if (labelSet is null && notLabelSet is null)
         {
-            var labelSet = new HashSet<string>(options.Labels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => e.Label != null && labelSet.Contains(e.Label));
+            return entries;
         }
 
-        if (options.NotLabels is { Count: > 0 })
-        {
-            var notLabelSet = new HashSet<string>(options.NotLabels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => e.Label == null || !notLabelSet.Contains(e.Label));
-        }
-
-        return [.. filtered];
+        return entries.AsValueEnumerable()
+            .Where(e => (labelSet is null || (e.Label != null && labelSet.Contains(e.Label)))
+                && (notLabelSet is null || e.Label == null || !notLabelSet.Contains(e.Label)))
+            .ToList();
     }
 
     private static List<WipeManifestEntry> FilterWipeEntries(
         List<WipeManifestEntry> entries, FlashBundleOptions options)
     {
-        IEnumerable<WipeManifestEntry> filtered = entries;
-
-        if (options.Labels is { Count: > 0 })
+        HashSet<string>? labelSet = options.Labels is { Count: > 0 } labels
+            ? new HashSet<string>(labels, StringComparer.OrdinalIgnoreCase) : null;
+        HashSet<string>? notLabelSet = options.NotLabels is { Count: > 0 } notLabels
+            ? new HashSet<string>(notLabels, StringComparer.OrdinalIgnoreCase) : null;
+        if (labelSet is null && notLabelSet is null)
         {
-            var labelSet = new HashSet<string>(options.Labels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => labelSet.Contains(e.Label));
+            return entries;
         }
 
-        if (options.NotLabels is { Count: > 0 })
-        {
-            var notLabelSet = new HashSet<string>(options.NotLabels, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(e => !notLabelSet.Contains(e.Label));
-        }
-
-        return [.. filtered];
+        return entries.AsValueEnumerable()
+            .Where(e => (labelSet is null || labelSet.Contains(e.Label))
+                && (notLabelSet is null || !notLabelSet.Contains(e.Label)))
+            .ToList();
     }
 
     private static string? ResolveUfsProvisionPath(FlashBundleOptions options)
@@ -108,6 +104,7 @@ public sealed partial class FlashBundleOrchestrator
             return null;
         }
         var candidates = Directory.EnumerateFiles(options.ImageDirectory, "*.xml", SearchOption.TopDirectoryOnly)
+            .AsValueEnumerable()
             .Where(f =>
             {
                 var name = Path.GetFileNameWithoutExtension(f);
@@ -126,9 +123,19 @@ public sealed partial class FlashBundleOrchestrator
     private UfsProvisionPlan PrepareUfs(UfsProvisionFile document, FlashBundleOptions options)
     {
         var entries = document.Entries;
+        var hasNonBody = false;
+        for (var index = 1; index < entries.Count - 1; index++)
+        {
+            if (entries[index].Value is not UfsProvisionBody)
+            {
+                hasNonBody = true;
+                break;
+            }
+        }
+
         if (entries.Count is < 3 or > 258 || entries[0].Value is not UfsProvisionCommon common
             || entries[^1].Value is not UfsProvisionEpilogue epilogue
-            || entries.Skip(1).SkipLast(1).Any(entry => entry.Value is not UfsProvisionBody))
+            || hasNonBody)
         {
             throw new InvalidDataException("UFS provisioning requires one common entry, one or more bodies, then one epilogue.");
         }

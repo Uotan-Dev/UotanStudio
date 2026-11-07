@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 
@@ -29,7 +28,7 @@ public static class DebugBridgeRoute
 {
     private const int PositiveTtlMs = 2000;
     private static readonly Lock StateLock = new();
-    private static readonly Dictionary<string, bool> ReportedStates = new(StringComparer.Ordinal);
+    private static readonly Dictionary<(string Host, int Port), bool> ReportedStates = [];
 
     private static int _mode;
     private static int _modeConfigured;
@@ -264,7 +263,7 @@ public static class DebugBridgeRoute
     /// 处理程序抛出的异常会被吞没。</para></remarks>
     public static event Action<string, int, bool>? ServerAvailabilityChanged;
 
-    private static void ReportState(string host, int port, string key, bool listening)
+    private static void ReportState(string host, int port, (string Host, int Port) key, bool listening)
     {
         var handler = ServerAvailabilityChanged;
         if (handler is null)
@@ -294,10 +293,10 @@ public static class DebugBridgeRoute
 
     private sealed record ProbeResult(bool Listening, long TimestampTicks);
 
-    private static readonly ConcurrentDictionary<string, ProbeResult> PositiveCache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<(string Host, int Port), ProbeResult> PositiveCache = [];
 
     [ThreadStatic]
-    private static ConcurrentDictionary<string, bool>? _scopeCache;
+    private static ConcurrentDictionary<(string Host, int Port), bool>? _scopeCache;
 
     [ThreadStatic]
     private static int _scopeDepth;
@@ -335,7 +334,7 @@ public static class DebugBridgeRoute
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        (string Host, int Port) key = (host, port);
         if (PositiveCache.TryGetValue(key, out var cached))
         {
             if (Environment.TickCount64 - cached.TimestampTicks < PositiveTtlMs)
@@ -405,7 +404,7 @@ public static class DebugBridgeRoute
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        (string Host, int Port) key = (host, port);
         if (PositiveCache.TryGetValue(key, out var cached))
         {
             if (Environment.TickCount64 - cached.TimestampTicks < PositiveTtlMs)
@@ -484,21 +483,21 @@ public static class DebugBridgeRoute
     /// <returns>Scope handle; Dispose restores the outer scope. <para>作用域句柄，Dispose 后恢复外层作用域。</para></returns>
     public static IDisposable BeginProbeScope()
     {
-        _scopeCache ??= new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
+        _scopeCache ??= new ConcurrentDictionary<(string Host, int Port), bool>();
         _scopeDepth++;
         return new ProbeScope();
     }
 
     internal static bool ProbeEndpoint(string host, int port)
     {
-        if (_scopeCache is not null && _scopeCache.TryGetValue(string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture)), out var scoped))
+        if (_scopeCache is not null && _scopeCache.TryGetValue((host, port), out var scoped))
         {
             return scoped;
         }
         var result = IsListening(host, port);
         if (_scopeCache is not null)
         {
-            _scopeCache[string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture))] = result;
+            _scopeCache[(host, port)] = result;
         }
         return result;
     }
@@ -510,7 +509,7 @@ public static class DebugBridgeRoute
     /// <param name="port">Server TCP port number. <para>server TCP 端口号。</para></param>
     public static void InvalidateProbe(string host, int port)
     {
-        var key = string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        var key = (host, port);
         PositiveCache.TryRemove(key, out _);
         _scopeCache?.TryRemove(key, out _);
     }

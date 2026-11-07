@@ -115,7 +115,7 @@ public sealed partial class MtkSession
                 var reading = new MtkEfuseReading(hardwareCode, efuseBase, readings);
                 RecordSecurityEvidence("xflash-efuse-read", CommandOutcomeKind.Completed,
                     $"{readings.Count} cells requested, {reading.ReadCellCount} read from the target.",
-                    string.Concat(readings.Select(cell => cell.BytesHex)));
+                    ConcatCellHexEvidence(readings));
                 return reading;
             }
             catch
