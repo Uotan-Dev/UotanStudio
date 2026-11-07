@@ -3197,7 +3197,7 @@ public sealed partial class FlashViewModel
     /// <param name="e">Event arguments. <para>事件参数。</para></param>
     internal async void OnCancelFlashClick(object? sender, RoutedEventArgs e)
     {
-        if (_busy || _confirming || _flashCancellation is not { } cancellation ||
+        if (_confirming || _flashCancellation is not { } cancellation ||
             TopLevel.GetTopLevel(Surface) is not Window owner)
         {
             return;
