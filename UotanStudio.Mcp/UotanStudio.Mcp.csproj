@@ -9,6 +9,7 @@
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <ProjectReference Include="..\UotanStudio.Pipeline\UotanStudio.Pipeline.csproj" />
+    <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
   </ItemGroup>
 
   <ItemGroup>

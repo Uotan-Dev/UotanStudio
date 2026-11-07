@@ -17,7 +17,7 @@ public partial class ProjectReferenceDirectionGuardTests
         ["UotanStudio.Mirroring"] = Set("UotanStudio.Assets", "UotanStudio.Comm"),
         ["UotanStudio.Media"] = new HashSet<string>(StringComparer.Ordinal),
         ["UotanStudio.Pipeline"] = Set("UotanStudio.Assets", "UotanStudio.Compress", "UotanStudio.Firmware", "UotanStudio.Hash", "UotanStudio.Net"),
-        ["UotanStudio.Mcp"] = Set("UotanStudio.Firmware", "UotanStudio.Comm", "UotanStudio.Pipeline"),
+        ["UotanStudio.Mcp"] = Set("UotanStudio.Firmware", "UotanStudio.Comm", "UotanStudio.Pipeline", "UotanStudio.Net"),
         ["UotanStudio"] = Set("UotanStudio.Assets", "UotanStudio.Pipeline", "UotanStudio.Comm", "UotanStudio.Mirroring", "UotanStudio.Firmware", "UotanStudio.Mcp", "UotanStudio.Media", "UotanStudio.Hash", "UotanStudio.Net", "UotanStudio.RegexInfer", "UotanStudio.DD"),
         ["UotanStudio.Desktop"] = Set("UotanStudio", "UotanStudio.Mcp"),
         ["UotanStudio.RegexInfer"] = new HashSet<string>(StringComparer.Ordinal),

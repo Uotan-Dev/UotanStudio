@@ -6,6 +6,7 @@ using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Decompile;
 using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using UotanStudio.Hash.Digests;
+using UotanStudio.Net.Http;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -274,6 +275,21 @@ internal static class MiscToolHandlers
                 ToolJson.Data(new InputOutputPayload(resolvedInput, resolvedOutput)));
         }, cancellationToken);
 
+    /// <summary>
+    /// Downloads a file over http(s) into the sandbox through the shared download entry point, verifies the
+    /// optional SHA-256 digest against the staged file, and publishes the output with a single atomic move.
+    /// <para>经统一下载入口把文件以 http(s) 下载进沙箱，对暂存文件校验可选的 SHA-256 摘要后以单次原子移动发布输出。</para>
+    /// </summary>
+    /// <param name="sandbox">Path sandbox that resolves the output path.<para>解析输出路径的路径沙箱。</para></param>
+    /// <param name="url">Absolute http(s) URL to download.<para>要下载的绝对 http(s) 地址。</para></param>
+    /// <param name="outputPath">Output file path inside the sandbox.<para>沙箱内的输出文件路径。</para></param>
+    /// <param name="sha256">Optional expected SHA-256 hex digest; a mismatch fails without touching the output.
+    /// <para>可选的期望 SHA-256 十六进制摘要；不匹配时失败且不改动输出。</para></param>
+    /// <param name="cancellationToken">Client cancellation token; the download additionally runs on a five-minute budget.
+    /// <para>客户端取消令牌；下载另有五分钟预算。</para></param>
+    /// <returns>A success result reporting the published file, or a failure result for an invalid URL, a digest
+    /// mismatch, or the five-minute timeout.
+    /// <para>成功结果报告已发布文件；地址非法、摘要不匹配或五分钟超时返回失败结果。</para></returns>
     public static async Task<ToolResult> DownloadFileAsync(PathSandbox sandbox, string url,
         string outputPath, string? sha256, CancellationToken cancellationToken)
     {
@@ -286,20 +302,14 @@ internal static class MiscToolHandlers
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(resolved)!);
-        var temporary = resolved + "." + Guid.NewGuid().ToString("N") + ".part";
-        var published = false;
+        var staging = resolved + ".staging-" + Guid.NewGuid().ToString("N");
         try
         {
             using var client = new HttpClient();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMinutes(5));
-            await using (var source = await client.GetStreamAsync(uri, timeout.Token).ConfigureAwait(false))
-            await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                131072, FileOptions.Asynchronous | FileOptions.SequentialScan))
-            {
-                await source.CopyToAsync(target, 131072, timeout.Token).ConfigureAwait(false);
-                await target.FlushAsync(timeout.Token).ConfigureAwait(false);
-            }
+            await HttpDownload.DownloadAsync(client, uri, staging, cancellationToken: timeout.Token)
+                .ConfigureAwait(false);
 
             string? actual = null;
             if (!string.IsNullOrWhiteSpace(sha256))
@@ -319,7 +329,7 @@ internal static class MiscToolHandlers
                     return new ToolResult(false, "sha256 must be 64 hexadecimal characters.");
                 }
 
-                await using var stream = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read,
+                await using var stream = new FileStream(staging, FileMode.Open, FileAccess.Read, FileShare.Read,
                     131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
                 var actualHash = await Sha256.ComputeHashAsync(stream, timeout.Token)
                     .ConfigureAwait(false);
@@ -331,8 +341,7 @@ internal static class MiscToolHandlers
                 }
             }
 
-            File.Move(temporary, resolved, overwrite: true);
-            published = true;
+            File.Move(staging, resolved, overwrite: true);
             return new ToolResult(true,
                 $"Downloaded {new FileInfo(resolved).Length} bytes into {resolved}"
                     + (actual is null ? string.Empty : $" (sha256 {actual})"),
@@ -346,9 +355,9 @@ internal static class MiscToolHandlers
         }
         finally
         {
-            if (!published && File.Exists(temporary))
+            if (File.Exists(staging))
             {
-                File.Delete(temporary);
+                File.Delete(staging);
             }
         }
     }
