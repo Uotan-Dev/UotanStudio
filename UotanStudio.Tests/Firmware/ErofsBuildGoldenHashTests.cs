@@ -28,8 +28,8 @@ public sealed class ErofsBuildGoldenHashTests
         using var source = new TempDirectory();
         WriteFixture(source, fixture);
 
-        var image = new ErofsBuilder().Build(source.Path, OptionsFor(fixture));
-        var again = new ErofsBuilder().Build(source.Path, OptionsFor(fixture));
+        var image = InMemoryImage.Erofs(source.Path, OptionsFor(fixture));
+        var again = InMemoryImage.Erofs(source.Path, OptionsFor(fixture));
 
         var actual = Convert.ToHexString(SHA256.HashData(image));
         Assert.True(actual == expected, $"fixture={fixture} expected={expected} actual={actual}");

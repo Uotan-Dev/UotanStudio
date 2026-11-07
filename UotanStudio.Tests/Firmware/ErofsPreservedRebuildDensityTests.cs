@@ -18,7 +18,7 @@ public class ErofsPreservedRebuildDensityTests
         temp.WriteBytes("heavy.bin", payload);
 
         var imagePath = Path.Combine(temp.Path, "source.img");
-        var source = new ErofsBuilder().Build(temp.Path, SourceOptions());
+        var source = InMemoryImage.Erofs(temp.Path, SourceOptions());
         await File.WriteAllBytesAsync(imagePath, source, TestContext.Current.CancellationToken);
         var sourceLayout = LayoutOf(source);
 
@@ -63,7 +63,7 @@ public class ErofsPreservedRebuildDensityTests
 
         var imagePath = Path.Combine(temp.Path, "source.img");
         var options = SourceOptions();
-        var source = new ErofsBuilder().Build(temp.Path, options);
+        var source = InMemoryImage.Erofs(temp.Path, options);
         await File.WriteAllBytesAsync(imagePath, source, TestContext.Current.CancellationToken);
 
         var extracted = Path.Combine(temp.Path, "extracted");

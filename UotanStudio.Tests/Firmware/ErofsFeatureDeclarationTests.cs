@@ -52,7 +52,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(declared),
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(expectedIncompat, superblock.FeatureIncompat);
@@ -103,7 +103,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = ErofsFeatureSet.FromWords(0, 0),
         };
 
-        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("metabox", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.Metabox), error.Message, StringComparison.Ordinal);
@@ -122,7 +122,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster),
         };
 
-        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("device_table", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.ExtraDeviceCount), error.Message, StringComparison.Ordinal);
@@ -133,7 +133,7 @@ public sealed class ErofsFeatureDeclarationTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 40 * 1024).ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             UseExtentIndexes = ErofsTriStateFeature.Enabled,
@@ -158,7 +158,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.FortyEightBit),
         };
 
-        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("48bit", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.UseExtentIndexes), error.Message, StringComparison.Ordinal);
@@ -175,7 +175,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.XattrPrefixes),
         };
 
-        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("xattr_prefixes", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.SourceXattrPrefixes), error.Message, StringComparison.Ordinal);
@@ -187,7 +187,7 @@ public sealed class ErofsFeatureDeclarationTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x42, 1024).ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
@@ -221,7 +221,7 @@ public sealed class ErofsFeatureDeclarationTests
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
         ];
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             IshareXattrs = true,
             FileXattrs = new Dictionary<string, IReadOnlyList<ErofsXattrEntry>>
@@ -256,7 +256,7 @@ public sealed class ErofsFeatureDeclarationTests
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
         ];
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Metabox = true,
             MetaboxRequired = true,
@@ -291,7 +291,7 @@ public sealed class ErofsFeatureDeclarationTests
         var payload = Enumerable.Repeat((byte)0x77, 3000).ToArray();
         source.WriteBytes("data.bin", payload);
         const string prefix = "erofs.fingerprint.v1";
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             IshareXattrs = true,
             IshareXattrPrefix = prefix,
@@ -317,7 +317,7 @@ public sealed class ErofsFeatureDeclarationTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x31, 4096).ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Features = ErofsFeatureSet.Auto
                 .With(ErofsFeature.Lz4ZeroPadding)
@@ -367,7 +367,7 @@ public sealed class ErofsFeatureDeclarationTests
                 .With(ErofsFeature.XattrFilter),
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(ErofsSuperblock.CompatMtime, superblock.FeatureCompat);
@@ -501,7 +501,7 @@ public sealed class ErofsFeatureDeclarationTests
     }
 
     private static byte[] BuildWholeBlockImage(string directory, ErofsFeatureSet features)
-        => new ErofsBuilder().Build(directory, new ErofsOptions
+        => InMemoryImage.Erofs(directory, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             BuildTime = 1_700_000_000UL,

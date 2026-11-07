@@ -159,7 +159,7 @@ public sealed class ErofsCompacted2BTests
     }
 
     private static byte[] Build(string sourcePath, bool useCompacted2B, bool useCompactedIndexes = true)
-        => new ErofsBuilder().Build(sourcePath, new ErofsOptions
+        => InMemoryImage.Erofs(sourcePath, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -170,7 +170,7 @@ public sealed class ErofsCompacted2BTests
         });
 
     private static byte[] BuildBigPcluster(string sourcePath)
-        => new ErofsBuilder().Build(sourcePath, new ErofsOptions
+        => InMemoryImage.Erofs(sourcePath, new ErofsOptions
         {
             BlockSize = BigPclusterBlockSize,
             Compress = true,
@@ -182,7 +182,7 @@ public sealed class ErofsCompacted2BTests
         });
 
     private static byte[] BuildSmallPclusterLimit(string sourcePath)
-        => new ErofsBuilder().Build(sourcePath, new ErofsOptions
+        => InMemoryImage.Erofs(sourcePath, new ErofsOptions
         {
             BlockSize = MixedBlockSize,
             Compress = true,

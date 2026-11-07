@@ -38,7 +38,7 @@ public sealed class ErofsInterlacedReachabilityTests
         };
         Assert.True(options.InterlacedPlainPclusters, "the option predicate must hold for this build.");
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         using var parser = new ErofsParser(image);
         var records = parser.ReadRebuildOptions().SourceInodes!;
 
@@ -71,7 +71,7 @@ public sealed class ErofsInterlacedReachabilityTests
                 ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster),
         };
 
-        Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => InMemoryImage.Erofs(source.Path, options));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class ErofsInterlacedReachabilityTests
         };
         Assert.False(options.InterlacedPlainPclusters);
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         using var parser = new ErofsParser(image);
         var records = parser.ReadRebuildOptions().SourceInodes!;
         var record = records.Values.Single(r =>

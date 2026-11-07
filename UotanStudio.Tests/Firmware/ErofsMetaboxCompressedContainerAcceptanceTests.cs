@@ -29,7 +29,7 @@ public sealed class ErofsMetaboxCompressedContainerAcceptanceTests
             source.WriteBytes(name, payload);
         }
 
-        var verbatim = new ErofsBuilder().Build(source.Path, MetaboxOptions());
+        var verbatim = InMemoryImage.Erofs(source.Path, MetaboxOptions());
         var extracted = Path.Combine(source.Path, "extracted");
         ErofsRebuildParameters profile;
         using (var parser = new ErofsParser(verbatim))
@@ -44,7 +44,7 @@ public sealed class ErofsMetaboxCompressedContainerAcceptanceTests
         restored.Metabox = true;
         restored.MetaboxRequired = true;
 
-        var rebuilt = new ErofsBuilder().Build(extracted, restored);
+        var rebuilt = InMemoryImage.Erofs(extracted, restored);
 
         using var reader = new ErofsParser(rebuilt);
         var container = reader.MetaboxContainer;
@@ -70,7 +70,7 @@ public sealed class ErofsMetaboxCompressedContainerAcceptanceTests
             source.WriteBytes($"resident-{i:D4}.bin", payload);
         }
 
-        var image = new ErofsBuilder().Build(source.Path, MetaboxOptions());
+        var image = InMemoryImage.Erofs(source.Path, MetaboxOptions());
         using var parser = new ErofsParser(image);
         var container = parser.MetaboxContainer;
         Assert.NotNull(container);

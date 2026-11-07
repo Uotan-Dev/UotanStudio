@@ -33,7 +33,7 @@ public sealed class ErofsPclusterDedupeTests
         var options = PinnedOptions();
         options.DedupeMode = ErofsDedupeMode.Pcluster;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.True(options.SavedByDeduplication > 0,
             $"expected the reused frames to be reported; saw {options.SavedByDeduplication}.");
@@ -53,8 +53,8 @@ public sealed class ErofsPclusterDedupeTests
         dedupeOptions.DedupeMode = ErofsDedupeMode.Pcluster;
         var plainOptions = PinnedOptions();
 
-        var deduped = new ErofsBuilder().Build(source.Path, dedupeOptions);
-        var plain = new ErofsBuilder().Build(source.Path, plainOptions);
+        var deduped = InMemoryImage.Erofs(source.Path, dedupeOptions);
+        var plain = InMemoryImage.Erofs(source.Path, plainOptions);
 
         Assert.True(deduped.Length < plain.Length,
             $"pcluster reuse must shrink the image; deduped={deduped.Length} plain={plain.Length}.");
@@ -74,8 +74,8 @@ public sealed class ErofsPclusterDedupeTests
         var plainOptions = PinnedOptions();
         plainOptions.Compress = false;
 
-        var deduped = new ErofsBuilder().Build(source.Path, dedupeOptions);
-        var plain = new ErofsBuilder().Build(source.Path, plainOptions);
+        var deduped = InMemoryImage.Erofs(source.Path, dedupeOptions);
+        var plain = InMemoryImage.Erofs(source.Path, plainOptions);
 
         Assert.True(deduped.Length < plain.Length,
             $"whole-file reuse must still shrink the image; deduped={deduped.Length} plain={plain.Length}.");
@@ -91,7 +91,7 @@ public sealed class ErofsPclusterDedupeTests
         var options = PinnedOptions();
         options.Dedup = true;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.Null(options.SavedByDeduplication);
         using var parser = new ErofsParser(image);
@@ -109,7 +109,7 @@ public sealed class ErofsPclusterDedupeTests
         var options = PinnedOptions();
         options.Dedup = true;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.Null(options.SavedByDeduplication);
         using var parser = new ErofsParser(image);
@@ -126,7 +126,7 @@ public sealed class ErofsPclusterDedupeTests
         var options = PinnedOptions();
         options.DedupeMode = ErofsDedupeMode.Pcluster;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.Null(options.SavedByDeduplication);
         using var parser = new ErofsParser(image);

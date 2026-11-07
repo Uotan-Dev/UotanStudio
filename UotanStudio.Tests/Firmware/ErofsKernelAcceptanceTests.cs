@@ -34,7 +34,7 @@ public sealed class ErofsKernelAcceptanceTests
         source.WriteBytes("big.bin", LargeCompressiblePayload());
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -53,7 +53,7 @@ public sealed class ErofsKernelAcceptanceTests
 
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
@@ -76,7 +76,7 @@ public sealed class ErofsKernelAcceptanceTests
         using var source = new TempDirectory();
         source.WriteBytes("big.bin", payload);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

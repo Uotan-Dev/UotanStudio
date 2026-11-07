@@ -45,12 +45,11 @@ public class ErofsExtractParallelReadBenchmarks : IDisposable
             File.WriteAllBytes(Path.Combine(source, $"blob-{index}.bin"), payload);
         }
 
-        var image = new ErofsBuilder().Build(source, new ErofsOptions
+        _imagePath = Path.Combine(_root, "image.erofs");
+        new ErofsBuilder().Build(source, _imagePath, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });
-        _imagePath = Path.Combine(_root, "image.erofs");
-        File.WriteAllBytes(_imagePath, image);
         _previousWorkers = FirmwareParallelism.Workers;
         FirmwareParallelism.Workers = Workers;
     }

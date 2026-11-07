@@ -27,7 +27,7 @@ public class ErofsInodeModelEquivalenceTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, CreateOptions(variant));
+        var image = InMemoryImage.Erofs(temp.Path, CreateOptions(variant));
         using var parser = new ErofsParser(image);
         var superblock = parser.Superblock;
 
@@ -68,7 +68,7 @@ public class ErofsInodeModelEquivalenceTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, CreateOptions(variant));
+        var image = InMemoryImage.Erofs(temp.Path, CreateOptions(variant));
         using var parser = new ErofsParser(image);
         var superblock = parser.Superblock;
         var records = parser.ReadRebuildOptions().SourceInodes!;

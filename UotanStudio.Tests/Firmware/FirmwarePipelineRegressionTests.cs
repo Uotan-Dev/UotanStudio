@@ -34,7 +34,7 @@ public class FirmwarePipelineRegressionTests
 
         var systemImagePath = Path.Combine(temp.Path, "system.img");
         await File.WriteAllBytesAsync(systemImagePath,
-            Ext4Builder.Build(root, new Ext4Options { TargetSizeBytes = 8 * 1024 * 1024 }), token);
+            InMemoryImage.Ext4(root, new Ext4Options { TargetSizeBytes = 8 * 1024 * 1024 }), token);
         var (blocksBefore, blockSize) = ReadExt4Geometry(systemImagePath);
         Assert.Equal(LogicalBlock, blockSize);
         Assert.True(blocksBefore > 0);

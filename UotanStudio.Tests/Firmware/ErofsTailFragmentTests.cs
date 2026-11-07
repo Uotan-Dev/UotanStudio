@@ -33,7 +33,7 @@ public sealed class ErofsTailFragmentTests
         var options = PinnedOptions();
         options.Fragments = true;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.NotEqual(0UL, parser.Superblock.PackedNid);
@@ -52,7 +52,7 @@ public sealed class ErofsTailFragmentTests
         var options = PinnedOptions();
         options.Fragments = true;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.NotEqual(0UL, parser.Superblock.PackedNid);
@@ -71,7 +71,7 @@ public sealed class ErofsTailFragmentTests
         options.Fragments = true;
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("no node qualified", exception.Message, StringComparison.Ordinal);
     }
@@ -86,7 +86,7 @@ public sealed class ErofsTailFragmentTests
         options.Fragments = true;
         options.AllFilesAsFragments = true;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.NotEqual(0UL, parser.Superblock.PackedNid);
@@ -120,7 +120,7 @@ public sealed class ErofsTailFragmentTests
         source.WriteBytes("big.bin", payload);
         var options = PinnedOptions();
         options.Fragments = true;
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var extracted = new TempDirectory();
         byte[] rebuilt;
@@ -128,7 +128,7 @@ public sealed class ErofsTailFragmentTests
         {
             var restored = parser.ReadRebuildOptions();
             parser.ExtractToDirectory(extracted.Path);
-            rebuilt = new ErofsBuilder().Build(extracted.Path, restored);
+            rebuilt = InMemoryImage.Erofs(extracted.Path, restored);
         }
 
         using var reparsed = new ErofsParser(rebuilt);
@@ -145,7 +145,7 @@ public sealed class ErofsTailFragmentTests
         source.WriteBytes("small.bin", payload);
         var options = PinnedOptions();
         options.Fragments = true;
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var extracted = new TempDirectory();
         byte[] rebuilt;
@@ -153,7 +153,7 @@ public sealed class ErofsTailFragmentTests
         {
             var restored = parser.ReadRebuildOptions();
             parser.ExtractToDirectory(extracted.Path);
-            rebuilt = new ErofsBuilder().Build(extracted.Path, restored);
+            rebuilt = InMemoryImage.Erofs(extracted.Path, restored);
         }
 
         using var reparsed = new ErofsParser(rebuilt);
@@ -180,7 +180,7 @@ public sealed class ErofsTailFragmentTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("would invent a packed fragment", exception.Message, StringComparison.Ordinal);
     }
@@ -201,7 +201,7 @@ public sealed class ErofsTailFragmentTests
             ["random.bin"] = options.SourceInodes[ulong.MaxValue - 1],
         };
 
-        Assert.ThrowsAny<FileSystemException>(() => new ErofsBuilder().Build(source.Path, options));
+        Assert.ThrowsAny<FileSystemException>(() => InMemoryImage.Erofs(source.Path, options));
     }
 
     private static ErofsOptions PinnedOptions() => new()

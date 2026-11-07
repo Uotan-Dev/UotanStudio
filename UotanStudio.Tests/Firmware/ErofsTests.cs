@@ -46,7 +46,7 @@ public class ErofsTests
         var text = string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 400));
         WriteText(temp, "dir/text.txt", text);
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true, CompressionLevel = 3 });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true, CompressionLevel = 3 });
         var parser = new ErofsParser(image);
 
         var paths = parser.EnumerateFiles()
@@ -71,7 +71,7 @@ public class ErofsTests
         WriteText(temp, "a.txt", "alpha");
         WriteText(temp, "b.txt", "beta");
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var parser = new ErofsParser(image);
 
         var paths = parser.EnumerateFiles()
@@ -90,7 +90,7 @@ public class ErofsTests
         var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 2000));
         WriteText(temp, "large.txt", payload);
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true, CompressionLevel = 9 });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true, CompressionLevel = 9 });
         var parser = new ErofsParser(image);
 
         Assert.Equal(payload, Encoding.UTF8.GetString(parser.ReadFileBytes("large.txt")));
@@ -107,7 +107,7 @@ public class ErofsTests
             WriteText(temp, "dir/" + name, "x");
         }
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var parser = new ErofsParser(image);
 
         var directory = parser.EnumerateEntries().Single(entry => entry.Path == "dir");
@@ -127,7 +127,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "payload");
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false, Metabox = true });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false, Metabox = true });
         using var parser = new ErofsParser(image);
         var direct = ErofsSuperblock.FromImage(image);
 
@@ -176,7 +176,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var parser = new ErofsParser(image);
 
         Assert.Empty(parser.EnumerateFiles());
@@ -194,7 +194,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "x.txt", "payload");
         var imagePath = Path.Combine(temp.Path, "image.erofs");
-        File.WriteAllBytes(imagePath, new ErofsBuilder().Build(temp.Path, new ErofsOptions()));
+        File.WriteAllBytes(imagePath, InMemoryImage.Erofs(temp.Path, new ErofsOptions()));
 
         var handler = new ErofsFormatHandler();
         Assert.True(handler.CanHandle(imagePath));
@@ -234,7 +234,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "stream payload");
         temp.WriteBytes("dir/data.bin", [1, 2, 3]);
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true });
         var imagePath = Path.Combine(temp.Path, "image.erofs");
         File.WriteAllBytes(imagePath, image);
 
@@ -259,7 +259,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "stream payload");
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var imagePath = Path.Combine(temp.Path, "image.erofs");
         File.WriteAllBytes(imagePath, image);
 
@@ -279,7 +279,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "payload");
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions());
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions());
 
         var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
         Assert.Throws<FormatException>(() => new ErofsParser(truncated));
@@ -291,7 +291,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 2000));
         WriteText(temp, "large.txt", payload);
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
 
         var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
         using var parser = new ErofsParser(truncated);
@@ -305,7 +305,7 @@ public class ErofsTests
         WriteText(temp, "small.txt", "payload");
         var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 2000));
         WriteText(temp, "large.txt", payload);
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
         var imagePath = Path.Combine(temp.Path, "truncated.erofs");
         File.WriteAllBytes(imagePath, truncated);
@@ -322,7 +322,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "a.txt", string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 100)));
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true });
         var superblock = ErofsSuperblock.FromImage(image);
         using var parser = new ErofsParser(image);
         var entry = parser.EnumerateFiles().Single();
@@ -340,7 +340,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "a.txt", string.Concat(Enumerable.Repeat("0123456789abcdef", 1024)));
 
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
         var superblock = ErofsSuperblock.FromImage(image);
         using var parser = new ErofsParser(image);
         var entry = parser.EnumerateFiles().Single();
@@ -361,7 +361,7 @@ public class ErofsTests
         using var temp = new TempDirectory();
         WriteText(temp, "a.txt", "hello");
         var options = new ErofsOptions { Compress = false, BlockSize = blockSize, SuperblockChecksum = true };
-        var image = new ErofsBuilder().Build(temp.Path, options);
+        var image = InMemoryImage.Erofs(temp.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
         Assert.True(superblock.HasCompatChecksum);
 
@@ -380,7 +380,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "a.txt", "hello erofs checksum");
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true });
 
         using (var parser = new ErofsParser(image))
         {
@@ -477,7 +477,7 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "file.txt", "payload");
-        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions());
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions());
         var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
         var imagePath = Path.Combine(temp.Path, "truncated.erofs");
         File.WriteAllBytes(imagePath, truncated);

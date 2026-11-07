@@ -123,7 +123,7 @@ public sealed class ErofsRebuildOptimizerTests : IDisposable
             new ErofsOptions { BuildTime = 1700000000UL, Uuid = new byte[16] }, profile, Token);
 
         Assert.Empty(report);
-        Assert.Equal(new ErofsBuilder().Build(directory, new ErofsOptions
+        Assert.Equal(InMemoryImage.Erofs(directory, new ErofsOptions
         {
             BuildTime = 1700000000UL,
             Uuid = new byte[16],
@@ -191,7 +191,7 @@ public sealed class ErofsRebuildOptimizerTests : IDisposable
     }
 
     private static byte[] BuildLegacyImage(string directory)
-        => new ErofsBuilder().Build(directory, new ErofsOptions
+        => InMemoryImage.Erofs(directory, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });

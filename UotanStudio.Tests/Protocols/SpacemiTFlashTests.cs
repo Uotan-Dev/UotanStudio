@@ -2012,7 +2012,7 @@ public sealed class SpacemiTFlashTests : IDisposable
         };
         using var session = new FastbootSession(transport, timeoutMs: 50);
 
-        var failure = Assert.Throws<FastbootException>(() => session.ExecuteCommand("getvar:version"));
+        var failure = Assert.Throws<FastbootException>(() => session.ExecuteCommand("getvar:version", TestContext.Current.CancellationToken));
 
         Assert.Equal(2, transport.Commands.Count);
         Assert.All(transport.Commands, command => Assert.Equal("getvar:version", command));
@@ -2033,7 +2033,7 @@ public sealed class SpacemiTFlashTests : IDisposable
         };
         using var session = new FastbootSession(transport, timeoutMs: 50);
 
-        var response = session.ExecuteCommand("getvar:version");
+        var response = session.ExecuteCommand("getvar:version", TestContext.Current.CancellationToken);
 
         Assert.Equal(FastbootResponseState.Success, response.State);
         Assert.Equal("1.0", response.Info);
@@ -2055,7 +2055,7 @@ public sealed class SpacemiTFlashTests : IDisposable
         };
         using var session = new FastbootSession(transport, timeoutMs: 50);
 
-        var response = session.ExecuteCommand("getvar:product");
+        var response = session.ExecuteCommand("getvar:product", TestContext.Current.CancellationToken);
 
         Assert.Equal(FastbootResponseState.Success, response.State);
         Assert.Equal("orangepi-rv2", response.Info);

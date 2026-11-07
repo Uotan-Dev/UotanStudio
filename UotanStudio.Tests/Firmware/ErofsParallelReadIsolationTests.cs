@@ -97,7 +97,7 @@ public class ErofsParallelReadIsolationTests
     }
 
     private static byte[] BuildImage(string source)
-        => new ErofsBuilder().Build(source, new ErofsOptions
+        => InMemoryImage.Erofs(source, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });

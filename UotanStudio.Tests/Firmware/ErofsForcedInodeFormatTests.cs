@@ -34,7 +34,7 @@ public sealed class ErofsForcedInodeFormatTests
         var options = PinnedOptions();
         options.InodeFormat = ErofsInodeFormat.Compact;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -53,8 +53,8 @@ public sealed class ErofsForcedInodeFormatTests
         var extendedOptions = PinnedOptions();
         extendedOptions.InodeFormat = ErofsInodeFormat.Extended;
 
-        var compact = new ErofsBuilder().Build(source.Path, compactOptions);
-        var extended = new ErofsBuilder().Build(source.Path, extendedOptions);
+        var compact = InMemoryImage.Erofs(source.Path, compactOptions);
+        var extended = InMemoryImage.Erofs(source.Path, extendedOptions);
 
         using var parser = new ErofsParser(extended);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -79,7 +79,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("compact inodes were forced", exception.Message, StringComparison.Ordinal);
         Assert.Contains("uid 70000", exception.Message, StringComparison.Ordinal);
@@ -101,7 +101,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("recorded an extended inode", exception.Message, StringComparison.Ordinal);
     }
@@ -116,7 +116,7 @@ public sealed class ErofsForcedInodeFormatTests
         options.ChunkSize = BlockSize;
         options.ChunkIndexKind = ErofsChunkIndexKind.Indexes;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -134,7 +134,7 @@ public sealed class ErofsForcedInodeFormatTests
         options.ChunkSize = BlockSize;
         options.ChunkIndexKind = ErofsChunkIndexKind.BlockMap;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -157,7 +157,7 @@ public sealed class ErofsForcedInodeFormatTests
         options.BlobDeviceIds = [1];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("4-byte chunk block maps were forced", exception.Message, StringComparison.Ordinal);
         Assert.Contains("device 1", exception.Message, StringComparison.Ordinal);
@@ -183,7 +183,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("4-byte chunk block maps were forced", exception.Message, StringComparison.Ordinal);
         Assert.Contains("device-shaped layout", exception.Message, StringComparison.Ordinal);
@@ -221,7 +221,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("preserved inode 'data.bin'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("recorded an extended=False inode record", exception.Message, StringComparison.Ordinal);
@@ -247,7 +247,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("preserved inode 'data.bin'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("recorded 8-byte chunk index entries=False", exception.Message, StringComparison.Ordinal);
@@ -271,7 +271,7 @@ public sealed class ErofsForcedInodeFormatTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("preserved inode 'data.bin'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("recorded a chunk-based layout", exception.Message, StringComparison.Ordinal);
@@ -292,7 +292,7 @@ public sealed class ErofsForcedInodeFormatTests
             ["data.bin"] = record,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var written = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];

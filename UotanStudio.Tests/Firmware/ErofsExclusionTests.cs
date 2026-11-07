@@ -134,7 +134,7 @@ public sealed class ErofsExclusionTests
         source.WriteBytes("lib/kept.txt", Enumerable.Repeat((byte)0x35, 512).ToArray());
         source.WriteBytes("lib/drop.so", Enumerable.Repeat((byte)0x36, 512).ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, Options(["drop.bin", "secret"], [@"\.so$"]));
+        var image = InMemoryImage.Erofs(source.Path, Options(["drop.bin", "secret"], [@"\.so$"]));
         var paths = ImagePaths(image);
 
         Assert.Contains("kept.bin", paths);
@@ -152,7 +152,7 @@ public sealed class ErofsExclusionTests
         source.WriteBytes("keep/one.txt.backup", "backup"u8.ToArray());
         source.WriteBytes("keep/two.apk", "two"u8.ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, Options(null, [@"\.apk$"]));
+        var image = InMemoryImage.Erofs(source.Path, Options(null, [@"\.apk$"]));
         var paths = ImagePaths(image);
 
         Assert.Contains("keep/one.txt", paths);
@@ -167,7 +167,7 @@ public sealed class ErofsExclusionTests
         source.WriteBytes("kept.txt", "kept"u8.ToArray());
 
         var error = Assert.Throws<ArgumentException>(
-            () => new ErofsBuilder().Build(source.Path, Options(null, ["[unterminated"])));
+            () => InMemoryImage.Erofs(source.Path, Options(null, ["[unterminated"])));
 
         Assert.Contains("[unterminated", error.Message, StringComparison.Ordinal);
     }
@@ -200,7 +200,7 @@ public sealed class ErofsExclusionTests
         };
         using var scope = new FileSystemEditPlan(source.Path, manifest, projection).Enter();
 
-        var image = new ErofsBuilder().Build(source.Path, Options(["projected-and-excluded.txt"], null));
+        var image = InMemoryImage.Erofs(source.Path, Options(["projected-and-excluded.txt"], null));
         var paths = ImagePaths(image);
 
         Assert.Contains("kept.txt", paths);

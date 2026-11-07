@@ -40,7 +40,7 @@ public sealed class ErofsBuilderReplayTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [Device("dev1") with { TagBytes = digest }];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         var slot = ReadDeviceSlot(image);
         Assert.Equal(digest, slot.Tag.AsSpan(0, digest.Length).ToArray());
@@ -58,7 +58,7 @@ public sealed class ErofsBuilderReplayTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [Device("other.img")];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         var slot = ReadDeviceSlot(image);
         Assert.Equal("other.img", Encoding.UTF8.GetString(slot.Tag).TrimEnd('\0'));
@@ -69,7 +69,7 @@ public sealed class ErofsBuilderReplayTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x43, BlockSize).ToArray());
-        var baseline = new ErofsBuilder().Build(source.Path, DeviceOptions());
+        var baseline = InMemoryImage.Erofs(source.Path, DeviceOptions());
         var baselineSlot = ReadDeviceSlot(baseline);
 
         var replay = DeviceOptions();
@@ -78,7 +78,7 @@ public sealed class ErofsBuilderReplayTests
             new ErofsSourceDevice(new byte[ErofsDeviceSlot.TagSize], baselineSlot.Blocks, baselineSlot.UniAddr + 8),
         ];
 
-        var rebuilt = new ErofsBuilder().Build(source.Path, replay);
+        var rebuilt = InMemoryImage.Erofs(source.Path, replay);
 
         Assert.Equal(baselineSlot.UniAddr + 8, ReadDeviceSlot(rebuilt).UniAddr);
         Assert.Empty(replay.BuildWarnings);
@@ -89,7 +89,7 @@ public sealed class ErofsBuilderReplayTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x44, BlockSize).ToArray());
-        var baseline = new ErofsBuilder().Build(source.Path, DeviceOptions());
+        var baseline = InMemoryImage.Erofs(source.Path, DeviceOptions());
         var baselineSlot = ReadDeviceSlot(baseline);
 
         var replay = DeviceOptions();
@@ -98,7 +98,7 @@ public sealed class ErofsBuilderReplayTests
             new ErofsSourceDevice(new byte[ErofsDeviceSlot.TagSize], baselineSlot.Blocks, 1),
         ];
 
-        var rebuilt = new ErofsBuilder().Build(source.Path, replay);
+        var rebuilt = InMemoryImage.Erofs(source.Path, replay);
 
         Assert.Equal(baselineSlot.UniAddr, ReadDeviceSlot(rebuilt).UniAddr);
         var warning = Assert.Single(replay.BuildWarnings);
@@ -114,7 +114,7 @@ public sealed class ErofsBuilderReplayTests
         var options = PinnedOptions();
         options.SourceSbExtSlots = 3;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         var superblock = ErofsSuperblock.FromImage(image);
         Assert.Equal((byte)3, superblock.SbExtSlots);
@@ -133,7 +133,7 @@ public sealed class ErofsBuilderReplayTests
         options.MetaboxRequired = true;
         options.SourceSbExtSlots = 0;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         var superblock = ErofsSuperblock.FromImage(image);
         Assert.Equal((byte)1, superblock.SbExtSlots);
@@ -148,7 +148,7 @@ public sealed class ErofsBuilderReplayTests
         var options = PinnedOptions();
         options.SourceDirBlkBits = 12;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.Equal((byte)12, ErofsSuperblock.FromImage(image).DirBlkBits);
         using var parser = new ErofsParser(image);
@@ -164,7 +164,7 @@ public sealed class ErofsBuilderReplayTests
         options.SourceDirBlkBits = 16;
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("s_dirblkbits=16", exception.Message, StringComparison.Ordinal);
     }
@@ -175,7 +175,7 @@ public sealed class ErofsBuilderReplayTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x49, BlockSize).ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, PinnedOptions());
+        var image = InMemoryImage.Erofs(source.Path, PinnedOptions());
 
         var superblock = ErofsSuperblock.FromImage(image);
         Assert.Equal((byte)0, superblock.SbExtSlots);
@@ -206,7 +206,7 @@ public sealed class ErofsBuilderReplayTests
             ["data.bin"] = record,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.True(ErofsSuperblock.FromImage(image).Has48Bit);
         using var parser = new ErofsParser(image);
@@ -235,7 +235,7 @@ public sealed class ErofsBuilderReplayTests
             ["plain.bin"] = plain,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var rebuilt = parser.ReadRebuildOptions().SourceInodesByPath!;
@@ -271,7 +271,7 @@ public sealed class ErofsBuilderReplayTests
             ["sub"] = directory,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         var warning = Assert.Single(options.BuildWarnings);
         Assert.Contains("dot-omitted", warning, StringComparison.Ordinal);

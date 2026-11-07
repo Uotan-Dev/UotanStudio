@@ -22,7 +22,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"0 data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -39,7 +39,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"0 data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var records = parser.ReadRebuildOptions().SourceInodesByPath!;
@@ -55,7 +55,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"0 data\.bin", $@"{BlockSize} data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -70,7 +70,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"0 block\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data/block.bin"];
@@ -85,7 +85,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = ["# a comment", "", "   ", @"0 data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -101,7 +101,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"4096 *.so"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -120,7 +120,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"5000 data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
@@ -138,7 +138,7 @@ public sealed class ErofsCompressHintTests
         var options = PinnedOptions();
         options.CompressHints = [@"8192 data\.bin"];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.Equal(8192, options.MaxPclusterSize);
         var warning = Assert.Single(options.BuildWarnings);
@@ -157,7 +157,7 @@ public sealed class ErofsCompressHintTests
         options.CompressHints = [@"4096 5 data\.bin"];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("compression configuration 5", exception.Message, StringComparison.Ordinal);
         Assert.Contains("configures 1 codec", exception.Message, StringComparison.Ordinal);
@@ -173,8 +173,8 @@ public sealed class ErofsCompressHintTests
         var emptyKey = PinnedOptions();
         emptyKey.CompressHints = null;
 
-        var first = new ErofsBuilder().Build(source.Path, withoutKey);
-        var second = new ErofsBuilder().Build(source.Path, emptyKey);
+        var first = InMemoryImage.Erofs(source.Path, withoutKey);
+        var second = InMemoryImage.Erofs(source.Path, emptyKey);
 
         Assert.Equal(Convert.ToHexString(SHA256.HashData(first)), Convert.ToHexString(SHA256.HashData(second)));
         Assert.Empty(withoutKey.BuildWarnings);

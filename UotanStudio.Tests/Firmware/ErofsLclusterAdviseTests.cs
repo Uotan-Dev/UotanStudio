@@ -107,7 +107,7 @@ public sealed class ErofsLclusterAdviseTests
     {
         using var source = new TempDirectory();
         source.Write("data.bin", string.Concat(Enumerable.Repeat("UotanStudio EROFS 32 KiB logical cluster. ", 2000)));
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = 32768,
             Compress = true,
@@ -131,7 +131,7 @@ public sealed class ErofsLclusterAdviseTests
     {
         using var source = new TempDirectory();
         source.Write("data.bin", string.Concat(Enumerable.Repeat("UotanStudio EROFS compacted cluster. ", 2000)));
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = 16384,
             Compress = true,
@@ -157,7 +157,7 @@ public sealed class ErofsLclusterAdviseTests
     {
         using var source = new TempDirectory();
         source.Write("data.bin", string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 400)));
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -182,7 +182,7 @@ public sealed class ErofsLclusterAdviseTests
         }
 
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

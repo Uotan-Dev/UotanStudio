@@ -116,7 +116,7 @@ public class ErofsExtentIntraFileDedupeTests
         return addresses;
     }
 
-    private static byte[] Build(string path, int maxPclusterSize) => new ErofsBuilder().Build(path, new ErofsOptions
+    private static byte[] Build(string path, int maxPclusterSize) => InMemoryImage.Erofs(path, new ErofsOptions
     {
         BlockSize = BlockSize,
         Compress = true,

@@ -31,7 +31,7 @@ public class ErofsCompressionConfigurationTests
             new Random(20260907).NextBytes(random);
             source.WriteBytes("random.bin", random);
         }
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = algorithm,
             Metabox = metabox,
@@ -71,7 +71,7 @@ public class ErofsCompressionConfigurationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x53, 8192).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -97,7 +97,7 @@ public class ErofsCompressionConfigurationTests
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         };
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(BlockSize, options.MaxPclusterSize);
@@ -123,7 +123,7 @@ public class ErofsCompressionConfigurationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x42, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             CompressedTailPacking = true,
@@ -144,7 +144,7 @@ public class ErofsCompressionConfigurationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x63, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -172,7 +172,7 @@ public class ErofsCompressionConfigurationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x5A, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             Dedup = true,
@@ -196,7 +196,7 @@ public class ErofsCompressionConfigurationTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x63, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             SuperblockChecksum = superblockChecksum,
@@ -265,7 +265,7 @@ public class ErofsCompressionConfigurationTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", AlternatingCompressionPayload());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             OptimizeCompression = true,
@@ -285,7 +285,7 @@ public class ErofsCompressionConfigurationTests
         var random = new byte[11128];
         new Random(20260918).NextBytes(random);
         source.WriteBytes("incompressible.bin", random);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             OptimizeCompression = true,
@@ -324,7 +324,7 @@ public class ErofsCompressionConfigurationTests
             payloads[name] = payload;
             source.WriteBytes(name, payload);
         }
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             OptimizeCompression = true,

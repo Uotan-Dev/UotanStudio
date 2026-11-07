@@ -30,7 +30,7 @@ public class F2fsTimestampPreservationTests
         File.SetLastWriteTimeUtc(filePath, writeTime);
         File.SetCreationTimeUtc(filePath, writeTime);
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
         Assert.NotEmpty(image);
     }
 
@@ -41,7 +41,7 @@ public class F2fsTimestampPreservationTests
         File.WriteAllBytes(Path.Combine(tempDir.Path, "a.txt"), "aaa"u8.ToArray());
         File.WriteAllBytes(Path.Combine(tempDir.Path, "b.txt"), "bbb"u8.ToArray());
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
         using var ms = new MemoryStream(image, writable: false);
         using var parser = new F2fsParser(ms);
 
@@ -63,7 +63,7 @@ public class F2fsTimestampPreservationTests
         File.SetLastWriteTimeUtc(filePath, writeTime);
         File.SetCreationTimeUtc(filePath, writeTime);
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
         using var ms = new MemoryStream(image, writable: false);
         using var parser = new F2fsParser(ms);
 
@@ -79,7 +79,7 @@ public class F2fsTimestampPreservationTests
         var content = "extract me"u8.ToArray();
         File.WriteAllBytes(Path.Combine(tempDir.Path, "x.txt"), content);
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
 
         using var extractDir = new TempDir();
         using var ms = new MemoryStream(image, writable: false);
@@ -123,7 +123,7 @@ public class F2fsTimestampPreservationTests
         File.SetLastWriteTimeUtc(file1Path, time1);
         File.SetLastWriteTimeUtc(file2Path, time2);
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
         Assert.NotEmpty(image);
 
         using var ms = new MemoryStream(image, writable: false);
@@ -143,7 +143,7 @@ public class F2fsTimestampPreservationTests
         File.SetLastWriteTimeUtc(filePath, writeTime);
         File.SetCreationTimeUtc(filePath, writeTime);
 
-        var image = F2fsBuilder.Build(tempDir.Path);
+        var image = InMemoryImage.F2fs(tempDir.Path);
         Assert.NotEmpty(image);
     }
 
@@ -154,7 +154,7 @@ public class F2fsTimestampPreservationTests
         File.WriteAllBytes(Path.Combine(tempDir.Path, "a.txt"), "aaa"u8.ToArray());
 
         var options = new F2fsOptions { SourceFeature = PreservedSourceFeatureWord };
-        var image = F2fsBuilder.Build(tempDir.Path, options);
+        var image = InMemoryImage.F2fs(tempDir.Path, options);
         using var ms = new MemoryStream(image, writable: false);
         using var parser = new F2fsParser(ms);
 

@@ -88,7 +88,7 @@ public sealed class ErofsZlib4cTests
         var payload = Payload();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var baseImage = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var baseImage = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -119,7 +119,7 @@ public sealed class ErofsZlib4cTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        return new ErofsBuilder().Build(source.Path, new ErofsOptions
+        return InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

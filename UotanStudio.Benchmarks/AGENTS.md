@@ -7,7 +7,7 @@
 - 本项目是独立的 BenchmarkDotNet 控制台程序，已在 `UotanStudio.slnx` 内，随解决方案构建、format 与测试门一起运行；基准运行仍需单独执行。
 - 它引用 `Firmware`、`Hash`、`Compress`、`Comm` 与宿主 `UotanStudio`，用于基准、启动测量与 headless UI 夹具；这些引用只服务测量，不得把测量专用类型或开关反向加到生产项目。
 - `Avalonia.Headless` 的 `PackageVersion` 必须留在 `Directory.Packages.props`；删掉后本项目的 `dotnet restore` 会以 `NU1010` 失败，而解决方案门仍然全绿。
-- `UotanStudio.Benchmarks.csproj` 的 `CS0618` 抑制只用于旧的整镜像内存型构建 API；生产调用方仍应使用流式重载。
+- 基准不引用已过时的整镜像内存型构建 API；构建负载统一走文件路径或流式重载，镜像文件留在各自的临时根目录内。
 
 ## 运行方式
 

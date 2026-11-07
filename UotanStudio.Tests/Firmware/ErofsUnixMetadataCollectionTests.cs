@@ -67,7 +67,7 @@ public class ErofsUnixMetadataCollectionTests
             descriptors[index] = new ErofsDeviceSpec($"ext{index}.img", 4096);
         }
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = 512,
             Compress = false,

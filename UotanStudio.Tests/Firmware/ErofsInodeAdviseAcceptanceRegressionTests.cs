@@ -45,7 +45,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
             Compress = false,
@@ -69,7 +69,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
             Compress = false,
@@ -101,7 +101,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = false,
             Compress = false,
@@ -120,7 +120,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x6B, 8 * 1024).ToArray());
         source.WriteBytes("small.txt", "advice"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
             Compress = true,
@@ -147,7 +147,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var restored = ErofsRebuildMetadata.Restore(SimulateDocumentRoundTrip(profile));
         Assert.True(restored.NlinkOneAdviseSupported);
 
-        var rebuilt = new ErofsBuilder().Build(extracted, restored);
+        var rebuilt = InMemoryImage.Erofs(extracted, restored);
         using var parser = new ErofsParser(rebuilt);
         var rebuiltFormats = InodeFormatsOfEnumeratedFiles(parser, rebuilt);
         Assert.NotEmpty(rebuiltFormats);
@@ -163,7 +163,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("target.txt", "payload"u8.ToArray());
         source.WriteBytes("plain.txt", "no xattr here"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
@@ -213,7 +213,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         byte[] rebuilt;
         using (new FileSystemEditPlan(extracted, manifest, projection).Enter())
         {
-            rebuilt = new ErofsBuilder().Build(extracted, captured);
+            rebuilt = InMemoryImage.Erofs(extracted, captured);
         }
 
         using var parser = new ErofsParser(rebuilt);
@@ -236,7 +236,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var payload = Enumerable.Repeat((byte)0x4C, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
@@ -263,7 +263,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var payload = Enumerable.Repeat((byte)0x4C, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
@@ -286,7 +286,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var payload = Enumerable.Repeat((byte)0x11, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,

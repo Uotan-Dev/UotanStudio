@@ -116,7 +116,7 @@ public class Ext4DirentNameBoundTests
             File.WriteAllText(Path.Combine(root, "omega.txt"), "OOO\n");
             File.WriteAllText(Path.Combine(root, "zeta.txt"), "ZZZ\n");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             var position = FindDirentPosition(image, "omega.txt");
             Assert.True(position >= 0, "Test setup failed: 'omega.txt' directory entry not found.");
             var recordLength = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(position + 4, 2));
@@ -151,7 +151,7 @@ public class Ext4DirentNameBoundTests
             Directory.CreateDirectory(Path.Combine(root, "子目录"));
             File.WriteAllText(Path.Combine(root, "子目录", "内部文件.bin"), "数据");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var paths = parser.ListFiles()

@@ -48,14 +48,15 @@ public class ErofsDensePlanningBenchmarks : IDisposable
     [Benchmark]
     public int Build()
     {
-        var image = new ErofsBuilder().Build(_source, new ErofsOptions
+        using var image = new MemoryStream();
+        new ErofsBuilder().Build(_source, image, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             OptimizeCompression = OptimizeCompression,
             Uuid = new byte[16],
             BuildTime = 1700000000,
         });
-        return image.Length;
+        return (int)image.Length;
     }
 
     public void Dispose()

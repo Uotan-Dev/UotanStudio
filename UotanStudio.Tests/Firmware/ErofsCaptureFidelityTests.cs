@@ -37,7 +37,7 @@ public sealed class ErofsCaptureFidelityTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("payload.bin", new byte[BlockSize]);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
@@ -63,7 +63,7 @@ public sealed class ErofsCaptureFidelityTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [new ErofsDeviceSpec("blob.img", 2 * BlockSize)];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         int slotOffset;
         using (var probe = new ErofsParser(image))
         {
@@ -97,7 +97,7 @@ public sealed class ErofsCaptureFidelityTests
         options.ChunkSize = BlockSize;
         options.ChunkIndexKind = ErofsChunkIndexKind.Indexes;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         int formatOffset;
         using (var probe = new ErofsParser(image))
         {
@@ -129,7 +129,7 @@ public sealed class ErofsCaptureFidelityTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
             Compress = false,
@@ -161,7 +161,7 @@ public sealed class ErofsCaptureFidelityTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", CompressiblePayload(1500 * 1024, 1024));
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = 1024,
             Compress = true,

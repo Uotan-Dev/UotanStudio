@@ -31,7 +31,7 @@ public sealed class ErofsDenseStagingTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
         var options = DenseLz4Options();
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         using var parser = new ErofsParser(image);
         Assert.True(parser.MaxCompressedClusterOfs() > 0,
             "the fixture produced no byte-granular dense pcluster, so the staged hand-off went untested.");
@@ -56,14 +56,14 @@ public sealed class ErofsDenseStagingTests
         options.BuildTime = 1_735_689_600UL;
         options.Uuid = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE];
 
-        var first = new ErofsBuilder().Build(source.Path, options);
+        var first = InMemoryImage.Erofs(source.Path, options);
         using (var parser = new ErofsParser(first))
         {
             Assert.True(parser.MaxCompressedClusterOfs() > 0,
                 "the fixture produced no dense pcluster, so the staging hand-off stayed outside the determinism gate.");
         }
 
-        var second = new ErofsBuilder().Build(source.Path, options);
+        var second = InMemoryImage.Erofs(source.Path, options);
         Assert.Equal(first.Length, second.Length);
         Assert.Equal(first, second);
     }
@@ -75,7 +75,7 @@ public sealed class ErofsDenseStagingTests
         using var source = new TempDirectory();
         source.WriteBytes("mixed.bin", payload);
         var options = DenseLz4Options();
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         using var parser = new ErofsParser(image);
         Assert.Equal(payload, parser.ReadFileBytes("mixed.bin"));
         Assert.Empty(parser.PclusterKernelCoverageDeficits());

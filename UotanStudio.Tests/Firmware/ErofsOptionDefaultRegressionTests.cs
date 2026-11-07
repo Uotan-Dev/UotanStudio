@@ -27,7 +27,7 @@ public sealed class ErofsOptionDefaultRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
 
-        var implicitDefaults = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var implicitDefaults = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -35,7 +35,7 @@ public sealed class ErofsOptionDefaultRegressionTests
             Uuid = new byte[16],
             BuildTime = 1_700_000_000UL,
         });
-        var explicitDefaults = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var explicitDefaults = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

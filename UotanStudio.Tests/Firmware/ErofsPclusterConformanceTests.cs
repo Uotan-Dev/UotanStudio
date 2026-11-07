@@ -147,7 +147,7 @@ public sealed class ErofsPclusterConformanceTests
         var payload = TextLikePayload(BlockSize + 46);
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -171,7 +171,7 @@ public sealed class ErofsPclusterConformanceTests
         var payload = LineCounterPayload(256 * 1024);
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -295,7 +295,7 @@ public sealed class ErofsPclusterConformanceTests
         var payload = TextLikePayload(8 * BlockSize + 1301);
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -324,7 +324,7 @@ public sealed class ErofsPclusterConformanceTests
 
     private static List<Extent> Plan(string tree, byte[] payload, ErofsOptions options, out byte[] image)
     {
-        image = new ErofsBuilder().Build(tree, options);
+        image = InMemoryImage.Erofs(tree, options);
         using var parser = new ErofsParser(image);
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
         return Extents(parser, "data.bin", payload.LongLength, BlockSize);

@@ -23,7 +23,7 @@ public class ErofsRebuildPreservationTests
         var payload = Enumerable.Repeat((byte)0x77, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
         source.WriteBytes("small.txt", "tiny"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });
@@ -81,7 +81,7 @@ public class ErofsRebuildPreservationTests
         var payload = Enumerable.Repeat((byte)0x3C, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
         source.WriteBytes("small.txt", "tiny"u8.ToArray());
-        var original = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var original = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });
@@ -95,7 +95,7 @@ public class ErofsRebuildPreservationTests
         using (var parser = new ErofsParser(original))
         {
             var options = parser.ReadRebuildOptions();
-            var repacked = new ErofsBuilder().Build(extracted, options);
+            var repacked = InMemoryImage.Erofs(extracted, options);
             var repackedSuperblock = ErofsSuperblock.FromImage(repacked);
             Assert.Equal(originalSuperblock.FeatureIncompat, repackedSuperblock.FeatureIncompat);
             Assert.Equal(originalSuperblock.FeatureCompat, repackedSuperblock.FeatureCompat);

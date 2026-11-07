@@ -12,11 +12,11 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Verifies the two-pass streaming build model of <see cref="Ext4Builder"/> and
-/// <see cref="ErofsBuilder"/>: the streamed output must match the byte[] API byte for byte,
-/// large images are written to seekable streams (never a full in-memory image array), and a
+/// <see cref="ErofsBuilder"/>: the streamed output must match the path-written output byte for
+/// byte, large images are written to seekable streams (never a full in-memory image array), and a
 /// source file truncated between the layout pass and the data-copy pass fails the build.
 /// <para>验证 <see cref="Ext4Builder"/> 与 <see cref="ErofsBuilder"/> 的两遍流式构建模型：
-/// 流式输出须与 byte[] API 逐字节一致、大镜像写入可寻址流（不构造完整内存镜像数组），
+/// 流式输出须与路径写入的输出逐字节一致、大镜像写入可寻址流（不构造完整内存镜像数组），
 /// 且布局遍与数据拷贝遍之间被截断的源文件会使构建失败。</para>
 /// </summary>
 public class BuilderStreamingTests
@@ -25,7 +25,7 @@ public class BuilderStreamingTests
     private const ulong FixedErofsBuildTime = 1_700_000_000;
 
     [Fact]
-    public void Ext4_StreamingOutput_MatchesByteArrayApi_ByteForByte()
+    public void Ext4_StreamingOutput_MatchesPathApi_ByteForByte()
     {
         using var temp = new TempDirectory();
         temp.Write("hello.txt", "hello streaming ext4\n");
@@ -40,7 +40,10 @@ public class BuilderStreamingTests
         temp.WriteBytes("large.bin", big);
 
         var options = new Ext4Options();
-        var expected = Ext4Builder.Build(temp.Path, options);
+        using var reference = new TempDirectory();
+        var referencePath = Path.Combine(reference.Path, "reference.img");
+        Ext4Builder.Build(temp.Path, referencePath, options);
+        var expected = File.ReadAllBytes(referencePath);
         using var stream = new MemoryStream();
         Ext4Builder.Build(temp.Path, stream, options);
 
@@ -52,7 +55,10 @@ public class BuilderStreamingTests
     {
         using var temp = new TempDirectory();
         temp.Write("a.txt", "alpha");
-        var expected = Ext4Builder.Build(temp.Path);
+        using var reference = new TempDirectory();
+        var referencePath = Path.Combine(reference.Path, "reference.img");
+        Ext4Builder.Build(temp.Path, referencePath);
+        var expected = File.ReadAllBytes(referencePath);
         var prefix = Encoding.ASCII.GetBytes("preserved-prefix");
         using var output = new MemoryStream();
         output.Write(prefix);
@@ -70,7 +76,7 @@ public class BuilderStreamingTests
     }
 
     [Fact]
-    public void Ext4_StreamingOutput_MatchesByteArrayApi_WithSparseMultiExtentLeaves()
+    public void Ext4_StreamingOutput_MatchesPathApi_WithSparseMultiExtentLeaves()
     {
         using var temp = new TempDirectory();
 
@@ -91,7 +97,10 @@ public class BuilderStreamingTests
         temp.WriteBytes("sparse.bin", content);
 
         var options = new Ext4Options { EnableSparse = true };
-        var expected = Ext4Builder.Build(temp.Path, options);
+        using var reference = new TempDirectory();
+        var referencePath = Path.Combine(reference.Path, "reference.img");
+        Ext4Builder.Build(temp.Path, referencePath, options);
+        var expected = File.ReadAllBytes(referencePath);
         using var stream = new MemoryStream();
         Ext4Builder.Build(temp.Path, stream, options);
 
@@ -99,17 +108,18 @@ public class BuilderStreamingTests
     }
 
     [Fact]
-    public void Ext4_PathApi_MatchesByteArrayApi()
+    public void Ext4_PathApi_MatchesStreamApi()
     {
         using var temp = new TempDirectory();
         temp.Write("a.txt", "alpha");
         temp.WriteBytes("b.bin", [1, 2, 3, 4, 5]);
 
-        var expected = Ext4Builder.Build(temp.Path);
+        using var stream = new MemoryStream();
+        Ext4Builder.Build(temp.Path, stream);
         var outputPath = Path.Combine(temp.Path, "out.img");
         Ext4Builder.Build(temp.Path, outputPath);
 
-        Assert.Equal(expected, File.ReadAllBytes(outputPath));
+        Assert.Equal(stream.ToArray(), File.ReadAllBytes(outputPath));
     }
 
     [Fact]
@@ -207,7 +217,10 @@ public class BuilderStreamingTests
     {
         using var temp = new TempDirectory();
         temp.Write("a.txt", "alpha");
-        var expected = Ext4Builder.Build(temp.Path);
+        using var reference = new TempDirectory();
+        var referencePath = Path.Combine(reference.Path, "reference.img");
+        Ext4Builder.Build(temp.Path, referencePath);
+        var expected = File.ReadAllBytes(referencePath);
 
         using var output = new WriteOnlyNonSeekableStream();
         Ext4Builder.Build(temp.Path, output);
@@ -216,7 +229,7 @@ public class BuilderStreamingTests
     }
 
     [Fact]
-    public void Erofs_StreamingOutput_MatchesByteArrayApi()
+    public void Erofs_StreamingOutput_MatchesPathApi()
     {
         using var temp = new TempDirectory();
         WriteText(temp, "hello.txt", "hello erofs streaming\n");
@@ -229,6 +242,7 @@ public class BuilderStreamingTests
 
         temp.WriteBytes("dir/big.bin", big);
 
+        using var reference = new TempDirectory();
         foreach (var compress in new[] { false, true })
         {
             var options = new ErofsOptions
@@ -237,7 +251,9 @@ public class BuilderStreamingTests
                 CompressionLevel = 5,
                 BuildTime = FixedErofsBuildTime,
             };
-            var expected = new ErofsBuilder().Build(temp.Path, options);
+            var referencePath = Path.Combine(reference.Path, $"reference-{compress}.erofs");
+            new ErofsBuilder().Build(temp.Path, referencePath, options);
+            var expected = File.ReadAllBytes(referencePath);
             using var stream = new MemoryStream();
             new ErofsBuilder().Build(temp.Path, stream, options);
             var actual = stream.ToArray();

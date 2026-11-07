@@ -261,7 +261,7 @@ public sealed class ErofsExtentIndexTests
         options.Features = ErofsFeatureSet.Auto.With(ErofsFeature.Lz4ZeroPadding);
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("data.bin", exception.Message, StringComparison.Ordinal);
         Assert.Contains("48bit", exception.Message, StringComparison.Ordinal);
@@ -281,7 +281,7 @@ public sealed class ErofsExtentIndexTests
             .With(ErofsFeature.Ztailpacking);
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("inline", exception.Message, StringComparison.Ordinal);
     }
@@ -302,7 +302,7 @@ public sealed class ErofsExtentIndexTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("data.bin", exception.Message, StringComparison.Ordinal);
         Assert.Contains("extent index", exception.Message, StringComparison.Ordinal);
@@ -356,7 +356,7 @@ public sealed class ErofsExtentIndexTests
             ["data.bin"] = new FsConfigEntry(0, 0, 0x81A4),
         };
 
-        var source = new ErofsBuilder().Build(temp.Path, sourceOptions);
+        var source = InMemoryImage.Erofs(temp.Path, sourceOptions);
         var (sourceLayout, sourceHeader) = ReadMapHeader(source, "data.bin");
         Assert.Equal(1, sourceLayout);
         Assert.True(sourceHeader.HasExtents);
@@ -420,7 +420,7 @@ public sealed class ErofsExtentIndexTests
         Directory.SetLastWriteTimeUtc(source.Path, pinned);
         var options = PinnedOptions();
         configure?.Invoke(options);
-        return new ErofsBuilder().Build(source.Path, options);
+        return InMemoryImage.Erofs(source.Path, options);
     }
 
     private static (int DataLayout, ZErofsMapHeader Header) ReadMapHeader(byte[] image, string path)

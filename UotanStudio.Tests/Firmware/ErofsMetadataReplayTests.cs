@@ -22,7 +22,7 @@ public class ErofsMetadataReplayTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
+        var image = InMemoryImage.Erofs(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
 
         using var parser = new ErofsParser(image);
         var entries = parser.EnumerateEntries().ToDictionary(entry => entry.Path, StringComparer.Ordinal);
@@ -54,7 +54,7 @@ public class ErofsMetadataReplayTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
+        var image = InMemoryImage.Erofs(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
 
         using var parser = new ErofsParser(image);
         var wide = parser.EnumerateEntries().Single(entry => entry.Path == "meta/data.bin");
@@ -71,7 +71,7 @@ public class ErofsMetadataReplayTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
+        var image = InMemoryImage.Erofs(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
 
         using var parser = new ErofsParser(image);
         var options = parser.ReadRebuildOptions();
@@ -92,7 +92,7 @@ public class ErofsMetadataReplayTests
     {
         using var temp = new TempDirectory();
         WriteTree(temp);
-        var image = new ErofsBuilder().Build(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
+        var image = InMemoryImage.Erofs(temp.Path, OptionsFor(SourceAttributes(), FileXattrs()));
 
         ErofsOptions captured;
         using (var parser = new ErofsParser(image))
@@ -157,7 +157,7 @@ public class ErofsMetadataReplayTests
         using var temp = new TempDirectory();
         WriteTree(temp);
         var imagePath = Path.Combine(temp.Path, "source.img");
-        await File.WriteAllBytesAsync(imagePath, new ErofsBuilder().Build(temp.Path, OptionsFor(SourceAttributes(), FileXattrs())),
+        await File.WriteAllBytesAsync(imagePath, InMemoryImage.Erofs(temp.Path, OptionsFor(SourceAttributes(), FileXattrs())),
             TestContext.Current.CancellationToken);
 
         var extracted = Path.Combine(temp.Path, "extracted");
@@ -209,7 +209,7 @@ public class ErofsMetadataReplayTests
         var imagePath = Path.Combine(temp.Path, "source.img");
         var sourceOptions = OptionsFor(SourceAttributes(), FileXattrs());
         sourceOptions.SuperblockChecksum = false;
-        var image = new ErofsBuilder().Build(temp.Path, sourceOptions);
+        var image = InMemoryImage.Erofs(temp.Path, sourceOptions);
         var sourceNumbers = ErofsInodeNumberFixture.Stamp(image);
         Assert.Equal(5, sourceNumbers.Count);
         await File.WriteAllBytesAsync(imagePath, image, TestContext.Current.CancellationToken);

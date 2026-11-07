@@ -23,7 +23,7 @@ public class ErofsZtailpackingTests
         using var source = new TempDirectory();
         source.WriteBytes("zt.bin", payload);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -53,7 +53,7 @@ public class ErofsZtailpackingTests
         using var source = new TempDirectory();
         source.WriteBytes("zc.bin", payload);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

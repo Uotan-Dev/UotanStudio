@@ -28,7 +28,7 @@ public sealed class ErofsPackFeatureRejectionTests
         var options = Gated(bit, 0);
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("does not fully implement", exception.Message, StringComparison.Ordinal);
     }
@@ -44,7 +44,7 @@ public sealed class ErofsPackFeatureRejectionTests
         var options = Gated(0, bit);
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("does not fully implement", exception.Message, StringComparison.Ordinal);
     }
@@ -62,7 +62,7 @@ public sealed class ErofsPackFeatureRejectionTests
         };
 
         Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class ErofsPackFeatureRejectionTests
         };
 
         Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class ErofsPackFeatureRejectionTests
         source.WriteBytes("data.bin", new byte[8192]);
         var options = new ErofsOptions { RejectIncompleteFeatures = true };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         Assert.NotEmpty(image);
     }

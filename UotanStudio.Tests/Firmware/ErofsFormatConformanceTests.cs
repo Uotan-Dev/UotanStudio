@@ -21,7 +21,7 @@ public class ErofsFormatConformanceTests
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x41, 3000).ToArray());
         const string prefix = "erofs.fingerprint.v1";
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             SuperblockChecksum = false,
             IshareXattrs = true,
@@ -45,7 +45,7 @@ public class ErofsFormatConformanceTests
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x42, 3000).ToArray());
         const string prefix = "erofs.fingerprint.v1";
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             SuperblockChecksum = false,
             IshareXattrs = true,
@@ -80,7 +80,7 @@ public class ErofsFormatConformanceTests
         source.WriteBytes("$c.txt", [0x03]);
         source.WriteBytes("z.txt", [0x04]);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             SuperblockChecksum = false,
             Compress = false,
@@ -103,7 +103,7 @@ public class ErofsFormatConformanceTests
 
         source.WriteBytes("zz.txt", [0x06]);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             SuperblockChecksum = false,
             Compress = false,

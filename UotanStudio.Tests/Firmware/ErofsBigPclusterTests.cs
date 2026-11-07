@@ -34,7 +34,7 @@ public sealed class ErofsBigPclusterTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,
@@ -69,7 +69,7 @@ public sealed class ErofsBigPclusterTests
                 .With(ErofsFeature.CompressionConfigs),
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(0x00000003u, superblock.FeatureIncompat);
@@ -99,7 +99,7 @@ public sealed class ErofsBigPclusterTests
                 .With(ErofsFeature.Lz4ZeroPadding),
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);

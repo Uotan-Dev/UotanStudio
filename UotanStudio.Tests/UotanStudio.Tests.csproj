@@ -10,8 +10,6 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>UotanStudio.Tests</RootNamespace>
-    <!-- Legacy in-memory builders remain covered by compatibility tests; production callers use streaming overloads. -->
-    <NoWarn>$(NoWarn);CS0618</NoWarn>
     <!-- 启用 Microsoft.Testing.Platform 通道，使 dotnet test 可直接发现并运行 xunit.v3 测试 -->
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>

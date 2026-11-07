@@ -39,7 +39,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x53, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = 4 * BlockSize,
@@ -54,7 +54,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
         Assert.Equal(sourceSuperblock.FeatureCompat, profileCompat);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(sourceSuperblock.FeatureIncompat, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal(sourceSuperblock.FeatureCompat, rebuiltSuperblock.FeatureCompat);
@@ -72,7 +72,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x74, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = BlockSize,
@@ -89,7 +89,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(
             ErofsSuperblock.IncompatLz4_0Padding, replay.Profile.FeatureIncompat);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, rebuiltSuperblock.FeatureIncompat);
         Assert.False(rebuiltSuperblock.HasBigPcluster);
@@ -103,7 +103,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x42, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             Features = Declare(ErofsFeature.Lz4ZeroPadding),
@@ -115,7 +115,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var profileIncompat = replay.Profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal(0u, rebuiltSuperblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
@@ -137,7 +137,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var payload = Enumerable.Repeat((byte)0x5A, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
         source.WriteBytes("tail.bin", Enumerable.Repeat((byte)0x41, 1000).ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             Fragments = true,
@@ -152,7 +152,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var profileIncompat = replay.Profile.FeatureIncompat;
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(FragmentedLegacyIncompat, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal(0u, rebuiltSuperblock.FeatureIncompat & ErofsSuperblock.IncompatBigPcluster);
@@ -173,7 +173,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x37, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -194,7 +194,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(sourceSuperblock.FeatureIncompat, profileIncompat);
         Assert.True(replay.Restored.FeaturesAuthoritative);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(ModernIncompat, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal(1 << (int)ErofsCompressionAlgorithm.Lz4, rebuiltSuperblock.AvailableComprAlgs);
@@ -219,7 +219,7 @@ public sealed class ErofsRebuildFeatureReplayTests
             JsonNode.Parse(ToJson(replay.Profile))!.AsObject()["dotOmitted"]!.GetValue<string>());
         Assert.Equal(ErofsTriStateFeature.Disabled, replay.Restored.DotOmitted);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         Assert.Equal(0, AdviceBitCensus(rebuilt).WithAdviceBit);
         using var parser = new ErofsParser(rebuilt);
         Assert.Equal(
@@ -231,7 +231,7 @@ public sealed class ErofsRebuildFeatureReplayTests
     public void Build_TargetDeclaredToDefineTheAdviseBit_WritesItOnEverySingleLinkedFile()
     {
         using var source = BuildAdviceFixture(false, out _);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = 4 * BlockSize,
@@ -257,7 +257,7 @@ public sealed class ErofsRebuildFeatureReplayTests
             JsonNode.Parse(ToJson(replay.Profile))!.AsObject()["dotOmitted"]!.GetValue<string>());
         Assert.Equal(ErofsTriStateFeature.Disabled, replay.Restored.DotOmitted);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         Assert.Equal(0, AdviceBitCensus(rebuilt).WithAdviceBit);
     }
 
@@ -271,7 +271,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var replay = Replay(image, source.Path);
         replay.Restored.DotOmitted = ErofsTriStateFeature.Disabled;
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         Assert.Equal(0, AdviceBitCensus(rebuilt).WithAdviceBit);
         using var parser = new ErofsParser(rebuilt);
         Assert.Equal(64 * 1024, parser.ReadFileBytes("data.bin").Length);
@@ -283,7 +283,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x71, 16 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             ExtraDeviceCount = 1,
@@ -299,7 +299,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal("other.img", Encoding.UTF8.GetString(device.Tag).TrimEnd('\0'));
         Assert.Equal((ulong)(ExtraDeviceBytes / BlockSize), device.Blocks);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
         Assert.Equal(sourceSuperblock.FeatureIncompat, rebuiltSuperblock.FeatureIncompat);
         Assert.Equal((ushort)1, rebuiltSuperblock.ExtraDevices);
@@ -405,7 +405,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var payload = Enumerable.Repeat((byte)0x77, 20 * 1024).ToArray();
         source.WriteBytes("data.bin", payload);
         source.WriteBytes("small.txt", "tiny"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });
@@ -437,8 +437,8 @@ public sealed class ErofsRebuildFeatureReplayTests
         legacy.BuildTime = 1_700_000_000UL;
         pinned.BuildTime = 1_700_000_000UL;
 
-        var legacyImage = new ErofsBuilder().Build(extracted, legacy);
-        var pinnedImage = new ErofsBuilder().Build(extracted, pinned);
+        var legacyImage = InMemoryImage.Erofs(extracted, legacy);
+        var pinnedImage = InMemoryImage.Erofs(extracted, pinned);
 
         Assert.Equal(legacyImage, pinnedImage);
         var legacySuperblock = ErofsSuperblock.FromImage(legacyImage);
@@ -457,7 +457,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x6D, 20 * 1024).ToArray());
         source.WriteBytes("meta/small.txt", "tiny"u8.ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = BlockSize,
@@ -477,7 +477,7 @@ public sealed class ErofsRebuildFeatureReplayTests
             Assert.Equal((uint?)expected, record.Ino);
         }
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltNumbers = ErofsInodeNumberFixture.Read(rebuilt);
 
         Assert.Equal(sourceNumbers, rebuiltNumbers);
@@ -490,7 +490,7 @@ public sealed class ErofsRebuildFeatureReplayTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x2E, 8 * 1024).ToArray());
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = BlockSize,
@@ -515,7 +515,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var legacy = FromJson(document.ToJsonString());
         Assert.All(legacy.Inodes, record => Assert.Null(record.Ino));
 
-        var rebuilt = new ErofsBuilder().Build(extracted, ErofsRebuildMetadata.Restore(legacy));
+        var rebuilt = InMemoryImage.Erofs(extracted, ErofsRebuildMetadata.Restore(legacy));
         var rebuiltNumbers = ErofsInodeNumberFixture.Read(rebuilt);
 
         Assert.Equal(
@@ -552,7 +552,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x53, 64 * 1024).ToArray());
         source.WriteBytes("small.txt", "advice"u8.ToArray());
-        image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = legacy ? BlockSize : 4 * BlockSize,
@@ -635,7 +635,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
         ];
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             XattrNameFilter = true,
             IshareXattrs = true,
@@ -662,7 +662,7 @@ public sealed class ErofsRebuildFeatureReplayTests
             ["b.bin"] = shared,
         };
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         var rebuiltSuperblock = ErofsSuperblock.FromImage(rebuilt);
 
         Assert.True((rebuiltSuperblock.FeatureCompat & ErofsSuperblock.CompatXattrFilter) != 0);
@@ -684,7 +684,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var payload = Enumerable.Repeat((byte)0x5D, 4096).ToArray();
         source.WriteBytes("data.bin", payload);
         const string prefix = "erofs.fingerprint.v1";
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             IshareXattrs = true,
             IshareXattrPrefix = prefix,
@@ -698,7 +698,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         var replay = Replay(image, source.Path);
         Assert.Equal(prefix, replay.Restored.IshareXattrPrefix);
 
-        var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
+        var rebuilt = InMemoryImage.Erofs(replay.Extracted, replay.Restored);
         using var parser = new ErofsParser(rebuilt);
         var file = parser.EnumerateFiles().Single(entry => entry.Path.EndsWith("data.bin", StringComparison.Ordinal));
         var fingerprint = Assert.Single(file.Xattrs ?? [], x => x.Name == prefix);

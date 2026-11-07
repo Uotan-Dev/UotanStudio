@@ -36,7 +36,7 @@ public sealed class ErofsMetazoneTests
         var options = PinnedOptions();
         options.Compress = false;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.Equal(0u, parser.Superblock.MetaBlkAddr);
@@ -53,7 +53,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.SourceMetaBlkAddr = 4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.NotEqual(0u, parser.Superblock.MetaBlkAddr);
@@ -71,7 +71,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.SourceMetaBlkAddr = 4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var zoneBlock = parser.Superblock.MetaBlkAddr;
@@ -97,7 +97,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.SourceMetaBlkAddr = 4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var zoneStart = checked((long)parser.Superblock.MetaBlkAddr * BlockSize);
@@ -123,13 +123,13 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.SourceMetaBlkAddr = 4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var rebuilt = parser.ReadRebuildOptions();
         Assert.Equal(parser.Superblock.MetaBlkAddr, rebuilt.SourceMetaBlkAddr);
 
-        var second = new ErofsBuilder().Build(source.Path, rebuilt);
+        var second = InMemoryImage.Erofs(source.Path, rebuilt);
         using var reread = new ErofsParser(second);
         Assert.Equal(rebuilt.SourceMetaBlkAddr, reread.Superblock.MetaBlkAddr);
         Assert.Equal(4 * BlockSize, reread.ReadFileBytes("data.bin").Length);
@@ -148,7 +148,7 @@ public sealed class ErofsMetazoneTests
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var error = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("metabox container is compressed", error.Message, StringComparison.Ordinal);
     }
@@ -165,7 +165,7 @@ public sealed class ErofsMetazoneTests
         options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.True(parser.Superblock.HasMetabox);
@@ -185,7 +185,7 @@ public sealed class ErofsMetazoneTests
         options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.True(parser.Superblock.HasMetabox);
@@ -204,7 +204,7 @@ public sealed class ErofsMetazoneTests
         var options = PinnedOptions();
         options.Compress = false;
         options.SourceMetaBlkAddr = 4;
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var captured = ErofsRebuildMetadata.Capture(parser.ReadRebuildOptions());

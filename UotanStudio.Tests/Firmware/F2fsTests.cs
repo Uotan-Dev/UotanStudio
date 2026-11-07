@@ -41,7 +41,7 @@ public class F2fsTests
 
             File.WriteAllBytes(Path.Combine(root, "large.bin"), largeBytes);
 
-            var image = F2fsBuilder.Build(root);
+            var image = InMemoryImage.F2fs(root);
             Assert.Equal(0xF2F52010u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024, 4)));
 
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
@@ -94,7 +94,7 @@ public class F2fsTests
             Encoding.ASCII.GetBytes("sparse tail\n", content.AsSpan(BlockSize * 2));
             File.WriteAllBytes(Path.Combine(root, "sparse.bin"), content);
 
-            var image = F2fsBuilder.Build(root, new F2fsOptions { EnableSparse = true });
+            var image = InMemoryImage.F2fs(root, new F2fsOptions { EnableSparse = true });
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
 
             var readBack = ReadFile(parser, "sparse.bin");
@@ -252,7 +252,7 @@ public class F2fsTests
         try
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
-            var image = F2fsBuilder.Build(root);
+            var image = InMemoryImage.F2fs(root);
 
             var tiny = new MemoryStream(image, 0, 2000, writable: false);
             Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(tiny));
@@ -276,7 +276,7 @@ public class F2fsTests
         try
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
-            var image = F2fsBuilder.Build(root);
+            var image = InMemoryImage.F2fs(root);
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1024 + 96, 4), 0);
             Assert.Throws<FileSystemCorruptedException>(() => new F2fsParser(new MemoryStream(image, writable: false)));
         }
@@ -293,7 +293,7 @@ public class F2fsTests
         try
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
-            var image = F2fsBuilder.Build(root);
+            var image = InMemoryImage.F2fs(root);
 
             var mainBlkaddr = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 92, 4));
             var rootInodeOffset = checked((long)mainBlkaddr * BlockSize + 16);

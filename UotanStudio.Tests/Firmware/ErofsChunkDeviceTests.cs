@@ -36,7 +36,7 @@ public sealed class ErofsChunkDeviceTests
         var options = PinnedOptions();
         options.ChunkSize = BlockSize;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var rebuilt = parser.ReadRebuildOptions();
@@ -58,7 +58,7 @@ public sealed class ErofsChunkDeviceTests
         options.ChunkSize = BlockSize / 2;
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("power of two", exception.Message, StringComparison.Ordinal);
     }
@@ -75,7 +75,7 @@ public sealed class ErofsChunkDeviceTests
         options.BlobDeviceIds = [1];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("device 1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("data.bin", exception.Message, StringComparison.Ordinal);
@@ -93,7 +93,7 @@ public sealed class ErofsChunkDeviceTests
         options.BlobDeviceIds = [2];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("blob device index 2", exception.Message, StringComparison.Ordinal);
     }
@@ -114,7 +114,7 @@ public sealed class ErofsChunkDeviceTests
         options.BlobDeviceIds = [1, 2];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("one device per image", exception.Message, StringComparison.Ordinal);
     }
@@ -138,7 +138,7 @@ public sealed class ErofsChunkDeviceTests
             ["data.bin"] = record,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var rebuilt = parser.ReadRebuildOptions();
@@ -164,7 +164,7 @@ public sealed class ErofsChunkDeviceTests
         };
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("device 1", exception.Message, StringComparison.Ordinal);
     }
@@ -180,7 +180,7 @@ public sealed class ErofsChunkDeviceTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [new ErofsDeviceSpec("blob.img", 2 * BlockSize)];
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         ulong unifiedBase;
         long tableOffset;
@@ -223,7 +223,7 @@ public sealed class ErofsChunkDeviceTests
         var options = PinnedOptions();
         options.ChunkSize = BlockSize;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.Equal(first, parser.ReadFileBytes("a.bin"));

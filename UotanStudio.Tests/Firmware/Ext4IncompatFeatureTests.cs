@@ -188,7 +188,7 @@ public class Ext4IncompatFeatureTests
         try
         {
             File.WriteAllText(Path.Combine(root, "hello.txt"), "hello ext4\n");
-            return Ext4Builder.Build(root);
+            return InMemoryImage.Ext4(root);
         }
         finally
         {

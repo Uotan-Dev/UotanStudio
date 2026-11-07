@@ -50,7 +50,7 @@ public sealed class ErofsTerminalPclusterTests
             OptimizeCompression = dense,
         };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         using var parser = new ErofsParser(image);
         var rows = parser.DumpIndexClusters("data.bin");
 
@@ -79,7 +79,7 @@ public sealed class ErofsTerminalPclusterTests
         source.WriteBytes("aligned.bin", aligned);
         source.WriteBytes("partial.bin", partial);
         source.WriteBytes("single.bin", single);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = true,

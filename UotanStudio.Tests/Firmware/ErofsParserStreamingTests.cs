@@ -20,7 +20,7 @@ public class ErofsParserStreamingTests
             temp.WriteBytes(file.Path, file.Content);
         }
 
-        return new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        return InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = false });
     }
 
     [Fact]

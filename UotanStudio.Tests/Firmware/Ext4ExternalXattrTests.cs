@@ -59,7 +59,7 @@ public class Ext4ExternalXattrTests
             Directory.CreateDirectory(Path.Combine(root, "sub"));
             File.WriteAllText(Path.Combine(root, "sub", "c.txt"), "ccc\n");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var entries = parser.ListFiles();
@@ -88,7 +88,7 @@ public class Ext4ExternalXattrTests
                 expectedFiles.Add(name);
             }
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
             var entries = parser.ListFiles();

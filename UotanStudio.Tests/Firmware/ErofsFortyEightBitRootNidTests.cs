@@ -115,6 +115,6 @@ public sealed class ErofsFortyEightBitRootNidTests
             BuildTime = 1_700_000_000UL,
         };
         configure?.Invoke(options);
-        return new ErofsBuilder().Build(source.Path, options);
+        return InMemoryImage.Erofs(source.Path, options);
     }
 }

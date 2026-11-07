@@ -41,7 +41,7 @@ public class Ext4Tests
 
             File.WriteAllBytes(Path.Combine(root, "large.bin"), largeBytes);
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var expected = new SortedSet<string> { "hello.txt", "blob.bin", "subdir", "subdir/inner.txt", "large.bin" };
@@ -88,7 +88,7 @@ public class Ext4Tests
             Encoding.ASCII.GetBytes("sparse tail\n", content.AsSpan(BlockSize * 2));
             File.WriteAllBytes(Path.Combine(root, "sparse.bin"), content);
 
-            var image = Ext4Builder.Build(root, new Ext4Options { EnableSparse = true });
+            var image = InMemoryImage.Ext4(root, new Ext4Options { EnableSparse = true });
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var readBack = ReadFile(parser, "sparse.bin");
@@ -119,7 +119,7 @@ public class Ext4Tests
             var imagePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".img");
             try
             {
-                File.WriteAllBytes(imagePath, Ext4Builder.Build(root));
+                File.WriteAllBytes(imagePath, InMemoryImage.Ext4(root));
                 var handler = new Ext4FormatHandler();
                 Assert.True(handler.CanHandle(imagePath));
                 Assert.Equal("EXT4", handler.FormatName);
@@ -162,7 +162,7 @@ public class Ext4Tests
             Directory.CreateDirectory(Path.Combine(root, "sub"));
             File.WriteAllText(Path.Combine(root, "sub", "b.txt"), "beta");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             Assert.Equal(0xEF53, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(1024 + 56, 2)));
             Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 24, 4)));
@@ -200,7 +200,7 @@ public class Ext4Tests
             }
 
             File.WriteAllBytes(Path.Combine(root, "large.bin"), largeBytes);
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             var inodesPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 40, 4));
             var inodeSize = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(1024 + 88, 2));
@@ -233,7 +233,7 @@ public class Ext4Tests
             File.WriteAllText(Path.Combine(root, "subdir", "inner.txt"), "inner");
             File.WriteAllText(Path.Combine(root, "top.txt"), "top");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             var inodeTableOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(BlockSize + 8, 4)) * BlockSize);
             var rootInodeOffset = inodeTableOffset + (2 - 1) * 256;
@@ -285,7 +285,7 @@ public class Ext4Tests
             File.WriteAllBytes(Path.Combine(root, "payload.bin"), payload);
             File.WriteAllText(Path.Combine(root, "meta.txt"), "vendor partition");
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             Assert.True(image.LongLength < 16L * 1024 * 1024, $"image too large: {image.LongLength}");
             var blocksPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 32, 4));

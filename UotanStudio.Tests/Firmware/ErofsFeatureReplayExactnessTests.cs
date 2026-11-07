@@ -60,7 +60,7 @@ public sealed class ErofsFeatureReplayExactnessTests
     }
 
     private static byte[] Build(string source, ErofsOptions options)
-        => new ErofsBuilder().Build(source, options);
+        => InMemoryImage.Erofs(source, options);
 
     private static (byte[] Image, ErofsOptions Restored) Replay(byte[] image, string root)
     {
@@ -69,6 +69,6 @@ public sealed class ErofsFeatureReplayExactnessTests
         var extracted = Path.Combine(root, "extracted");
         Directory.CreateDirectory(extracted);
         parser.ExtractToDirectory(extracted);
-        return (new ErofsBuilder().Build(extracted, options), options);
+        return (InMemoryImage.Erofs(extracted, options), options);
     }
 }

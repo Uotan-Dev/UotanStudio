@@ -30,7 +30,7 @@ public class Ext4HtreeAndCsumTests
                 File.WriteAllText(Path.Combine(root, $"file{i}.txt"), $"content-{i}");
             }
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var paths = parser.ListFiles()
@@ -58,7 +58,7 @@ public class Ext4HtreeAndCsumTests
                 File.WriteAllText(Path.Combine(root, $"payload-file-{i:D4}-payload-content.bin"), content);
             }
 
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
 
             var listed = parser.ListFiles()
@@ -106,7 +106,7 @@ public class Ext4HtreeAndCsumTests
         try
         {
             File.WriteAllText(Path.Combine(root, "payload.bin"), new string('x', 400));
-            var image = Ext4Builder.Build(root);
+            var image = InMemoryImage.Ext4(root);
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
             var inodeNumber = parser.ListFiles().First(static e => e.Path == "payload.bin").Inode;
@@ -156,7 +156,7 @@ public class Ext4HtreeAndCsumTests
                 File.WriteAllText(Path.Combine(root, $"a{i}.txt"), new string('q', 400));
             }
 
-            var image = Ext4Builder.Build(root, new Ext4Options { EnableMetadataCsum = false });
+            var image = InMemoryImage.Ext4(root, new Ext4Options { EnableMetadataCsum = false });
 
             using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
             var entries = parser.ListFiles()

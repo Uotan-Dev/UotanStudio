@@ -122,7 +122,7 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var image = F2fsBuilder.Build(source.Path, LabeledOptions(meta));
+        var image = InMemoryImage.F2fs(source.Path, LabeledOptions(meta));
         var root = ReadInodeNodeByNid(image, RootIno);
         var extraIsize = BinaryPrimitives.ReadUInt16LittleEndian(root.AsSpan(ExtraIsizeFieldOffset, 2));
 
@@ -142,8 +142,8 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var plain = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path), RootIno);
-        var labeled = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path, LabeledOptions(meta)), RootIno);
+        var plain = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path), RootIno);
+        var labeled = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path, LabeledOptions(meta)), RootIno);
 
         Assert.Equal(
             BinaryPrimitives.ReadUInt16LittleEndian(plain.AsSpan(ExtraIsizeFieldOffset, 2)),
@@ -173,7 +173,7 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var root = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path, LabeledOptions(meta)), RootIno);
+        var root = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path, LabeledOptions(meta)), RootIno);
         var words = BinaryPrimitives.ReadUInt16LittleEndian(root.AsSpan(InlineXattrSizeFieldOffset, 2));
         var region = InlineXattrRegionOffset(words);
 
@@ -200,7 +200,7 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var root = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path, LabeledOptions(meta)), RootIno);
+        var root = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path, LabeledOptions(meta)), RootIno);
         var region = InlineXattrRegionOffset(
             BinaryPrimitives.ReadUInt16LittleEndian(root.AsSpan(InlineXattrSizeFieldOffset, 2)));
 
@@ -215,7 +215,7 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var root = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path, LabeledOptions(meta)), RootIno);
+        var root = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path, LabeledOptions(meta)), RootIno);
         var words = BinaryPrimitives.ReadUInt16LittleEndian(root.AsSpan(InlineXattrSizeFieldOffset, 2));
         var regionWord = DefAddrsPerInode - words;
         var dentryBlock = BinaryPrimitives.ReadUInt32LittleEndian(root.AsSpan(FirstUsableAddrByte, 4));
@@ -236,7 +236,7 @@ public class F2fsInodeXattrLayoutTests
     {
         using var source = new ScratchDir();
         WriteTree(source);
-        var root = ReadInodeNodeByNid(F2fsBuilder.Build(source.Path), RootIno);
+        var root = ReadInodeNodeByNid(InMemoryImage.F2fs(source.Path), RootIno);
         var maskedRanges = new (int Start, int End)[]
         {
             (32, 68),
@@ -273,7 +273,7 @@ public class F2fsInodeXattrLayoutTests
         using var source = new ScratchDir();
         using var meta = new ScratchDir();
         WriteTree(source);
-        var image = F2fsBuilder.Build(source.Path, LabeledOptions(meta));
+        var image = InMemoryImage.F2fs(source.Path, LabeledOptions(meta));
         var feature = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(SuperblockFeatureOffset, 4));
         var inodeNodes = 0;
 
@@ -313,7 +313,7 @@ public class F2fsInodeXattrLayoutTests
                 ["labeled.txt"] = new(StringComparer.Ordinal) { ["security.selinux"] = value },
             },
         };
-        var image = F2fsBuilder.Build(source.Path, options);
+        var image = InMemoryImage.F2fs(source.Path, options);
         var fileNode = ReadInodeNodeByName(image, "labeled.txt");
         var ownerIno = BinaryPrimitives.ReadUInt32LittleEndian(fileNode.AsSpan(FooterOffset, 4));
         var words = BinaryPrimitives.ReadUInt16LittleEndian(fileNode.AsSpan(InlineXattrSizeFieldOffset, 2));

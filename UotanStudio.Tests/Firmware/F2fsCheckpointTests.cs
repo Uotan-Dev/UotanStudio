@@ -17,7 +17,7 @@ public class F2fsCheckpointTests
         using var source = new TempDirectory();
         using var target = new TempDirectory();
         File.WriteAllBytes(Path.Combine(source.Path, "file.bin"), new byte[8192]);
-        using var image = new MemoryStream(F2fsBuilder.Build(source.Path));
+        using var image = new MemoryStream(InMemoryImage.F2fs(source.Path));
         using var parser = new F2fsParser(image);
         parser.ListFiles();
         image.SetLength(4096);
@@ -35,7 +35,7 @@ public class F2fsCheckpointTests
     {
         using var source = new TempDirectory();
         File.WriteAllText(Path.Combine(source.Path, "test.txt"), "old-data", new UTF8Encoding(false));
-        var image = F2fsBuilder.Build(source.Path);
+        var image = InMemoryImage.F2fs(source.Path);
         var sb = F2fsSuperblock.FromBytes(image.AsSpan(1024));
         var oldNode = Read32(image, (int)sb.NatBlkaddr * 4096 + 4 * 9 + 5);
         var newNode = (uint)(image.Length / 4096 - 1);
@@ -73,7 +73,7 @@ public class F2fsCheckpointTests
     {
         using var source = new TempDirectory();
         File.WriteAllText(Path.Combine(source.Path, "test.txt"), "data");
-        var image = F2fsBuilder.Build(source.Path);
+        var image = InMemoryImage.F2fs(source.Path);
         var sb = F2fsSuperblock.FromBytes(image.AsSpan(1024));
         image[(int)sb.CpBlkaddr * 4096] ^= 1;
         using (var parser = new F2fsParser(new MemoryStream(image))) Assert.Single(parser.ListFiles());
@@ -86,7 +86,7 @@ public class F2fsCheckpointTests
     {
         using var source = new TempDirectory();
         File.WriteAllText(Path.Combine(source.Path, "test.txt"), "data");
-        var image = F2fsBuilder.Build(source.Path);
+        var image = InMemoryImage.F2fs(source.Path);
         var sb = F2fsSuperblock.FromBytes(image.AsSpan(1024));
         var firstBlock = (uint)(image.Length / 4096 - 12);
         for (uint nid = 10; nid <= 14; nid++) Write32(image, (int)sb.NatBlkaddr * 4096 + (int)nid * 9 + 5, firstBlock + nid - 10);

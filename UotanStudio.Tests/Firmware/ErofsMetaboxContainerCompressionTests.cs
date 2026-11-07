@@ -53,7 +53,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         options.SourceMetaboxCompressed = true;
         options.SourceMetaboxAlgorithm = ErofsCompressionAlgorithm.Lz4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.True(parser.MetaboxContainer?.Compressed,
@@ -75,8 +75,8 @@ public sealed class ErofsMetaboxContainerCompressionTests
         encoded.SourceMetaboxCompressed = true;
         encoded.SourceMetaboxAlgorithm = ErofsCompressionAlgorithm.Lz4;
 
-        var verbatimImage = new ErofsBuilder().Build(source.Path, verbatim);
-        var encodedImage = new ErofsBuilder().Build(source.Path, encoded);
+        var verbatimImage = InMemoryImage.Erofs(source.Path, verbatim);
+        var encodedImage = InMemoryImage.Erofs(source.Path, encoded);
 
         Assert.True(encodedImage.LongLength < verbatimImage.LongLength,
             $"an encoded container has to occupy fewer bytes than the verbatim one, but {encodedImage.LongLength} "
@@ -92,7 +92,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         options.SourceMetaboxCompressed = true;
         options.SourceMetaboxAlgorithm = ErofsCompressionAlgorithm.Lz4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var containerNid = parser.Superblock.MetaBoxNid;
@@ -111,7 +111,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         options.SourceMetaboxCompressed = true;
         options.SourceMetaboxAlgorithm = ErofsCompressionAlgorithm.Lz4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         var entries = parser.EnumerateEntries().ToList();
@@ -130,7 +130,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         WriteIncompressibleResidents(source);
         var options = PreservedContainersOptions();
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.False(parser.MetaboxContainer?.Compressed,
@@ -148,7 +148,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var error = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("metabox container is compressed", error.Message, StringComparison.Ordinal);
     }
@@ -164,7 +164,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var error = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+            () => InMemoryImage.Erofs(source.Path, options));
 
         Assert.Contains("metabox container is compressed", error.Message, StringComparison.Ordinal);
     }
@@ -178,7 +178,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
         options.SourceMetaboxCompressed = true;
         options.SourceMetaboxAlgorithm = ErofsCompressionAlgorithm.Lz4;
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
 
         using var parser = new ErofsParser(image);
         Assert.False(parser.ReadRebuildOptions().SourceMetaboxCompressed,

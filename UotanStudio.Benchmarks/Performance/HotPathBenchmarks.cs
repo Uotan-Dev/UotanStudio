@@ -47,7 +47,9 @@ public class HotPathBenchmarks
             erofsNames.Add(name);
         }
 
-        _erofsImage = new ErofsBuilder().Build(erofsSource, new ErofsOptions { Compress = true });
+        using var erofsImage = new MemoryStream();
+        new ErofsBuilder().Build(erofsSource, erofsImage, new ErofsOptions { Compress = true });
+        _erofsImage = erofsImage.ToArray();
         _erofsPaths = [.. erofsNames];
 
         var ext4Source = Path.Combine(_root, "ext4_src");
@@ -61,7 +63,9 @@ public class HotPathBenchmarks
             }
         }
 
-        _ext4Image = Ext4Builder.Build(ext4Source, new Ext4Options { IncludeJournal = false });
+        using var ext4Image = new MemoryStream();
+        Ext4Builder.Build(ext4Source, ext4Image, new Ext4Options { IncludeJournal = false });
+        _ext4Image = ext4Image.ToArray();
 
         var stage = Path.Combine(_root, "stage");
         Directory.CreateDirectory(stage);

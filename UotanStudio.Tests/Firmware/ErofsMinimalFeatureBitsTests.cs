@@ -19,7 +19,7 @@ public sealed class ErofsMinimalFeatureBitsTests
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 32 * 1024).ToArray());
         var options = new ErofsOptions { BlockSize = BlockSize, Algorithm = ErofsCompressionAlgorithm.Lz4 };
 
-        var image = new ErofsBuilder().Build(source.Path, options);
+        var image = InMemoryImage.Erofs(source.Path, options);
         var superblock = ErofsSuperblock.FromImage(image);
 
         Assert.Equal(ErofsSuperblock.IncompatLz4_0Padding, superblock.FeatureIncompat);
@@ -36,7 +36,7 @@ public sealed class ErofsMinimalFeatureBitsTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 32 * 1024).ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Zstd,
@@ -55,7 +55,7 @@ public sealed class ErofsMinimalFeatureBitsTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 64 * 1024).ToArray());
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -80,7 +80,7 @@ public sealed class ErofsMinimalFeatureBitsTests
         }
 
         source.WriteBytes("data.bin", payload);
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
@@ -105,7 +105,7 @@ public sealed class ErofsMinimalFeatureBitsTests
         new Random(20261023 + length).NextBytes(payload);
         source.WriteBytes("random.bin", payload);
 
-        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Deflate,
