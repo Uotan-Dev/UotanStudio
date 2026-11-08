@@ -1,7 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Reflection;
-using System.Runtime;
-using System.Runtime.InteropServices;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -348,73 +345,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <para>合成模式标签资源键；无法观测时为 null。</para></returns>
     private string? ActiveCompositionLabelKey()
         => _activeCompositionLabelKey ??= RenderingRuntimeProbe.DetectActiveCompositionLabelKey();
-
-    /// <summary>
-    /// Gets the single-line summary of the garbage collector the running process uses: the collector name,
-    /// the server/workstation shape, the concurrent state and the latency mode joined by localized separators.
-    /// <para>获取运行进程所用垃圾回收器的单行摘要：回收器名称、服务器/工作站形态、并发状态与延迟模式，
-    /// 以本地化分隔符连接。</para>
-    /// </summary>
-    public string CurrentGcText => CurrentGc;
-
-    private static readonly string CurrentGc = BuildCurrentGcText();
-
-    /// <summary>
-    /// Reads one garbage-collector configuration variable, returning the fallback when the variable is absent.
-    /// <para>读取一个垃圾回收器配置变量；变量缺失时返回回退值。</para>
-    /// </summary>
-    /// <param name="name">Configuration variable name.<para>配置变量名。</para></param>
-    /// <param name="fallback">Value returned when the variable is absent.<para>变量缺失时返回的值。</para></param>
-    /// <returns>The current variable value, or <paramref name="fallback"/>.<para>当前变量值；缺失时为 <paramref name="fallback"/>。</para></returns>
-    private static string? ProbeGcVariable(string name, string? fallback)
-        => GC.GetConfigurationVariables().TryGetValue(name, out var value) && value is string text ? text : fallback;
-
-    /// <summary>
-    /// Composes the current-GC summary from the collector name, the server/workstation shape, the concurrent
-    /// state and the latency mode.
-    /// <para>用回收器名称、服务器/工作站形态、并发状态与延迟模式合成当前垃圾回收摘要。</para>
-    /// </summary>
-    /// <returns>The localized one-line summary.<para>本地化的单行摘要。</para></returns>
-    private static string BuildCurrentGcText()
-    {
-        var language = LanguageService.Instance;
-        var name = ProbeGcVariable("SatoriGC", null) is not null
-            ? "Satori GC"
-            : language.GetString("Settings_GcDefaultName");
-        var shape = GCSettings.IsServerGC
-            ? language.GetString("Settings_GcServerShape")
-            : language.GetString("Settings_GcWorkstationShape");
-        var concurrent = ProbeGcVariable("System.GC.Concurrent", "1") != "0"
-            ? language.GetString("Settings_GcConcurrentOn")
-            : language.GetString("Settings_GcConcurrentOff");
-        return string.Format(
-            language.GetString("Settings_GcSummaryFormat"),
-            name,
-            shape,
-            concurrent,
-            GCSettings.LatencyMode.ToString());
-    }
-
-    /// <summary>
-    /// Gets the .NET SDK version the application was built with, falling back to the runtime description when
-    /// the build-time metadata is absent.
-    /// <para>获取构建应用所用的 .NET SDK 版本；缺少构建期元数据时回退到运行时描述。</para>
-    /// </summary>
-    public string DotNetSdkVersionText => DotNetSdkVersion;
-
-    private static readonly string DotNetSdkVersion = ResolveDotNetSdkVersion();
-
-    /// <summary>
-    /// Reads the SDK version baked into the entry assembly as <c>DotNetSdkVersion</c> metadata, falling back to
-    /// the runtime framework description when the metadata is missing.
-    /// <para>读取入口程序集中键为 <c>DotNetSdkVersion</c> 的元数据；缺失时回退到运行时框架描述。</para>
-    /// </summary>
-    /// <returns>The SDK version string, or the runtime description.<para>SDK 版本字符串，或运行时描述。</para></returns>
-    private static string ResolveDotNetSdkVersion()
-        => Assembly.GetEntryAssembly()?.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "DotNetSdkVersion") is { Value: { Length: > 0 } version }
-            ? version
-            : RuntimeInformation.FrameworkDescription;
 
     private bool _stoppingServer;
     private string _serverActionKey = "Settings_ServerActionNone";
@@ -969,7 +899,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        OnPropertyChanged(nameof(CurrentGcText));
         OnPropertyChanged(nameof(LanguagePreviewText));
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));

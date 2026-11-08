@@ -31,11 +31,11 @@
             <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimaryPointerover}" />
         </Style>
 
-        <Style Selector="Border.ChannelInactive">
+        <Style Selector="Border.BadgeInactive">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{StaticResource AboutBadgeBorderBrush}" />
         </Style>
-        <Style Selector="Border.ChannelInactive > TextBlock">
+        <Style Selector="Border.BadgeInactive > TextBlock">
             <Setter Property="Foreground" Value="{StaticResource AboutBadgeTextBrush}" />
         </Style>
         <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
@@ -74,6 +74,30 @@
                                  Click="OnCommitClick" />
                 <TextBlock x:Name="CommitUnavailableText" Text="{DynamicResource About_CommitUnknown}"
                            FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="False" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
+                <TextBlock Text="{DynamicResource About_Gc}" FontSize="11" Opacity="0.7"
+                           VerticalAlignment="Center" />
+                <Border x:Name="GcNameBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="GcNameText" FontSize="10" />
+                </Border>
+                <Border x:Name="GcConcurrencyBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="GcConcurrencyText" FontSize="10" />
+                </Border>
+                <Border x:Name="GcLatencyBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="GcLatencyText" FontSize="10" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
+                <TextBlock Text="{DynamicResource About_DotNetSdkVersion}" FontSize="11" Opacity="0.7"
+                           VerticalAlignment="Center" />
+                <Border x:Name="DotNetSdkBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="DotNetSdkText" FontSize="10" />
+                </Border>
             </StackPanel>
             <TextBlock Text="{DynamicResource About_Description}"
                        FontSize="12" Opacity="0.8"
