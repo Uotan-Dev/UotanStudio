@@ -865,23 +865,16 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             return;
         }
 
-        long sectorSize = 0;
-        try
+        var (sectorSize, targetRejected) = await TryDetectSectorSizeOwnedAsync(cancellationToken).ConfigureAwait(false);
+        if (sectorSize <= 0 && targetRejected && !RequiresReconnect
+            && TryGetAlternateStorageType(Configuration.StorageType) is { } alternate)
         {
-            var storageInfo = await GetStorageInfoCoreAsync(0, cancellationToken);
-            if (storageInfo.IsAck && (storageInfo.StorageGeometry?.SectorSize ?? storageInfo.GetInt64("sector_size")) is long detected && detected > 0)
-            {
-                sectorSize = detected;
-                Log($"Sector size from getstorageinfo: {sectorSize}");
-            }
-            else
-            {
-                Log($"getstorageinfo returned no usable sector size (IsAck={storageInfo.IsAck}); using default.");
-            }
-        }
-        catch (EdlException ex) when (!RequiresReconnect)
-        {
-            Log($"getstorageinfo failed ({ex.Message}); using default sector size.");
+            Log($"getstorageinfo was rejected as {Configuration.StorageType}; reconfiguring as " +
+                $"{alternate} and retrying detection once.");
+            Configuration.StorageType = alternate;
+            Configuration.SectorSize = 0;
+            await ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true).ConfigureAwait(false);
+            (sectorSize, targetRejected) = await TryDetectSectorSizeOwnedAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (sectorSize <= 0)
@@ -892,6 +885,58 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
         Configuration.SectorSize = sectorSize;
     }
+
+    /// <summary>
+    /// Queries <c>getstorageinfo</c> once and returns its detected sector size together with whether
+    /// the target explicitly rejected the query; zero with a rejection is the media-mismatch signature,
+    /// while a timeout or transport failure reports no rejection and leaves the reconnect path to decide.
+    /// <para>查询一次 <c>getstorageinfo</c>，返回探测到的扇区大小与目标是否明确拒绝；零加拒绝即介质
+    /// 失配签名，而超时或传输失败不视为拒绝，交由重连路径处置。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The detected sector size (zero when absent) and the explicit-rejection flag.
+    /// <para>探测到的扇区大小（缺失为零）与显式拒绝标记。</para></returns>
+    private async Task<(long SectorSize, bool TargetRejected)> TryDetectSectorSizeOwnedAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var storageInfo = await GetStorageInfoCoreAsync(0, cancellationToken);
+            if (storageInfo.IsAck
+                && (storageInfo.StorageGeometry?.SectorSize ?? storageInfo.GetInt64("sector_size")) is long detected
+                && detected > 0)
+            {
+                Log($"Sector size from getstorageinfo: {detected}");
+                return (detected, false);
+            }
+
+            Log($"getstorageinfo returned no usable sector size (IsAck={storageInfo.IsAck}).");
+            return (0, !storageInfo.IsAck);
+        }
+        catch (EdlException ex) when (!RequiresReconnect)
+        {
+            Log($"getstorageinfo failed ({ex.Message}).");
+            return (0, false);
+        }
+    }
+
+    /// <summary>
+    /// Returns the other mainstream media guess to try when the current one produces no usable
+    /// geometry; the paired switch covers the common mis-detection where a programmer acknowledges any
+    /// memory name and only fails later at storage open. NAND, SPI NOR and explicit non-paired types
+    /// get no alternate.
+    /// <para>返回当前介质猜测探测不出可用几何时可供尝试的另一主流介质；成对切换覆盖常见误判——
+    /// programmer 对任意 memory 名称都确认、直到打开存储才失败。NAND、SPI NOR 与非成对类型没有备选。</para>
+    /// </summary>
+    /// <param name="storageType">The storage type that just failed detection. <para>刚刚探测失败的存储类型。</para></param>
+    /// <returns>The alternate storage type, or <see langword="null"/> when none applies.
+    /// <para>备选存储类型；不适用时为 <see langword="null"/>。</para></returns>
+    private static FirehoseStorageType? TryGetAlternateStorageType(FirehoseStorageType storageType) => storageType switch
+    {
+        FirehoseStorageType.Emmc or FirehoseStorageType.Unknown => FirehoseStorageType.Ufs,
+        FirehoseStorageType.Ufs => FirehoseStorageType.Emmc,
+        _ => null
+    };
 
     /// <summary>
     /// Sends an XML command and waits for its response.

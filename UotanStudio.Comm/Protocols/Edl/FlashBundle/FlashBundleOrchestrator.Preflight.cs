@@ -36,6 +36,23 @@ public sealed partial class FlashBundleOrchestrator
             }
         }
     }
+    private static void ApplySourceOverrides(IEnumerable<RawProgramEntry> entries,
+        IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is not { Count: > 0 })
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (!string.IsNullOrEmpty(entry.SourceFile)
+                && overrides.TryGetValue(entry.SourceFile, out var replacement))
+            {
+                entry.SourceFile = replacement;
+            }
+        }
+    }
 
     private static List<RawProgramEntry> FilterProgramEntries(
         List<RawProgramEntry> entries, FlashBundleOptions options)

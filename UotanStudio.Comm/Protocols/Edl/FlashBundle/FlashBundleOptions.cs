@@ -43,6 +43,16 @@ public sealed class FlashBundleOptions
     public string ImageDirectory { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the mapping from a resolved bundle source path to the staged replacement file used
+    /// instead, e.g. decompressed images substituted for compressed sources.
+    /// <para>获取或设置“已解析源路径 → 暂存替代文件”的映射，例如用解压产物替代压缩源。</para>
+    /// </summary>
+    /// <value>Case-insensitive full-path keys resolved from the manifests; <see langword="null"/> or empty keeps
+    /// every entry on its manifest source.
+    /// <para>大小写不敏感的完整路径键，来自清单解析结果；为 <see langword="null"/> 或空时所有条目保持清单源。</para></value>
+    public IReadOnlyDictionary<string, string>? SourceOverrides { get; set; }
+
+    /// <summary>
     /// Gets or sets the explicit UFS provisioning XML path. When <c>null</c>, the orchestrator
     /// auto-discovers a <c>*ufs*provision*.xml</c> file under <see cref="ImageDirectory"/>.
     /// <para>获取或设置显式的 UFS 配置 XML 路径。为 <c>null</c> 时，编排器会在

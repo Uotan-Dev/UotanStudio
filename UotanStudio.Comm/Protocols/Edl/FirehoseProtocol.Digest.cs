@@ -15,6 +15,15 @@ public sealed partial class FirehoseProtocol
 {
     private ProgramPayloadDigest? _programPayloadDigest;
 
+    /// <summary>
+    /// Set once the target proves it cannot answer <c>&lt;getsha256digest&gt;</c> (a rejection or a
+    /// silent command), so later verifications skip straight to the authoritative read-back comparison
+    /// instead of paying another command timeout.
+    /// <para>目标一旦被证实无法应答 <c>&lt;getsha256digest&gt;</c>（拒绝或命令沉默）即置位，使后续校验
+    /// 直接走权威的回读比对，而不再支付一次命令超时。</para>
+    /// </summary>
+    private bool _targetDigestUnavailable;
+
     private sealed record ProgramPayloadDigest(long SourceLength, long StartSector, long NumSectors,
         int PhysicalPartition, byte[] Digest);
 
@@ -65,7 +74,7 @@ public sealed partial class FirehoseProtocol
     internal async Task<bool> TryVerifyProgramWithTargetDigestOwnedAsync(Stream dataStream, long startSector,
         long numSectors, int physicalPartition, CancellationToken cancellationToken)
     {
-        if (Configuration.StorageType is FirehoseStorageType.Nand || !dataStream.CanSeek)
+        if (Configuration.StorageType is FirehoseStorageType.Nand || !dataStream.CanSeek || _targetDigestUnavailable)
         {
             return false;
         }
@@ -173,10 +182,12 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Sends <c>&lt;getsha256digest&gt;</c> on an owned lease and extracts the digest from the target
-    /// logs or response attributes. A NAK or a missing digest yields <see langword="null"/> and keeps
-    /// the session usable.
+    /// logs or response attributes. A NAK, a missing digest or a silent command yields
+    /// <see langword="null"/> and keeps the session usable; the silent command also marks digest
+    /// verification unavailable for the rest of the session.
     /// <para>在已持有的租约上发送 <c>&lt;getsha256digest&gt;</c>，并从目标日志或响应属性中提取摘要。
-    /// NAK 或缺少摘要时返回 <see langword="null"/>，会话保持可用。</para>
+    /// NAK、缺少摘要或命令沉默都返回 <see langword="null"/>，会话保持可用；命令沉默还会在本会话剩余
+    /// 时间把摘要校验标记为不可用。</para>
     /// </summary>
     /// <param name="startSector">The absolute starting sector. <para>绝对起始扇区。</para></param>
     /// <param name="numSectors">The number of sectors to hash. <para>待计算哈希的扇区数。</para></param>
@@ -192,17 +203,37 @@ public sealed partial class FirehoseProtocol
         int physicalPartition, CancellationToken cancellationToken, int? slot = null)
     {
         ThrowIfDisposed();
+        if (_targetDigestUnavailable)
+        {
+            return null;
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegative(startSector);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(numSectors);
         _ = ValidateStorageRange(startSector, numSectors, physicalPartition);
         var logs = new List<string>();
-        var response = await SendCommandAndWaitResponseAsync(
-            FirehoseXmlBuilder.BuildGetSha256Digest(Configuration.SectorSize, numSectors, physicalPartition,
-                startSector, slot),
-            cancellationToken,
-            blockObserver: block => logs.AddRange(block.Logs)).ConfigureAwait(false);
+        FirehoseResponse response;
+        try
+        {
+            response = await SendCommandAndWaitResponseAsync(
+                FirehoseXmlBuilder.BuildGetSha256Digest(Configuration.SectorSize, numSectors, physicalPartition,
+                    startSector, slot),
+                cancellationToken,
+                blockObserver: block => logs.AddRange(block.Logs),
+                tolerateResponseTimeout: true).ConfigureAwait(false);
+        }
+        catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
+        {
+            DiscardPendingResponseBytes();
+            _targetDigestUnavailable = true;
+            Log("The target stayed silent for <getsha256digest>; digest verification is unavailable for this " +
+                "session and verification falls back to the read-back comparison.");
+            return null;
+        }
+
         if (!response.IsAck)
         {
+            _targetDigestUnavailable = true;
             Log("The target rejected <getsha256digest>; digest verification is unavailable.");
             return null;
         }
@@ -228,10 +259,13 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Extracts a 64-character hexadecimal digest from free-form log text or an attribute value;
-    /// the target emits it as <c>Digest &lt;hex&gt;</c> inside a log node.
+    /// Extracts a 64-character hexadecimal digest from free-form log text or an attribute value; the
+    /// target emits it as <c>Digest &lt;hex&gt;</c> inside a log node. Only a maximal hex run of exactly
+    /// 64 characters, bounded by a non-hex character or a string boundary, counts as a digest, so a
+    /// longer hash or a longer hex blob is never misread as the first 64 characters of itself.
     /// <para>从自由格式的日志文本或属性值中提取 64 字符的十六进制摘要；目标以日志节点内的
-    /// <c>Digest &lt;hex&gt;</c> 形式输出。</para>
+    /// <c>Digest &lt;hex&gt;</c> 形式输出。只有恰好 64 字符、两端为非 hex 字符或串边界的最大 hex 连续段
+    /// 才算摘要，因此更长的哈希或十六进制串不会被误读为其前 64 个字符。</para>
     /// </summary>
     private static string? TryExtractDigestHex(string? text)
     {
@@ -240,29 +274,25 @@ public sealed partial class FirehoseProtocol
             return null;
         }
 
-        var start = 0;
-        while (start + 64 <= text.Length)
+        var index = 0;
+        while (index < text.Length)
         {
-            if (Uri.IsHexDigit(text[start]) && Uri.IsHexDigit(text[start + 63]))
+            if (!Uri.IsHexDigit(text[index]))
             {
-                var candidate = text.AsSpan(start, 64);
-                var allHex = true;
-                foreach (var character in candidate)
-                {
-                    if (!Uri.IsHexDigit(character))
-                    {
-                        allHex = false;
-                        break;
-                    }
-                }
-
-                if (allHex)
-                {
-                    return new string(candidate);
-                }
+                index++;
+                continue;
             }
 
-            start++;
+            var runStart = index;
+            while (index < text.Length && Uri.IsHexDigit(text[index]))
+            {
+                index++;
+            }
+
+            if (index - runStart == EdlConstants.Sha256DigestLength * 2)
+            {
+                return text.Substring(runStart, EdlConstants.Sha256DigestLength * 2);
+            }
         }
 
         return null;

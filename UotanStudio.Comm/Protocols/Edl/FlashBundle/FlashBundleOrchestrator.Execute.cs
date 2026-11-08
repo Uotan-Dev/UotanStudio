@@ -711,6 +711,19 @@ public sealed partial class FlashBundleOrchestrator
                 $"No source file for program entry '{entry.Label ?? entry.Filename}'. program 条目缺少源文件。");
         }
 
+        var entryKey = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
+        void RaiseChunk(EdlProgramChunkProgress progress)
+        {
+            if (progress.EntryKey is null)
+            {
+                ProgramChunkProgress?.Invoke(this, progress with { EntryKey = entryKey });
+            }
+            else
+            {
+                ProgramChunkProgress?.Invoke(this, progress);
+            }
+        }
+
         var startSector = FirehoseSectorAddress.Parse(entry.StartSector);
 
         stream.Position = 0;
@@ -733,7 +746,8 @@ public sealed partial class FlashBundleOrchestrator
 
             var response = await RequireFirehose().ProgramSparseOwnedAsync(
                 stream, startSector, entry.Filename, entry.PhysicalPartitionNumber,
-                entry.NumPartitionSectors > 0 ? entry.NumPartitionSectors : null, cancellationToken, rangeCompleted).ConfigureAwait(false);
+                entry.NumPartitionSectors > 0 ? entry.NumPartitionSectors : null, cancellationToken, rangeCompleted,
+                RaiseChunk).ConfigureAwait(false);
             if (!response.IsAck)
             {
                 throw new EdlException(EdlErrorCode.ProgramFailed,
@@ -766,7 +780,8 @@ public sealed partial class FlashBundleOrchestrator
             ? await PrepareDigestCommandAsync(entry, stream, sectorSize, numSectors, startSector, cancellationToken).ConfigureAwait(false)
             : null;
         var responseRaw = await RequireFirehose().ProgramCoreAsync(
-            stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, cancellationToken).ConfigureAwait(false);
+            stream, startSector, numSectors, entry.Filename, entry.PhysicalPartitionNumber, cancellationToken,
+            RaiseChunk).ConfigureAwait(false);
         if (!responseRaw.IsAck)
         {
             throw new EdlException(EdlErrorCode.ProgramFailed,

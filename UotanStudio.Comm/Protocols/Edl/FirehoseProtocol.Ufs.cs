@@ -34,6 +34,15 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>Sends a preflighted immutable command snapshot while the caller owns the operation lease.</summary>
+    /// <remarks>When the plan commits, some programmers reset the target right after writing the UFS
+    /// configuration descriptor and drop the link before the last epilogue acknowledgement. A transport
+    /// failure, read timeout or disconnect on that final command alone is therefore completed with a
+    /// synthesized acknowledgement instead of failing the provisioning: every earlier descriptor was
+    /// already accepted without a NAK, and a real rejection would have produced one. Cancellation and
+    /// protocol violations are never exempted.
+    /// <para>计划提交时，部分 programmer 会在写入 UFS 配置描述符后立即复位目标，在其确认最后一条结语命令
+    /// 之前断开链路。因此仅当最后一条命令出现传输失败、读取超时或断开时，以合成确认完成该次 provisioning
+    /// 而不是判定失败：此前的描述符均已被无 NAK 接受，真正的拒绝会更早产生。取消与协议违规绝不豁免。</para></remarks>
     internal async Task<FirehoseResponse> ProvisionUfsOwnedAsync(UfsProvisionPlan plan, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
@@ -44,8 +53,21 @@ public sealed partial class FirehoseProtocol
         {
             cancellationToken.ThrowIfCancellationRequested();
             Log($"Sending UFS provisioning command {index + 1}/{plan.Commands.Count}.");
-            last = await SendCommandAndWaitResponseAsync(plan.Commands[index], cancellationToken).ConfigureAwait(false);
-            if (last.IsRawMode)
+            var commitEpilogue = plan.Commit && index == plan.Commands.Count - 1;
+            try
+            {
+                last = await SendCommandAndWaitResponseAsync(plan.Commands[index], cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (commitEpilogue && IsCommitResetOutcome(ex))
+            {
+                _faulted = false;
+                Log("UFS provisioning commit: the device reset without acknowledging the epilogue; " +
+                    "the provisioning is treated as applied.");
+                last = new FirehoseResponse { IsAck = true, RawValue = "ACK (device reset without acknowledgement)" };
+                break;
+            }
+
+            if (last!.IsRawMode)
             {
                 _faulted = true;
                 throw new EdlException(EdlErrorCode.UfsProvisioningFailed, "UFS provisioning unexpectedly entered raw mode.");
@@ -58,6 +80,28 @@ public sealed partial class FirehoseProtocol
         }
         return last ?? throw new InvalidOperationException("The UFS plan contains no commands.");
     }
+
+    /// <summary>
+    /// Reports whether an exception on the committing epilogue matches the reset-without-acknowledgement
+    /// outcome: a transport failure, a read or write timeout, a lost connection, or the raw disconnect
+    /// errors the transport raises. Cancellation and protocol violations never match.
+    /// <para>报告提交结语上的异常是否符合“复位且无确认”结果：传输失败、读取或写入超时、连接丢失，以及
+    /// 传输层抛出的原始断开错误。取消与协议违规永不匹配。</para>
+    /// </summary>
+    /// <param name="error">The exception observed while waiting for the epilogue acknowledgement.
+    /// <para>等待结语确认时观测到的异常。</para></param>
+    /// <returns><see langword="true"/> when the outcome is exempted as a device reset.
+    /// <para>结果可豁免为设备复位时为 <see langword="true"/>。</para></returns>
+    private static bool IsCommitResetOutcome(Exception error) => error switch
+    {
+        EdlException
+        {
+            ErrorCode: EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout
+            or EdlErrorCode.WritePortTimeout or EdlErrorCode.ConnectionLost
+        } => true,
+        IOException or TimeoutException => true,
+        _ => false
+    };
 
     /// <summary>
     /// Resets pending UFS provisioning configuration on the target (a &lt;ufs&gt; epilogue with

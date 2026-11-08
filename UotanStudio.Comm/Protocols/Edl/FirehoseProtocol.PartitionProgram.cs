@@ -34,6 +34,9 @@ public sealed partial class FirehoseProtocol
     /// <para>可选的“先比对后跳过”快速路径：当同时请求 <paramref name="verify"/> 且存储不是 NAND 时，区域按有界分块遍历，源数据已与目标摘要一致的块保持不动。目标不支持摘要时 回退为整区域的常规编程。返回结果仍报告完整的请求长度，因为摘要匹配的块已确认存在于目标上。</para></param>
     /// <param name="cancellationToken">Cancellation for preflight, lease, metadata and transfers.
     /// <para>取消覆盖预检、租约等待、元数据与数据传输。</para></param>
+    /// <param name="chunkProgress">Optional per-chunk progress callback raised after each raw payload block is
+    /// accepted by the target, or null to keep the transfer silent.
+    /// <para>可选的逐块进度回调；目标每接受一个原始负载块后触发一次，为 null 时传输保持无回调。</para></param>
     /// <returns>Final-ACK byte count and optional readback byte count.
     /// <para>最终 ACK 的字节数以及可选的回读字节数。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
@@ -58,7 +61,8 @@ public sealed partial class FirehoseProtocol
     /// <para>协议已被释放。</para></exception>
     public async Task<FirehosePartitionWriteResult> ProgramRawPartitionFromFileAsync(FirehoseGptSnapshot snapshot,
         string partitionName, string sourcePath, long partitionOffset = 0, bool verify = false,
-        bool skipMatchedRegions = false, CancellationToken cancellationToken = default)
+        bool skipMatchedRegions = false, CancellationToken cancellationToken = default,
+        Action<EdlProgramChunkProgress>? chunkProgress = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
@@ -98,7 +102,7 @@ public sealed partial class FirehoseProtocol
             }
 
             await ProgramCoreAsync(source, new FirehoseSectorAddress(start, false), sectors, "partition.bin",
-                region, cancellationToken).ConfigureAwait(false);
+                region, cancellationToken, chunkProgress).ConfigureAwait(false);
         }
 
         ValidateGptBinding(snapshot);

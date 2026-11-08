@@ -7,6 +7,29 @@ using UotanStudio.Hash.Digests;
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
+/// Carries the per-chunk progress of one Firehose program transfer, reported after each raw payload
+/// block has been accepted by the transport.
+/// <para>携带一次 Firehose 编程传输的逐块进度；在传输层接受每块原始载荷后上报。</para>
+/// </summary>
+/// <param name="EntryKey">The caller-defined entry key (for example the bundle label), or <see langword="null"/>
+/// when the caller has none.
+/// <para>调用方定义的条目键（例如刷写包标签）；调用方没有时为 <see langword="null"/>。</para></param>
+/// <param name="Filename">The target filename metadata sent with the program command.
+/// <para>随 program 命令发送的目标文件名元数据。</para></param>
+/// <param name="PhysicalPartitionNumber">The physical storage region or LUN.
+/// <para>物理存储区域或 LUN。</para></param>
+/// <param name="BytesWritten">The cumulative bytes accepted so far, including zero padding.
+/// <para>目前已累计接受的字节数，含补零。</para></param>
+/// <param name="TotalBytes">The total bytes this transfer covers, including zero padding.
+/// <para>本次传输覆盖的总字节数，含补零。</para></param>
+public sealed record EdlProgramChunkProgress(
+    string? EntryKey,
+    string? Filename,
+    int PhysicalPartitionNumber,
+    long BytesWritten,
+    long TotalBytes);
+
+/// <summary>
 /// Firehose protocol program, erase, patch and wipe operations.
 /// <para>Firehose 协议的编程、擦除、补丁与擦写操作。</para>
 /// </summary>
@@ -22,10 +45,13 @@ public sealed partial class FirehoseProtocol
     /// <param name="filename">The target filename. <para>目标文件名。</para></param>
     /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="chunkProgress">Optional per-chunk progress callback raised after each raw payload block
+    /// is accepted; <see langword="null"/> keeps the previous silent behaviour.
+    /// <para>可选的逐块进度回调；每块原始载荷被接受后触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
     /// <exception cref="EdlException">Thrown when the target NAKs the program. <para>目标对编程返回 NAK 时抛出。</para></exception>
-    public Task<FirehoseResponse> ProgramAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
-        => ProgramSerializedAsync(dataStream, new FirehoseSectorAddress(startSector, false), numSectors, filename, physicalPartition, cancellationToken);
+    public Task<FirehoseResponse> ProgramAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default, Action<EdlProgramChunkProgress>? chunkProgress = null)
+        => ProgramSerializedAsync(dataStream, new FirehoseSectorAddress(startSector, false), numSectors, filename, physicalPartition, cancellationToken, chunkProgress);
 
     /// <summary>Programs a constant or disk-relative sector range without buffering the complete image.
     /// <para>编程常量或磁盘相对地址的扇区范围，不缓冲完整镜像。</para></summary>
@@ -38,21 +64,38 @@ public sealed partial class FirehoseProtocol
     /// <param name="physicalPartition">The physical storage region or LUN.
     /// <para>物理存储区域或 LUN。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <param name="chunkProgress">Optional per-chunk progress callback raised after each raw payload block
+    /// is accepted; <see langword="null"/> keeps the previous silent behaviour.
+    /// <para>可选的逐块进度回调；每块原始载荷被接受后触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     /// <returns>The final target acknowledgement.<para>目标的最终确认响应。</para></returns>
     public Task<FirehoseResponse> ProgramAsync(Stream dataStream, string startSector, long numSectors,
-        string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
-        => ProgramSerializedAsync(dataStream, FirehoseSectorAddress.Parse(startSector), numSectors, filename, physicalPartition, cancellationToken);
+        string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default, Action<EdlProgramChunkProgress>? chunkProgress = null)
+        => ProgramSerializedAsync(dataStream, FirehoseSectorAddress.Parse(startSector), numSectors, filename, physicalPartition, cancellationToken, chunkProgress);
 
     private async Task<FirehoseResponse> ProgramSerializedAsync(Stream dataStream, FirehoseSectorAddress startSector,
-        long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken)
+        long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken,
+        Action<EdlProgramChunkProgress>? chunkProgress = null)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        return await ProgramCoreAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken).ConfigureAwait(false);
+        return await ProgramCoreAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken, chunkProgress)
+            .ConfigureAwait(false);
     }
 
     /// <summary>Programs while the caller holds the operation lease.</summary>
+    /// <param name="dataStream">The stream containing the complete declared range.
+    /// <para>包含完整声明范围的流。</para></param>
+    /// <param name="startSector">The parsed start address.<para>已解析的起始地址。</para></param>
+    /// <param name="numSectors">The number of sectors to write.<para>待写入的扇区数量。</para></param>
+    /// <param name="filename">The target filename metadata.<para>随命令发送的目标文件名元数据。</para></param>
+    /// <param name="physicalPartition">The physical storage region or LUN.
+    /// <para>物理存储区域或 LUN。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <param name="chunkProgress">Optional per-chunk progress callback raised after each raw payload block
+    /// is accepted; <see langword="null"/> keeps the previous silent behaviour.
+    /// <para>可选的逐块进度回调；每块原始载荷被接受后触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     internal async Task<FirehoseResponse> ProgramCoreAsync(Stream dataStream, FirehoseSectorAddress startSector,
-        long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken)
+        long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken,
+        Action<EdlProgramChunkProgress>? chunkProgress = null)
     {
         ThrowIfDisposed();
         _programPayloadDigest = null;
@@ -105,6 +148,8 @@ public sealed partial class FirehoseProtocol
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             transferStarted = true;
             await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, payloadDigest,
+                bytesWritten => chunkProgress?.Invoke(
+                    new EdlProgramChunkProgress(null, filename, physicalPartition, bytesWritten, totalBytes)),
                 cancellationToken);
             payloadSent = true;
             var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
@@ -166,9 +211,23 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>Programs sparse ranges under the caller's lease, reporting bytes only after each final ACK.</summary>
+    /// <param name="sparseStream">The seekable, caller-owned image stream.
+    /// <para>可寻址、由调用方持有的镜像流。</para></param>
+    /// <param name="startSector">The parsed start address.<para>已解析的起始地址。</para></param>
+    /// <param name="filename">The filename metadata sent with each data range.
+    /// <para>随每个数据范围一同发送的文件名元数据。</para></param>
+    /// <param name="physicalPartition">The physical storage region.<para>物理存储区域。</para></param>
+    /// <param name="maximumSectors">Optional declared partition capacity, including skipped ranges.
+    /// <para>可选的声明分区容量，包含被跳过的范围。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <param name="rangeCompleted">Optional callback invoked with the byte count of each completed range.
+    /// <para>可选回调；每个范围完成时以其字节数触发。</para></param>
+    /// <param name="chunkProgress">Optional per-chunk progress callback raised after each raw payload block
+    /// is accepted; <see langword="null"/> keeps the previous silent behaviour.
+    /// <para>可选的逐块进度回调；每块原始载荷被接受后触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     internal async Task<FirehoseResponse> ProgramSparseOwnedAsync(Stream sparseStream, FirehoseSectorAddress startSector,
         string filename, int physicalPartition, long? maximumSectors, CancellationToken cancellationToken,
-        Action<long>? rangeCompleted = null)
+        Action<long>? rangeCompleted = null, Action<EdlProgramChunkProgress>? chunkProgress = null)
     {
         ThrowIfDisposed();
         RequireCapability(EdlFirehoseCommand.Sparse);
@@ -197,7 +256,8 @@ public sealed partial class FirehoseProtocol
                 ? checked(startSector.Value - offset / sectorSize)
                 : checked(startSector.Value + offset / sectorSize), startSector.RelativeToEnd);
             logical.Position = offset;
-            response = await ProgramCoreAsync(logical, address, sectors, filename, physicalPartition, cancellationToken).ConfigureAwait(false);
+            response = await ProgramCoreAsync(logical, address, sectors, filename, physicalPartition, cancellationToken,
+                chunkProgress).ConfigureAwait(false);
             rangeCompleted?.Invoke(checked(sectors * sectorSize));
         }
 
@@ -432,10 +492,13 @@ public sealed partial class FirehoseProtocol
     /// <param name="digest">Optional accumulator receiving every byte accepted by the transport, including the
     /// trailing zero padding, so the target digest can be compared without reading the source again.
     /// <para>可选的累加器；接收传输层接受的每个字节（含尾部补零），使目标摘要无需再次读取源即可比对。</para></param>
+    /// <param name="chunkWritten">Optional callback raised after each accepted block with the cumulative
+    /// accepted byte count; <see langword="null"/> keeps the previous silent behaviour.
+    /// <para>可选回调；每块被接受后以累计已接受字节数触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
     private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload,
-        DigestAccumulator? digest, CancellationToken cancellationToken)
+        DigestAccumulator? digest, Action<long>? chunkWritten, CancellationToken cancellationToken)
     {
         var zlpTimeout = GetZlpTimeoutMs();
         var buffer = ArrayPool<byte>.Shared.Rent(maxPayload);
@@ -486,6 +549,7 @@ public sealed partial class FirehoseProtocol
 
                 digest?.Append(buffer.AsSpan(0, toRead));
                 bytesWritten += toRead;
+                chunkWritten?.Invoke(bytesWritten);
             }
         }
         finally

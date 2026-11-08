@@ -123,6 +123,7 @@ public sealed partial class FlashBundleOrchestrator
         if (!options.SkipProgram)
         {
             ResolveSourceFiles(programs, options.ImageDirectory);
+            ApplySourceOverrides(programs, options.SourceOverrides);
         }
         var absentPrograms = options.SkipAbsentSources && !options.SkipProgram
             ? programs.Where(entry => !string.IsNullOrEmpty(entry.Filename) && !File.Exists(entry.SourceFile)).ToList()

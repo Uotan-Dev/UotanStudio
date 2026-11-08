@@ -277,30 +277,77 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Sets the active A/B slot via &lt;setactivepartition&gt;.
-    /// <para>通过 &lt;setactivepartition&gt; 设置活跃 A/B 槽位。</para>
+    /// Sets the active A/B slot via &lt;setactivepartition&gt;, accepting the fastboot-style suffix and
+    /// normalizing it to the decimal slot number the wire format carries (0 = slot a, 1 = slot b).
+    /// <para>通过 &lt;setactivepartition&gt; 设置活跃 A/B 槽位，接受 fastboot 风格的后缀并归一化为线上格式
+    /// 携带的十进制槽位编号（0 = 槽位 a，1 = 槽位 b）。</para>
     /// </summary>
-    /// <param name="slot">The slot identifier ("a" or "b"). <para>槽位标识（"a" 或 "b"）。</para></param>
+    /// <param name="slot">The slot suffix ("a" or "b", case-insensitive) or a decimal slot number.
+    /// <para>槽位后缀（"a" 或 "b"，不区分大小写）或十进制槽位编号。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="slot"/> is empty or names no known slot.
+    /// <para><paramref name="slot"/> 为空或不是已知槽位。</para></exception>
     public async Task<FirehoseResponse> SetActivePartitionAsync(string slot, CancellationToken cancellationToken = default)
     {
-        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(slot))
+        if (string.IsNullOrWhiteSpace(slot))
         {
             throw new ArgumentException("Slot cannot be null or empty.", nameof(slot));
         }
 
+        return await SetActivePartitionAsync(NormalizeActiveSlot(slot), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sets the active A/B slot via &lt;setactivepartition&gt; using the decimal slot number the command
+    /// carries on the wire (0 = slot a, 1 = slot b).
+    /// <para>通过 &lt;setactivepartition&gt; 以命令在线上携带的十进制槽位编号设置活跃 A/B 槽位
+    /// （0 = 槽位 a，1 = 槽位 b）。</para>
+    /// </summary>
+    /// <param name="slot">The zero-based slot number.<para>从零开始的槽位编号。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
+    public async Task<FirehoseResponse> SetActivePartitionAsync(int slot, CancellationToken cancellationToken = default)
+    {
+        using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         Log($"Sending <setactivepartition> slot={slot}");
         var response = await SendCommandAndWaitResponseAsync(FirehoseXmlBuilder.BuildSetActivePartition(slot), cancellationToken);
 
         if (!response.IsAck)
         {
             throw new EdlException(EdlErrorCode.SetActivePartitionFailed,
-                $"Set active partition failed for slot '{slot}'. Response: {response.RawValue}");
+                $"Set active partition failed for slot {slot}. Response: {response.RawValue}");
         }
 
-        Log($"Active partition set to slot '{slot}' successfully.");
+        Log($"Active partition set to slot {slot} successfully.");
         return response;
+    }
+
+    /// <summary>
+    /// Normalizes a slot label to the decimal slot number: "a" maps to 0, "b" maps to 1, and a decimal
+    /// string passes through; any other label is refused because the command carries no such value.
+    /// <para>把槽位标签归一化为十进制槽位编号："a" 映射为 0，"b" 映射为 1，十进制数字串原样通过；
+    /// 其他标签一律拒绝，因为该命令不携带此类取值。</para>
+    /// </summary>
+    /// <param name="slot">The slot label or number text.<para>槽位标签或编号文本。</para></param>
+    /// <returns>The zero-based slot number.<para>从零开始的槽位编号。</para></returns>
+    private static int NormalizeActiveSlot(string slot)
+    {
+        if (string.Equals(slot.Trim(), "a", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (string.Equals(slot.Trim(), "b", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        if (int.TryParse(slot.Trim(), out var number))
+        {
+            return number;
+        }
+
+        throw new ArgumentException($"Slot '{slot}' is neither a known suffix (a/b) nor a slot number.", nameof(slot));
     }
 }

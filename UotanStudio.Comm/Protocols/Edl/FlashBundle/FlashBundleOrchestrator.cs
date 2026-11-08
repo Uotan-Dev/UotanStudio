@@ -122,6 +122,13 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
 {
     private readonly EdlSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
+    /// <summary>
+    /// Raised after each raw program payload block is accepted by the transport, carrying the bundle
+    /// entry key, the target file, and the cumulative accepted byte count.
+    /// <para>传输层每接受一块原始编程载荷后触发，携带刷写包条目键、目标文件与累计已接受字节数。</para>
+    /// </summary>
+    public event EventHandler<EdlProgramChunkProgress>? ProgramChunkProgress;
+
     /// <summary>Runs a flash bundle from a rawprogram file (and optional patch file), resolving image paths against <paramref name="imageDir"/>. UFS provisioning XML is auto-discovered in the image directory.
     /// <para>从 rawprogram 文件（及可选的 patch 文件）运行刷写包，镜像路径按 <paramref name="imageDir"/> 解析。UFS 配置 XML 在镜像目录中自动发现。</para></summary>
     /// <param name="rawprogramPath">The rawprogram XML file path.

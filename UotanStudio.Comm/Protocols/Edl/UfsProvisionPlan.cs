@@ -5,14 +5,21 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <summary>A bounded snapshot of structurally validated commands, not validation against device provisioning capabilities.</summary>
 internal sealed class UfsProvisionPlan
 {
-    private UfsProvisionPlan(string[] commands, int? slot)
+    private UfsProvisionPlan(string[] commands, int? slot, bool commit)
     {
         Commands = Array.AsReadOnly(commands);
         Slot = slot;
+        Commit = commit;
     }
 
     internal IReadOnlyList<string> Commands { get; }
+
     internal int? Slot { get; }
+
+    /// <summary>Gets whether the plan persists the configuration on the device; the epilogue of a committing
+    /// plan may reset the target before it can acknowledge the last command.
+    /// <para>获取该计划是否在设备上持久化配置；提交型计划的结语可能在确认最后一条命令之前复位目标。</para></summary>
+    internal bool Commit { get; }
 
     internal static UfsProvisionPlan Prepare(UfsCommon common, IReadOnlyList<UfsBody> bodies,
         UfsEpilogue epilogue, bool commit, int? slot)
@@ -67,7 +74,7 @@ internal sealed class UfsProvisionPlan
             commands.Add(FirehoseXmlBuilder.BuildUfsBody(body, slot));
         }
         commands.Add(FirehoseXmlBuilder.BuildUfsEpilogue(epilogue, commit, slot));
-        return new UfsProvisionPlan([.. commands], slot);
+        return new UfsProvisionPlan([.. commands], slot, commit);
     }
 
     private static void CheckByte(int value, string name)

@@ -197,26 +197,26 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds the &lt;setactivepartition&gt; XML command for setting the active A/B slot.
-    /// <para>构建用于设置活跃 A/B 槽位的 &lt;setactivepartition&gt; XML 命令。</para>
+    /// Builds the &lt;setactivepartition&gt; XML command for setting the active A/B slot. The wire format
+    /// carries a decimal slot number (0 = slot a, 1 = slot b), matching the reference firehose loader.
+    /// <para>构建用于设置活跃 A/B 槽位的 &lt;setactivepartition&gt; XML 命令。线上格式携带十进制槽位编号
+    /// （0 = 槽位 a，1 = 槽位 b），与参考 firehose 装载器一致。</para>
     /// </summary>
-    /// <param name="slot">The slot identifier to set as active (e.g. "a" or "b"). <para>待设置为活跃的槽位标识（如 "a" 或 "b"）。</para></param>
+    /// <param name="slot">The zero-based slot number to set as active.<para>待设置为活跃的从零开始槽位编号。</para></param>
     /// <returns>The setactivepartition XML string. <para>setactivepartition XML 字符串。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="slot"/> is null or empty.
-    /// <para><paramref name="slot"/> 为 null 或空。</para>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="slot"/> is negative or above 255.
+    /// <para><paramref name="slot"/> 为负或超过 255。</para>
     /// </exception>
-    public static string BuildSetActivePartition(string slot)
+    public static string BuildSetActivePartition(int slot)
     {
-        if (string.IsNullOrEmpty(slot))
-        {
-            throw new ArgumentException("Slot cannot be null or empty.", nameof(slot));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(slot);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, byte.MaxValue);
 
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
         sb.Append(EdlConstants.DataOpen);
-        sb.Append($"<setactivepartition slot=\"{EscapeXml(slot)}\" />\n");
+        sb.Append($"<setactivepartition slot=\"{slot}\" />\n");
         sb.Append(EdlConstants.DataClose);
         return sb.ToString();
     }
