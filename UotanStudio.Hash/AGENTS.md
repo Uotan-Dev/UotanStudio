@@ -4,7 +4,7 @@
 
 ## 边界
 
-- 本库是最底层叶子库，只依赖 BCL 与 `System.IO.Hashing`，不得引用任何其他业务项目。
+- 本库是最底层叶子库，只依赖 BCL 与 `System.IO.Hashing`，不得引用任何其他业务项目。`Cilica.OptimizerTask` 是 Release 构建期的 MSBuild 工具包（`PrivateAssets="all"`、`developmentDependency`），只贡献构建目标与 `[Optimize]` 特性源码，不产生运行时程序集引用，不计入这条依赖边界。
 - 全仓库生产代码只能经本库公共契约做校验和与摘要计算；其他项目不得 `using System.IO.Hashing`、不得调用 `MD5`/`SHA*`/`IncrementalHash` 的哈希入口，也不得自带 CRC 多项式表。`UotanStudio.Tests/Firmware/Architecture/HashBoundaryGuardTests.cs` 负责全仓扫描。
 - 本库是仓库内唯一可以声明 `System.IO.Hashing` 包的项目。签名与验签、作为签名参数的 `HashAlgorithmName`、HMAC、随机数生成、AES 等厂商加解密、定时比较不在本库转发范围。
 - `InternalsVisibleTo` 只给 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks`；其他项目通过公共契约消费，不得靠扩大友元程序集绕开文档与边界要求。

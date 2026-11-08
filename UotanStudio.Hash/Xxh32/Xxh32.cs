@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Cilica.Attributes;
 
 namespace UotanStudio.Hash.Xxh32;
 
@@ -7,6 +8,7 @@ namespace UotanStudio.Hash.Xxh32;
 /// implementations compute.
 /// <para>EROFS xattr 名称过滤器所固定的磁盘格式变体，即 Linux 内核与 fsck 实现所计算的 XXH32。</para>
 /// </summary>
+[Optimize]
 public static class Xxh32
 {
     /// <summary>

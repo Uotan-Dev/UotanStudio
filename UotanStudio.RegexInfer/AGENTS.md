@@ -4,7 +4,7 @@
 
 ## 边界与行为
 
-- 本项目是零依赖的确定性正则推导库，命名空间为 `UotanStudio.RegexInfer`；不要引入 UI、文件系统、网络或固件依赖，也不要依赖宿主状态。
+- 本项目是零依赖的确定性正则推导库，命名空间为 `UotanStudio.RegexInfer`；不要引入 UI、文件系统、网络或固件依赖，也不要依赖宿主状态。本项目不接 Cilica：0.18.2-preview 会把 BCL 内部类型引用内联进 `Ranker`/`TraceBuilder`，NativeAOT 的 ILC 无法解析这些类型并把方法判成 always-throw，详见根 `AGENTS.md` 与 `VERIFICATION.md`。
 - 输入是源文本、正例与可选负例；输出是候选正则及证据。只有通过 .NET 正则引擎编译、并精确提取全部正例的候选才会返回；仍然匹配负例的候选不能被静默丢弃，必须带非零 `NegativeLeaks` 返回，由调用方判断。
 - 同一输入与同一 `RegexInferenceOptions` 必须产生相同候选、相同顺序与相同分数。不要引入字典遍历顺序、当前文化、随机数或时间依赖。
 - 不要把选项 XML 当成已经生效的保护：`MaxNodes` 当前没有被读取；`TopResults`、`MaxOutputLength`、`MaxTraceLength` 只参与评分或没有限制搜索/长度；`Ranker.Validate` 与 `InferredRegex.TryCreateCompiled` 都使用无 `MatchTimeout` 的 `new Regex(pattern)`。要补预算或超时，必须同时改验证与编译两处并补测试，不能只改注释。

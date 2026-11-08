@@ -9,6 +9,9 @@
   <ItemGroup>
     <!-- Hardware-accelerated standard CRC-32; the only project allowed to reference it, per the boundary gate. -->
     <PackageReference Include="System.IO.Hashing" />
+    <!-- Release-only post-build IL optimizer; PrivateAssets keeps the build tool out of downstream projects.
+         Only types/methods carrying [Cilica.Attributes.Optimize] are rewritten. -->
+    <PackageReference Include="Cilica.OptimizerTask" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

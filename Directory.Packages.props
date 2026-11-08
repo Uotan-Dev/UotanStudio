@@ -88,5 +88,8 @@
     <!-- Abstractions only: the host bridges Microsoft.Extensions.Logging producers into IUnifiedLog without pulling the implementation, options or provider pipeline. -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
     <!-- Source-compatible command parsing with trimming/AOT support. -->
+    <!-- Release-only post-build SSA IL optimizer. Preview is pinned explicitly; bump only after a Release
+         build, the Release test suite and a NativeAOT publish have been re-verified on the new version. -->
+    <PackageVersion Include="Cilica.OptimizerTask" Version="0.18.2-preview" />
   </ItemGroup>
 </Project>

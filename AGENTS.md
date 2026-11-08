@@ -90,6 +90,14 @@ Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug
 
 测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained`，且不得出现新的裁剪/AOT 警告；`PublishAot` 由 `UotanStudio.Desktop.csproj` 声明，Release 默认 `DebugType=none`，发布的原生镜像不产 PDB；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
+### 构建期 IL 优化（Cilica）
+
+- `Cilica.OptimizerTask` 在 `Directory.Packages.props` 固定为预览版 `0.18.2-preview`，只在 Release 生效。包的 targets 在 `Compile` 之后改写当前项目 `obj/` 下的 `IntermediateAssembly`，随后的产物复制、裁剪与 NativeAOT 的 `IlcCompile` 都消费改写后的 IL。默认只变换带 `[Cilica.Attributes.Optimize]` 的类型或方法，`[Cilica.Attributes.DoNotOptimize]` 只排除自身导入、挡不住被内联进调用方（见下）；特性类型由包的 `contentFiles` 注入，不产生运行时程序集引用。
+- 试点项目只有 `UotanStudio.Hash`，用 `PrivateAssets="all"` 引用该包，标记集中在 `Fnv1a64` 与 `Xxh32` 这两个纯算术类型。新增试点只需在目标 csproj 加同样的 `PackageReference`，再给热点类型或方法加 `[Optimize]`；不要给测试、基准或构建期生成器项目加。
+- 不要把 Cilica 接到会内联 BCL 泛型集合、`Regex` 或 LINQ 实现的方法上：`0.18.2-preview` 对 `UotanStudio.RegexInfer` 的 `Ranker`/`TraceBuilder` 改写后，程序集里出现了 `System.Runtime.CompilerServices.MethodTable` 与 `TypeHandle` 的跨程序集引用，NativeAOT 的 ILC 无法从 `System.Private.CoreLib` 解析它们，把 `BuildForOne`、`NegatedClassFor`、`RenderSeparatorRun` 判为 `will always throw`。`[DoNotOptimize]` 挡不住，因为 `InlineMethods` 仍会把被排除方法内联进调用方；因此这类程序集只能整体排除。
+- `-p:UotanCilicaEnabled=false` 整次构建关闭改写，是应急回退开关；`-p:RunCilica=false` 也可单独关闭。`-p:CilicaAllMethods=true` 会去掉 `--filter-unmarked`、把试点程序集的全部方法纳入变换，属高风险配置，不做默认。`CilicaExtraArgs` 透传 CLI 参数（如 `--strict`、`--dump-dir`）。
+- 升级包版本或扩大标记范围前重跑三道门禁：Release 全量构建（Cilica 日志各 Pass 的 `failed` 必须为 0）、Release 测试套件（验证改写后语义等价）、NativeAOT win-x64 发布（确认无新增裁剪/AOT 警告，且发布日志不能出现本仓库程序集的 `ILC: Method ... will always throw`）。Debug 构建与测试不经过改写。
+
 文件系统内核验收只使用 `tools/gki-fs-lab` 的 x86_64 GKI 客户机。KVM 加速可选，未启用时使用 TCG 并在报告中标注 `acceleration=tcg`。
 
 所有内嵌二进制资源集中在 `UotanStudio.Assets/Assets/<bundle>/` 下（bundle 为 `fonts`、`ohos/device`、`drivers/rockusb`、`drivers/mediatek-vcom`、`drivers/mediatek-full`、`drivers/google-usb`、`drivers/rockchip-adb`、`drivers/qualcomm-qud`、`drivers/silabs-cp210x`、`drivers/ftdi-cdm`、`delivery`、`firmware/magic`，另有可选 `scrcpy`），每个负载是同目录的压缩帧 `<path>.zst`，唯一清单是 `UotanStudio.Assets/Assets/manifest.tsv`（`bundle`/`path`/长度/SHA-256/编码/来源六列）。改原始负载后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单（`dotnet run tools/compress-embedded-assets.cs -- --check` 只校验），生成物与代码一起提交。`firmware/magic` 的帧由 `UotanStudio.Firmware.MagicGen` 生成，该脚本只负责索引。驱动包与字体的原始负载留在 `reference/` 下，脚本按 `specs` 的显式文件表（可直接从 zip 读取）生成帧，`Assets/drivers/<packageId>/` 只提交帧。消费方一律经 `UotanStudio.Assets` 的 `AssetCatalog`/`AssetStore` 准备与抽取，不得再各自读取程序集资源。
