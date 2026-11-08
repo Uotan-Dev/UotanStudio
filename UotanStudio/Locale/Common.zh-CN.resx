@@ -5074,7 +5074,7 @@
     <value>正在重启至 sideload…</value>
   </data>
   <data name="Flash_Progress_SplittingSparse" xml:space="preserve">
-    <value>正在拆分稀疏镜像…</value>
+    <value>正在重新切割镜像…</value>
   </data>
   <data name="Flash_Progress_TruncatedNote" xml:space="preserve">
     <value>（已截断至 {0} 个扇区）</value>

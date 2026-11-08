@@ -5074,7 +5074,7 @@ Continue?</value>
     <value>Rebooting to sideload…</value>
   </data>
   <data name="Flash_Progress_SplittingSparse" xml:space="preserve">
-    <value>Splitting the sparse image into chunks…</value>
+    <value>Re-cutting the image into download-sized chunks…</value>
   </data>
   <data name="Flash_Progress_TruncatedNote" xml:space="preserve">
     <value> (truncated to {0} sectors)</value>

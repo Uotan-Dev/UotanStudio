@@ -3483,6 +3483,7 @@ public sealed partial class FlashViewModel
                 rowsByName.TryAdd(row.Name, row);
             }
 
+            var statusLog = new PartitionStatusLog();
             var progress = new Progress<FlashProgress>(update =>
             {
                 if (update.Partition is { } name && rowsByName.TryGetValue(name, out var row) &&
@@ -3492,11 +3493,17 @@ public sealed partial class FlashViewModel
                     UpdateOverall();
                 }
 
-                if (update.Percent is 0 or 100)
+                // Every phase and every numbered chunk reaches the log once, in run order: gating on the percent
+                // alone printed the first chunk again per wire chunk and skipped everything after it.
+                // 每个阶段与每个编号分块各按运行顺序写入日志一次：只按百分比门控会把第一个分块在每个线上分块上重复
+                // 打印，并跳过其后的全部内容。
+                if (!statusLog.TryAccept(update.Partition, update.Status))
                 {
-                    AppendLog(string.Format(CultureInfo.InvariantCulture,
-                        _localizer.GetString("Flash_Log_PartitionStatus"), update.Partition, update.Status));
+                    return;
                 }
+
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_Log_PartitionStatus"), update.Partition, update.Status));
             });
             SetRowsQueued(selected);
             if (device.Protocol is DeviceProtocolKind.Edl or DeviceProtocolKind.Adb)

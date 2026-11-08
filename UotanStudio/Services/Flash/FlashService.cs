@@ -464,7 +464,7 @@ public sealed class FlashService : IFlashService
     /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>A summary line describing the bytes flashed. <para>描述已刷写字节数的摘要文本。</para></returns>
-    private static string FlashImageChunked(
+    internal static string FlashImageChunked(
         FastbootSession session, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -482,7 +482,7 @@ public sealed class FlashService : IFlashService
         {
             using var image = File.OpenRead(imagePath);
             Report(progress, partition, 5, FlashLogText.Get("Flash_Progress_Uploading"));
-            var byteProgress = new Progress<long>(written =>
+            var byteProgress = new SynchronousFlashProgress(written =>
                 Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0,
                     FlashLogText.Get("Flash_Progress_Uploading")));
             var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct, resolveSlot: false,
@@ -522,8 +522,10 @@ public sealed class FlashService : IFlashService
                 using var chunk = File.OpenRead(chunks[i]);
                 var chunkLength = chunk.Length;
                 var index = i;
-                var chunkProgress = new Progress<long>(written =>
-                    Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, (bytesDone + written) * 100L / totalBytes) : 0,
+                var chunkBase = bytesDone;
+                var chunkProgress = new SynchronousFlashProgress(written =>
+                    Report(progress, partition,
+                        totalBytes > 0 ? (int)Math.Min(100, (chunkBase + written) * 100L / totalBytes) : 0,
                         FlashLogText.Format("Flash_Progress_UploadingChunk", index + 1, chunks.Length)));
                 var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false,
                     options: FlashPartitionOptions.PreparedSparseChunks);
