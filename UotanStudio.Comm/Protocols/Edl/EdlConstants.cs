@@ -330,14 +330,6 @@ internal static class EdlConstants
     public const int HelloProbeTimeoutMs = 1500;
 
     /// <summary>
-    /// Short timeout used to read the optional trailing packet after the Sahara handshake
-    /// loop exits (timeout is tolerated — some devices send nothing after DONE_RESPONSE).
-    /// <para>握手循环退出后读取可选尾包的短超时（毫秒）；超时可容忍——部分设备在
-    /// DONE_RESPONSE 之后不再发送任何包。</para>
-    /// </summary>
-    public const int SaharaTrailingPacketTimeoutMs = 1000;
-
-    /// <summary>
     /// Total read budget (ms) for the active Firehose NOP probe.
     /// <para>主动 Firehose NOP 探测的总读取预算（毫秒）。</para>
     /// </summary>

@@ -6,11 +6,11 @@ using Xunit;
 namespace UotanStudio.Tests.Protocols;
 
 /// <summary>
-/// Replays the QUD serial recovery path: a target whose bootrom HELLO was already consumed only speaks again
-/// after a Sahara RESET_STATE_MACHINE, and an unexpected packet read before that wake must be drained to its
-/// full protocol length so the following HELLO read still starts on a packet boundary.
-/// <para>回放 QUD 串口恢复路径：bootrom HELLO 已被消费的目标只有收到 Sahara RESET_STATE_MACHINE 才会重新开口，
-/// 而唤起之前读到的意外数据包必须按完整协议长度排空，使随后的 HELLO 读取仍然从数据包边界开始。</para>
+/// Replays the QUD serial recovery and first-packet dispatch paths: a target whose bootrom HELLO was
+/// already consumed is answered with a speculative HELLO_RESPONSE, and a target that starts its Sahara
+/// exchange with READ_DATA or END_OF_IMAGE instead of HELLO continues from that packet.
+/// <para>回放 QUD 串行恢复与首包分发路径：bootrom HELLO 已被消费的目标以推测性 HELLO_RESPONSE 应答；
+/// 而以 READ_DATA 或 END_OF_IMAGE 而非 HELLO 开始交换的目标从该数据包继续。</para>
 /// </summary>
 public sealed class SaharaRecoveryTests
 {
@@ -22,6 +22,7 @@ public sealed class SaharaRecoveryTests
     private const uint DoneResponseCommand = EdlConstants.SaharaCmdDoneResponse;
     private const uint ResetStateCommand = EdlConstants.SaharaCmdResetState;
     private const uint FirehoseImageId = (uint)SaharaImageId.Firehose;
+    private const uint UnknownImageId = 0x5A;
     private const uint ImageTxCompleteStatus = (uint)SaharaMode.ImageTxComplete;
     private const int HelloPacketBytes = 48;
     private const int ReadDataPacketBytes = 20;
@@ -34,7 +35,7 @@ public sealed class SaharaRecoveryTests
     private const uint DeviceHelloMaxCommandLength = 0x400;
 
     [Fact]
-    public async Task Handshake_QudSerialHelloConsumed_WakesWithResetStateMachineAndReturnsImageTxPending()
+    public async Task Handshake_QudSerialHelloConsumed_AnswersWithSpeculativeHelloResponseAndReturnsImageTxPending()
     {
         var transport = new WakeGatedSaharaTransport();
         transport.EnqueueRead(
@@ -55,12 +56,11 @@ public sealed class SaharaRecoveryTests
             Assert.Equal(SaharaMode.ImageTxPending, mode);
             Assert.Equal((uint?)DeviceHelloVersion, sahara.NegotiatedProtocolVersion);
             Assert.False(sahara.FirehoseAlreadyRunning);
-            var resets = ResetStateWrites(transport);
-            Assert.Single(resets);
-            Assert.Equal(ResetStatePacketBytes, resets[0].Length);
+            Assert.Empty(ResetStateWrites(transport));
             var helloResponses = HelloResponseWrites(transport);
-            Assert.Single(helloResponses);
-            Assert.Equal(DeviceHelloVersion, BinaryPrimitives.ReadUInt32LittleEndian(helloResponses[0].AsSpan(8)));
+            Assert.Equal(2, helloResponses.Count);
+            Assert.Equal(EdlConstants.SaharaVersion, BinaryPrimitives.ReadUInt32LittleEndian(helloResponses[0].AsSpan(8)));
+            Assert.Equal((uint)SaharaMode.ImageTxPending, BinaryPrimitives.ReadUInt32LittleEndian(helloResponses[0].AsSpan(20)));
             Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
         }
         finally
@@ -70,12 +70,10 @@ public sealed class SaharaRecoveryTests
     }
 
     [Fact]
-    public async Task Handshake_QudRecoveryReadsUnexpectedEndOfImage_DrainsWholePacketBeforeNextWake()
+    public async Task Handshake_FirstPacketIsReadData_ServesImageWithoutHelloExchange()
     {
         var transport = new WakeGatedSaharaTransport();
         transport.EnqueueRead(
-            EndOfImage(FirehoseImageId, 0),
-            Hello(SaharaMode.ImageTxPending),
             ReadData(0, UploadedRangeBytes),
             EndOfImage(FirehoseImageId, 0),
             DoneResponse(ImageTxCompleteStatus));
@@ -90,11 +88,110 @@ public sealed class SaharaRecoveryTests
                 cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(SaharaMode.ImageTxPending, mode);
-            Assert.Equal((uint?)DeviceHelloVersion, sahara.NegotiatedProtocolVersion);
-            var resets = ResetStateWrites(transport);
-            Assert.Equal(2, resets.Count);
-            Assert.All(resets, reset => Assert.Equal(ResetStatePacketBytes, reset.Length));
+            Assert.Single(HelloResponseWrites(transport));
+            Assert.Empty(ResetStateWrites(transport));
             Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_FirstPacketIsEndOfImageWithNakStatus_ReportsDeviceStatus()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            EndOfImage(FirehoseImageId, 0x0A));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var failure = await Assert.ThrowsAsync<SaharaException>(() => sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken));
+
+            Assert.Contains("invalid transmission length", failure.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(EdlFailureKind.ExecutionUnknown, EdlFailureClassification.Classify(failure));
+            Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_DoneResponseTimeoutAfterCompletedImages_CompletesAsFirehoseEntry()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 0));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_UnknownImageIdRequested_ResetsStateMachineAndReportsProgrammerImageMismatch()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes, UnknownImageId));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var failure = await Assert.ThrowsAsync<SaharaException>(() => sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken));
+
+            Assert.Equal(EdlFailureKind.ProgrammerImageMismatch, failure.FailureKind);
+            var resets = ResetStateWrites(transport);
+            Assert.Single(resets);
+            Assert.Equal(ResetStatePacketBytes, resets[0].Length);
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_ImageUpload_RaisesPerBlockImageProgress()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 0),
+            DoneResponse(ImageTxCompleteStatus));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        var progress = new List<SaharaImageProgressEventArgs>();
+        sahara.ImageProgress += (_, eventArgs) => progress.Add(eventArgs);
+        try
+        {
+            await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            var block = Assert.Single(progress);
+            Assert.Equal(FirehoseImageId, block.ImageId);
+            Assert.Equal(UploadedRangeBytes, block.BytesUploaded);
+            Assert.Equal(UploadedRangeBytes, block.ImageBytes);
         }
         finally
         {
@@ -114,12 +211,12 @@ public sealed class SaharaRecoveryTests
         return packet;
     }
 
-    private static byte[] ReadData(uint offset, uint length)
+    private static byte[] ReadData(uint offset, uint length, uint imageId = FirehoseImageId)
     {
         var packet = new byte[ReadDataPacketBytes];
         BinaryPrimitives.WriteUInt32LittleEndian(packet, ReadDataCommand);
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), (uint)packet.Length);
-        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(8), FirehoseImageId);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(8), imageId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(12), offset);
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(16), length);
         return packet;
@@ -148,6 +245,9 @@ public sealed class SaharaRecoveryTests
         => write.Length == ResetStatePacketBytes
             && BinaryPrimitives.ReadUInt32LittleEndian(write) == ResetStateCommand;
 
+    private static List<byte[]> ResetStateWrites(ScriptedSaharaTransport transport)
+        => [.. transport.Writes.Where(IsResetStateWrite)];
+
     private static List<byte[]> ResetStateWrites(WakeGatedSaharaTransport transport)
         => [.. transport.Writes.Where(IsResetStateWrite)];
 
@@ -156,10 +256,10 @@ public sealed class SaharaRecoveryTests
             && BinaryPrimitives.ReadUInt32LittleEndian(write) == HelloResponseCommand)];
 
     /// <summary>
-    /// Models the QUD serial link: every read times out until the host writes a Sahara
-    /// RESET_STATE_MACHINE, after which the scripted packets are delivered in order.
-    /// <para>模拟 QUD 串口链路：在主机写入 Sahara RESET_STATE_MACHINE 之前每次读取都超时，之后按顺序交付脚本化
-    /// 数据包。</para>
+    /// Models the QUD serial link: every read times out until the host writes the speculative Sahara
+    /// HELLO_RESPONSE, after which the scripted packets are delivered in order.
+    /// <para>模拟 QUD 串口链路：在主机写入推测性 Sahara HELLO_RESPONSE 之前每次读取都超时，之后按顺序交付
+    /// 脚本化数据包。</para>
     /// </summary>
     private sealed class WakeGatedSaharaTransport : ICommTransport
     {
@@ -224,7 +324,8 @@ public sealed class SaharaRecoveryTests
         {
             var packet = data.AsSpan(offset, length).ToArray();
             Writes.Add(packet);
-            if (IsResetStateWrite(packet))
+            if (packet.Length == HelloPacketBytes
+                && BinaryPrimitives.ReadUInt32LittleEndian(packet) == HelloResponseCommand)
             {
                 _armed = true;
             }

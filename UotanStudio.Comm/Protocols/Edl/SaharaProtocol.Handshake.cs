@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -11,18 +10,11 @@ namespace UotanStudio.Comm.Protocols.Edl;
 public sealed partial class SaharaProtocol
 {
     /// <summary>
-    /// Number of bounded RESET_STATE_MACHINE attempts made while re-establishing a HELLO that the QUD serial
-    /// driver consumed before this host read it.
-    /// <para>为重新建立被 QUD 串口驱动在本主机读取之前消费掉的 HELLO，所做有界 RESET_STATE_MACHINE 尝试次数。</para>
+    /// Largest declared packet length accepted while classifying the first packet, covering every
+    /// Sahara packet this host dispatches (48-byte HELLO is the largest) with margin.
+    /// <para>分类首包时接受的最大声明包长，覆盖本主机分发的所有 Sahara 包（最大为 48 字节的 HELLO）并留有余量。</para>
     /// </summary>
-    private const int QudHelloRecoveryAttempts = 2;
-
-    /// <summary>
-    /// Largest payload this host is willing to drain from an unexpected packet so it can resynchronize the
-    /// Sahara stream before trying the wake command again.
-    /// <para>主机愿意从意外数据包中读取的最大负载字节数，用于在再次尝试唤起命令前重新同步 Sahara 流。</para>
-    /// </summary>
-    private const int QudHelloRecoveryDrainLimitBytes = 4096;
+    private const int FirstPacketLengthBoundBytes = 64;
 
     /// <summary>
     /// Performs the Sahara handshake, uploading the specified programmer image.
@@ -67,37 +59,40 @@ public sealed partial class SaharaProtocol
         Log("Waiting for Sahara HELLO from device...");
 
         var helloProbeTimeout = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
-        byte[] firstData;
-
+        byte[] firstHeader;
         try
         {
-            firstData = await ReadExactAsync(Marshal.SizeOf<SaharaHelloPacket>(), helloProbeTimeout, cancellationToken);
+            firstHeader = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), helloProbeTimeout, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
         {
             if (QudHelloRecoveryEnabled)
             {
                 Log("First read timed out; the QUD driver may have consumed the HELLO. " +
-                    "Sending RESET_STATE_MACHINE so the target re-announces HELLO...");
-                var recoveredHello = await RecoverQudHelloAsync(cancellationToken).ConfigureAwait(false);
-                if (recoveredHello is not null)
+                    "Sending a speculative HELLO_RESPONSE so the target proceeds...");
+                await WriteStructAsync(BuildSpeculativeHelloResponse(images.Count > 0), cancellationToken)
+                    .ConfigureAwait(false);
+                try
                 {
-                    firstData = recoveredHello;
+                    firstHeader = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), helloProbeTimeout, cancellationToken)
+                        .ConfigureAwait(false);
                 }
-                else if (await ProbeFirehoseNopAsync(cancellationToken))
+                catch (EdlException recoveryEx) when (recoveryEx.ErrorCode == EdlErrorCode.ReadPortTimeout)
                 {
-                    RequireIdentityNotRequested();
-                    FirehoseAlreadyRunning = true;
-                    Log("Device is already running Firehose; skipping Sahara handshake.");
-                    return SaharaMode.ImageTxComplete;
-                }
-                else
-                {
+                    if (await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        RequireIdentityNotRequested();
+                        FirehoseAlreadyRunning = true;
+                        Log("Device is already running Firehose; skipping Sahara handshake.");
+                        return SaharaMode.ImageTxComplete;
+                    }
+
                     Log("Sahara HELLO recovery failed; reporting the original read timeout.");
                     throw;
                 }
             }
-            else if (await ProbeFirehoseNopAsync(cancellationToken))
+            else if (await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
             {
                 RequireIdentityNotRequested();
                 FirehoseAlreadyRunning = true;
@@ -110,7 +105,7 @@ public sealed partial class SaharaProtocol
             }
         }
 
-        if (LooksLikeFirehoseXml(firstData))
+        if (LooksLikeFirehoseXml(firstHeader))
         {
             RequireIdentityNotRequested();
             FirehoseAlreadyRunning = true;
@@ -118,13 +113,56 @@ public sealed partial class SaharaProtocol
             return SaharaMode.ImageTxComplete;
         }
 
-        var helloPacket = BytesToStruct<SaharaHelloPacket>(firstData);
+        var firstPacket = BytesToStruct<SaharaPacketHeader>(firstHeader);
+        if (firstPacket.Command == SaharaCommand.Hello
+            && firstPacket.Length != (uint)Marshal.SizeOf<SaharaHelloPacket>())
+        {
+            await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+            throw new SaharaException(
+                $"Unexpected first-packet HELLO length {firstPacket.Length}, expected {Marshal.SizeOf<SaharaHelloPacket>()}.");
+        }
+
+        byte[]? pendingPacket;
+        SaharaHelloPending? pendingHello = null;
+        if (firstPacket.Command == SaharaCommand.Hello)
+        {
+            var helloData = await ReadRemainingPacket<SaharaHelloPacket>(firstHeader, cancellationToken).ConfigureAwait(false);
+            pendingHello = new SaharaHelloPending(BytesToStruct<SaharaHelloPacket>(helloData));
+            pendingPacket = null;
+        }
+        else if (firstPacket.Command is SaharaCommand.ReadData or SaharaCommand.ReadData64
+            or SaharaCommand.EndOfImage or SaharaCommand.DoneResponse)
+        {
+            if (firstPacket.Length < (uint)Marshal.SizeOf<SaharaPacketHeader>()
+                || firstPacket.Length > FirstPacketLengthBoundBytes)
+            {
+                await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+                throw new SaharaException(
+                    $"Unexpected first-packet length {firstPacket.Length} for {firstPacket.Command}.");
+            }
+
+            pendingPacket = await ReadRemainingKnownLengthAsync(firstPacket.Length, firstHeader, cancellationToken)
+                .ConfigureAwait(false);
+            Log($"Sahara transfer started with {firstPacket.Command} instead of HELLO; continuing from that packet.");
+        }
+        else
+        {
+            await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+            throw DescribeUnsupportedSaharaCommand((uint)firstPacket.Command);
+        }
+
         if (images.Count == 0)
         {
-            if (AllowStreamDload && helloPacket.Mode == SaharaMode.Command)
+            if (pendingPacket is not null)
             {
-                ValidateHello(helloPacket);
-                NegotiatedProtocolVersion = Math.Min(helloPacket.Version, EdlConstants.SaharaHostMaxProtocolVersion);
+                throw new SaharaException("Device is in Sahara mode but no programmer image was provided.");
+            }
+
+            var streamHello = pendingHello!.Value.Packet;
+            if (AllowStreamDload && streamHello.Mode == SaharaMode.Command)
+            {
+                ValidateHello(streamHello);
+                NegotiatedProtocolVersion = Math.Min(streamHello.Version, EdlConstants.SaharaHostMaxProtocolVersion);
                 await WriteStructAsync(new SaharaHelloResponsePacket
                 {
                     Command = SaharaCommand.HelloResponse,
@@ -144,23 +182,72 @@ public sealed partial class SaharaProtocol
             throw new SaharaException("Device is in Sahara mode but no programmer image was provided.");
         }
 
+        SaharaHelloPacket helloPacket;
+        var mode = SaharaMode.ImageTxPending;
+        if (pendingHello is { } hello)
+        {
+            helloPacket = hello.Packet;
+        }
+        else
+        {
+            helloPacket = new SaharaHelloPacket
+            {
+                Command = SaharaCommand.Hello,
+                Length = (uint)Marshal.SizeOf<SaharaHelloPacket>(),
+                Version = EdlConstants.SaharaVersion,
+                MinVersion = EdlConstants.SaharaMinVersion,
+                Mode = SaharaMode.ImageTxPending
+            };
+            Log("The target skipped HELLO and requested image data directly; continuing the transfer.");
+        }
+
+        if (QueryIdentityBeforeUpload && pendingHello is null)
+        {
+            throw new SaharaException("A target that skipped HELLO cannot provide the required Sahara device identity.");
+        }
         if (QueryIdentityBeforeUpload)
         {
             helloPacket = await QueryIdentityOwnedAsync(helloPacket, cancellationToken).ConfigureAwait(false);
         }
-        var mode = helloPacket.Mode;
-        await AcknowledgeImageHelloAsync(helloPacket, cancellationToken).ConfigureAwait(false);
+        if (pendingHello is not null)
+        {
+            mode = helloPacket.Mode;
+            await AcknowledgeImageHelloAsync(helloPacket, cancellationToken).ConfigureAwait(false);
+        }
 
         Log("Starting image transfer...");
         var handshakeComplete = false;
         var waitingForDone = false;
         var waitingForHello = false;
         var helloCount = 1;
+        var imagesCompleted = 0;
 
         while (!handshakeComplete)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var headerData = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), _timeoutMs, cancellationToken);
+            byte[] headerData;
+            if (pendingPacket is not null)
+            {
+                headerData = pendingPacket;
+                pendingPacket = null;
+            }
+            else
+            {
+                try
+                {
+                    headerData = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), _timeoutMs, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout
+                    && (waitingForDone || waitingForHello) && imagesCompleted > 0)
+                {
+                    Log("Read timed out while waiting for the next packet after completed image transfers; " +
+                        "the device most likely switched to Firehose. Completing the handshake.");
+                    handshakeComplete = true;
+                    break;
+                }
+            }
+
             var header = BytesToStruct<SaharaPacketHeader>(headerData);
             if ((waitingForDone && header.Command != SaharaCommand.DoneResponse)
                 || (waitingForHello && header.Command != SaharaCommand.Hello))
@@ -178,12 +265,18 @@ public sealed partial class SaharaProtocol
                         Log($"READ_DATA: ImageId={rp.ImageId}, Offset={rp.DataOffset}, Length={rp.DataLength}");
                         if (!images.TryGetValue(rp.ImageId, out var img))
                         {
-                            throw new SaharaException($"Unknown image id {rp.ImageId}");
+                            await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+                            throw new SaharaException(
+                                $"The target requested image id {rp.ImageId} which the supplied programmer set does not contain.")
+                            {
+                                FailureKind = EdlFailureKind.ProgrammerImageMismatch
+                            };
                         }
 
                         ValidateReadRange(rp.DataOffset, rp.DataLength, img.Length, "READ_DATA");
                         img.Position = rp.DataOffset;
                         await TransferImageRangeAsync(img, rp.DataLength, "READ_DATA", cancellationToken);
+                        RaiseImageProgress(rp.ImageId, (long)rp.DataOffset + rp.DataLength, img);
                         break;
                     }
 
@@ -194,7 +287,12 @@ public sealed partial class SaharaProtocol
                         Log($"READ_DATA64: ImageId={rp64.ImageId}, Offset=0x{rp64.DataOffset:X16}, Length=0x{rp64.DataLength:X16}");
                         if (rp64.ImageId > uint.MaxValue || !images.TryGetValue((uint)rp64.ImageId, out var img64))
                         {
-                            throw new SaharaException($"Unknown image id {rp64.ImageId}");
+                            await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+                            throw new SaharaException(
+                                $"The target requested image id {rp64.ImageId} which the supplied programmer set does not contain.")
+                            {
+                                FailureKind = EdlFailureKind.ProgrammerImageMismatch
+                            };
                         }
 
                         if (rp64.DataOffset > long.MaxValue || rp64.DataLength > long.MaxValue)
@@ -205,6 +303,7 @@ public sealed partial class SaharaProtocol
                         ValidateReadRange((long)rp64.DataOffset, (long)rp64.DataLength, img64.Length, "READ_DATA64");
                         img64.Position = (long)rp64.DataOffset;
                         await TransferImageRangeAsync(img64, (long)rp64.DataLength, "READ_DATA64", cancellationToken);
+                        RaiseImageProgress((uint)rp64.ImageId, (long)rp64.DataOffset + (long)rp64.DataLength, img64);
                         break;
                     }
 
@@ -220,9 +319,15 @@ public sealed partial class SaharaProtocol
                         }
                         if (!images.ContainsKey(eoi.ImageId))
                         {
-                            throw new SaharaException($"Unknown completed image id {eoi.ImageId}.");
+                            await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+                            throw new SaharaException(
+                                $"The target completed image id {eoi.ImageId} which the supplied programmer set does not contain.")
+                            {
+                                FailureKind = EdlFailureKind.ProgrammerImageMismatch
+                            };
                         }
 
+                        imagesCompleted++;
                         var done = new SaharaDonePacket { Command = SaharaCommand.Done, Length = (uint)Marshal.SizeOf<SaharaDonePacket>() };
                         await WriteStructAsync(done, cancellationToken);
                         waitingForDone = true;
@@ -273,6 +378,70 @@ public sealed partial class SaharaProtocol
 
         HandshakeComplete?.Invoke(this, mode);
         return mode;
+    }
+
+    /// <summary>Buffers a HELLO parsed from the first packet so the image-less and identity paths keep
+    /// their original HELLO-driven flow.<para>缓存从首包解析出的 HELLO，使无镜像与身份查询路径保持原有的
+    /// HELLO 驱动流程。</para></summary>
+    /// <param name="Packet">The parsed HELLO packet.<para>解析出的 HELLO 包。</para></param>
+    private readonly record struct SaharaHelloPending(SaharaHelloPacket Packet);
+
+    /// <summary>
+    /// Builds the unsolicited HELLO_RESPONSE sent when the QUD serial driver consumed the bootrom HELLO:
+    /// it advertises the host version and the mode the pending handshake needs, exactly like the
+    /// speculative response the reference implementations send.
+    /// <para>构造 QUD 串口驱动消费掉 bootrom HELLO 时主动发送的 HELLO_RESPONSE：它宣告主机版本与本次握手
+    /// 所需模式，与参考实现发送的推测性应答一致。</para>
+    /// </summary>
+    /// <param name="imageTransfer">Whether the pending handshake expects image transfer; <see langword="false"/>
+    /// selects command mode.<para>本次握手是否期望镜像传输；<see langword="false"/> 选择命令模式。</para></param>
+    /// <returns>The 48-byte speculative HELLO_RESPONSE packet.<para>48 字节的推测性 HELLO_RESPONSE 包。</para></returns>
+    private static SaharaHelloResponsePacket BuildSpeculativeHelloResponse(bool imageTransfer) => new()
+    {
+        Command = SaharaCommand.HelloResponse,
+        Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
+        Version = EdlConstants.SaharaVersion,
+        MinVersion = EdlConstants.SaharaHostCompatibleVersion,
+        Status = 0,
+        Mode = imageTransfer ? SaharaMode.ImageTxPending : SaharaMode.Command
+    };
+
+    /// <summary>
+    /// Reports whether the first bytes look like a Firehose document after skipping packet padding and
+    /// ASCII whitespace, so a target already running Firehose is recognized from the header-sized read.
+    /// <para>在跳过包填充与 ASCII 空白后，报告首字节是否形似 Firehose 文档，使头部大小的读取也能识别
+    /// 已在运行 Firehose 的目标。</para>
+    /// </summary>
+    /// <param name="d">The data to check. <para>要检查的数据。</para></param>
+    /// <returns><c>true</c> if the first non-padding bytes are &lt;?xml. <para>如果首个非填充字节起为 &lt;?xml 则返回 <c>true</c>。</para></returns>
+    private static bool LooksLikeFirehoseXml(byte[] d)
+    {
+        if (d is null)
+        {
+            return false;
+        }
+
+        var start = EdlConstants.MeasureDocumentPrefix(d);
+        return d.AsSpan(start).StartsWith("<?xml"u8);
+    }
+
+    /// <summary>
+    /// Raises <see cref="ImageProgress"/> after one READ_DATA/READ_DATA64 block has been served.
+    /// <para>在服务完一个 READ_DATA/READ_DATA64 块后触发 <see cref="ImageProgress"/>。</para>
+    /// </summary>
+    /// <param name="imageId">The Sahara image identifier being served.<para>正在服务的 Sahara 镜像标识。</para></param>
+    /// <param name="bytesUploaded">The cumulative bytes uploaded for this image so far.<para>该镜像目前已累计上传的字节数。</para></param>
+    /// <param name="image">The stream serving the image, used for its total length when seekable.<para>正在提供镜像的流；可定位时用于总长。</para></param>
+    private void RaiseImageProgress(uint imageId, long bytesUploaded, Stream image)
+    {
+        var handler = ImageProgress;
+        if (handler is null)
+        {
+            return;
+        }
+
+        handler.Invoke(this, new SaharaImageProgressEventArgs(imageId, bytesUploaded,
+            image.CanSeek ? image.Length : null));
     }
 
     /// <summary>
@@ -362,139 +531,6 @@ public sealed partial class SaharaProtocol
         }
     }
 
-    /// <summary>
-    /// Wakes a target whose bootrom HELLO was already consumed by the QUD serial driver by sending
-    /// RESET_STATE_MACHINE and then reading the HELLO it re-announces.
-    /// <para>通过发送 RESET_STATE_MACHINE 再读取目标重新宣告的 HELLO，唤起 bootrom HELLO 已被 QUD 串口驱动消费的目标。</para>
-    /// </summary>
-    /// <remarks>
-    /// Every attempt is bounded: a target that stays silent simply ends that attempt, and an unexpected
-    /// packet is drained to its full protocol length before the next wake, so a following read cannot
-    /// start in the middle of a half-consumed packet. <see langword="null"/> means no HELLO arrived; the
-    /// caller keeps the original read-timeout semantics.
-    /// <para>每次尝试都有界：保持静默的目标只会结束当前尝试，意外数据包则在下次唤起之前按完整协议长度读掉，
-    /// 因此后续读取不会从半个数据包的中间开始。<see langword="null"/> 表示没有收到 HELLO；调用方保持原始读取
-    /// 超时语义。</para>
-    /// </remarks>
-    /// <param name="cancellationToken">Cancellation token checked before every wake and read.
-    /// <para>在每次唤起与读取之前检查的取消令牌。</para></param>
-    /// <returns>The 48-byte HELLO packet, or <see langword="null"/> when no bounded attempt produced one.
-    /// <para>48 字节的 HELLO 包；没有任何有界尝试得到时为 <see langword="null"/>。</para></returns>
-    private async Task<byte[]?> RecoverQudHelloAsync(CancellationToken cancellationToken)
-    {
-        var helloBytes = Marshal.SizeOf<SaharaHelloPacket>();
-        var headerBytes = Marshal.SizeOf<SaharaPacketHeader>();
-        var wakeTimeoutMs = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
-        for (var attempt = 1; attempt <= QudHelloRecoveryAttempts; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var reset = BuildSaharaSimpleCommand(SaharaCommand.ResetState);
-                await WriteDataAsync(reset, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Log($"RESET_STATE_MACHINE attempt {attempt} could not be written: {ex.Message}");
-                CommTrace.Debug("edl", $"Sahara HELLO recovery: RESET_STATE_MACHINE write failed ({ex.Message}).");
-                return null;
-            }
-
-            Log($"Sent RESET_STATE_MACHINE (attempt {attempt} of {QudHelloRecoveryAttempts}) so the target re-announces HELLO.");
-            byte[] headerData;
-            try
-            {
-                headerData = await ReadExactAsync(headerBytes, wakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-            }
-            catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
-            {
-                Log($"No Sahara packet arrived after RESET_STATE_MACHINE attempt {attempt}.");
-                CommTrace.Debug("edl", $"Sahara HELLO recovery: no packet after wake attempt {attempt}.");
-                continue;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Log($"Reading the packet after RESET_STATE_MACHINE attempt {attempt} failed: {ex.Message}");
-                CommTrace.Debug("edl",
-                    $"Sahara HELLO recovery: packet read failed on wake attempt {attempt} ({ex.Message}).");
-                return null;
-            }
-
-            var header = BytesToStruct<SaharaPacketHeader>(headerData);
-            if (header.Command == SaharaCommand.Hello && header.Length == (uint)helloBytes)
-            {
-                byte[] body;
-                try
-                {
-                    body = await ReadExactAsync(helloBytes - headerBytes, wakeTimeoutMs, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Log($"The HELLO after RESET_STATE_MACHINE attempt {attempt} was truncated: {ex.Message}");
-                    CommTrace.Debug("edl", $"Sahara HELLO recovery: truncated HELLO on wake attempt {attempt}.");
-                    return null;
-                }
-                var hello = new byte[helloBytes];
-                headerData.CopyTo(hello, 0);
-                body.CopyTo(hello, headerBytes);
-                Log("The target re-announced HELLO after RESET_STATE_MACHINE.");
-                CommTrace.Debug("edl",
-                    $"Sahara HELLO recovery: HELLO received after wake attempt {attempt}.");
-                return hello;
-            }
-
-            Log($"Received {header.Command} (len {header.Length}) instead of HELLO after RESET_STATE_MACHINE.");
-            if (!await TryDrainUnexpectedSaharaPacketAsync(header, cancellationToken).ConfigureAwait(false))
-            {
-                CommTrace.Debug("edl",
-                    $"Sahara HELLO recovery: could not drain {header.Command} (len {header.Length}); attempt stopped.");
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Consumes the remaining bytes of an unexpected Sahara packet so the next read starts on a packet boundary.
-    /// <para>读取意外 Sahara 数据包的全部剩余字节，使下一次读取从数据包边界开始。</para>
-    /// </summary>
-    /// <param name="header">The already-read packet header. <para>已读取的数据包头。</para></param>
-    /// <param name="cancellationToken">Cancellation token for the bounded drain read.
-    /// <para>用于有界排出读取的取消令牌。</para></param>
-    /// <returns><see langword="true"/> when the whole packet was drained, <see langword="false"/> when the
-    /// reported length is unusable or the drain could not finish.
-    /// <para>整包已读掉时为 <see langword="true"/>；上报长度不可用或未能读完时为
-    /// <see langword="false"/>。</para></returns>
-    private async Task<bool> TryDrainUnexpectedSaharaPacketAsync(SaharaPacketHeader header,
-        CancellationToken cancellationToken)
-    {
-        var headerBytes = (uint)Marshal.SizeOf<SaharaPacketHeader>();
-        if (header.Length < headerBytes || header.Length - headerBytes > QudHelloRecoveryDrainLimitBytes)
-        {
-            return false;
-        }
-
-        var remaining = (int)(header.Length - headerBytes);
-        if (remaining == 0)
-        {
-            return true;
-        }
-
-        try
-        {
-            await ReadExactAsync(remaining, _timeoutMs, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Log($"Draining {remaining} bytes of {header.Command} failed: {ex.Message}");
-            return false;
-        }
-        CommTrace.Debug("edl", $"Sahara HELLO recovery: drained {remaining} bytes of {header.Command}.");
-        return true;
-    }
-
     private static void ValidateHello(SaharaHelloPacket hello)
     {
         ValidateCommand(hello.Command, SaharaCommand.Hello, hello.Length, (uint)Marshal.SizeOf<SaharaHelloPacket>());
@@ -524,9 +560,9 @@ public sealed partial class SaharaProtocol
         0x07 => "invalid image header size",
         0x08 => "invalid image data size",
         0x09 => "invalid image type received",
-        0x0A => "invalid data offset",
-        0x0B => "invalid data length",
-        0x0C => "invalid image id",
+        0x0A => "invalid transmission length",
+        0x0B => "invalid reception length",
+        0x0C => "general transmission or reception error",
         _ => "unmapped Sahara status"
     };
 
@@ -594,23 +630,5 @@ public sealed partial class SaharaProtocol
         {
             throw;
         }
-    }
-
-    /// <summary>
-    /// Checks if the data looks like a Firehose XML response after skipping the NUL packet padding and ASCII
-    /// whitespace a target emits before its document.
-    /// <para>在跳过目标在文档之前输出的 NUL 包填充与 ASCII 空白后，检查数据是否看起来像 Firehose XML 响应。</para>
-    /// </summary>
-    /// <param name="d">The data to check. <para>要检查的数据。</para></param>
-    /// <returns><c>true</c> if the first non-padding bytes are &lt;?xml. <para>如果首个非填充字节起为 &lt;?xml 则返回 <c>true</c>。</para></returns>
-    private static bool LooksLikeFirehoseXml(byte[] d)
-    {
-        if (d is null)
-        {
-            return false;
-        }
-
-        var start = EdlConstants.MeasureDocumentPrefix(d);
-        return d.AsSpan(start).StartsWith("<?xml"u8);
     }
 }

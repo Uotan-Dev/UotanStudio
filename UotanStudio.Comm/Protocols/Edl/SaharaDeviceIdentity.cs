@@ -36,11 +36,14 @@ public sealed class SaharaDeviceIdentity
     /// <para>32 位或 64 位小端版本值；目标拒绝读取时为零。</para></value>
     public ulong SblVersion { get; }
 
-    /// <summary>Gets the exact OEM public-key-hash reply in hexadecimal, including device padding.
-    /// <para>获取十六进制表示的精确 OEM 公钥哈希回复，包含设备填充。</para></summary>
-    /// <value>The bounded raw response, not a guessed hash algorithm or trusted certificate; empty
+    /// <summary>Gets the OEM public-key-hash reply in hexadecimal, normalized to a single digest: a
+    /// fully repeated digest block is cut to one copy, trailing zero padding is stripped, and the length
+    /// is rounded back up to the nearest standard SHA-256/384/512 size.
+    /// <para>获取十六进制表示的 OEM 公钥哈希回复，已归一化为单个摘要：完整重复的摘要块裁剪为一份，
+    /// 去除尾部零填充，并把长度向上取整到最近的标准 SHA-256/384/512 大小。</para></summary>
+    /// <value>The normalized digest, not a guessed hash algorithm or trusted certificate; empty
     /// when the target refused the read.
-    /// <para>有界的原始响应，并非推断的哈希算法或可信证书；目标拒绝读取时为空。</para></value>
+    /// <para>归一化后的摘要，并非推断的哈希算法或可信证书；目标拒绝读取时为空。</para></value>
     public string OemPublicKeyHashHex { get; }
 
     /// <summary>Gets the protocol version acknowledged during the identity exchange, when known.

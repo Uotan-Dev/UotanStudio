@@ -29,6 +29,7 @@ public sealed partial class EdlSession : IProtocolSession
     private EdlRelinkOffer? _lastRelinkOffer;
     private string? _programmerSha256Hex;
     private string? _programmerFileName;
+    private bool _programmerHashPreflightDone;
 
     /// <summary>
     /// Creates a new EDL session over the specified device transport.
@@ -86,6 +87,14 @@ public sealed partial class EdlSession : IProtocolSession
 
     /// <summary>Reports verified protocol changes within this session.<para>报告本会话内经校验的协议变化。</para></summary>
     public event EventHandler<EdlProtocolState>? ProtocolStateChanged;
+
+    /// <summary>
+    /// Raised after each Sahara READ_DATA/READ_DATA64 block has been served during a programmer upload,
+    /// so hosts can render per-image transfer progress.
+    /// <para>programmer 上传期间每服务完一个 Sahara READ_DATA/READ_DATA64 块后触发，供宿主呈现逐镜像传输
+    /// 进度。</para>
+    /// </summary>
+    public event EventHandler<SaharaImageProgressEventArgs>? SaharaImageProgress;
 
     /// <summary>
     /// Gets the ordered evidence produced by programmer selection preflight and initialization gates.
@@ -407,6 +416,7 @@ public sealed partial class EdlSession : IProtocolSession
 
         _programmerSha256Hex = measured;
         _programmerFileName = descriptor.FileName;
+        _programmerHashPreflightDone = true;
         using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         await InitializeOwnedAsync(programmerImage, cancellationToken, options).ConfigureAwait(false);
     }
@@ -499,6 +509,10 @@ public sealed partial class EdlSession : IProtocolSession
         var skipResponse = options?.SkipResponseOnReadWrite ?? false;
         Firehose!.Configuration.SkipResponseOnErase = skipResponse;
         Firehose.Configuration.SkipResponseOnReadWrite = skipResponse;
+        if (HasProgrammerImages(programmerImages) && !_programmerHashPreflightDone)
+        {
+            RecordProgrammerHashPreflight(programmerImages!, cancellationToken);
+        }
         if (_protocolState == EdlProtocolState.Unknown)
         {
             await ProbeProtocolBeforeInitializationAsync(cancellationToken).ConfigureAwait(false);
@@ -515,6 +529,11 @@ public sealed partial class EdlSession : IProtocolSession
             if (_protocolState != EdlProtocolState.Firehose)
             {
                 LinkStage = HasProgrammerImages(programmerImages) ? EdlLinkStage.ProgrammerUploading : EdlLinkStage.SaharaConnecting;
+                if (Sahara is { } previousSahara)
+                {
+                    previousSahara.ImageProgress -= ForwardSaharaImageProgress;
+                }
+
                 Sahara = new SaharaProtocol(Transport)
                 {
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? UsesSerialFallback,
@@ -522,6 +541,7 @@ public sealed partial class EdlSession : IProtocolSession
                     QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false,
                     AllowStreamDload = options?.AllowStreamDload ?? false
                 };
+                Sahara.ImageProgress += ForwardSaharaImageProgress;
                 var mode = HasProgrammerImages(programmerImages)
                     ? await Sahara.HandshakeAsync(programmerImages!, cancellationToken).ConfigureAwait(false)
                     : await Sahara.HandshakeAsync(programmerImage: null, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -567,6 +587,56 @@ public sealed partial class EdlSession : IProtocolSession
             Firehose!.Invalidate();
             LinkStage = EdlLinkStage.Failed;
             PublishRelinkOffer();
+            throw;
+        }
+    }
+
+    /// <summary>Forwards the active Sahara instance's image progress to this session's subscribers.
+    /// <para>把当前 Sahara 实例的镜像进度转发给本会话的订阅者。</para></summary>
+    /// <param name="sender">The Sahara protocol instance. <para>Sahara 协议实例。</para></param>
+    /// <param name="e">The per-block progress. <para>逐块进度。</para></param>
+    private void ForwardSaharaImageProgress(object? sender, SaharaImageProgressEventArgs e)
+        => SaharaImageProgress?.Invoke(this, e);
+
+    /// <summary>
+    /// Measures the SHA-256 of every programmer image before any device interaction and records it as
+    /// initialization evidence; a single-image set also becomes the session's programmer identity so
+    /// capability snapshots and bundle results carry the measured upload identity.
+    /// <para>在任何设备交互之前测量每个 programmer 镜像的 SHA-256 并记录为初始化证据；单镜像集合同时成为
+    /// 会话的 programmer 身份，使能力快照与刷写包结果携带实测的上传身份。</para>
+    /// </summary>
+    /// <remarks>The measurement reuses the streaming hash and restores each stream position, so the
+    /// handshake uploads the identical bytes afterwards.<para>测量复用流式哈希并恢复每个流的位置，因此
+    /// 握手随后上传的正是相同字节。</para></remarks>
+    /// <param name="programmerImages">The non-empty image set about to be uploaded.
+    /// <para>即将上传的非空镜像集合。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between hash chunks.
+    /// <para>在哈希数据块之间检查的取消令牌。</para></param>
+    private void RecordProgrammerHashPreflight(IReadOnlyDictionary<uint, Stream> programmerImages,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? singleImageHash = null;
+            foreach (var (imageId, stream) in programmerImages)
+            {
+                var measured = EdlProgrammerHash.ComputeSha256Hex(stream, cancellationToken);
+                RecordInitializationEvidence("programmer-hash-preflight", CommandOutcomeKind.Completed,
+                    $"Image {imageId}: measured SHA-256 {measured} before device interaction.", measured, null);
+                singleImageHash = measured;
+            }
+
+            if (programmerImages.Count == 1)
+            {
+                _programmerSha256Hex = singleImageHash;
+            }
+
+            _programmerHashPreflightDone = true;
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            RecordInitializationEvidence("programmer-hash-preflight", ClassifyFailure(error),
+                "The programmer stream could not be hashed before device interaction.", null, null);
             throw;
         }
     }

@@ -84,4 +84,80 @@ public sealed class EdlProgrammerImageSet
         return new EdlProgrammerImageSet(fullPath, isManifest: false,
             [new SaharaProgrammerImage((uint)SaharaImageId.Firehose, fullPath, length)]);
     }
+
+    /// <summary>
+    /// Builds an image set from an in-memory id-to-file mapping, e.g. a programmer mapping inferred from
+    /// file-name conventions when a folder carries no vendor manifest.
+    /// <para>由内存中的 id 到文件映射构建镜像集合，例如目录没有厂商清单时按文件名约定推断出的 programmer 映射。</para>
+    /// </summary>
+    /// <remarks>
+    /// The mapping is validated like a manifest before any upload: duplicate identifiers, missing files,
+    /// empty or oversized images and an over-ceiling combined size are all rejected here. Each image is
+    /// re-measured from disk, so a stale declared length cannot poison the upload evidence.
+    /// <para>映射在上传前按清单同等规则校验：重复标识、缺失文件、空镜像或超限镜像以及超合计上限都在此拒绝。
+    /// 每个镜像按磁盘重新测量，因此过期的声明长度不会污染上传证据。</para></remarks>
+    /// <param name="sourcePath">The path the mapping is attributed to, typically the scanned folder; it is
+    /// recorded as the set source for evidence and logs.
+    /// <para>映射归属的路径，通常为扫描目录；作为集合来源记录进证据与日志。</para></param>
+    /// <param name="images">The candidate image mappings in rule order.
+    /// <para>按规则顺序排列的候选镜像映射。</para></param>
+    /// <returns>The validated image set, marked as a manifest whenever it carries more than one image.
+    /// <para>校验通过的镜像集合；多于一个镜像时按清单形态标记。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="sourcePath"/> is blank, or an image carries no path.
+    /// <para><paramref name="sourcePath"/> 为空，或某个镜像没有路径。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="images"/> is null.
+    /// <para><paramref name="images"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The mapping is empty or above the image-count ceiling, repeats an
+    /// image identifier, or any image is missing, empty, oversized or pushes the combined size over the ceiling.
+    /// <para>映射为空或超过镜像数量上限、重复镜像标识，或任一镜像缺失、为空、超限或使合计大小超过上限。</para></exception>
+    public static EdlProgrammerImageSet FromImages(string sourcePath, IReadOnlyList<SaharaProgrammerImage> images)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentNullException.ThrowIfNull(images);
+        if (images.Count is 0 or > SaharaProgrammerManifest.MaximumImages)
+        {
+            throw new InvalidDataException(
+                $"A programmer set carries between 1 and {SaharaProgrammerManifest.MaximumImages} images.");
+        }
+
+        var seen = new HashSet<uint>();
+        var total = 0L;
+        var measured = new List<SaharaProgrammerImage>(images.Count);
+        foreach (var image in images)
+        {
+            if (!seen.Add(image.ImageId))
+            {
+                throw new InvalidDataException($"The programmer set repeats image_id {image.ImageId}.");
+            }
+
+            if (string.IsNullOrWhiteSpace(image.Path))
+            {
+                throw new InvalidDataException($"The image for image_id {image.ImageId} carries no path.");
+            }
+
+            var fullPath = Path.GetFullPath(image.Path);
+            if (!File.Exists(fullPath))
+            {
+                throw new InvalidDataException($"The programmer image does not exist: {fullPath}.");
+            }
+
+            var length = new FileInfo(fullPath).Length;
+            if (length is 0 || length > SaharaProgrammerManifest.MaximumImageBytes)
+            {
+                throw new InvalidDataException(
+                    $"The programmer image must be non-empty and at most {SaharaProgrammerManifest.MaximumImageBytes} bytes: {fullPath}.");
+            }
+
+            total += length;
+            if (total > SaharaProgrammerManifest.MaximumTotalImageBytes)
+            {
+                throw new InvalidDataException(
+                    $"The programmer images total more than {SaharaProgrammerManifest.MaximumTotalImageBytes} bytes: {fullPath}.");
+            }
+
+            measured.Add(new SaharaProgrammerImage(image.ImageId, fullPath, length));
+        }
+
+        return new EdlProgrammerImageSet(Path.GetFullPath(sourcePath), isManifest: measured.Count > 1, measured);
+    }
 }

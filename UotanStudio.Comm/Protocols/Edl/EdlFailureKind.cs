@@ -80,6 +80,13 @@ public enum EdlFailureKind
     ResourceMismatch,
 
     /// <summary>
+    /// The target requested or completed a Sahara image id the supplied programmer set does not contain,
+    /// so the bootloader package does not match this device platform.
+    /// <para>目标请求或完成了所提供 programmer 集合不包含的 Sahara 镜像 id，即引导包与设备平台不匹配。</para>
+    /// </summary>
+    ProgrammerImageMismatch,
+
+    /// <summary>
     /// The device-side state is unknown and the failure cannot be attributed to a more specific
     /// kind; consumers must reconnect rather than retry.
     /// <para>设备端状态未知，且无法归入更具体的类别；消费者必须重连而不是重试。</para>

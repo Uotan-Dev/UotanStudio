@@ -265,6 +265,91 @@ public sealed class EdlProgrammerImageSetTests : IDisposable
         && BinaryPrimitives.ReadUInt32LittleEndian(write) is not (
             (uint)SaharaCommand.HelloResponse or (uint)SaharaCommand.Done or (uint)SaharaCommand.ResetState);
 
+    [Fact]
+    public void FromImages_MultiImageMapping_BuildsManifestSetWithMeasuredLengths()
+    {
+        var first = WriteFile("multi_image.mbn", BuildElf());
+        var second = WriteFile("prog_firehose_ddr.elf", BuildElf());
+
+        var set = EdlProgrammerImageSet.FromImages(_root, [
+            new SaharaProgrammerImage(37, first, 999),
+            new SaharaProgrammerImage(13, second, 1)
+        ]);
+
+        Assert.True(set.IsManifest);
+        Assert.Equal(Path.GetFullPath(_root), set.SourcePath);
+        Assert.Equal(2, set.Images.Count);
+        Assert.Equal(new FileInfo(first).Length, set.Images[0].LengthBytes);
+        Assert.Equal(Path.GetFullPath(first), set.Images[0].Path);
+    }
+
+    [Fact]
+    public void FromImages_SingleImage_BuildsPlainImageSet()
+    {
+        var image = WriteFile("prog_ufs_firehose.elf", BuildElf());
+
+        var set = EdlProgrammerImageSet.FromImages(_root,
+            [new SaharaProgrammerImage((uint)SaharaImageId.Firehose, image, 64)]);
+
+        Assert.False(set.IsManifest);
+        Assert.Equal(Path.GetFullPath(image), set.Images[0].Path);
+    }
+
+    [Fact]
+    public void FromImages_RepeatedImageId_IsRejected()
+    {
+        var image = WriteFile("xbl.elf", BuildElf());
+
+        Assert.Throws<InvalidDataException>(() => EdlProgrammerImageSet.FromImages(_root, [
+            new SaharaProgrammerImage(21, image, 16),
+            new SaharaProgrammerImage(21, image, 16)
+        ]));
+    }
+
+    [Fact]
+    public void FromImages_MissingImage_IsRejected()
+    {
+        var image = WriteFile("xbl.elf", BuildElf());
+
+        Assert.Throws<InvalidDataException>(() => EdlProgrammerImageSet.FromImages(_root, [
+            new SaharaProgrammerImage(21, image, 16),
+            new SaharaProgrammerImage(13, Path.Combine(_root, "absent.elf"), 16)
+        ]));
+    }
+
+    [Fact]
+    public void FromImages_EmptyImage_IsRejected()
+    {
+        var image = WriteFile("empty.elf", []);
+
+        Assert.Throws<InvalidDataException>(() => EdlProgrammerImageSet.FromImages(_root,
+            [new SaharaProgrammerImage(13, image, 0)]));
+    }
+
+    [Fact]
+    public void FromImages_AboveImageCountCeiling_IsRejected()
+    {
+        var image = WriteFile("xbl.elf", BuildElf());
+        var images = Enumerable.Range(0, SaharaProgrammerManifest.MaximumImages + 1)
+            .Select(index => new SaharaProgrammerImage((uint)index, image, 16))
+            .ToArray();
+
+        Assert.Throws<InvalidDataException>(() => EdlProgrammerImageSet.FromImages(_root, images));
+    }
+
+    [Fact]
+    public void FromImages_EmptyMapping_IsRejected()
+        => Assert.Throws<InvalidDataException>(() => EdlProgrammerImageSet.FromImages(_root, []));
+
+    [Fact]
+    public void FromImages_BlankSourcePath_IsRejected()
+    {
+        var image = WriteFile("xbl.elf", BuildElf());
+
+        Assert.Throws<ArgumentException>(() => EdlProgrammerImageSet.FromImages(" ",
+            [new SaharaProgrammerImage(21, image, 16)]));
+    }
+
     private string WriteFile(string name, byte[] content)
     {
         var path = Path.Combine(_root, name);

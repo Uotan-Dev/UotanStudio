@@ -28,9 +28,10 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     /// <summary>
     /// Gets or sets whether the QUD HELLO recovery is enabled. When the initial passive HELLO
     /// read times out (the QUD driver may have swallowed the device's first HELLO), an
-    /// unsolicited 48-byte HELLO_RESPONSE is sent so the device re-sends its HELLO.
+    /// unsolicited 48-byte HELLO_RESPONSE is sent so the device proceeds with the exchange it
+    /// was waiting to run.
     /// <para>获取或设置是否启用 QUD HELLO 恢复。当初始被动 HELLO 读取超时（QUD 驱动可能
-    /// 吞掉了设备的首个 HELLO）时，主动发送 48 字节的 HELLO_RESPONSE 让设备重发 HELLO。</para>
+    /// 吞掉了设备的首个 HELLO）时，主动发送 48 字节的 HELLO_RESPONSE 让设备继续原本等待的交换。</para>
     /// </summary>
     /// <value><see langword="true"/> lets <c>HandshakeAsync</c> send the unsolicited recovery
     /// HELLO_RESPONSE after the initial passive HELLO read times out; the default is
@@ -88,6 +89,13 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     /// <para>握手完成时触发。</para>
     /// </summary>
     public event EventHandler<SaharaMode>? HandshakeComplete;
+
+    /// <summary>
+    /// Raised after each READ_DATA/READ_DATA64 block has been served during image upload, so hosts can
+    /// render per-image transfer progress.
+    /// <para>镜像上传期间每服务完一个 READ_DATA/READ_DATA64 块后触发，供宿主呈现逐镜像传输进度。</para>
+    /// </summary>
+    public event EventHandler<SaharaImageProgressEventArgs>? ImageProgress;
 
     /// <summary>
     /// Raised for log messages.

@@ -64,3 +64,27 @@ public sealed partial class SaharaProtocol
         }
     }
 }
+
+/// <summary>
+/// Carries the progress of one Sahara image upload, reported after each READ_DATA/READ_DATA64 block
+/// the target requested has been served.
+/// <para>携带一次 Sahara 镜像上传的进度；在目标请求的每个 READ_DATA/READ_DATA64 块被服务完后上报。</para>
+/// </summary>
+/// <param name="imageId">The Sahara image identifier being uploaded.<para>正在上传的 Sahara 镜像标识。</para></param>
+/// <param name="bytesUploaded">The cumulative bytes uploaded for this image so far.<para>该镜像目前已累计上传的字节数。</para></param>
+/// <param name="imageBytes">The total image length in bytes, or <see langword="null"/> when the serving stream cannot report one.
+/// <para>镜像总字节数；提供镜像的流无法给出时为 <see langword="null"/>。</para></param>
+public sealed class SaharaImageProgressEventArgs(uint imageId, long bytesUploaded, long? imageBytes) : EventArgs
+{
+    /// <summary>Gets the Sahara image identifier being uploaded.
+    /// <para>获取正在上传的 Sahara 镜像标识。</para></summary>
+    public uint ImageId { get; } = imageId;
+
+    /// <summary>Gets the cumulative bytes uploaded for this image so far.
+    /// <para>获取该镜像目前已累计上传的字节数。</para></summary>
+    public long BytesUploaded { get; } = bytesUploaded;
+
+    /// <summary>Gets the total image length in bytes, or <see langword="null"/> when unknown.
+    /// <para>获取镜像总字节数；未知时为 <see langword="null"/>。</para></summary>
+    public long? ImageBytes { get; } = imageBytes;
+}

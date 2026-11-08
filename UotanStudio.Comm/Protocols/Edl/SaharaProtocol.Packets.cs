@@ -165,6 +165,33 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
+    /// Completes a packet whose already-read header declared its length, so a first packet that carries a
+    /// known Sahara command is consumed to its boundary before the dispatch loop reuses it.
+    /// <para>补读一个包头已读且已声明长度的数据包，使携带已知 Sahara 命令的首包在分发循环复用它之前被
+    /// 消费到包边界。</para>
+    /// </summary>
+    /// <param name="declaredLength">The length the packet header declared; the caller has already bounded it.
+    /// <para>包头声明的长度；调用方已对其设限。</para></param>
+    /// <param name="headerBytes">The already-read header bytes.<para>已读取的包头字节。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The complete packet bytes, header included.<para>含包头的完整包字节。</para></returns>
+    private async Task<byte[]> ReadRemainingKnownLengthAsync(uint declaredLength, byte[] headerBytes, CancellationToken ct)
+    {
+        var headerBytesCount = Marshal.SizeOf<SaharaPacketHeader>();
+        var remaining = (int)declaredLength - headerBytesCount;
+        if (remaining <= 0)
+        {
+            return headerBytes;
+        }
+
+        var body = await ReadExactAsync(remaining, _timeoutMs, ct).ConfigureAwait(false);
+        var full = new byte[declaredLength];
+        headerBytes.CopyTo(full, 0);
+        body.CopyTo(full, headerBytesCount);
+        return full;
+    }
+
+    /// <summary>
     /// Validates that the actual command and length match expected values.
     /// <para>验证实际命令和长度是否与预期值匹配。</para>
     /// </summary>

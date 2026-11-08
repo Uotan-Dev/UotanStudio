@@ -18,8 +18,9 @@ namespace UotanStudio.Comm.Protocols.Edl.Programmer;
 /// <see cref="EdlProgrammerDescriptor.OemPublicKeyHashes"/>: the convention stores 16 hexadecimal characters,
 /// while <see cref="EdlProgrammerDescriptor.Validate"/> requires at least 32 and
 /// <see cref="EdlRuleProgrammerSelector"/> compares the whole lower-cased Sahara reply
-/// (<see cref="SaharaDeviceIdentity.OemPublicKeyHashHex"/>) ordinal-equal to a declared value. Padding or
-/// truncating either side would invent matching evidence, so scanned rows declare the hardware id only.</para>
+/// (<see cref="SaharaDeviceIdentity.OemPublicKeyHashHex"/>, already normalized to a single digest) ordinal-equal
+/// to a declared value. Padding or truncating either side would invent matching evidence, so scanned rows
+/// declare the hardware id only.</para>
 /// <para>文件名中恢复出的 OEM 公钥哈希前缀刻意不写入
 /// <see cref="EdlProgrammerDescriptor.OemPublicKeyHashes"/>：约定里该段只有 16 个十六进制字符，而
 /// <see cref="EdlProgrammerDescriptor.Validate"/> 要求至少 32 个，且 <see cref="EdlRuleProgrammerSelector"/>
@@ -63,11 +64,12 @@ public static class EdlProgrammerFolderScanner
     private const int PublicKeyHashPrefixHexLength = 16;
     /// <summary>
     /// Extensions the scan admits: the single-image <c>.elf</c> and <c>.mbn</c> programmers, the bare
-    /// <c>.bin</c> form, and the multi-ELF <c>.melf</c> container newer loaders ship as.
-    /// <para>扫描接纳的扩展名：单镜像的 <c>.elf</c> 与 <c>.mbn</c> programmer、裸 <c>.bin</c> 形式，以及较新
-    /// loader 使用的多 ELF <c>.melf</c> 容器。</para>
+    /// <c>.bin</c> form, the multi-ELF <c>.melf</c> container newer loaders ship as, and the
+    /// <c>.xml</c> multi-image programmer manifest.
+    /// <para>扫描接纳的扩展名：单镜像的 <c>.elf</c> 与 <c>.mbn</c> programmer、裸 <c>.bin</c> 形式、较新
+    /// loader 使用的多 ELF <c>.melf</c> 容器，以及多镜像 programmer 清单 <c>.xml</c>。</para>
     /// </summary>
-    private static readonly string[] ProgrammerExtensions = [".bin", ".mbn", ".elf", ".melf"];
+    private static readonly string[] ProgrammerExtensions = [".bin", ".mbn", ".elf", ".melf", ".xml"];
 
     /// <summary>
     /// Scans a folder with the default candidate-count and per-file-size ceilings.
@@ -231,12 +233,12 @@ public static class EdlProgrammerFolderScanner
 
     /// <summary>
     /// Parses one bare file name against the loader naming convention without touching the disk. The
-    /// extension must be <c>.bin</c>, <c>.mbn</c>, <c>.elf</c> or <c>.melf</c>; the name without its extension splits
-    /// on <c>_</c> into two to eight non-empty segments, the first being the 16-hex-digit hardware id,
+    /// extension must be <c>.bin</c>, <c>.mbn</c>, <c>.elf</c>, <c>.melf</c> or <c>.xml</c>; the name without its extension
+    /// splits on <c>_</c> into two to eight non-empty segments, the first being the 16-hex-digit hardware id,
     /// the second the 16-hex-digit OEM public-key-hash prefix, and the rest free-form vendor tags. A
     /// name that does not fit is refused rather than silently repaired.
     /// <para>在不访问磁盘的前提下按 loader 命名约定解析单个纯文件名。扩展名必须为 <c>.bin</c>、
-    /// <c>.mbn</c>、<c>.elf</c> 或 <c>.melf</c>；去掉扩展名后按 <c>_</c> 切分为 2 至 8 个非空段，第一段是 16 个
+    /// <c>.mbn</c>、<c>.elf</c>、<c>.melf</c> 或 <c>.xml</c>；去掉扩展名后按 <c>_</c> 切分为 2 至 8 个非空段，第一段是 16 个
     /// 十六进制字符的硬件标识符，第二段是 16 个十六进制字符的 OEM 公钥哈希前缀，其余为自由的厂商标记。
     /// 不符合约定的名称直接拒绝，不做静默修复。</para>
     /// </summary>
@@ -278,7 +280,7 @@ public static class EdlProgrammerFolderScanner
         {
             var extension = Path.GetExtension(fileName);
             refusalReason = $"'{fileName}' has the extension '{extension}' instead of one of the programmer " +
-                "extensions .bin, .mbn, .elf or .melf.";
+                "extensions .bin, .mbn, .elf, .melf or .xml.";
             return false;
         }
 

@@ -54,9 +54,9 @@ public sealed partial class SaharaProtocol
         }
 
         var hashBytes = await ExecuteOptionalIdentityCommandAsync(
-            NegotiatedProtocolVersion >= 3, 3, 4096, token).ConfigureAwait(false);
+            optional: true, 3, 4096, token).ConfigureAwait(false);
         var version = await ExecuteOptionalIdentityCommandAsync(
-            NegotiatedProtocolVersion >= 3, 7, 8, token).ConfigureAwait(false);
+            optional: true, 7, 8, token).ConfigureAwait(false);
         await WriteSaharaCommandWordAsync(SaharaCommand.SwitchMode, (uint)SaharaMode.ImageTxPending, token).ConfigureAwait(false);
         var imageHello = BytesToStruct<SaharaHelloPacket>(
             await ReadExactAsync(Marshal.SizeOf<SaharaHelloPacket>(), _timeoutMs, token).ConfigureAwait(false));
@@ -69,10 +69,50 @@ public sealed partial class SaharaProtocol
             serial,
             hardware,
             version.Length == 0 ? 0 : DecodeIdentityWord(version),
-            Convert.ToHexString(hashBytes),
+            Convert.ToHexString(TrimOemPublicKeyHash(hashBytes)),
             NegotiatedProtocolVersion,
             chipIdentifierV3);
         return imageHello;
+    }
+
+    /// <summary>
+    /// Normalizes the raw OEM public-key-hash payload down to a single digest, following the reference
+    /// trim: a repeated digest (the first block recurring in full) is cut to one copy, trailing zero
+    /// padding is stripped, and the remainder is rounded back up to the nearest standard digest size
+    /// (SHA-256/384/512) so a digest whose final bytes are legitimately zero is not truncated.
+    /// <para>按参考裁剪规则把原始 OEM 公钥哈希负载归一化为单个摘要：完整重复的摘要块裁剪为一份，
+    /// 去除尾部零填充，再把剩余长度向上取整到最近的标准摘要大小（SHA-256/384/512），使末字节合法为零的
+    /// 摘要不会被截断。</para>
+    /// </summary>
+    /// <param name="payload">The bounded raw command response.<para>有界的原始命令响应。</para></param>
+    /// <returns>The normalized digest bytes, never longer than the payload.<para>归一化后的摘要字节；绝不长于原始负载。</para></returns>
+    private static byte[] TrimOemPublicKeyHash(byte[] payload)
+    {
+        var length = payload.Length;
+        var originalLength = length;
+        for (var size = 4; size * 2 <= length; size++)
+        {
+            if (payload.AsSpan(0, size).SequenceEqual(payload.AsSpan(size, size)))
+            {
+                length = size;
+                break;
+            }
+        }
+
+        while (length > 0 && payload[length - 1] == 0)
+        {
+            length--;
+        }
+
+        foreach (var digestSize in (int[])[32, 48, 64])
+        {
+            if (length <= digestSize && digestSize <= originalLength)
+            {
+                return payload[..digestSize];
+            }
+        }
+
+        return payload[..length];
     }
 
     /// <summary>

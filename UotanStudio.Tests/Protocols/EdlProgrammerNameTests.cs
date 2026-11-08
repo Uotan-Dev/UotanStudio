@@ -19,6 +19,7 @@ public sealed class EdlProgrammerNameTests
     [InlineData(".mbn")]
     [InlineData(".elf")]
     [InlineData(".melf")]
+    [InlineData(".xml")]
     public void TryParseProgrammerName_AdmitsEveryProgrammerExtension(string extension)
     {
         var accepted = EdlProgrammerFolderScanner.TryParseProgrammerName(

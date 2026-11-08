@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
@@ -107,15 +108,23 @@ internal sealed class CommDeviceTransportOpener(
             var session = OpenNativeSessionWithRetry(endpoint, usb, cancellationToken);
             if (session is null)
             {
-                if (string.Equals(endpoint.Protocol, "edl", StringComparison.Ordinal) &&
-                    EdlSerialPortFallback.TryOpenConnected(usb.Path) is { } serial)
+                if (string.Equals(endpoint.Protocol, "edl", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (cancellationToken.IsCancellationRequested)
+                    var serial = EdlSerialPortFallback.TryOpenConnected(usb.Path);
+                    if (serial is not null)
                     {
-                        serial.Dispose();
-                        cancellationToken.ThrowIfCancellationRequested();
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            serial.Dispose();
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                        return new OwnedDeviceTransport<SerialTransport>(serial);
                     }
-                    return new OwnedDeviceTransport<SerialTransport>(serial);
+                }
+                else
+                {
+                    UsbTrace.LogFormatted(
+                        $"EDL serial fallback skipped for the '{endpoint.Protocol}' endpoint at '{usb.Path}'; only 'edl' endpoints may fall back to the QDLoader serial port.");
                 }
                 throw new IOException(DescribeUnopenableEndpoint(endpoint, usb));
             }
