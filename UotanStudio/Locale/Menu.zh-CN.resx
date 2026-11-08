@@ -435,6 +435,24 @@
   <data name="About_OpenSourceNotice" xml:space="preserve">
     <value>本软件以 GNU GPL-3.0 分发，使用或参考下列开源项目，并分别遵循其许可协议。MIT、BSD 与 Apache-2.0 组件与 GPL-3.0 兼容，其声明予以保留。Semi.Avalonia.AvaloniaEdit 与 Semi.Avalonia.Dock 主题为 IRIHI 专有、闭源包，受 IRIHI EULA 约束，与 GPL-3.0 不兼容。LibUsbDotNet（LGPL-3.0-or-later）为静态链接；MiSans 字体按自身许可未修改使用。</value>
   </data>
+  <data name="About_Gc" xml:space="preserve">
+    <value>当前垃圾回收</value>
+  </data>
+  <data name="About_GcServerShape" xml:space="preserve">
+    <value>server GC</value>
+  </data>
+  <data name="About_GcWorkstationShape" xml:space="preserve">
+    <value>workstation GC</value>
+  </data>
+  <data name="About_GcConcurrentOn" xml:space="preserve">
+    <value>Gen 2</value>
+  </data>
+  <data name="About_GcConcurrentOff" xml:space="preserve">
+    <value>No Gen 2</value>
+  </data>
+  <data name="About_DotNetSdkVersion" xml:space="preserve">
+    <value>.NET SDK 版本</value>
+  </data>
   <data name="Menu_CompareFiles" xml:space="preserve">
     <value>文件比较</value>
   </data>

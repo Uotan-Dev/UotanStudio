@@ -435,6 +435,24 @@ Continue creating the project?</value>
   <data name="About_OpenSourceNotice" xml:space="preserve">
     <value>UotanStudio is distributed under GNU GPL-3.0. It uses or references the open-source projects listed below, each governed by its own license. MIT, BSD and Apache-2.0 components are compatible with GPL-3.0 and their notices are retained. The Semi.Avalonia.AvaloniaEdit and Semi.Avalonia.Dock themes are proprietary, closed-source packages under the IRIHI EULA and are not GPL-3.0-compatible. LibUsbDotNet (LGPL-3.0-or-later) is statically linked; the MiSans fonts are used unmodified under their own license.</value>
   </data>
+  <data name="About_Gc" xml:space="preserve">
+    <value>Current GC</value>
+  </data>
+  <data name="About_GcServerShape" xml:space="preserve">
+    <value>server GC</value>
+  </data>
+  <data name="About_GcWorkstationShape" xml:space="preserve">
+    <value>workstation GC</value>
+  </data>
+  <data name="About_GcConcurrentOn" xml:space="preserve">
+    <value>Gen 2</value>
+  </data>
+  <data name="About_GcConcurrentOff" xml:space="preserve">
+    <value>No Gen 2</value>
+  </data>
+  <data name="About_DotNetSdkVersion" xml:space="preserve">
+    <value>.NET SDK version</value>
+  </data>
   <data name="Menu_CompareFiles" xml:space="preserve">
     <value>Compare Files</value>
   </data>

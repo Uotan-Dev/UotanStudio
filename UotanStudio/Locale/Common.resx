@@ -1042,6 +1042,15 @@ Author: 暮间雾
   <data name="Flash_EdlProgrammerChoice" xml:space="preserve">
     <value>Programmer in package</value>
   </data>
+  <data name="Flash_EdlLoaderUploading" xml:space="preserve">
+    <value>Uploading Sahara programmer image {0} ({1} bytes)</value>
+  </data>
+  <data name="Flash_EdlProgrammerInferred" xml:space="preserve">
+    <value>Inferred a multi-image programmer set from file names ({0} images); a vendor qsahara_device_programmer.xml remains the authoritative source</value>
+  </data>
+  <data name="Flash_EdlProgrammerInferredFailed" xml:space="preserve">
+    <value>The inferred programmer set failed validation and stays unused</value>
+  </data>
   <data name="Flash_EdlChooseProgrammerDir" xml:space="preserve">
     <value>Match programmer by folder</value>
   </data>
@@ -1388,6 +1397,9 @@ Author: 暮间雾
   </data>
   <data name="Flash_EdlImageMismatch" xml:space="preserve">
     <value>EDL image {0} no longer matches its rawprogram entry.</value>
+  </data>
+  <data name="Flash_EdlProgrammerImageMismatch" xml:space="preserve">
+    <value>The bootloader package does not match this device platform.</value>
   </data>
   <data name="Flash_EdlGptProgrammed" xml:space="preserve">
     <value>EDL partition '{0}' programmed from the device GPT ({1} bytes written, {2} bytes verified).</value>

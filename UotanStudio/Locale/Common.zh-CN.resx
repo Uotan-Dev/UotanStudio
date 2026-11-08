@@ -1042,6 +1042,15 @@
   <data name="Flash_EdlProgrammerChoice" xml:space="preserve">
     <value>包内 Programmer</value>
   </data>
+  <data name="Flash_EdlLoaderUploading" xml:space="preserve">
+    <value>正在上传 Sahara Programmer 镜像 {0}（{1} 字节）</value>
+  </data>
+  <data name="Flash_EdlProgrammerInferred" xml:space="preserve">
+    <value>已按文件名推断出多镜像 Programmer 集合（{0} 个镜像）；厂商 qsahara_device_programmer.xml 仍是权威来源</value>
+  </data>
+  <data name="Flash_EdlProgrammerInferredFailed" xml:space="preserve">
+    <value>推断出的 Programmer 集合未通过校验，保持不使用</value>
+  </data>
   <data name="Flash_EdlChooseProgrammerDir" xml:space="preserve">
     <value>按目录匹配 Programmer</value>
   </data>
@@ -1388,6 +1397,9 @@
   </data>
   <data name="Flash_EdlImageMismatch" xml:space="preserve">
     <value>EDL 镜像 {0} 与 rawprogram 清单不再一致。</value>
+  </data>
+  <data name="Flash_EdlProgrammerImageMismatch" xml:space="preserve">
+    <value>引导包与设备平台不匹配。</value>
   </data>
   <data name="Flash_EdlGptProgrammed" xml:space="preserve">
     <value>已按设备 GPT 写入 EDL 分区“{0}”（写入 {1} 字节，校验 {2} 字节）。</value>

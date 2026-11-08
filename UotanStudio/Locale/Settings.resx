@@ -450,31 +450,4 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL (D3D9)</value>
   </data>
-  <data name="Settings_Gc" xml:space="preserve">
-    <value>Garbage collection</value>
-  </data>
-  <data name="Settings_GcCurrent" xml:space="preserve">
-    <value>Current GC</value>
-  </data>
-  <data name="Settings_GcSummaryFormat" xml:space="preserve">
-    <value>{0}, {1}, {2}; latency mode {3}</value>
-  </data>
-  <data name="Settings_GcDefaultName" xml:space="preserve">
-    <value>default GC</value>
-  </data>
-  <data name="Settings_GcServerShape" xml:space="preserve">
-    <value>server</value>
-  </data>
-  <data name="Settings_GcWorkstationShape" xml:space="preserve">
-    <value>workstation</value>
-  </data>
-  <data name="Settings_GcConcurrentOn" xml:space="preserve">
-    <value>concurrent</value>
-  </data>
-  <data name="Settings_GcConcurrentOff" xml:space="preserve">
-    <value>non-concurrent</value>
-  </data>
-  <data name="Settings_DotNetSdkVersion" xml:space="preserve">
-    <value>.NET SDK version</value>
-  </data>
 </root>
