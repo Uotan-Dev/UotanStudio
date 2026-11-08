@@ -20,4 +20,19 @@ internal static class EdlFailureText
         response.Error is { } error
             ? $"{error.Description} ({error})"
             : response.RawValue ?? "no response value reported";
+
+    /// <summary>
+    /// Gets the localized user-facing text for a typed failure kind; kinds without a dedicated phrase
+    /// return <see langword="null"/> so the caller keeps its own exception rendering.
+    /// <para>获取类型化失败种类的面向用户本地化文本；没有专用短语的种类返回
+    /// <see langword="null"/>，由调用方保留自身的异常渲染。</para>
+    /// </summary>
+    /// <param name="kind">The classified failure kind. <para>已分类的失败种类。</para></param>
+    /// <returns>The localized phrase, or <see langword="null"/> when the kind has none.
+    /// <para>本地化短语；该种类没有时为 <see langword="null"/>。</para></returns>
+    internal static string? Describe(EdlFailureKind kind) => kind switch
+    {
+        EdlFailureKind.ProgrammerImageMismatch => LanguageService.Instance.GetString("Flash_EdlProgrammerImageMismatch"),
+        _ => null
+    };
 }

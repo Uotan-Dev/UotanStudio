@@ -40,6 +40,33 @@ internal sealed class EdlConnectionCache(
 
     private const long ParkedLeaseIdleLimitMilliseconds = 60_000;
 
+    /// <summary>
+    /// Upper bound applied to the relink offer's own timeout so one failed run can never park the
+    /// caller on a wait measured in hours.
+    /// <para>对重链提议自带超时的上限，使一次失败的运行绝不会把调用方挂在以小时计的等待上。</para>
+    /// </summary>
+    private const int MaximumRelinkWaitMilliseconds = 120_000;
+
+    /// <summary>
+    /// How many re-enumeration rebuilds one run may consume; one relink attempt keeps the operation
+    /// bounded while still covering the single post-programmer mode switch of a flash run.
+    /// <para>一次运行可消费的重枚举重建次数；单次重链尝试既覆盖刷写运行唯一一次写入 programmer 后的
+    /// 模式切换，又让操作保持有界。</para>
+    /// </summary>
+    private const int MaximumRelinkAttempts = 1;
+
+    /// <summary>
+    /// Gets or sets the delegate that waits for the re-enumerated replacement endpoint of a failed link
+    /// and opens a lease on it. It receives the consumed relink offer, the cooperative wait deadline in
+    /// milliseconds and the cancellation token, and returns <see langword="null"/> when the device did
+    /// not re-enumerate in time or the evidence cannot be correlated. When unset, failures keep the
+    /// original behaviour of publishing the offer and releasing the lease without waiting.
+    /// <para>获取或设置等待失败链路的重枚举替代端点并在其上打开租约的委托。它收到已消费的重链提议、
+    /// 协作式等待的毫秒截止时间与取消令牌，设备未按时重枚举或证据无法关联时返回
+    /// <see langword="null"/>。未设置时，失败保持原有行为：发布提议并释放租约，不等待。</para>
+    /// </summary>
+    internal Func<EdlRelinkOffer, int, CancellationToken, Task<DeviceLease?>>? ReconnectWaiter { get; set; }
+
     private static void Park(Entry entry, DeviceLease lease)
     {
         entry.Parked = lease;
@@ -178,29 +205,68 @@ internal sealed class EdlConnectionCache(
         void OnProtocolChanged(object? sender, EdlProtocolState state) => Publish(entry, state);
         try
         {
-            if (entry.Removed)
+            for (var attempt = 0; ; attempt++)
             {
-                throw new IOException("The EDL endpoint was removed.");
+                try
+                {
+                    if (entry.Removed)
+                    {
+                        throw new IOException("The EDL endpoint was removed.");
+                    }
+                    if (lease is null)
+                    {
+                        lease = TakeParked(entry);
+                        if (lease is not null && !LeaseIsLive(lease))
+                        {
+                            await lease.DisposeAsync().ConfigureAwait(false);
+                            lease = null;
+                            Publish(entry, EdlProtocolState.Unknown);
+                        }
+                        lease ??= await open(device, cancellationToken).ConfigureAwait(false);
+                        if (entry.Removed)
+                        {
+                            throw new IOException("The EDL endpoint was removed.");
+                        }
+                    }
+                    session = RequireSession(lease);
+                    session.ProtocolStateChanged += OnProtocolChanged;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var result = await operation(session).ConfigureAwait(false);
+                    Publish(entry, session.ProtocolState);
+                    succeeded = true;
+                    return result;
+                }
+                catch (Exception failure) when (attempt < MaximumRelinkAttempts
+                    && failure is not OperationCanceledException
+                    && TakeRelinkOffer(session, failure, out var offer))
+                {
+                    LogService.Instance.Write(LogLevel.Info, "DeviceManager",
+                        $"EDL operation on '{device.Key}' failed with reconnection evidence; consuming the relink offer " +
+                        $"and waiting up to {Math.Min((int)offer.Timeout.TotalMilliseconds, MaximumRelinkWaitMilliseconds)} ms " +
+                        "for the re-enumerated endpoint.");
+                    if (session is not null)
+                    {
+                        session.ProtocolStateChanged -= OnProtocolChanged;
+                        session = null;
+                    }
+                    if (lease is not null)
+                    {
+                        await lease.DisposeAsync().ConfigureAwait(false);
+                        lease = null;
+                    }
+
+                    var replacement = await OpenReconnectedLeaseAsync(offer, cancellationToken).ConfigureAwait(false);
+                    if (replacement is null)
+                    {
+                        LogService.Instance.Write(LogLevel.Warn, "DeviceManager",
+                            $"EDL relink for '{device.Key}' produced no replacement endpoint; the original failure is reported.");
+                        throw;
+                    }
+
+                    lease = replacement;
+                    Publish(entry, EdlProtocolState.Unknown);
+                }
             }
-            lease = TakeParked(entry);
-            if (lease is not null && !LeaseIsLive(lease))
-            {
-                await lease.DisposeAsync().ConfigureAwait(false);
-                lease = null;
-                Publish(entry, EdlProtocolState.Unknown);
-            }
-            lease ??= await open(device, cancellationToken).ConfigureAwait(false);
-            if (entry.Removed)
-            {
-                throw new IOException("The EDL endpoint was removed.");
-            }
-            session = RequireSession(lease);
-            session.ProtocolStateChanged += OnProtocolChanged;
-            cancellationToken.ThrowIfCancellationRequested();
-            var result = await operation(session).ConfigureAwait(false);
-            Publish(entry, session.ProtocolState);
-            succeeded = true;
-            return result;
         }
         catch
         {
@@ -231,6 +297,77 @@ internal sealed class EdlConnectionCache(
             {
                 Release(entry);
             }
+        }
+    }
+
+    /// <summary>
+    /// Consumes the failed session's relink offer when the failure carries reconnection evidence: the
+    /// session already faulted, or the failure classifies as a lost connection, a lost completion, or an
+    /// unknown execution state. Without a configured reconnection waiter the offer is left in place so a
+    /// later consumer can still act on it.
+    /// <para>当失败携带重连证据时取走失败会话的重链提议：会话已失效，或失败被归类为连接丢失、完成丢失或
+    /// 未知的执行状态。未配置重连等待委托时提议保留原处，后续消费者仍可行动。</para>
+    /// </summary>
+    /// <param name="session">The session the operation ran on, or <see langword="null"/> when it never opened.
+    /// <para>运行操作的会话；未打开时为 <see langword="null"/>。</para></param>
+    /// <param name="failure">The observed failure.<para>观测到的失败。</para></param>
+    /// <param name="offer">The consumed offer when this method returns <see langword="true"/>.
+    /// <para>本方法返回 <see langword="true"/> 时为已取走的提议。</para></param>
+    /// <returns><see langword="true"/> when a relinkable offer was consumed.
+    /// <para>已取走可重链的提议时为 <see langword="true"/>。</para></returns>
+    private bool TakeRelinkOffer(EdlSession? session, Exception failure, out EdlRelinkOffer offer)
+    {
+        offer = null!;
+        if (ReconnectWaiter is null || session is null)
+        {
+            return false;
+        }
+
+        var sessionFaulted = session.Firehose?.RequiresReconnect == true;
+        var classified = EdlFailureClassification.Classify(failure);
+        if (!sessionFaulted
+            && classified is not (EdlFailureKind.ConnectionLost or EdlFailureKind.CompletionLost
+                or EdlFailureKind.ExecutionUnknown or EdlFailureKind.CancelledAfterTransfer))
+        {
+            return false;
+        }
+
+        var taken = session.TakeRelinkOffer();
+        if (taken?.PreviousEndpoint is null)
+        {
+            return false;
+        }
+
+        offer = taken;
+        return true;
+    }
+
+    /// <summary>
+    /// Waits, bounded by the offer timeout, for the re-enumerated replacement endpoint through the
+    /// configured waiter and reports the opened lease; every waiter failure degrades to
+    /// <see langword="null"/> so the original operation failure is surfaced unchanged.
+    /// <para>通过已配置的等待委托在提议超时内等待重枚举出的替代端点并返回打开的租约；等待的任何失败都
+    /// 降级为 <see langword="null"/>，使原始操作失败原样上报。</para>
+    /// </summary>
+    /// <param name="offer">The consumed relink offer carrying the previous endpoint.
+    /// <para>已取走、携带旧端点的重链提议。</para></param>
+    /// <param name="cancellationToken">Cancels the wait.<para>取消等待。</para></param>
+    /// <returns>The lease opened on the replacement endpoint, or <see langword="null"/>.
+    /// <para>在替代端点上打开的租约；或为 <see langword="null"/>。</para></returns>
+    private async Task<DeviceLease?> OpenReconnectedLeaseAsync(EdlRelinkOffer offer, CancellationToken cancellationToken)
+    {
+        var waiter = ReconnectWaiter!;
+        var timeoutMs = (int)Math.Clamp(offer.Timeout.TotalMilliseconds, 1, MaximumRelinkWaitMilliseconds);
+        try
+        {
+            return await waiter(offer, timeoutMs, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TimeoutException or NotSupportedException or InvalidOperationException
+            or IOException or ArgumentException)
+        {
+            LogService.Instance.Write(LogLevel.Info, "DeviceManager",
+                $"EDL relink wait for '{offer.PreviousEndpoint?.Id}' ended without a replacement: {ex.Message}");
+            return null;
         }
     }
 

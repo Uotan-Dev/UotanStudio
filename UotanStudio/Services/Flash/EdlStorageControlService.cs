@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
@@ -87,14 +88,29 @@ internal static class EdlStorageControlService
     /// <param name="value">The bootable storage drive number, UFS→1 and eMMC→0. <para>可引导存储驱动器编号，
     /// UFS→1、eMMC→0。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
+    /// <param name="programmerPath">Optional programmer override path; ignored when
+    /// <paramref name="programmerImages"/> is supplied. <para>可选的编程器覆盖路径；提供了
+    /// <paramref name="programmerImages"/> 时忽略。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
+    /// <param name="programmerImages">Optional pre-built programmer image set, e.g. an in-memory inferred
+    /// mapping; it takes precedence over <paramref name="programmerPath"/>.
+    /// <para>可选的预构建 programmer 镜像集合，例如内存推断的映射；优先于 <paramref name="programmerPath"/>。</para></param>
     /// <returns>The set result. <para>设置结果。</para></returns>
     internal static Task<FlashResult> SetBootableStorageDriveAsync(DeviceTarget device, int value, CancellationToken ct,
-        string? programmerPath = null, EdlInitializationOptions? initialization = null)
+        string? programmerPath = null, EdlInitializationOptions? initialization = null,
+        EdlProgrammerImageSet? programmerImages = null)
         => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
+            if (programmerImages is not null)
+            {
+                await EdlProgrammerSession.EnsureInitializedAsync(session, programmerImages, initialization, ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct)
+                    .ConfigureAwait(false);
+            }
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             return await SetBootableStorageDriveCoreAsync(firehose, value, ct).ConfigureAwait(false);
@@ -111,14 +127,29 @@ internal static class EdlStorageControlService
     /// <param name="lun">The explicit LUN; <see langword="null"/> scans by name. <para>显式 LUN；为空时按名
     /// 扫描。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
+    /// <param name="programmerPath">Optional programmer override path; ignored when
+    /// <paramref name="programmerImages"/> is supplied. <para>可选的编程器覆盖路径；提供了
+    /// <paramref name="programmerImages"/> 时忽略。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
+    /// <param name="programmerImages">Optional pre-built programmer image set, e.g. an in-memory inferred
+    /// mapping; it takes precedence over <paramref name="programmerPath"/>.
+    /// <para>可选的预构建 programmer 镜像集合，例如内存推断的映射；优先于 <paramref name="programmerPath"/>。</para></param>
     /// <returns>The digest result. <para>摘要结果。</para></returns>
     internal static Task<EdlPartitionDigest> GetPartitionSha256Async(DeviceTarget device, string partition, int? lun,
-        CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
+        CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null,
+        EdlProgrammerImageSet? programmerImages = null)
         => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
-            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
+            if (programmerImages is not null)
+            {
+                await EdlProgrammerSession.EnsureInitializedAsync(session, programmerImages, initialization, ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct)
+                    .ConfigureAwait(false);
+            }
             var firehose = session.Firehose
                 ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
             return await GetPartitionSha256CoreAsync(firehose, partition, lun, ct).ConfigureAwait(false);

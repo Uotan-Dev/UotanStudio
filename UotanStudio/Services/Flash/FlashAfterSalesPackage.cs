@@ -30,6 +30,9 @@ public sealed record AfterSalesPartitionImage(string Partition, string FilePath,
 /// <para>IMAGES 中已存在合并好的 <c>super.img</c> 时为真。</para></param>
 /// <param name="HiddenDynamicImages">Scattered dynamic-partition images hidden because the super is already merged.
 /// <para>super 已合并而隐藏的散包动态分区镜像数。</para></param>
+/// <param name="InferredProgrammer">The multi-image programmer mapping inferred from file-name conventions, or
+/// <see langword="null"/> when the package carries a manifest or nothing inferable.
+/// <para>按文件名约定推断出的多镜像 programmer 映射；包内已有清单或无可推断内容时为 <see langword="null"/>。</para></param>
 public sealed record AfterSalesPackageContents(
     string ImageDirectory,
     IReadOnlyList<AfterSalesPartitionImage> Images,
@@ -38,7 +41,8 @@ public sealed record AfterSalesPackageContents(
     IReadOnlyList<string> Programmers,
     int MergedRadioImages,
     bool HasMergedSuper,
-    int HiddenDynamicImages);
+    int HiddenDynamicImages,
+    EdlInferredProgrammerManifest? InferredProgrammer = null);
 
 /// <summary>
 /// Reads an extracted OPlus/OnePlus after-sales ("service ROM") package: an <c>IMAGES</c> tree of per-partition
@@ -166,9 +170,13 @@ public static class FlashAfterSalesPackage
         }
 
         var programmers = EnumerateProgrammers(imageDirectory);
+        var inferredProgrammer = programmers.Length > 0 &&
+            FlashBinPackage.IsProgrammerManifestPath(programmers[0])
+            ? null
+            : EdlManifestInference.TryInfer(imageDirectory);
         return new AfterSalesPackageContents(imageDirectory, images, programs,
             programmers.Length == 1 ? programmers[0] : null, programmers, mergedRadioImages,
-            mergedSuper, hiddenDynamicImages);
+            mergedSuper, hiddenDynamicImages, inferredProgrammer);
 
         int AddFolder(string directory, bool fromImages)
         {
@@ -299,13 +307,16 @@ public static class FlashAfterSalesPackage
             .Select(Path.GetFullPath)
             .Order(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Enumerates the package's programmer candidates through the shared EDL scan: a validated multi-image
+    /// programmer manifest wins, otherwise the <c>prog_*firehose*</c> ELF/MBN/MELF files are the candidates.
+    /// <para>经共享 EDL 扫描列举包内 programmer 候选：通过校验的多镜像 programmer 清单优先，否则以
+    /// <c>prog_*firehose*</c> 的 ELF/MBN/MELF 文件为候选。</para>
+    /// </summary>
+    /// <param name="directory">IMAGES directory to scan. <para>要扫描的 IMAGES 目录。</para></param>
+    /// <returns>The candidates in ordinal name order. <para>按名称顺序排列的候选。</para></returns>
     private static string[] EnumerateProgrammers(string directory)
-        => [.. Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => Path.GetFileName(path) is var name &&
-                name.StartsWith("prog_", StringComparison.OrdinalIgnoreCase) &&
-                name.Contains("firehose", StringComparison.OrdinalIgnoreCase) &&
-                name.EndsWith(".elf", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)];
+        => FlashBinPackage.EnumerateProgrammers(directory);
 
     private static string? FindDirectory(string folder, string name)
     {

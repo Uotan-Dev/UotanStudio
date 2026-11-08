@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
@@ -30,43 +31,179 @@ internal static class FlashEdlBundleService
     /// <para>扇区大小、槽位、分块与擦除的可选覆盖项。</para></param>
     /// <param name="initialization">Options controlling session initialization.
     /// <para>控制会话初始化的选项。</para></param>
+    /// <param name="chunkProgress">Optional reporter for the per-chunk program byte counters of every entry, or
+    /// null to keep the transfer silent.<para>每个条目逐块编程字节计数的可选上报对象；为 null 时传输保持无回调。</para></param>
+    /// <param name="programmerProgress">Optional reporter for the per-image Sahara programmer upload byte counts,
+    /// or null to keep the upload silent.<para>Sahara programmer 逐镜像上传字节计数的可选上报对象；为 null 时上传保持无回调。</para></param>
+    /// <param name="programmerImages">Optional pre-built programmer image set, e.g. an in-memory inferred
+    /// multi-image mapping; it is uploaded instead of the file at <paramref name="programmerPath"/> and makes
+    /// that path optional.
+    /// <para>可选的预构建 programmer 镜像集合，例如内存推断的多镜像映射；提供时替代
+    /// <paramref name="programmerPath"/> 文件上传，并使该路径可缺省。</para></param>
     /// <returns>The non-fatal deviations recorded while the bundle ran.
     /// <para>包执行期间记录的非致命偏差。</para></returns>
     public static async Task<IReadOnlyList<string>> FlashAsync(DetectedDevice device, string folder, string programmerPath,
         CancellationToken ct, bool continueOnFailure = false, bool skipAbsentSources = false,
         IReadOnlyList<string>? labels = null, IProgress<FlashBundleProgress>? progress = null, bool verify = false,
-        bool skipUfsProvision = false, EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null)
+        bool skipUfsProvision = false, EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null,
+        IProgress<EdlProgramChunkProgress>? chunkProgress = null,
+        IProgress<SaharaImageProgressEventArgs>? programmerProgress = null,
+        EdlProgrammerImageSet? programmerImages = null)
     {
-        if (device.Protocol != DeviceProtocolKind.Edl || !File.Exists(programmerPath))
+        if (device.Protocol != DeviceProtocolKind.Edl || (!File.Exists(programmerPath) && programmerImages is null))
         {
             throw new InvalidOperationException("An EDL device and Firehose programmer are required.");
         }
-        var options = InspectFolder(folder, skipUfsProvision, ct, continueOnFailure, skipAbsentSources, labels,
-            verify, tuning);
-        return await App.DeviceMonitor.RunEdlAsync(device, async session =>
+        var (options, programs) = InspectFolder(folder, skipUfsProvision, ct, continueOnFailure, skipAbsentSources,
+            labels, verify, tuning);
+        var (overrides, staged) = await StageCompressedSourcesAsync(programs, ct).ConfigureAwait(false);
+        if (overrides.Count > 0)
         {
-            await InspectAllAsync(session, options, ct).ConfigureAwait(false);
-            await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
-            return await ExecuteAllAsync(session, options, progress, ct).ConfigureAwait(false);
-        }, ct).ConfigureAwait(false);
+            foreach (var option in options)
+            {
+                option.SourceOverrides = overrides;
+            }
+        }
+
+        try
+        {
+            return await App.DeviceMonitor.RunEdlAsync(device, async session =>
+            {
+                if (programmerProgress is not null)
+                {
+                    session.SaharaImageProgress += OnProgrammerProgress;
+                }
+                try
+                {
+                    await InspectAllAsync(session, options, ct).ConfigureAwait(false);
+                    if (programmerImages is not null)
+                    {
+                        await EdlProgrammerSession.EnsureInitializedAsync(session, programmerImages, initialization,
+                            ct).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization,
+                            ct).ConfigureAwait(false);
+                    }
+                    return await ExecuteAllAsync(session, options, progress, chunkProgress, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (programmerProgress is not null)
+                    {
+                        session.SaharaImageProgress -= OnProgrammerProgress;
+                    }
+                }
+            }, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var path in staged)
+            {
+                try { File.Delete(path); } catch (IOException) { }
+            }
+        }
+
+        void OnProgrammerProgress(object? sender, SaharaImageProgressEventArgs imageProgress)
+            => programmerProgress!.Report(imageProgress);
     }
 
+    /// <summary>Inspects all bundle members before opening a serial device, then flashes them in manifest order.
+    /// <para>先在打开串口设备前检查包内全部成员，再按清单顺序刷写。</para></summary>
+    /// <param name="connect">Connector producing the serial EDL session.<para>产生串口 EDL 会话的连接器。</para></param>
+    /// <param name="folder">Directory holding the rawprogram manifests and images.
+    /// <para>存放 rawprogram 清单与镜像的目录。</para></param>
+    /// <param name="includeUfsProvision">Includes the UFS provision step when true.
+    /// <para>为真时包含 UFS 配置步骤。</para></param>
+    /// <param name="cancellationToken">Token cancelling the run.<para>用于取消执行的令牌。</para></param>
+    /// <param name="continueOnFailure">Keeps going after a failed write when true.
+    /// <para>为真时写入失败后继续执行。</para></param>
+    /// <param name="skipAbsentSources">Tolerates missing source images when true.
+    /// <para>为真时容忍缺失的源镜像。</para></param>
+    /// <param name="labels">Labels selecting manifest entries; null selects every entry.
+    /// <para>筛选清单条目的标签，为空时选择全部条目。</para></param>
+    /// <param name="progress">Reporter for per-step bundle progress.<para>逐步骤的进度上报对象。</para></param>
+    /// <param name="verify">Requests read-back checks of written data when true.
+    /// <para>为真时要求回读校验已写入的数据。</para></param>
+    /// <param name="tuning">Optional sector size, slot, chunking and wipe overrides.
+    /// <para>扇区大小、槽位、分块与擦除的可选覆盖项。</para></param>
+    /// <param name="chunkProgress">Optional reporter for the per-chunk program byte counters of every entry, or
+    /// null to keep the transfer silent.<para>每个条目逐块编程字节计数的可选上报对象；为 null 时传输保持无回调。</para></param>
+    /// <returns>The non-fatal deviations recorded while the bundle ran.
+    /// <para>包执行期间记录的非致命偏差。</para></returns>
     internal static async Task<IReadOnlyList<string>> FlashSerialCoreAsync(Func<CancellationToken, Task<EdlSession>> connect,
         string folder, bool includeUfsProvision, CancellationToken cancellationToken, bool continueOnFailure = false,
         bool skipAbsentSources = false, IReadOnlyList<string>? labels = null,
-        IProgress<FlashBundleProgress>? progress = null, bool verify = false, EdlBundleTuning? tuning = null)
+        IProgress<FlashBundleProgress>? progress = null, bool verify = false, EdlBundleTuning? tuning = null,
+        IProgress<EdlProgramChunkProgress>? chunkProgress = null)
     {
         ArgumentNullException.ThrowIfNull(connect);
-        var options = InspectFolder(folder, !includeUfsProvision, cancellationToken, continueOnFailure,
+        var (options, programs) = InspectFolder(folder, !includeUfsProvision, cancellationToken, continueOnFailure,
             skipAbsentSources, labels, verify, tuning);
-        using var session = await connect(cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The serial connector returned no EDL session.");
-        cancellationToken.ThrowIfCancellationRequested();
-        await InspectAllAsync(session, options, cancellationToken).ConfigureAwait(false);
-        return await ExecuteAllAsync(session, options, progress, cancellationToken).ConfigureAwait(false);
+        var (overrides, staged) = await StageCompressedSourcesAsync(programs, cancellationToken).ConfigureAwait(false);
+        if (overrides.Count > 0)
+        {
+            foreach (var option in options)
+            {
+                option.SourceOverrides = overrides;
+            }
+        }
+
+        try
+        {
+            using var session = await connect(cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The serial connector returned no EDL session.");
+            cancellationToken.ThrowIfCancellationRequested();
+            await InspectAllAsync(session, options, cancellationToken).ConfigureAwait(false);
+            return await ExecuteAllAsync(session, options, progress, chunkProgress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var path in staged)
+            {
+                try { File.Delete(path); } catch (IOException) { }
+            }
+        }
     }
 
-    private static FlashBundleOptions[] InspectFolder(string folder, bool skipUfsProvision, CancellationToken ct,
+    /// <summary>
+    /// Decompresses every distinct zstd-compressed bundle source into a staged temporary file and maps it over
+    /// the manifest source so the orchestrator never programs compressed bytes.
+    /// <para>把每个不同的 zstd 压缩包源解压到暂存临时文件并映射覆盖清单源，使编排器永不把压缩字节写入设备。</para>
+    /// </summary>
+    /// <param name="programs">Program entries parsed from the bundle manifests.
+    /// <para>从包清单解析出的 program 条目。</para></param>
+    /// <param name="ct">Cancels decompression.<para>取消解压。</para></param>
+    /// <returns>The source-to-staged override map (empty when nothing is compressed) and the staged paths to
+    /// delete after the run.
+    /// <para>源到暂存文件的覆盖映射（无压缩源时为空）与运行结束后应删除的暂存路径。</para></returns>
+    private static async Task<(IReadOnlyDictionary<string, string> Overrides, List<string> Staged)>
+        StageCompressedSourcesAsync(IEnumerable<RawProgramEntry> programs, CancellationToken ct)
+    {
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var staged = new List<string>();
+        foreach (var source in programs
+            .Select(entry => entry.SourceFile)
+            .Where(source => !string.IsNullOrEmpty(source)
+                && source.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!File.Exists(source))
+            {
+                continue;
+            }
+
+            var replacement = await FlashCompressedImage.PrepareAsync(source, ct).ConfigureAwait(false);
+            overrides.Add(source, replacement);
+            staged.Add(replacement);
+        }
+        return (overrides, staged);
+    }
+
+    private static (FlashBundleOptions[] Options, IReadOnlyList<RawProgramEntry> Programs) InspectFolder(
+        string folder, bool skipUfsProvision, CancellationToken ct,
         bool continueOnFailure, bool skipAbsentSources, IReadOnlyList<string>? labels, bool verify,
         EdlBundleTuning? tuning)
     {
@@ -89,7 +226,7 @@ internal static class FlashEdlBundleService
                 throw new FileNotFoundException("EDL bundle image is missing.", entry.SourceFile);
             }
         }
-        return [.. manifests.Select((manifest, index) => new FlashBundleOptions
+        return ([.. manifests.Select((manifest, index) => new FlashBundleOptions
         {
             RawProgramPath = manifest,
             PatchPath = File.Exists(Path.Combine(directory,
@@ -112,7 +249,7 @@ internal static class FlashEdlBundleService
                 : null,
             AllowEntireStorageWipe = tuning?.AllowEntireStorageWipe == true,
             SkipUfsProvision = skipUfsProvision || index != manifests.Length - 1
-        })];
+        })], programs);
     }
 
     private static async Task InspectAllAsync(EdlSession session, FlashBundleOptions[] options, CancellationToken ct)
@@ -132,9 +269,15 @@ internal static class FlashEdlBundleService
     }
 
     private static async Task<IReadOnlyList<string>> ExecuteAllAsync(EdlSession session, FlashBundleOptions[] options,
-        IProgress<FlashBundleProgress>? progress, CancellationToken ct)
+        IProgress<FlashBundleProgress>? progress, IProgress<EdlProgramChunkProgress>? chunkProgress,
+        CancellationToken ct)
     {
         var orchestrator = new FlashBundleOrchestrator(session);
+        if (chunkProgress is not null)
+        {
+            orchestrator.ProgramChunkProgress += (_, chunk) => chunkProgress.Report(chunk);
+        }
+
         var results = await orchestrator.FlashPackageAsync(options, progress, ct).ConfigureAwait(false);
         var warnings = new List<string>();
         foreach (var result in results)

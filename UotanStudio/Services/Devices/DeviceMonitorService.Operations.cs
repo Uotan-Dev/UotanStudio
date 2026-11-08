@@ -2,6 +2,7 @@ using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
@@ -155,14 +156,29 @@ public sealed partial class DeviceMonitorService
     /// <para>可选的扇区大小、写入块与 NAND 覆盖项。</para></param>
     /// <param name="initialization">Optional EDL initialization options for the session.
     /// <para>可选的会话 EDL 初始化选项。</para></param>
+    /// <param name="chunkProgress">Optional reporter for the per-chunk program byte counters of every bundle
+    /// entry, or null to keep the transfer silent.
+    /// <para>每个包条目逐块编程字节计数的可选上报对象；为 null 时传输保持无回调。</para></param>
+    /// <param name="programmerProgress">Optional reporter for the per-image Sahara programmer upload byte counts,
+    /// or null to keep the upload silent.
+    /// <para>Sahara programmer 逐镜像上传字节计数的可选上报对象；为 null 时上传保持无回调。</para></param>
+    /// <param name="programmerImages">Optional pre-built programmer image set, e.g. an in-memory inferred
+    /// multi-image mapping; it is uploaded instead of the file at <paramref name="programmerPath"/> and makes
+    /// that path optional.
+    /// <para>可选的预构建 programmer 镜像集合，例如内存推断的多镜像映射；提供时替代
+    /// <paramref name="programmerPath"/> 文件上传，并使该路径可缺省。</para></param>
     /// <returns>The non-fatal deviations recorded during the run.<para>执行期间记录的非致命偏差。</para></returns>
     public Task<IReadOnlyList<string>> FlashEdlBundleAsync(DetectedDevice device, string folder, string programmerPath,
         CancellationToken cancellationToken = default, bool continueOnFailure = false,
         bool skipAbsentSources = false, IReadOnlyList<string>? labels = null,
         IProgress<FlashBundleProgress>? progress = null, bool verify = false, bool skipUfsProvision = false,
-        EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null)
+        EdlBundleTuning? tuning = null, EdlInitializationOptions? initialization = null,
+        IProgress<EdlProgramChunkProgress>? chunkProgress = null,
+        IProgress<SaharaImageProgressEventArgs>? programmerProgress = null,
+        EdlProgrammerImageSet? programmerImages = null)
         => FlashEdlBundleService.FlashAsync(device, folder, programmerPath, cancellationToken,
-            continueOnFailure, skipAbsentSources, labels, progress, verify, skipUfsProvision, tuning, initialization);
+            continueOnFailure, skipAbsentSources, labels, progress, verify, skipUfsProvision, tuning, initialization,
+            chunkProgress, programmerProgress, programmerImages);
 
     /// <summary>Routes deployment and connection through the selected ADB server or native USB target.<para>经所选 ADB server 或原生 USB 目标完成部署与连接。</para></summary>
     /// <param name="device">The target to mirror.<para>要投屏的目标。</para></param>

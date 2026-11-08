@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text;
@@ -5,6 +6,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
@@ -13,6 +15,7 @@ using UotanStudio.Comm.Protocols.Mtk.Profile;
 using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
@@ -110,6 +113,8 @@ public sealed partial class FlashViewModel
     private string? _edlProgrammer;
     private string? _edlProgrammerOverride;
     private bool _isCustomProgrammer;
+    private EdlInferredProgrammerManifest? _inferredProgrammer;
+    private EdlProgrammerImageSet? _inferredImageSet;
 
     /// <summary>
     /// The programmer the EDL path would upload right now: the custom file when the picker is on the custom row,
@@ -118,6 +123,15 @@ public sealed partial class FlashViewModel
     /// 证实 loader 行配置了哪个文件。</para>
     /// </summary>
     internal string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
+
+    /// <summary>
+    /// The in-memory inferred programmer image set of the loaded package, or null when the picker is on the
+    /// custom row or the package carries no inferred mapping. It takes precedence over the package programmer
+    /// candidate because a lone Firehose image cannot answer the other identifiers a multi-image target requests.
+    /// <para>已加载包在内存推断出的 programmer 镜像集合；选择框处于自选档或包没有推断映射时为 null。它优先于包内
+    /// programmer 候选，因为单只 Firehose 镜像无法应答多镜像目标请求的其他标识。</para>
+    /// </summary>
+    internal EdlProgrammerImageSet? EffectiveEdlProgrammerImages => _isCustomProgrammer ? null : _inferredImageSet;
 
     private bool _flatBinPackage;
     private bool _edlBundleReady;
@@ -600,7 +614,8 @@ public sealed partial class FlashViewModel
         _edlProgrammer = package.Programmer;
         _isCustomProgrammer = false;
         UpdateEdlProgrammerPickOptions();
-        _edlBundleReady = package.Programs.Count > 0 && package.Programmers.Count > 0;
+        _edlBundleReady = package.Programs.Count > 0 &&
+            (package.Programmers.Count > 0 || package.InferredProgrammer is not null);
         var rows = new List<FlashPartitionEntry>(package.Images.Count);
         var positions = new Dictionary<FlashPartitionEntry, long>(package.Images.Count);
         foreach (var image in package.Images)
@@ -632,6 +647,7 @@ public sealed partial class FlashViewModel
             AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {package.Programmers.Count}");
         }
 
+        SetInferredProgrammer(package.InferredProgrammer);
         var merged = package.MergedRadioImages > 0
             ? $" · {_localizer.GetString("Flash_AfterSalesMerged")} {package.MergedRadioImages}"
             : string.Empty;
@@ -928,14 +944,55 @@ public sealed partial class FlashViewModel
 
         OrderFolderRows(rows, positions);
         Partitions.Apply(0, rows);
-        _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
+        _edlBundleReady = bin.Programs.Count > 0 &&
+            (bin.Programmers.Count > 0 || bin.InferredProgrammer is not null);
         if (bin.Programmers.Count > 1)
         {
             AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
         }
+
+        SetInferredProgrammer(bin.InferredProgrammer);
         UpdateEdlButton();
         AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
         return true;
+    }
+
+    /// <summary>
+    /// Writes the inferred multi-image programmer mapping to the side log so a folder without a vendor manifest
+    /// still shows what the name conventions recovered.
+    /// <para>把推断出的多镜像 programmer 映射写入侧边日志，使没有厂商清单的目录仍能看到命名约定恢复出的内容。</para>
+    /// </summary>
+    /// <param name="inferred">The inferred mapping, or <see langword="null"/> when nothing was inferred.
+    /// <para>推断出的映射；未推断出内容时为 <see langword="null"/>。</para></param>
+    /// <summary>
+    /// Keeps the inferred multi-image programmer mapping of the loaded package and validates it into an uploadable
+    /// image set; a mapping that fails the programmer bounds stays a log note instead of a flash input.
+    /// <para>保存已加载包推断出的多镜像 programmer 映射并校验为可上传镜像集合；未通过 programmer 限额的映射只留
+    /// 日志，不进入刷写输入。</para>
+    /// </summary>
+    /// <param name="inferred">The inferred mapping, or null when the package carries a real manifest.
+    /// <para>推断映射；包内有真实清单时为 null。</para></param>
+    private void SetInferredProgrammer(EdlInferredProgrammerManifest? inferred)
+    {
+        _inferredProgrammer = inferred;
+        _inferredImageSet = null;
+        if (inferred is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _inferredImageSet = EdlProgrammerImageSet.FromImages(inferred.Directory, inferred.Images);
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException or ArgumentException)
+        {
+            AppendLog($"{_localizer.GetString("Flash_EdlProgrammerInferredFailed")}: {error.Message}");
+            return;
+        }
+
+        AppendLog(string.Format(CultureInfo.InvariantCulture,
+            _localizer.GetString("Flash_EdlProgrammerInferred"), inferred.Images.Count));
     }
 
     /// <summary>
@@ -1827,6 +1884,8 @@ public sealed partial class FlashViewModel
         ProgrammerCandidates = [];
         _isCustomProgrammer = false;
         _edlProgrammerOverride = null;
+        _inferredProgrammer = null;
+        _inferredImageSet = null;
         UpdateEdlProgrammerPickOptions();
     }
 
@@ -1871,8 +1930,17 @@ public sealed partial class FlashViewModel
             return existing;
         }
 
-        await EdlProgrammerSession.EnsureInitializedAsync(session, EffectiveEdlProgrammer, initialization,
-            cancellationToken).ConfigureAwait(true);
+        var imageSet = EffectiveEdlProgrammerImages;
+        if (imageSet is not null)
+        {
+            await EdlProgrammerSession.EnsureInitializedAsync(session, imageSet, initialization,
+                cancellationToken).ConfigureAwait(true);
+        }
+        else
+        {
+            await EdlProgrammerSession.EnsureInitializedAsync(session, EffectiveEdlProgrammer, initialization,
+                cancellationToken).ConfigureAwait(true);
+        }
         return session.Firehose ?? throw new InvalidOperationException(
             "The EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
     }
@@ -2677,7 +2745,8 @@ public sealed partial class FlashViewModel
 
     internal async void OnFlashEdlBundleClick(object? sender, RoutedEventArgs e)
     {
-        if (_busy || _confirming || EffectiveEdlProgrammer is null || !_flatBinPackage ||
+        if (_busy || _confirming || (EffectiveEdlProgrammer is null && EffectiveEdlProgrammerImages is null) ||
+            !_flatBinPackage ||
             SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner ||
             !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
@@ -2695,8 +2764,9 @@ public sealed partial class FlashViewModel
     private async Task RunEdlBundleAsync(DetectedDevice? device, Window owner)
     {
         var language = _localizer;
+        var programmerImages = EffectiveEdlProgrammerImages;
         var programmerPath = EffectiveEdlProgrammer;
-        if (programmerPath is null || !_flatBinPackage) return;
+        if (!_flatBinPackage || (programmerPath is null && programmerImages is null)) return;
         _confirming = true;
         bool confirmed;
         try
@@ -2769,7 +2839,8 @@ public sealed partial class FlashViewModel
                         SetRowRunning(matched, "Flash_Status_Flashing");
                     }
 
-                    if (bundleActiveRow is { State: FlashRowState.Running } running && update.Total > 0)
+                    if (bundleActiveRow is { State: FlashRowState.Running } running && update.Total > 0 &&
+                        running.Percent == 0)
                     {
                         running.Percent = (int)Math.Clamp(update.Current * 100d / update.Total, 0d, 100d);
                         UpdateOverall();
@@ -2781,11 +2852,60 @@ public sealed partial class FlashViewModel
                     AppendLog(update.Message);
                 }
             });
-            var warnings = await App.DeviceMonitor.FlashEdlBundleAsync(device!, _loadedPath, programmerPath,
+            var progressThrottle = new PartitionProgressThrottle();
+            var chunkProgress = new Progress<EdlProgramChunkProgress>(update =>
+            {
+                if (update.EntryKey is not { } key || !rowsByName.TryGetValue(key, out var chunkRow))
+                {
+                    return;
+                }
+
+                if (!ReferenceEquals(chunkRow, bundleActiveRow))
+                {
+                    if (bundleActiveRow is { State: FlashRowState.Running })
+                    {
+                        SetRowFinished(bundleActiveRow, success: true);
+                    }
+
+                    bundleActiveRow = chunkRow;
+                    SetRowRunning(chunkRow, "Flash_Status_Flashing");
+                }
+
+                if (chunkRow is { State: FlashRowState.Running } chunkRunning && update.TotalBytes > 0)
+                {
+                    var percent = (int)Math.Clamp(update.BytesWritten * 100d / update.TotalBytes, 0d, 100d);
+                    chunkRunning.Percent = percent;
+                    UpdateOverall();
+                    if (progressThrottle.ShouldReport(update.EntryKey, percent, "Flash_Status_Flashing",
+                            Environment.TickCount64))
+                    {
+                        WeakReferenceMessenger.Default.Send(new FlashProgressMessage(update.EntryKey, percent,
+                            _localizer.GetString("Flash_Status_Flashing"), update.EntryKey, update.BytesWritten,
+                            update.TotalBytes));
+                    }
+                }
+            });
+            var programmerProgress = new Progress<SaharaImageProgressEventArgs>(update =>
+            {
+                if (update.ImageBytes is not { } imageBytes || imageBytes <= 0)
+                {
+                    return;
+                }
+
+                var percent = (int)Math.Clamp(update.BytesUploaded * 100d / imageBytes, 0d, 100d);
+                if (progressThrottle.ShouldReport(null, percent, "Flash_EdlLoaderUploading", Environment.TickCount64))
+                {
+                    WeakReferenceMessenger.Default.Send(new FlashProgressMessage(null, percent,
+                        string.Format(CultureInfo.InvariantCulture,
+                            _localizer.GetString("Flash_EdlLoaderUploading"), update.ImageId, update.BytesUploaded),
+                        null, update.BytesUploaded, imageBytes));
+                }
+            });
+            var warnings = await App.DeviceMonitor.FlashEdlBundleAsync(device!, _loadedPath, programmerPath ?? string.Empty,
                 cancellation.Token, Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
                 Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true, bundleLabels, progress,
                 verify: false, skipUfsProvision: false, bundleTuning,
-                initialization);
+                initialization, chunkProgress, programmerProgress, programmerImages);
             if (bundleActiveRow is { State: FlashRowState.Running })
             {
                 SetRowFinished(bundleActiveRow, success: true);
@@ -3247,7 +3367,7 @@ public sealed partial class FlashViewModel
             ? RkParameterTablePath()
             : null;
         if (!FlashModeAllowed(device.Protocol, _flatBinPackage,
-                EffectiveEdlProgrammer is not null,
+                EffectiveEdlProgrammer is not null || EffectiveEdlProgrammerImages is not null,
                 rkParameterPath is not null || rkForceAddress) ||
             device.Protocol == DeviceProtocolKind.Adb && !await FlashSuService.HasSuAsync(device, CancellationToken.None))
         {
@@ -3391,9 +3511,12 @@ public sealed partial class FlashViewModel
                 }
                 if (device.Protocol == DeviceProtocolKind.Edl)
                 {
+                    var edlSources = await StageEdlCompressedRowsAsync(selected, staged, language,
+                        cancellation.Token).ConfigureAwait(true);
                     await App.DeviceMonitor.RunEdlAsync(device, async edl =>
                     {
                         FirehoseGptSnapshot? deviceGpt = null;
+                        var chunkThrottle = new PartitionProgressThrottle();
                         foreach (var row in selected)
                         {
                             cancellation.Token.ThrowIfCancellationRequested();
@@ -3410,10 +3533,17 @@ public sealed partial class FlashViewModel
                             FlashResult result;
                             if (manifestEntry is { } entry)
                             {
-                                result = await FlashService.Default.FlashEdlPartitionAsync(
-                                    edl, entry, Path.GetDirectoryName(row.FilePath)!,
-                                    EffectiveEdlProgrammer, progress, cancellation.Token, verify: false,
-                                    initialization);
+                                var imageSet = EffectiveEdlProgrammerImages;
+                                result = imageSet is not null
+                                    ? await FlashService.Default.FlashEdlPartitionAsync(
+                                        edl, CloneEntryWithStagedSource(entry, edlSources.GetValueOrDefault(row)),
+                                        Path.GetDirectoryName(row.FilePath)!, imageSet, progress, cancellation.Token,
+                                        verify: false, initialization)
+                                    : await FlashService.Default.FlashEdlPartitionAsync(
+                                        edl, CloneEntryWithStagedSource(entry, edlSources.GetValueOrDefault(row)),
+                                        Path.GetDirectoryName(row.FilePath)!,
+                                        EffectiveEdlProgrammer, progress, cancellation.Token, verify: false,
+                                        initialization);
                             }
                             else
                             {
@@ -3422,14 +3552,21 @@ public sealed partial class FlashViewModel
                                 var snapshot = deviceGpt ??= await firehose.ReadGptWithPartitionEntryOverridesAsync(
                                     SelectedEdlLun, gptEntryLba, gptEntryCount, gptEntrySize,
                                     cancellation.Token).ConfigureAwait(true);
-                                var written = await firehose.ProgramRawPartitionFromFileAsync(snapshot, row.Name,
-                                    row.FilePath, verify: false, cancellationToken: cancellation.Token).ConfigureAwait(true);
-                                result = new FlashResult
-                                {
-                                    Success = true,
-                                    Summary = string.Format(language.GetString("Flash_EdlGptProgrammed"),
-                                        row.Name, written.AcknowledgedBytes, written.VerifiedBytes)
-                                };
+                                result = await ProgramEdlGptRowAsync(firehose, snapshot, row.Name,
+                                    edlSources.GetValueOrDefault(row, row.FilePath), language,
+                                    cancellation.Token, chunk =>
+                                    {
+                                        var percent = chunk.TotalBytes > 0
+                                            ? (int)Math.Clamp(chunk.BytesWritten * 100 / chunk.TotalBytes, 0, 99)
+                                            : 0;
+                                        if (chunkThrottle.ShouldReport(row.Name, percent,
+                                                language.GetString("Flash_Status_Flashing"),
+                                                Environment.TickCount64))
+                                        {
+                                            ((IProgress<FlashProgress>)progress).Report(new FlashProgress(
+                                                row.Name, percent, language.GetString("Flash_Status_Flashing")));
+                                        }
+                                    }).ConfigureAwait(true);
                             }
 
                             AppendLog(result.Summary);
@@ -3657,6 +3794,148 @@ public sealed partial class FlashViewModel
             SetControlEnabled("ChooseFolderButton", true);
             SetControlEnabled("PartitionGrid", true);
         }
+    }
+
+    /// <summary>
+    /// Stages decompressed copies of every selected EDL row whose image is a compressed <c>.zst</c> file so the
+    /// EDL paths never program compressed bytes into a partition; every staged file is registered in
+    /// <paramref name="staged"/> for the shared cleanup.
+    /// <para>为所选 EDL 行中镜像为 <c>.zst</c> 压缩文件的行暂存解压副本，使 EDL 路径不会把压缩字节写进分区；
+    /// 每个暂存文件都登记进 <paramref name="staged"/> 以便统一清理。</para>
+    /// </summary>
+    /// <param name="rows">The selected rows about to flash over EDL. <para>即将经 EDL 刷写的所选行。</para></param>
+    /// <param name="staged">Cleanup list receiving every staged decompressed file.
+    /// <para>接收全部暂存解压文件的清理列表。</para></param>
+    /// <param name="language">Localizer supplying the progress text. <para>提供进度文本的本地化器。</para></param>
+    /// <param name="cancellationToken">Token cancelling the staging. <para>取消暂存的令牌。</para></param>
+    /// <returns>The row-to-source mapping; rows without a compressed image keep their original file.
+    /// <para>行到源路径的映射；没有压缩镜像的行沿用原文件。</para></returns>
+    private async Task<Dictionary<FlashPartitionEntry, string>> StageEdlCompressedRowsAsync(
+        IReadOnlyList<FlashPartitionEntry> rows, List<string> staged, ILocalizer language,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<FlashPartitionEntry, string> sources = [];
+        foreach (var row in rows.Where(row => File.Exists(row.FilePath) &&
+            row.FilePath.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AppendLog($"{row.FileName}: {language.GetString("Flash_Decompressing")}");
+            var path = await FlashCompressedImage.PrepareAsync(row.FilePath, cancellationToken).ConfigureAwait(true);
+            staged.Add(path);
+            sources[row] = path;
+        }
+
+        return sources;
+    }
+
+    /// <summary>
+    /// Returns a copy of the manifest entry whose source file points at the staged decompressed image, leaving the
+    /// entry stored in <c>_edlEntries</c> untouched; rows without a staged image keep the original entry.
+    /// <para>返回源文件指向暂存解压镜像的清单条目副本，不改动 <c>_edlEntries</c> 中的原条目；没有暂存镜像的行
+    /// 沿用原条目。</para>
+    /// </summary>
+    /// <param name="entry">The parsed manifest entry. <para>解析出的清单条目。</para></param>
+    /// <param name="stagedSource">The staged decompressed path, or <see langword="null"/> when the row was not staged.
+    /// <para>暂存解压路径；该行未暂存时为 <see langword="null"/>。</para></param>
+    /// <returns>The entry to program from. <para>用于编程的条目。</para></returns>
+    private static RawProgramEntry CloneEntryWithStagedSource(RawProgramEntry entry, string? stagedSource)
+    {
+        if (stagedSource is null)
+        {
+            return entry;
+        }
+
+        return new RawProgramEntry
+        {
+            SectorSizeInBytes = entry.SectorSizeInBytes,
+            NumPartitionSectors = entry.NumPartitionSectors,
+            Filename = entry.Filename,
+            PhysicalPartitionNumber = entry.PhysicalPartitionNumber,
+            StartSector = entry.StartSector,
+            FileSectorOffset = entry.FileSectorOffset,
+            Label = entry.Label,
+            IsSparse = entry.IsSparse,
+            UnsparseFileSize = entry.UnsparseFileSize,
+            PagesPerBlock = entry.PagesPerBlock,
+            LastSector = entry.LastSector,
+            Slot = entry.Slot,
+            SourceFile = stagedSource,
+            Digest = entry.Digest,
+            DigestSignature = entry.DigestSignature,
+            SignatureSize = entry.SignatureSize
+        };
+    }
+
+    /// <summary>
+    /// Programs one manifest-free EDL row against the device GPT: Android sparse images go through the sparse
+    /// transfer path and everything else through the raw file path, so a compressed or sparse layout can never be
+    /// written as raw sectors.
+    /// <para>把无清单的 EDL 行按设备 GPT 写入：Android sparse 镜像走 sparse 传输路径，其余走原始文件路径，
+    /// 使压缩或 sparse 布局都不会被当成原始扇区写入。</para>
+    /// </summary>
+    /// <param name="firehose">The configured Firehose protocol instance.
+    /// <para>已配置的 Firehose 协议实例。</para></param>
+    /// <param name="snapshot">The validated device GPT observation. <para>已校验的设备 GPT 观测。</para></param>
+    /// <param name="partitionName">Exact GPT partition name. <para>精确的 GPT 分区名。</para></param>
+    /// <param name="source">The (possibly staged) source image path. <para>（可能已暂存的）源镜像路径。</para></param>
+    /// <param name="language">Localizer supplying the result text. <para>提供结果文本的本地化器。</para></param>
+    /// <param name="cancellationToken">Token cancelling the write. <para>取消写入的令牌。</para></param>
+    /// <returns>The flash result of the single row. <para>该行的刷写结果。</para></returns>
+    private static async Task<FlashResult> ProgramEdlGptRowAsync(FirehoseProtocol firehose,
+        FirehoseGptSnapshot snapshot, string partitionName, string source, ILocalizer language,
+        CancellationToken cancellationToken, Action<EdlProgramChunkProgress>? chunkProgress = null)
+    {
+        if (IsAndroidSparseImageFile(source))
+        {
+            var sectorSize = snapshot.Geometry.SectorSize;
+            var partition = snapshot.Table.FindPartition(partitionName);
+            var maximumSectors = partition.ByteLength / sectorSize;
+            using var stream = File.OpenRead(source);
+            var response = await firehose.ProgramSparseAsync(stream,
+                partition.FirstLba.ToString(CultureInfo.InvariantCulture), partitionName,
+                snapshot.Geometry.PhysicalPartitionNumber, maximumSectors,
+                cancellationToken).ConfigureAwait(true);
+            if (!response.IsAck)
+            {
+                return new FlashResult
+                {
+                    Success = false,
+                    Summary = $"{partitionName}: {EdlFailureText.Describe(response)}"
+                };
+            }
+
+            return new FlashResult
+            {
+                Success = true,
+                Summary = string.Format(language.GetString("Flash_EdlGptProgrammed"),
+                    partitionName, partition.ByteLength, 0L)
+            };
+        }
+
+        var written = await firehose.ProgramRawPartitionFromFileAsync(snapshot, partitionName, source,
+            verify: false, cancellationToken: cancellationToken, chunkProgress: chunkProgress)
+            .ConfigureAwait(true);
+        return new FlashResult
+        {
+            Success = true,
+            Summary = string.Format(language.GetString("Flash_EdlGptProgrammed"),
+                partitionName, written.AcknowledgedBytes, written.VerifiedBytes)
+        };
+    }
+
+    /// <summary>
+    /// Reports whether a file starts with the Android sparse image magic, read from the first four bytes.
+    /// <para>通过前四字节判断文件是否以 Android sparse 镜像魔数开头。</para>
+    /// </summary>
+    /// <param name="path">Image file to probe. <para>要探测的镜像文件。</para></param>
+    /// <returns><see langword="true"/> when the file carries the sparse header magic.
+    /// <para>文件带 sparse 头魔数时为 <see langword="true"/>。</para></returns>
+    private static bool IsAndroidSparseImageFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        Span<byte> header = stackalloc byte[4];
+        return stream.Read(header) == 4 && BinaryPrimitives.ReadUInt32LittleEndian(header) ==
+            UotanStudio.Firmware.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
     }
 
     private static bool LooksLikeScatter(string path)
@@ -4152,8 +4431,8 @@ public sealed partial class FlashViewModel
         await RunEdlStorageServiceCallAsync(async token =>
         {
             var result = await EdlStorageControlService.SetBootableStorageDriveAsync(
-                new DeviceInfo(device), value, token, EffectiveEdlProgrammer, initialization)
-                .ConfigureAwait(true);
+                new DeviceInfo(device), value, token, EffectiveEdlProgrammer, initialization,
+                EffectiveEdlProgrammerImages).ConfigureAwait(true);
             return result.Summary;
         });
     }
@@ -4328,7 +4607,7 @@ public sealed partial class FlashViewModel
         {
             var digest = await EdlStorageControlService.GetPartitionSha256Async(
                 new DeviceInfo(device), partition, SelectedEdlLun, token, EffectiveEdlProgrammer,
-                initialization).ConfigureAwait(true);
+                initialization, EffectiveEdlProgrammerImages).ConfigureAwait(true);
             return $"{digest.Partition} [{digest.StartSector} x{digest.SectorCount}] lun {digest.Lun}: {digest.Sha256Hex}";
         });
     }

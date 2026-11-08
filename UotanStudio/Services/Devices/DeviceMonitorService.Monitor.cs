@@ -101,6 +101,25 @@ public sealed partial class DeviceMonitorService
         _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
             () => LeaseEndpoint(device, sessionKind: Comm.Contracts.DeviceSessionKind.Edl,
                 cancellationToken: token), token), ScheduleChange);
+        _edlConnections.ReconnectWaiter = async (offer, timeoutMs, cancellationToken) =>
+        {
+            var previous = offer.PreviousEndpoint;
+            if (previous is null)
+            {
+                return null;
+            }
+
+            var policy = offer.Correlation switch
+            {
+                Comm.Devices.Services.ModeTransitionEvidence.Container =>
+                    Comm.Devices.Services.UsbReconnectIdentityPolicy.Container,
+                Comm.Devices.Services.ModeTransitionEvidence.PhysicalPort =>
+                    Comm.Devices.Services.UsbReconnectIdentityPolicy.PhysicalPort,
+                _ => Comm.Devices.Services.UsbReconnectIdentityPolicy.PhysicalLocation,
+            };
+            return await _controller.WaitForUsbReconnectAsync(previous, Comm.Contracts.DeviceSessionKind.Edl,
+                policy, timeoutMs, cancellationToken).ConfigureAwait(false);
+        };
         RestorePairedNetworkTargets();
     }
 

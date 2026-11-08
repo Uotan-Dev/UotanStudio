@@ -50,12 +50,45 @@ internal static class EdlProgrammerSession
         if (SaharaProgrammerManifest.IsManifestPath(programmerPath))
         {
             var imageSet = EdlProgrammerImageSet.Open(programmerPath);
-            await session.EnsureInitializedFromImageSetAsync(imageSet, initialization, cancellationToken)
-                .ConfigureAwait(false);
+            await EnsureInitializedAsync(session, imageSet, initialization, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         using var programmer = File.OpenRead(programmerPath);
         await session.EnsureInitializedAsync(programmer, initialization, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Ensures the session is initialized with the supplied pre-built programmer image set, e.g. a multi-image
+    /// mapping inferred in memory when a folder carries no vendor manifest.
+    /// <para>用所给预构建的 programmer 镜像集合确保会话已初始化，例如目录没有厂商清单时在内存推断出的多镜像映射。</para>
+    /// </summary>
+    /// <param name="session">The session to start; it is opened by the caller's device lease.
+    /// <para>要启动的会话；由调用方的设备租约打开。</para></param>
+    /// <param name="programmerImages">The validated image set to upload, or <see langword="null"/> to start
+    /// without a programmer upload.
+    /// <para>要上传的已校验镜像集合；为 <see langword="null"/> 时不带 programmer 上传启动。</para></param>
+    /// <param name="initialization">Optional session startup requirements.
+    /// <para>可选的会话启动要求。</para></param>
+    /// <param name="cancellationToken">Cancels the parse and the handshake.
+    /// <para>取消解析与握手。</para></param>
+    /// <returns>A task that completes when the session is configured or was already configured.
+    /// <para>会话已配置或本就已配置时完成的任务。</para></returns>
+    /// <exception cref="InvalidDataException">One referenced image is missing or the set is not usable.
+    /// <para>某个被引用的镜像缺失或集合不可用。</para></exception>
+    /// <exception cref="IOException">A programmer image exists but cannot be opened.
+    /// <para>programmer 镜像存在但无法打开。</para></exception>
+    internal static async Task EnsureInitializedAsync(EdlSession session, EdlProgrammerImageSet? programmerImages,
+        EdlInitializationOptions? initialization, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (programmerImages is null)
+        {
+            await session.EnsureInitializedAsync(null, initialization, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await session.EnsureInitializedFromImageSetAsync(programmerImages, initialization, cancellationToken)
+            .ConfigureAwait(false);
     }
 }

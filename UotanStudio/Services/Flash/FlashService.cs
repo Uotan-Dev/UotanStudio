@@ -6,6 +6,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
+using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Hash.Crc32Ieee;
@@ -638,6 +639,36 @@ public sealed class FlashService : IFlashService
             throw new FileNotFoundException("Firehose programmer is missing.", programmerPath);
         }
         await EdlProgrammerSession.EnsureInitializedAsync(session, programmerPath, initialization, ct).ConfigureAwait(false);
+        var firehose = session.Firehose
+            ?? throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_NoFirehose"));
+        return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
+    }
+
+    /// <summary>Uploads the supplied programmer image set before programming a manifest entry, with an optional
+    /// read-back verification after a successful write; the set may be a multi-image mapping inferred in memory
+    /// when a folder carries no vendor manifest.
+    /// <para>上传所给的 programmer 镜像集合后编程清单条目，并可在写入成功后执行回读校验；该集合可以是目录没有
+    /// 厂商清单时在内存推断出的多镜像映射。</para></summary>
+    /// <param name="session">The EDL session, initialized on demand.<para>按需初始化的 EDL 会话。</para></param>
+    /// <param name="entry">The target rawprogram entry.<para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory.<para>镜像文件所在目录。</para></param>
+    /// <param name="programmerImages">The validated programmer image set to upload, or null to skip the upload.
+    /// <para>要上传的已校验 programmer 镜像集合，为 null 时跳过上传。</para></param>
+    /// <param name="progress">Optional flash progress reporter.<para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the programmed range back and compare it with the source file.
+    /// <para>是否回读已编程范围并与源文件比对。</para></param>
+    /// <param name="initialization">Options governing session initialization, or null for the defaults.
+    /// <para>控制会话初始化的选项，为 null 时使用默认值。</para></param>
+    /// <returns>The flash result.<para>刷写结果。</para></returns>
+    public async Task<FlashResult> FlashEdlPartitionAsync(
+        EdlSession session, RawProgramEntry entry, string imageDir, EdlProgrammerImageSet? programmerImages,
+        IProgress<FlashProgress>? progress, CancellationToken ct, bool verify,
+        EdlInitializationOptions? initialization = null)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        await EdlProgrammerSession.EnsureInitializedAsync(session, programmerImages, initialization, ct)
+            .ConfigureAwait(false);
         var firehose = session.Firehose
             ?? throw new InvalidOperationException(FlashLogText.Get("Flash_Exception_NoFirehose"));
         return await FlashEdlPartitionAsync(firehose, entry, imageDir, progress, ct, verify).ConfigureAwait(false);
