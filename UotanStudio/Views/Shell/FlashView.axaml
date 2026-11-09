@@ -412,24 +412,23 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_SpacemiTVerify}" />
                             </Grid>
-                            <!-- AVB 选项组常驻：未勾选“禁用 AVB”时只把命令选择框置灰，组本身不消失。 -->
-                            <!-- The AVB option group stays on the page: with AVB disabling unchecked only the command
-                                 selector turns unusable instead of the group leaving the page. -->
-                            <StackPanel Name="AvbOptionsPanel" Spacing="8">
+                            <!-- AVB 二级选项组跟随“禁用 AVB”复选框显隐：勾选后才展开命令选择框，取消勾选立刻收起。 -->
+                            <!-- The AVB option group follows its check box: the command selector appears once AVB
+                                 disabling is ticked and collapses again as soon as it is cleared. -->
+                            <StackPanel Name="AvbOptionsPanel" Spacing="8"
+                                        IsVisible="{Binding #DisableVbmetaBox.IsChecked}">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_DisableVbmeta}" FontWeight="SemiBold" />
                                 <ComboBox Name="AvbDisableCommandBox" HorizontalAlignment="Stretch" Height="32"
                                           VerticalContentAlignment="Center"
                                           SelectedIndex="0"
-                                          IsEnabled="{Binding #DisableVbmetaBox.IsChecked}"
                                           AutomationProperties.Name="{DynamicResource Avb_DisableCommandTitle}" />
                             </StackPanel>
-                            <!-- Root 分组常驻：未勾选“添加 Root”时整组只置灰，自定义包入口与版本列表各自按所选来源置灰，
-                                 而不是从页面上消失。 -->
-                            <!-- The root group stays on the page: with the root patch unchecked the group only turns
-                                 unusable, and the custom-package entries and the version list each follow the chosen
-                                 source instead of leaving the page. -->
-                            <StackPanel Name="RootOptionsPanel" Spacing="8">
+                            <!-- Root 二级选项组跟随“添加 Root”复选框显隐；组内自定义包入口与版本列表仍各自按所选来源置灰。 -->
+                            <!-- The root group follows its check box; inside it the custom-package entries and the
+                                 version list still follow the chosen source. -->
+                            <StackPanel Name="RootOptionsPanel" Spacing="8"
+                                        IsVisible="{Binding #AddRootBox.IsChecked}">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_AddRoot}" FontWeight="SemiBold" />
                                 <ComboBox Name="RootPartitionBox" HorizontalAlignment="Stretch" Height="32"

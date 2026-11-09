@@ -13,7 +13,8 @@ internal readonly record struct FlashGateContext(
     bool IsSpacemiTFastboot,
     bool HasAdbSu,
     bool HasSelectedPartitions = false,
-    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown);
+    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown,
+    bool IsFastbootd = false);
 
 /// <summary>
 /// One control's own availability condition: the control holds this object, and the page asks that control whether
@@ -65,24 +66,24 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// An option of the shared flash action: offered on a fastboot endpoint, because that is the only transport whose
-    /// flash path reads it. An erase, a reboot or a slot switch has nothing for an AVB, root, data-erase or COW option
-    /// to act on, so those options close on every other device instead of pretending they would change the run.
-    /// <para>通用烧录动作的选项：只在 fastboot 端点上提供，因为只有该传输的烧录路径会读取它。擦除、重启或槽位切换没有可供
-    /// AVB、Root、清数据或 COW 选项作用的对象，因此这些选项在其它设备上关闭，而不是假装会改变运行。</para>
+    /// An option of the flash action offered to every selected device: the flash paths read it wherever one can act on
+    /// it, and the page keeps it selectable so the intent survives a device swap instead of being closed by a protocol
+    /// the option never named. Only a page operation turns it off.
+    /// <para>烧录动作的选项，对任何已选设备都提供：凡是有路径能作用于它时都会读取它，页面保持它可勾选，使意图在换设备后
+    /// 仍然保留，而不是被该选项从未提及的协议关闭；只有页面操作期间才关闭它。</para>
     /// </summary>
-    internal static FlashControlGate FlashOption(string name, bool busyDisabled = false) => new(name,
-        static context => context.Kind == FlashDeviceKind.Fastboot,
+    internal static FlashControlGate FlashOptionAnyDevice(string name, bool busyDisabled = false) => new(name,
+        static context => context.Mode != FlashDeviceMode.None,
         busyDisabled);
 
     /// <summary>
-    /// An option only the generic fastboot flash path honours: the SpacemiT package run writes the package's own tables
-    /// and never reads it, so it is offered only when the selected fastboot endpoint is not that gadget.
-    /// <para>只由通用 fastboot 烧录路径读取的选项：进迭时空烧录包运行写的是包内分区表，从不读取它，因此只在所选 fastboot
-    /// 端点不是该 gadget 时提供。</para>
+    /// An option the user-space fastboot daemon answers: offered only while the selected fastboot endpoint reports
+    /// fastbootd, because the bootloader fastboot has no logical partition table to act on.
+    /// <para>由用户空间 fastboot 守护进程应答的选项：只在所选 fastboot 端点报告处于 fastbootd 时提供，因为引导程序阶段的
+    /// fastboot 没有可供作用的逻辑分区表。</para>
     /// </summary>
-    internal static FlashControlGate GenericFastbootOption(string name, bool busyDisabled = false) => new(name,
-        static context => context.Kind == FlashDeviceKind.Fastboot && !context.IsSpacemiTFastboot,
+    internal static FlashControlGate FastbootdOption(string name, bool busyDisabled = false) => new(name,
+        static context => context.IsFastbootd,
         busyDisabled);
 
     /// <summary>
@@ -95,17 +96,6 @@ internal sealed class FlashControlGate
         context.Kind == FlashDeviceKind.Fastboot &&
         context.IsSpacemiTFastboot &&
         context.FastbootStage != SpacemiTBootStage.BromFdl;
-
-    /// <summary>
-    /// An option only the SpacemiT package flash path honours: offered on the SpacemiT U-Boot fastboot gadget,
-    /// whose flasher reads a partition back after writing it, and closed on every other endpoint — including a gadget
-    /// still sitting in the BootROM download mode, which can neither flash nor read a partition yet.
-    /// <para>只由进迭时空烧录包烧录路径读取的选项：在进迭时空 U-Boot fastboot gadget 上提供（其烧录器会在写入后回读分区），
-    /// 在其它端点上一律关闭——包括仍处于 BootROM 下载模式、尚不能烧写或回读分区的 gadget。</para>
-    /// </summary>
-    internal static FlashControlGate SpacemiTOption(string name, bool busyDisabled = false) => new(name,
-        static context => IsSpacemiTReadCapable(context),
-        busyDisabled);
 
     /// <summary>
     /// The shared storage predicate: offered only to protocols without their own restricted kind, and a Rockchip

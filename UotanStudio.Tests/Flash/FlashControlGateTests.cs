@@ -18,8 +18,8 @@ public sealed class FlashControlGateTests
     private static FlashGateContext Context(FlashDeviceMode mode,
         FlashDeviceKind kind = FlashDeviceKind.Unknown, RockchipStage stage = RockchipStage.Unknown,
         bool spacemiTFastboot = false, bool adbSu = false, bool hasSelectedPartitions = false,
-        SpacemiTBootStage fastbootStage = SpacemiTBootStage.Unknown) =>
-        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions, fastbootStage);
+        SpacemiTBootStage fastbootStage = SpacemiTBootStage.Unknown, bool fastbootd = false) =>
+        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions, fastbootStage, fastbootd);
 
     [Fact]
     public void ModeOf_SelectedProtocol_ReturnsModeThatOffersItsSection()
@@ -211,19 +211,15 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
-    public void SpacemiTOption_IsOfferedOnlyToTheSpacemiTUbootGadget()
+    public void VerifyOption_StaysSelectableOnEveryConnectedDevice()
     {
-        var gate = FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true);
+        var gate = FlashControlGate.FlashOptionAnyDevice("SpacemiTVerifyBox", busyDisabled: true);
 
         Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
-            spacemiTFastboot: true)));
-        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
             spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
             spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, spacemiTFastboot: true)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Shared)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
         Assert.True(gate.BusyDisabled);
     }
@@ -266,9 +262,9 @@ public sealed class FlashControlGateTests
     [Fact]
     public void SpacemiTGates_CloseWhileThePageIsBusy()
     {
-        Assert.True(FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true).BusyDisabled);
+        Assert.True(FlashControlGate.FlashOptionAnyDevice("SpacemiTVerifyBox", busyDisabled: true).BusyDisabled);
         Assert.True(FlashControlGate.Readback("ReadbackSelectedButton", busyDisabled: true).BusyDisabled);
-        Assert.False(FlashControlGate.SpacemiTOption("SpacemiTVerifyBox").BusyDisabled);
+        Assert.False(FlashControlGate.FlashOptionAnyDevice("SpacemiTVerifyBox").BusyDisabled);
         Assert.False(FlashControlGate.Readback("ReadbackSelectedButton").BusyDisabled);
     }
 
@@ -318,6 +314,51 @@ public sealed class FlashControlGateTests
         }
 
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb)));
+    }
+
+    [Fact]
+    public void FlashOptionAnyDevice_StaysSelectableOnEveryConnectedDevice()
+    {
+        var gate = FlashControlGate.FlashOptionAnyDevice("DisableVbmetaBox", busyDisabled: true);
+
+        foreach (var mode in SelectedModes)
+        {
+            Assert.True(gate.IsOffered(Context(mode)), mode.ToString());
+        }
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot, spacemiTFastboot: true)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)), "no device offers no option");
+        Assert.True(gate.BusyDisabled);
+    }
+
+    [Fact]
+    public void FastbootdOption_IsOfferedOnlyWhileTheEndpointRunsTheUserSpaceDaemon()
+    {
+        foreach (var name in new[] { "DeleteCowBox", "ShowAllPartitionsBox" })
+        {
+            var gate = FlashControlGate.FastbootdOption(name, busyDisabled: true);
+
+            Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot, fastbootd: true)), name);
+            Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)), name);
+            Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)), name);
+            Assert.True(gate.BusyDisabled, name);
+        }
+    }
+
+    [Fact]
+    public void OptionGroups_ShowThemselvesFromTheirOwnCheckBox()
+    {
+        var view = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "UotanStudio", "Views", "Shell", "FlashView.axaml"));
+
+        Assert.Matches(
+            new Regex("<StackPanel Name=\"AvbOptionsPanel\"[^>]*IsVisible=\"\\{Binding #DisableVbmetaBox[.]IsChecked\\}\"",
+                RegexOptions.Compiled), view);
+        Assert.Matches(
+            new Regex("<StackPanel Name=\"RootOptionsPanel\"[^>]*IsVisible=\"\\{Binding #AddRootBox[.]IsChecked\\}\"",
+                RegexOptions.Compiled), view);
     }
 
     [Fact]

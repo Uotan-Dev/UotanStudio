@@ -28,7 +28,7 @@
 - `.resx` 只作为 `AdditionalFiles` 并从 SDK 默认 `EmbeddedResource` glob 移除，否则会生成 satellite assembly。UI 可见文本只走资源字典，不能在界面中拼接中英文。
 - 已生成脚本文本只在生成时确定语言；切换界面语言不得改写已生成内容。
 - 编辑器明确选择“按文本打开”时必须保持文本模式（`EditorOpenMode.Text`），即使文件含 NUL 或使用二进制扩展名；只有 `Auto` 才允许按扩展名或内容探测。
-- 烧录页面以**禁用**表达“当前设备不提供该动作”：`FlashControlGate` 只决定启用状态，不隐藏控件，也没有可见性条件；切换设备只展开该协议对应的分类，不收起其它分类，未选中设备时保留已持久化的展开状态。新增控件时按同样方式接入门控，不要用 `IsVisible` 表达设备条件。
+- 烧录页面以**禁用**表达“当前设备不提供该动作”：`FlashControlGate` 只决定启用状态，不隐藏控件，也没有设备可见性条件；切换设备只展开该协议对应的分类，不收起其它分类，未选中设备时保留已持久化的展开状态。新增控件时按同样方式接入门控，不要用 `IsVisible` 表达设备条件。唯一的显隐联动是“禁用 AVB”与“添加 Root”两个二级选项组：它们跟随各自复选框的勾选状态展开或收起（`IsVisible` 绑定同级复选框），因此不登记门控，运行期间的禁用由被禁用的父面板承担。选项复选框（禁用 AVB、添加 Root、清空数据、重启、进迭时空校验）在任何已连接设备上都保持可勾选，只有“删除 COW”和“显示所有分区”跟随 fastbootd；选项是否真的生效仍由各烧录路径自己判定。
 - MiSans 字形由 `UotanStudio.Assets` 的 `fonts` 资源包随包（`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，压缩帧与清单在 `UotanStudio.Assets/Assets/fonts`），字体帧只由 Assets 的 fonts 包提供；启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection.DecompressFaces` 经 `AssetStore.Read` 取已校验字节并注册到 `FontManager`。启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解码解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。
 - `.dat`、`.new.dat`、`.patch.dat`、`.br`、`.transfer.list` 的识别复用现有格式注册与判定（`ImageInputService`、`ImageOutputService`、`ProjectExplorerView`）；不要在 View 复制后缀判断。
 

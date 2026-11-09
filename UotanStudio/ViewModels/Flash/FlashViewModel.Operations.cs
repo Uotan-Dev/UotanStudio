@@ -1338,10 +1338,9 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Applies the root options to the side pane: the panel stays present and turns unusable while adding root is off,
-    /// and the custom-package entries and the version list report their own availability instead of disappearing.
-    /// <para>把 Root 选项应用到侧边栏：面板保持呈现，在未启用添加 Root 时不可用；自定义包入口与版本列表改为各自表明可用性
-    /// 而不是隐藏。</para>
+    /// Applies the root options to the side pane: the panel is shown by the root check box itself, and the
+    /// custom-package entries and the version list report their own availability inside it.
+    /// <para>把 Root 选项应用到侧边栏：面板由 Root 复选框本身决定显隐，组内自定义包入口与版本列表各自表明可用性。</para>
     /// </summary>
     internal void UpdateRootControlsState()
     {
@@ -1349,7 +1348,6 @@ public sealed partial class FlashViewModel
         var sourceBox = Field<ComboBox>("RootFileSourceBox");
         var pathBox = Field<TextBox>("RootPackagePathBox");
 
-        SetControlEnabled("RootOptionsPanel", addRoot);
         var customFile = sourceBox.SelectedIndex == RootCustomFileIndex;
         pathBox.IsEnabled = addRoot && customFile;
         SetControlEnabled("ChooseRootPackageButton", addRoot && customFile);
@@ -2315,13 +2313,20 @@ public sealed partial class FlashViewModel
         SetControlEnabled("EdlPartitionDigestButton", !_busy && edlFirehose);
         var mtkStage = MtkStage;
 
-        SetControlEnabled("DisableVbmetaBox", !_busy);
-        SetControlEnabled("AddRootBox", !_busy);
-        SetControlEnabled("EraseDataBox", !_busy);
-        SetControlEnabled("RebootAfterBox", !_busy);
-        SetControlEnabled("ShowAllPartitionsBox", !_busy);
-        SetControlEnabled("DeleteCowBox", !_busy);
-        SetControlEnabled("SpacemiTVerifyBox", !_busy);
+        // The option check boxes are offered by any connected device: their flash paths decide what they read, and the
+        // flash action reports the mismatch when a chosen option has no path. The two logical-partition options follow
+        // fastbootd alone, which is the only mode that owns a logical table.
+        // 选项复选框对任何已连接设备都提供：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配。两个逻辑分区选项
+        // 只跟随 fastbootd，那是唯一拥有逻辑分区表的模式。
+        var hasDevice = DeviceMode != FlashDeviceMode.None;
+        var fastbootdOptions = IsSelectedFastbootd;
+        SetControlEnabled("DisableVbmetaBox", !_busy && hasDevice);
+        SetControlEnabled("AddRootBox", !_busy && hasDevice);
+        SetControlEnabled("EraseDataBox", !_busy && hasDevice);
+        SetControlEnabled("RebootAfterBox", !_busy && hasDevice);
+        SetControlEnabled("ShowAllPartitionsBox", !_busy && fastbootdOptions);
+        SetControlEnabled("DeleteCowBox", !_busy && fastbootdOptions);
+        SetControlEnabled("SpacemiTVerifyBox", !_busy && hasDevice);
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
         // The flash action runs on the rows the user picked: the EDL bundle needs a writable entry ticked (an empty
@@ -3343,6 +3348,23 @@ public sealed partial class FlashViewModel
         }
     }
 
+    /// <summary>
+    /// Whether the run that is about to start reads none of the option check boxes: an erase ignores every option, and
+    /// the ADB, EDL, MTK, Rockchip and Allwinner flash paths each write their own row plan without consulting them. The
+    /// option check boxes stay selectable on every connected device, so only a path with options to honour reports the
+    /// mismatch when one is ticked.
+    /// <para>即将执行的操作是否完全不读取任何选项复选框：擦除忽略全部选项，ADB、EDL、联发科、瑞芯微与全志的烧录路径各自
+    /// 写入自己的行计划而不查询它们。选项复选框在任何已连接设备上都可勾选，因此只有真正能作用于选项的路径才在勾选时报告
+    /// 不匹配。</para>
+    /// </summary>
+    /// <param name="protocol">Protocol of the selected device. <para>所选设备的协议。</para></param>
+    /// <param name="erase">Whether the run erases instead of flashing. <para>本次操作是否为擦除而非烧录。</para></param>
+    /// <returns><see langword="true"/> when ticking any option cannot change this run.
+    /// <para>勾选任何选项都无法改变本次操作时为 <see langword="true"/>。</para></returns>
+    private static bool IsOptionlessRun(DeviceProtocolKind protocol, bool erase) =>
+        erase || protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Edl or DeviceProtocolKind.Mtk or
+            DeviceProtocolKind.Rkdl or DeviceProtocolKind.Sunxi;
+
     /// <remarks>
     /// A Rockchip flash needs an addressing source, never a loader: rows resolve through the parameter table,
     /// or through their own row address when the forced-address switch is set, the way the vendor tool writes a
@@ -3378,7 +3400,7 @@ public sealed partial class FlashViewModel
         }
         var plainOptions = erase || Field<CheckBox>("DeleteCowBox").IsChecked == true || Field<CheckBox>("EraseDataBox").IsChecked == true ||
             Field<CheckBox>("RebootAfterBox").IsChecked == true || Field<CheckBox>("DisableVbmetaBox").IsChecked == true || Field<CheckBox>("AddRootBox").IsChecked == true;
-        if (device.Protocol != DeviceProtocolKind.Fastboot && plainOptions)
+        if (device.Protocol != DeviceProtocolKind.Fastboot && plainOptions && !IsOptionlessRun(device.Protocol, erase))
         {
             AppendLog(_localizer.GetString("Flash_ModeMismatch"));
             return;

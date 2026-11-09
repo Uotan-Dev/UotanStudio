@@ -65,6 +65,13 @@ public sealed partial class FlashViewModel
     internal SpacemiTBootStage SelectedFastbootStage => SelectedDevice?.FastbootStage ?? SpacemiTBootStage.Unknown;
 
     /// <summary>
+    /// Whether the selected fastboot endpoint runs the user-space fastboot daemon, which the page derives from the
+    /// same variables that tag the device entry as fastbootd.
+    /// <para>所选 fastboot 端点是否运行用户空间 fastboot 守护进程；页面按标记设备条目为 fastbootd 的同一组变量判定。</para>
+    /// </summary>
+    internal bool IsSelectedFastbootd => _deviceViewModel?.SelectedDevice?.IsFastbootd == true;
+
+    /// <summary>
     /// The last ADB root-shell verdict for the selected device key; <see langword="null"/> until a probe for
     /// that key completed, so an unprobed device never looks authorized.
     /// <para>所选设备键最近一次的 ADB root shell 结论；对该键的探测完成前为 <see langword="null"/>，
@@ -116,7 +123,7 @@ public sealed partial class FlashViewModel
     /// </summary>
     private FlashGateContext GateContext =>
         new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions,
-            SelectedFastbootStage);
+            SelectedFastbootStage, IsSelectedFastbootd);
 
     /// <summary>
     /// Registers every control's own gate; called once when the page is attached, before any enable decision reads it.
@@ -166,9 +173,16 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Shared action pane: the common actions, the busy-only check boxes and the two option panels.
-    /// <para>通用操作区：通用动作、仅随忙碌态变化的复选框与两个选项面板。</para>
+    /// Shared action pane: the common actions, the option check boxes and the two option panels.
+    /// <para>通用操作区：通用动作、选项复选框与两个选项面板。</para>
     /// </summary>
+    /// <remarks>
+    /// The option check boxes stay selectable on every connected device, because each flash path reads the ones it can
+    /// act on and the flash action itself reports a protocol mismatch when a chosen option has no path there. Only the
+    /// two options that act on logical partitions follow fastbootd, which is the only mode with a logical table.
+    /// <para>选项复选框在任何已连接设备上都保持可勾选，因为每条烧录路径各自读取它能作用的选项，而所选选项在该设备上没有
+    /// 路径时由烧录动作本身报告协议不匹配。只有作用于逻辑分区的两个选项跟随 fastbootd，那是唯一有逻辑分区表的模式。</para>
+    /// </remarks>
     private void RegisterSharedControlGates()
     {
         RegisterGate("LoadBootButton", FlashControlGate.LoaderOnly("LoadBootButton", busyDisabled: true));
@@ -182,21 +196,24 @@ public sealed partial class FlashViewModel
         RegisterGate("SwitchSlotButton", FlashControlGate.SlotSwitch("SwitchSlotButton", busyDisabled: true));
 
         RegisterGate("DisableVbmetaBox",
-            FlashControlGate.GenericFastbootOption("DisableVbmetaBox", busyDisabled: true));
-        RegisterGate("AddRootBox", FlashControlGate.GenericFastbootOption("AddRootBox", busyDisabled: true));
-        RegisterGate("EraseDataBox", FlashControlGate.GenericFastbootOption("EraseDataBox", busyDisabled: true));
-        RegisterGate("RebootAfterBox", FlashControlGate.FlashOption("RebootAfterBox", busyDisabled: true));
-        RegisterGate("DeleteCowBox", FlashControlGate.GenericFastbootOption("DeleteCowBox", busyDisabled: true));
+            FlashControlGate.FlashOptionAnyDevice("DisableVbmetaBox", busyDisabled: true));
+        RegisterGate("AddRootBox", FlashControlGate.FlashOptionAnyDevice("AddRootBox", busyDisabled: true));
+        RegisterGate("EraseDataBox", FlashControlGate.FlashOptionAnyDevice("EraseDataBox", busyDisabled: true));
+        RegisterGate("RebootAfterBox", FlashControlGate.FlashOptionAnyDevice("RebootAfterBox", busyDisabled: true));
+        // Only the user-space daemon answers the two options that act on logical partitions.
+        // 只有用户空间守护进程应答这两个作用于逻辑分区的选项。
+        RegisterGate("DeleteCowBox", FlashControlGate.FastbootdOption("DeleteCowBox", busyDisabled: true));
         RegisterGate("SpacemiTVerifyBox",
-            FlashControlGate.SpacemiTOption("SpacemiTVerifyBox", busyDisabled: true));
+            FlashControlGate.FlashOptionAnyDevice("SpacemiTVerifyBox", busyDisabled: true));
         RegisterGate("ShowAllPartitionsBox",
-            FlashControlGate.SharedStorage("ShowAllPartitionsBox", busyDisabled: true));
-        RegisterGate("AvbOptionsPanel",
-            FlashControlGate.GenericFastbootOption("AvbOptionsPanel", busyDisabled: true));
-        RegisterGate("RootOptionsPanel",
-            FlashControlGate.GenericFastbootOption("RootOptionsPanel", busyDisabled: true));
+            FlashControlGate.FastbootdOption("ShowAllPartitionsBox", busyDisabled: true));
+        // The two option groups are shown by their own check box and restricted by nothing else: only a running page
+        // operation closes them, which keeps their inner selectors following the busy state as before.
+        // 两个选项组由各自的复选框决定显隐，除此之外不受任何限制：只有页面操作运行期间关闭它们，组内选择框因此仍随忙碌态变化。
+        RegisterGate("AvbOptionsPanel", FlashControlGate.BusyOnly("AvbOptionsPanel"));
+        RegisterGate("RootOptionsPanel", FlashControlGate.BusyOnly("RootOptionsPanel"));
         RegisterGate("ChooseRootPackageButton",
-            FlashControlGate.GenericFastbootOption("ChooseRootPackageButton", busyDisabled: true));
+            FlashControlGate.FlashOptionAnyDevice("ChooseRootPackageButton", busyDisabled: true));
     }
 
     /// <summary>
