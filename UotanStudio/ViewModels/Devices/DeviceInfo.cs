@@ -271,29 +271,30 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     } = string.Empty;
 
     /// <summary>
-    /// Display name: a server DNS-SD instance serial is replaced by the model or dialable address, and a
-    /// ready ADB or HDC target reads its platform plus the detected slot in the parentheses.
-    /// <para>显示名称：server 的 DNS-SD 实例串号改用型号或可拨号地址，就绪的 ADB 或 HDC 目标在括号内显示平台与检测到的槽位。</para>
+    /// Display name: the identity followed by the state in the parentheses, and a ready ADB or HDC target
+    /// reads its platform plus the detected slot there.
+    /// <para>显示名称：标识后跟括号内的状态，就绪的 ADB 或 HDC 目标在括号内显示平台与检测到的槽位。</para>
     /// </summary>
     public string DisplayName => $"{DisplayIdentity} ({StateLabel})";
 
     /// <summary>
-    /// Identity in front of the state: hardware serial plus model for a regular endpoint, and the model,
-    /// dialable address or shortened instance name for a DNS-SD server target.
-    /// <para>状态前显示的标识：普通端点为硬件序列号加型号；DNS-SD server 目标为型号、可拨号地址或缩短后的实例名。</para>
+    /// Identity in front of the state: the model the target reports, otherwise the hardware serial, and for
+    /// a DNS-SD instance without a model the dialable address or the shortened instance name.
+    /// <para>状态前显示的标识：优先目标上报的型号，其次硬件序列号；无型号的 DNS-SD 实例用可拨号地址或
+    /// 缩短后的实例名。</para>
     /// </summary>
     private string DisplayIdentity
     {
         get
         {
-            if (!AdbTargetInfo.IsMdnsInstanceName(Serial))
-            {
-                return string.IsNullOrEmpty(Model) ? SerialDisplay : $"{SerialDisplay} - {Model}";
-            }
-
             if (!string.IsNullOrEmpty(Model))
             {
                 return Model;
+            }
+
+            if (!AdbTargetInfo.IsMdnsInstanceName(Serial))
+            {
+                return SerialDisplay;
             }
 
             return Device.NetworkAlias is { Length: > 0 } alias ? alias : ShortenedInstanceName(Serial);
@@ -360,6 +361,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>设备列表条目副标题：序列号与状态的组合，供条目第二行显示。</para>
     /// </summary>
     public string ListSubtitle => string.IsNullOrEmpty(State) ? SerialDisplay : $"{SerialDisplay} · {State}";
+
+    /// <summary>
+    /// Identity shown when a destructive action must name its exact target: the display name plus the
+    /// hardware serial, because the concise display name alone cannot tell two identical models apart.
+    /// <para>危险操作确认时必须点名的精确目标标识：显示名称加硬件序列号，因为精简后的显示名称无法区分
+    /// 两台同型号设备。</para>
+    /// </summary>
+    public string ConfirmationIdentity => $"{DisplayName} · {SerialDisplay}";
 
     /// <summary>
     /// Link/port info; a TCP or UDP endpoint reports the dialable network alias when the server resolved

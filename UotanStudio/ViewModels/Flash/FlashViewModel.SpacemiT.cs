@@ -130,7 +130,7 @@ public sealed partial class FlashViewModel
                 Title = language.GetString("Flash_SpacemiTFlashTitle"),
                 Detail = language.GetString("Flash_SpacemiTConfirmDetail"),
                 ConfirmWord = SpacemiTFlashOptions.RequiredConfirmation,
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.DisplayName
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
             }).ConfigureAwait(true);
         }
         finally

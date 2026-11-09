@@ -233,7 +233,7 @@ public sealed partial class FlashViewModel
                 Title = language.GetString("Flash_SunxiBootFes"),
                 Detail = language.GetString("Flash_SunxiBootConfirmDetail"),
                 ConfirmWord = "FES",
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.DisplayName
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
             }).ConfigureAwait(true);
         }
         finally
@@ -331,7 +331,7 @@ public sealed partial class FlashViewModel
                 Title = language.GetString("Flash_SunxiFlash"),
                 Detail = language.GetString("Flash_SunxiFlashConfirmDetail"),
                 ConfirmWord = "FLASH",
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.DisplayName
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
             }).ConfigureAwait(true);
         }
         finally
@@ -604,7 +604,7 @@ public sealed partial class FlashViewModel
                 Title = language.GetString("Flash_SunxiExecute"),
                 Detail = string.Format(language.GetString("Flash_SunxiExecuteConfirmDetail"), address),
                 ConfirmWord = "EXEC",
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.DisplayName
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
             }).ConfigureAwait(true);
         }
         finally

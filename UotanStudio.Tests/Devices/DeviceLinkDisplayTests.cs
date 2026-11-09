@@ -261,12 +261,42 @@ public class DeviceLinkDisplayTests
     }
 
     [Fact]
-    public void DisplayName_HardwareSerialWithModel_UppercasesSerialAndKeepsModel()
+    public void DisplayName_HardwareSerialWithModel_ShowsModelOnly()
     {
         var device = Create(DeviceProtocolKind.Adb, DeviceTransportKind.Usb, "device");
         device.Model = "SM_G9730";
 
-        Assert.Equal("TEST - SM_G9730 (Android)", device.DisplayName);
+        Assert.Equal("SM_G9730 (Android)", device.DisplayName);
+        Assert.DoesNotContain("TEST", device.DisplayName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DisplayName_HarmonyOsSerialWithModelAndSlot_ShowsModelPlatformAndSlot()
+    {
+        var device = Create(DeviceProtocolKind.Hdc, DeviceTransportKind.Usb, "device", "23E0223830013261");
+        device.Model = "ALN-AL80";
+        device.Slot = "Slot A";
+
+        Assert.Equal("ALN-AL80 (HarmonyOS Slot A)", device.DisplayName);
+        Assert.DoesNotContain("23E0223830013261", device.DisplayName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfirmationIdentity_ConciseDisplayName_StillNamesTheSerial()
+    {
+        var device = Create(DeviceProtocolKind.Hdc, DeviceTransportKind.Usb, "device", "23E0223830013261");
+        device.Model = "ALN-AL80";
+        device.Slot = "Slot A";
+
+        Assert.Equal("ALN-AL80 (HarmonyOS Slot A) · 23E0223830013261", device.ConfirmationIdentity);
+    }
+
+    [Fact]
+    public void DisplayName_HardwareSerialWithoutModel_KeepsSerialForIdentification()
+    {
+        var device = Create(DeviceProtocolKind.Fastboot, DeviceTransportKind.Usb, "fastboot", "23E0223830013261");
+
+        Assert.Equal("23E0223830013261 (fastboot)", device.DisplayName);
     }
 
     [Fact]
