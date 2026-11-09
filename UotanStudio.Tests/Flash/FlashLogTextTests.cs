@@ -1,7 +1,5 @@
 using System.Globalization;
-using UotanStudio.Locale;
 using UotanStudio.Services;
-using UotanStudio.Services.Flash;
 using Xunit;
 
 namespace UotanStudio.Tests.Flash;

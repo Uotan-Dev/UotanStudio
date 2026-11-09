@@ -1,5 +1,4 @@
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Services.Flash;
 using Xunit;
 

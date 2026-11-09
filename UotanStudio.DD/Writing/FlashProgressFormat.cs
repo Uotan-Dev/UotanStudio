@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text;
-using UotanStudio.DD.Images;
 
 namespace UotanStudio.DD.Writing;
 

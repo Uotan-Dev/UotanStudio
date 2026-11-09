@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Ext4;
-using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

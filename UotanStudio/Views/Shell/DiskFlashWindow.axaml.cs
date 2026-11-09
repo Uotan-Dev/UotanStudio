@@ -6,7 +6,6 @@ using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using UotanStudio.Composition;
 using UotanStudio.Services;
-using UotanStudio.Services.Ui;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Shell;
 

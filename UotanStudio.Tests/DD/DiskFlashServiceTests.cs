@@ -1,6 +1,5 @@
 using UotanStudio.DD;
 using UotanStudio.DD.Drives;
-using UotanStudio.DD.Images;
 using UotanStudio.DD.Writing;
 using UotanStudio.Services.Flash;
 using Xunit;

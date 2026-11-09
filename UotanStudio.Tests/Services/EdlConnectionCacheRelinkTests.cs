@@ -1,7 +1,6 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Services.Devices;
 using UotanStudio.Tests.Protocols;
 using Xunit;

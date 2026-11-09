@@ -1,5 +1,4 @@
 using UotanStudio.Firmware.FileSystem.Erofs;
-using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
 using UotanStudio.Tests.TestInfrastructure;
