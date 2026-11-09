@@ -543,6 +543,15 @@
   <data name="Flash_ReadInfo" xml:space="preserve">
     <value>读取设备信息</value>
   </data>
+  <data name="Flash_ReadPartitionTable" xml:space="preserve">
+    <value>读取设备分区表</value>
+  </data>
+  <data name="Flash_PartitionTableUnavailable" xml:space="preserve">
+    <value>设备未通过 getvar all 枚举出分区表，分区列表保持不变。</value>
+  </data>
+  <data name="Flash_PartitionTableKeptPackage" xml:space="preserve">
+    <value>已加载的进迭时空包保留在列表中，其条目驱动引导链与存储动作。</value>
+  </data>
   <data name="Flash_LoadBoot" xml:space="preserve">
     <value>发送引导程序</value>
   </data>

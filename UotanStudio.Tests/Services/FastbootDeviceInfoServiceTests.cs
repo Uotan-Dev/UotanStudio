@@ -173,6 +173,31 @@ public sealed class FastbootDeviceInfoServiceTests
             () => FastbootDeviceInfoService.ReadAsync(device, showAll: false, TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ReadFactsAsync_NonFastbootDevice_RejectsTheRead()
+    {
+        var device = new DetectedDevice
+        {
+            Key = "usb:rkdl",
+            Serial = "RK01",
+            Protocol = DeviceProtocolKind.Rkdl,
+            Transport = DeviceTransportKind.Usb
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => FastbootDeviceInfoService.ReadFactsAsync(device, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void InfoRecord_WithoutATable_ReportsTheListAsUnavailable()
+    {
+        var read = new FastbootDeviceInfo(FastbootInfoBranch.SpacemiTFdl, SpacemiTBootStage.BromFdl, [],
+            [("boot", 4L * 1024 * 1024)]);
+
+        Assert.False(read.PartitionTableAvailable,
+            "only a read that parsed the variable dump may claim the table was enumerated");
+    }
+
     private static DetectedDevice FastbootDevice(ushort vendorId, ushort productId) => new()
     {
         Key = "usb:fastboot",

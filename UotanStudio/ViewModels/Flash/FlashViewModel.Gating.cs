@@ -194,6 +194,8 @@ public sealed partial class FlashViewModel
         RegisterGate("EraseSelectedButton",
             FlashControlGate.SharedStorage("EraseSelectedButton", busyDisabled: true));
         RegisterGate("SwitchSlotButton", FlashControlGate.SlotSwitch("SwitchSlotButton", busyDisabled: true));
+        RegisterGate("ReadPartitionTableButton",
+            FlashControlGate.PartitionTableRead("ReadPartitionTableButton", busyDisabled: true));
 
         RegisterGate("DisableVbmetaBox",
             FlashControlGate.FlashOptionAnyDevice("DisableVbmetaBox", busyDisabled: true));

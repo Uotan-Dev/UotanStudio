@@ -318,9 +318,12 @@
                         <TextBlock Text="{DynamicResource Flash_GeneralOperations}" FontWeight="SemiBold" />
                         <!-- 全协议通用功能 UI -->
                         <StackPanel Spacing="8">
-                            <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
-                                <Button Name="LoadBootButton" Classes="pane-action"
-                                        MinWidth="110"
+                            <!-- 通用动作固定为两列四行的按钮矩阵：每一行都由两个等宽按钮组成，按钮文字自动换行并居中。 -->
+                            <!-- The shared actions are a fixed two-column, four-row button matrix; each row holds two
+                                 equal-width buttons whose wrapped labels are centred. -->
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
+                                  RowSpacing="6" ColumnSpacing="6" HorizontalAlignment="Stretch">
+                                <Button Grid.Row="0" Grid.Column="0" Name="LoadBootButton" Classes="pane-action"
                                         Click="OnLoadBootClick"
                                         ToolTip.Tip="{DynamicResource Flash_LoadBoot}"
                                         AutomationProperties.Name="{DynamicResource Flash_LoadBoot}">
@@ -328,50 +331,50 @@
                                                FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Button>
-                                <Button Name="ReadInfoButton" Classes="pane-action"
-                                        MinWidth="110"
-                                        Click="OnReadInfoClick"
-                                        ToolTip.Tip="{DynamicResource Flash_ReadInfo}">
-                                    <TextBlock Text="{DynamicResource Flash_ReadInfo}"
-                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Button>
-                                <Button Name="ReadbackSelectedButton" Classes="pane-action"
-                                        MinWidth="110"
-                                        Click="OnReadbackSelectedClick"
-                                        ToolTip.Tip="{DynamicResource Flash_ReadbackSelected}">
-                                    <TextBlock Text="{DynamicResource Flash_ReadbackSelected}"
-                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Button>
-                                <Button Name="FlashSelectedButton" Classes="pane-action"
-                                        MinWidth="110"
+                                <Button Grid.Row="0" Grid.Column="1" Name="FlashSelectedButton" Classes="pane-action"
                                         Click="OnFlashSelectedClick"
-                                        ToolTip.Tip="{DynamicResource Flash_FlashSelected}">
+                                        ToolTip.Tip="{DynamicResource Flash_FlashSelected}"
+                                        AutomationProperties.Name="{DynamicResource Flash_FlashSelected}">
                                     <TextBlock Text="{DynamicResource Flash_FlashSelected}"
                                                FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Button>
-                                <Button Name="EraseSelectedButton" Classes="pane-action"
-                                        MinWidth="110"
+                                <Button Grid.Row="1" Grid.Column="0" Name="ReadPartitionTableButton" Classes="pane-action"
+                                        Click="OnReadPartitionTableClick"
+                                        ToolTip.Tip="{DynamicResource Flash_ReadPartitionTable}"
+                                        AutomationProperties.Name="{DynamicResource Flash_ReadPartitionTable}">
+                                    <TextBlock Text="{DynamicResource Flash_ReadPartitionTable}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="1" Name="ReadInfoButton" Classes="pane-action"
+                                        Click="OnReadInfoClick"
+                                        ToolTip.Tip="{DynamicResource Flash_ReadInfo}"
+                                        AutomationProperties.Name="{DynamicResource Flash_ReadInfo}">
+                                    <TextBlock Text="{DynamicResource Flash_ReadInfo}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Grid.Row="2" Grid.Column="0" Name="ReadbackSelectedButton" Classes="pane-action"
+                                        Click="OnReadbackSelectedClick"
+                                        ToolTip.Tip="{DynamicResource Flash_ReadbackSelected}"
+                                        AutomationProperties.Name="{DynamicResource Flash_ReadbackSelected}">
+                                    <TextBlock Text="{DynamicResource Flash_ReadbackSelected}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Grid.Row="2" Grid.Column="1" Name="EraseSelectedButton" Classes="pane-action"
                                         Click="OnEraseSelectedClick"
-                                        ToolTip.Tip="{DynamicResource Flash_EraseSelected}">
+                                        ToolTip.Tip="{DynamicResource Flash_EraseSelected}"
+                                        AutomationProperties.Name="{DynamicResource Flash_EraseSelected}">
                                     <TextBlock Text="{DynamicResource Flash_EraseSelected}"
                                                FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Button>
-                                <Button Name="CancelFlashButton" Classes="pane-action" IsEnabled="False"
-                                        MinWidth="110"
-                                        Click="OnCancelFlashClick"
-                                        ToolTip.Tip="{DynamicResource Flash_Cancel}">
-                                    <TextBlock Text="{DynamicResource Flash_Cancel}"
-                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Button>
-                                <DropDownButton Name="SwitchSlotButton" Classes="pane-action"
-                                                MinWidth="110"
+                                <DropDownButton Grid.Row="3" Grid.Column="0" Name="SwitchSlotButton" Classes="pane-action"
                                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                                ToolTip.Tip="{DynamicResource Flash_SwitchSlot}">
+                                                ToolTip.Tip="{DynamicResource Flash_SwitchSlot}"
+                                                AutomationProperties.Name="{DynamicResource Flash_SwitchSlot}">
                                     <TextBlock Text="{DynamicResource Flash_SwitchSlot}"
                                                FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
@@ -386,7 +389,16 @@
                                         </MenuFlyout>
                                     </DropDownButton.Flyout>
                                 </DropDownButton>
-                            </controls:JustifiedWrapPanel>
+                                <Button Grid.Row="3" Grid.Column="1" Name="CancelFlashButton" Classes="pane-action"
+                                        IsEnabled="False"
+                                        Click="OnCancelFlashClick"
+                                        ToolTip.Tip="{DynamicResource Flash_Cancel}"
+                                        AutomationProperties.Name="{DynamicResource Flash_Cancel}">
+                                    <TextBlock Text="{DynamicResource Flash_Cancel}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                            </Grid>
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                             <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                   RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">

@@ -156,6 +156,42 @@ public sealed class FlashFastbootDeviceStatusTests
         Assert.Empty(model.DeviceStatus);
     }
 
+    [Fact]
+    public void ReadInfo_DoesNotTouchThePartitionGridItWasGiven()
+    {
+        var model = NewModel();
+        model.Partitions.Add(new FlashPartitionEntry { Name = "boot", Size = "64.0 MB" });
+
+        model.PublishFastbootDeviceStatus(FdlRead(), FdlDevice, model.BeginDeviceStatusRefresh());
+
+        // The information read publishes device status only; the partition list belongs to the package and to the
+        // separate partition-table action.
+        // 信息读取只发布设备状态；分区列表属于刷机包与独立的分区表动作。
+        Assert.Single(model.Partitions);
+        Assert.Equal("boot", model.Partitions[0].Name);
+    }
+
+    [Fact]
+    public void ShouldReplacePartitionRows_OnlyWhenTheDeviceTableWasReadAndNoPackageOwnsTheRows()
+    {
+        var withoutTable = new FastbootDeviceInfo(FastbootInfoBranch.Generic, SpacemiTBootStage.Unknown, [], []);
+
+        Assert.False(FlashViewModel.ShouldReplacePartitionRows(withoutTable, spacemiTPackageLoaded: false),
+            "a read that never enumerated the table must leave the grid alone");
+        Assert.False(FlashViewModel.ShouldReplacePartitionRows(FdlRead(), spacemiTPackageLoaded: false),
+            "the BootROM download mode has no table to replace the grid with");
+        Assert.False(FlashViewModel.ShouldReplacePartitionRows(
+            ReadWithTable(), spacemiTPackageLoaded: true),
+            "a loaded SpacemiT package owns the rows that drive its actions");
+        Assert.True(FlashViewModel.ShouldReplacePartitionRows(ReadWithTable(), spacemiTPackageLoaded: false));
+    }
+
+    private static FastbootDeviceInfo ReadWithTable() => new(FastbootInfoBranch.Generic,
+        SpacemiTBootStage.Unknown, [], [("boot", 4L * 1024 * 1024)])
+    {
+        PartitionTableAvailable = true
+    };
+
     private static FastbootDeviceInfo FdlRead() => new(FastbootInfoBranch.SpacemiTFdl, SpacemiTBootStage.BromFdl,
         [
             new FastbootInfoFact("Flash_FastbootInfo_BromVersion", "v0.9.1"),

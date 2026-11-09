@@ -61,7 +61,17 @@ public sealed record FastbootDeviceInfo(
     FastbootInfoBranch Branch,
     SpacemiTBootStage Stage,
     IReadOnlyList<FastbootInfoFact> Facts,
-    IReadOnlyList<(string Name, long Size)> Partitions);
+    IReadOnlyList<(string Name, long Size)> Partitions)
+{
+    /// <summary>
+    /// Whether the endpoint actually enumerated a partition table, which only <c>getvar all</c> can supply. It stays
+    /// <see langword="false"/> for the BootROM FDL stage, which has no table, and for an endpoint that refuses the
+    /// variable dump, so a caller never reads an unavailable list as a device with no partitions.
+    /// <para>端点是否真正枚举出分区表（只有 <c>getvar all</c> 能提供）。对没有分区表的 BootROM FDL 阶段与拒绝变量转储的
+    /// 端点保持 <see langword="false"/>，调用方因此不会把“不可用”读成“设备没有分区”。</para>
+    /// </summary>
+    public bool PartitionTableAvailable { get; init; }
+}
 
 /// <summary>
 /// Reads device information from a fastboot endpoint through the branch that endpoint actually implements. A generic
@@ -137,7 +147,44 @@ public static class FastbootDeviceInfoService
     /// <para>该设备不是 fastboot 端点。</para></exception>
     /// <exception cref="FastbootException">The endpoint refuses <c>getvar all</c> and answers none of the individual
     /// variables either. <para>端点拒绝 <c>getvar all</c>，且逐个变量也全无应答。</para></exception>
-    public static async Task<FastbootDeviceInfo> ReadAsync(DetectedDevice device, bool showAll, CancellationToken ct)
+    public static Task<FastbootDeviceInfo> ReadAsync(DetectedDevice device, bool showAll, CancellationToken ct)
+        => ReadCoreAsync(device, showAll, includePartitions: true, ct);
+
+    /// <summary>
+    /// Reads the facts a fastboot endpoint reports without asking for its partition table.
+    /// <para>只读取 fastboot 端点上报的事实，不请求其分区表。</para>
+    /// </summary>
+    /// <remarks>
+    /// The variable dump the facts come from is also the only source of the partition table, so this read still asks
+    /// for it; what it never does is turn those keys into a partition list or query <c>is-userspace</c> for one, which
+    /// keeps an information read free of the partition backfill only the partition-table action performs.
+    /// <para>事实所依据的变量转储同时也是分区表的唯一来源，因此这次读取仍会请求它；它绝不把那些键解析成分区列表，也不为
+    /// 了列表去查询 <c>is-userspace</c>，从而让信息读取与只有分区表动作负责的分区回填彻底分开。</para>
+    /// </remarks>
+    /// <param name="device">The selected fastboot device. <para>所选 fastboot 设备。</para></param>
+    /// <param name="ct">Token cancelling the read. <para>取消读取的令牌。</para></param>
+    /// <returns>The branch that answered and the facts it reported, with no partition list.
+    /// <para>应答的分支及它上报的事实，不含分区列表。</para></returns>
+    /// <exception cref="ArgumentException">The device is not a fastboot endpoint.
+    /// <para>该设备不是 fastboot 端点。</para></exception>
+    /// <exception cref="FastbootException">The endpoint refuses <c>getvar all</c> and answers none of the individual
+    /// variables either. <para>端点拒绝 <c>getvar all</c>，且逐个变量也全无应答。</para></exception>
+    public static Task<FastbootDeviceInfo> ReadFactsAsync(DetectedDevice device, CancellationToken ct)
+        => ReadCoreAsync(device, showAll: false, includePartitions: false, ct);
+
+    /// <summary>
+    /// Runs one read over a single leased session, optionally turning the variable dump into a partition list.
+    /// <para>在一次租用的会话上完成读取，并可选地把变量转储解析成分区列表。</para>
+    /// </summary>
+    /// <param name="device">The selected fastboot device. <para>所选 fastboot 设备。</para></param>
+    /// <param name="showAll">Whether physical partitions are kept. <para>是否保留物理分区。</para></param>
+    /// <param name="includePartitions">Whether the variable dump is parsed into the partition list.
+    /// <para>是否把变量转储解析成分区列表。</para></param>
+    /// <param name="ct">Token cancelling the read. <para>取消读取的令牌。</para></param>
+    /// <returns>The branch that answered and what this read asked for.
+    /// <para>应答的分支及本次读取所请求的内容。</para></returns>
+    private static async Task<FastbootDeviceInfo> ReadCoreAsync(DetectedDevice device, bool showAll,
+        bool includePartitions, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);
         if (device.Protocol != DeviceProtocolKind.Fastboot)
@@ -174,7 +221,7 @@ public static class FastbootDeviceInfoService
             }
 
             var branch = ResolveBranch(isSpacemiT, stage);
-            if (branch == FastbootInfoBranch.SpacemiTFdl)
+            if (branch == FastbootInfoBranch.SpacemiTFdl || !includePartitions)
             {
                 return new FastbootDeviceInfo(branch, stage, BuildFacts(branch, variables), []);
             }
@@ -185,7 +232,10 @@ public static class FastbootDeviceInfoService
             ct.ThrowIfCancellationRequested();
             return new FastbootDeviceInfo(branch, stage, BuildFacts(branch, variables),
                 FastbootPartitionReader.Parse(variables,
-                    logicalOnly: !showAll && userspace.Equals("yes", StringComparison.OrdinalIgnoreCase)));
+                    logicalOnly: !showAll && userspace.Equals("yes", StringComparison.OrdinalIgnoreCase)))
+            {
+                PartitionTableAvailable = true
+            };
         }, ct), ct).ConfigureAwait(false);
     }
 
@@ -202,7 +252,8 @@ public static class FastbootDeviceInfoService
     /// <param name="refusal">The exception <c>getvar all</c> raised, rethrown when nothing answers.
     /// <para><c>getvar all</c> 抛出的异常；全无应答时重新抛出它。</para></param>
     /// <param name="ct">Token cancelling between probes. <para>在探测之间取消的令牌。</para></param>
-    /// <returns>The facts the endpoint answered, with no partition list. <para>端点应答的事实，不含分区列表。</para></returns>
+    /// <returns>The facts the endpoint answered, with no partition list and <see cref="FastbootDeviceInfo.PartitionTableAvailable"/>
+    /// left false. <para>端点应答的事实，不含分区列表，且 <see cref="FastbootDeviceInfo.PartitionTableAvailable"/> 保持 false。</para></returns>
     private static FastbootDeviceInfo ReadWithoutVariableList(FastbootSession session, DetectedDevice device,
         bool isSpacemiT, SpacemiTBootStage stage, FastbootException? refusal, CancellationToken ct)
     {

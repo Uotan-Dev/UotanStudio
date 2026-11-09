@@ -543,6 +543,15 @@ Author: 暮间雾
   <data name="Flash_ReadInfo" xml:space="preserve">
     <value>Read Info</value>
   </data>
+  <data name="Flash_ReadPartitionTable" xml:space="preserve">
+    <value>Read Partition Table</value>
+  </data>
+  <data name="Flash_PartitionTableUnavailable" xml:space="preserve">
+    <value>The device did not enumerate a partition table over getvar all; the list is unchanged.</value>
+  </data>
+  <data name="Flash_PartitionTableKeptPackage" xml:space="preserve">
+    <value>The loaded SpacemiT package stays in the list because its rows drive the boot-chain and storage actions.</value>
+  </data>
   <data name="Flash_LoadBoot" xml:space="preserve">
     <value>Send Loader</value>
   </data>

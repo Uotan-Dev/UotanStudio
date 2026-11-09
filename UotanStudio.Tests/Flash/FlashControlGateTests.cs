@@ -195,6 +195,92 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
+    public void PartitionTableRead_IsOfferedOnlyWhereFastbootEnumeratesTheTable()
+    {
+        var gate = FlashControlGate.PartitionTableRead("ReadPartitionTableButton", busyDisabled: true);
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.Uboot)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot,
+            spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)),
+            "the BootROM download mode has no partition table to read");
+
+        // Every other protocol reads its table through the action its own section owns.
+        // 其它协议都经各自分类拥有的动作读取分区表。
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Edl)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.True(gate.BusyDisabled);
+    }
+
+    [Fact]
+    public void SharedActions_FormAFixedTwoByFourButtonMatrix()
+    {
+        var view = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "UotanStudio", "Views", "Shell", "FlashView.axaml"));
+        var block = ActionMatrix(view);
+
+        Assert.Matches(new Regex("RowDefinitions=\"Auto,Auto,Auto,Auto\"", RegexOptions.Compiled), block);
+
+        var cells = new Dictionary<(int Row, int Column), string>();
+        // The lookahead keeps "<DropDownButton.Flyout>" out of the element scan; it is a property element, not a cell.
+        // 前瞻把 "<DropDownButton.Flyout>" 排除在元素扫描之外：它是属性元素而不是单元格。
+        foreach (Match button in new Regex(
+                     "<(?:Button|DropDownButton)(?=[\\s>])([^>]*)>", RegexOptions.Compiled).Matches(block))
+        {
+            var attributes = button.Groups[1].Value;
+            var name = Regex.Match(attributes, "Name=\"([A-Za-z0-9_]+)\"").Groups[1].Value;
+            var row = int.Parse(Regex.Match(attributes, "Grid[.]Row=\"(\\d+)\"").Groups[1].Value,
+                System.Globalization.CultureInfo.InvariantCulture);
+            var column = int.Parse(Regex.Match(attributes, "Grid[.]Column=\"(\\d+)\"").Groups[1].Value,
+                System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(cells.TryAdd((row, column), name), $"{name} shares a cell with another entry");
+        }
+
+        Assert.Equal(8, cells.Count);
+        Assert.All(cells.Keys, cell => Assert.InRange(cell.Row, 0, 3));
+        Assert.All(cells.Keys, cell => Assert.InRange(cell.Column, 0, 1));
+        for (var row = 0; row < 4; row++)
+        {
+            Assert.True(cells.ContainsKey((row, 0)), $"row {row} has no left entry");
+            Assert.True(cells.ContainsKey((row, 1)), $"row {row} has no right entry");
+        }
+
+        // Row by row, left to right: send the boot program, flash the selected rows, read the device's partition table,
+        // read the device, read the selected partitions back, erase them, switch the slot and cancel.
+        // 逐行从左到右：发送引导程序、刷入选中分区、读取设备分区表、读取设备信息、回读选中分区、擦除选中分区、切换槽位、取消。
+        Assert.Equal("LoadBootButton", cells[(0, 0)]);
+        Assert.Equal("FlashSelectedButton", cells[(0, 1)]);
+        Assert.Equal("ReadPartitionTableButton", cells[(1, 0)]);
+        Assert.Equal("ReadInfoButton", cells[(1, 1)]);
+        Assert.Equal("ReadbackSelectedButton", cells[(2, 0)]);
+        Assert.Equal("EraseSelectedButton", cells[(2, 1)]);
+        Assert.Equal("SwitchSlotButton", cells[(3, 0)]);
+        Assert.Equal("CancelFlashButton", cells[(3, 1)]);
+    }
+
+    /// <summary>
+    /// Reads the shared-action button matrix out of the page: the stretch grid that hosts the eight fixed action
+    /// cells, whose bounds end at the first closing tag after its opening one.
+    /// <para>从页面中取出通用动作按钮矩阵：承载八个固定动作单元格的拉伸网格，其范围终止于起始标签之后的第一个闭合标签。</para>
+    /// </summary>
+    /// <param name="view">The page markup. <para>页面标记。</para></param>
+    /// <returns>The matrix markup. <para>矩阵标记。</para></returns>
+    private static string ActionMatrix(string view)
+    {
+        const string start = "<Grid RowDefinitions=\"Auto,Auto,Auto,Auto\" ColumnDefinitions=\"*,*\"";
+        var index = view.IndexOf(start, StringComparison.Ordinal);
+        Assert.True(index >= 0, "the shared action matrix is missing from the page");
+        var end = view.IndexOf("</Grid>", index, StringComparison.Ordinal);
+        Assert.True(end > index, "the shared action matrix is not closed");
+        return view[index..end];
+    }
+
+    [Fact]
     public void SharedFlash_ClosesWhileTheSpacemiTGadgetStillSitsInTheBootromMode()
     {
         var gate = FlashControlGate.SharedFlash("FlashSelectedButton");

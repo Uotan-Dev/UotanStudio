@@ -2578,54 +2578,12 @@ public sealed partial class FlashViewModel
         SetBusy(true);
         try
         {
-            var info = await FastbootDeviceInfoService.ReadAsync(device,
-                Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, cancellation.Token);
-            // A loaded SpacemiT package survives the read: its folder and rows drive the boot-chain and storage
-            // actions, so the read only fills the device status table and never replaces the partition list.
-            // 已加载的进迭时空包在读取后保留：其目录与行驱动引导链和烧录动作，读取只填充设备状态表，绝不替换分区列表。
-            var preserveSpacemiTPackage = IsSpacemiTSelected && HasSpacemiTPackage;
-            if (!preserveSpacemiTPackage)
-            {
-                Partitions.Clear();
-                _loadedPath = string.Empty;
-                _requiredCodeName = null;
-                _requiresFastbootd = false;
-                _payloadPath = null;
-                _remotePayloadUrl = null;
-                _superPath = null;
-                _vendorPath = null;
-                _vendorEntries.Clear();
-                _oppoPath = null;
-                _oppoEntries.Clear();
-                _mtkResolution = null;
-                _mtkRows.Clear();
-                _mtkPartitions.Clear();
-                UpdateModeVisibility();
-                SetControlEnabled("ExtractSelectedButton", false);
-                SetControlEnabled("BuildWiredPackageButton", false);
-                PackagePath = string.Empty;
-            }
-
+            // The information read never touches the partition grid: the table is a separate action, so reading what a
+            // device is must not discard the rows a loaded package put there.
+            // 信息读取绝不触碰分区列表：分区表由独立动作负责，因此读取设备本身不会丢弃已加载包放入的条目。
+            var info = await FastbootDeviceInfoService.ReadFactsAsync(device, cancellation.Token);
             AppendLog($"{_localizer.GetString("Flash_ReadInfo")}: {device.DisplayName}");
             PublishFastbootDeviceStatus(info, device.Key, statusEpoch);
-            if (!preserveSpacemiTPackage)
-            {
-                var deviceRows = new List<FlashPartitionEntry>(info.Partitions.Count);
-                foreach (var (name, size) in info.Partitions)
-                {
-                    deviceRows.Add(new FlashPartitionEntry
-                    {
-                        Name = name,
-                        Size = FormatByteSize(size)
-                    });
-                }
-
-                Partitions.Apply(0, deviceRows);
-                if (info.Partitions.Count > 0)
-                {
-                    AppendLog($"{info.Partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
-                }
-            }
         }
         catch (OperationCanceledException) { AppendLog(_localizer.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -2634,6 +2592,122 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             _flashCancellation = null;
         }
+    }
+
+    /// <summary>
+    /// Reads the selected fastboot endpoint's partition table into the main partition list: the device's own
+    /// <c>partition-size</c> keys replace what the page held, so the grid describes the device rather than a package's
+    /// layout. A loaded SpacemiT package is kept, because its rows drive the boot-chain and storage actions and the
+    /// read cannot render that package's script steps.
+    /// <para>把所选 fastboot 端点的分区表读入主分区列表：设备自身的 <c>partition-size</c> 键替换页面原有内容，使列表描述
+    /// 设备而不是刷机包的布局。已加载的进迭时空包会保留，因为其条目驱动引导链与存储动作，而该读取无法呈现这个包的脚本步骤。</para>
+    /// </summary>
+    /// <remarks>
+    /// Only fastboot enumerates its table over the same variable dump the information read uses; every other protocol
+    /// reads it through the action its own section owns, so this entry stays closed there. A read that produced no
+    /// table leaves the grid untouched instead of emptying it, because an endpoint that refuses the variable dump has
+    /// not proven the device carries no partitions.
+    /// <para>只有 fastboot 通过与信息读取相同的变量转储枚举分区表；其它协议都经各自分类拥有的动作读取，因此该入口在那里保持
+    /// 关闭。没有读到分区表的读取不会清空列表而是原样保留，因为拒绝变量转储的端点并未证明设备没有分区。</para>
+    /// </remarks>
+    /// <param name="sender">The read button. <para>读取按钮。</para></param>
+    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
+    internal async void OnReadPartitionTableClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device || _busy || _confirming)
+        {
+            AppendLog(_localizer.GetString(SelectedDevice is null
+                ? "Flash_DeviceNotSelected"
+                : "Flash_ProtocolMismatch"));
+            return;
+        }
+
+        var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var info = await FastbootDeviceInfoService.ReadAsync(device,
+                Field<CheckBox>("ShowAllPartitionsBox").IsChecked == true, cancellation.Token);
+            AppendLog($"{language.GetString("Flash_ReadPartitionTable")}: {device.DisplayName}");
+            if (!info.PartitionTableAvailable)
+            {
+                AppendLog(language.GetString("Flash_PartitionTableUnavailable"));
+                return;
+            }
+
+            if (!ShouldReplacePartitionRows(info, IsSpacemiTSelected && HasSpacemiTPackage))
+            {
+                AppendLog(language.GetString("Flash_PartitionTableKeptPackage"));
+                return;
+            }
+
+            ResetLoadedPackageState();
+            var rows = new List<FlashPartitionEntry>(info.Partitions.Count);
+            foreach (var (name, size) in info.Partitions)
+            {
+                rows.Add(new FlashPartitionEntry
+                {
+                    Name = name,
+                    Size = FormatByteSize(size)
+                });
+            }
+
+            Partitions.Apply(0, rows);
+            AppendLog($"{rows.Count} {language.GetString("Flash_PartitionsLoaded")}");
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendError(ex); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+        }
+    }
+
+    /// <summary>
+    /// Whether a partition-table read replaces the grid: only a read that actually enumerated the device's table and
+    /// was not asked to leave a loaded SpacemiT package alone does so.
+    /// <para>分区表读取是否替换列表：只有确实枚举到设备分区表、且没有要求保留已加载进迭时空包的读取才会替换。</para>
+    /// </summary>
+    /// <param name="info">The read result. <para>读取结果。</para></param>
+    /// <param name="spacemiTPackageLoaded">Whether a SpacemiT package owns the rows the read must keep.
+    /// <para>进迭时空包是否拥有必须保留的条目。</para></param>
+    /// <returns><see langword="true"/> when the grid is replaced. <para>要替换列表时为 <see langword="true"/>。</para></returns>
+    internal static bool ShouldReplacePartitionRows(FastbootDeviceInfo info, bool spacemiTPackageLoaded)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return info.PartitionTableAvailable && !spacemiTPackageLoaded;
+    }
+
+    /// <summary>
+    /// Drops everything the page derived from a loaded package so the partition grid can describe the device's own
+    /// table: rows, the package path, the EDL and MTK resolutions and the vendor container entries all go, and the two
+    /// package-only actions close until another package provides them.
+    /// <para>清除页面从已加载包派生出的一切，使分区列表可以描述设备自身的分区表：条目、包路径、EDL 与 MTK 解析结果以及厂商
+    /// 容器条目全部清除，两个仅由包提供的操作在另一个包提供之前保持关闭。</para>
+    /// </summary>
+    private void ResetLoadedPackageState()
+    {
+        Partitions.Clear();
+        _loadedPath = string.Empty;
+        _requiredCodeName = null;
+        _requiresFastbootd = false;
+        _payloadPath = null;
+        _remotePayloadUrl = null;
+        _superPath = null;
+        _vendorPath = null;
+        _vendorEntries.Clear();
+        _oppoPath = null;
+        _oppoEntries.Clear();
+        _mtkResolution = null;
+        _mtkRows.Clear();
+        _mtkPartitions.Clear();
+        UpdateModeVisibility();
+        SetControlEnabled("ExtractSelectedButton", false);
+        SetControlEnabled("BuildWiredPackageButton", false);
+        PackagePath = string.Empty;
     }
 
     private async Task RunMtkDeviceInfoAsync()

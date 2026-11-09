@@ -146,6 +146,20 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
+    /// The partition-table read: offered only on a fastboot endpoint, because that is the one transport whose table is
+    /// enumerated by the same variable dump this page already reads. Every other protocol reads its table through the
+    /// action its own section owns, so the shared entry stays closed there instead of repeating that action; the
+    /// SpacemiT BootROM download mode is closed too, because that stage carries no partition table at all.
+    /// <para>分区表读取：只在 fastboot 端点上提供，因为只有该传输的分区表由本页已读取的同一份变量转储枚举。其它协议都经各自
+    /// 分类拥有的动作读取分区表，因此该通用入口在那里保持关闭，而不是重复那个动作；进迭时空 BootROM 下载模式同样关闭，
+    /// 因为该阶段根本没有分区表。</para>
+    /// </summary>
+    internal static FlashControlGate PartitionTableRead(string name, bool busyDisabled = false) => new(name,
+        static context => context.Kind == FlashDeviceKind.Fastboot &&
+            !(context.IsSpacemiTFastboot && context.FastbootStage == SpacemiTBootStage.BromFdl),
+        busyDisabled);
+
+    /// <summary>
     /// A shared control whose work is local to the package: offered to every selected device without a restricted kind,
     /// and kept on every Rockchip stage because it never touches device storage.
     /// <para>工作只发生在刷机包上的通用控件：提供给任何没有受限种类的已选设备，并在任何瑞芯微阶段都保留，因为它从不接触设备存储。</para>
