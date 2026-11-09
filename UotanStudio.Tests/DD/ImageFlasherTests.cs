@@ -69,6 +69,64 @@ public class ImageFlasherTests
     }
 
     [Fact]
+    public async Task FlashAsync_GzipImageToSectorAlignedTarget_PadsFinalChunkAndVerifies()
+    {
+        using var directory = new FlashTestDirectory();
+        var data = FlashTestData.CreateImageData(256 * 1024 + 278, 13);
+        var imagePath = directory.Combine("system.img.gz");
+        using (var file = new FileStream(imagePath, FileMode.CreateNew, FileAccess.Write))
+        using (var gzip = CompressionService.CreateCompressionStream(file, CompressionFormat.Gzip))
+        {
+            gzip.Write(data);
+        }
+
+        var image = ImageProbe.Probe(imagePath);
+        var factory = new AlignedDiskTargetFactory();
+        var progress = new RecordingProgress();
+        var result = await new ImageFlasher(factory).FlashAsync(
+            image,
+            [FlashTestData.CreateDrive(directory.Combine("target.bin"), data.Length + 4096)],
+            new FlashOptions { ConfirmOverwrite = true, BufferBytes = 64 * 1024 },
+            progress,
+            TestContext.Current.CancellationToken);
+
+        var written = factory.Target!.WrittenBytes;
+        var paddedLength = ((data.Length + AlignedDiskTargetFactory.AlignmentBytes - 1) /
+            AlignedDiskTargetFactory.AlignmentBytes) * AlignedDiskTargetFactory.AlignmentBytes;
+        Assert.Equal(paddedLength, written.Length);
+        Assert.Equal(data, written[..data.Length]);
+        Assert.All(written[data.Length..], value => Assert.Equal((byte)0, value));
+        Assert.Equal(data.Length, result.ImageBytes);
+        Assert.Equal(data.Length, result.BytesWritten);
+        Assert.Equal(FlashTestData.ComputeSha256(data), result.SourceChecksum);
+        Assert.Equal(FlashStage.Completed, progress.Reports[^1].Stage);
+        Assert.Contains(progress.Reports, report => report.Stage == FlashStage.Verifying);
+    }
+
+    [Fact]
+    public async Task FlashAsync_RawImageToSectorAlignedTarget_KeepsRealByteCounts()
+    {
+        using var directory = new FlashTestDirectory();
+        var data = FlashTestData.CreateImageData(1024 * 1024 + 278, 29);
+        var image = ImageProbe.Probe(directory.WriteFile("system.img", data));
+        var factory = new AlignedDiskTargetFactory();
+
+        var result = await new ImageFlasher(factory).FlashAsync(
+            image,
+            [FlashTestData.CreateDrive(directory.Combine("target.bin"), data.Length + 4096)],
+            new FlashOptions { ConfirmOverwrite = true, BufferBytes = 64 * 1024 },
+            progress: null,
+            TestContext.Current.CancellationToken);
+
+        var written = factory.Target!.WrittenBytes;
+        Assert.Equal(data, written[..data.Length]);
+        Assert.All(written[data.Length..], value => Assert.Equal((byte)0, value));
+        Assert.Equal(data.Length, result.ImageBytes);
+        Assert.Equal(data.Length, result.BytesWritten);
+        Assert.Equal(FlashTestData.ComputeSha256(data), result.SourceChecksum);
+    }
+
+    [Fact]
     public async Task FlashAsync_ZipImage_WritesEntryBytes()
     {
         using var directory = new FlashTestDirectory();

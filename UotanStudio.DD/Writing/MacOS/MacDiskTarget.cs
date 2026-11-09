@@ -31,6 +31,9 @@ internal sealed class MacDiskTarget : IDiskTarget
     public Stream Stream => _stream ?? throw new InvalidOperationException("The target has not been prepared.");
 
     /// <inheritdoc />
+    public int ChunkAlignmentBytes => RawDiskChunkAlignment.Bytes;
+
+    /// <inheritdoc />
     public async Task PrepareAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

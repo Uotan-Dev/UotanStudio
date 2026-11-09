@@ -12,9 +12,12 @@ namespace UotanStudio.DD;
 /// </summary>
 /// <remarks>
 /// Each chunk is read once, decoded once and written to every target before the next chunk is
-/// read. Verification re-opens the source and compares each target byte-for-byte.
+/// read. Raw block devices receive chunks rounded up to their alignment with zero padding, while the
+/// checksum, progress and verification cover only the real image bytes. Verification re-opens the
+/// source and compares each target byte-for-byte.
 /// <para>
-/// 每个块只读取、解码一次，写入全部目标后才读取下一块。校验阶段重新打开源并对逐个目标逐字节比较。
+/// 每个块只读取、解码一次，写入全部目标后才读取下一块。裸块设备收到的块按对齐要求向上取整并以零填充，
+/// 校验和、进度与回读比较只覆盖镜像的真实字节。校验阶段重新打开源并对逐个目标逐字节比较。
 /// </para>
 /// </remarks>
 public sealed class ImageFlasher
@@ -100,7 +103,15 @@ public sealed class ImageFlasher
                 await target.PrepareAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var buffer = new byte[options.BufferBytes];
+            var alignment = Math.Max(1, targets.Max(target => target.ChunkAlignmentBytes));
+            if (alignment > options.BufferBytes)
+            {
+                throw new FlashException(
+                    $"The target alignment of {alignment} bytes exceeds the {options.BufferBytes}-byte write buffer.");
+            }
+
+            var chunkBytes = (options.BufferBytes / alignment) * alignment;
+            var buffer = new byte[chunkBytes];
             progressReporter.EnterStage(FlashStage.Writing, totalBytes);
             long written = 0;
             using (var digest = Sha256.CreateAccumulator())
@@ -109,15 +120,20 @@ public sealed class ImageFlasher
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var read = await source.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+                    var read = await ReadChunkAsync(source, buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
                     if (read == 0)
                     {
                         break;
                     }
 
-                    var chunk = buffer.AsMemory(0, read);
-                    digest.Append(chunk.Span);
-                    await WriteChunkAsync(targets, chunk, cancellationToken).ConfigureAwait(false);
+                    var padded = AlignUp(read, alignment);
+                    if (padded > read)
+                    {
+                        buffer.AsSpan(read, padded - read).Clear();
+                    }
+
+                    digest.Append(buffer.AsSpan(0, read));
+                    await WriteChunkAsync(targets, buffer.AsMemory(0, padded), cancellationToken).ConfigureAwait(false);
                     written += (long)read * targets.Count;
                     progressReporter.Report(written, totalBytes);
                 }
@@ -130,7 +146,7 @@ public sealed class ImageFlasher
 
                 if (options.VerifyAfterWrite)
                 {
-                    await VerifyAsync(image, targets, buffer, totalBytes, progressReporter, cancellationToken)
+                    await VerifyAsync(image, targets, buffer, alignment, totalBytes, progressReporter, cancellationToken)
                         .ConfigureAwait(false);
                 }
 
@@ -262,6 +278,7 @@ public sealed class ImageFlasher
         FlashImage image,
         IReadOnlyList<IDiskTarget> targets,
         byte[] sourceBuffer,
+        int alignment,
         long? totalBytes,
         FlashProgressReporter progressReporter,
         CancellationToken cancellationToken)
@@ -280,17 +297,18 @@ public sealed class ImageFlasher
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var read = await source.ReadAsync(sourceBuffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            var read = await ReadChunkAsync(source, sourceBuffer.AsMemory(), cancellationToken).ConfigureAwait(false);
             if (read == 0)
             {
                 break;
             }
 
+            var padded = AlignUp(read, alignment);
             foreach (var target in targets)
             {
-                var actualRead = await ReadAtLeastAsync(target.Stream, verifyBuffer.AsMemory(0, read), cancellationToken)
+                var actualRead = await ReadAtLeastAsync(target.Stream, verifyBuffer.AsMemory(0, padded), cancellationToken)
                     .ConfigureAwait(false);
-                if (actualRead != read)
+                if (actualRead < read)
                 {
                     throw new FlashVerificationException(target.Drive, imageOffset + actualRead);
                 }
@@ -310,6 +328,29 @@ public sealed class ImageFlasher
             progressReporter.Report(processed, totalBytes);
         }
     }
+
+    private static async ValueTask<int> ReadChunkAsync(
+        Stream source,
+        Memory<byte> buffer,
+        CancellationToken cancellationToken)
+    {
+        var total = 0;
+        while (total < buffer.Length)
+        {
+            var read = await source.ReadAsync(buffer[total..], cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
+    }
+
+    private static int AlignUp(int value, int alignment) =>
+        alignment <= 1 ? value : ((value + alignment - 1) / alignment) * alignment;
 
     private static async Task<int> ReadAtLeastAsync(Stream stream, Memory<byte> buffer, CancellationToken cancellationToken)
     {

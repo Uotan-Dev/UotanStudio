@@ -135,6 +135,101 @@ internal sealed class MismatchDiskTarget : IDiskTarget
     }
 }
 
+internal sealed class AlignedDiskTargetFactory : IDiskTargetFactory
+{
+    internal const int AlignmentBytes = 4096;
+
+    internal AlignedDiskTarget? Target { get; private set; }
+
+    public IDiskTarget Create(FlashDrive drive)
+    {
+        var target = new AlignedDiskTarget(drive, AlignmentBytes);
+        Target = target;
+        return target;
+    }
+}
+
+internal sealed class AlignedDiskTarget : IDiskTarget
+{
+    private readonly SectorAlignedStream _stream;
+
+    internal AlignedDiskTarget(FlashDrive drive, int alignment)
+    {
+        Drive = drive;
+        ChunkAlignmentBytes = alignment;
+        _stream = new SectorAlignedStream(alignment);
+    }
+
+    public FlashDrive Drive { get; }
+
+    public Stream Stream => _stream;
+
+    public int ChunkAlignmentBytes { get; }
+
+    internal byte[] WrittenBytes => _stream.ToArray();
+
+    public Task PrepareAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task CompleteAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public ValueTask DisposeAsync()
+    {
+        _stream.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
+
+internal sealed class SectorAlignedStream : MemoryStream
+{
+    private readonly int _alignment;
+
+    internal SectorAlignedStream(int alignment) => _alignment = alignment;
+
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        EnsureAligned(count);
+        base.Write(buffer, offset, count);
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        EnsureAligned(buffer.Length);
+        base.Write(buffer);
+    }
+
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        EnsureAligned(buffer.Length);
+        return base.WriteAsync(buffer, cancellationToken);
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        EnsureAligned(count);
+        return base.Read(buffer, offset, count);
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        EnsureAligned(buffer.Length);
+        return base.Read(buffer);
+    }
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        EnsureAligned(buffer.Length);
+        return base.ReadAsync(buffer, cancellationToken);
+    }
+
+    private void EnsureAligned(int length)
+    {
+        if (length % _alignment != 0 || Position % _alignment != 0)
+        {
+            throw new IOException($"A raw target requires {_alignment}-byte aligned reads and writes.");
+        }
+    }
+}
+
 internal sealed class CorruptingStream : Stream
 {
     private readonly MemoryStream _written = new();

@@ -258,17 +258,28 @@ public static class FlashElevatedJobRunner
             return new FlashJobRunResult
             {
                 Status = IsAccessDenied(failure) ? FlashJobRunStatus.AccessDenied : FlashJobRunStatus.Failed,
-                Message = failure.ErrorMessage,
+                Message = FormatFailureMessage(failure),
             };
         }
 
         return new FlashJobRunResult
         {
-            Status = process.ExitCode == FlashJobChild.ExitSucceeded
-                ? FlashJobRunStatus.Failed
-                : FlashJobRunStatus.Failed,
+            Status = FlashJobRunStatus.Failed,
             Message = $"The writing process exited with code {process.ExitCode} without reporting a result.",
         };
+    }
+
+    private static string FormatFailureMessage(FlashProgressReport failure)
+    {
+        var message = failure.ErrorMessage ?? string.Empty;
+        if (failure.InnermostType is { } type && failure.InnermostMessage is { Length: > 0 } cause &&
+            !string.Equals(type, failure.ErrorType, StringComparison.Ordinal) &&
+            !string.Equals(cause, message, StringComparison.Ordinal))
+        {
+            return $"{message} ({type}: {cause})";
+        }
+
+        return message;
     }
 
     private static int ReadChunk(string path, long position, byte[] buffer)

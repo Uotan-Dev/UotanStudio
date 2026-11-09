@@ -32,6 +32,9 @@ internal sealed class WindowsDiskTarget : IDiskTarget
     public Stream Stream => _stream ?? throw new InvalidOperationException("The target has not been prepared.");
 
     /// <inheritdoc />
+    public int ChunkAlignmentBytes => RawDiskChunkAlignment.Bytes;
+
+    /// <inheritdoc />
     public Task PrepareAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

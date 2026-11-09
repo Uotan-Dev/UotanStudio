@@ -9,12 +9,12 @@ namespace UotanStudio.DD.Writing;
 /// 宿主读取的文件。</para>
 /// </summary>
 /// <remarks>
-/// The helper never raises a user-visible error of its own: every failure is written to the report file as an
-/// <c>error</c> line, so the host can show one consistent message whether the write, the device or the
-/// privilege check failed.
+/// The helper never raises a user-visible error of its own: every failure is appended to the report file as an
+/// <c>error</c> line, so the host keeps the progress lines it already read and can show one consistent message
+/// whether the write, the device or the privilege check failed.
 /// <para>
-/// 助手自身不弹出用户可见错误：任何失败都以 <c>error</c> 行写入报告文件，使宿主无论遇到写入、设备还是权限
-/// 检查失败，都能呈现一致的消息。
+/// 助手自身不弹出用户可见错误：任何失败都以 <c>error</c> 行追加到报告文件末尾，保留宿主已读取的进度行，
+/// 使宿主无论遇到写入、设备还是权限检查失败，都能呈现一致的消息。
 /// </para>
 /// </remarks>
 public static class FlashJobChild
@@ -110,16 +110,22 @@ public static class FlashJobChild
         }
         catch (Exception ex)
         {
-            TryWriteFailure(outputPath, ex);
+            AppendFailure(outputPath, ex);
             return ExitFailed;
         }
     }
 
-    private static void TryWriteFailure(string outputPath, Exception error)
+    /// <summary>
+    /// Appends the failure to the report the host already started reading, so progress lines stay in place.
+    /// <para>把失败追加到宿主已开始读取的报告末尾，保留此前的进度行。</para>
+    /// </summary>
+    /// <param name="outputPath">Report file path.<para>报告文件路径。</para></param>
+    /// <param name="error">Failure to report.<para>待上报的失败。</para></param>
+    internal static void AppendFailure(string outputPath, Exception error)
     {
         try
         {
-            using var report = ReportFile.Create(outputPath);
+            using var report = ReportFile.Append(outputPath);
             report.WriteLine(FlashProgressFormat.WriteError(error));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -139,9 +145,13 @@ public static class FlashJobChild
 
         private ReportFile(StreamWriter writer) => _writer = writer;
 
-        internal static ReportFile Create(string path)
+        internal static ReportFile Create(string path) => Open(path, FileMode.Create);
+
+        internal static ReportFile Append(string path) => Open(path, FileMode.Append);
+
+        private static ReportFile Open(string path, FileMode mode)
         {
-            var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+            var stream = new FileStream(path, mode, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             return new ReportFile(new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
             {
                 AutoFlush = true,

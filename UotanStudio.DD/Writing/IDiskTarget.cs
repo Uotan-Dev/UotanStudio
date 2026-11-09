@@ -23,6 +23,16 @@ public interface IDiskTarget : IAsyncDisposable
     Stream Stream { get; }
 
     /// <summary>
+    /// Gets the byte alignment every read and write on <see cref="Stream"/> must respect.
+    /// <para>获取 <see cref="Stream"/> 上每次读写必须满足的字节对齐。</para>
+    /// </summary>
+    /// <value>
+    /// <c>1</c> for targets that accept any chunk length, or a sector multiple for raw block devices.
+    /// <para>接受任意块长度的目标为 <c>1</c>；裸块设备为扇区大小的整数倍。</para>
+    /// </value>
+    int ChunkAlignmentBytes => 1;
+
+    /// <summary>
     /// Unmounts volumes and opens the raw device for read/write access.
     /// <para>卸载卷并以读写方式打开裸设备。</para>
     /// </summary>
@@ -54,4 +64,13 @@ public interface IDiskTargetFactory
     /// <param name="drive">Drive selected for writing.<para>选中用于写入的驱动器。</para></param>
     /// <returns>An unprepared target.<para>尚未准备的目标。</para></returns>
     IDiskTarget Create(FlashDrive drive);
+}
+
+/// <summary>
+/// Alignment shared by raw block device targets; it is a multiple of both 512-byte and 4096-byte sectors.
+/// <para>裸块设备目标共用的对齐值，同时是 512 字节与 4096 字节扇区的整数倍。</para>
+/// </summary>
+internal static class RawDiskChunkAlignment
+{
+    internal const int Bytes = 4096;
 }

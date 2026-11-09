@@ -135,6 +135,42 @@ public sealed class FlashJobProtocolTests
     }
 
     [Fact]
+    public void ChildFailureReport_AfterProgress_AppendsErrorWithoutTruncating()
+    {
+        using var directory = new FlashTestDirectory();
+        var reportPath = directory.Combine("flash.report");
+        var progressLine = "progress Preparing 0 4096 0 0 - 1";
+        File.WriteAllText(reportPath, progressLine + "\n");
+
+        FlashJobChild.AppendFailure(reportPath, new IOException("The parameter is incorrect"));
+
+        var lines = File.ReadAllLines(reportPath);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal(progressLine, lines[0]);
+        var failure = FlashProgressFormat.TryParse(lines[1]);
+        Assert.NotNull(failure);
+        Assert.True(failure!.IsError);
+        Assert.Equal(nameof(IOException), failure.ErrorType);
+        Assert.Equal("The parameter is incorrect", failure.ErrorMessage);
+    }
+
+    [Fact]
+    public void ChildFailureReport_WhenReportIsMissing_CreatesIt()
+    {
+        using var directory = new FlashTestDirectory();
+        var reportPath = directory.Combine("missing.report");
+
+        FlashJobChild.AppendFailure(reportPath, new FlashException("The image could not be flashed."));
+
+        var lines = File.ReadAllLines(reportPath);
+        Assert.Single(lines);
+        var failure = FlashProgressFormat.TryParse(lines[0]);
+        Assert.NotNull(failure);
+        Assert.True(failure!.IsError);
+        Assert.Equal(nameof(FlashException), failure.ErrorType);
+    }
+
+    [Fact]
     public void AccessClassifier_CurrentPlatform_UsesThatPlatformsDenialCode()
     {
         if (OperatingSystem.IsWindows())
