@@ -108,6 +108,7 @@
     <PackageReference Include="Sdcb.SimdCodecs.Tiff" />
     <PackageReference Include="Sdcb.SimdCodecs.Webp" />
     <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
   </ItemGroup>
 
 </Project>

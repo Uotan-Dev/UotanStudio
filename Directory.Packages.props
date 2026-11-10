@@ -54,7 +54,8 @@
     <!-- Device communication packages -->
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
-    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
+    <PackageVersion Include="SkiaSharp" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.155.0" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.14" />
     <!-- QR code generation for the wireless-debugging pairing popup (pure managed PNG writer). -->
     <PackageVersion Include="QRCoder" Version="1.8.1" />
