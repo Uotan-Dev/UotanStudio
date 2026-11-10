@@ -60,8 +60,11 @@ public sealed partial class SaharaProtocol
     /// <param name="timeoutMs">Total budget in milliseconds for the whole read. <para>整次读取的毫秒总预算。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The read bytes. <para>读取的字节。</para></returns>
-    /// <exception cref="EdlException">The budget expired before <paramref name="length"/> bytes arrived.
-    /// <para>在 <paramref name="length"/> 字节到达之前预算已耗尽。</para></exception>
+    /// <exception cref="EdlException">The budget expired before <paramref name="length"/> bytes arrived, reported as
+    /// <see cref="EdlErrorCode.ReadPortTimeout"/> so the Sahara recovery paths recognise it as a silent link rather
+    /// than as a protocol violation they must not retry.
+    /// <para>在 <paramref name="length"/> 字节到达之前预算已耗尽，以 <see cref="EdlErrorCode.ReadPortTimeout"/> 上报，
+    /// 使 Sahara 恢复路径把它识别为静默链路，而不是它们不得重试的协议违规。</para></exception>
     /// <exception cref="SaharaException">The packet was truncated or the transport reported an invalid length.
     /// <para>数据包被截断，或传输报告了无效长度。</para></exception>
     private async Task<byte[]> ReadExactAsync(int length, int timeoutMs, CancellationToken cancellationToken)
@@ -78,7 +81,9 @@ public sealed partial class SaharaProtocol
                 var remainingMs = timeoutMs - (Environment.TickCount64 - started);
                 if (remainingMs <= 0)
                 {
-                    throw new SaharaException("The Sahara packet receive deadline expired.");
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                        $"The Sahara packet receive deadline expired after {timeoutMs} ms with {total} of {length} bytes received" +
+                        (zeroLengthReads == 0 ? "." : $" and {zeroLengthReads} zero-length read(s)."));
                 }
                 int n;
                 try

@@ -66,6 +66,28 @@ public sealed class SaharaStaleEvidenceTests
         }
     }
 
+    [Fact]
+    public async Task Handshake_SilentLinkAfterTheFirstRead_WakesTheTargetInsteadOfReportingAProtocolError()
+    {
+        var transport = new SilentUntilWokenTransport();
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.True(transport.ZeroLengthReads >= 1);
+            Assert.Contains(transport.Writes, write => write.Length == 8
+                && BinaryPrimitives.ReadUInt32LittleEndian(write) == EdlConstants.SaharaCmdResetState);
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
     private static byte[] Hello()
     {
         var packet = new byte[HelloPacketBytes];
@@ -159,6 +181,85 @@ public sealed class SaharaStaleEvidenceTests
         public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs,
             CancellationToken cancellationToken = default)
             => Task.FromResult((long)length);
+
+        public Stream GetStream() => throw new NotSupportedException();
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Stays silent with zero-length answers until the host writes RESET_STATE_MACHINE, which is what a bootrom whose
+    /// one HELLO an earlier probe consumed looks like when the buffered evidence has aged out.
+    /// <para>在主机写入 RESET_STATE_MACHINE 之前以零长度应答保持静默，这正是唯一一次 HELLO 已被更早的探测消费、
+    /// 且缓冲证据已过期时 bootrom 的样子。</para>
+    /// </summary>
+    private sealed class SilentUntilWokenTransport : ICommTransport
+    {
+        private readonly Queue<byte[]> _packets = new();
+        private byte[]? _carry;
+        private bool _wakeSeen;
+
+        internal SilentUntilWokenTransport()
+        {
+            _packets.Enqueue(Hello());
+            _packets.Enqueue(ReadData(0, UploadedRangeBytes));
+            _packets.Enqueue(EndOfImage(0));
+            _packets.Enqueue(DoneResponse());
+        }
+
+        public int ZeroLengthReads { get; private set; }
+
+        public List<byte[]> Writes { get; } = [];
+
+        public bool IsConnected => true;
+
+        public void Connect() { }
+        public void Disconnect() { }
+        public void Reset() { }
+
+        public int Read(byte[] buffer, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+        {
+            if (_carry is { Length: > 0 } carry)
+            {
+                return Task.FromResult(Serve(carry, buffer, offset, length));
+            }
+
+            if (!_wakeSeen || _packets.Count == 0)
+            {
+                ZeroLengthReads++;
+                return Task.FromResult(0);
+            }
+
+            return Task.FromResult(Serve(_packets.Dequeue(), buffer, offset, length));
+        }
+
+        private int Serve(byte[] packet, byte[] buffer, int offset, int length)
+        {
+            var take = Math.Min(length, packet.Length);
+            packet.AsSpan(0, take).CopyTo(buffer.AsSpan(offset));
+            _carry = take < packet.Length ? packet[take..] : null;
+            return take;
+        }
+
+        public long Write(byte[] data, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+        {
+            var copy = data.AsSpan(offset, length).ToArray();
+            Writes.Add(copy);
+            if (copy.Length == 8
+                && BinaryPrimitives.ReadUInt32LittleEndian(copy) == EdlConstants.SaharaCmdResetState)
+            {
+                _wakeSeen = true;
+            }
+
+            return Task.FromResult((long)length);
+        }
 
         public Stream GetStream() => throw new NotSupportedException();
         public void Dispose() { }
