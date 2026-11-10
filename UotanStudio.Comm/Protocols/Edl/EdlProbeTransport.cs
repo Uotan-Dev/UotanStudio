@@ -38,10 +38,33 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     private const int FirehoseSilenceGraceMilliseconds = 1000;
     private const int SaharaResetStatePacketBytes = 8;
 
+    /// <summary>
+    /// How long a buffered probe HELLO stays worth replaying. A bootrom answers the host once and then waits for the
+    /// reply, so an answer this old belongs to a target that has long stopped waiting for it; replaying it makes the
+    /// host answer something the target no longer holds a slot for.
+    /// <para>缓冲的探测 HELLO 保持可用于回放的时长。bootrom 只应答主机一次然后等待回复，因此这么旧的应答属于
+    /// 早已不再等待它的目标；回放它会让主机去应答目标已不再预留位置的东西。</para>
+    /// </summary>
+    private const int DefaultBufferedEvidenceMaxAgeMs = 3000;
+
     private byte[]? _buffer;
     private int _length;
     private int _position;
     private bool _wakeAttempted;
+
+    /// <summary>
+    /// Timestamp of the last byte appended to the probe buffer, so buffered protocol evidence can be aged out.
+    /// <para>探测缓冲区最后一次追加字节的时间戳，使缓冲的协议证据可以被判定为过期。</para>
+    /// </summary>
+    private long _bufferedAtMilliseconds;
+
+    /// <summary>
+    /// Gets or sets how long buffered protocol evidence stays replayable; defaults to
+    /// <see cref="DefaultBufferedEvidenceMaxAgeMs"/> and exists so tests can shrink the window.
+    /// <para>获取或设置缓冲的协议证据保持可回放的时长；默认为
+    /// <see cref="DefaultBufferedEvidenceMaxAgeMs"/>，存在是为了让测试能缩短该窗口。</para>
+    /// </summary>
+    internal int BufferedEvidenceMaxAgeMs { get; set; } = DefaultBufferedEvidenceMaxAgeMs;
 
     /// <summary>
     /// Classifies the endpoint by reading what the target sends, waking a silent bootrom target with one Sahara
@@ -135,6 +158,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             if (count != 0)
             {
                 _length += count;
+                _bufferedAtMilliseconds = Environment.TickCount64;
                 readPendingAfterWake = false;
                 idleReads = 0;
                 continue;
@@ -331,6 +355,11 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     internal bool TryReadSaharaHello(out SaharaHelloPacket hello)
     {
         hello = default;
+        if (IsBufferedEvidenceStale())
+        {
+            return false;
+        }
+
         var bytes = _buffer.AsSpan(0, _length);
         if (bytes.Length < Marshal.SizeOf<SaharaHelloPacket>())
         {
@@ -351,6 +380,45 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             MaxCommandLength = BinaryPrimitives.ReadUInt32LittleEndian(bytes[16..]),
             Mode = (SaharaMode)BinaryPrimitives.ReadUInt32LittleEndian(bytes[20..]),
         };
+        return true;
+    }
+
+    /// <summary>
+    /// Reports whether the buffered protocol evidence is too old to replay, discarding it so the next probe has to
+    /// wake the target and read an answer the target is actually still waiting for.
+    /// <para>报告缓冲的协议证据是否已旧到不可回放，并丢弃它，使下一次探测必须唤醒目标并读取目标确实仍在等待的
+    /// 应答。</para>
+    /// </summary>
+    /// <remarks>
+    /// The probe answers nothing, so a bootrom that announced HELLO here holds that slot open until a handshake
+    /// replies. When the handshake reaches the buffered HELLO only after the user spent time picking files, the
+    /// reply arrives far too late and the target answers the stale slot with a stall. Ageing the evidence out makes
+    /// the handshake re-announce instead of answering a slot the target has abandoned.
+    /// <para>探测不应答任何内容，因此在此宣告 HELLO 的 bootrom 会一直保留该位置直到握手回复。当用户在挑选文件上
+    /// 花掉时间后握手才用到缓冲的 HELLO 时，回复来得太晚，目标会以一个 STALL 应答那个过期位置。把证据判定为过期
+    /// 使握手改为重新唤醒，而不是去应答目标早已放弃的位置。</para>
+    /// </remarks>
+    /// <returns><see langword="true"/> when the evidence was discarded for age.
+    /// <para>证据因过旧而被丢弃时为 <see langword="true"/>。</para></returns>
+    private bool IsBufferedEvidenceStale()
+    {
+        if (_length == 0)
+        {
+            return false;
+        }
+
+        if (Environment.TickCount64 - _bufferedAtMilliseconds <= BufferedEvidenceMaxAgeMs)
+        {
+            return false;
+        }
+
+        CommTrace.Write(CommLogLevel.Debug, "edl",
+            $"EDL probe dropped {_length} buffered byte(s) older than {BufferedEvidenceMaxAgeMs} ms; the target no " +
+            "longer waits for the reply those bytes implied, so it has to be woken again.");
+        _length = 0;
+        _position = 0;
+        _bufferedAtMilliseconds = 0;
+        _wakeAttempted = false;
         return true;
     }
 
@@ -431,6 +499,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     {
         _length = 0;
         _position = 0;
+        _bufferedAtMilliseconds = 0;
         _wakeAttempted = false;
         inner.Reset();
     }
@@ -447,13 +516,40 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     }
 
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
-        => _position < _length ? ReadBuffered(buffer, offset, length) : inner.Read(buffer, offset, length, timeoutMs);
+        => HasServableBufferedBytes()
+            ? ReadBuffered(buffer, offset, length)
+            : inner.Read(buffer, offset, length, timeoutMs);
 
     public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _position < _length ? Task.FromResult(ReadBuffered(buffer, offset, length))
+        return HasServableBufferedBytes()
+            ? Task.FromResult(ReadBuffered(buffer, offset, length))
             : inner.ReadAsync(buffer, offset, length, timeoutMs, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reports whether buffered bytes may still be replayed to the caller, ageing out evidence the target has
+    /// already stopped waiting for.
+    /// <para>报告缓冲字节是否仍可回放给调用方；已过期、目标不再等待的证据会被丢弃。</para>
+    /// </summary>
+    /// <remarks>
+    /// This is the seam the handshake reads through, so the age check belongs here as well as in
+    /// <see cref="TryReadSaharaHello"/>: serving a buffered HELLO straight from <see cref="ReadBuffered"/> would
+    /// answer a slot the bootrom abandoned minutes ago.
+    /// <para>这是握手读取所经的接缝，因此时效检查既要放在 <see cref="TryReadSaharaHello"/>，也要放在这里：
+    /// 直接从 <see cref="ReadBuffered"/> 回放缓冲的 HELLO 会去应答 bootrom 几分钟前就已放弃的位置。</para>
+    /// </remarks>
+    /// <returns><see langword="true"/> when unread buffered bytes survive the age check.
+    /// <para>未读缓冲字节通过时效检查时为 <see langword="true"/>。</para></returns>
+    private bool HasServableBufferedBytes()
+    {
+        if (_position >= _length)
+        {
+            return false;
+        }
+
+        return !IsBufferedEvidenceStale() && _position < _length;
     }
 
     public long Write(byte[] data, int offset, int length, int timeoutMs) => inner.Write(data, offset, length, timeoutMs);
