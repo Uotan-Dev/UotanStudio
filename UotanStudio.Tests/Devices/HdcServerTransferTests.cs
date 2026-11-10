@@ -95,8 +95,8 @@ public sealed class HdcServerTransferTests
                 await WriteTaskFrameAsync(stream, HdcCommand.FileFinish, new byte[] { 0 }, cancellationToken);
             }, cancellationToken);
             using var client = new HdcServerSyncClient(new HdcServerClient("127.0.0.1", server.Port), ConnectKey);
-            await Task.Run(() => client.Recv(remotePath, destination, cancellationToken), cancellationToken);
-            await server.Completion;
+            var receive = Task.Run(() => client.Recv(remotePath, destination, cancellationToken), cancellationToken);
+            await AwaitScriptAndClientAsync(server, receive, cancellationToken);
             Assert.Equal(content, await File.ReadAllBytesAsync(destination, cancellationToken));
         }
         finally
@@ -337,6 +337,36 @@ public sealed class HdcServerTransferTests
         Assert.Throws<NotSupportedException>(() => _ = session.Forwards);
     }
 
+    /// <summary>
+    /// Waits for one scripted server task and one client operation together, so a server-side assertion
+    /// surfaces as its own failure instead of leaving the client blocked on a frame the script never sends.
+    /// <para>同时等待脚本化的 server 任务与客户端操作，使 server 侧断言以自身失败呈现，而不是让客户端一直等待脚本永远不会发送的帧。</para>
+    /// </summary>
+    /// <param name="server">The scripted server whose task runs concurrently. <para>并发运行脚本任务的脚本化 server。</para></param>
+    /// <param name="client">The client operation under test. <para>被测的客户端操作。</para></param>
+    /// <param name="cancellationToken">Cancels the combined wait. <para>取消合并后的等待。</para></param>
+    /// <remarks>
+    /// Awaiting the client first deadlocks the diagnosis: the script cannot send its next frame while its own
+    /// assertion fails, and the client then waits for that frame until the test timeout, which reads as an
+    /// unrelated cancellation rather than the real assertion. Both tasks are observed here and the script's
+    /// exception is rethrown with its original stack.
+    /// <para>先等待客户端会掩盖诊断：脚本的断言失败后无法再发送下一帧，客户端随即一直等到测试超时，表现为无关的取消而不是真正的断言。此处同时观察两个任务并原样重抛脚本的异常。</para>
+    /// </remarks>
+    private static async Task AwaitScriptAndClientAsync(ScriptedServer server, Task client,
+        CancellationToken cancellationToken)
+    {
+        var both = Task.WhenAll(server.Completion, client);
+        try
+        {
+            await both.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None));
+            throw;
+        }
+    }
+
     private static async Task AssertIdleSlaveTaskAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
         var (command, payload) = await ReadTaskFrameAsync(stream, cancellationToken);
@@ -466,10 +496,18 @@ public sealed class HdcServerTransferTests
         private async Task RunAsync(Func<NetworkStream, string, Task> script)
         {
             using var client = await _listener.AcceptTcpClientAsync(_lifetime.Token);
-            var stream = client.GetStream();
-            var connectKey = await GreetAsync(stream, _lifetime.Token);
-            await script(stream, connectKey);
-            await stream.FlushAsync(_lifetime.Token);
+            try
+            {
+                var stream = client.GetStream();
+                var connectKey = await GreetAsync(stream, _lifetime.Token);
+                await script(stream, connectKey);
+                await stream.FlushAsync(_lifetime.Token);
+            }
+            catch
+            {
+                client.Close();
+                throw;
+            }
         }
 
         public async ValueTask DisposeAsync()

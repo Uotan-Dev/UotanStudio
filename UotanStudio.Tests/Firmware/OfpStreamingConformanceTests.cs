@@ -151,7 +151,13 @@ public sealed class OfpStreamingConformanceTests
 
             Assert.Equal(1, result.ExtractedFileCount);
             Assert.Equal(payload, File.ReadAllBytes(Path.Combine(output, "entry.bin")));
-            Assert.True(source.BytesRead < zip.Length * 2,
+
+            // A ZIP entry stream cannot seek, so a wrapped package costs exactly two sequential passes: one that
+            // parses the OFP metadata and one that extracts the payload. The archive's own buffering can overshoot
+            // either pass by one block, so the bound allows two buffers on top of the two passes and still fails a
+            // reader that opens the wrapper a third time.
+            const int bufferSlackBytes = 32 * 1024;
+            Assert.True(source.BytesRead <= (zip.Length * 2L) + bufferSlackBytes,
                 $"ZIP wrapper was read {source.BytesRead} bytes for a {zip.Length}-byte archive.");
         }
         finally

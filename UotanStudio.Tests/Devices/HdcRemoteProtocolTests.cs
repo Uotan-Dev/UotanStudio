@@ -30,6 +30,7 @@ public sealed class HdcRemoteProtocolTests
             Assert.Contains("HDC daemon", timeout.Message, StringComparison.Ordinal);
 
             await server.GetStream().WriteAsync(new byte[] { 1, 2, 3 }, cancellationToken);
+            await server.GetStream().FlushAsync(cancellationToken);
             Assert.Equal(3, transport.Read(buffer, 0, buffer.Length, 2000));
             Assert.Equal(new byte[] { 1, 2, 3 }, buffer[..3]);
 
