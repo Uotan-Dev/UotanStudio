@@ -32,14 +32,17 @@ public sealed partial class SaharaProtocol
     private const int StaleDrainPacketLimit = 8;
 
     /// <summary>
-    /// Total budget spent waiting for a reset target to re-announce HELLO.
-    /// <para>等待被复位目标重新宣告 HELLO 的总预算。</para>
+    /// Total budget spent waiting for a reset target to re-announce HELLO. It is a whole budget, not a single read:
+    /// a bootrom that needs longer than one slice to service the reset still re-announces HELLO inside it.
+    /// <para>等待被复位目标重新宣告 HELLO 的总预算。它是整段预算而不是单次读取：需要超过一个读取切片的
+    /// bootrom 仍会在这段预算内重新宣告 HELLO。</para>
     /// </summary>
     private const int StaleRecoveryBudgetMs = EdlConstants.HelloProbeTimeoutMs * 2;
 
     /// <summary>
-    /// Per-read timeout applied inside the HELLO recovery budget.
-    /// <para>HELLO 恢复预算内每次读取的超时。</para>
+    /// Per-read slice applied inside the HELLO recovery budget; a slice that ends without a packet spends only that
+    /// slice, so the budget survives until the target finally answers.
+    /// <para>HELLO 恢复预算内每次读取的切片；没有数据包的切片只消耗该切片，使预算一直保留到目标应答为止。</para>
     /// </summary>
     private const int StaleRecoveryReadTimeoutMs = 500;
 
@@ -699,7 +702,9 @@ public sealed partial class SaharaProtocol
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
             {
-                return null;
+                Log($"No packet within {Math.Min(remainingMs, StaleRecoveryReadTimeoutMs)} ms of the recovery budget; " +
+                    "keeping the remaining budget open for the HELLO the reset is still bringing back.");
+                continue;
             }
             catch (SaharaException ex)
             {
