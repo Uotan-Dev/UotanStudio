@@ -41,6 +41,20 @@ public sealed partial class SaharaProtocol(ICommTransport transport, int? timeou
     public bool QudHelloRecoveryEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the session already validated a complete Sahara packet on this link before the
+    /// handshake started, so a silent first read can only mean the bootrom spent its single HELLO on that
+    /// earlier read.
+    /// <para>获取或设置本会话在握手开始前是否已在该链路上校验过完整的 Sahara 数据包；此时首个读取静默只可能是
+    /// bootrom 已经把唯一一次 HELLO 用在更早的那次读取上。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when the link is known to speak Sahara: the Firehose NOP probe is skipped,
+    /// so a bootrom is never handed XML it would parse as an unknown command, and the recovery writes
+    /// <c>RESET_STATE_MACHINE</c> straight away instead of spending the Firehose probe budget first.
+    /// <para>已知链路使用 Sahara 时为 <see langword="true"/>：跳过 Firehose NOP 探测，bootrom 不会收到会被解析为
+    /// 未知命令的 XML，恢复流程直接写 <c>RESET_STATE_MACHINE</c> 而不是先耗尽 Firehose 探测预算。</para></value>
+    public bool LinkReportsSahara { get; set; }
+
+    /// <summary>
     /// Gets or sets an explicit compatibility exception for a single Firehose image returning pending on completion.
     /// <para>获取或设置单个 Firehose 镜像在完成时返回 pending 的显式兼容例外。</para>
     /// </summary>

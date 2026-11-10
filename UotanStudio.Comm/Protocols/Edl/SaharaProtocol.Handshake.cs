@@ -94,7 +94,7 @@ public sealed partial class SaharaProtocol
         byte[] firstHeader;
         try
         {
-            firstHeader = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), helloProbeTimeout, cancellationToken)
+            firstHeader = await ReadPacketPrefixAsync(FirstPacketLengthBoundBytes, helloProbeTimeout, cancellationToken)
                 .ConfigureAwait(false);
             Log($"Read the first packet after {helloWatch.ElapsedMilliseconds} ms of a {helloProbeTimeout} ms budget.");
         }
@@ -108,12 +108,12 @@ public sealed partial class SaharaProtocol
                     .ConfigureAwait(false);
                 try
                 {
-                    firstHeader = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), helloProbeTimeout, cancellationToken)
-                        .ConfigureAwait(false);
+                    firstHeader = await ReadPacketPrefixAsync(FirstPacketLengthBoundBytes, helloProbeTimeout,
+                        cancellationToken).ConfigureAwait(false);
                 }
                 catch (EdlException recoveryEx) when (recoveryEx.ErrorCode == EdlErrorCode.ReadPortTimeout)
                 {
-                    if (await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
+                    if (!LinkReportsSahara && await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
                     {
                         RequireIdentityNotRequested();
                         FirehoseAlreadyRunning = true;
@@ -130,7 +130,7 @@ public sealed partial class SaharaProtocol
                     firstHeader = wokenHeader;
                 }
             }
-            else if (await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
+            else if (!LinkReportsSahara && await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
             {
                 RequireIdentityNotRequested();
                 FirehoseAlreadyRunning = true;
@@ -165,16 +165,14 @@ public sealed partial class SaharaProtocol
                 $"Unexpected first-packet HELLO length {firstPacket.Length}, expected {Marshal.SizeOf<SaharaHelloPacket>()}.");
         }
 
-        byte[]? pendingPacket;
-        SaharaHelloPending? pendingHello = null;
+        SaharaFirstPacket? bootstrap = null;
         if (firstPacket.Command == SaharaCommand.Hello)
         {
             var helloData = await ReadRemainingPacket<SaharaHelloPacket>(firstHeader, cancellationToken).ConfigureAwait(false);
             var receivedHello = BytesToStruct<SaharaHelloPacket>(helloData);
             Log($"HELLO: version={receivedHello.Version}, minVersion={receivedHello.MinVersion}, " +
                 $"maxCommandLength={receivedHello.MaxCommandLength}, mode={receivedHello.Mode} (0x{(uint)receivedHello.Mode:X2}).");
-            pendingHello = new SaharaHelloPending(receivedHello);
-            pendingPacket = null;
+            bootstrap = receivedHello;
         }
         else if (firstPacket.Command is SaharaCommand.ReadData or SaharaCommand.ReadData64
             or SaharaCommand.EndOfImage or SaharaCommand.DoneResponse)
@@ -187,25 +185,25 @@ public sealed partial class SaharaProtocol
                     $"Unexpected first-packet length {firstPacket.Length} for {firstPacket.Command}.");
             }
 
-            pendingPacket = await ReadRemainingKnownLengthAsync(firstPacket.Length, firstHeader, cancellationToken)
+            var packet = await ReadRemainingKnownLengthAsync(firstPacket.Length, firstHeader, cancellationToken)
                 .ConfigureAwait(false);
-            if (IsStaleTransferResult(firstPacket.Command, pendingPacket))
+            if (IsStaleTransferResult(firstPacket.Command, packet))
             {
                 Log($"{firstPacket.Command} at the start of the upload carries a status from an earlier, already " +
                     "finished attempt; resetting the target state machine instead of resuming that transfer.");
                 if (await TryResetTargetAndAwaitHelloAsync(cancellationToken).ConfigureAwait(false) is { } recoveredHello)
                 {
-                    pendingHello = new SaharaHelloPending(recoveredHello);
-                    pendingPacket = null;
+                    bootstrap = recoveredHello;
                 }
                 else
                 {
-                    throw DescribeStaleTransferResult(firstPacket.Command, pendingPacket);
+                    throw DescribeStaleTransferResult(firstPacket.Command, packet);
                 }
             }
             else
             {
                 Log($"Sahara transfer started with {firstPacket.Command} instead of HELLO; continuing from that packet.");
+                bootstrap = packet;
             }
         }
         else
@@ -216,12 +214,11 @@ public sealed partial class SaharaProtocol
 
         if (images.Count == 0)
         {
-            if (pendingPacket is not null)
+            if (bootstrap is not { Value: SaharaHelloPacket streamHello })
             {
                 throw new SaharaException("Device is in Sahara mode but no programmer image was provided.");
             }
 
-            var streamHello = pendingHello!.Value.Packet;
             if (AllowStreamDload && streamHello.Mode == SaharaMode.Command)
             {
                 ValidateHello(streamHello);
@@ -247,9 +244,10 @@ public sealed partial class SaharaProtocol
 
         SaharaHelloPacket helloPacket;
         var mode = SaharaMode.ImageTxPending;
-        if (pendingHello is { } hello)
+        var helloAnnounced = bootstrap is { Value: SaharaHelloPacket };
+        if (bootstrap is { Value: SaharaHelloPacket announced })
         {
-            helloPacket = hello.Packet;
+            helloPacket = announced;
         }
         else
         {
@@ -264,7 +262,7 @@ public sealed partial class SaharaProtocol
             Log("The target skipped HELLO and requested image data directly; continuing the transfer.");
         }
 
-        if (QueryIdentityBeforeUpload && pendingHello is null)
+        if (QueryIdentityBeforeUpload && !helloAnnounced)
         {
             throw new SaharaException("A target that skipped HELLO cannot provide the required Sahara device identity.");
         }
@@ -272,7 +270,7 @@ public sealed partial class SaharaProtocol
         {
             helloPacket = await QueryIdentityOwnedAsync(helloPacket, cancellationToken).ConfigureAwait(false);
         }
-        if (pendingHello is not null)
+        if (helloAnnounced)
         {
             mode = helloPacket.Mode;
             await AcknowledgeImageHelloAsync(helloPacket, cancellationToken).ConfigureAwait(false);
@@ -290,10 +288,10 @@ public sealed partial class SaharaProtocol
         {
             cancellationToken.ThrowIfCancellationRequested();
             byte[] headerData;
-            if (pendingPacket is not null)
+            if (bootstrap is { Value: byte[] pendingPacket })
             {
                 headerData = pendingPacket;
-                pendingPacket = null;
+                bootstrap = null;
             }
             else
             {
@@ -464,12 +462,6 @@ public sealed partial class SaharaProtocol
         HandshakeComplete?.Invoke(this, mode);
         return mode;
     }
-
-    /// <summary>Buffers a HELLO parsed from the first packet so the image-less and identity paths keep
-    /// their original HELLO-driven flow.<para>缓存从首包解析出的 HELLO，使无镜像与身份查询路径保持原有的
-    /// HELLO 驱动流程。</para></summary>
-    /// <param name="Packet">The parsed HELLO packet.<para>解析出的 HELLO 包。</para></param>
-    private readonly record struct SaharaHelloPending(SaharaHelloPacket Packet);
 
     /// <summary>
     /// Builds the unsolicited HELLO_RESPONSE sent when the QUD serial driver consumed the bootrom HELLO:
@@ -703,15 +695,14 @@ public sealed partial class SaharaProtocol
     /// <remarks>
     /// The bootrom announces HELLO exactly once after it enters emergency download, so a session that probed the
     /// endpoint first consumes it and leaves the later handshake with a silent link. RESET_STATE_MACHINE is the only
-    /// host request that makes it announce HELLO again, and it is written only here, after the Firehose probe has
-    /// already established that the target is not answering Firehose XML: a target that already runs Firehose never
-    /// reaches this method, so it is never handed a command its state rejects. Every read keeps the remaining budget
-    /// instead of ending the recovery, because a bootrom that needs longer than one slice still answers inside it.
+    /// host request that makes it announce HELLO again, and it is written only once the target is known not to be
+    /// running Firehose: either <see cref="LinkReportsSahara"/> already proved the link speaks Sahara, or the
+    /// Firehose probe just failed to answer. Every read keeps the remaining budget instead of ending the recovery,
+    /// because a bootrom that needs longer than one slice still answers inside it.
     /// <para>bootrom 进入紧急下载模式后只会宣告一次 HELLO，因此先探测过端点的会话已经消费掉它，留给后续握手的
-    /// 是静默链路。RESET_STATE_MACHINE 是让它重新宣告 HELLO 的唯一主机请求，且只在此处写入——此时 Firehose 探测
-    /// 已经确认目标不应答 Firehose XML，因此已在运行 Firehose 的目标根本到不了本方法，也就不会收到它当前状态会
-    /// 拒绝的命令。每次读取都保留剩余预算而不是结束恢复，因为需要超过一个切片才响应的 bootrom 仍会在这段预算内
-    /// 应答。</para>
+    /// 是静默链路。RESET_STATE_MACHINE 是让它重新宣告 HELLO 的唯一主机请求，且只在确认目标未运行 Firehose 之后
+    /// 才写入：<see cref="LinkReportsSahara"/> 已经证明链路使用 Sahara，或 Firehose 探测刚刚没有得到应答。每次读取
+    /// 都保留剩余预算而不是结束恢复，因为需要超过一个切片才响应的 bootrom 仍会在这段预算内应答。</para>
     /// </remarks>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The header of the re-announced packet, or <see langword="null"/> when nothing arrived.
@@ -721,14 +712,13 @@ public sealed partial class SaharaProtocol
         Log("The link stayed silent after both HELLO reads; the bootrom already announced its one HELLO to an " +
             "earlier probe. Writing Sahara RESET_STATE_MACHINE so it announces HELLO again.");
         await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
-        var headerBytes = Marshal.SizeOf<SaharaPacketHeader>();
         var deadline = Environment.TickCount64 + StaleRecoveryBudgetMs;
         while (Environment.TickCount64 < deadline)
         {
             var remainingMs = (int)Math.Max(1, deadline - Environment.TickCount64);
             try
             {
-                return await ReadExactAsync(headerBytes,
+                return await ReadPacketPrefixAsync(FirstPacketLengthBoundBytes,
                     Math.Min(remainingMs, StaleRecoveryReadTimeoutMs), cancellationToken).ConfigureAwait(false);
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
@@ -949,3 +939,15 @@ public sealed partial class SaharaProtocol
         }
     }
 }
+/// <summary>
+/// The first packet of an upload: either the HELLO the target announced or the packet that continues a
+/// transfer the target already started. The target cannot do both, so the two travel as one value instead of
+/// a nullable pair whose members must be kept mutually exclusive by hand.
+/// <para>上传的首个数据包：目标宣告的 HELLO，或目标早已开始的传输所继续的数据包。目标不可能同时做这两件事，
+/// 因此二者作为一个值传递，而不是一对必须手工维持互斥的可空成员。</para>
+/// </summary>
+/// <remarks>
+/// The cases are positional: the first is the announced HELLO, the second is the complete packet.
+/// <para>各分支按位置排列：第一个是宣告的 HELLO，第二个是完整的数据包。</para>
+/// </remarks>
+internal union SaharaFirstPacket(SaharaHelloPacket, byte[]);

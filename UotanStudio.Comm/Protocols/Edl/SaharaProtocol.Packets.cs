@@ -52,6 +52,93 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
+    /// Reads the first packet of a link into one buffer that can hold the largest packet this host dispatches,
+    /// returning whatever arrived once the target has said something, and spending the whole budget a
+    /// zero-length read would otherwise end.
+    /// <para>把链路上的首个数据包读入一个足以容纳本主机分发的最大数据包的缓冲区，在目标开口后返回实际到达的字节，
+    /// 并耗尽零长度读本会提前结束的整段预算。</para>
+    /// </summary>
+    /// <remarks>
+    /// A USB bulk read completes on the packet boundary and never carries a second packet, and no target sends a
+    /// second packet before the host answers the first, so a buffer wider than the header cannot steal bytes from
+    /// the following packet. Asking for the header alone instead splits one packet across two reads; on a
+    /// bootrom that announces HELLO as a single 48-byte packet that turns a one-round-trip handshake into two and
+    /// leaves the excess bytes of the packet in the endpoint for a read that no longer describes them.
+    /// <para>USB 批量读取在数据包边界完成且不会携带第二个数据包，且任何目标都不会在主机应答首个数据包之前发送
+    /// 第二个数据包，因此比包头更宽的缓冲区不会窃取后续数据包的字节。只请求包头则会把同一个数据包拆成两次读取；
+    /// 对以单个 48 字节包宣告 HELLO 的 bootrom，这会把一次往返的握手变成两次，并把该数据包多余的字节留在端点里，
+    /// 交给一个已不再描述它们的读取。</para>
+    /// </remarks>
+    /// <param name="bound">Upper bound for the prefix in bytes.
+    /// <para>前缀字节数上限。</para></param>
+    /// <param name="timeoutMs">Total budget in milliseconds for the whole read.
+    /// <para>整次读取的毫秒总预算。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Between one and <paramref name="bound"/> bytes, in the order the target sent them.
+    /// <para>1 到 <paramref name="bound"/> 字节，按目标发送顺序排列。</para></returns>
+    /// <exception cref="EdlException">The budget expired before any byte arrived, reported as
+    /// <see cref="EdlErrorCode.ReadPortTimeout"/> so the Sahara recovery paths treat it as a silent link.
+    /// <para>在任何字节到达之前预算已耗尽，以 <see cref="EdlErrorCode.ReadPortTimeout"/> 上报，使 Sahara 恢复路径
+    /// 将其视为静默链路。</para></exception>
+    /// <exception cref="SaharaException">The transport reported an invalid receive length.
+    /// <para>传输报告了无效的接收长度。</para></exception>
+    private async Task<byte[]> ReadPacketPrefixAsync(int bound, int timeoutMs, CancellationToken cancellationToken)
+    {
+        var buf = ArrayPool<byte>.Shared.Rent(bound);
+        try
+        {
+            var total = 0;
+            var zeroLengthReads = 0;
+            var started = Environment.TickCount64;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var remainingMs = timeoutMs - (Environment.TickCount64 - started);
+                if (remainingMs <= 0)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                        $"The Sahara packet receive deadline expired after {timeoutMs} ms with {total} of {bound} bytes received" +
+                        (zeroLengthReads == 0 ? "." : $" and {zeroLengthReads} zero-length read(s)."));
+                }
+
+                int n;
+                try
+                {
+                    n = await _transport.ReadAsync(buf, total, bound - total, (int)remainingMs, cancellationToken);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout, ex.Message, ex);
+                }
+                if (n < 0 || n > bound - total)
+                {
+                    throw new SaharaException("The transport returned an invalid receive length.");
+                }
+                if (n == 0)
+                {
+                    // A zero-length read is "nothing arrived yet", not an expired deadline; spend the remaining
+                    // budget so a cleared STALL is not reported as a timeout.
+                    zeroLengthReads++;
+                    Log($"Read returned 0 byte(s) with {remainingMs} ms of budget left " +
+                        $"(occurrence {zeroLengthReads}); retrying instead of reporting a timeout.");
+                    await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                total += n;
+                if (total >= Marshal.SizeOf<SaharaPacketHeader>())
+                {
+                    return buf.AsSpan(0, total).ToArray();
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+        }
+    }
+
+    /// <summary>
     /// Reads an exact number of bytes from the transport, spending the whole budget a zero-length read would
     /// otherwise end.
     /// <para>从传输中读取精确数量的字节；零长度读只会消耗预算而不再结束读取。</para>
@@ -197,13 +284,13 @@ public sealed partial class SaharaProtocol
     /// </summary>
     /// <param name="declaredLength">The length the packet header declared; the caller has already bounded it.
     /// <para>包头声明的长度；调用方已对其设限。</para></param>
-    /// <param name="headerBytes">The already-read header bytes.<para>已读取的包头字节。</para></param>
+    /// <param name="headerBytes">The already-read prefix, which can already span the whole packet.
+    /// <para>已读取的前缀；它可能已经覆盖整个数据包。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The complete packet bytes, header included.<para>含包头的完整包字节。</para></returns>
     private async Task<byte[]> ReadRemainingKnownLengthAsync(uint declaredLength, byte[] headerBytes, CancellationToken ct)
     {
-        var headerBytesCount = Marshal.SizeOf<SaharaPacketHeader>();
-        var remaining = (int)declaredLength - headerBytesCount;
+        var remaining = (int)declaredLength - headerBytes.Length;
         if (remaining <= 0)
         {
             return headerBytes;
@@ -212,7 +299,7 @@ public sealed partial class SaharaProtocol
         var body = await ReadExactAsync(remaining, _timeoutMs, ct).ConfigureAwait(false);
         var full = new byte[declaredLength];
         headerBytes.CopyTo(full, 0);
-        body.CopyTo(full, headerBytesCount);
+        body.CopyTo(full, headerBytes.Length);
         return full;
     }
 

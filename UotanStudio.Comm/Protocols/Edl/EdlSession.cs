@@ -584,7 +584,8 @@ public sealed partial class EdlSession : IProtocolSession
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? UsesSerialFallback,
                     AllowSingleFirehosePendingCompletion = options?.AllowSingleFirehosePendingCompletion ?? false,
                     QueryIdentityBeforeUpload = options?.QueryIdentityBeforeUpload ?? false,
-                    AllowStreamDload = options?.AllowStreamDload ?? false
+                    AllowStreamDload = options?.AllowStreamDload ?? false,
+                    LinkReportsSahara = _protocolState == EdlProtocolState.Sahara
                 };
                 Sahara.ImageProgress += ForwardSaharaImageProgress;
                 Sahara.LogMessage += ForwardProtocolLogMessage;
