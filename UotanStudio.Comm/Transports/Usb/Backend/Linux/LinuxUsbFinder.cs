@@ -495,6 +495,11 @@ internal static class LinuxUsbFinder
         {
             foreach (var deviceDir in Directory.EnumerateDirectories(sysfsDevicesRoot))
             {
+                if (LinuxSysfsTopology.IsInterfaceDirectoryName(Path.GetFileName(deviceDir)))
+                {
+                    continue;
+                }
+
                 if (TryReadSysfsInt(Path.Combine(deviceDir, "busnum"), out var busNum) &&
                     TryReadSysfsInt(Path.Combine(deviceDir, "devnum"), out var devNum))
                 {
@@ -514,6 +519,11 @@ internal static class LinuxUsbFinder
         value = 0;
         try
         {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
             return int.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
         catch

@@ -37,18 +37,18 @@ internal static partial class LinuxUsbAPI
     public static uint USBDEVFS_RESET = 0x5514;
 
     /// <summary>
-    /// <c>_IOR('U', 20, struct usbdevfs_setinterface)</c>: activates an interface alternate setting through
+    /// <c>_IOR('U', 4, struct usbdevfs_setinterface)</c>: activates an interface alternate setting through
     /// the kernel instead of a bare control request.
-    /// <para><c>_IOR('U', 20, struct usbdevfs_setinterface)</c>：经内核激活接口备用设置，而不是裸控制请求。</para>
+    /// <para><c>_IOR('U', 4, struct usbdevfs_setinterface)</c>：经内核激活接口备用设置，而不是裸控制请求。</para>
     /// </summary>
-    public const uint USBDEVFS_SETINTERFACE = 0x80085514;
+    public const uint USBDEVFS_SETINTERFACE = 0x80085504;
 
     /// <summary>
-    /// <c>_IOR('U', 3, unsigned int)</c>: activates a device configuration. The kernel rejects it while any
+    /// <c>_IOR('U', 5, unsigned int)</c>: activates a device configuration. The kernel rejects it while any
     /// interface of the descriptor is still claimed.
-    /// <para><c>_IOR('U', 3, unsigned int)</c>：激活设备配置。描述符仍有接口被申请时内核会拒绝。</para>
+    /// <para><c>_IOR('U', 5, unsigned int)</c>：激活设备配置。描述符仍有接口被申请时内核会拒绝。</para>
     /// </summary>
-    public const uint USBDEVFS_SETCONFIGURATION = 0x80045503;
+    public const uint USBDEVFS_SETCONFIGURATION = 0x80045505;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct Usbdevfs_setinterface
@@ -154,9 +154,45 @@ internal static partial class LinuxUsbAPI
     public static uint USBDEVFS_REAPURBNDELAY_X86_64 = 0x4008550D;
     public static uint USBDEVFS_REAPURBNDELAY_X86 = 0x4004550D;
 
-    public const byte USBDEVFS_URB_TYPE_BULK = 2;
-    public const byte USBDEVFS_URB_TYPE_INTERRUPT = 3;
-    public const uint USBDEVFS_URB_SHORT_NOT_OK = 0x0002;
+    /// <summary>
+    /// Isochronous URB type code from <c>linux/usbdevice_fs.h</c>.
+    /// <para><c>linux/usbdevice_fs.h</c> 中的等时 URB 类型编号。</para>
+    /// </summary>
+    public const byte USBDEVFS_URB_TYPE_ISO = 0;
+
+    /// <summary>
+    /// Interrupt URB type code from <c>linux/usbdevice_fs.h</c>; usbfs uses 1, while
+    /// <c>libusb_transfer_type</c> uses 3 for interrupt transfers.
+    /// <para><c>linux/usbdevice_fs.h</c> 中的中断 URB 类型编号；usbfs 取 1，
+    /// <c>libusb_transfer_type</c> 的中断传输取 3。</para>
+    /// </summary>
+    public const byte USBDEVFS_URB_TYPE_INTERRUPT = 1;
+
+    /// <summary>
+    /// Control URB type code from <c>linux/usbdevice_fs.h</c>.
+    /// <para><c>linux/usbdevice_fs.h</c> 中的控制 URB 类型编号。</para>
+    /// </summary>
+    public const byte USBDEVFS_URB_TYPE_CONTROL = 2;
+
+    /// <summary>
+    /// Bulk URB type code from <c>linux/usbdevice_fs.h</c>; usbfs uses 3, while
+    /// <c>libusb_transfer_type</c> uses 2 for bulk transfers.
+    /// <para><c>linux/usbdevice_fs.h</c> 中的批量 URB 类型编号；usbfs 取 3，
+    /// <c>libusb_transfer_type</c> 的批量传输取 2。</para>
+    /// </summary>
+    public const byte USBDEVFS_URB_TYPE_BULK = 3;
+
+    /// <summary>
+    /// usbfs flag that rejects a short bulk or interrupt transfer.
+    /// <para>usbfs 标志，表示拒绝短的批量或中断传输。</para>
+    /// </summary>
+    public const uint USBDEVFS_URB_SHORT_NOT_OK = 0x0001;
+
+    /// <summary>
+    /// usbfs flag that schedules an isochronous URB as soon as possible.
+    /// <para>usbfs 标志，表示尽快调度等时 URB。</para>
+    /// </summary>
+    public const uint USBDEVFS_URB_ISO_ASAP = 0x0002;
 
     public const short POLLIN = 0x001;
     public const short POLLOUT = 0x004;

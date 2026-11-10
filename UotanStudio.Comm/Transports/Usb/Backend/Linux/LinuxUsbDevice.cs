@@ -864,7 +864,9 @@ internal class LinuxUsbDevice : UsbDevice
             if (ioctl(Fd, submitCode, urbPointer) < 0)
             {
                 kernelReferencesUrb = false;
-                throw new IOException($"USB async submit failed: {Marshal.GetLastWin32Error()}");
+                var errno = Marshal.GetLastWin32Error();
+                throw new IOException(
+                    $"USB async submit failed: errno {errno}, type {urbType}, endpoint 0x{endpoint:X2}, length {length}.");
             }
 
             var infiniteWait = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs;
