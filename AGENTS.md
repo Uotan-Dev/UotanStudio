@@ -1,6 +1,6 @@
 # UotanStudio 项目指令
 
-UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信的 .NET 10/C# 14 桌面应用。本文件只保留仓库级约束与项目地图；具体项目的规则放在各目录的 `AGENTS.md`，代理进入目录后按需读取，不要把全部子项目规则一次性堆进上下文。
+UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信的 .NET 11/C# 15 桌面应用。本文件只保留仓库级约束与项目地图；具体项目的规则放在各目录的 `AGENTS.md`，代理进入目录后按需读取，不要把全部子项目规则一次性堆进上下文。
 
 ## 读取顺序
 
@@ -47,7 +47,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 ## 代码与文档
 
-- 目标 .NET 10/C# 14；`global.json` 固定 SDK `10.0.401` 并 `rollForward: latestMinor`。遵循根 `.editorconfig`：4 空格缩进、禁止 Tab、file-scoped namespace、使用 `var` 与现有规则要求的模式匹配/集合表达式/对象初始化等现代写法、控制流必须有花括号、`insert_final_newline = false`。公共和内部 API 保持明确可空标注，DTO 必需值使用 `required` 或合理默认值。
+- 目标 .NET 11/C# 15；`global.json` 固定 SDK `11.0.100` 并 `rollForward: latestMinor`，`LangVersion` 取 `latest`，新语法只在确有收益时使用（现用 C# 15 的 `union` 声明）。遵循根 `.editorconfig`：4 空格缩进、禁止 Tab、file-scoped namespace、使用 `var` 与现有规则要求的模式匹配/集合表达式/对象初始化等现代写法、控制流必须有花括号、`insert_final_newline = false`。公共和内部 API 保持明确可空标注，DTO 必需值使用 `required` 或合理默认值。
 - 指针声明与 `&`、`fixed`、`sizeof`、`stackalloc`→指针都必须在 `unsafe` 上下文中书写，生产代码的 `unsafe` 要求保持不变。
 - 设置了 `GenerateDocumentationFile` 的公共类型与成员必须有中英双语 XML 注释：`<summary>` 内英文整句在前，中文整句写在同一 `<summary>` 的 `<para>` 中。具体项目清单、`CS1591` 与 `TreatWarningsAsErrors` 的差异写在对应项目文件；公共形态只由代码与 XML 注释声明，不维护 `PublicAPI.*.txt`。
 - 生产代码不得用项目级 `NoWarn` 隐藏新的生产警告，也不得用它掩盖可修复的空引用、裁剪或异步问题。裁剪兼容性优先修复真实调用链；避免在生产路径使用 `StackFrame.GetMethod()` 等需要保留反射元数据的 API，确需使用时要明确标注并验证裁剪边界，不能为了安静构建而全局禁用 IL2026。
