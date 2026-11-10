@@ -14,18 +14,19 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <remarks>
 /// The probe never writes a Sahara HELLO_RESPONSE, because the handshake that owns Sahara negotiation is the only
 /// component that can consume the target state an unsolicited HELLO response would create. When the buffered
-/// prefix holds no evidence it writes one Sahara RESET_STATE_MACHINE packet, which makes a silent bootrom target
-/// re-announce HELLO and only produces a parser log on a target that already runs Firehose. It also writes at
-/// most one Firehose NOP: unconditionally on a transport that cannot silently lose the bootrom HELLO, and on a
-/// serial transport only after the target has already produced a complete Firehose XML document, so a live Sahara
-/// target is never handed XML it would parse as an unknown command. Emitting Firehose XML at all proves the target
-/// is not a bootrom waiting for HELLO, because such a bootrom only sends binary HELLO or nothing.
+/// prefix holds no evidence it writes at most one Sahara RESET_STATE_MACHINE packet per session, which makes a
+/// silent bootrom target re-announce HELLO and only produces a parser log on a target that already runs Firehose;
+/// repeating the wake would only hand a target that is mid-transfer another command its state rejects. It also
+/// writes at most one Firehose NOP: unconditionally on a transport that cannot silently lose the bootrom HELLO, and
+/// on a serial transport only after the target has already produced a complete Firehose XML document, so a live
+/// Sahara target is never handed XML it would parse as an unknown command. Emitting Firehose XML at all proves the
+/// target is not a bootrom waiting for HELLO, because such a bootrom only sends binary HELLO or nothing.
 /// <para>探测从不写入 Sahara HELLO_RESPONSE，因为只有负责 Sahara 协商的握手层才能消费主动 HELLO 应答造成的目标状态。
-/// 当缓冲前缀不含任何证据时，它写入一条 Sahara RESET_STATE_MACHINE，使静默的 bootrom 目标重新宣告 HELLO，
-/// 而在已运行 Firehose 的目标上只会留下一条解析日志。它还会写入至多一条 Firehose NOP：在不会静默丢掉
-/// bootrom HELLO 的传输上无条件写入，在串口上则只在目标已经吐出一份完整的 Firehose XML 文档之后写入，
-/// 因此处于 Sahara 的目标绝不会收到会被解析为未知命令的 XML。只要输出 Firehose XML 就证明目标不是等待
-/// HELLO 的 bootrom（这种 bootrom 只会发二进制 HELLO 或什么都不发）。</para>
+/// 当缓冲前缀不含任何证据时，它每个会话最多写入一条 Sahara RESET_STATE_MACHINE，使静默的 bootrom 目标重新宣告
+/// HELLO，而在已运行 Firehose 的目标上只会留下一条解析日志；重复唤醒只会给正在传输的目标再送一条它当前状态会
+/// 拒绝的命令。它还会写入至多一条 Firehose NOP：在不会静默丢掉 bootrom HELLO 的传输上无条件写入，在串口上则
+/// 只在目标已经吐出一份完整的 Firehose XML 文档之后写入，因此处于 Sahara 的目标绝不会收到会被解析为未知命令的
+/// XML。只要输出 Firehose XML 就证明目标不是等待 HELLO 的 bootrom（这种 bootrom 只会发二进制 HELLO 或什么都不发）。</para>
 /// </remarks>
 internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
 {
@@ -40,6 +41,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     private byte[]? _buffer;
     private int _length;
     private int _position;
+    private bool _wakeAttempted;
 
     /// <summary>
     /// Classifies the endpoint by reading what the target sends, waking a silent bootrom target with one Sahara
@@ -105,7 +107,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             {
                 break;
             }
-            var canWake = !wakeSent && !pendingDocument && HasNoProtocolEvidence(buffered);
+            var canWake = !wakeSent && !_wakeAttempted && !pendingDocument && HasNoProtocolEvidence(buffered);
             var canProbe = !nopSent && !readPendingAfterWake && !pendingDocument
                 && AcceptsFirehoseProbe(buffered)
                 && (nopAllowed || HasFirehoseDocumentEvidence(buffered));
@@ -142,6 +144,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
             readPendingAfterWake = false;
             if (canWake)
             {
+                _wakeAttempted = true;
                 if (!await TryWriteSaharaWakeAsync(remaining, elapsed, cancellationToken).ConfigureAwait(false))
                 {
                     break;
@@ -428,6 +431,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     {
         _length = 0;
         _position = 0;
+        _wakeAttempted = false;
         inner.Reset();
     }
 

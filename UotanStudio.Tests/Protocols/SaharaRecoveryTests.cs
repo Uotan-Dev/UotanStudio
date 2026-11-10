@@ -99,7 +99,7 @@ public sealed class SaharaRecoveryTests
     }
 
     [Fact]
-    public async Task Handshake_FirstPacketIsEndOfImageWithNakStatus_ReportsDeviceStatus()
+    public async Task Handshake_FirstPacketIsEndOfImageWithNakStatus_ResetsTargetWithoutAnsweringDone()
     {
         var transport = new ScriptedSaharaTransport();
         transport.EnqueueRead(
@@ -113,7 +113,99 @@ public sealed class SaharaRecoveryTests
 
             Assert.Contains("invalid transmission length", failure.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(EdlFailureKind.ExecutionUnknown, EdlFailureClassification.Classify(failure));
+            Assert.Single(ResetStateWrites(transport));
+            Assert.DoesNotContain(transport.Writes,
+                write => write.Length == 8 && BinaryPrimitives.ReadUInt32LittleEndian(write) == DoneCommand);
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_StaleEndOfImage_ResetsTargetAndRestartsFromTheReannouncedHello()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            EndOfImage(FirehoseImageId, 1),
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 0),
+            DoneResponse(ImageTxCompleteStatus));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        var progress = new List<SaharaImageProgressEventArgs>();
+        sahara.ImageProgress += (_, eventArgs) => progress.Add(eventArgs);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.Equal((uint?)DeviceHelloVersion, sahara.NegotiatedProtocolVersion);
+            Assert.Single(ResetStateWrites(transport));
+            Assert.Single(progress);
             Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_RejectedImage_ResetsTargetAndUploadsTheImageAgainOnce()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 8),
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 0),
+            DoneResponse(ImageTxCompleteStatus));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        var progress = new List<SaharaImageProgressEventArgs>();
+        sahara.ImageProgress += (_, eventArgs) => progress.Add(eventArgs);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.Single(ResetStateWrites(transport));
+            Assert.Equal(2, progress.Count);
+            Assert.Equal(DoneCommand, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Handshake_RejectedImageTwice_StopsAfterOneRecovery()
+    {
+        var transport = new ScriptedSaharaTransport();
+        transport.EnqueueRead(
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 8),
+            Hello(SaharaMode.ImageTxPending),
+            ReadData(0, UploadedRangeBytes),
+            EndOfImage(FirehoseImageId, 8));
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var failure = await Assert.ThrowsAsync<SaharaException>(() => sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken));
+
+            Assert.Contains("invalid image data size", failure.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(sahara.FirehoseAlreadyRunning);
         }
         finally
         {

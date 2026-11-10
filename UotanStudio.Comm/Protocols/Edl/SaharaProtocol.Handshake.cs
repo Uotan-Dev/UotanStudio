@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -15,6 +16,32 @@ public sealed partial class SaharaProtocol
     /// <para>分类首包时接受的最大声明包长，覆盖本主机分发的所有 Sahara 包（最大为 48 字节的 HELLO）并留有余量。</para>
     /// </summary>
     private const int FirstPacketLengthBoundBytes = 64;
+
+    /// <summary>
+    /// Read timeout used while discarding packets a failed attempt left in the endpoint, short enough to keep
+    /// recovery inside the caller's retry budget.
+    /// <para>丢弃失败尝试遗留在端点中的数据包时使用的读取超时，短到足以把恢复控制在调用方的重试预算内。</para>
+    /// </summary>
+    private const int StaleDrainTimeoutMs = 250;
+
+    /// <summary>
+    /// Upper bound on the packets discarded before a reset, so a target that keeps streaming cannot hold the
+    /// recovery open.
+    /// <para>复位前排空的数据包上限，使持续输出的目标无法把恢复过程拖住。</para>
+    /// </summary>
+    private const int StaleDrainPacketLimit = 8;
+
+    /// <summary>
+    /// Total budget spent waiting for a reset target to re-announce HELLO.
+    /// <para>等待被复位目标重新宣告 HELLO 的总预算。</para>
+    /// </summary>
+    private const int StaleRecoveryBudgetMs = EdlConstants.HelloProbeTimeoutMs * 2;
+
+    /// <summary>
+    /// Per-read timeout applied inside the HELLO recovery budget.
+    /// <para>HELLO 恢复预算内每次读取的超时。</para>
+    /// </summary>
+    private const int StaleRecoveryReadTimeoutMs = 500;
 
     /// <summary>
     /// Performs the Sahara handshake, uploading the specified programmer image.
@@ -143,7 +170,24 @@ public sealed partial class SaharaProtocol
 
             pendingPacket = await ReadRemainingKnownLengthAsync(firstPacket.Length, firstHeader, cancellationToken)
                 .ConfigureAwait(false);
-            Log($"Sahara transfer started with {firstPacket.Command} instead of HELLO; continuing from that packet.");
+            if (IsStaleTransferResult(firstPacket.Command, pendingPacket))
+            {
+                Log($"{firstPacket.Command} at the start of the upload carries a status from an earlier, already " +
+                    "finished attempt; resetting the target state machine instead of resuming that transfer.");
+                if (await TryResetTargetAndAwaitHelloAsync(cancellationToken).ConfigureAwait(false) is { } recoveredHello)
+                {
+                    pendingHello = new SaharaHelloPending(recoveredHello);
+                    pendingPacket = null;
+                }
+                else
+                {
+                    throw DescribeStaleTransferResult(firstPacket.Command, pendingPacket);
+                }
+            }
+            else
+            {
+                Log($"Sahara transfer started with {firstPacket.Command} instead of HELLO; continuing from that packet.");
+            }
         }
         else
         {
@@ -221,6 +265,7 @@ public sealed partial class SaharaProtocol
         var waitingForHello = false;
         var helloCount = 1;
         var imagesCompleted = 0;
+        var rejectedImageRecovered = false;
 
         while (!handshakeComplete)
         {
@@ -314,7 +359,28 @@ public sealed partial class SaharaProtocol
                         Log($"END_OF_IMAGE: ImageId={eoi.ImageId}, Status={eoi.Status}");
                         if (eoi.Status != 0)
                         {
-                            await TryAbandonImageTransferAsync(cancellationToken).ConfigureAwait(false);
+                            if (!rejectedImageRecovered)
+                            {
+                                rejectedImageRecovered = true;
+                                Log($"The target rejected image {eoi.ImageId} with status {eoi.Status} " +
+                                    $"({DescribeSaharaStatus(eoi.Status)}); resetting its state machine and announcing the image again.");
+                                if (await TryResetTargetAndAwaitHelloAsync(cancellationToken).ConfigureAwait(false)
+                                    is { } restartHello)
+                                {
+                                    imagesCompleted = 0;
+                                    waitingForDone = false;
+                                    waitingForHello = false;
+                                    mode = restartHello.Mode;
+                                    await AcknowledgeImageHelloAsync(restartHello, cancellationToken).ConfigureAwait(false);
+                                    Log("The reset target re-announced HELLO; restarting the image upload from the beginning.");
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                await TryResetTargetStateAsync(cancellationToken).ConfigureAwait(false);
+                            }
+
                             throw new SaharaException($"END_OF_IMAGE with non-zero status: {eoi.Status} ({DescribeSaharaStatus(eoi.Status)})");
                         }
                         if (!images.ContainsKey(eoi.ImageId))
@@ -487,25 +553,174 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Sends a best-effort DONE after the target rejected an image, so the device leaves the
-    /// image-transfer state instead of waiting for a host that already failed. Every cleanup failure
-    /// is logged and swallowed because the caller must surface the original Sahara error unchanged.
-    /// <para>在目标设备拒绝某个镜像后尽力发送 DONE，使设备离开镜像传输状态，而不是继续等待一个
-    /// 已经失败的主机。所有清理失败都只记录并被吞掉，因为调用方必须原样抛出原始的 Sahara 错误。</para>
+    /// Reports whether a packet buffered at the start of an upload is the result of an earlier transfer rather
+    /// than a request this handshake can serve, so the caller resets the target instead of answering it.
+    /// <para>报告上传起点读到的数据包是上一轮传输的结果而不是本次握手可服务的请求，使调用方复位目标而不是应答它。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    private async Task TryAbandonImageTransferAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// A rejected image answers with <c>END_OF_IMAGE</c> carrying a non-zero status, and a <c>DONE_RESPONSE</c>
+    /// only exists once a <c>DONE</c> was answered. Neither belongs to a transfer that has not started, and
+    /// answering either one is what leaves the target in a state the next attempt cannot use.
+    /// <para>被拒绝的镜像以携带非零状态的 <c>END_OF_IMAGE</c> 回应，而 <c>DONE_RESPONSE</c> 只会在 <c>DONE</c>
+    /// 被应答后出现。两者都不属于尚未开始的传输，而应答其中任何一个正是让目标停留在下一次尝试无法使用的状态的原因。</para>
+    /// </remarks>
+    /// <param name="command">The command of the buffered packet.<para>已缓冲数据包的命令。</para></param>
+    /// <param name="packet">The complete buffered packet.<para>完整的已缓冲数据包。</para></param>
+    /// <returns><see langword="true"/> when the packet reports a finished or failed transfer.
+    /// <para>数据包报告已结束或已失败的传输时为 <see langword="true"/>。</para></returns>
+    private static bool IsStaleTransferResult(SaharaCommand command, byte[] packet) => command switch
     {
-        try
+        SaharaCommand.EndOfImage => packet.Length >= Marshal.SizeOf<SaharaEndOfImagePacket>()
+            && BytesToStruct<SaharaEndOfImagePacket>(packet).Status != 0,
+        SaharaCommand.DoneResponse => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// Builds the failure reported when a stale transfer result cannot be turned back into a HELLO, keeping the
+    /// status text the target reported.
+    /// <para>构造无法把残留的传输结果重新变回 HELLO 时上报的失败，保留目标报告的状态文本。</para>
+    /// </summary>
+    /// <param name="command">The command of the stale packet.<para>残留数据包的命令。</para></param>
+    /// <param name="packet">The complete stale packet.<para>完整的残留数据包。</para></param>
+    /// <returns>The exception to surface to the caller.<para>向调用方抛出的异常。</para></returns>
+    private static SaharaException DescribeStaleTransferResult(SaharaCommand command, byte[] packet)
+    {
+        if (command == SaharaCommand.EndOfImage && packet.Length >= Marshal.SizeOf<SaharaEndOfImagePacket>())
         {
-            var done = new SaharaDonePacket { Command = SaharaCommand.Done, Length = (uint)Marshal.SizeOf<SaharaDonePacket>() };
-            await WriteStructAsync(done, cancellationToken).ConfigureAwait(false);
-            Log("Sent DONE to abandon the rejected image transfer.");
+            var eoi = BytesToStruct<SaharaEndOfImagePacket>(packet);
+            return new SaharaException(
+                $"END_OF_IMAGE with non-zero status: {eoi.Status} ({DescribeSaharaStatus(eoi.Status)})");
         }
-        catch (Exception ex)
+
+        return new SaharaException($"The target answered {command} from an earlier transfer that the host cannot resume.");
+    }
+
+    /// <summary>
+    /// Discards the packets a failed attempt left in the endpoint so the following handshake starts from a clean
+    /// packet boundary instead of consuming a result that belongs to the previous attempt.
+    /// <para>丢弃失败尝试遗留在端点中的数据包，使随后的握手从干净的数据包边界开始，而不是消费属于上一次尝试的结果。</para>
+    /// </summary>
+    /// <remarks>The drain is bounded in both packets and time: the first read timeout is the silence the caller
+    /// needs, and the packet ceiling stops a target that keeps streaming from holding recovery open.
+    /// <para>排空在数据包数量与时间上都受限：第一次读取超时即调用方所需的静默，数据包上限则阻止持续输出的目标拖住恢复过程。</para></remarks>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task completing once the endpoint is quiet or the bound is reached.
+    /// <para>端点静默或达到上限后完成的任务。</para></returns>
+    private async Task DrainPendingPacketsAsync(CancellationToken cancellationToken)
+    {
+        for (var drained = 0; drained < StaleDrainPacketLimit; drained++)
         {
-            Log($"Cleanup DONE after a rejected image transfer failed: {ex.Message}");
+            try
+            {
+                var (header, _) = await ReceiveSaharaPacketAsync(StaleDrainTimeoutMs, cancellationToken)
+                    .ConfigureAwait(false);
+                Log($"Discarded a Sahara {header.Command} packet left behind by an earlier transfer.");
+            }
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
+            {
+                return;
+            }
+            catch (SaharaException ex)
+            {
+                Log($"Sahara drain stopped on a packet the host cannot frame: {ex.Message}");
+                return;
+            }
         }
+    }
+
+    /// <summary>
+    /// Drains the endpoint and asks the target to reset its Sahara state machine, leaving the link in the state
+    /// a later attempt can start from.
+    /// <para>排空端点并要求目标复位 Sahara 状态机，使链路回到后续尝试可以开始的状态。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task completing after the best-effort reset.<para>尽力复位后完成的任务。</para></returns>
+    private async Task TryResetTargetStateAsync(CancellationToken cancellationToken)
+    {
+        await DrainPendingPacketsAsync(cancellationToken).ConfigureAwait(false);
+        await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resets the target state machine and returns the HELLO it re-announces, or <see langword="null"/> when the
+    /// target stays silent or reports a HELLO this host cannot serve.
+    /// <para>复位目标状态机并返回它重新宣告的 HELLO；目标保持静默或报告本主机无法服务的 HELLO 时返回 <see langword="null"/>。</para>
+    /// </summary>
+    /// <remarks>Only an image-transfer HELLO ends the recovery, because that is the only state the upload loop can
+    /// consume. The reset is written before the first read, so leftovers a failed attempt queued are discarded by
+    /// the same loop that waits for the re-announcement instead of needing a separate drain.
+    /// <para>只有镜像传输状态的 HELLO 会结束恢复，因为那是上传循环唯一可消费的状态。复位在第一次读取之前写入，
+    /// 因此失败尝试排队的遗留数据包由同一个等待重宣告的循环丢弃，不需要单独的排空步骤。</para></remarks>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The HELLO announcing image transfer, or <see langword="null"/>.
+    /// <para>宣告镜像传输的 HELLO；或 <see langword="null"/>。</para></returns>
+    private async Task<SaharaHelloPacket?> TryResetTargetAndAwaitHelloAsync(CancellationToken cancellationToken)
+    {
+        await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+        var deadline = Environment.TickCount64 + StaleRecoveryBudgetMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            var remainingMs = (int)Math.Max(1, deadline - Environment.TickCount64);
+            (SaharaPacketHeader Header, byte[] Body) received;
+            try
+            {
+                received = await ReceiveSaharaPacketAsync(
+                    Math.Min(remainingMs, StaleRecoveryReadTimeoutMs), cancellationToken).ConfigureAwait(false);
+            }
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
+            {
+                return null;
+            }
+            catch (SaharaException ex)
+            {
+                Log($"Sahara recovery stopped on a packet the host cannot frame: {ex.Message}");
+                return null;
+            }
+
+            if (TryParseRecoveredHello(received.Header, received.Body, out var hello))
+            {
+                Log($"The reset target re-announced HELLO (version {hello.Version}, mode {hello.Mode}).");
+                return hello;
+            }
+
+            Log($"Discarded a Sahara {received.Header.Command} packet while waiting for the reset target to announce HELLO.");
+        }
+
+        Log($"The reset target did not announce HELLO within {StaleRecoveryBudgetMs} ms.");
+        return null;
+    }
+
+    /// <summary>
+    /// Parses a HELLO received during recovery and reports whether this host can upload to it.
+    /// <para>解析恢复期间收到的 HELLO，并报告本主机是否可以向它上传。</para>
+    /// </summary>
+    /// <param name="header">The received packet header.<para>收到的数据包头。</para></param>
+    /// <param name="body">The received packet body, header excluded.<para>收到的数据包体，不含包头。</para></param>
+    /// <param name="hello">The parsed HELLO when this method returns <see langword="true"/>.
+    /// <para>本方法返回 <see langword="true"/> 时解析出的 HELLO。</para></param>
+    /// <returns><see langword="true"/> for a valid image-transfer HELLO.
+    /// <para>合法的镜像传输 HELLO 为 <see langword="true"/>。</para></returns>
+    private static bool TryParseRecoveredHello(SaharaPacketHeader header, byte[] body, out SaharaHelloPacket hello)
+    {
+        hello = default;
+        var packetBytes = Marshal.SizeOf<SaharaHelloPacket>();
+        if (header.Command != SaharaCommand.Hello
+            || header.Length != (uint)packetBytes
+            || body.Length != packetBytes - Marshal.SizeOf<SaharaPacketHeader>())
+        {
+            return false;
+        }
+
+        var packet = new byte[packetBytes];
+        BinaryPrimitives.WriteUInt32LittleEndian(packet, (uint)header.Command);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), header.Length);
+        body.CopyTo(packet.AsSpan(Marshal.SizeOf<SaharaPacketHeader>()));
+        hello = BytesToStruct<SaharaHelloPacket>(packet);
+        return hello.Mode == SaharaMode.ImageTxPending
+            && hello.Version >= EdlConstants.SaharaMinVersion
+            && hello.MinVersion <= hello.Version
+            && hello.MinVersion <= EdlConstants.SaharaHostMaxProtocolVersion;
     }
 
     /// <summary>
