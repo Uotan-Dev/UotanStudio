@@ -36,7 +36,7 @@ internal static class ImageFileCatalog
     /// <para>在独立方法中注册可选编解码器，使程序集加载失败与类型初始化隔离，内置解码器仍可用。</para>
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void RegisterOptionalCodecs() => SimdCodecs.Register(HeifImageDecoder.Registration);
+    private static void RegisterOptionalCodecs() => ImageCodecs.Register(HeifImageDecoder.Registration);
 
     /// <summary>Extension to codec-format table; entries whose format the facade cannot decode are kept so the viewer can name them.</summary>
     private static readonly FrozenDictionary<string, ImageFormat> _formats =
@@ -149,13 +149,13 @@ internal static class ImageFileCatalog
             return false;
         }
 
-        var format = SimdCodecs.DetectFormat(header);
-        if (format != ImageFormat.Unknown && SimdCodecs.IsDecodable(format))
+        var format = ImageCodecs.DetectFormat(header);
+        if (format != ImageFormat.Unknown && ImageCodecs.IsDecodable(format))
         {
             return true;
         }
 
-        if (!SimdCodecs.CanDecode(header))
+        if (!ImageCodecs.CanDecode(header))
         {
             return false;
         }

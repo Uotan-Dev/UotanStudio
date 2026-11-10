@@ -84,8 +84,9 @@
     <PackageReference Include="NodifyM.Avalonia" />
     <!-- Explicit-factory DI container; registrations are AOT/trimming safe. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- Abstractions only: the unified-log bridge reads ILogger producers without the implementation, options or provider pipeline. -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- Abstractions only: the unified-log bridge reads ILogger producers without the implementation, options or provider pipeline.
+         .NET 11 ships Microsoft.Extensions.Logging.Abstractions inside the shared framework, so no PackageReference is needed. -->
+
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />

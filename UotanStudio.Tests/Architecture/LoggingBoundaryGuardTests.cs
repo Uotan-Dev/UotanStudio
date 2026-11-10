@@ -90,7 +90,7 @@ public sealed partial class LoggingBoundaryGuardTests
     {
         const string content = """
             <PackageReference Include="Microsoft.Extensions.Logging" />
-            <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+            <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
             <PackageReference Include="Microsoft.Extensions.Options" />
             """;
 

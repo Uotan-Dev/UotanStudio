@@ -53,7 +53,7 @@ internal static class ImageFileInspector
             cancellationToken.ThrowIfCancellationRequested();
 
             var magic = IdentifyMagic(bytes);
-            var format = SimdCodecs.DetectFormat(bytes);
+            var format = ImageCodecs.DetectFormat(bytes);
             properties = properties with
             {
                 FilePath = fullPath,
@@ -62,10 +62,10 @@ internal static class ImageFileInspector
                 MimeType = magic?.MimeType ?? string.Empty,
                 MagicExtensions = magic?.Extensions ?? string.Empty,
                 CodecFormat = ImageFileCatalog.FormatName(format),
-                Decodable = format != ImageFormat.Unknown && SimdCodecs.IsDecodable(format),
+                Decodable = format != ImageFormat.Unknown && ImageCodecs.IsDecodable(format),
             };
 
-            if (!SimdCodecs.TryReadInfo(bytes, out var info))
+            if (!ImageCodecs.TryReadInfo(bytes, out var info))
             {
                 return new ImageFileSnapshot(properties, null, "Dock_ImageViewer_Unsupported");
             }
@@ -88,7 +88,7 @@ internal static class ImageFileInspector
             }
 
             var rgba = new byte[checked((int)(pixels * 4))];
-            if (!SimdCodecs.TryDecodeIntoRgba8(bytes, rgba) && !TryStretchFloat(bytes, rgba))
+            if (!TryDecodeIntoRgba8(bytes, rgba) && !TryStretchFloat(bytes, rgba))
             {
                 return new ImageFileSnapshot(properties, null, "Dock_ImageViewer_Unsupported");
             }
@@ -109,6 +109,32 @@ internal static class ImageFileInspector
     }
 
     /// <summary>
+    /// Decodes the payload straight into a caller-owned 8-bit RGBA raster, so no intermediate managed image
+    /// is allocated between the codec and the preview buffer.
+    /// <para>把载荷直接解码到调用方持有的 8 位 RGBA 栅格，编解码器与预览缓冲之间不再分配中间托管图像。</para>
+    /// </summary>
+    /// <param name="bytes">Complete encoded payload.<para>完整的编码载荷。</para></param>
+    /// <param name="destination">RGBA buffer sized four bytes per pixel; written in full on success.
+    /// <para>每像素四字节的 RGBA 缓冲区；成功时被完整写入。</para></param>
+    /// <returns><see langword="true"/> when the payload decoded and fitted the buffer.
+    /// <para>载荷成功解码且长度适配缓冲区时为 <see langword="true"/>。</para></returns>
+    private static bool TryDecodeIntoRgba8(byte[] bytes, byte[] destination)
+    {
+        if (!ImageCodecs.TryReadInfo(bytes, out var info))
+        {
+            return false;
+        }
+
+        var stride = checked(info.Width * 4);
+        if (info.Width <= 0 || info.Height <= 0 || checked(stride * info.Height) != destination.Length)
+        {
+            return false;
+        }
+
+        return ImageCodecs.TryDecodeInto(bytes, destination, stride, PixelFormat.Rgba32, DecodeOptions.Default, CancellationToken.None);
+    }
+
+    /// <summary>
     /// Projects float or 16-bit rasters onto 8-bit RGBA by stretching the finite colour range; used when
     /// the facade refuses an 8-bit projection because a tone decision is required.
     /// <para>把浮点或 16 位栅格按有限色彩区间线性拉伸到 8 位 RGBA；门面因需要色调决策而拒绝
@@ -116,7 +142,7 @@ internal static class ImageFileInspector
     /// </summary>
     private static bool TryStretchFloat(byte[] bytes, byte[] destination)
     {
-        if (!SimdCodecs.TryDecode(bytes, out var image) || image is null)
+        if (!ImageCodecs.TryDecode(bytes, out var image, DecodeOptions.Default, CancellationToken.None) || image is null)
         {
             return false;
         }

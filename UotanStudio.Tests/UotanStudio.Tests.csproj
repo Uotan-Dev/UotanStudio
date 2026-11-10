@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Sdk Name="PublishWithSatoriGC" Version="10.0.15-satori.40994390316.1" />
+  <Sdk Name="PublishWithSatoriGC" Version="11.0.0-satori.42242472725.2" />
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.Contains('riscv64')) or $(RuntimeIdentifier.Contains('loongarch64')))">
     <UseSatoriGC>false</UseSatoriGC>
   </PropertyGroup>

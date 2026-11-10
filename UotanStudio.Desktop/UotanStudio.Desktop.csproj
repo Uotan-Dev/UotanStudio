@@ -2,7 +2,7 @@
   <!-- 发布时用 Satori GC 替换默认 GC：仅自包含发布（含 NativeAOT）生效；版本跟随上游开发更新，需定期核对 NuGet。
        Swaps the default GC for Satori GC at publish time: takes effect only on self-contained publishes
        (NativeAOT included); the version tracks upstream development and needs periodic NuGet checks. -->
-  <Sdk Name="PublishWithSatoriGC" Version="10.0.15-satori.40994390316.1" />
+  <Sdk Name="PublishWithSatoriGC" Version="11.0.0-satori.42242472725.2" />
   <!-- riscv64 与 loongarch64 没有 Satori 运行时包：这些 RID 回落到默认 GC。
        riscv64 and loongarch64 have no Satori runtime packs: these RIDs fall back to the default GC. -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.Contains('riscv64')) or $(RuntimeIdentifier.Contains('loongarch64')))">
