@@ -132,5 +132,6 @@ GC 特性（2026-11-07，Release，专用测量宿主 `%TEMP%` 单进程单模�
 
 - 全部测试时长来自本机 Release 单进程运行；CI 的 `dotnet test --solution` 路径与 Runner 机器未实测。
 - win-x64 以外的 RID 发布未执行；riscv64/loongarch64 的真实发布未执行（本机无对应交叉工具链），烘焙的 SDK 版本未在发布产物实测。
+- QEMU 实验发布（2026-11-10）：本机 .NET 10.0.403 对 `linux-loongarch64` / `linux-riscv64` 还原即报 `NU1101`（NuGet 无 `Microsoft.NETCore.App.Runtime.*` 与 `Microsoft.NETCore.App.Runtime.NativeAOT.*` 包），证实官方 SDK 无法发布这两个 RID；`release.yml` 的实验 job 改走 QEMU 模拟 + 经 GitHub releases API 动态解析最新 10.0.x 社区 SDK（可用 `sdk_version` 覆盖版本前缀，无版本或摘要钉定；下载用 release 自带 `sha256` digest 做同源完整性校验，非独立信任锚）。用两份真实 release 快照校验了解析表达式：默认前缀 `10.0` 在 `filipnavara/dotnet-riscv` 与 `loongson/dotnet` 均解析到 10.0.114，`11.0.100-rc.3` 解析到对应 RC3，musl 与 SourceBuilt 资产被排除。但本机无 QEMU/Docker、WSL 被安全策略禁用，该链路既未在 GitHub Actions 调度也未在本机实测，容器镜像 tag、社区 SDK 与 `PublishWithSatoriGC`/Cilica 的兼容性、模拟下的构建时长均未验证；`loongson/dotnet` 的 release 说明还要求额外配置 `https://lnuget.loongnix.cn/v3/index.json` 才能还原 `linux-loongarch64` 的 nupkg：容器脚本仅在 `RID=linux-loongarch64` 时以 `-p:RestoreAdditionalProjectSources` 追加该源（其他 RID 不启用），并用 `curl` 预检 feed 可达性；该第三方源的包内容、可达性与 `NU1301` 风险均未在真实 runner 验证。
 - Satori GC 的延迟与吞吐特性未测量。
 - `CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
