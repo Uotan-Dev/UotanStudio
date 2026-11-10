@@ -6,6 +6,13 @@ namespace UotanStudio.Comm.Protocols.Edl;
 public sealed partial class SaharaProtocol
 {
     /// <summary>
+    /// Pause between two reads that returned nothing, so a transport that keeps answering a zero-length read
+    /// immediately cannot spin the budget away in a tight loop.
+    /// <para>两次零长度读之间的停顿，使立即返回零长度读的传输无法以紧循环耗掉预算。</para>
+    /// </summary>
+    private const int ZeroLengthReadRetryDelayMs = 5;
+
+    /// <summary>
     /// Reads up to <paramref name="length"/> bytes, returning only the bytes actually received.
     /// <para>读取最多 <paramref name="length"/> 个字节，仅返回实际收到的字节。</para>
     /// </summary>
@@ -45,14 +52,18 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Reads an exact number of bytes from the transport.
-    /// <para>从传输中读取精确数量的字节。</para>
+    /// Reads an exact number of bytes from the transport, spending the whole budget a zero-length read would
+    /// otherwise end.
+    /// <para>从传输中读取精确数量的字节；零长度读只会消耗预算而不再结束读取。</para>
     /// </summary>
     /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="timeoutMs">Total budget in milliseconds for the whole read. <para>整次读取的毫秒总预算。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The read bytes. <para>读取的字节。</para></returns>
-    /// <exception cref="EdlException">Thrown on timeout. <para>超时时抛出。</para></exception>
+    /// <exception cref="EdlException">The budget expired before <paramref name="length"/> bytes arrived.
+    /// <para>在 <paramref name="length"/> 字节到达之前预算已耗尽。</para></exception>
+    /// <exception cref="SaharaException">The packet was truncated or the transport reported an invalid length.
+    /// <para>数据包被截断，或传输报告了无效长度。</para></exception>
     private async Task<byte[]> ReadExactAsync(int length, int timeoutMs, CancellationToken cancellationToken)
     {
         var buf = ArrayPool<byte>.Shared.Rent(length);
@@ -83,7 +94,15 @@ public sealed partial class SaharaProtocol
                     {
                         throw new SaharaException("The Sahara packet was truncated.");
                     }
-                    throw new EdlException(EdlErrorCode.ReadPortTimeout);
+
+                    // A zero-length read is "nothing arrived yet", not an expired deadline: usbfs reports a
+                    // cleared STALL as a zero-length completion, so failing here would report a stall as a
+                    // timeout. Spend the remaining budget instead and let the deadline decide.
+                    // A zero-length read is "nothing arrived yet", not an expired deadline: usbfs reports a
+                    // cleared STALL as a zero-length completion, so failing here would report a stall as a
+                    // timeout. Spend the remaining budget instead and let the deadline decide.
+                    await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    continue;
                 }
                 if (n < 0 || n > length - total)
                 {

@@ -688,7 +688,33 @@ internal class LinuxUsbDevice : UsbDevice
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
         => WriteInterruptAsync(endpointAddress, data, offset, length, timeoutMs).GetAwaiter().GetResult();
 
-    protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+    protected override Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+        => SubmitChunkAsync(Ep_in, buffer, length, timeoutMs, cancellationToken);
+
+    protected override Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+        => SubmitChunkAsync(Ep_out, buffer, length, timeoutMs, cancellationToken);
+
+    /// <summary>
+    /// Submits one bulk URB and retries a stall the way the synchronous bulk path does, clearing the halted pipe
+    /// between attempts.
+    /// <para>提交一次批量 URB，并像同步批量路径那样重试 STALL，两次尝试之间清除停住的管道。</para>
+    /// </summary>
+    /// <remarks>
+    /// A stall is a retryable answer, not a timeout and not an empty transfer: the stall has already been cleared
+    /// by <see cref="InterpretCompletion"/>, so the next attempt polls the same endpoint again. Retries are bounded
+    /// by the same process-wide policy the synchronous path uses.
+    /// <para>STALL 是可重试的应答，既不是超时也不是空传输：<see cref="InterpretCompletion"/> 已经清除了该停住
+    /// 状态，因此下一次尝试会再次轮询同一端点。重试次数由同步路径使用的同一进程级策略限定。</para>
+    /// </remarks>
+    /// <param name="endpoint">The bulk endpoint address. <para>批量端点地址。</para></param>
+    /// <param name="buffer">Pointer into pinned memory. <para>指向固定内存的指针。</para></param>
+    /// <param name="length">The transfer length in bytes. <para>传输字节数。</para></param>
+    /// <param name="timeoutMs">Per-attempt wait budget in milliseconds. <para>每次尝试的毫秒等待预算。</para></param>
+    /// <param name="cancellationToken">Cancels the wait. <para>取消等待。</para></param>
+    /// <returns>The chunk result, carrying the retry count it consumed.
+    /// <para>分块结果，并携带其消耗的重试次数。</para></returns>
+    private async Task<UsbChunkResult> SubmitChunkAsync(byte endpoint, IntPtr buffer, int length, int timeoutMs,
+        CancellationToken cancellationToken)
     {
         if (_fd.IsInvalid)
         {
@@ -696,20 +722,30 @@ internal class LinuxUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var outcome = await SubmitUrbAsync(Ep_in, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
-        return MapOutcome(outcome);
-    }
-
-    protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
-    {
-        if (_fd.IsInvalid)
+        var retryPolicy = UsbTransferPolicies.DefaultRetryPolicy;
+        var retryCount = 0;
+        while (true)
         {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
+            var outcome = await SubmitUrbAsync(endpoint, buffer, length, effectiveTimeoutMs, cancellationToken,
+                USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
+            if (outcome.Status != 0 && -outcome.Status == EPIPE && retryCount < retryPolicy.MaxRetries)
+            {
+                retryCount++;
+                await Task.Delay(retryPolicy.RetryDelayMs, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
 
-        var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var outcome = await SubmitUrbAsync(Ep_out, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
-        return MapOutcome(outcome);
+            if (outcome.Status != 0 && -outcome.Status == EPIPE)
+            {
+                UsbTrace.LogFormatted(
+                    $"LinuxUsbDevice: endpoint 0x{endpoint:X2} stalled (EPIPE) after {retryCount} retries; reporting the stall instead of an empty transfer.");
+            }
+
+            var chunk = MapOutcome(outcome);
+            return retryCount == 0
+                ? chunk
+                : new UsbChunkResult(chunk.Status, chunk.Transferred, chunk.NativeError, chunk.RetryCount + retryCount);
+        }
     }
 
     /// <summary>
@@ -1036,10 +1072,17 @@ internal class LinuxUsbDevice : UsbDevice
     private static uint DiscardUrbCode => IntPtr.Size == 8 ? USBDEVFS_DISCARDURB_X86_64 : USBDEVFS_DISCARDURB_X86;
 
     /// <summary>
-    /// Clears a halted endpoint after the kernel reported a stall and turns the stall into an empty read,
-    /// matching the synchronous bulk path.
-    /// <para>在内核报告 STALL 后清除端点停住状态并把该 STALL 转为空读取，与同步批量路径一致。</para>
+    /// Clears a halted endpoint after the kernel reported a stall and keeps the stall status, so the chunk caller
+    /// retries it exactly like the synchronous bulk path instead of reading a stall as an empty completion.
+    /// <para>在内核报告 STALL 后清除端点停住状态并保留该 STALL 状态，使分块调用方像同步批量路径那样重试，
+    /// 而不是把 STALL 读成一次空的完成。</para>
     /// </summary>
+    /// <remarks>
+    /// Reporting the stall as zero transferred bytes would surface as a timeout at the protocol layer, which is
+    /// the wrong reason: the endpoint answered, it just refused the transfer.
+    /// <para>把该 STALL 报告为零个已传输字节会在协议层表现为超时，而那是错误的原因：端点其实应答了，只是拒绝了
+    /// 本次传输。</para>
+    /// </remarks>
     private UrbOutcome InterpretCompletion(UrbOutcome completed, byte endpoint)
     {
         if (completed.Status == 0)
@@ -1050,7 +1093,6 @@ internal class LinuxUsbDevice : UsbDevice
         if (-completed.Status == EPIPE)
         {
             ClearHalt(endpoint);
-            return default;
         }
 
         return completed;

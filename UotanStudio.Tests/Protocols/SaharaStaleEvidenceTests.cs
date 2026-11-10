@@ -45,6 +45,27 @@ public sealed class SaharaStaleEvidenceTests
             "stale evidence must be dropped so the read falls through to the target instead of replaying it");
     }
 
+    [Fact]
+    public async Task ReadExact_TransportAnswersZeroLengthReads_SpendsTheBudgetInsteadOfReportingTimeout()
+    {
+        var transport = new ZeroLengthThenHelloTransport();
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.True(transport.ZeroLengthReads >= 2,
+                "a zero-length read must be retried instead of being surfaced as a read timeout");
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
     private static byte[] Hello()
     {
         var packet = new byte[HelloPacketBytes];
@@ -143,4 +164,78 @@ public sealed class SaharaStaleEvidenceTests
         public void Dispose() { }
     }
 
+    /// <summary>
+    /// Answers the first reads with zero bytes, which is what a cleared stall looks like on usbfs, and only then
+    /// serves the scripted Sahara exchange.
+    /// <para>最初几次读取以零字节应答（这正是 usbfs 上已清除 STALL 的样子），之后才提供脚本化的 Sahara 交换。</para>
+    /// </summary>
+    private sealed class ZeroLengthThenHelloTransport : ICommTransport
+    {
+        private readonly Queue<byte[]> _packets = new();
+        private byte[]? _carry;
+        private bool _helloDelivered;
+
+        internal ZeroLengthThenHelloTransport()
+        {
+            _packets.Enqueue(Hello());
+            _packets.Enqueue(ReadData(0, UploadedRangeBytes));
+            _packets.Enqueue(EndOfImage(0));
+            _packets.Enqueue(DoneResponse());
+        }
+
+        public int ZeroLengthReads { get; private set; }
+
+        public bool IsConnected => true;
+
+        public void Connect() { }
+        public void Disconnect() { }
+        public void Reset() { }
+
+        public int Read(byte[] buffer, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+        {
+            if (_carry is { Length: > 0 } carry)
+            {
+                return Task.FromResult(Serve(carry, buffer, offset, length));
+            }
+
+            if (_packets.Count == 0)
+            {
+                throw new TimeoutException();
+            }
+
+            var packet = _packets.Peek();
+            var isReadData = packet.Length == ReadDataPacketBytes
+                && BinaryPrimitives.ReadUInt32LittleEndian(packet) == ReadDataCommand;
+            if (isReadData && ZeroLengthReads < 2)
+            {
+                ZeroLengthReads++;
+                return Task.FromResult(0);
+            }
+
+            _packets.Dequeue();
+            return Task.FromResult(Serve(packet, buffer, offset, length));
+        }
+
+        private int Serve(byte[] packet, byte[] buffer, int offset, int length)
+        {
+            var take = Math.Min(length, packet.Length);
+            packet.AsSpan(0, take).CopyTo(buffer.AsSpan(offset));
+            _carry = take < packet.Length ? packet[take..] : null;
+            return take;
+        }
+
+        public long Write(byte[] data, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult((long)length);
+
+        public Stream GetStream() => throw new NotSupportedException();
+        public void Dispose() { }
+    }
 }
