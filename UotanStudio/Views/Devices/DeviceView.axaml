@@ -449,8 +449,9 @@
 
                                     <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_LinkPort}" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
-                                               Text="{Binding LinkPort}" />
+                                    <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                                         Text="{Binding LinkPort}" TextWrapping="Wrap"
+                                                         ToolTip.Tip="{Binding LinkPort}" />
 
                                     <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Vendor}"

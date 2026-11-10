@@ -372,19 +372,48 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
 
     /// <summary>
     /// Link/port info; a TCP or UDP endpoint reports the dialable network alias when the server resolved
-    /// one, and a selected endpoint without a link class falls back to a sibling endpoint of the same
-    /// physical device.
+    /// one, a USB endpoint reports the device path its backend recorded at discovery, and a selected
+    /// endpoint without a link class falls back to a sibling endpoint of the same physical device.
     /// <para>链接端口/地址信息；TCP 或 UDP 端点优先显示 server 解析出的可拨号网络别名，
-    /// 所选端点没有链路类别时回退到同一物理设备的其他端点。</para>
+    /// USB 端点显示发现时后端记录的设备路径，所选端点没有链路类别时回退到同一物理设备的其他端点。</para>
     /// </summary>
     public string LinkPort => LinkSource.Transport switch
     {
         DeviceTransportKind.Tcp or DeviceTransportKind.Udp => LinkSource.NetworkAlias ?? LinkSource.Serial,
         DeviceTransportKind.Serial => LinkSource.Key,
         DeviceTransportKind.Usb when ReferenceEquals(LinkSource, Device) && EdlSerialPort.Length > 0 => EdlSerialPort,
-        DeviceTransportKind.Usb => "USB",
+        DeviceTransportKind.Usb => UsbDevicePath(),
         _ => "Unknown",
     };
+
+    /// <summary>
+    /// Device path the backend recorded for this physical device: the selected endpoint's own path first,
+    /// then any sibling USB endpoint of the same device, and the transport label when no endpoint
+    /// published one.
+    /// <para>后端为该物理设备记录的设备路径：优先所选端点自身的路径，其次同一设备的其他 USB 端点；
+    /// 没有任何端点发布路径时回退到传输标签。</para>
+    /// </summary>
+    /// <returns>The recorded device path, or <c>USB</c> when discovery published none.
+    /// <para>已记录的设备路径；发现阶段未发布路径时为 <c>USB</c>。</para></returns>
+    private string UsbDevicePath()
+    {
+        var path = LinkSource.Endpoint?.Usb?.Path;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        foreach (var connection in Connections)
+        {
+            path = connection.Endpoint?.Usb?.Path;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                return path;
+            }
+        }
+
+        return "USB";
+    }
 
     /// <summary>
     /// The endpoint that carries link evidence: the selected one when it reports a transport, otherwise the

@@ -1,4 +1,6 @@
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 using Xunit;
@@ -367,6 +369,75 @@ public class DeviceLinkDisplayTests
     public void MapServerTransport_ServerReportedLabel_MapsCaseInsensitively(
         string? label, DeviceTransportKind expected)
         => Assert.Equal(expected, DeviceMonitorService.MapServerTransport(label));
+
+    [Fact]
+    public void LinkPort_DirectUsbEndpoint_ShowsBackendRecordedDevicePath()
+    {
+        var device = new DeviceInfo(new DetectedDevice
+        {
+            Key = "native|Native|18D1|4EE7|bus-1-dev-073",
+            Serial = "R58M12345",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb,
+            State = "device",
+            Endpoint = UsbEndpoint("native|Native|18D1|4EE7|bus-1-dev-073", "/dev/bus/usb/001/073")
+        });
+
+        Assert.Equal("/dev/bus/usb/001/073", device.LinkPort);
+    }
+
+    [Fact]
+    public void LinkPort_ServerUsbEndpointWithoutPath_UsesSiblingDirectUsbPath()
+    {
+        var server = new DetectedDevice
+        {
+            Key = "adb:R58M12345",
+            Serial = "R58M12345",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb,
+            State = "device",
+            Endpoint = UsbEndpoint("R58M12345", string.Empty)
+        };
+        var direct = new DetectedDevice
+        {
+            Key = "native|Native|18D1|4EE7|bus-1-dev-073",
+            Serial = "R58M12345",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb,
+            State = "device",
+            Endpoint = UsbEndpoint("native|Native|18D1|4EE7|bus-1-dev-073", "/dev/bus/usb/001/073")
+        };
+        var device = new DeviceInfo([server, direct]);
+
+        Assert.Equal("/dev/bus/usb/001/073", device.LinkPort);
+    }
+
+    [Fact]
+    public void LinkPort_UsbEndpointWithoutRecordedPath_KeepsTransportLabel()
+    {
+        var device = new DeviceInfo(new DetectedDevice
+        {
+            Key = "native|Native|18D1|4EE7|bus-1-dev-073",
+            Serial = "R58M12345",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb,
+            State = "device",
+            Endpoint = UsbEndpoint("native|Native|18D1|4EE7|bus-1-dev-073", string.Empty)
+        });
+
+        Assert.Equal("USB", device.LinkPort);
+    }
+
+    private static DeviceEndpoint UsbEndpoint(string address, string path) => new()
+    {
+        Source = "usb",
+        Transport = nameof(UsbApiKind.Native),
+        Address = address,
+        DisplayName = "TEST",
+        Protocol = "adb",
+        Route = "direct-usb",
+        Usb = new UsbEndpointDetails(UsbApiKind.Native, path, 0x18D1, 0x4EE7, null, null, null)
+    };
 
     private static DeviceInfo Create(DeviceProtocolKind protocol, DeviceTransportKind transport, string state,
         string? serial = null)
