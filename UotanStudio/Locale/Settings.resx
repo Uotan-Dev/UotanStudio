@@ -312,6 +312,18 @@
   <data name="Settings_UsbLibusb" xml:space="preserve">
     <value>Force libusb</value>
   </data>
+  <data name="Settings_UsbBackendRestartTitle" xml:space="preserve">
+    <value>USB backend</value>
+  </data>
+  <data name="Settings_UsbBackendRestartMessage" xml:space="preserve">
+    <value>Changing the USB backend setting requires restarting the application.</value>
+  </data>
+  <data name="Settings_UsbBackendRestartConfirm" xml:space="preserve">
+    <value>Save and restart</value>
+  </data>
+  <data name="Settings_UsbBackendRestartFailed" xml:space="preserve">
+    <value>The setting was saved, but automatic restart failed. Restart the application manually.</value>
+  </data>
   <data name="Settings_AdbServer" xml:space="preserve">
     <value>ADB server</value>
   </data>

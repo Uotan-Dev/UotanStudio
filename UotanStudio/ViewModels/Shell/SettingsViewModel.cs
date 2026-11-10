@@ -6,6 +6,7 @@ using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.Services.Keys;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;
 
@@ -43,6 +44,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     private int _renderingBackendIndex;
     private int _compositionModeIndex;
+    private bool _usbBackendConfirmationPending;
+    private bool _suppressUsbBackendWriteback;
 
     /// <summary>
     /// Gets the USB backend choices shown by the device-communication combo box. The entries
@@ -54,25 +57,123 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <value>The localized options in backend order. <para>按后端顺序排列的本地化选项。</para></value>
     public IReadOnlyList<LocalizedOption> UsbBackendOptions => _usbBackendOptions.Options;
 
-    /// <summary>Persisted USB mode; existing sessions retain their backend until restart.
-    /// <para>已持久化的 USB 模式；已建立的会话在重启前保持原后端。</para>
+    /// <summary>
+    /// Gets or sets the persisted USB backend. Changing it asks for confirmation: confirming saves the
+    /// selection and restarts the process, while cancelling restores the previous backend.
+    /// <para>获取或设置已持久化的 USB 后端。修改时先弹出确认框：确认则保存选择并重启进程，
+    /// 取消则还原为原来的后端。</para>
     /// </summary>
     public int DeviceUsbBackendIndex
     {
         get => (int)_appSettings.DeviceCommunication.UsbBackend;
         set
         {
+            if (_loading || _suppressUsbBackendWriteback)
+            {
+                return;
+            }
+
             if (value is < 0 or > 2 || DeviceUsbBackendIndex == value)
             {
                 return;
             }
+
+            if (_usbBackendConfirmationPending)
+            {
+                OnPropertyChanged(nameof(DeviceUsbBackendIndex));
+                return;
+            }
+
+            _usbBackendConfirmationPending = true;
+            _ = ConfirmUsbBackendChangeAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// Confirms a USB backend change, applies it only on acceptance and restarts the process so the
+    /// setting takes effect.
+    /// <para>确认 USB 后端变更，仅在用户接受后应用设置并重启进程使其生效。</para>
+    /// </summary>
+    /// <param name="requested">The selected backend ordinal.
+    /// <para>所选后端的序号。</para></param>
+    private async Task ConfirmUsbBackendChangeAsync(int requested)
+    {
+        var applied = false;
+        try
+        {
+            var owner = DialogService.GetOwnerWindow();
+            var language = LanguageService.Instance;
+            var confirmed = owner is not null && await DialogService.ConfirmAsync(
+                owner,
+                language.GetString("Settings_UsbBackendRestartTitle"),
+                language.GetString("Settings_UsbBackendRestartMessage"),
+                language.GetString("Settings_UsbBackendRestartConfirm"));
+
+            if (!confirmed)
+            {
+                RevertUsbBackendSelection();
+                return;
+            }
+
             _appSettings.DeviceCommunication = _appSettings.DeviceCommunication with
             {
-                UsbBackend = (Comm.Transports.Usb.Abstractions.UsbApiKind)value
+                UsbBackend = (Comm.Transports.Usb.Abstractions.UsbApiKind)requested
             };
-            OnPropertyChanged();
-            DebouncedSaveSettings();
+            applied = true;
+            OnPropertyChanged(nameof(DeviceUsbBackendIndex));
+            SaveSettings();
+
+            if (!ApplicationRestartService.RestartWithSolution())
+            {
+                ShowUsbBackendRestartFailure();
+            }
         }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Settings", $"USB backend change failed: {ex.Message}");
+            if (applied)
+            {
+                ShowUsbBackendRestartFailure();
+            }
+            else
+            {
+                RevertUsbBackendSelection();
+            }
+        }
+        finally
+        {
+            _usbBackendConfirmationPending = false;
+        }
+    }
+
+    /// <summary>
+    /// Restores the combo box selection from the persisted backend after a cancelled or failed change.
+    /// <para>在变更被取消或失败后，从持久化后端恢复下拉框选择。</para>
+    /// </summary>
+    private void RevertUsbBackendSelection()
+    {
+        _suppressUsbBackendWriteback = true;
+        OnPropertyChanged(nameof(DeviceUsbBackendIndex));
+        _suppressUsbBackendWriteback = false;
+    }
+
+    /// <summary>
+    /// Warns that the setting was saved but the automatic restart could not be started.
+    /// <para>提示设置已保存但自动重启未能发起。</para>
+    /// </summary>
+    private void ShowUsbBackendRestartFailure()
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        _ = DialogService.ShowAsync(owner,
+            language.GetString("Settings_UsbBackendRestartTitle"),
+            language.GetString("Settings_UsbBackendRestartFailed"),
+            Ursa.Controls.MessageBoxIcon.Warning);
     }
 
     /// <summary>

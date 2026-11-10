@@ -282,6 +282,24 @@ public sealed class DebugBridgeRouteTests : IDisposable
     }
 
     [Fact]
+    public void AppSettings_UsbBackend_RoundTrips()
+    {
+        var settings = new AppSettings
+        {
+            DeviceCommunication = new Comm.DeviceCommunicationConfiguration
+            {
+                UsbBackend = Comm.Transports.Usb.Abstractions.UsbApiKind.LibUsbDotNet
+            }
+        };
+
+        var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
+        var roundTripped = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(Comm.Transports.Usb.Abstractions.UsbApiKind.LibUsbDotNet, roundTripped.DeviceCommunication.UsbBackend);
+    }
+
+    [Fact]
     public void DeviceCommunicationConfiguration_UndefinedRouteMode_FallsBackToAuto()
     {
         var configuration = new Comm.DeviceCommunicationConfiguration
