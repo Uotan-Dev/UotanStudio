@@ -1858,6 +1858,53 @@ public sealed partial class ErofsBuilder
 
     private static long CeilDiv(long value, long divisor) => value == 0 ? 0 : (value + divisor - 1) / divisor;
 
+    /// <summary>
+    /// Streams one node's bytes to an absolute image offset through the destination handle, so several workers can
+    /// open their own sources at the same time. Opening a source dominates a small copy: the sequential form pays one
+    /// handle creation per node on the build's single thread.
+    /// <para>经目标句柄把单个节点的字节流式写到镜像中的绝对偏移，使多个工作者可以同时打开各自的源文件。小拷贝的
+    /// 主要成本在打开源文件上：顺序形态会在构建的单一线程上为每个节点付一次句柄创建。</para>
+    /// </summary>
+    /// <param name="output">Image stream owning the destination handle, used for its base offset and capture window.
+    /// <para>持有目标句柄的镜像流，提供基准偏移与捕获窗口。</para></param>
+    /// <param name="handle">Destination handle from <c>TryGetDirectWriteHandle</c>.
+    /// <para>由 <c>TryGetDirectWriteHandle</c> 取得的目标句柄。</para></param>
+    /// <param name="node">Node whose file is copied. <para>要拷贝其文件的节点。</para></param>
+    /// <param name="length">Byte count copied from the source start. <para>从源起始拷贝的字节数。</para></param>
+    /// <param name="targetOffset">Image-relative offset of the first byte written.
+    /// <para>首个被写入字节的镜像相对偏移。</para></param>
+    /// <param name="token">Cancels between chunks. <para>在块之间取消。</para></param>
+    private static void CopyFileRangeDirect(OffsetStream output, Microsoft.Win32.SafeHandles.SafeFileHandle handle,
+        ErofsInode node, long length, long targetOffset, CancellationToken token)
+    {
+        if (length <= 0)
+        {
+            return;
+        }
+
+        using var source = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            1 << 16, FileOptions.SequentialScan);
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(HashChunkBytes);
+        try
+        {
+            var remaining = length;
+            var pos = targetOffset;
+            while (remaining > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var count = (int)Math.Min((long)HashChunkBytes, remaining);
+                source.ReadExactly(buffer, 0, count);
+                output.WriteAtDirect(handle, pos, buffer.AsSpan(0, count));
+                pos += count;
+                remaining -= count;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     private static long AlignUp(long value, long alignment) => (value + alignment - 1) / alignment * alignment;
 
     private static void ZeroImage(Stream output, long length, CancellationToken token)

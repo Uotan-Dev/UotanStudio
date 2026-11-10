@@ -915,5 +915,55 @@ public sealed partial class ErofsBuilder
 
             inner.Write(buffer, offset, count);
         }
+
+        /// <summary>
+        /// Flushes the buffered destination and hands out its handle for out-of-order writes, so several workers can
+        /// fill disjoint block ranges without serializing on this stream's position.
+        /// <para>刷新带缓冲的目标并交出它的句柄供乱序写入，使多个工作者可以填充互不相交的块区间，
+        /// 而不必在本流的位置上串行。</para>
+        /// </summary>
+        /// <param name="handle">Destination handle addressed by absolute file offset.
+        /// <para>按文件绝对偏移寻址的目标句柄。</para></param>
+        /// <returns><see langword="true"/> when the destination is a seekable file stream; otherwise
+        /// <see langword="false"/> and the caller keeps writing through the stream.
+        /// <para>目标是可寻址的文件流时为 <see langword="true"/>；否则为 <see langword="false"/>，调用方继续经流写入。</para></returns>
+        internal bool TryGetDirectWriteHandle(out Microsoft.Win32.SafeHandles.SafeFileHandle handle)
+        {
+            if (inner is FileStream { CanSeek: true } file)
+            {
+                file.Flush();
+                handle = file.SafeFileHandle;
+                return true;
+            }
+
+            handle = null!;
+            return false;
+        }
+
+        /// <summary>
+        /// Writes one span at an image-relative offset through a handle obtained from
+        /// <see cref="TryGetDirectWriteHandle"/>, honouring the capture window a superblock write may have installed.
+        /// <para>经 <see cref="TryGetDirectWriteHandle"/> 取得的句柄，在镜像相对偏移处写出一个跨度，并遵守超级块写入
+        /// 可能已安装的捕获窗口。</para>
+        /// </summary>
+        /// <param name="handle">Destination handle. <para>目标句柄。</para></param>
+        /// <param name="offset">Image-relative offset of the first byte written.
+        /// <para>首个被写入字节的镜像相对偏移。</para></param>
+        /// <param name="data">Bytes to write. <para>要写入的字节。</para></param>
+        internal void WriteAtDirect(Microsoft.Win32.SafeHandles.SafeFileHandle handle, long offset, ReadOnlySpan<byte> data)
+        {
+            if (_capture is not null)
+            {
+                var from = Math.Max(offset, _captureStart);
+                var to = Math.Min(offset + data.Length, _captureStart + _capture.Length);
+                if (to > from)
+                {
+                    data.Slice((int)(from - offset), (int)(to - from))
+                        .CopyTo(_capture.AsSpan((int)(from - _captureStart)));
+                }
+            }
+
+            RandomAccess.Write(handle, data, checked(offset + baseOffset));
+        }
     }
 }

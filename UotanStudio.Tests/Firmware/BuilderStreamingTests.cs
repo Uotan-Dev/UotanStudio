@@ -266,6 +266,44 @@ public class BuilderStreamingTests
     }
 
     [Fact]
+    public void Erofs_ManySmallFiles_PathAndStreamBuildsMatch()
+    {
+        using var temp = new TempDirectory();
+        for (var index = 0; index < 96; index++)
+        {
+            var payload = new byte[512 + (index % 5) * 700];
+            for (var i = 0; i < payload.Length; i++)
+            {
+                payload[i] = (byte)((index * 31 + i * 7) % 251);
+            }
+
+            temp.WriteBytes(FormattableString.Invariant($"dir{index % 6}/leaf{index}.bin"), payload);
+        }
+
+        using var reference = new TempDirectory();
+        foreach (var compress in new[] { false, true })
+        {
+            var options = new ErofsOptions
+            {
+                Compress = compress,
+                CompressionLevel = 3,
+                BuildTime = FixedErofsBuildTime,
+            };
+            var referencePath = Path.Combine(reference.Path, FormattableString.Invariant($"many-{compress}.erofs"));
+            new ErofsBuilder().Build(temp.Path, referencePath, options);
+            var expected = File.ReadAllBytes(referencePath);
+            using var stream = new MemoryStream();
+            new ErofsBuilder().Build(temp.Path, stream, options);
+            var actual = stream.ToArray();
+
+            Assert.Equal(expected.Length, actual.Length);
+            Assert.Equal(
+                EraseNondeterministicSuperblockFields(expected),
+                EraseNondeterministicSuperblockFields(actual));
+        }
+    }
+
+    [Fact]
     public void Erofs_LargeImage_StreamedToFile_HasExpectedHeaderBlocksAndLength()
     {
         using var temp = new TempDirectory();

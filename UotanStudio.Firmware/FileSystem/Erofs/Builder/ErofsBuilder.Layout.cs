@@ -3242,6 +3242,7 @@ public sealed partial class ErofsBuilder
         /// <para>可选计数器，接收未被压缩遍历计量的每个已收集负载的大小，使每个负载字节在整个构建中恰好计量一次。</para></param>
         internal void WriteNodeData(Stream output, Core.ExtractionByteCounter? progress = null)
         {
+            List<ErofsInode>? flat = null;
             foreach (var node in Ordered)
             {
                 Options.CancellationToken.ThrowIfCancellationRequested();
@@ -3274,11 +3275,60 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
                 {
-                    var copyLen = Math.Min(node.FlatBlocks * BlockSize, (long)node.Size);
-                    CopyFileRange(output, node, 0, copyLen, node.FlatBlockAddr * BlockSize, Options.CancellationToken);
+                    (flat ??= []).Add(node);
+                    continue;
                 }
 
                 if (IsMeasuredPayload(node) && node.Pclusters is null)
+                {
+                    progress?.Add((int)node.Size);
+                }
+            }
+
+            if (flat is not null)
+            {
+                WriteFlatData(output, flat, progress);
+            }
+        }
+
+        /// <summary>
+        /// Emits every unchanged payload that owns whole blocks. Their block ranges are disjoint and already assigned,
+        /// so a seekable file destination lets several workers open and copy in parallel; a source open is the
+        /// dominant cost of a small copy, and paying it once per node on this single thread is what makes many-file
+        /// trees slow. Progress is still reported in traversal order so the counter is deterministic.
+        /// <para>写出每个占整块且内容未变的负载。它们的块区间互不相交且已分配，因此可寻址的文件目标允许若干工作者并行
+        /// 打开并拷贝；小拷贝的主要成本是打开源文件，若在这条单线程上为每个节点付一次，多文件树就会变慢。进度仍按遍历
+        /// 顺序上报，使计数器可复现。</para>
+        /// </summary>
+        /// <param name="output">Destination stream in image coordinates.
+        /// <para>镜像坐标下的目标流。</para></param>
+        /// <param name="nodes">Flat payloads in traversal order. <para>按遍历顺序排列的扁平负载。</para></param>
+        /// <param name="progress">Optional counter receiving each payload's size in traversal order.
+        /// <para>可选计数器，按遍历顺序接收每个负载的大小。</para></param>
+        private void WriteFlatData(Stream output, List<ErofsInode> nodes, Core.ExtractionByteCounter? progress)
+        {
+            if (nodes.Count > 1 && output is OffsetStream target && target.TryGetDirectWriteHandle(out var handle))
+            {
+                Core.FirmwareParallelism.ForEach(nodes, node =>
+                {
+                    var copyLen = Math.Min(node.FlatBlocks * BlockSize, (long)node.Size);
+                    CopyFileRangeDirect(target, handle, node, copyLen,
+                        node.FlatBlockAddr * BlockSize, Options.CancellationToken);
+                });
+            }
+            else
+            {
+                foreach (var node in nodes)
+                {
+                    var copyLen = Math.Min(node.FlatBlocks * BlockSize, (long)node.Size);
+                    CopyFileRange(output, node, 0, copyLen, node.FlatBlockAddr * BlockSize,
+                        Options.CancellationToken);
+                }
+            }
+
+            foreach (var node in nodes)
+            {
+                if (IsMeasuredPayload(node))
                 {
                     progress?.Add((int)node.Size);
                 }

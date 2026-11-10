@@ -65,6 +65,15 @@ GC 特性（2026-11-07，Release，专用测量宿主 `%TEMP%` 单进程单模�
 - 已知取舍：`InterfaceRelocation`（第一批 SmaliAssembler 的 `Select→Distinct→Order→ToArray` 形态）ZLinq 分配 1.216 MB→0.480 MB（-61%）但耗时 318.93→441.46 µs（+39%，每类约 +60 ns），已采纳（分配收益换微小时间成本），保持现状不改回。
 - HotPathBenchmarks 首次基线（本批改动后测得，改动前数字因两批改动同树未提交而不可分离）：`ErofsCompressedExtract` 2649.4 µs/8.32 MB、`Ext4MetadataWalk` 244.8 µs/938 KB、`DeliveryShaChecksumLoop` 44572.9 µs/1.08 MB、`ByteEquivalenceScan` 8202.1 µs/64.5 KB。后续同类改动以此对照。
 
+EROFS 打包写数据阶段并行化（2026-11-10，Release，`UotanStudio.Benchmarks --profile`，`--repeats 3`，机器另有并行负载）：
+
+- 定位：多文件树的主要成本不是压缩，而是**每个节点重新打开一次源文件**。1408 个 4 KB 文件 + 1 MB 大文件的构建，`WriteNodeData` 占 415–575 ms，其中 `CopyFileRange` 的源文件打开 440–499 ms、实际读+写仅 27–33 ms；同一构建 `PlanNodePayloads` 为 177–254 ms。按分支计时确认 1408 个节点全部走扁平拷贝分支（zstd 下 4 KB 内容不足以压成一个 pcluster）。
+- 改动：`WriteNodeData` 先顺序处理目录、压缩、packed 与 metabox 节点，再把「占整块且内容未变的扁平负载」收集起来，经 `OffsetStream.TryGetDirectWriteHandle`（刷新缓冲后交出 `SafeFileHandle`）交给 `FirmwareParallelism.ForEach` 并行执行，各工作者用 `RandomAccess.Write` 写互不相交的块区间；目标不是可寻址文件流时（`MemoryStream`、非可寻址流）保持原有顺序路径。进度计数改为按遍历顺序在拷贝后补报，保持可复现。
+- A/B 对照（同一二进制，临时开关强制顺序路径，各 3 轮 × 3 次构建，交替运行）：1408 文件 + 1 MB 树 zstd 2587.7 / 2609.8 / 2810.6 ms → 1668.8 / 1709.1 / 1789.6 ms（约 1.55×），六次构建镜像 SHA-256 全为 `AEA7A4C9…F24E`；同规模 lz4 2923.7 → 1837.6 ms（收尾后最终态）。最终态 zstd 1408 文件 1574.0 ms、lz4 1838 ms、384 文件 + 4 MB 316.8 ms、单文件 64 MB 463.6 ms（均为 3 次构建合计）。
+- 新增回归：`BuilderStreamingTests.Erofs_ManySmallFiles_PathAndStreamBuildsMatch`（96 个 512–3312 B 文件，压缩开/关各一次，路径构建≈并行写入与流式构建≈顺序写入逐字节一致）。
+- 未纳入本次：压缩节点的写出（`WriteCompressedData`）仍按节点串行打开源文件，且其暂存回读在文件落盘形态下使用共享 `FileStream` 定位，并行化需先解决暂存读的线程安全；`PlanNodePayloads` 的每节点打开同样只做并行、未减少次数。
+- 门禁（2026-11-10，Debug）：全量 slnx 构建 0 警告 0 错误 → `dotnet test --solution` 9133 用例/9090 通过/43 跳过/0 失败（1m48s）→ `dotnet format` `whitespace`/`style` 双门零报告；固件命名空间单跑 4554 用例/4541 通过/13 跳过、架构 27/27。NativeAOT 发布未重跑。
+
 ## 已知不稳定用例与环境门控
 
 - 环境门控跳过：`UOTAN_MAGISKBOOT_ORACLE`、`UOTAN_SELINUX_POLICY_SAMPLE`、`UOTAN_SAMSUNG_*`、`UOTAN_EROFS_CORPUS`、`UOTAN_HDC_MIRROR_DIRECT`、`UOTAN_DEVICE_SHELL_TARGET`、`UOTAN_QCN_SAMPLE` 等未设置即跳过；RKDL 真机用例默认跳过；`UotanStudio.Tests.Services` 的 1 条跳过是未随包的 scrcpy jar。
