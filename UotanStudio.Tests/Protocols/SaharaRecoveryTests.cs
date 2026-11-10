@@ -1,16 +1,18 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Protocols;
 
 /// <summary>
 /// Replays the QUD serial recovery and first-packet dispatch paths: a target whose bootrom HELLO was
-/// already consumed is answered with a speculative HELLO_RESPONSE, and a target that starts its Sahara
-/// exchange with READ_DATA or END_OF_IMAGE instead of HELLO continues from that packet.
-/// <para>回放 QUD 串行恢复与首包分发路径：bootrom HELLO 已被消费的目标以推测性 HELLO_RESPONSE 应答；
-/// 而以 READ_DATA 或 END_OF_IMAGE 而非 HELLO 开始交换的目标从该数据包继续。</para>
+/// already consumed is answered with a speculative HELLO_RESPONSE, a target that starts its Sahara
+/// exchange with READ_DATA or END_OF_IMAGE instead of HELLO continues from that packet, and a target that
+/// only carries the result of an earlier attempt is reset instead of answered.
+/// <para>回放 QUD 串行恢复与首包分发路径：bootrom HELLO 已被消费的目标以推测性 HELLO_RESPONSE 应答；以
+/// READ_DATA 或 END_OF_IMAGE 而非 HELLO 开始交换的目标从该数据包继续；只携带上一轮结果的目标被复位而不是应答。</para>
 /// </summary>
 public sealed class SaharaRecoveryTests
 {
@@ -20,6 +22,8 @@ public sealed class SaharaRecoveryTests
     private const uint EndOfImageCommand = EdlConstants.SaharaCmdEndOfImage;
     private const uint DoneCommand = EdlConstants.SaharaCmdDone;
     private const uint DoneResponseCommand = EdlConstants.SaharaCmdDoneResponse;
+    private const uint ResetCommand = EdlConstants.SaharaCmdReset;
+    private const uint ResetResponseCommand = EdlConstants.SaharaCmdResetResponse;
     private const uint ResetStateCommand = EdlConstants.SaharaCmdResetState;
     private const uint FirehoseImageId = (uint)SaharaImageId.Firehose;
     private const uint UnknownImageId = 0x5A;
@@ -28,6 +32,7 @@ public sealed class SaharaRecoveryTests
     private const int ReadDataPacketBytes = 20;
     private const int EndOfImagePacketBytes = 16;
     private const int DoneResponsePacketBytes = 12;
+    private const int ResetPacketBytes = 8;
     private const int ResetStatePacketBytes = 8;
     private const int UploadedRangeBytes = 8;
     private const uint DeviceHelloVersion = 2;
@@ -291,6 +296,65 @@ public sealed class SaharaRecoveryTests
         }
     }
 
+    [Fact]
+    public async Task ResetTargetAsync_LeftoverQueued_DiscardsItAndReadsTheResetAcknowledgement()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue(EndOfImage(FirehoseImageId, 1));
+        transport.OnWrite = write => IsResetWrite(write) ? [ResetResponse()] : [];
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            await sahara.ResetTargetAsync(TestContext.Current.CancellationToken);
+
+            var reset = Assert.Single(transport.Writes);
+            Assert.True(IsResetWrite(reset));
+            Assert.DoesNotContain(transport.Writes, IsResetStateWrite);
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ResetTargetAsync_TargetAnswersAnotherPacket_ReportsTheResetWasNotAccepted()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.OnWrite = write => IsResetWrite(write) ? [EndOfImage(FirehoseImageId, 1)] : [];
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var failure = await Assert.ThrowsAsync<SaharaException>(() => sahara.ResetTargetAsync(
+                TestContext.Current.CancellationToken));
+
+            Assert.Contains("RESET_RESP", failure.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ResetSaharaTargetAsync_LeftoverQueued_ConfirmsByResetAndRetiresTheLink()
+    {
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue(EndOfImage(FirehoseImageId, 1));
+        transport.OnWrite = write => IsResetWrite(write) ? [ResetResponse()] : [];
+        using var session = new EdlSession(transport);
+        var state = await session.ProbeProtocolAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(EdlProtocolState.Sahara, state);
+
+        await session.ResetSaharaTargetAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(transport.Writes, IsResetWrite);
+        Assert.Equal(EdlProtocolState.Unknown, session.ProtocolState);
+        Assert.Equal(EdlLinkStage.Stale, session.LinkStage);
+        Assert.False(session.IsConfigured);
+        Assert.False(session.IsConnected);
+    }
+
     private static byte[] Hello(SaharaMode mode)
     {
         var packet = new byte[HelloPacketBytes];
@@ -332,6 +396,18 @@ public sealed class SaharaRecoveryTests
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(8), status);
         return packet;
     }
+
+    private static byte[] ResetResponse()
+    {
+        var packet = new byte[ResetPacketBytes];
+        BinaryPrimitives.WriteUInt32LittleEndian(packet, ResetResponseCommand);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), (uint)packet.Length);
+        return packet;
+    }
+
+    private static bool IsResetWrite(byte[] write)
+        => write.Length == ResetPacketBytes
+            && BinaryPrimitives.ReadUInt32LittleEndian(write) == ResetCommand;
 
     private static bool IsResetStateWrite(byte[] write)
         => write.Length == ResetStatePacketBytes

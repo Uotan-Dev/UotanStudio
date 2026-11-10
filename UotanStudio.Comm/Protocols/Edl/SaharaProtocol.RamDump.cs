@@ -111,7 +111,7 @@ public sealed partial class SaharaProtocol
                 await DownloadRamDumpRegionAsync(region, outputRoot, progress, cancellationToken).ConfigureAwait(false);
             }
 
-            await SendSaharaResetAsync(cancellationToken).ConfigureAwait(false);
+            await SendSaharaResetAsync(RamDumpControlTimeoutMs, cancellationToken).ConfigureAwait(false);
             resetSent = true;
             return selected;
         }
@@ -329,11 +329,21 @@ public sealed partial class SaharaProtocol
         }
     }
 
-    private async Task SendSaharaResetAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Sends a Sahara RESET and confirms the target answered it, so a caller only reports a reset the target
+    /// actually accepted.
+    /// <para>发送 Sahara RESET 并确认目标已应答，使调用方只上报目标确实接受的复位。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Upper bound for the RESET_RESPONSE read. <para>读取 RESET_RESPONSE 的毫秒上限。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task completing after the acknowledgement.<para>确认之后完成的任务。</para></returns>
+    /// <exception cref="SaharaException">The target answered with something other than RESET_RESPONSE.
+    /// <para>目标以 RESET_RESPONSE 之外的数据包应答。</para></exception>
+    private async Task SendSaharaResetAsync(int timeoutMs, CancellationToken cancellationToken)
     {
         var reset = BuildSaharaSimpleCommand(SaharaCommand.Reset);
         await WriteDataAsync(reset, cancellationToken).ConfigureAwait(false);
-        var (response, _) = await ReceiveSaharaPacketAsync(RamDumpControlTimeoutMs, cancellationToken).ConfigureAwait(false);
+        var (response, _) = await ReceiveSaharaPacketAsync(timeoutMs, cancellationToken).ConfigureAwait(false);
         if (response.Command != SaharaCommand.ResetResponse || response.Length != RamDumpSimpleCommandBytes)
         {
             throw new SaharaException($"Expected Sahara RESET_RESP, received {response.Command} (len {response.Length}).");

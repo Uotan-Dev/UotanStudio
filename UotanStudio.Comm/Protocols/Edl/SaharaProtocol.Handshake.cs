@@ -553,6 +553,35 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
+    /// Sends the Sahara RESET packet, so a target still in emergency download leaves it and boots by itself.
+    /// <para>发送 Sahara RESET 数据包，使仍在紧急下载模式的目标离开该模式并自行启动。</para>
+    /// </summary>
+    /// <remarks>
+    /// This is the bootrom RESET (0x07), not RESET_STATE_MACHINE (0x13): it ends the Sahara exchange instead of
+    /// restarting it, which is the only way to leave emergency download without a programmer upload. Packets a
+    /// previous attempt left queued are discarded first so the acknowledgement is read from the reset itself.
+    /// <para>这是 bootrom 的 RESET（0x07），不是 RESET_STATE_MACHINE（0x13）：它结束 Sahara 交换而不是重新开始，
+    /// 也是不加载 programmer 就离开紧急下载模式的唯一方式。先丢弃上一次尝试遗留的数据包，使确认读自本次复位。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token checked before the write and the acknowledgement read.
+    /// <para>在写入与读取确认之前检查的取消令牌。</para></param>
+    /// <returns>A task completing once the target acknowledged the reset.
+    /// <para>目标确认复位后完成的任务。</para></returns>
+    /// <exception cref="SaharaException">The target answered with a packet other than RESET_RESPONSE.
+    /// <para>目标以 RESET_RESPONSE 之外的数据包应答。</para></exception>
+    /// <exception cref="EdlException">The acknowledgement did not arrive within the command timeout.
+    /// <para>确认未在命令超时内到达。</para></exception>
+    /// <exception cref="ObjectDisposedException">The protocol instance has been disposed.
+    /// <para>协议实例已被释放。</para></exception>
+    public async Task ResetTargetAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await DrainPendingPacketsAsync(cancellationToken).ConfigureAwait(false);
+        await SendSaharaResetAsync(_timeoutMs, cancellationToken).ConfigureAwait(false);
+        Log("The target acknowledged the Sahara RESET and leaves emergency download mode.");
+    }
+
+    /// <summary>
     /// Reports whether a packet buffered at the start of an upload is the result of an earlier transfer rather
     /// than a request this handshake can serve, so the caller resets the target instead of answering it.
     /// <para>报告上传起点读到的数据包是上一轮传输的结果而不是本次握手可服务的请求，使调用方复位目标而不是应答它。</para>

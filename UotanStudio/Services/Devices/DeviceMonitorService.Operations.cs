@@ -537,6 +537,11 @@ public sealed partial class DeviceMonitorService
             return true;
         }
 
+        if (device.Protocol == DeviceProtocolKind.Edl)
+        {
+            return await RebootEdlAsync(device, mode, cancellationToken).ConfigureAwait(false);
+        }
+
         if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc)
         {
             await StopLogcatStreamingAsync(device).ConfigureAwait(false);
@@ -575,6 +580,64 @@ public sealed partial class DeviceMonitorService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Reboots an EDL target with the one command its current link state accepts: a target that never reached the
+    /// programmer takes the bootrom reset that boots the system, and a target already running the programmer takes
+    /// the firehose power command for the requested mode.
+    /// <para>用 EDL 目标当前链路状态接受的命令重启它：从未进入 programmer 的目标接受启动系统的 bootrom 复位，
+    /// 已在运行 programmer 的目标接受请求模式对应的 firehose power 命令。</para>
+    /// </summary>
+    /// <remarks>
+    /// A target that never reached Firehose can only boot the system, because the bootrom reset names no mode; the
+    /// other targets need a bootloader control block written to misc, which this entry point carries no image for.
+    /// Those cases report an unhandled request instead of resetting into the system, and so does a target already
+    /// handed to the streaming downloader, where no Sahara exchange is left to end.
+    /// <para>从未进入 Firehose 的目标只能启动系统，因为 bootrom 复位无法指定模式；其余目标需要把引导控制块写入
+    /// misc，而本入口没有对应镜像。这些情况都报告请求未被处理，而不是静默复位进系统；已交给流式下载器的目标同理，
+    /// 那里已不存在可结束的 Sahara 交换。</para>
+    /// </remarks>
+    /// <param name="device">The EDL endpoint to reboot. <para>要重启的 EDL 端点。</para></param>
+    /// <param name="mode">The requested boot destination. <para>请求的启动目的地。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange. <para>取消本次交换。</para></param>
+    /// <returns><see langword="true"/> when the target acknowledged the request.
+    /// <para>目标确认该请求时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> RebootEdlAsync(DetectedDevice device, string mode, CancellationToken cancellationToken)
+    {
+        var target = mode switch
+        {
+            "system" => RebootOption.Reset,
+            "edl" => RebootOption.ResetToEdl,
+            _ => (RebootOption?)null
+        };
+        if (target is not { } option)
+        {
+            return false;
+        }
+
+        return await RunEdlAsync(device, async session =>
+        {
+            var state = await session.ProbeProtocolAsync(cancellationToken).ConfigureAwait(false);
+            if (state == EdlProtocolState.Firehose && session.Firehose is { } firehose)
+            {
+                if (!session.IsConfigured)
+                {
+                    await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+                }
+
+                var response = await firehose.PowerAsync(option, cancellationToken).ConfigureAwait(false);
+                return response.IsAck;
+            }
+
+            if (state == EdlProtocolState.Streaming || option != RebootOption.Reset)
+            {
+                return false;
+            }
+
+            await session.ResetSaharaTargetAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

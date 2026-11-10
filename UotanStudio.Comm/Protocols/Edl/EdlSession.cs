@@ -325,6 +325,39 @@ public sealed partial class EdlSession : IProtocolSession
     public uint MaxPacketLength => Sahara?.MaxPacketLength ?? 4096;
 
     /// <summary>
+    /// Resets a target that is still in Sahara, so it leaves emergency download and boots by itself, and
+    /// retires this session's link because the target re-enumerates.
+    /// <para>复位仍在 Sahara 的目标，使其离开紧急下载模式并自行启动；目标会重新枚举，因此本会话的链路随之退役。</para>
+    /// </summary>
+    /// <remarks>
+    /// The reset needs no programmer upload, which is why it is the only way out of a target that cannot
+    /// reach Firehose. The session is left with no verified protocol and marked stale, so no later command
+    /// runs on the link the reset ended.
+    /// <para>该复位不需要加载 programmer，因此是目标无法进入 Firehose 时唯一的出路。会话随后不再持有已验证协议并
+    /// 被标记为陈旧，使后续命令不会在被复位结束的链路上执行。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task completing once the target acknowledged the reset.
+    /// <para>目标确认复位后完成的任务。</para></returns>
+    /// <exception cref="SaharaException">The target answered with a packet other than RESET_RESPONSE.
+    /// <para>目标以 RESET_RESPONSE 之外的数据包应答。</para></exception>
+    /// <exception cref="EdlException">The acknowledgement did not arrive within the command timeout.
+    /// <para>确认未在命令超时内到达。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已被释放。</para></exception>
+    public async Task ResetSaharaTargetAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        using var operation = await Firehose!.EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        var protocol = Sahara ?? new SaharaProtocol(Transport);
+        await protocol.ResetTargetAsync(cancellationToken).ConfigureAwait(false);
+        Firehose.Invalidate();
+        IsConfigured = false;
+        LinkStage = EdlLinkStage.Stale;
+        SetProtocolState(EdlProtocolState.Unknown);
+    }
+
+    /// <summary>
     /// Performs Sahara handshake (if needed) and Firehose configure.
     /// <para>执行 Sahara 握手（如需要）和 Firehose 配置。</para>
     /// Concurrent callers share the completed initialization. An initialized session is not
