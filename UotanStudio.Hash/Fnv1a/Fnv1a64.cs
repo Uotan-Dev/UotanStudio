@@ -1,5 +1,3 @@
-using Cilica.Attributes;
-
 namespace UotanStudio.Hash.Fnv1a;
 
 /// <summary>
@@ -13,7 +11,6 @@ namespace UotanStudio.Hash.Fnv1a;
 /// <para>本库把标准 CRC 与摘要转发给 BCL；FNV 不属于其中之一，因此在本库实现而不是留在调用方。字符重载消费
 /// UTF-16 码元，正是设备投影键已有的形态；字节重载服务于持有 UTF-8 字节的调用方。</para>
 /// </remarks>
-[Optimize]
 public static class Fnv1a64
 {
     /// <summary>The FNV-1a 64-bit offset basis. <para>FNV-1a 64 位的初始偏移基值。</para></summary>

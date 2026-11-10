@@ -371,7 +371,6 @@ jobs:
           dotnet publish "$PUBLISH_PROJECT" \
             -c Release -r "$RID" --self-contained true \
             -p:DebugType=none -p:DebugSymbols=false \
-            -p:UotanCilicaEnabled=false \
             -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
             $restore_args \
             -o /work/out

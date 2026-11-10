@@ -14,16 +14,6 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
-  <!-- Cilica is an opt-in, Release-only post-build IL rewrite (see root AGENTS.md). Projects that reference
-       Cilica.OptimizerTask get RunCilica=true from the package targets in Release; this switch disables the
-       rewrite for an entire build with -p:UotanCilicaEnabled=false without editing any project file.
-       Cilica 是可选、仅 Release 生效的构建后 IL 改写；用 -p:UotanCilicaEnabled=false 可整次构建关闭。 -->
-  <PropertyGroup>
-    <UotanCilicaEnabled Condition="'$(UotanCilicaEnabled)' == ''">true</UotanCilicaEnabled>
-    <RunCilica Condition="'$(UotanCilicaEnabled)' != 'true'">false</RunCilica>
-    <CilicaAllMethods Condition="'$(CilicaAllMethods)' == ''">false</CilicaAllMethods>
-  </PropertyGroup>
-
   <!-- Derive the semantic version from Version.props unless CI supplied a complete Version. -->
   <PropertyGroup>
     <VersionChannel Condition="'$(VersionChannel)' == ''">beta</VersionChannel>
