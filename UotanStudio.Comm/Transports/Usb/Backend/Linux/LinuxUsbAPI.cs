@@ -33,8 +33,69 @@ internal static partial class LinuxUsbAPI
 
     public static uint USBDEVFS_CLAIMINTERFACE = 0x8004550F;
     public static uint USBDEVFS_RELEASEINTERFACE = 0x80045510;
-    public static uint USBDEVFS_DISCONNECT = 0x5516;
     public static uint USBDEVFS_RESET = 0x5514;
+
+    /// <summary>
+    /// <c>_IO('U', 22)</c>: detaches the kernel driver bound to one interface. The kernel handles it only
+    /// inside <c>USBDEVFS_IOCTL</c>; a bare ioctl with this number matches no case of the dispatcher and is
+    /// rejected with <c>ENOTTY</c>, so it is never sent on its own.
+    /// <para><c>_IO('U', 22)</c>：摘下绑定在某接口上的内核驱动。内核只在 <c>USBDEVFS_IOCTL</c> 内部处理它；
+    /// 直接用该编号发 ioctl 不会命中分派表中任何分支并被 <c>ENOTTY</c> 拒绝，因此绝不单独发送。</para>
+    /// </summary>
+    public const uint USBDEVFS_DISCONNECT = 0x5516;
+
+    /// <summary>
+    /// <c>_IOWR('U', 18, struct usbdevfs_ioctl)</c>: forwards one interface-scoped request to the driver bound
+    /// to that interface, which is how <see cref="USBDEVFS_DISCONNECT"/>, <c>USBDEVFS_CONNECT</c> and
+    /// <c>USBDEVFS_DISCONNECT_CLAIM</c> reach the kernel.
+    /// <para><c>_IOWR('U', 18, struct usbdevfs_ioctl)</c>：把一个接口范围内的请求转发给绑定该接口的驱动，
+    /// <see cref="USBDEVFS_DISCONNECT"/>、<c>USBDEVFS_CONNECT</c> 与 <c>USBDEVFS_DISCONNECT_CLAIM</c>
+    /// 正是由此抵达内核。</para>
+    /// </summary>
+    public const uint USBDEVFS_IOCTL = 0xC0105512;
+
+    /// <summary>
+    /// <c>_IOR('U', 27, struct usbdevfs_disconnect_claim)</c>: detaches whichever driver holds the interface
+    /// (except <c>usbfs</c> itself) and claims it for this descriptor in one step.
+    /// <para><c>_IOR('U', 27, struct usbdevfs_disconnect_claim)</c>：把占用该接口的驱动（<c>usbfs</c> 自身除外）
+    /// 摘下并为当前描述符申请该接口，一步完成。</para>
+    /// </summary>
+    public const uint USBDEVFS_DISCONNECT_CLAIM = 0x8108551B;
+
+    /// <summary>
+    /// Disconnect-and-claim flag that skips the request when the interface is already held by the named driver.
+    /// <para>断开并申请的标志：接口已被指定名字的驱动持有时跳过该请求。</para>
+    /// </summary>
+    public const uint USBDEVFS_DISCONNECT_CLAIM_EXCEPT_DRIVER = 0x02;
+
+    /// <summary>
+    /// Interface name buffer length in <see cref="Usbdevfs_disconnect_claim"/>; the kernel compares at most this
+    /// many bytes.
+    /// <para><see cref="Usbdevfs_disconnect_claim"/> 中的接口名缓冲区长度；内核最多比较这么多字节。</para>
+    /// </summary>
+    public const int USBDEVFS_MAXDRIVERNAME = 255;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Usbdevfs_ioctl
+    {
+        public int Ifno;
+        public int IoctlCode;
+        public IntPtr Data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct Usbdevfs_disconnect_claim
+    {
+        public uint Interface;
+        public uint Flags;
+        public fixed byte Driver[USBDEVFS_MAXDRIVERNAME + 1];
+    }
+
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_ioctl arg);
+
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_disconnect_claim arg);
 
     /// <summary>
     /// <c>_IOR('U', 4, struct usbdevfs_setinterface)</c>: activates an interface alternate setting through

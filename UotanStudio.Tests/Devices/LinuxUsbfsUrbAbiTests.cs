@@ -65,6 +65,38 @@ public sealed class LinuxUsbfsUrbAbiTests
     }
 
     [Fact]
+    public void DisconnectRequestCodes_MatchUsbdeviceFsHeader_EncodeTheInterfaceScopedForm()
+    {
+        const uint writeDirection = 1u << 30;
+        const uint readDirection = 2u << 30;
+        const uint usbdevfsType = (uint)'U' << 8;
+
+        var ioctlStructBytes = (uint)Marshal.SizeOf<LinuxUsbAPI.Usbdevfs_ioctl>();
+        var disconnectClaimBytes = (uint)Marshal.SizeOf<LinuxUsbAPI.Usbdevfs_disconnect_claim>();
+
+        Assert.Equal((uint)'U' << 8 | 22u, LinuxUsbAPI.USBDEVFS_DISCONNECT);
+        Assert.Equal(LinuxUsbAPI.USBDEVFS_IOCTL,
+            writeDirection | readDirection | (ioctlStructBytes << 16) | usbdevfsType | 18u);
+        Assert.Equal(LinuxUsbAPI.USBDEVFS_DISCONNECT_CLAIM,
+            readDirection | (disconnectClaimBytes << 16) | usbdevfsType | 27u);
+        Assert.Equal(255, LinuxUsbAPI.USBDEVFS_MAXDRIVERNAME);
+        Assert.Equal(0x02u, LinuxUsbAPI.USBDEVFS_DISCONNECT_CLAIM_EXCEPT_DRIVER);
+    }
+
+    [Fact]
+    public void DisconnectStructures_FieldOffsets_MatchKernelLayout()
+    {
+        Assert.Equal(0, (int)Marshal.OffsetOf<LinuxUsbAPI.Usbdevfs_ioctl>(nameof(LinuxUsbAPI.Usbdevfs_ioctl.Ifno)));
+        Assert.Equal(4, (int)Marshal.OffsetOf<LinuxUsbAPI.Usbdevfs_ioctl>(nameof(LinuxUsbAPI.Usbdevfs_ioctl.IoctlCode)));
+        Assert.Equal(8, (int)Marshal.OffsetOf<LinuxUsbAPI.Usbdevfs_ioctl>(nameof(LinuxUsbAPI.Usbdevfs_ioctl.Data)));
+        Assert.Equal(16, Marshal.SizeOf<LinuxUsbAPI.Usbdevfs_ioctl>());
+
+        Assert.Equal(0, (int)Marshal.OffsetOf<LinuxUsbAPI.Usbdevfs_disconnect_claim>(nameof(LinuxUsbAPI.Usbdevfs_disconnect_claim.Interface)));
+        Assert.Equal(4, (int)Marshal.OffsetOf<LinuxUsbAPI.Usbdevfs_disconnect_claim>(nameof(LinuxUsbAPI.Usbdevfs_disconnect_claim.Flags)));
+        Assert.Equal(264, Marshal.SizeOf<LinuxUsbAPI.Usbdevfs_disconnect_claim>());
+    }
+
+    [Fact]
     public void IsInterfaceDirectoryName_SysfsInterfaceAndDeviceNames_ClassifiesCorrectly()
     {
         Assert.True(LinuxSysfsTopology.IsInterfaceDirectoryName("1-5.3:1.0"));

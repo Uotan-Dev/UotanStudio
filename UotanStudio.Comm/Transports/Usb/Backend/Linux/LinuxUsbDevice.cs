@@ -149,9 +149,23 @@ internal class LinuxUsbDevice : UsbDevice
     }
 
     /// <summary>
-    /// Claims a single interface with a detach-and-retry fallback for udev-rebound drivers.
-    /// <para>使用分离并重试回退声明单个接口，以应对 udev 重新绑定驱动。</para>
+    /// Claims a single interface, detaching a bound kernel driver through the disconnect-and-claim request
+    /// when the first claim reports the interface busy.
+    /// <para>声明单个接口；首次申请报告接口忙时，经断开并申请请求摘下已绑定的内核驱动。</para>
     /// </summary>
+    /// <remarks>
+    /// A QDLoader-class device (VID 05C6/PID 9008 and its siblings) is claimed at probe time by the kernel's
+    /// <c>qcserial</c> driver, so <c>USBDEVFS_CLAIMINTERFACE</c> answers <c>EBUSY</c> until that driver is
+    /// detached; the same holds when a udev rule or ModemManager bound another driver. The detach has to go
+    /// through <c>USBDEVFS_IOCTL</c>: the kernel's dispatcher has no case for a bare <c>USBDEVFS_DISCONNECT</c>
+    /// request number, so issuing it directly returns <c>ENOTTY</c> and the interface stays busy. The
+    /// disconnect-and-claim request performs detach and claim atomically and skips the detach when the holder
+    /// is already <c>usbfs</c>.
+    /// <para>QDLoader 类设备（VID 05C6/PID 9008 及其同族）在探测时就被内核 <c>qcserial</c> 驱动占用，因此在内核驱动被摘下前
+    /// <c>USBDEVFS_CLAIMINTERFACE</c> 只会返回 <c>EBUSY</c>；udev 规则或 ModemManager 绑定了其他驱动时同样如此。摘除必须经
+    /// <c>USBDEVFS_IOCTL</c>：内核分派表没有裸 <c>USBDEVFS_DISCONNECT</c> 请求号的分支，直接发送只会得到 <c>ENOTTY</c>
+    /// 而接口仍然被占用。断开并申请请求会原子地完成摘除与申请，并在占用者已是 <c>usbfs</c> 时跳过摘除。</para>
+    /// </remarks>
     /// <param name="interfaceId">The interface number to claim. <para>要声明的接口编号。</para></param>
     /// <returns><c>true</c> when claimed; otherwise <c>false</c>. <para>声明成功返回 <c>true</c>；否则返回 <c>false</c>。</para></returns>
     private bool ClaimInterface(byte interfaceId)
@@ -160,7 +174,12 @@ internal class LinuxUsbDevice : UsbDevice
         var n = ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc);
         if (n != 0)
         {
-            ioctl(Fd, USBDEVFS_DISCONNECT, ref ifc);
+            var claimErrno = Marshal.GetLastWin32Error();
+            if (claimErrno is EBUSY or EACCES)
+            {
+                DetachKernelDriver(interfaceId);
+            }
+
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 n = ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc);
@@ -185,6 +204,60 @@ internal class LinuxUsbDevice : UsbDevice
 
         _claimedInterfaces.Add(interfaceId);
         return true;
+    }
+
+    /// <summary>
+    /// Detaches whichever kernel driver holds one interface and claims it for this descriptor in a single
+    /// request, so a device the kernel bound at probe time becomes usable.
+    /// <para>摘下占用某接口的内核驱动并在同一次请求中把该接口申请给当前描述符，使内核在探测时绑定的设备可用。</para>
+    /// </summary>
+    /// <remarks>
+    /// <c>USBDEVFS_DISCONNECT_CLAIM</c> carries the <c>EXCEPT_DRIVER</c> flag naming <c>usbfs</c>, so a claim
+    /// this descriptor already owns is left untouched instead of failing the request. Kernels older than the
+    /// ioctl report <c>ENOTTY</c>; the wrapped <c>USBDEVFS_DISCONNECT</c> request is the documented fallback and
+    /// the following claim decides the outcome either way, so both failures are only logged.
+    /// <para><c>USBDEVFS_DISCONNECT_CLAIM</c> 携带指明 <c>usbfs</c> 的 <c>EXCEPT_DRIVER</c> 标志，因此本描述符已持有的
+    /// 申请会原样保留而不是令请求失败。早于该 ioctl 的内核返回 <c>ENOTTY</c>；包装后的 <c>USBDEVFS_DISCONNECT</c>
+    /// 请求是有据可依的回退，且无论哪一步失败都由随后的申请决定结果，因此两者失败只记录日志。</para>
+    /// </remarks>
+    /// <param name="interfaceId">The interface whose bound driver is detached. <para>要摘下驱动的接口。</para></param>
+    private void DetachKernelDriver(byte interfaceId)
+    {
+        unsafe
+        {
+            var disconnectClaim = new Usbdevfs_disconnect_claim
+            {
+                Interface = interfaceId,
+                Flags = USBDEVFS_DISCONNECT_CLAIM_EXCEPT_DRIVER
+            };
+            var driverName = "usbfs"u8;
+            for (var index = 0; index < driverName.Length; index++)
+            {
+                disconnectClaim.Driver[index] = driverName[index];
+            }
+
+            disconnectClaim.Driver[driverName.Length] = 0;
+            if (ioctl(Fd, USBDEVFS_DISCONNECT_CLAIM, ref disconnectClaim) == 0)
+            {
+                UsbTrace.Log($"LinuxUsbDevice: detached the kernel driver holding interface {interfaceId} on '{DevicePath}'.");
+                return;
+            }
+
+            var claimErrno = Marshal.GetLastWin32Error();
+            UsbTrace.Log($"LinuxUsbDevice: USBDEVFS_DISCONNECT_CLAIM on interface {interfaceId} of '{DevicePath}' failed (errno {claimErrno}); falling back to the wrapped USBDEVFS_DISCONNECT request.");
+        }
+
+        var request = new Usbdevfs_ioctl
+        {
+            Ifno = interfaceId,
+            IoctlCode = unchecked((int)USBDEVFS_DISCONNECT),
+            Data = IntPtr.Zero
+        };
+        if (ioctl(Fd, USBDEVFS_IOCTL, ref request) != 0)
+        {
+            var errno = Marshal.GetLastWin32Error();
+            UsbTrace.Log($"LinuxUsbDevice: USBDEVFS_IOCTL(USBDEVFS_DISCONNECT) on interface {interfaceId} of '{DevicePath}' failed (errno {errno}); the following claim reports the outcome.");
+        }
     }
 
     /// <summary>
