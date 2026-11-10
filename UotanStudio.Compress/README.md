@@ -24,7 +24,7 @@
 
 `CompressionService.CreateCompressionStream` 与 `CreateDecompressionStream` 返回增量的编码/解码流，供调用方自己控制读取节奏：它们不施加输出上限，释放返回流会写出容器尾部但不关闭调用方流。需要一次性解压并限制展开大小的场景仍用 `Decompress(Stream, Stream, CompressionFormat, long, CancellationToken)`。构造侧支持 Gzip、Zlib、Deflate、Brotli、Lz4、Bzip2、Xz、Zstd 与 `None`；解压侧不覆盖 Lzma、Lz4Legacy 与 Lzop，压缩侧不覆盖 Xz、Lzma、Lz4Legacy 与 Lzop，这些格式只有整块入口，调用它们会得到 `NotSupportedException`。
 
-`Codecs/Lz4/Lz4BlockCodec`、`Codecs/Zstd/ZstdBlockCodec`、`Codecs/Lz4/Lz4DestinationCodec`、`Codecs/Lzo/Lzo1x` 与 `Codecs/Deflate/PuffDeflateCodec` 是给文件系统/Payload/差分用的格式域裸原语，因 `UotanStudio.Firmware` 直接调用而保持 public；它们不属于宿主的通用压缩门面：`Lz4BlockCodec` 保持 K4os 的负值返回约定（目标容量不足与数据损坏是两个不同的谓词，调用方分别处理），`ZstdBlockCodec` 的簇读取依赖 `Unwrap(source, expectedSize)` 的尺寸提示语义。
+`Codecs/Lz4/Lz4BlockCodec`、`Codecs/Zstd/ZstdBlockCodec`、`Codecs/Lz4/Lz4DestinationCodec`、`Codecs/Lzo/Lzo1x` 与 `Codecs/Deflate/PuffDeflateCodec` 是给文件系统/Payload/差分用的格式域裸原语，因 `UotanStudio.Firmware` 直接调用而保持 public；它们不属于宿主的通用压缩门面：`Lz4BlockCodec` 保持 K4os 的负值返回约定（目标容量不足与数据损坏是两个不同的谓词，调用方分别处理），`ZstdBlockCodec` 的簇读取由调用方声明解码长度，因此不依赖尺寸提示；它压/解两个方向都直接走 zstd 的 `ZSTD_compress2` 与 `ZSTD_decompressDCtx`，参数（含 `windowLog`）经 `ZSTD_CCtx_setParameter` 生效，而一次性帧解码不查看 `ZSTD_d_windowLogMax`，所以窗口上限仍由帧头读取在本库内执行。
 
 `Files/CompressionFile` 提供 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`，负责文件生命周期、取消、解压大小上限、进度上报和输出的原子发布。
 
