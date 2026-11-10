@@ -21,7 +21,7 @@ on:
           - beta
         default: auto
       sdk_version:
-        description: "Experimental RIDs only: community SDK version prefix (e.g. 10.0.114, 11.0.100-rc.3); empty = newest SDK matching the project's TFM major"
+        description: "Experimental RIDs only: community SDK version prefix (e.g. 11.0.100, 12.0.100-rc.1); empty = newest SDK matching the project's TFM major"
         required: false
         default: ""
   push:
@@ -40,8 +40,10 @@ env:
 
 jobs:
   prepare:
+    # Pinned to the Ubuntu 24.04 image: the ubuntu-latest label migrates to Ubuntu 26 on 2026-10-19, and every
+    # Linux RID below publishes on 24.04, so the matrix must resolve on the same image.
     name: Resolve RID matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
@@ -54,12 +56,12 @@ jobs:
           set -euo pipefail
 
           declare -A runners=(
-            [win-x64]=windows-latest
+            [win-x64]=windows-2025
             [win-arm64]=windows-11-arm
             [linux-x64]=ubuntu-24.04
             [linux-arm64]=ubuntu-24.04-arm
-            [osx-x64]=macos-latest
-            [osx-arm64]=macos-latest
+            [osx-x64]=macos-26
+            [osx-arm64]=macos-26
             [linux-riscv64]=ubuntu-24.04
             [linux-loongarch64]=ubuntu-24.04
           )
@@ -180,7 +182,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "11.0.x"
 
       - name: Setup QEMU (experimental)
         if: matrix.experimental
@@ -258,7 +260,7 @@ jobs:
           mkdir -p "$work/sdk" "$work/src" "$work/out" "$work/home"
           command -v jq >/dev/null || { echo "::error::jq is required to resolve community SDK releases" >&2; exit 1; }
 
-          # No version pin: default to the repository TFM major (net10.0 -> 10.0) so the
+          # No version pin: default to the repository TFM major (net11.0 -> 11.0) so the
           # community SDK stays compatible; sdk_version can override with any version prefix.
           tfm=$(sed -n 's/.*<TargetFramework[^>]*>net\([0-9][0-9.]*\).*<\/TargetFramework>.*/\1/p' Directory.Build.props | head -1)
           default_series=$(printf '%s' "$tfm" | cut -d. -f1,2)
@@ -268,7 +270,7 @@ jobs:
           fi
           want="${SDK_VERSION:-$default_series}"
           if ! [[ "$want" =~ ^[0-9][0-9A-Za-z.-]*$ ]]; then
-            echo "::error::Invalid sdk_version '$want'; use a version prefix such as 10.0.114 or 11.0.100-rc.3." >&2
+            echo "::error::Invalid sdk_version '$want'; use a version prefix such as 11.0.100 or 12.0.100-rc.1." >&2
             exit 1
           fi
 
@@ -429,7 +431,7 @@ jobs:
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

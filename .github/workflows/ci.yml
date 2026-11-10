@@ -17,8 +17,8 @@ env:
 
 jobs:
   build-format-test:
-    name: windows-latest
-    runs-on: windows-latest
+    name: windows-2025
+    runs-on: windows-2025
 
     steps:
       - uses: actions/checkout@v5
@@ -26,7 +26,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "11.0.x"
 
       - name: Restore
         run: dotnet restore UotanStudio.slnx
