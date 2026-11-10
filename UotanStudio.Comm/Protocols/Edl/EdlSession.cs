@@ -43,6 +43,7 @@ public sealed partial class EdlSession : IProtocolSession
         _probeTransport = new EdlProbeTransport(transport);
         Transport = _probeTransport;
         Firehose = new FirehoseProtocol(Transport, firehoseConfig);
+        Firehose.LogMessage += ForwardProtocolLogMessage;
     }
 
     /// <summary>
@@ -87,6 +88,16 @@ public sealed partial class EdlSession : IProtocolSession
 
     /// <summary>Reports verified protocol changes within this session.<para>报告本会话内经校验的协议变化。</para></summary>
     public event EventHandler<EdlProtocolState>? ProtocolStateChanged;
+
+    /// <summary>
+    /// Raised for every protocol step the Sahara, Firehose and streaming layers report, so a failed EDL run leaves
+    /// its packet-level reasoning in the host log instead of discarding it.
+    /// <para>Sahara、Firehose 与流式层上报的每个协议步骤都会触发，使失败的 EDL 运行把其数据包级推理留在宿主日志里
+    /// 而不是被丢弃。</para>
+    /// </summary>
+    /// <value>The message text as the protocol layer rendered it.
+    /// <para>协议层渲染的消息文本。</para></value>
+    public event EventHandler<string>? ProtocolLogMessage;
 
     /// <summary>
     /// Raised after each Sahara READ_DATA/READ_DATA64 block has been served during a programmer upload,
@@ -565,6 +576,7 @@ public sealed partial class EdlSession : IProtocolSession
                 if (Sahara is { } previousSahara)
                 {
                     previousSahara.ImageProgress -= ForwardSaharaImageProgress;
+                    previousSahara.LogMessage -= ForwardProtocolLogMessage;
                 }
 
                 Sahara = new SaharaProtocol(Transport)
@@ -575,6 +587,7 @@ public sealed partial class EdlSession : IProtocolSession
                     AllowStreamDload = options?.AllowStreamDload ?? false
                 };
                 Sahara.ImageProgress += ForwardSaharaImageProgress;
+                Sahara.LogMessage += ForwardProtocolLogMessage;
                 var mode = HasProgrammerImages(programmerImages)
                     ? await Sahara.HandshakeAsync(programmerImages!, cancellationToken).ConfigureAwait(false)
                     : await Sahara.HandshakeAsync(programmerImage: null, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -623,6 +636,13 @@ public sealed partial class EdlSession : IProtocolSession
             throw;
         }
     }
+
+    /// <summary>Forwards one protocol step onto <see cref="ProtocolLogMessage"/>.
+    /// <para>把一个协议步骤转发到 <see cref="ProtocolLogMessage"/>。</para></summary>
+    /// <param name="sender">The protocol that reported the step. <para>上报该步骤的协议。</para></param>
+    /// <param name="message">The rendered step text. <para>已渲染的步骤文本。</para></param>
+    private void ForwardProtocolLogMessage(object? sender, string message)
+        => ProtocolLogMessage?.Invoke(this, message);
 
     /// <summary>Forwards the active Sahara instance's image progress to this session's subscribers.
     /// <para>把当前 Sahara 实例的镜像进度转发给本会话的订阅者。</para></summary>
@@ -685,6 +705,7 @@ public sealed partial class EdlSession : IProtocolSession
     {
         await Sahara!.SwitchToStreamDloadAsync(cancellationToken).ConfigureAwait(false);
         var streaming = new StreamingProtocol(Transport);
+        streaming.LogMessage += ForwardProtocolLogMessage;
         await streaming.HelloAsync(cancellationToken).ConfigureAwait(false);
         Streaming = streaming;
     }

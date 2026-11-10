@@ -173,7 +173,6 @@ public sealed class SaharaStaleEvidenceTests
     {
         private readonly Queue<byte[]> _packets = new();
         private byte[]? _carry;
-        private bool _helloDelivered;
 
         internal ZeroLengthThenHelloTransport()
         {

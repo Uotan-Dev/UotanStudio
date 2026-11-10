@@ -86,14 +86,17 @@ public sealed partial class SaharaProtocol
                 throw new ArgumentException("Sahara images must be readable and seekable.", nameof(images));
             }
         }
-        Log("Waiting for Sahara HELLO from device...");
+        Log($"Waiting for Sahara HELLO from device (image(s)={images.Count}, " +
+            $"QudHelloRecoveryEnabled={QudHelloRecoveryEnabled})...");
 
         var helloProbeTimeout = Math.Min(_timeoutMs, EdlConstants.HelloProbeTimeoutMs);
+        var helloWatch = System.Diagnostics.Stopwatch.StartNew();
         byte[] firstHeader;
         try
         {
             firstHeader = await ReadExactAsync(Marshal.SizeOf<SaharaPacketHeader>(), helloProbeTimeout, cancellationToken)
                 .ConfigureAwait(false);
+            Log($"Read the first packet after {helloWatch.ElapsedMilliseconds} ms of a {helloProbeTimeout} ms budget.");
         }
         catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.ReadPortTimeout)
         {
@@ -153,6 +156,7 @@ public sealed partial class SaharaProtocol
         }
 
         var firstPacket = BytesToStruct<SaharaPacketHeader>(firstHeader);
+        Log($"First packet: command={firstPacket.Command} (0x{(uint)firstPacket.Command:X2}), length={firstPacket.Length}.");
         if (firstPacket.Command == SaharaCommand.Hello
             && firstPacket.Length != (uint)Marshal.SizeOf<SaharaHelloPacket>())
         {
@@ -166,7 +170,10 @@ public sealed partial class SaharaProtocol
         if (firstPacket.Command == SaharaCommand.Hello)
         {
             var helloData = await ReadRemainingPacket<SaharaHelloPacket>(firstHeader, cancellationToken).ConfigureAwait(false);
-            pendingHello = new SaharaHelloPending(BytesToStruct<SaharaHelloPacket>(helloData));
+            var receivedHello = BytesToStruct<SaharaHelloPacket>(helloData);
+            Log($"HELLO: version={receivedHello.Version}, minVersion={receivedHello.MinVersion}, " +
+                $"maxCommandLength={receivedHello.MaxCommandLength}, mode={receivedHello.Mode} (0x{(uint)receivedHello.Mode:X2}).");
+            pendingHello = new SaharaHelloPending(receivedHello);
             pendingPacket = null;
         }
         else if (firstPacket.Command is SaharaCommand.ReadData or SaharaCommand.ReadData64
@@ -546,7 +553,7 @@ public sealed partial class SaharaProtocol
         _ => new SaharaException($"Unexpected Sahara command: {command}")
     };
 
-    private Task AcknowledgeImageHelloAsync(SaharaHelloPacket hello, CancellationToken token)
+    private async Task AcknowledgeImageHelloAsync(SaharaHelloPacket hello, CancellationToken token)
     {
         ValidateHello(hello);
         if (hello.Mode != SaharaMode.ImageTxPending)
@@ -554,14 +561,18 @@ public sealed partial class SaharaProtocol
             throw new SaharaException($"Image transfer requires ImageTxPending, received {hello.Mode}.");
         }
         NegotiatedProtocolVersion = Math.Min(hello.Version, EdlConstants.SaharaHostMaxProtocolVersion);
-        return WriteStructAsync(new SaharaHelloResponsePacket
+        Log($"Answering HELLO with HELLO_RESP: version={NegotiatedProtocolVersion.Value}, " +
+            $"minVersion={EdlConstants.SaharaHostCompatibleVersion}, mode=ImageTxPending. A bootrom only keeps the " +
+            "announced slot open until this reply, so a long gap here is what makes it reject the late answer.");
+        await WriteStructAsync(new SaharaHelloResponsePacket
         {
             Command = SaharaCommand.HelloResponse,
             Length = (uint)Marshal.SizeOf<SaharaHelloResponsePacket>(),
             Version = NegotiatedProtocolVersion.Value,
             MinVersion = EdlConstants.SaharaHostCompatibleVersion,
             Mode = SaharaMode.ImageTxPending
-        }, token);
+        }, token).ConfigureAwait(false);
+        Log("HELLO_RESP written; waiting for the target's first upload request.");
     }
 
     /// <summary>

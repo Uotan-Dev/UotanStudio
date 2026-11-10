@@ -511,6 +511,9 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
         {
             _buffer!.AsSpan(_position, count).CopyTo(buffer.AsSpan(offset, count));
             _position += count;
+            CommTrace.Write(CommLogLevel.Trace, "edl",
+                $"EDL replay served {count} buffered byte(s) aged " +
+                $"{Environment.TickCount64 - _bufferedAtMilliseconds} ms to the protocol layer.");
         }
         return count;
     }

@@ -70,6 +70,7 @@ public sealed partial class SaharaProtocol
         try
         {
             var total = 0;
+            var zeroLengthReads = 0;
             var started = Environment.TickCount64;
             while (total < length)
             {
@@ -98,9 +99,9 @@ public sealed partial class SaharaProtocol
                     // A zero-length read is "nothing arrived yet", not an expired deadline: usbfs reports a
                     // cleared STALL as a zero-length completion, so failing here would report a stall as a
                     // timeout. Spend the remaining budget instead and let the deadline decide.
-                    // A zero-length read is "nothing arrived yet", not an expired deadline: usbfs reports a
-                    // cleared STALL as a zero-length completion, so failing here would report a stall as a
-                    // timeout. Spend the remaining budget instead and let the deadline decide.
+                    zeroLengthReads++;
+                    Log($"Read returned 0 byte(s) with {remainingMs} ms of budget left " +
+                        $"(occurrence {zeroLengthReads}); retrying instead of reporting a timeout.");
                     await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
                     continue;
                 }

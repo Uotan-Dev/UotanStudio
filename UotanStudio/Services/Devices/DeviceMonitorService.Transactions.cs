@@ -267,11 +267,36 @@ public sealed partial class DeviceMonitorService
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Runs one operation against the EDL session and records every protocol step the Sahara, Firehose and streaming
+    /// layers report, so a failed run leaves its packet-level reasoning in the host log.
+    /// <para>在 EDL 会话上运行一次操作，并记录 Sahara、Firehose 与流式层上报的每个协议步骤，使失败的运行把其
+    /// 数据包级推理留在宿主日志里。</para>
+    /// </summary>
+    /// <param name="device">The EDL endpoint. <para>EDL 端点。</para></param>
+    /// <param name="operation">The operation to run on the session. <para>要在会话上运行的操作。</para></param>
+    /// <param name="cancellationToken">Cancels the operation. <para>取消该操作。</para></param>
+    /// <returns>The operation result. <para>操作结果。</para></returns>
     internal Task<TResult> RunEdlAsync<TResult>(DetectedDevice device,
         Func<EdlSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operation);
         EnsureEdlLivenessProbe();
-        return _edlConnections.RunAsync(device, operation, cancellationToken);
+        return _edlConnections.RunAsync(device, async session =>
+        {
+            void OnProtocolLog(object? sender, string message)
+                => LogService.Instance.Write(LogLevel.Debug, "Edl", message);
+
+            session.ProtocolLogMessage += OnProtocolLog;
+            try
+            {
+                return await operation(session).ConfigureAwait(false);
+            }
+            finally
+            {
+                session.ProtocolLogMessage -= OnProtocolLog;
+            }
+        }, cancellationToken);
     }
 
     internal TResult RunAdb<TResult>(DetectedDevice device, Func<IAdbDeviceSession, TResult> operation,
