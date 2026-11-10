@@ -43,6 +43,29 @@ public sealed class SaharaRecoveryWindowTests
         }
     }
 
+    [Fact]
+    public async Task Handshake_ProbeConsumedTheOnlyHello_WakesTheBootromAndCompletesTheUpload()
+    {
+        var transport = new ConsumedHelloTransport();
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.False(sahara.FirehoseAlreadyRunning);
+            Assert.Contains(transport.Writes, write => write.Length == 8
+                && BinaryPrimitives.ReadUInt32LittleEndian(write) == ResetStateCommand);
+            Assert.Equal(EdlConstants.SaharaCmdDone, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[^1]));
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
     private static byte[] Hello()
     {
         var packet = new byte[HelloPacketBytes];
@@ -83,6 +106,88 @@ public sealed class SaharaRecoveryWindowTests
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), (uint)packet.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(8), ImageTxCompleteStatus);
         return packet;
+    }
+
+    /// <summary>
+    /// Models the endpoint after an earlier probe already consumed the bootrom's only HELLO: every read stays
+    /// silent until the host writes Sahara RESET_STATE_MACHINE, after which the target announces HELLO again and
+    /// serves the upload. A Firehose NOP never produces a document, which is what proves the target is not Firehose.
+    /// <para>模拟更早的探测已经消费掉 bootrom 唯一一次 HELLO 之后的端点：在主机写入 Sahara RESET_STATE_MACHINE
+    /// 之前所有读取都静默，之后目标重新宣告 HELLO 并完成上传。Firehose NOP 从不产生文档，这正是目标不是
+    /// Firehose 的证据。</para>
+    /// </summary>
+    private sealed class ConsumedHelloTransport : ICommTransport
+    {
+        private readonly Queue<byte[]> _packets = new();
+        private byte[]? _carry;
+        private bool _wakeSeen;
+
+        internal ConsumedHelloTransport()
+        {
+            _packets.Enqueue(Hello());
+            _packets.Enqueue(ReadData(0, UploadedRangeBytes));
+            _packets.Enqueue(EndOfImage(0));
+            _packets.Enqueue(DoneResponse());
+        }
+
+        public List<byte[]> Writes { get; } = [];
+
+        public bool IsConnected => true;
+
+        public void Connect() { }
+        public void Disconnect() { }
+        public void Reset() { }
+
+        public int Read(byte[] buffer, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_wakeSeen)
+            {
+                throw new TimeoutException();
+            }
+
+            if (_carry is { Length: > 0 } carry)
+            {
+                return Task.FromResult(Serve(carry, buffer, offset, length));
+            }
+
+            if (_packets.Count == 0)
+            {
+                throw new TimeoutException();
+            }
+
+            return Task.FromResult(Serve(_packets.Dequeue(), buffer, offset, length));
+        }
+
+        private int Serve(byte[] packet, byte[] buffer, int offset, int length)
+        {
+            var take = Math.Min(length, packet.Length);
+            packet.AsSpan(0, take).CopyTo(buffer.AsSpan(offset));
+            _carry = take < packet.Length ? packet[take..] : null;
+            return take;
+        }
+
+        public long Write(byte[] data, int offset, int length, int timeoutMs)
+            => throw new NotSupportedException();
+
+        public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs,
+            CancellationToken cancellationToken = default)
+        {
+            var copy = data.AsSpan(offset, length).ToArray();
+            Writes.Add(copy);
+            if (copy.Length == 8 && BinaryPrimitives.ReadUInt32LittleEndian(copy) == ResetStateCommand)
+            {
+                _wakeSeen = true;
+            }
+
+            return Task.FromResult((long)length);
+        }
+
+        public Stream GetStream() => throw new NotSupportedException();
+        public void Dispose() { }
     }
 
     private sealed class DelayedHelloTransport : ICommTransport

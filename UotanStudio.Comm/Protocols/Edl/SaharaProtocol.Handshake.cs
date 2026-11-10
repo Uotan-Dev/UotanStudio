@@ -118,8 +118,13 @@ public sealed partial class SaharaProtocol
                         return SaharaMode.ImageTxComplete;
                     }
 
-                    Log("Sahara HELLO recovery failed; reporting the original read timeout.");
-                    throw;
+                    if (await TryWakeSaharaHelloAsync(cancellationToken).ConfigureAwait(false) is not { } wokenHeader)
+                    {
+                        Log("Sahara HELLO recovery failed; reporting the original read timeout.");
+                        throw;
+                    }
+
+                    firstHeader = wokenHeader;
                 }
             }
             else if (await ProbeFirehoseNopAsync(cancellationToken).ConfigureAwait(false))
@@ -128,6 +133,10 @@ public sealed partial class SaharaProtocol
                 FirehoseAlreadyRunning = true;
                 Log("Device is already running Firehose; skipping Sahara handshake.");
                 return SaharaMode.ImageTxComplete;
+            }
+            else if (await TryWakeSaharaHelloAsync(cancellationToken).ConfigureAwait(false) is { } wokenFirstHeader)
+            {
+                firstHeader = wokenFirstHeader;
             }
             else
             {
@@ -672,6 +681,54 @@ public sealed partial class SaharaProtocol
     {
         await DrainPendingPacketsAsync(cancellationToken).ConfigureAwait(false);
         await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Wakes a bootrom that already answered its one HELLO before this handshake started and returns the header it
+    /// re-announces, or <see langword="null"/> when it stays silent for the whole budget.
+    /// <para>唤醒在本次握手开始前就已应答过唯一一次 HELLO 的 bootrom 并返回它重新宣告的包头；在整个预算内保持
+    /// 静默时返回 <see langword="null"/>。</para>
+    /// </summary>
+    /// <remarks>
+    /// The bootrom announces HELLO exactly once after it enters emergency download, so a session that probed the
+    /// endpoint first consumes it and leaves the later handshake with a silent link. RESET_STATE_MACHINE is the only
+    /// host request that makes it announce HELLO again, and it is written only here, after the Firehose probe has
+    /// already established that the target is not answering Firehose XML: a target that already runs Firehose never
+    /// reaches this method, so it is never handed a command its state rejects. Every read keeps the remaining budget
+    /// instead of ending the recovery, because a bootrom that needs longer than one slice still answers inside it.
+    /// <para>bootrom 进入紧急下载模式后只会宣告一次 HELLO，因此先探测过端点的会话已经消费掉它，留给后续握手的
+    /// 是静默链路。RESET_STATE_MACHINE 是让它重新宣告 HELLO 的唯一主机请求，且只在此处写入——此时 Firehose 探测
+    /// 已经确认目标不应答 Firehose XML，因此已在运行 Firehose 的目标根本到不了本方法，也就不会收到它当前状态会
+    /// 拒绝的命令。每次读取都保留剩余预算而不是结束恢复，因为需要超过一个切片才响应的 bootrom 仍会在这段预算内
+    /// 应答。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The header of the re-announced packet, or <see langword="null"/> when nothing arrived.
+    /// <para>重新宣告的数据包头；没有任何数据到达时为 <see langword="null"/>。</para></returns>
+    private async Task<byte[]?> TryWakeSaharaHelloAsync(CancellationToken cancellationToken)
+    {
+        Log("The link stayed silent after both HELLO reads; the bootrom already announced its one HELLO to an " +
+            "earlier probe. Writing Sahara RESET_STATE_MACHINE so it announces HELLO again.");
+        await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+        var headerBytes = Marshal.SizeOf<SaharaPacketHeader>();
+        var deadline = Environment.TickCount64 + StaleRecoveryBudgetMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            var remainingMs = (int)Math.Max(1, deadline - Environment.TickCount64);
+            try
+            {
+                return await ReadExactAsync(headerBytes,
+                    Math.Min(remainingMs, StaleRecoveryReadTimeoutMs), cancellationToken).ConfigureAwait(false);
+            }
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
+            {
+                Log($"No packet within {Math.Min(remainingMs, StaleRecoveryReadTimeoutMs)} ms of the wake budget; " +
+                    "keeping the remaining budget open for the HELLO the reset is still bringing back.");
+            }
+        }
+
+        Log($"The woken bootrom did not announce HELLO within {StaleRecoveryBudgetMs} ms.");
+        return null;
     }
 
     /// <summary>
