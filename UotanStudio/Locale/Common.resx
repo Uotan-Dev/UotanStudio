@@ -555,11 +555,17 @@ Author: 暮间雾
   <data name="Flash_LoadBoot" xml:space="preserve">
     <value>Send Loader</value>
   </data>
+  <data name="Flash_LoadBootEdlDone" xml:space="preserve">
+    <value>Programmer {0} was sent; the device is now in Firehose mode.</value>
+  </data>
   <data name="Flash_LoadBootNoDevice" xml:space="preserve">
     <value>Select a device before sending a loader programmer.</value>
   </data>
   <data name="Flash_LoadBootNoLoaderRow" xml:space="preserve">
     <value>No entry with the loader command exists in the list; import a configuration that carries one first.</value>
+  </data>
+  <data name="Flash_LoadBootNoProgrammer" xml:space="preserve">
+    <value>The Qualcomm section has no programmer to send yet: pick an ELF in the list, or choose a custom programmer and name its file.</value>
   </data>
   <data name="Flash_LoadBootRkApplying" xml:space="preserve">
     <value>Sending loader programmer: applying loader row {0}.</value>

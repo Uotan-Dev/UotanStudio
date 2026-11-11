@@ -555,11 +555,17 @@
   <data name="Flash_LoadBoot" xml:space="preserve">
     <value>发送引导程序</value>
   </data>
+  <data name="Flash_LoadBootEdlDone" xml:space="preserve">
+    <value>Programmer {0} 已发送，设备已进入 Firehose 模式。</value>
+  </data>
   <data name="Flash_LoadBootNoDevice" xml:space="preserve">
     <value>请先选择设备，再发送引导程序。</value>
   </data>
   <data name="Flash_LoadBootNoLoaderRow" xml:space="preserve">
     <value>条目列表中没有命令为 loader 的行；请先导入包含 loader 条目的配置。</value>
+  </data>
+  <data name="Flash_LoadBootNoProgrammer" xml:space="preserve">
+    <value>高通分类还没有可发送的 Programmer：请在下拉框选择 ELF，或选择自选 Programmer 并指定文件。</value>
   </data>
   <data name="Flash_LoadBootRkApplying" xml:space="preserve">
     <value>发送引导程序：正在应用 loader 行 {0}。</value>

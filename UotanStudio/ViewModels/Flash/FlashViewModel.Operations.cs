@@ -1570,18 +1570,19 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Loads a boot loader for the selected device: EDL uses the <c>loader</c> row as its Sahara programmer when the
-    /// grid carries one and otherwise picks a programmer, MTK likewise falls back to picking a preloader (DA)
-    /// package, and Rockchip validates the loader row, applies it, downloads it to the device and waits for the
-    /// loader-stage re-enumeration.
-    /// <para>为所选设备加载引导：条目列表带 <c>loader</c> 行时 EDL 把它当作 Sahara programmer，没有该行才选择
-    /// programmer；MTK 同样在没有该行时改为选择 preloader（DA）包；瑞芯微校验该 loader 行，应用后下载到设备并等待
-    /// loader 阶段的重枚举。</para>
+    /// Loads a boot loader for the selected device: EDL sends the programmer the Qualcomm section names so the bootrom
+    /// leaves Sahara and comes back up in Firehose, MTK uses the <c>loader</c> row when the grid carries one and
+    /// otherwise picks a preloader (DA) package, and Rockchip validates the loader row, applies it, downloads it to
+    /// the device and waits for the loader-stage re-enumeration.
+    /// <para>为所选设备加载引导：EDL 发送高通分类指定的 programmer，使 bootrom 离开 Sahara 并以 Firehose 重新应答；
+    /// MTK 在条目列表带 <c>loader</c> 行时使用该行，否则改为选择 preloader（DA）包；瑞芯微校验 loader 行、应用后下载到
+    /// 设备，并等待 loader 阶段的重枚举。</para>
     /// </summary>
     /// <remarks>
-    /// A loader row that already names a programmer is parsed for this device and used; the picker opens only
-    /// when the grid carries no such row.
-    /// <para>loader 行已给出 programmer 时按该设备解析并使用它，没有该行才打开选择器。</para>
+    /// The EDL branch never opens a picker of its own: the Qualcomm section owns the programmer choice, and the
+    /// load-boot button stays closed until that choice names a file. The picker fallbacks below belong to MTK alone.
+    /// <para>EDL 分支绝不自行打开选择框：programmer 由高通分类负责，且在该选择给出文件之前发送引导按钮保持关闭。
+    /// 下面的选择器回退只属于 MTK。</para>
     /// </remarks>
     internal async void OnLoadBootClick(object? sender, RoutedEventArgs e)
     {
@@ -1594,11 +1595,7 @@ public sealed partial class FlashViewModel
         switch (device.Protocol)
         {
             case DeviceProtocolKind.Edl:
-                if (!await TryLoadBootFromLoaderRowAsync().ConfigureAwait(true))
-                {
-                    OnEdlChooseProgrammerClick(sender, e);
-                }
-
+                await SendEdlProgrammerAsync(device).ConfigureAwait(true);
                 break;
             case DeviceProtocolKind.Mtk:
                 if (!await TryLoadBootFromLoaderRowAsync().ConfigureAwait(true))
@@ -1616,6 +1613,103 @@ public sealed partial class FlashViewModel
             default:
                 AppendLog(_localizer.GetString("Flash_LoadBootUnsupported"));
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Sends the programmer the Qualcomm section names to the selected endpoint: the bootrom receives it over Sahara,
+    /// leaves that state and comes back up running Firehose, which is what every later EDL action talks to.
+    /// <para>把高通分类指定的 programmer 发送到所选端点：bootrom 经 Sahara 接收它，离开该状态并以 Firehose 重新应答，
+    /// 后续每个 EDL 动作都与该状态通信。</para>
+    /// </summary>
+    /// <remarks>
+    /// The image set the package inferred wins over the single file, because a multi-image programmer only uploads
+    /// correctly as its whole set. A custom file replaces the set, which is why the two are read together through
+    /// <see cref="EffectiveEdlProgrammerImages"/> and <see cref="EffectiveEdlProgrammer"/>; an already configured session
+    /// answers with its Firehose instance instead of uploading a second time.
+    /// <para>包内推断出的多镜像集合优先于单文件，因为多镜像 programmer 只有整组上传才正确。自选文件替换该集合，因此两者一起经
+    /// <see cref="EffectiveEdlProgrammerImages"/> 与 <see cref="EffectiveEdlProgrammer"/> 读取；已配置的会话直接返回其
+    /// Firehose 实例，不会重复上传。</para>
+    /// </remarks>
+    /// <param name="device">The selected EDL endpoint. <para>所选 EDL 端点。</para></param>
+    private async Task SendEdlProgrammerAsync(DetectedDevice device)
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        if (!EdlProgrammerReady)
+        {
+            AppendLog(language.GetString("Flash_LoadBootNoProgrammer"));
+            return;
+        }
+
+        if (!TryBuildEdlInitialization(out var initialization))
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            AppendLog(string.Format(CultureInfo.InvariantCulture, language.GetString("Flash_EdlLoaderUploading"),
+                Path.GetFileName(EffectiveEdlProgrammer ?? string.Empty), EffectiveEdlProgrammerBytes()));
+
+            await App.DeviceMonitor.RunEdlAsync(device, async session =>
+            {
+                await ConfigureEdlAsync(session, initialization, cancellation.Token).ConfigureAwait(true);
+                return true;
+            }, cancellation.Token).ConfigureAwait(true);
+
+            AppendLog(string.Format(CultureInfo.InvariantCulture, language.GetString("Flash_LoadBootEdlDone"),
+                Path.GetFileName(EffectiveEdlProgrammer ?? string.Empty)));
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception ex)
+        {
+            AppendError(ex);
+        }
+        finally
+        {
+            _flashCancellation = null;
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Size of the programmer the Qualcomm section names, in bytes, for the upload log line; a multi-image set reports
+    /// the sum of its images, and an unreadable file reports zero rather than failing the action before it starts.
+    /// <para>高通分类指定的 programmer 字节数，用于上传日志；多镜像集合报告其镜像之和，不可读的文件报告零而不是在动作开始前失败。</para>
+    /// </summary>
+    /// <returns>The programmer size in bytes, or zero. <para>programmer 字节数；不可读时为 0。</para></returns>
+    private long EffectiveEdlProgrammerBytes()
+    {
+        if (EffectiveEdlProgrammerImages is { } set)
+        {
+            return set.Images.Sum(image => image.LengthBytes);
+        }
+
+        try
+        {
+            return EffectiveEdlProgrammer is { Length: > 0 } path && File.Exists(path)
+                ? new FileInfo(path).Length
+                : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
         }
     }
 
@@ -2295,6 +2389,36 @@ public sealed partial class FlashViewModel
         FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage, RkStage);
 
     /// <summary>
+    /// Whether the Qualcomm section already names a programmer the load-boot action can send: a candidate picked in the
+    /// dropdown, or a custom row whose path box carries a file that still exists. A custom row with no file chosen has
+    /// nothing to send, so the action stays closed instead of opening a picker of its own, which is what the page used
+    /// to do. A path whose file has since disappeared is no better: the upload would start Sahara without an image.
+    /// <para>高通分类是否已经写明加载引导动作可发送的 programmer：下拉框选中的候选，或自选行且地址栏已带仍存在的文件。
+    /// 自选行尚未选文件时没有可发送的内容，因此该动作保持关闭，而不是像以往那样自己弹出选择框；文件已不存在的地址同样不可发，
+    /// 否则上传会在没有镜像的情况下启动 Sahara。</para>
+    /// </summary>
+    internal bool EdlProgrammerReady => IsEdlProgrammerPathReady(EffectiveEdlProgrammer);
+
+    /// <summary>
+    /// Whether one programmer address names a readable file: an empty path box and a path whose file was moved away
+    /// both leave the Sahara upload without an image, so neither counts as a programmer the action can send.
+    /// <para>一个 programmer 地址是否指向可读文件：地址栏为空或文件已被移走都会让 Sahara 上传没有镜像，因此两者都不算
+    /// 该动作可发送的 programmer。</para>
+    /// </summary>
+    /// <param name="path">Programmer path the page shows. <para>页面显示的 programmer 路径。</para></param>
+    /// <returns><see langword="true"/> when the path names an existing file.<para>路径指向存在的文件时为 <see langword="true"/>。</para></returns>
+    internal static bool IsEdlProgrammerPathReady(string? path) =>
+        path is { Length: > 0 } && File.Exists(path);
+
+    /// <summary>
+    /// Whether the load-boot action has everything it needs: a protocol stage that can still take a loader, and on an
+    /// EDL endpoint the programmer its branch sends.
+    /// <para>加载引导动作是否已具备全部条件：仍能接受 loader 的协议阶段，以及在 EDL 端点上其分支要发送的 programmer。</para>
+    /// </summary>
+    internal bool CanSendBootLoader => CanLoadBoot &&
+        (SelectedDevice?.Protocol is not DeviceProtocolKind.Edl || EdlProgrammerReady);
+
+    /// <summary>
     /// Recomputes the enables derived from the selected device and the protocol stage; sections keep their own expansion
     /// and stay present, so a device only closes the controls it cannot serve.
     /// <para>按所选设备与协议阶段重算派生启用值；各分类保持自身展开状态并保持呈现，设备只关闭它无法提供的控件。</para>
@@ -2319,7 +2443,11 @@ public sealed partial class FlashViewModel
         // 七个选项复选框不携带设备条件：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配，因此它们自身的门控
         // 只在页面操作运行期间关闭它们。
         UpdateRootControlsState();
-        SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
+        // The load-boot action sends the programmer the Qualcomm section names, so on an EDL endpoint it waits for that
+        // selection instead of opening a picker of its own: without it there is nothing to send and nothing to switch.
+        // 加载引导动作发送高通分类指定的 programmer，因此在 EDL 端点上它等待该选择而不是自行弹出选择框：没有选择就没有
+        // 可发送的内容，也没有可切换的目标。
+        SetControlEnabled("LoadBootButton", !_busy && CanSendBootLoader);
         // The flash action runs on the rows the user picked: the EDL bundle needs a writable entry ticked (an empty
         // selection otherwise means "the whole package") and every other dispatch path flashes selected rows only.
         // 烧录动作作用于用户勾选的行：EDL 整包需要勾选可写条目（否则空选意味着"整个包"），其余派发路径都只烧写勾选行。
