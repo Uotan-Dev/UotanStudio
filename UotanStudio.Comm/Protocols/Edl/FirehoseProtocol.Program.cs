@@ -542,7 +542,7 @@ public sealed partial class FirehoseProtocol
                 }
 
                 if (ShouldTerminateBlockWithZlp(Configuration.ZlpAwareHost, toRead, (int)Configuration.SectorSize)
-                    && _transport is UsbDeviceTransport usbTransport)
+                    && FindUsbDeviceTransport(_transport) is { } usbTransport)
                 {
                     await usbTransport.Session.WriteZlpAsync(zlpTimeout, cancellationToken).ConfigureAwait(false);
                 }
@@ -557,6 +557,23 @@ public sealed partial class FirehoseProtocol
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
+
+    /// <summary>
+    /// Resolves the USB transport behind a protocol-level wrapper, so the ZLP the host declared with
+    /// <c>ZlpAwareHost=1</c> is actually emitted. A session always exchanges through its probe wrapper, so matching
+    /// only the bare USB transport silently dropped every ZLP the configure request promised.
+    /// <para>解析协议层包装之后的 USB 传输，使主机以 <c>ZlpAwareHost=1</c> 声明的 ZLP 真正发出。会话一律经探测包装
+    /// 交换数据，只匹配裸 USB 传输会让 configure 请求承诺的每个 ZLP 都被静默丢弃。</para>
+    /// </summary>
+    /// <param name="transport">The transport the protocol exchanges on. <para>协议交换所用的传输。</para></param>
+    /// <returns>The USB transport when one backs the exchange, otherwise <see langword="null"/>.
+    /// <para>支撑本次交换的 USB 传输；没有时为 <see langword="null"/>。</para></returns>
+    private static UsbDeviceTransport? FindUsbDeviceTransport(ICommTransport transport) => transport switch
+    {
+        UsbDeviceTransport direct => direct,
+        EdlProbeTransport probe => FindUsbDeviceTransport(probe.Inner),
+        _ => null
+    };
 
     /// <summary>
     /// Determines whether a program payload block needs a trailing zero-length packet: a

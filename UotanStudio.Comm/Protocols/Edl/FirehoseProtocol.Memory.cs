@@ -266,6 +266,10 @@ public sealed partial class FirehoseProtocol
     /// the target, so one transport read stays inside one target packet.
     /// <para>读取请求不会超过目标设备为“自目标方向”协商的负载大小，因此单次传输读取保持在目标的
     /// 一个数据包之内。</para>
+    /// A zero-length completion delimits one negotiated payload block rather than reporting an expired deadline;
+    /// the reads are bounded in count and the transfer in total time, so a stalled target still fails.
+    /// <para>零长度完成标记的是一个协商负载块的边界，而不是截止时间已过；读取按次数设界、传输按总时间设界，
+    /// 因此中途停住的目标仍会失败。</para>
     /// </summary>
     /// <param name="destination">The destination stream. <para>目标流。</para></param>
     /// <param name="totalBytes">The number of raw bytes to read. <para>待读取的原始字节数。</para></param>
@@ -278,6 +282,8 @@ public sealed partial class FirehoseProtocol
         long bytesRead = 0;
         var chunkBytes = GetRawReadChunkSize();
         var rawBuffer = new byte[chunkBytes];
+        var silentReads = 0;
+        var deadline = Environment.TickCount64 + RawPayloadTransferBudgetMs;
 
         while (bytesRead < totalBytes)
         {
@@ -293,22 +299,47 @@ public sealed partial class FirehoseProtocol
             else
             {
                 var toRead = (int)Math.Min(chunkBytes, totalBytes - bytesRead);
+                var remainingMs = deadline - Environment.TickCount64;
+                if (remainingMs <= 0)
+                {
+                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                        $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
+                }
+
                 int n;
                 try
                 {
-                    n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
+                    n = await _transport.ReadAsync(rawBuffer, 0, toRead,
+                        (int)Math.Min(_cmdTimeoutMs, remainingMs), cancellationToken).ConfigureAwait(false);
                 }
                 catch (TimeoutException ex)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout,
                         $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.", ex);
                 }
-                if (n <= 0 || n > toRead)
+                if (n < 0 || n > toRead)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout,
                         $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
                 }
+                if (n == 0)
+                {
+                    // A zero-length completion is not an expired deadline: the programmer ends each
+                    // negotiated payload block with one, so the transport answers the next request with
+                    // "nothing yet" at every block boundary. Treating it as a timeout aborts a healthy
+                    // transfer exactly one payload size into the read. Silence still has to end, so the
+                    // reads are bounded in count and the whole transfer stays inside one budget.
+                    if (++silentReads > MaximumSilentRawReads)
+                    {
+                        throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                            $"Raw payload read went silent after {bytesRead}/{totalBytes} bytes.");
+                    }
 
+                    await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                silentReads = 0;
                 chunkBuffer = rawBuffer;
                 chunkLength = n;
             }
@@ -324,6 +355,31 @@ public sealed partial class FirehoseProtocol
         }
 
     }
+
+    /// <summary>
+    /// Delay between two reads that completed with a zero length, so a target that keeps answering an empty
+    /// completion immediately cannot spin the budget away.
+    /// <para>两次零长度完成读取之间的停顿，使立即返回空完成的目标无法以紧循环耗掉预算。</para>
+    /// </summary>
+    private const int ZeroLengthReadRetryDelayMs = 2;
+
+    /// <summary>
+    /// How many consecutive zero-length completions are tolerated before the payload is reported as silent.
+    /// The programmer emits one at every negotiated payload block boundary, so the bound only has to cover the
+    /// programmable block density of a slow target and never the whole transfer.
+    /// <para>连续多少次零长度完成之后把负载报告为静默。programmer 在每个协商负载块边界发出一次，
+    /// 因此该上限只需覆盖慢速目标的块间距，而不是整次传输。</para>
+    /// </summary>
+    private const int MaximumSilentRawReads = 512;
+
+    /// <summary>
+    /// Total budget for one raw payload transfer, independent of how many blocks it spans. A single command
+    /// timeout cannot bound a multi-gigabyte read, while no bound at all would let a target that stalls mid-payload
+    /// hold the session forever.
+    /// <para>单次原始负载传输的总预算，与其跨越多少个块无关。单条命令超时无法为多 GB 读取设界，而完全没有上界
+    /// 又会让负载中途停住的目标永久占住会话。</para>
+    /// </summary>
+    private const int RawPayloadTransferBudgetMs = 30 * 60 * 1000;
 
     /// <summary>
     /// Resolves the raw payload read chunk: the <see cref="EdlConstants.RawReadChunkBytes"/> ceiling
