@@ -4547,6 +4547,7 @@ public sealed partial class FlashViewModel
     {
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        var statusEpoch = BeginDeviceStatusRefresh();
         SetBusy(true);
         try
         {
@@ -4564,7 +4565,7 @@ public sealed partial class FlashViewModel
             }, cancellation.Token).ConfigureAwait(true);
 
             var rows = EdlInfoFormatter.Format(snapshot);
-            PublishEdlInfoRows(rows, language);
+            PublishEdlInfoRows(rows, language, device.Key, statusEpoch);
             AppendLog(rows.Count == 0
                 ? language.GetString("Flash_EdlInfoEmpty")
                 : string.Format(language.GetString("Flash_EdlInfoDone"), rows.Count));
@@ -4579,18 +4580,45 @@ public sealed partial class FlashViewModel
         }
     }
 
-    private void PublishEdlInfoRows(IReadOnlyList<EdlInfoRow> rows, ILocalizer language)
+    private void PublishEdlInfoRows(IReadOnlyList<EdlInfoRow> rows, ILocalizer language, string deviceKey,
+        int statusEpoch)
     {
-        EdlInfoRows.Clear();
+        if (statusEpoch != _rkStatusRefreshEpoch)
+        {
+            return;
+        }
+
+        // The status table is where device information belongs, so the read ends there instead of growing a second
+        // list inside the protocol section; the summary line in the log still reports how many fields arrived.
+        // 设备信息本就该在状态表里，因此这次读取直接落到那里，而不是在协议分类里再长出一个列表；日志里仍以摘要行报告收到了
+        // 多少个字段。
+        ReplaceDeviceStatus(deviceKey, BuildEdlStatusRows(rows, language));
+    }
+
+    /// <summary>
+    /// Projects the rows of one EDL device-information read onto the device status table; the mapping is its own method
+    /// so the read itself stays free of presentation detail.
+    /// <para>把一次 EDL 设备信息读取的行投影到设备状态表；映射单独成方法，使读取本身不含呈现细节。</para>
+    /// </summary>
+    /// <param name="rows">Rows the formatter produced. <para>格式化器产生的行。</para></param>
+    /// <param name="language">The active localizer. <para>当前本地化器。</para></param>
+    /// <returns>Status rows in the order the read reported them. <para>按读取上报顺序排列的状态行。</para></returns>
+    internal static List<FlashDeviceStatusEntry> BuildEdlStatusRows(IReadOnlyList<EdlInfoRow> rows, ILocalizer language)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(language);
+        var statusRows = new List<FlashDeviceStatusEntry>(rows.Count);
         foreach (var row in rows)
         {
-            EdlInfoRows.Add(new FlashPartitionEntry
+            statusRows.Add(new FlashDeviceStatusEntry
             {
+                Key = FlashDeviceStatusRowKeys.EdlInfo,
                 Name = language.GetString(row.Key),
-                Size = row.Value
+                Value = row.Value
             });
-            AppendLog($"{language.GetString(row.Key)}: {row.Value}");
         }
+
+        return statusRows;
     }
 
     /// <summary>

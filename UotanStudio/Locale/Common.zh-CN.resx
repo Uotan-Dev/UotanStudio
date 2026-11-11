@@ -1113,9 +1113,6 @@
   <data name="Flash_EdlBootImageWritten" xml:space="preserve">
     <value>已把引导控制块写入 misc（LUN {0}，起始扇区 {1}，{2} 个扇区）。</value>
   </data>
-  <data name="Flash_EdlInfoGroup" xml:space="preserve">
-    <value>设备信息（按读取阶段）</value>
-  </data>
   <data name="Flash_EdlInfoDone" xml:space="preserve">
     <value>已读取 {0} 条设备信息。</value>
   </data>

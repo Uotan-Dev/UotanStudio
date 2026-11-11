@@ -61,6 +61,12 @@ public static class FlashDeviceStatusRowKeys
     /// <para>fastboot 端点的启动阶段与它应答的变量，合并为同一分组。</para>
     /// </summary>
     public const string Fastboot = "fastboot";
+
+    /// <summary>
+    /// The fields one EDL device-information read reported, folded into one group.
+    /// <para>一次 EDL 设备信息读取上报的字段，合并为同一分组。</para>
+    /// </summary>
+    public const string EdlInfo = "edl-info";
 }
 
 public sealed partial class FlashViewModel

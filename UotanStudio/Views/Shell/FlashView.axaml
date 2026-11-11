@@ -625,31 +625,6 @@
                                 <CheckBox Name="EdlSkipResponseBox" Content="{DynamicResource Flash_EdlSkipResponse}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlSkipResponse}" />
-                                <StackPanel Name="EdlInfoGroup" Spacing="6">
-                                    <!-- 读取设备信息的结果逐条呈现：键取自本地化资源，值由 EdlInfoFormatter 格式化。 -->
-                                    <!-- Each row of the device-information read is shown in place: the key comes from the localised resources and the value is formatted by EdlInfoFormatter. -->
-                                    <TextBlock Text="{DynamicResource Flash_EdlInfoGroup}" FontSize="12"
-                                               FontWeight="SemiBold" Opacity="0.8" />
-                                    <Border Classes="InfoCard" MaxHeight="220" MinHeight="40">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                      HorizontalScrollBarVisibility="Disabled">
-                                            <ItemsControl Name="EdlInfoList" ItemsSource="{Binding EdlInfoRows}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid ColumnDefinitions="150,*" ColumnSpacing="8" Margin="0,2">
-                                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                                                       FontSize="12" Opacity="0.8"
-                                                                       TextWrapping="Wrap" />
-                                                            <TextBlock Grid.Column="1" Text="{Binding Size}"
-                                                                       FontSize="12" TextWrapping="Wrap"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
-                                    </Border>
-                                </StackPanel>
                                 <StackPanel Name="EdlRegionGroup" Spacing="8">
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <TextBox Name="EdlBootableValueBox" Grid.Column="0" MinHeight="32" Text="0"

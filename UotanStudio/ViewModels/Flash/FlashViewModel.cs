@@ -300,14 +300,6 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <summary>All partition entries. <para>全部分区条目。</para></summary>
     public LogEntryCollection<FlashPartitionEntry> Partitions { get; } = [];
 
-    /// <summary>
-    /// The rows of the last EDL device-information read, one per reported field; the grid binds to them
-    /// separately from <see cref="Partitions"/> so a read never overwrites the partition plan.
-    /// <para>最近一次 EDL 设备信息读取的行，每个上报字段一行；列表单独绑定它们而不复用
-    /// <see cref="Partitions"/>，使读取永不覆盖分区计划。</para>
-    /// </summary>
-    public LogEntryCollection<FlashPartitionEntry> EdlInfoRows { get; } = [];
-
     /// <summary>The entries bound to the grid after applying the search text. <para>按搜索词过滤后绑定到列表的分区条目。</para></summary>
     public LogEntryCollection<FlashPartitionEntry> VisiblePartitions { get; } = [];
 

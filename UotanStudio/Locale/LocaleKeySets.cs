@@ -354,7 +354,6 @@ internal static class LocaleKeySets
         "Flash_EdlReadbackSelected",
         "Flash_EdlGenerateXml",
         "Flash_EdlGeneralizedXml",
-        "Flash_EdlInfoGroup",
         "Flash_EdlBootImageHint",         "Flash_EdlBootImageChoose",         "Flash_EdlBootImageWritten",
         "Flash_EdlInfoDone",
         "Flash_EdlInfoEmpty",

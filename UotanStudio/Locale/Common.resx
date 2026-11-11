@@ -1113,9 +1113,6 @@ Author: 暮间雾
   <data name="Flash_EdlBootImageWritten" xml:space="preserve">
     <value>Wrote the bootloader control block to misc (LUN {0}, sector {1}, {2} sector(s)).</value>
   </data>
-  <data name="Flash_EdlInfoGroup" xml:space="preserve">
-    <value>Device information by read stage</value>
-  </data>
   <data name="Flash_EdlInfoDone" xml:space="preserve">
     <value>Read {0} device-information row(s).</value>
   </data>
