@@ -259,17 +259,22 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// 工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
     /// <param name="node">The tree node whose device is taken over.<para>要被接管设备的树节点。</para></param>
-    public async Task EnableTakeoverAsync(UsbTreeNodeViewModel node)
+    /// <returns>
+    /// <see langword="true"/> when the takeover package was installed successfully; otherwise
+    /// <see langword="false"/>.
+    /// <para>接管驱动包安装成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// </returns>
+    public async Task<bool> EnableTakeoverAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
             _disposed || !OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
         {
-            return;
+            return false;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_TakeoverEnabling", node.DisplayText);
-        var refreshRequired = false;
+        var succeeded = false;
         try
         {
             var request = new WinUsbTakeoverRequest
@@ -283,7 +288,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_TakeoverEnabled", node.DisplayText);
-                    refreshRequired = true;
+                    succeeded = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_TakeoverElevationRequired");
@@ -307,10 +312,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (refreshRequired)
+        if (succeeded)
         {
-            await RefreshAsync().ConfigureAwait(true);
+            await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
+
+        return succeeded;
     }
 
     /// <summary>
@@ -322,17 +329,22 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// 进行中的操作；移除在后台执行，期间树不读取、工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
     /// <param name="node">The tree node whose takeover ends.<para>要结束接管的树节点。</para></param>
-    public async Task CancelTakeoverAsync(UsbTreeNodeViewModel node)
+    /// <returns>
+    /// <see langword="true"/> when the takeover package was removed successfully; otherwise
+    /// <see langword="false"/>.
+    /// <para>接管驱动包移除成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// </returns>
+    public async Task<bool> CancelTakeoverAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
             _disposed || !OperatingSystem.IsWindows())
         {
-            return;
+            return false;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_TakeoverDisabling", node.DisplayText);
-        var refreshRequired = false;
+        var succeeded = false;
         try
         {
             var result = await Task.Run(() => _driverConfig.UninstallTakeover(node.Node.InstanceId))
@@ -341,7 +353,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_TakeoverDisabled", node.DisplayText);
-                    refreshRequired = true;
+                    succeeded = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_TakeoverElevationRequired");
@@ -365,10 +377,28 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (refreshRequired)
+        if (succeeded)
         {
-            await RefreshAsync().ConfigureAwait(true);
+            await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
+
+        return succeeded;
+    }
+
+    /// <summary>
+    /// Drops the host USB enumeration inventory after a driver binding changed so device discovery re-reads
+    /// the interface GUIDs instead of reusing the ones cached before the takeover, then refreshes the tree.
+    /// <para>驱动绑定变化后丢弃宿主 USB 枚举清单，使设备发现重读接口 GUID、不再复用接管前缓存的结果，随后刷新树。</para>
+    /// </summary>
+    /// <returns>A task completing when the topology refresh finished. <para>拓扑刷新完成时结束的任务。</para></returns>
+    private async Task RefreshAfterDriverChangeAsync()
+    {
+        if (_monitorsDevices)
+        {
+            await App.DeviceMonitor.ForceFullRefreshAsync().ConfigureAwait(true);
+        }
+
+        await RefreshAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -668,7 +698,9 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth,
-            EnableTakeoverAsync, CancelTakeoverAsync, InstallDriverAsync);
+            candidate => EnableTakeoverAsync(candidate),
+            candidate => CancelTakeoverAsync(candidate),
+            InstallDriverAsync);
         node.ShowDriverAction = _driverConfig.IsSupported &&
             capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
             branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&

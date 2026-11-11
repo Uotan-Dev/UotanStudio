@@ -3863,6 +3863,8 @@ internal static class LocaleKeySets
         "UsbTree_TakeoverDisabled",
         "UsbTree_TakeoverElevationRequired",
         "UsbTree_TakeoverFailed",
+        "UsbTree_RestartRequiredTitle",
+        "UsbTree_RestartRequiredMessage",
         "UsbTree_DriverStateRefreshFailed",
         "UsbTree_InstallDriver",
         "UsbTree_DriverInstalling",

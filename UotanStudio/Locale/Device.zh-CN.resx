@@ -759,6 +759,12 @@
   <data name="UsbTree_TakeoverFailed" xml:space="preserve">
     <value>设备接管失败：{0}</value>
   </data>
+  <data name="UsbTree_RestartRequiredTitle" xml:space="preserve">
+    <value>需要重新启动计算机</value>
+  </data>
+  <data name="UsbTree_RestartRequiredMessage" xml:space="preserve">
+    <value>要使这个设备生效，你需要重新启动计算机。</value>
+  </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>驱动状态查询失败：{0}</value>
   </data>

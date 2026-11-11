@@ -759,6 +759,12 @@
   <data name="UsbTree_TakeoverFailed" xml:space="preserve">
     <value>Device takeover failed: {0}</value>
   </data>
+  <data name="UsbTree_RestartRequiredTitle" xml:space="preserve">
+    <value>Restart required</value>
+  </data>
+  <data name="UsbTree_RestartRequiredMessage" xml:space="preserve">
+    <value>To make this device take effect, you need to restart your computer.</value>
+  </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>Driver state query failed: {0}</value>
   </data>

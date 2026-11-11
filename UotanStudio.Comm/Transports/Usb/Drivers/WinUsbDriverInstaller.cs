@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security;
 using System.Security.Principal;
+using UotanStudio.Comm.Transports.Usb.Backend.Windows;
+using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Transports.Usb.Drivers;
 
@@ -129,6 +131,15 @@ public sealed class WinUsbDriverInstaller
     /// <para>接管期间两次绑定观测之间的间隔。</para></summary>
     private static readonly TimeSpan BindingPollInterval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>The upper bound a takeover waits for a WinUSB-openable interface after the binding changes.
+    /// <para>绑定变化后，接管等待出现可由 WinUSB 打开的接口的上界。</para></summary>
+    private static readonly TimeSpan InterfaceWaitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>The in-box USB device interface class, a last candidate when a WinUSB stack publishes no
+    /// node-level DeviceInterfaceGUIDs value.
+    /// <para>系统内置 USB 设备接口类；当 WinUSB 栈没有节点级 DeviceInterfaceGUIDs 值时作为最后候选。</para></summary>
+    private static readonly Guid UsbDeviceInterfaceGuid = new("a5dcbf10-6530-11d2-901f-00c04fb951ed");
+
     /// <summary>The wait shared by the takeover and vendor package installs for the PnP installation queue
     /// to drain before they queue their own work.
     /// <para>接管与厂商包安装在排入自己的工作前，共享的 PnP 安装队列排空等待上限。</para></summary>
@@ -211,7 +222,10 @@ public sealed class WinUsbDriverInstaller
     /// it is published. A devnode whose install previously failed is bound through an asynchronous retry
     /// installation, every other present devnode needs a forced install that PnP completes inside this call,
     /// and both paths wait at most <see cref="BindingWaitTimeout"/> for the observed binding to become the
-    /// takeover package. Before anything is staged, the PnP installation queue must drain within
+    /// takeover package. The result then requires a WinUSB-openable device interface on that instance,
+    /// because a registry-level binding alone does not prove the running driver stack switched; a missing
+    /// interface triggers one asynchronous re-enumeration and is reported as a replug requirement. Before
+    /// anything is staged, the PnP installation queue must drain within
     /// <see cref="PendingInstallWaitTimeout"/>: queueing onto a busy queue blocks every other device
     /// install, so a busy queue is refused. A devnode that is pending removal is rejected too.
     /// <para>通过暂存新生成的自签名 WinUSB 驱动包并请求 PnP 绑定来接管设备。需要管理员令牌；该包把系统内置
@@ -219,6 +233,8 @@ public sealed class WinUsbDriverInstaller
     /// 与下载模式访问所用的 WinUSB 路径打开。证书会被加入本机 <c>Root</c> 与 <c>TrustedPublisher</c>
     /// 存储，并在发布前销毁私钥。此前安装失败的设备节点经异步重试安装完成绑定，其余在位节点必须经 PnP 在本次
     /// 调用内完成的强制安装，两条路径都最多等待 <see cref="BindingWaitTimeout"/> 观测绑定是否变为接管包。
+    /// 绑定后还要求该实例存在可由 WinUSB 打开的设备接口：仅注册表层面的绑定不能证明运行中的驱动栈已切换；
+    /// 接口缺失时触发一次异步重枚举，仍缺失则如实上报需要拔插或重启，而不报成功。
     /// 在暂存任何内容之前，PnP 安装队列必须在 <see cref="PendingInstallWaitTimeout"/> 内排空：向繁忙的
     /// 队列排队会阻塞所有其他设备安装，因此队列繁忙时直接拒绝；处于移除中的设备节点同样会被拒绝。</para>
     /// </summary>
@@ -262,10 +278,13 @@ public sealed class WinUsbDriverInstaller
             }
 
             var current = QueryState(request.InstanceId);
-            if (current is { DevicePresent: true, IsTakeoverBinding: true } && problem == 0)
+            if (current is { DevicePresent: true, IsTakeoverBinding: true } && problem == 0 &&
+                (WaitForWinUsbInterface(request.InstanceId, InterfaceWaitTimeout) ||
+                 (RequestDriverRestart(request.InstanceId) &&
+                  WaitForWinUsbInterface(request.InstanceId, InterfaceWaitTimeout))))
             {
                 return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
-                    $"'{request.HardwareId}' already runs the self-signed WinUSB package and the device started.");
+                    $"'{request.HardwareId}' already runs the self-signed WinUSB package and its WinUSB interface is openable.");
             }
 
             WinUsbSelfSignedDriverPackage.PurgeLegacyCertificates();
@@ -279,6 +298,7 @@ public sealed class WinUsbDriverInstaller
                     WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupCopyOEMInf failed"));
             }
 
+            var rebootRequired = 0;
             var bound = current.IsTakeoverBinding;
             if (!bound && ReadDevNodeStatus(request.InstanceId).Present)
             {
@@ -286,7 +306,7 @@ public sealed class WinUsbDriverInstaller
                         request.HardwareId, package.InfPath,
                         WinUsbDriverNativeMethods.InstallFlagForce |
                         WinUsbDriverNativeMethods.InstallFlagNonInteractive,
-                        out _) &&
+                        out rebootRequired) &&
                     WaitForTakeoverBinding(request.InstanceId);
             }
 
@@ -302,15 +322,33 @@ public sealed class WinUsbDriverInstaller
                     $"Staged the self-signed WinUSB package for '{request.HardwareId}'; the device is no longer present and binds on its next enumeration.");
             }
 
-            if (bound && stillProblem == 0)
+            var interfaceReady = WaitForWinUsbInterface(request.InstanceId, InterfaceWaitTimeout);
+            if (!interfaceReady && RequestDriverRestart(request.InstanceId))
+            {
+                interfaceReady = WaitForWinUsbInterface(request.InstanceId, InterfaceWaitTimeout);
+            }
+
+            if (rebootRequired != 0)
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    $"Bound the self-signed WinUSB package for '{request.HardwareId}', but Windows requires a reboot before the driver can start; reboot or replug the device and retry.");
+            }
+
+            if (bound && stillProblem == 0 && interfaceReady)
             {
                 return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
-                    $"Staged and bound the self-signed WinUSB package for '{request.HardwareId}'; the device started.");
+                    $"Staged and bound the self-signed WinUSB package for '{request.HardwareId}'; its WinUSB interface is openable.");
             }
 
             var pendingNote = WinUsbDriverNativeMethods.WaitForNoPendingInstallation(TimeSpan.Zero)
                 ? string.Empty
                 : " The PnP installation queue still reports a pending install; unplug the device if Device Manager or other devices stop responding.";
+            if (bound && stillProblem == 0)
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    $"Bound the self-signed WinUSB package for '{request.HardwareId}', but no WinUSB device interface is openable: the running driver stack is still the vendor driver. Replug the device (or reboot) so WinUSB starts, then retry.{pendingNote}");
+            }
+
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
                 bound
                     ? $"Bound the self-signed WinUSB package for '{request.HardwareId}' but the device did not start (problem 0x{stillProblem:X}).{pendingNote}"
@@ -323,6 +361,7 @@ public sealed class WinUsbDriverInstaller
         }
         finally
         {
+            UsbCommunicationLayer.ResetUsbEnumerationInventory();
             TryDeleteDirectory(workDirectory);
         }
     }
@@ -605,6 +644,143 @@ public sealed class WinUsbDriverInstaller
         return false;
     }
 
+
+    /// <summary>
+    /// Parses the device node's <c>DeviceInterfaceGUIDs</c> registry value, accepting both REG_MULTI_SZ
+    /// and a single string and ignoring malformed entries.
+    /// <para>解析设备节点的 <c>DeviceInterfaceGUIDs</c> 注册表值，兼容 REG_MULTI_SZ 与单个字符串，忽略非法项。</para>
+    /// </summary>
+    /// <param name="value">The raw registry value. <para>注册表原始值。</para></param>
+    /// <returns>The distinct GUIDs carried by the value. <para>该值携带的去重 GUID。</para></returns>
+    internal static IReadOnlyList<Guid> ParseInterfaceGuids(object? value)
+    {
+        IEnumerable<string> entries = value switch
+        {
+            string[] list => list,
+            string single => [single],
+            _ => []
+        };
+
+        var result = new List<Guid>();
+        foreach (var text in entries)
+        {
+            if (Guid.TryParse(text.Trim().Trim('{', '}'), out var guid) && !result.Contains(guid))
+            {
+                result.Add(guid);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads the interface class GUIDs the node registered for its driver, plus the in-box USB device
+    /// interface class as a last candidate for stacks that publish no node-level value.
+    /// <para>读取节点为驱动注册的接口类 GUID，并补上系统内置 USB 设备接口类，覆盖不写节点级值的驱动栈。</para>
+    /// </summary>
+    private static IReadOnlyList<Guid> ReadWinUsbInterfaceCandidates(string instanceId)
+    {
+        var candidates = new List<Guid>();
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Enum\" + instanceId + @"\Device Parameters");
+            candidates.AddRange(ParseInterfaceGuids(key?.GetValue("DeviceInterfaceGUIDs")));
+        }
+        catch (Exception ex) when (ex is SecurityException or IOException or UnauthorizedAccessException)
+        {
+        }
+
+        if (!candidates.Contains(UsbDeviceInterfaceGuid))
+        {
+            candidates.Add(UsbDeviceInterfaceGuid);
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Polls until one device interface of this exact instance can be opened through
+    /// <c>WinUsb_Initialize</c>; a registry binding alone does not prove the running stack serves WinUSB.
+    /// <para>有界轮询，直到该精确实例的某个设备接口可由 <c>WinUsb_Initialize</c> 打开；仅注册表绑定
+    /// 不能证明运行中的驱动栈已经由 WinUSB 提供服务。</para>
+    /// </summary>
+    private static bool WaitForWinUsbInterface(string instanceId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            foreach (var guid in ReadWinUsbInterfaceCandidates(instanceId))
+            {
+                if (UsbPnpNative.FindDeviceInterfacePath(guid, instanceId) is { } path &&
+                    CanOpenWinUsbInterface(path))
+                {
+                    return true;
+                }
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+
+            Thread.Sleep(BindingPollInterval);
+        }
+    }
+
+    /// <summary>Opens one interface path through WinUSB and releases both handles immediately.
+    /// <para>经 WinUSB 打开一条接口路径并立即释放两个句柄。</para></summary>
+    private static bool CanOpenWinUsbInterface(string path)
+    {
+        var file = Win32API.SimpleCreateHandle(path, true);
+        if (file == Win32API.INVALID_HANDLE_VALUE)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!WinUSBAPI.WinUsb_Initialize(file, out var iface))
+            {
+                return false;
+            }
+
+            using var opened = new SafeWinUsbHandle(iface);
+            return true;
+        }
+        finally
+        {
+            Win32API.CloseHandle(file);
+        }
+    }
+
+    /// <summary>
+    /// Queues an asynchronous re-enumeration of one devnode and its parent hub so PnP can start the
+    /// bound stack without a synchronous wait that a stalled node could hold open indefinitely.
+    /// <para>对设备节点及其父集线器排队异步重枚举，使 PnP 启动已绑定驱动栈，同时避免可能被卡住节点
+    /// 无限期占住的同步等待。</para>
+    /// </summary>
+    private static bool RequestDriverRestart(string instanceId)
+    {
+        if (WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
+                WinUsbDriverNativeMethods.CmLocateDevnodeNormal) != WinUsbDriverNativeMethods.CrSuccess)
+        {
+            return false;
+        }
+
+        var queued = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+            WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+            WinUsbDriverNativeMethods.CmReenumerateAsynchronous) == WinUsbDriverNativeMethods.CrSuccess;
+        if (WinUsbDriverNativeMethods.CmGetParent(out var parent, devInst, 0) ==
+            WinUsbDriverNativeMethods.CrSuccess)
+        {
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(parent,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+                WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
+        }
+
+        return queued;
+    }
 
     private static void TryDeleteDirectory(string path)
     {

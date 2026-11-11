@@ -188,10 +188,10 @@ internal sealed class CommDeviceTransportOpener(
 
     /// <summary>
     /// Explains why an enumerated USB endpoint could not be opened: the device disappeared between discovery and the
-    /// open, or it is still present while no backend could open it — the usual cause being another process that holds
-    /// an exclusive handle to the port, which a flasher-mode device rejects a second open on.
-    /// <para>说明一个已枚举 USB 端点为何无法打开：设备在发现与打开之间消失，或设备仍在位但没有任何后端能打开它——
-    /// 最常见的原因是另一个进程以独占方式持有该端口的句柄，处于刷机模式的设备会拒绝第二次打开。</para>
+    /// open, it is still present while another process holds an exclusive handle to the port, or the enumerated path
+    /// names a USB-device/COM-port interface instead of a WinUSB interface that any native backend could open.
+    /// <para>说明一个已枚举 USB 端点为何无法打开：设备在发现与打开之间消失；设备仍在位但另一个进程以独占方式
+    /// 持有该端口的句柄；或枚举出的路径是 USB 设备/COM 口接口，而不是任何原生后端能打开的 WinUSB 接口。</para>
     /// </summary>
     /// <param name="endpoint">The endpoint that failed to open. <para>打开失败的端点。</para></param>
     /// <param name="usb">The USB details recorded at discovery. <para>发现时记录的 USB 详细信息。</para></param>
@@ -222,9 +222,38 @@ internal sealed class CommDeviceTransportOpener(
             .First(candidate => string.Equals(candidate.DevicePath, usb.Path, StringComparison.OrdinalIgnoreCase))
             .DeviceInstanceId;
         var instance = string.IsNullOrWhiteSpace(instanceId) ? string.Empty : $" (instance '{instanceId}')";
+        if (IsNonWinUsbInterfacePath(usb.Path))
+        {
+            return $"{identity}{instance} is still connected, but the enumerated path is a USB-device or COM-port " +
+                $"interface rather than a WinUSB interface: the WinUSB takeover driver is not serving the running " +
+                $"device stack. Replug the device or let the driver restart finish, then retry; the communication " +
+                $"log records the native error of the failed open ({endpoint.Protocol} endpoint).";
+        }
+
         return $"{identity}{instance} is still connected but no {usb.Backend} backend could open it: another process " +
             $"most likely holds an exclusive handle to this port, or the device withdrew its interface after a mode " +
             $"switch (the communication log records the native error of the failed open). Close the other flasher or " +
             $"debug tool and retry ({endpoint.Protocol} endpoint).";
     }
+
+    /// <summary>
+    /// Reports whether a Windows device-interface path names the USB-device or COM-port class instead of a
+    /// WinUSB interface; a native backend cannot open such a path as a WinUSB session.
+    /// <para>判断 Windows 设备接口路径是否属于 USB 设备类或 COM 口类而非 WinUSB 接口；原生后端无法把这类
+    /// 路径作为 WinUSB 会话打开。</para>
+    /// </summary>
+    /// <param name="path">The enumerated device-interface path. <para>已枚举的设备接口路径。</para></param>
+    /// <returns><see langword="true"/> for a USB-device or COM-port interface path.
+    /// <para>路径为 USB 设备接口或 COM 口接口时为 <see langword="true"/>。</para></returns>
+    internal static bool IsNonWinUsbInterfacePath(string path)
+        => !string.IsNullOrWhiteSpace(path) && NonWinUsbInterfaceGuids.Any(guid =>
+            path.EndsWith("#" + guid, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Interface class GUIDs that a hub or a serial driver registers, never a WinUSB interface.
+    /// <para>由集线器或串口驱动注册、绝非 WinUSB 接口的设备接口类 GUID。</para></summary>
+    private static readonly string[] NonWinUsbInterfaceGuids =
+    [
+        "{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
+        "{86e0d1e0-8089-11d0-9ce4-08003e301f73}"
+    ];
 }

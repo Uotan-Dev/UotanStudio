@@ -94,8 +94,8 @@ public partial class UsbTreeWindow : Window
 
     /// <summary>
     /// Asks for the dangerous-operation confirmation and, when confirmed, takes the clicked row's device
-    /// over with a self-signed WinUSB package.
-    /// <para>弹出危险操作确认,确认后用自签名 WinUSB 包接管点击行对应的设备。</para>
+    /// over with a self-signed WinUSB package; a confirmed success shows an informational restart notice.
+    /// <para>弹出危险操作确认，确认后用自签名 WinUSB 包接管点击行对应的设备；接管确定成功后弹出重启提示。</para>
     /// </summary>
     private async void OnEnableTakeoverClick(object? sender, RoutedEventArgs e)
     {
@@ -117,13 +117,17 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        _ = _model.EnableTakeoverAsync(node);
+        if (await _model.EnableTakeoverAsync(node))
+        {
+            await ShowRestartRequiredAsync();
+        }
     }
 
     /// <summary>
     /// Asks for the dangerous-operation confirmation and, when confirmed, ends the takeover of the clicked
-    /// row's device by removing the self-signed package and its certificate.
-    /// <para>弹出危险操作确认,确认后移除自签名包与证书,结束点击行对应设备的接管。</para>
+    /// row's device by removing the self-signed package and its certificate; a confirmed success shows an
+    /// informational restart notice.
+    /// <para>弹出危险操作确认，确认后移除自签名包与证书，结束点击行对应设备的接管；取消接管确定成功后弹出重启提示。</para>
     /// </summary>
     private async void OnCancelTakeoverClick(object? sender, RoutedEventArgs e)
     {
@@ -145,7 +149,24 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        _ = _model.CancelTakeoverAsync(node);
+        if (await _model.CancelTakeoverAsync(node))
+        {
+            await ShowRestartRequiredAsync();
+        }
+    }
+
+    /// <summary>
+    /// Shows the restart notice after a successful takeover change; the dialog only informs the user and
+    /// never restarts the computer on their behalf.
+    /// <para>接管状态变更成功后显示重启提示；弹窗仅作告知，不会代替用户重启计算机。</para>
+    /// </summary>
+    private Task ShowRestartRequiredAsync()
+    {
+        var language = LanguageService.Instance;
+        return DialogService.ShowAsync(this,
+            language.GetString("UsbTree_RestartRequiredTitle"),
+            language.GetString("UsbTree_RestartRequiredMessage"),
+            Ursa.Controls.MessageBoxIcon.Information);
     }
 
     /// <summary>
