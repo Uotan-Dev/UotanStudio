@@ -70,6 +70,28 @@ public sealed class SaharaBootstrapTests
         }
     }
 
+    [Fact]
+    public async Task Handshake_FirstRead_OutrunsAQueuedDuplicateAnnouncement()
+    {
+        var transport = new ScriptedSaharaTransport(silentUntilWoken: false, duplicateHello: true);
+        using var programmer = new MemoryStream(new byte[UploadedRangeBytes]);
+        var sahara = new SaharaProtocol(transport);
+        try
+        {
+            var mode = await sahara.HandshakeAsync(programmer,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(SaharaMode.ImageTxPending, mode);
+            Assert.True(transport.ReadRequestLengths[0] >= 2 * HelloPacketBytes,
+                "a request narrower than the queued burst makes the host controller abort the read as a babble, " +
+                "which libusb raises as Error.Overflow and the flash dies before the handshake starts");
+        }
+        finally
+        {
+            sahara.Dispose();
+        }
+    }
+
     private static byte[] Hello()
     {
         var packet = new byte[HelloPacketBytes];
@@ -125,10 +147,24 @@ public sealed class SaharaBootstrapTests
         private byte[]? _carry;
         private bool _wakeSeen;
 
-        internal ScriptedSaharaTransport(bool silentUntilWoken)
+        internal ScriptedSaharaTransport(bool silentUntilWoken, bool duplicateHello = false)
         {
             _silentUntilWoken = silentUntilWoken;
-            _packets.Enqueue(Hello());
+            if (duplicateHello)
+            {
+                // A bootrom that re-announces while the host is away leaves a second copy of the same packet in the
+                // endpoint, so the next read is answered with both of them in one transfer.
+                // 主机离开时重新宣告的 bootrom 会在端点里留下同一数据包的第二份，因此下一次读取会在一次传输中收到两份。
+                var burst = new byte[HelloPacketBytes * 2];
+                Hello().CopyTo(burst, 0);
+                Hello().CopyTo(burst, HelloPacketBytes);
+                _packets.Enqueue(burst);
+            }
+            else
+            {
+                _packets.Enqueue(Hello());
+            }
+
             _packets.Enqueue(ReadData(0, UploadedRangeBytes));
             _packets.Enqueue(EndOfImage(0));
             _packets.Enqueue(DoneResponse());

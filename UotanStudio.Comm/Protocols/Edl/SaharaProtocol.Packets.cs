@@ -13,6 +13,18 @@ public sealed partial class SaharaProtocol
     private const int ZeroLengthReadRetryDelayMs = 5;
 
     /// <summary>
+    /// Width of the read handed to the transport for a packet prefix. A bootrom can queue more than one announcement
+    /// of the same handshake state, and a request narrower than the queued burst makes the host controller abort the
+    /// transfer as a babble, which libusb surfaces as <c>LIBUSB_ERROR_OVERFLOW</c> and the transport then raises as a
+    /// failed transfer. 1 KiB covers a burst of the largest packet this protocol dispatches (a 48-byte HELLO) with
+    /// room to spare, so the queue never outruns the buffer.
+    /// <para>读取数据包前缀时交给传输的宽度。bootrom 可能排下不止一份同一握手状态的宣告，而比队列中的这一批更窄的请求
+    /// 会让主机以 babble 中止传输，libusb 将其呈现为 <c>LIBUSB_ERROR_OVERFLOW</c>，传输层再把它抛成传输失败。
+    /// 1 KiB 足以覆盖本协议分发的最大数据包（48 字节 HELLO）的整批重复，并留有余量，队列因此不会超出缓冲区。</para>
+    /// </summary>
+    private const int PacketBurstBufferBytes = 1024;
+
+    /// <summary>
     /// Reads up to <paramref name="length"/> bytes, returning only the bytes actually received.
     /// <para>读取最多 <paramref name="length"/> 个字节，仅返回实际收到的字节。</para>
     /// </summary>
@@ -52,22 +64,24 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Reads the first packet of a link into one buffer that can hold the largest packet this host dispatches,
-    /// returning whatever arrived once the target has said something, and spending the whole budget a
-    /// zero-length read would otherwise end.
-    /// <para>把链路上的首个数据包读入一个足以容纳本主机分发的最大数据包的缓冲区，在目标开口后返回实际到达的字节，
-    /// 并耗尽零长度读本会提前结束的整段预算。</para>
+    /// Reads the first packet of a link into one buffer that can hold a whole burst of packets, returning the prefix
+    /// this host dispatches, and spending the whole budget a zero-length read would otherwise end.
+    /// <para>把链路上的首个数据包读入一个足以容纳一整批数据包的缓冲区，返回本主机分发所需的包头前缀，并耗尽零长度读
+    /// 本会提前结束的整段预算。</para>
     /// </summary>
     /// <remarks>
-    /// A USB bulk read completes on the packet boundary and never carries a second packet, and no target sends a
-    /// second packet before the host answers the first, so a buffer wider than the header cannot steal bytes from
-    /// the following packet. Asking for the header alone instead splits one packet across two reads; on a
-    /// bootrom that announces HELLO as a single 48-byte packet that turns a one-round-trip handshake into two and
-    /// leaves the excess bytes of the packet in the endpoint for a read that no longer describes them.
-    /// <para>USB 批量读取在数据包边界完成且不会携带第二个数据包，且任何目标都不会在主机应答首个数据包之前发送
-    /// 第二个数据包，因此比包头更宽的缓冲区不会窃取后续数据包的字节。只请求包头则会把同一个数据包拆成两次读取；
-    /// 对以单个 48 字节包宣告 HELLO 的 bootrom，这会把一次往返的握手变成两次，并把该数据包多余的字节留在端点里，
-    /// 交给一个已不再描述它们的读取。</para>
+    /// The read handed to the transport is <see cref="PacketBurstBufferBytes"/> wide, not <paramref name="bound"/>:
+    /// a bootrom that answers with more bytes than the request describes makes the host controller abort the transfer
+    /// as a babble, which libusb reports as <c>LIBUSB_ERROR_OVERFLOW</c> and the transport raises as a failed transfer,
+    /// so a request sized to the 48-byte HELLO alone kills the flash the moment the target has queued a second copy of
+    /// it. Sizing the request for a whole burst keeps that case a normal read, and only the prefix is returned because
+    /// every packet this host dispatches is smaller than it; any surplus is a duplicate announcement of the same
+    /// handshake state and is dropped with a log line instead of being spliced into the next packet.
+    /// <para>交给传输的读取宽度是 <see cref="PacketBurstBufferBytes"/> 而不是 <paramref name="bound"/>：bootrom 应答的
+    /// 字节多于请求所描述的字节时，主机会以 babble 中止该次传输，libusb 将其报告为 <c>LIBUSB_ERROR_OVERFLOW</c>，
+    /// 传输层再把它抛成传输失败——因此只按 48 字节 HELLO 取宽度的请求，会在目标多排了一份 HELLO 时直接终止烧录。
+    /// 按一整批取宽度可以让这种情况仍是一次正常读取；只返回前缀是因为本主机分发的每个数据包都比它小，多余的字节属于
+    /// 同一握手状态的重复宣告，记录一行日志后丢弃，而不会拼进下一个数据包。</para>
     /// </remarks>
     /// <param name="bound">Upper bound for the prefix in bytes.
     /// <para>前缀字节数上限。</para></param>
@@ -84,7 +98,7 @@ public sealed partial class SaharaProtocol
     /// <para>传输报告了无效的接收长度。</para></exception>
     private async Task<byte[]> ReadPacketPrefixAsync(int bound, int timeoutMs, CancellationToken cancellationToken)
     {
-        var buf = ArrayPool<byte>.Shared.Rent(bound);
+        var buf = ArrayPool<byte>.Shared.Rent(PacketBurstBufferBytes);
         try
         {
             var total = 0;
@@ -104,13 +118,13 @@ public sealed partial class SaharaProtocol
                 int n;
                 try
                 {
-                    n = await _transport.ReadAsync(buf, total, bound - total, (int)remainingMs, cancellationToken);
+                    n = await _transport.ReadAsync(buf, total, PacketBurstBufferBytes - total, (int)remainingMs, cancellationToken);
                 }
                 catch (TimeoutException ex)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout, ex.Message, ex);
                 }
-                if (n < 0 || n > bound - total)
+                if (n < 0 || n > PacketBurstBufferBytes - total)
                 {
                     throw new SaharaException("The transport returned an invalid receive length.");
                 }
@@ -123,6 +137,14 @@ public sealed partial class SaharaProtocol
                         $"(occurrence {zeroLengthReads}); retrying instead of reporting a timeout.");
                     await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
                     continue;
+                }
+
+                var prefixRoom = bound - total;
+                if (n > prefixRoom)
+                {
+                    Log($"The target answered with {n} byte(s) for a {prefixRoom}-byte packet request; keeping the " +
+                        "prefix and dropping the queued surplus.");
+                    n = prefixRoom;
                 }
 
                 total += n;
@@ -293,7 +315,11 @@ public sealed partial class SaharaProtocol
         var remaining = (int)declaredLength - headerBytes.Length;
         if (remaining <= 0)
         {
-            return headerBytes;
+            // The prefix can be wider than the packet it starts: a bootrom that queued a duplicate announcement
+            // arrives in one read, and everything past the declared length belongs to that duplicate.
+            // 前缀可能比它起始的数据包更宽：排下重复宣告的 bootrom 会在一次读取中一起到达，超出声明长度的字节属于那份
+            // 重复宣告。
+            return headerBytes.Length == declaredLength ? headerBytes : headerBytes[..(int)declaredLength];
         }
 
         var body = await ReadExactAsync(remaining, _timeoutMs, ct).ConfigureAwait(false);

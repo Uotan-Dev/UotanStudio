@@ -33,7 +33,19 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     private const int MaximumProbeBytes = 64 * 1024;
     private const int MaximumProbeMilliseconds = EdlConstants.ProbeReadBudgetMs;
     private const int ProbeReadSliceMilliseconds = 500;
-    private const int ProbeReadChunkBytes = 48;
+
+    /// <summary>
+    /// Width of one probe read. It is deliberately wider than the 48-byte HELLO it usually receives: a bootrom can
+    /// queue a second announcement of the same handshake state, and a request narrower than the queued burst makes the
+    /// host controller abort the transfer as a babble, which libusb reports as <c>LIBUSB_ERROR_OVERFLOW</c> and the
+    /// transport raises as a failed transfer. The probe buffer keeps every byte read, so a wider read only ever adds
+    /// bytes to classify rather than losing them.
+    /// <para>单次探测读取的宽度。它刻意宽于通常收到的 48 字节 HELLO：bootrom 可能排下第二份同一握手状态的宣告，而比这一批
+    /// 更窄的请求会让主机以 babble 中止传输，libusb 将其报告为 <c>LIBUSB_ERROR_OVERFLOW</c>，传输层再把它抛成传输失败。
+    /// 探测缓冲区保留读到的每个字节，因此更宽的读取只会增加待分类的字节，而不会丢失字节。</para>
+    /// </summary>
+    private const int ProbeReadChunkBytes = 1024;
+
     private const int MaximumIdleReads = 64;
     private const int FirehoseSilenceGraceMilliseconds = 1000;
     private const int SaharaResetStatePacketBytes = 8;

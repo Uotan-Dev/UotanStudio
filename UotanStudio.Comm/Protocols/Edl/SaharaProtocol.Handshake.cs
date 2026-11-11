@@ -901,6 +901,18 @@ public sealed partial class SaharaProtocol
                     break;
                 }
 
+                // A binary Sahara packet is proof the target is a bootrom, not a loader running Firehose: stop here
+                // instead of reading out the whole probe budget for a document that cannot arrive, so the caller can
+                // move on to the wake that actually brings the announcement back.
+                // 二进制 Sahara 数据包即证明目标是 bootrom 而不是运行 Firehose 的 loader：就此停止，不必为一份不可能
+                // 到达的文档耗尽整个探测预算，让调用方转去执行真正能唤回宣告的复位。
+                if (length == 0 && EdlProbeTransport.Classify(chunk) is not EdlProtocolState.Unknown)
+                {
+                    Log("The Firehose probe was answered with a Sahara packet; the target is not running Firehose, " +
+                        "so the probe stops waiting for a document.");
+                    return false;
+                }
+
                 foreach (var value in chunk)
                 {
                     if (++total > document.Length)
