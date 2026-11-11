@@ -279,6 +279,10 @@ internal static class FlashEdlBundleService
         }
 
         var results = await orchestrator.FlashPackageAsync(options, progress, ct).ConfigureAwait(false);
+        // The package is the unit the user started, so it is also the unit that reports completion: every storage
+        // region finished above without announcing anything.
+        // 刷写包是用户发起的单位，因此也由它上报完成：上面每个存储区域结束时都不再宣告。
+        progress?.Report(new FlashBundleProgress(FlashBundlePhase.Completed, "Flash completed. 刷入完成。", 1, 1));
         var warnings = new List<string>();
         foreach (var result in results)
         {

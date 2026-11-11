@@ -1061,7 +1061,7 @@ Author: 暮间雾
     <value>Uploading Sahara programmer image {0} ({1} bytes)</value>
   </data>
   <data name="Flash_EdlProgrammerInferred" xml:space="preserve">
-    <value>Inferred a multi-image programmer set from file names ({0} images); a vendor qsahara_device_programmer.xml remains the authoritative source</value>
+    <value>Inferred {0} bootloader file(s)</value>
   </data>
   <data name="Flash_EdlProgrammerInferredFailed" xml:space="preserve">
     <value>The inferred programmer set failed validation and stays unused</value>
@@ -4984,7 +4984,7 @@ Continue?</value>
     <value>Sending the programmer for {0}…</value>
   </data>
   <data name="Flash_Progress_EdlSinglePartition" xml:space="preserve">
-    <value>Programming {0}…</value>
+    <value>Flashing {0}…</value>
   </data>
   <data name="Flash_Progress_EraseAllDone" xml:space="preserve">
     <value>All partitions erased.</value>

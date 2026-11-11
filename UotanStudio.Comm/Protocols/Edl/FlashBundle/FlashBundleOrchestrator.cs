@@ -336,7 +336,11 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
                 return result;
             }
 
-            RaiseProgress(progress, FlashBundlePhase.Completed, "Flash bundle completed. 刷写包已完成。", 1, 1);
+            // A package spans several storage regions, and each one completes its own bundle. Reporting completion
+            // from here would print the same line once per region, so only the package-level caller announces the
+            // finished flash.
+            // 一个刷写包跨越多个存储区域，每个区域都会完成自己的清单。在这里上报完成会让同一行按区域重复打印，
+            // 因此只由整包调用方宣告刷入结束。
             result.IsSuccess = result.Errors.Count == 0;
         }
         catch (OperationCanceledException ex)

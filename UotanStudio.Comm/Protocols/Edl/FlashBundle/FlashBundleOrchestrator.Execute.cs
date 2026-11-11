@@ -84,7 +84,7 @@ public sealed partial class FlashBundleOrchestrator
                     continue;
                 }
 
-                RaiseProgress(progress, FlashBundlePhase.Programming, $"Programming {displayName}... 编程 {displayName}...", i, total);
+                RaiseProgress(progress, FlashBundlePhase.Programming, $"Flashing {displayName}... 刷入 {displayName}...", i, total);
                 var programStarted = Stopwatch.GetTimestamp();
                 long itemAcked = 0;
                 try

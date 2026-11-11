@@ -160,7 +160,7 @@ internal static class EdlGptPartitionService
             var (snapshot, partitionEntry) = await ResolvePartitionSnapshotAsync(firehose, partition, lun, ct)
                 .ConfigureAwait(false);
             progress?.Report(new FlashProgress(partition, 30,
-                $"Programming {partition} at LBA {partitionEntry.FirstLba}... 正在编程 {partition}..."));
+                $"Flashing {partition} at LBA {partitionEntry.FirstLba}... 正在刷入 {partition}..."));
             var result = await firehose.ProgramRawPartitionFromFileAsync(snapshot, partition, imagePath,
                 verify: verify, cancellationToken: ct).ConfigureAwait(false);
             progress?.Report(new FlashProgress(partition, 100, "Program complete. 编程完成。"));

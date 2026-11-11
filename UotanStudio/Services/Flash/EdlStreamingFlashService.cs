@@ -65,8 +65,8 @@ internal static class EdlStreamingFlashService
 
         var length = new FileInfo(imagePath).Length;
         progress?.Report(new FlashProgress(partition.Name, 0,
-            $"Programming {partition.Name} through the Streaming DLOAD backend at 0x{partition.StartLba:X8}... " +
-            $"正在经流式 DLOAD 后端编程 {partition.Name}..."));
+            $"Flashing {partition.Name} through the Streaming DLOAD backend at 0x{partition.StartLba:X8}... " +
+            $"正在经流式 DLOAD 后端刷入 {partition.Name}..."));
         var chunkThrottle = CreateChunkThrottle(progress, partition.Name);
         try
         {
