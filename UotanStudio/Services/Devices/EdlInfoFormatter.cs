@@ -13,95 +13,95 @@ internal static class EdlInfoFormatter
 {
     /// <summary>The row key of the observed protocol mode.
     /// <para>已观测协议模式的行键。</para></summary>
-    internal const string ProtocolKey = "EdlInfo_Protocol";
+    internal const string ProtocolKey = "Flash_EdlInfo_Protocol";
 
     /// <summary>The row key of the Sahara protocol version.
     /// <para>Sahara 协议版本的行键。</para></summary>
-    internal const string SaharaVersionKey = "EdlInfo_SaharaVersion";
+    internal const string SaharaVersionKey = "Flash_EdlInfo_SaharaVersion";
 
     /// <summary>The row key of the Sahara minimum protocol version.
     /// <para>Sahara 最低协议版本的行键。</para></summary>
-    internal const string SaharaMinVersionKey = "EdlInfo_SaharaMinVersion";
+    internal const string SaharaMinVersionKey = "Flash_EdlInfo_SaharaMinVersion";
 
     /// <summary>The row key of the Sahara maximum command length.
     /// <para>Sahara 最大命令长度的行键。</para></summary>
-    internal const string SaharaMaxCommandLengthKey = "EdlInfo_SaharaMaxCommandLength";
+    internal const string SaharaMaxCommandLengthKey = "Flash_EdlInfo_SaharaMaxCommandLength";
 
     /// <summary>The row key of the Sahara operating mode.
     /// <para>Sahara 操作模式的行键。</para></summary>
-    internal const string SaharaModeKey = "EdlInfo_SaharaMode";
+    internal const string SaharaModeKey = "Flash_EdlInfo_SaharaMode";
 
     /// <summary>The row key of the bootrom-reported serial number.
     /// <para>bootrom 上报序列号的行键。</para></summary>
-    internal const string IdentitySerialKey = "EdlInfo_IdentitySerial";
+    internal const string IdentitySerialKey = "Flash_EdlInfo_IdentitySerial";
 
     /// <summary>The row key of the bootrom-reported hardware identifier.
     /// <para>bootrom 上报硬件标识的行键。</para></summary>
-    internal const string IdentityHardwareKey = "EdlInfo_IdentityHardware";
+    internal const string IdentityHardwareKey = "Flash_EdlInfo_IdentityHardware";
 
     /// <summary>The row key of the bootrom-reported SBL version.
     /// <para>bootrom 上报 SBL 版本的行键。</para></summary>
-    internal const string IdentitySblVersionKey = "EdlInfo_IdentitySblVersion";
+    internal const string IdentitySblVersionKey = "Flash_EdlInfo_IdentitySblVersion";
 
     /// <summary>The row key of the bootrom-reported OEM public-key hash.
     /// <para>bootrom 上报 OEM 公钥哈希的行键。</para></summary>
-    internal const string IdentityOemKeyHashKey = "EdlInfo_IdentityOemKeyHash";
+    internal const string IdentityOemKeyHashKey = "Flash_EdlInfo_IdentityOemKeyHash";
 
     /// <summary>The row key of the version 3 chip identifier.
     /// <para>版本 3 芯片标识的行键。</para></summary>
-    internal const string IdentityChipIdentifierKey = "EdlInfo_IdentityChipIdentifier";
+    internal const string IdentityChipIdentifierKey = "Flash_EdlInfo_IdentityChipIdentifier";
 
     /// <summary>The row key of the Firehose version string.
     /// <para>Firehose 版本字符串的行键。</para></summary>
-    internal const string FirehoseVersionKey = "EdlInfo_FirehoseVersion";
+    internal const string FirehoseVersionKey = "Flash_EdlInfo_FirehoseVersion";
 
     /// <summary>The row key of the loaded programmer's file name.
     /// <para>已加载 programmer 文件名的行键。</para></summary>
-    internal const string ProgrammerKey = "EdlInfo_Programmer";
+    internal const string ProgrammerKey = "Flash_EdlInfo_Programmer";
 
     /// <summary>The row key of the negotiated storage type.
     /// <para>协商得到的存储类型的行键。</para></summary>
-    internal const string StorageTypeKey = "EdlInfo_StorageType";
+    internal const string StorageTypeKey = "Flash_EdlInfo_StorageType";
 
     /// <summary>The row key of the reported sector size.
     /// <para>上报扇区大小的行键。</para></summary>
-    internal const string SectorSizeKey = "EdlInfo_SectorSize";
+    internal const string SectorSizeKey = "Flash_EdlInfo_SectorSize";
 
     /// <summary>The row key of the reported storage capacity.
     /// <para>上报存储容量的行键。</para></summary>
-    internal const string CapacityKey = "EdlInfo_Capacity";
+    internal const string CapacityKey = "Flash_EdlInfo_Capacity";
 
     /// <summary>The row key of the reported physical sector count.
     /// <para>上报物理扇区数的行键。</para></summary>
-    internal const string SectorCountKey = "EdlInfo_SectorCount";
+    internal const string SectorCountKey = "Flash_EdlInfo_SectorCount";
 
     /// <summary>The row key of the reported maximum payload size.
     /// <para>上报最大负载大小的行键。</para></summary>
-    internal const string MaxPayloadKey = "EdlInfo_MaxPayload";
+    internal const string MaxPayloadKey = "Flash_EdlInfo_MaxPayload";
 
     /// <summary>The row key of the storage serial number.
     /// <para>存储序列号的行键。</para></summary>
-    internal const string StorageSerialKey = "EdlInfo_StorageSerial";
+    internal const string StorageSerialKey = "Flash_EdlInfo_StorageSerial";
 
     /// <summary>The row key of the storage manufacturer.
     /// <para>存储厂商的行键。</para></summary>
-    internal const string StorageManufacturerKey = "EdlInfo_StorageManufacturer";
+    internal const string StorageManufacturerKey = "Flash_EdlInfo_StorageManufacturer";
 
     /// <summary>The row key of the storage firmware version.
     /// <para>存储固件版本的行键。</para></summary>
-    internal const string StorageFirmwareKey = "EdlInfo_StorageFirmware";
+    internal const string StorageFirmwareKey = "Flash_EdlInfo_StorageFirmware";
 
     /// <summary>The row key of the reported page size.
     /// <para>上报页大小的行键。</para></summary>
-    internal const string PageSizeKey = "EdlInfo_PageSize";
+    internal const string PageSizeKey = "Flash_EdlInfo_PageSize";
 
     /// <summary>The row key of the active A/B slot.
     /// <para>活动 A/B 槽位的行键。</para></summary>
-    internal const string ActiveSlotKey = "EdlInfo_ActiveSlot";
+    internal const string ActiveSlotKey = "Flash_EdlInfo_ActiveSlot";
 
     /// <summary>The row key of the A/B slot layout.
     /// <para>A/B 槽位布局的行键。</para></summary>
-    internal const string SlotLayoutKey = "EdlInfo_SlotLayout";
+    internal const string SlotLayoutKey = "Flash_EdlInfo_SlotLayout";
 
     /// <summary>The row value stating the partitioning carries no A/B slots.
     /// <para>表示分区方案没有 A/B 槽位的行值。</para></summary>
@@ -112,7 +112,7 @@ internal static class EdlInfoFormatter
     private const string DualSlotLayoutText = "Dual (A/B)";
     /// <summary>The row key of the QDLoader serial port name.
     /// <para>QDLoader 串口端口名的行键。</para></summary>
-    internal const string SerialPortKey = "EdlInfo_SerialPort";
+    internal const string SerialPortKey = "Flash_EdlInfo_SerialPort";
 
     /// <summary>
     /// Formats the rows in display order; stage-specific rows appear only when that stage actually

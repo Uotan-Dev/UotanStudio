@@ -2965,15 +2965,7 @@ public sealed partial class FlashViewModel
         var programmerImages = EffectiveEdlProgrammerImages;
         var programmerPath = EffectiveEdlProgrammer;
         if (!_flatBinPackage || (programmerPath is null && programmerImages is null)) return;
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_FlashEdlBundle"),
-                device!.DisplayName);
-        }
-        finally { _confirming = false; }
-        if (!confirmed || PackagePath != _loadedPath) return;
+        if (PackagePath != _loadedPath) return;
         if (SelectedDevice is not DetectedDevice current || current.Key != device!.Key ||
                  (await Task.Run(App.DeviceMonitor.Scan)).All(found =>
                      found.Key != device.Key || found.Protocol != DeviceProtocolKind.Edl))
@@ -3657,15 +3649,25 @@ public sealed partial class FlashViewModel
                 description += " <- " + Path.GetFileName(chosenPackage);
             }
         }
-        _confirming = true;
-        bool confirmed;
-        try
+        // Flashing the selected partitions is what the button says it does, so it runs straight away. Erasing keeps
+        // its confirmation because it destroys data that is not the loaded package.
+        // 刷入所选分区正是该按钮声明的工作，因此直接执行。擦除保留确认，因为它销毁的不是已加载包的数据。
+        if (erase)
         {
-            confirmed = await DialogService.ConfirmAsync(owner,
-                language.GetString(erase ? "Flash_EraseSelected" : "Flash_FlashSelected"), description);
+            _confirming = true;
+            bool confirmed;
+            try
+            {
+                confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EraseSelected"), description);
+            }
+            finally { _confirming = false; }
+            if (!confirmed)
+            {
+                return;
+            }
         }
-        finally { _confirming = false; }
-        if (!confirmed || selected.Any(entry => !entry.IsSelected || !Partitions.Contains(entry))) return;
+
+        if (selected.Any(entry => !entry.IsSelected || !Partitions.Contains(entry))) return;
         if (!string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
         {
             AppendLog(language.GetString("Flash_PackageChanged"));
