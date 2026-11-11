@@ -65,13 +65,6 @@ public sealed partial class FlashViewModel
     internal SpacemiTBootStage SelectedFastbootStage => SelectedDevice?.FastbootStage ?? SpacemiTBootStage.Unknown;
 
     /// <summary>
-    /// Whether the selected fastboot endpoint runs the user-space fastboot daemon, which the page derives from the
-    /// same variables that tag the device entry as fastbootd.
-    /// <para>所选 fastboot 端点是否运行用户空间 fastboot 守护进程；页面按标记设备条目为 fastbootd 的同一组变量判定。</para>
-    /// </summary>
-    internal bool IsSelectedFastbootd => _deviceViewModel?.SelectedDevice?.IsFastbootd == true;
-
-    /// <summary>
     /// The last ADB root-shell verdict for the selected device key; <see langword="null"/> until a probe for
     /// that key completed, so an unprobed device never looks authorized.
     /// <para>所选设备键最近一次的 ADB root shell 结论；对该键的探测完成前为 <see langword="null"/>，
@@ -123,7 +116,7 @@ public sealed partial class FlashViewModel
     /// </summary>
     private FlashGateContext GateContext =>
         new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions,
-            SelectedFastbootStage, IsSelectedFastbootd);
+            SelectedFastbootStage);
 
     /// <summary>
     /// Registers every control's own gate; called once when the page is attached, before any enable decision reads it.
@@ -177,11 +170,11 @@ public sealed partial class FlashViewModel
     /// <para>通用操作区：通用动作、选项复选框与两个选项面板。</para>
     /// </summary>
     /// <remarks>
-    /// The option check boxes stay selectable on every connected device, because each flash path reads the ones it can
-    /// act on and the flash action itself reports a protocol mismatch when a chosen option has no path there. Only the
-    /// two options that act on logical partitions follow fastbootd, which is the only mode with a logical table.
-    /// <para>选项复选框在任何已连接设备上都保持可勾选，因为每条烧录路径各自读取它能作用的选项，而所选选项在该设备上没有
-    /// 路径时由烧录动作本身报告协议不匹配。只有作用于逻辑分区的两个选项跟随 fastbootd，那是唯一有逻辑分区表的模式。</para>
+    /// The seven option check boxes carry no device condition: a tick is an intent the user states before choosing a
+    /// device, each flash path reads the options it can act on, and the flash action itself reports a protocol mismatch
+    /// when a chosen option has no path there. Only a running page operation closes them.
+    /// <para>七个选项复选框不携带设备条件：勾选是用户在选设备之前表达的意图，每条烧录路径各自读取它能作用的选项，而所选选项在
+    /// 该设备上没有路径时由烧录动作本身报告协议不匹配。只有页面操作运行期间才关闭它们。</para>
     /// </remarks>
     private void RegisterSharedControlGates()
     {
@@ -197,18 +190,18 @@ public sealed partial class FlashViewModel
         RegisterGate("ReadPartitionTableButton",
             FlashControlGate.PartitionTableRead("ReadPartitionTableButton", busyDisabled: true));
 
-        RegisterGate("DisableVbmetaBox",
-            FlashControlGate.FlashOptionAnyDevice("DisableVbmetaBox", busyDisabled: true));
-        RegisterGate("AddRootBox", FlashControlGate.FlashOptionAnyDevice("AddRootBox", busyDisabled: true));
-        RegisterGate("EraseDataBox", FlashControlGate.FlashOptionAnyDevice("EraseDataBox", busyDisabled: true));
-        RegisterGate("RebootAfterBox", FlashControlGate.FlashOptionAnyDevice("RebootAfterBox", busyDisabled: true));
-        // Only the user-space daemon answers the two options that act on logical partitions.
-        // 只有用户空间守护进程应答这两个作用于逻辑分区的选项。
-        RegisterGate("DeleteCowBox", FlashControlGate.FastbootdOption("DeleteCowBox", busyDisabled: true));
-        RegisterGate("SpacemiTVerifyBox",
-            FlashControlGate.FlashOptionAnyDevice("SpacemiTVerifyBox", busyDisabled: true));
-        RegisterGate("ShowAllPartitionsBox",
-            FlashControlGate.FastbootdOption("ShowAllPartitionsBox", busyDisabled: true));
+        // The seven option check boxes state an intent, not a device capability: each flash path reads the options it can
+        // act on and the flash action reports the mismatch when a chosen option has no path there, so no device
+        // condition can close them. Only a running page operation does.
+        // 七个选项复选框表达的是意图而不是设备能力：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配，
+        // 因此没有任何设备条件能关闭它们，只有页面操作运行期间才关闭。
+        RegisterGate("DisableVbmetaBox", FlashControlGate.BusyOnly("DisableVbmetaBox"));
+        RegisterGate("AddRootBox", FlashControlGate.BusyOnly("AddRootBox"));
+        RegisterGate("EraseDataBox", FlashControlGate.BusyOnly("EraseDataBox"));
+        RegisterGate("RebootAfterBox", FlashControlGate.BusyOnly("RebootAfterBox"));
+        RegisterGate("ShowAllPartitionsBox", FlashControlGate.BusyOnly("ShowAllPartitionsBox"));
+        RegisterGate("DeleteCowBox", FlashControlGate.BusyOnly("DeleteCowBox"));
+        RegisterGate("SpacemiTVerifyBox", FlashControlGate.BusyOnly("SpacemiTVerifyBox"));
         // The two option groups are shown by their own check box and restricted by nothing else: only a running page
         // operation closes them, which keeps their inner selectors following the busy state as before.
         // 两个选项组由各自的复选框决定显隐，除此之外不受任何限制：只有页面操作运行期间关闭它们，组内选择框因此仍随忙碌态变化。

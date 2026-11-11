@@ -2313,20 +2313,11 @@ public sealed partial class FlashViewModel
         SetControlEnabled("EdlPartitionDigestButton", !_busy && edlFirehose);
         var mtkStage = MtkStage;
 
-        // The option check boxes are offered by any connected device: their flash paths decide what they read, and the
-        // flash action reports the mismatch when a chosen option has no path. The two logical-partition options follow
-        // fastbootd alone, which is the only mode that owns a logical table.
-        // 选项复选框对任何已连接设备都提供：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配。两个逻辑分区选项
-        // 只跟随 fastbootd，那是唯一拥有逻辑分区表的模式。
-        var hasDevice = DeviceMode != FlashDeviceMode.None;
-        var fastbootdOptions = IsSelectedFastbootd;
-        SetControlEnabled("DisableVbmetaBox", !_busy && hasDevice);
-        SetControlEnabled("AddRootBox", !_busy && hasDevice);
-        SetControlEnabled("EraseDataBox", !_busy && hasDevice);
-        SetControlEnabled("RebootAfterBox", !_busy && hasDevice);
-        SetControlEnabled("ShowAllPartitionsBox", !_busy && fastbootdOptions);
-        SetControlEnabled("DeleteCowBox", !_busy && fastbootdOptions);
-        SetControlEnabled("SpacemiTVerifyBox", !_busy && hasDevice);
+        // The seven option check boxes carry no device condition: each flash path reads the options it can act on and
+        // the flash action reports the mismatch when a chosen option has no path there, so their own gates close them
+        // only while the page runs an operation.
+        // 七个选项复选框不携带设备条件：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配，因此它们自身的门控
+        // 只在页面操作运行期间关闭它们。
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
         // The flash action runs on the rows the user picked: the EDL bundle needs a writable entry ticked (an empty

@@ -13,8 +13,7 @@ internal readonly record struct FlashGateContext(
     bool IsSpacemiTFastboot,
     bool HasAdbSu,
     bool HasSelectedPartitions = false,
-    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown,
-    bool IsFastbootd = false);
+    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown);
 
 /// <summary>
 /// One control's own availability condition: the control holds this object, and the page asks that control whether
@@ -66,24 +65,13 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// An option of the flash action offered to every selected device: the flash paths read it wherever one can act on
-    /// it, and the page keeps it selectable so the intent survives a device swap instead of being closed by a protocol
-    /// the option never named. Only a page operation turns it off.
-    /// <para>烧录动作的选项，对任何已选设备都提供：凡是有路径能作用于它时都会读取它，页面保持它可勾选，使意图在换设备后
-    /// 仍然保留，而不是被该选项从未提及的协议关闭；只有页面操作期间才关闭它。</para>
+    /// The root-package picker: offered to every selected device, because the root package is a local artefact and the
+    /// page only needs a device before that package can be applied. Only a page operation turns it off.
+    /// <para>Root 包选择入口：对任何已选设备都提供，因为 Root 包是本地产物，页面只需要有一台设备才能应用它。只有页面操作
+    /// 运行期间才关闭它。</para>
     /// </summary>
     internal static FlashControlGate FlashOptionAnyDevice(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode != FlashDeviceMode.None,
-        busyDisabled);
-
-    /// <summary>
-    /// An option the user-space fastboot daemon answers: offered only while the selected fastboot endpoint reports
-    /// fastbootd, because the bootloader fastboot has no logical partition table to act on.
-    /// <para>由用户空间 fastboot 守护进程应答的选项：只在所选 fastboot 端点报告处于 fastbootd 时提供，因为引导程序阶段的
-    /// fastboot 没有可供作用的逻辑分区表。</para>
-    /// </summary>
-    internal static FlashControlGate FastbootdOption(string name, bool busyDisabled = false) => new(name,
-        static context => context.IsFastbootd,
         busyDisabled);
 
     /// <summary>
