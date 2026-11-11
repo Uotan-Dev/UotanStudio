@@ -9,21 +9,25 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 /// When the WinUSB direct open of an EDL endpoint fails because the target is bound by a
 /// QDLoader-style serial driver as a COM port, this resolves the owning serial port from the
 /// endpoint's exact device path and opens it. Resolution is fail-closed: only a node exactly
-/// associated with the endpoint device node (the node itself or one of its direct children) whose
-/// class GUID is Ports (<c>{4d36e978-e325-11ce-bfc1-08002be10318}</c>) and whose <c>COMn</c> port
-/// name can be resolved is accepted; the driver service name is deliberately not restricted — on
-/// real machines the QDLoader binding may land on Microsoft's <c>usbser</c> or on Qualcomm's own
-/// <c>qcwdfserial</c> serial service, and identity is guaranteed by the exact parent match rather
-/// than by a driver name. Any failed step returns <see langword="null"/> and the caller keeps the
-/// original exception semantics. Every call re-resolves the current PnP state and never caches the
-/// port name, since the QDLoader port number may change across re-enumerations.
+/// associated with the endpoint device node (the node itself or one of its direct children) that
+/// belongs to the Ports class (<c>{4d36e978-e325-11ce-bfc1-08002be10318}</c>) or publishes a present
+/// COM-port device interface for that exact instance, and whose <c>COMn</c> port name can be
+/// resolved, is accepted; the driver service name is deliberately not restricted — on real machines
+/// the QDLoader binding may land on Microsoft's <c>usbser</c> or on Qualcomm's own <c>qcwdfserial</c>
+/// serial service, and identity is guaranteed by the exact parent match rather than by a driver name.
+/// A present COM-port interface also qualifies a node whose class GUID names a WinUSB takeover binding
+/// while the running serial stack still owns the port. Any failed step returns <see langword="null"/>
+/// and the caller keeps the original exception semantics. Every call re-resolves the current PnP state
+/// and never caches the port name, since the QDLoader port number may change across re-enumerations.
 /// <para>当 EDL 端点的 WinUSB 直开失败、且目标被 QDLoader 类串口驱动绑定为 COM 口时，从端点的
 /// 精确设备路径解析所属串口并打开。解析始终 fail-closed：只有与端点设备节点精确关联（节点自身或
-/// 其直接子节点）、类 GUID 为 Ports（<c>{4d36e978-e325-11ce-bfc1-08002be10318}</c>）且能解析出
-/// <c>COMn</c> 端口名的节点才会被采纳；驱动服务名不作限定——真机上的 QDLoader 既可能落到
-/// Microsoft <c>usbser</c>，也可能落到高通自己的 <c>qcwdfserial</c> 等串口服务，而身份保证来自
-/// 父节点精确匹配而非驱动名。任何一步失败都返回 <see langword="null"/>，由调用方维持原异常语义。
-/// 每次调用都按当前 PnP 状态重新解析，不缓存端口名（QDLoader 重枚举后端口号可能变化）。</para>
+/// 其直接子节点）、类 GUID 为 Ports（<c>{4d36e978-e325-11ce-bfc1-08002be10318}</c>）或为该精确实例
+/// 发布了在位的 COM 口设备接口、且能解析出 <c>COMn</c> 端口名的节点才会被采纳；驱动服务名不作
+/// 限定——真机上的 QDLoader 既可能落到 Microsoft <c>usbser</c>，也可能落到高通自己的
+/// <c>qcwdfserial</c> 等串口服务，而身份保证来自父节点精确匹配而非驱动名。在位的 COM 口设备接口
+/// 也覆盖类 GUID 已写为 WinUSB 接管绑定、但运行中的驱动栈仍持有该串口的节点。任何一步失败都返回
+/// <see langword="null"/>，由调用方维持原异常语义。每次调用都按当前 PnP 状态重新解析，不缓存端口名
+/// （QDLoader 重枚举后端口号可能变化）。</para>
 /// </summary>
 internal static partial class EdlSerialPortFallback
 {
@@ -32,6 +36,8 @@ internal static partial class EdlSerialPortFallback
     private const int MaxInstanceIdChars = 200;
 
     private static readonly Guid PortsClassGuid = new("4D36E978-E325-11CE-BFC1-08002BE10318");
+
+    private static readonly Guid ComPortInterfaceGuid = new("86E0D1E0-8089-11D0-9CE4-08003E301F73");
 
     [GeneratedRegex("^COM\\d+$", RegexOptions.CultureInvariant)]
     private static partial Regex ComPortNamePattern();
@@ -165,13 +171,17 @@ internal static partial class EdlSerialPortFallback
     }
 
     /// <summary>
-    /// Checks whether one device node is a Ports-class serial node and, if so, resolves its port
-    /// name; otherwise returns <see langword="null"/>. The port name prefers the authoritative
+    /// Checks whether one device node is a serial node and, if so, resolves its port name; otherwise
+    /// returns <see langword="null"/>. A node qualifies through its Ports class GUID or through a present
+    /// COM-port device interface registered for exactly this instance; the latter keeps a QDLoader port
+    /// usable while the node's class GUID already names a WinUSB takeover binding. The port name prefers the authoritative
     /// <c>PortName</c> value under
     /// <c>HKLM\SYSTEM\CurrentControlSet\Enum\&lt;instance&gt;\Device Parameters</c> and falls back
     /// to parsing the <c>(COMx)</c> suffix of the friendly name when the value is absent.
-    /// <para>判断单个设备节点是否为 Ports 类的串口节点，是则解析端口名；否则返回
-    /// <see langword="null"/>。端口名优先取注册表
+    /// <para>判断单个设备节点是否为串口节点，是则解析端口名；否则返回
+    /// <see langword="null"/>。节点由 Ports 类 GUID 或由该精确实例注册且在位的 COM 口设备接口确认；
+    /// 后者使类 GUID 已改为 WinUSB 接管绑定、但串口仍由运行中的驱动栈持有时，QDLoader 端口依旧可用。
+    /// 端口名优先取注册表
     /// <c>HKLM\SYSTEM\CurrentControlSet\Enum\&lt;instance&gt;\Device Parameters</c> 下的
     /// <c>PortName</c>（权威来源），缺失时回退到从友好名称解析 <c>(COMx)</c> 的方式。</para>
     /// </summary>
@@ -184,7 +194,8 @@ internal static partial class EdlSerialPortFallback
         }
 
         var properties = UsbPnpNative.ReadProperties(devInst, instanceId);
-        if (properties.ClassGuid is not { } classGuid || classGuid != PortsClassGuid)
+        var isPortsNode = properties.ClassGuid is { } classGuid && classGuid == PortsClassGuid;
+        if (!isPortsNode && UsbPnpNative.FindDeviceInterfacePath(ComPortInterfaceGuid, instanceId) is null)
         {
             return null;
         }
