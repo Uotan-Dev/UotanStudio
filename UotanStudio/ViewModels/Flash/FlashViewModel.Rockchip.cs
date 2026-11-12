@@ -381,7 +381,7 @@ public sealed partial class FlashViewModel
     private static List<string> ProbeRkStorages(RkdlSession session, ILocalizer language, uint initialMask)
     {
         var header = language.GetString("Flash_RkStorageProbeHeader");
-        var lines = new List<string>(RkdlStorage.Names.Length + 2) { header };
+        List<string> lines = [with(RkdlStorage.Names.Length + 2), header];
         for (var index = 0; index < RkdlStorage.Names.Length; index++)
         {
             var label = RkdlStorage.Names[index];
@@ -493,10 +493,9 @@ public sealed partial class FlashViewModel
         var capability = session.ReadCapability();
         var chipInfo = session.ReadChipInfo();
         var flashId = session.ReadFlashId();
-        var lines = new List<string>
-        {
+        List<string> lines = [
             $"{language.GetString("Flash_RkCapability")}: 0x{Convert.ToHexString(capability.Raw)}"
-        };
+        ];
         lines.AddRange(capability.Describe());
         lines.Add($"{language.GetString("Flash_RkChipName")}: {chipInfo.ChipName}");
         lines.Add($"FlashID: 0x{Convert.ToHexString(flashId)}");

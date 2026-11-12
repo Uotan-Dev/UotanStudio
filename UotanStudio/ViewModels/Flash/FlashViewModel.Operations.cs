@@ -1903,6 +1903,21 @@ public sealed partial class FlashViewModel
     private DetectedDevice? _lastObservedDevice;
 
     /// <summary>
+    /// Collapses every side section so switching to the page always presents a fully collapsed sidebar; sections
+    /// expand again only through the user's own toggles, a device switch or a package load.
+    /// <para>收起全部侧边分类，使切入页面时侧边栏总是全部折叠；此后只有用户自己的切换、设备更换或刷机包载入才会再展开分类。</para>
+    /// </summary>
+    internal void CollapseAllSections()
+    {
+        if (_surface is null) return;
+        Field<Expander>("EdlExpander").IsExpanded = false;
+        Field<Expander>("MtkExpander").IsExpanded = false;
+        Field<Expander>("RkExpander").IsExpanded = false;
+        Field<Expander>("SunxiExpander").IsExpanded = false;
+        Field<Expander>("ImageExpander").IsExpanded = false;
+    }
+
+    /// <summary>
     /// Expands the side section the selected device's protocol owns and leaves every other section as the user left it,
     /// so selecting a device never hides the sections that do not match it; a page without a device keeps the persisted
     /// expansion untouched.

@@ -19,11 +19,10 @@ internal static class FlashSuperEmptySparse
         var table = prepared.MetadataImage.AsSpan(BlockSize).ToArray();
         var paddedTable = new byte[checked((table.Length + BlockSize - 1) / BlockSize * BlockSize)];
         table.CopyTo(paddedTable, 0);
-        var segments = new List<(long Offset, byte[] Bytes)>
-        {
+        List<(long Offset, byte[] Bytes)> segments = [
             (BlockSize, geometry),
             (BlockSize * 2L, geometry)
-        };
+        ];
         for (uint slot = 0; slot < metadata.Geometry.MetadataSlotCount; slot++)
         {
             segments.Add((MetadataReader.GetPrimaryMetadataOffset(metadata.Geometry, slot), paddedTable));

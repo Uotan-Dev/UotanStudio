@@ -327,15 +327,14 @@ public sealed partial class FlashViewModel
     private static (List<FlashDeviceStatusEntry> Rows, List<int>? Storages, int CurrentStorage)
         BuildRkdlStatusRows(RkdlSession session, ILocalizer language)
     {
-        var rows = new List<FlashDeviceStatusEntry>
-        {
+        List<FlashDeviceStatusEntry> rows = [
             new()
             {
                 Key = FlashDeviceStatusRowKeys.Stage,
                 Name = language.GetString("Flash_RkStatus"),
                 Value = language.GetString("Flash_RkStatusLoaderReady"),
             },
-        };
+        ];
 
         var capability = session.ReadCapability();
         var chipInfo = session.ReadChipInfo();

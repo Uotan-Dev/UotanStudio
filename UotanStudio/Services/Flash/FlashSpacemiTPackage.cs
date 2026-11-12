@@ -293,7 +293,7 @@ public static class FlashSpacemiTPackage
     /// <exception cref="IOException">The primary table cannot be read. <para>主分区表无法读取。</para></exception>
     private static List<SpacemiTPartitionTable> LoadLayoutTables(string folder, string primaryPath)
     {
-        var layouts = new List<SpacemiTPartitionTable> { SpacemiTPartitionTable.Load(primaryPath) };
+        List<SpacemiTPartitionTable> layouts = [SpacemiTPartitionTable.Load(primaryPath)];
         var primary = Path.GetFullPath(primaryPath);
         foreach (var path in Directory.EnumerateFiles(folder, "partition_*.json", SearchOption.TopDirectoryOnly)
                      .Order(StringComparer.OrdinalIgnoreCase))

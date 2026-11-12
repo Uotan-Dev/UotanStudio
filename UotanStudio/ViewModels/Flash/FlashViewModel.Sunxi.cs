@@ -643,12 +643,11 @@ public sealed partial class FlashViewModel
         var mode = status.IsFes
             ? language.GetString("Flash_SunxiModeFes")
             : language.GetString("Flash_SunxiModeFel");
-        var parts = new List<string>
-        {
+        List<string> parts = [
             status.ChipName,
             mode,
             $"FW 0x{status.Identity.Firmware:X}"
-        };
+        ];
         if (status.IsFes)
         {
             parts.Add(string.Format(language.GetString("Flash_SunxiStorageFormat"), status.StorageType ?? 0));

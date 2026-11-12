@@ -4,9 +4,9 @@ using UotanStudio.Services;
 namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
-/// Restores and persists the flash page's side-section expander state so a restart reopens the sections the user
-/// left open.
-/// <para>恢复并持久化烧录页面侧边分类的展开状态，使重启后重新打开用户上次展开的分类。</para>
+/// Persists the flash page's side-section expander flags and seeds them from the persisted identifiers at
+/// construction; switching to the page always starts with every section collapsed.
+/// <para>持久化烧录页面侧边分类的展开标志，并在构造时按持久化标识播种；切入页面时总是全部收起。</para>
 /// </summary>
 public sealed partial class FlashViewModel
 {

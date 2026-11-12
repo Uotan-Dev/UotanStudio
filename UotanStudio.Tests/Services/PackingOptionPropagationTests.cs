@@ -317,6 +317,8 @@ public sealed class PackingOptionPropagationTests
         var extracted = Path.Combine(temp.Path, "product");
         Directory.CreateDirectory(source);
         File.WriteAllText(Path.Combine(source, "payload.txt"), new string('d', 48 * 1024));
+        File.SetLastWriteTimeUtc(Path.Combine(source, "payload.txt"),
+            DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime);
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
