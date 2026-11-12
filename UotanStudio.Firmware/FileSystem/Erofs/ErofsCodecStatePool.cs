@@ -68,8 +68,8 @@ internal sealed class ErofsEncoderContext : IDisposable
     /// 交替时不致重建。压缩器从不被重新配置：级别在其生命周期内固定，且另一级别遗留的窗口对数会悄悄改变输出的帧，
     /// 因此每个组合各持一个实例，保留集满时释放最久未用的那个。</para>
     /// </summary>
-    /// <param name="level">Compression level already clamped to the range ZstdSharp accepts.
-    /// <para>已截断到 ZstdSharp 接受区间的压缩级别。</para></param>
+    /// <param name="level">Compression level already clamped to the range the zstd engine accepts.
+    /// <para>已截断到 zstd 引擎接受区间的压缩级别。</para></param>
     /// <param name="windowLog">Frame window log to apply, or <c>0</c> for the level's own default.
     /// <para>要写入的帧窗口对数；为 <c>0</c> 时使用该级别自身的默认值。</para></param>
     /// <returns>A compressor owned by this context. <para>由本上下文持有的压缩器。</para></returns>

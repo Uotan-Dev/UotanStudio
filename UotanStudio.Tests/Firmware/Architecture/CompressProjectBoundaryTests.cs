@@ -120,7 +120,8 @@ public class CompressProjectBoundaryTests
         Assert.True(File.Exists(projectPath), $"Compression project file '{projectPath}' is missing.");
 
         var references = ProjectReferencePattern.Matches(File.ReadAllText(projectPath))
-            .Select(match => Path.GetFileNameWithoutExtension(match.Groups["path"].Value))
+            .Select(match => Path.GetFileNameWithoutExtension(
+                match.Groups["path"].Value.Replace('\\', '/')))
             .Where(name => name.Length > 0)
             .Order(StringComparer.Ordinal)
             .ToList();

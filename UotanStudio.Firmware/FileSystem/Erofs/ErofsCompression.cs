@@ -1039,8 +1039,8 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// ZSTD compression (fully-managed ZstdSharp port) producing a standard zstd frame; when windowLog &gt; 0 the frame window log is set accordingly.
-    /// <para>ZSTD 压缩（ZstdSharp 全托管移植），输出标准 zstd 帧；windowLog &gt; 0 时写入帧的窗口对数。</para>
+    /// ZSTD compression (the runtime's managed zstd engine) producing a standard zstd frame; when windowLog &gt; 0 the frame window log is set accordingly.
+    /// <para>ZSTD 压缩（运行时内置的托管 zstd 引擎），输出标准 zstd 帧；windowLog &gt; 0 时写入帧的窗口对数。</para>
     /// </summary>
     private static int CompressZstd(
         byte[] source,
@@ -1082,8 +1082,8 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// ZSTD decompression (fully-managed ZstdSharp port); when windowLog &gt; 0 the maximum window log is constrained accordingly.
-    /// <para>ZSTD 解压（ZstdSharp 全托管移植）；windowLog &gt; 0 时约束最大窗口对数。</para>
+    /// ZSTD decompression (the runtime's managed zstd engine); when windowLog &gt; 0 the maximum window log is constrained accordingly.
+    /// <para>ZSTD 解压（运行时内置的托管 zstd 引擎）；windowLog &gt; 0 时约束最大窗口对数。</para>
     /// </summary>
     private static int DecompressZstd(
         byte[] source,

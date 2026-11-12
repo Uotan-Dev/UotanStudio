@@ -205,7 +205,7 @@ internal static class F2fsCompression
     /// <para>数组长度与解码容量；池化上下文直接解码到该数组中，帧未覆盖的尾部保持为零，与新建缓冲区的结果相同。</para></param>
     /// <returns>The decoded array, whose length is always <paramref name="expectedSize"/>.
     /// <para>解码后的数组，长度始终为 <paramref name="expectedSize"/>。</para></returns>
-    /// <exception cref="ZstdSharp.ZstdException">The frame is malformed or expands beyond the capacity.
+    /// <exception cref="UotanStudio.Compress.CompressionException">The frame is malformed or expands beyond the capacity.
     /// <para>帧无效或展开后超出容量。</para></exception>
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)
     {

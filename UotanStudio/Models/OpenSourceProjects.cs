@@ -268,17 +268,6 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "ZstdSharp.Port",
-            DescriptionKey = "About_Project_ZstdSharpPort",
-            RepositoryUrl = "https://github.com/oleg-st/ZstdSharp",
-            LicenseName = "MIT / BSD-3-Clause (zstd)",
-            LicenseUrl = "https://github.com/oleg-st/ZstdSharp/blob/master/LICENSE",
-            AuthorName = "Oleg Stepanischev / Meta Platforms",
-            AuthorGitHubUrl = "https://github.com/oleg-st",
-            AuthorAvatarUrl = "https://github.com/oleg-st.png"
-        },
-        new OpenSourceProject
-        {
             Name = "LZMA-SDK (.NET)",
             DescriptionKey = "About_Project_LzmaSdk",
             RepositoryUrl = "https://github.com/monemihir/LZMA-SDK",

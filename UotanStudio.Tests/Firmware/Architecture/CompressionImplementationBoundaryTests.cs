@@ -5,17 +5,17 @@ namespace UotanStudio.Tests.Firmware.Architecture;
 
 /// <summary>
 /// Guards the invariant that generic compression is implemented only inside <c>UotanStudio.Compress</c>: no other
-/// production project may instantiate the in-box gzip, deflate, zlib or Brotli streams, because the layers above the
-/// library must reach the generic codecs through its facade.
+/// production project may instantiate the in-box gzip, deflate, zlib, Brotli or Zstandard streams, because the
+/// layers above the library must reach the generic codecs through its facade.
 /// <para>守护"通用压缩只在 <c>UotanStudio.Compress</c> 中实现"这一不变量：其他生产工程不得直接实例化内置的
-/// gzip、deflate、zlib 或 Brotli 流，库之上的层必须经其门面使用通用编解码器。</para>
+/// gzip、deflate、zlib、Brotli 或 Zstandard 流，库之上的层必须经其门面使用通用编解码器。</para>
 /// </summary>
 public class CompressionImplementationBoundaryTests
 {
     private const string CompressProjectDirectory = "UotanStudio.Compress";
 
     private static readonly Regex GenericCompressionStreamPattern = new(
-        @"new\s+(?:(?:System\.)?(?:IO\.)?Compression\.)?(?:GZipStream|GzipStream|DeflateStream|ZLibStream|ZlibStream|BrotliStream)\s*\(",
+        @"new\s+(?:(?:System\.)?(?:IO\.)?Compression\.)?(?:GZipStream|GzipStream|DeflateStream|ZLibStream|ZlibStream|BrotliStream|ZstandardStream)\s*\(",
         RegexOptions.CultureInvariant);
 
     private static readonly HashSet<string> ExcludedDirectoryNames = new(StringComparer.Ordinal)

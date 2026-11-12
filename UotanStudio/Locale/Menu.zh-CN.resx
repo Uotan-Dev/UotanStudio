@@ -990,9 +990,6 @@
   <data name="About_Project_K4osCompressionLz4" xml:space="preserve">
     <value>LZ4 压缩库；托管层 MIT，内嵌 liblz4（BSD-2-Clause，Yann Collet）</value>
   </data>
-  <data name="About_Project_ZstdSharpPort" xml:space="preserve">
-    <value>Zstandard 压缩库；托管层 MIT，内嵌 zstd（BSD-3-Clause，Meta Platforms）</value>
-  </data>
   <data name="About_Project_LzmaSdk" xml:space="preserve">
     <value>LZMA/LZMA2 解压；NuGet 包装层 MIT，内含 7-Zip LZMA SDK（公有领域）</value>
   </data>

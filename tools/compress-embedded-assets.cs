@@ -1,11 +1,9 @@
 #:property ManagePackageVersionsCentrally=false
-#:package ZstdSharp.Port@0.8.8
 
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using ZstdSharp;
 
 const int Level = 19;
 
@@ -259,7 +257,16 @@ int ProcessBundle(BundleSpec spec)
             }
             else
             {
-                var compressed = new Compressor(Level).Wrap(source).ToArray();
+                var frameBuffer = new byte[ZstandardEncoder.GetMaxCompressedLength(source.LongLength)];
+                if (!ZstandardEncoder.TryCompress(source, frameBuffer, out var frameLength, Level,
+                        ZstandardCompressionOptions.DefaultWindowLog2))
+                {
+                    Console.Error.WriteLine($"{spec.Key}: compression failed for '{name}'");
+                    failures++;
+                    continue;
+                }
+
+                var compressed = frameBuffer[..frameLength];
                 var roundTrip = Unwrap(compressed, framePath);
                 if (!roundTrip.AsSpan().SequenceEqual(source))
                 {
@@ -392,9 +399,24 @@ byte[] Unwrap(byte[] frame, string framePath)
 {
     try
     {
-        return new Decompressor().Unwrap(frame).ToArray();
+        if (!ZstandardDecoder.TryGetMaxDecompressedLength(frame, out var length) || length is < 0 or > int.MaxValue)
+        {
+            throw new InvalidOperationException($"'{framePath}' does not declare a decodable zstd content size.");
+        }
+
+        var decoded = new byte[length];
+        if (!ZstandardDecoder.TryDecompress(frame, decoded, out var written) || written != length)
+        {
+            throw new InvalidOperationException($"'{framePath}' is not a valid zstd frame.");
+        }
+
+        return decoded;
     }
-    catch (ZstdException error)
+    catch (InvalidOperationException)
+    {
+        throw;
+    }
+    catch (Exception error)
     {
         throw new InvalidOperationException($"'{framePath}' is not a zstd frame: {error.Message}", error);
     }

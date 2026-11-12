@@ -1,30 +1,28 @@
 using System.Buffers;
-using ZstdSharp.Unsafe;
+using System.IO.Compression;
 
 namespace UotanStudio.Compress.Codecs.Zstd;
 
 /// <summary>
-/// Frame-level Zstd block primitives over spans, built on the zstd library's own entry points, for filesystem
-/// formats that store a whole zstd frame per block rather than a container with headers and checksums.
-/// <para>以 zstd 库自身的入口实现的帧级 Zstd 块原语，以 span 交换数据，供按块存储完整 zstd 帧而非带头部与校验和容器的
-/// 文件系统格式使用。</para>
+/// Frame-level Zstd block primitives over spans, built on the managed zstd engine the runtime ships in
+/// <see cref="System.IO.Compression"/>, for filesystem formats that store a whole zstd frame per block rather than a
+/// container with headers and checksums.
+/// <para>基于运行时随 <see cref="System.IO.Compression"/> 内置的托管 zstd 引擎实现的帧级 Zstd 块原语，以 span 交换数据，
+/// 供按块存储完整 zstd 帧而非带头部与校验和容器的文件系统格式使用。</para>
 /// </summary>
 /// <remarks>
-/// Both directions are span-based and call <c>ZSTD_compress2</c> / <c>ZSTD_decompressDCtx</c> on contexts this type
-/// owns and pools, so every parameter is applied through <c>ZSTD_CCtx_setParameter</c> exactly as the zstd manual
-/// describes and no convenience wrapper resets state behind the caller's back. A pooled context keeps the compression
-/// level it was created with, and the window is written on every call (auto when the caller does not ask for one), so
-/// no frame inherits the previous frame's window. The bytes written for a given level and payload match the
-/// single-frame path of the array-level compressor, because a zstd frame is destination-independent, and an empty
-/// payload produces no frame at all.
-/// The decode side cannot rely on the context's <c>ZSTD_d_windowLogMax</c>: a one-shot frame decode does not consult
-/// it, so the declared window is read out of the frame header and refused before any decoding starts.
-/// <para>两个方向都以 span 交换数据，并在本类型自有且池化的上下文上调用 <c>ZSTD_compress2</c> /
-/// <c>ZSTD_decompressDCtx</c>，因此每个参数都按 zstd 手册通过 <c>ZSTD_CCtx_setParameter</c> 生效，也不会出现便利包装在
-/// 调用方背后重置状态的情形。池中的上下文保留其创建时的压缩级别，窗口则在每次调用时写入（调用方不指定时取自动），因此没有帧会
-/// 继承上一帧的窗口。给定级别与载荷时写出的字节与数组级压缩器的单帧路径一致，因为 zstd 帧与目标无关；空载荷不会产生任何帧。
-/// 解码侧不能依赖上下文的 <c>ZSTD_d_windowLogMax</c>：一次性帧解码并不查看它，因此先读出帧声明的窗口并在任何解码开始前拒绝
-/// 超限帧。</para>
+/// Both directions are span-based and run on encoder and decoder instances this type owns and pools, so every frame
+/// starts from a fresh session: the encoder is reset, the source length is declared, and the whole block is written
+/// as one final chunk, which lets the engine right-size the declared window and record the content size. A pooled
+/// encoder keeps the compression level and window it was created with, so no frame inherits another frame's
+/// parameters, and an empty payload produces no frame at all.
+/// The decode side cannot rely on a configured window ceiling because the managed engine does not consult one while
+/// decoding, so the declared window is read out of the frame header and refused before any decoding starts.
+/// <para>两个方向都以 span 交换数据，并在本类型自有且池化的编码器与解码器实例上运行，因此每一帧都从全新会话开始：
+/// 编码器先重置、声明源长度，再把整块作为最后分片一次写出，使引擎得以收窄声明的窗口并记录内容尺寸。池中的编码器
+/// 保留其创建时的压缩级别与窗口，因此没有帧会继承其他帧的参数；空载荷不会产生任何帧。
+/// 解码侧不能依赖配置的窗口上限，因为托管引擎在解码过程中不查看它，因此先从帧头读出声明的窗口并在任何解码开始前
+/// 拒绝超限帧。</para>
 /// </remarks>
 public static class ZstdBlockCodec
 {
@@ -33,6 +31,7 @@ public static class ZstdBlockCodec
     private const int DefaultLevel = 3;
     private const int SmallSourceThreshold = 128 << 10;
     private const int MinimumWindowLog = 10;
+    private const int UnknownSizeInitialBytes = 64 << 10;
 
     /// <summary>
     /// Conservative zstd bound for a source of the given length, the ZSTD_compressBound formula.
@@ -61,23 +60,22 @@ public static class ZstdBlockCodec
     /// <para>把整块数据压缩为一个独立的 zstd 帧。</para>
     /// </summary>
     /// <param name="source">Block payload to compress; an empty payload produces no frame at all and no
-    /// compression context is created for it.
-    /// <para>待压缩的块载荷；空载荷不生成任何帧，也不会为其创建压缩上下文。</para></param>
+    /// encoder is used for it.
+    /// <para>待压缩的块载荷；空载荷不生成任何帧，也不会为其使用编码器。</para></param>
     /// <param name="destination">Destination span; the frame is written from its start and no byte goes past its
     /// length, so a span too small to hold the frame is reported as a failure.
     /// <para>目标 span；帧从其起始处写入且不会越过长度边界，容量不足以容纳整帧时按失败处理。</para></param>
     /// <param name="level">Compression level, clamped into the zstd range from <c>-5</c> to <c>22</c> before the
-    /// context is created; the default matches the level the array-level compressor uses when no options are given.
-    /// <para>压缩级别，创建上下文前先夹取到 zstd 的 <c>-5</c> 至 <c>22</c> 区间；默认值与无选项时数组级压缩器使用的级别一致。</para></param>
+    /// encoder is rented; the default matches the level the array-level compressor uses when no options are given.
+    /// <para>压缩级别，租借编码器前先夹取到 zstd 的 <c>-5</c> 至 <c>22</c> 区间；默认值与无选项时数组级压缩器使用的级别一致。</para></param>
     /// <param name="windowLog">Window log written into the frame header when it is at least <c>10</c>, the smallest
-    /// window zstd encodes; <c>0</c> keeps the window the level would pick, so the emitted bytes stay
-    /// destination-independent. <para>不小于 <c>10</c>（zstd 可编码的最小窗口）时写入帧头的窗口对数；<c>0</c> 保持级别自身选定的窗口，
+    /// window zstd encodes; <c>0</c> keeps the engine default window, so the emitted bytes stay
+    /// destination-independent. <para>不小于 <c>10</c>（zstd 可编码的最小窗口）时写入帧头的窗口对数；<c>0</c> 保持引擎默认窗口，
     /// 因此产出的字节与目标无关。</para></param>
     /// <returns>Number of frame bytes written into <paramref name="destination"/>, or <c>0</c> for an empty source.
     /// <para>写入 <paramref name="destination"/> 的帧字节数；源为空时返回 <c>0</c>。</para></returns>
-    /// <exception cref="CompressionException">The zstd context rejected the parameters or the frame did not fit
-    /// <paramref name="destination"/>; the message carries the zstd error name.
-    /// <para>zstd 上下文拒绝参数，或帧无法容纳于 <paramref name="destination"/>；消息中携带 zstd 的错误名。</para></exception>
+    /// <exception cref="CompressionException">The frame did not fit <paramref name="destination"/>.
+    /// <para>帧无法容纳于 <paramref name="destination"/>。</para></exception>
     public static int Compress(ReadOnlySpan<byte> source, Span<byte> destination, int level = DefaultLevel, int windowLog = 0)
     {
         if (source.IsEmpty)
@@ -86,43 +84,45 @@ public static class ZstdBlockCodec
         }
 
         var clamped = Math.Clamp(level, MinimumLevel, MaximumLevel);
-        var context = CompressionContextPool.Rent(clamped);
+        var windowLog2 = windowLog >= MinimumWindowLog
+            ? windowLog
+            : ZstandardCompressionOptions.DefaultWindowLog2;
+        var encoder = CompressorCache.Rent(clamped, windowLog2);
         try
         {
-            unsafe
+            encoder.Reset();
+            encoder.SetSourceLength(source.Length);
+            var status = encoder.Compress(source, destination, out var consumed, out var written, isFinalBlock: true);
+            if (status != OperationStatus.Done || consumed != source.Length)
             {
-                var cctx = (ZSTD_CCtx_s*)context;
-                SetCompressionParameter(cctx, ZSTD_cParameter.ZSTD_c_windowLog,
-                    windowLog < MinimumWindowLog ? 0 : windowLog);
-                fixed (byte* input = source)
-                fixed (byte* output = destination)
-                {
-                    var written = Methods.ZSTD_compress2(cctx, output, (nuint)destination.Length, input,
-                        (nuint)source.Length);
-                    return EnsureSuccess(written, "ZSTD block compression");
-                }
+                throw new CompressionException(
+                    $"ZSTD block compression did not fit {destination.Length} bytes. "
+                    + $"ZSTD 块压缩无法装入 {destination.Length} 字节。");
             }
+
+            return written;
         }
         finally
         {
-            CompressionContextPool.Return(clamped, context);
+            CompressorCache.Return(clamped, windowLog2, encoder);
         }
     }
 
     /// <summary>
-    /// Decompresses one standalone zstd frame into a caller-owned span and reports the produced byte count.
-    /// <para>把一个独立的 zstd 帧解压到调用方持有的 span，并报告实际产出的字节数。</para>
+    /// Decompresses one standalone zstd frame, or a concatenation of frames, into a caller-owned span and reports
+    /// the produced byte count.
+    /// <para>把一个独立的 zstd 帧或帧的串联解压到调用方持有的 span，并报告实际产出的字节数。</para>
     /// </summary>
     /// <param name="source">Complete frame bytes; an empty source produces nothing and returns <c>0</c> without
-    /// touching a decompression context. <para>完整的帧字节；空源不产出内容，也不接触解压上下文，直接返回 <c>0</c>。</para></param>
+    /// touching a decoder. <para>完整的帧字节；空源不产出内容，也不接触解码器，直接返回 <c>0</c>。</para></param>
     /// <param name="destination">Destination span written from its start; it must be large enough for the whole
     /// decoded frame, and the caller uses the returned length rather than <paramref name="destination"/>'s length
     /// because the span carries no size hint. <para>从起始处写入的目标 span；其容量必须容纳整个解码帧，调用方应以返回长度
     /// 而非 <paramref name="destination"/> 的长度为准，因为 span 不携带尺寸提示。</para></param>
     /// <returns>The number of decoded bytes written into <paramref name="destination"/>.
     /// <para>写入 <paramref name="destination"/> 的解码字节数。</para></returns>
-    /// <exception cref="CompressionException">The frame is malformed or the destination is too small; the message
-    /// carries the zstd error name. <para>帧无效或目标容量不足；消息中携带 zstd 的错误名。</para></exception>
+    /// <exception cref="CompressionException">The frame is malformed, truncated or the destination is too small.
+    /// <para>帧无效、被截断或目标容量不足。</para></exception>
     public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
         => Decompress(source, destination, maximumWindowLog: 0);
 
@@ -132,24 +132,24 @@ public static class ZstdBlockCodec
     /// <para>在限制帧所声明窗口的前提下，把一个独立的 zstd 帧解压到调用方持有的 span，并报告实际产出的字节数。</para>
     /// </summary>
     /// <param name="source">Complete frame bytes; an empty source produces nothing and returns <c>0</c> without
-    /// touching a decompression context. <para>完整的帧字节；空源不产出内容，也不接触解压上下文，直接返回 <c>0</c>。</para></param>
+    /// touching a decoder. <para>完整的帧字节；空源不产出内容，也不接触解码器，直接返回 <c>0</c>。</para></param>
     /// <param name="destination">Destination span written from its start; it must be large enough for the whole
     /// decoded frame. <para>从起始处写入的目标 span；其容量必须容纳整个解码帧。</para></param>
     /// <param name="maximumWindowLog">Ceiling on the window the frame may declare, expressed as a power of two and
     /// read from the frame header before any decoding starts; <c>0</c> keeps the unbounded path, and a value of
     /// <c>64</c> or above cannot be exceeded by any declared window. An untrusted frame declaring a larger window
-    /// fails here instead of reaching the engine, which bounds nothing on this path: a one-shot frame decode does not
-    /// consult <c>ZSTD_d_windowLogMax</c>.
+    /// fails here instead of reaching the engine, which bounds nothing on this path: the managed engine does not
+    /// consult a window ceiling while decoding.
     /// <para>帧可声明窗口的上限，以 2 的幂表示，在任何解码开始前从帧头读取；<c>0</c> 保持不设限的路径，而
-    /// <c>64</c> 及以上不可能被任何声明的窗口超出。声明更大窗口的不可信帧在此失败而不进入引擎：该一次性帧解码
-    /// 并不会查看 <c>ZSTD_d_windowLogMax</c>。</para></param>
+    /// <c>64</c> 及以上不可能被任何声明的窗口超出。声明更大窗口的不可信帧在此失败而不进入引擎：托管引擎在解码
+    /// 过程中不查看窗口上限。</para></param>
     /// <returns>The number of decoded bytes written into <paramref name="destination"/>.
     /// <para>写入 <paramref name="destination"/> 的解码字节数。</para></returns>
     /// <exception cref="CompressionException">The frame declares a window above <paramref name="maximumWindowLog"/>,
-    /// which is reported without a zstd error, or it is malformed or needs more bytes than
-    /// <paramref name="destination"/> holds, where the message carries the zstd error name.
-    /// <para>帧声明的窗口超出 <paramref name="maximumWindowLog"/>（此情形不带 zstd 错误），或帧无效、目标容量不足；
-    /// 后两种情形的消息携带 zstd 的错误名。</para></exception>
+    /// which is reported without an engine error, or it is malformed, truncated or needs more bytes than
+    /// <paramref name="destination"/> holds.
+    /// <para>帧声明的窗口超出 <paramref name="maximumWindowLog"/>（此情形不带引擎错误），或帧无效、被截断、
+    /// 所需字节多于目标容量。</para></exception>
     public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, int maximumWindowLog)
     {
         if (source.IsEmpty)
@@ -162,64 +162,61 @@ public static class ZstdBlockCodec
             RefuseOversizedWindow(source, maximumWindowLog);
         }
 
-        var context = DecompressionContextPool.Rent();
+        var decoder = DecompressorCache.Rent();
         try
         {
-            unsafe
+            decoder.Reset();
+            var consumed = 0;
+            var written = 0;
+            while (true)
             {
-                var dctx = (ZSTD_DCtx_s*)context;
-                fixed (byte* input = source)
-                fixed (byte* output = destination)
+                var status = decoder.Decompress(
+                    source[consumed..],
+                    destination[written..],
+                    out var stepConsumed,
+                    out var stepWritten);
+                consumed += stepConsumed;
+                written += stepWritten;
+                switch (status)
                 {
-                    var written = Methods.ZSTD_decompressDCtx(dctx, output, (nuint)destination.Length, input,
-                        (nuint)source.Length);
-                    return EnsureSuccess(written, "ZSTD block decompression");
+                    case OperationStatus.Done:
+                        if (consumed == source.Length)
+                        {
+                            return written;
+                        }
+
+                        if (stepConsumed == 0)
+                        {
+                            throw new CompressionException(
+                                "ZSTD block carries unparsable data behind the frames. ZSTD 块在帧之后携带了无法解析的数据。");
+                        }
+
+                        decoder.Reset();
+                        break;
+                    case OperationStatus.NeedMoreData:
+                        if (consumed == 0)
+                        {
+                            throw new CompressionException(
+                                "ZSTD block decompression failed: the frame is truncated. ZSTD 块解压失败：帧被截断。");
+                        }
+
+                        break;
+                    case OperationStatus.DestinationTooSmall:
+                        throw new CompressionException(
+                            $"ZSTD block needs more than the {destination.Length} decode bytes provided. "
+                            + $"ZSTD 块所需的解码空间超出了提供的 {destination.Length} 字节。");
+                    case OperationStatus.InvalidData:
+                        throw new CompressionException(
+                            "ZSTD block decompression failed: the frame is malformed. ZSTD 块解压失败：帧无效。");
+                    default:
+                        throw new CompressionException(
+                            $"Unexpected Zstd decoder status: {status}. Zstd 解码器返回了意外的状态 {status}。");
                 }
             }
         }
         finally
         {
-            DecompressionContextPool.Return(context);
-        }
-    }
-
-    /// <summary>
-    /// Reads the window a frame declares out of its header and refuses the frame when that window exceeds the
-    /// caller's ceiling, leaving the destination untouched.
-    /// <para>从帧头读出该帧声明的窗口，并在其超出调用方上限时拒绝该帧，目标缓冲区保持未被写入。</para>
-    /// </summary>
-    /// <param name="source">Frame bytes to inspect. <para>待检查的帧字节。</para></param>
-    /// <param name="maximumWindowLog">Window log the declared window must stay within. <para>所声明窗口必须落入的窗口对数上限。</para></param>
-    /// <remarks>
-    /// Any non-zero return from the header read means the buffer does not hold a parseable frame header, whether
-    /// because it is shorter than the header or because the magic is wrong, and is left to the decode call, which
-    /// reports it as the malformed frame it is. Only a zero return fills the header fields, so no window is ever read
-    /// from an unfilled struct.
-    /// <para>读取帧头返回非零即表示缓冲区并不含有可解析的帧头——无论是因为短于帧头还是因为魔数错误——都交由解码调用
-    /// 按其真实情况报为无效帧。只有返回零才会填好帧头字段，因此绝不会从未填充的结构里读出窗口。</para>
-    /// </remarks>
-    /// <exception cref="CompressionException">The declared window is larger than the ceiling.
-    /// <para>所声明的窗口大于上限。</para></exception>
-    private static void RefuseOversizedWindow(ReadOnlySpan<byte> source, int maximumWindowLog)
-    {
-        var ceiling = maximumWindowLog >= 64 ? ulong.MaxValue : 1UL << maximumWindowLog;
-        ZSTD_frameHeader header = default;
-        unsafe
-        {
-            fixed (byte* frame = source)
-            {
-                if (Methods.ZSTD_getFrameHeader(&header, frame, (UIntPtr)source.Length) != UIntPtr.Zero)
-                {
-                    return;
-                }
-            }
-        }
-
-        if (header.windowSize > ceiling)
-        {
-            throw new CompressionException(
-                $"ZSTD block declares a {header.windowSize} byte window above the {ceiling} byte ceiling. "
-                + $"ZSTD 块声明的窗口为 {header.windowSize} 字节，超出 {ceiling} 字节的上限。");
+            DecompressorCache.Return(decoder);
         }
     }
 
@@ -234,9 +231,8 @@ public static class ZstdBlockCodec
     /// <returns>A new array holding the decoded bytes, empty when <paramref name="expectedSize"/> is <c>0</c>.
     /// <para>保存解码字节的新数组；<paramref name="expectedSize"/> 为 <c>0</c> 时为空数组。</para></returns>
     /// <exception cref="CompressionException">The frame is malformed, needs more bytes than
-    /// <paramref name="expectedSize"/> (the message carries the zstd error name), or produces fewer than
-    /// the declared count. <para>帧无效，或所需解码字节多于 <paramref name="expectedSize"/>（消息携带 zstd 的错误名），
-    /// 或产出的字节少于声明数量。</para></exception>
+    /// <paramref name="expectedSize"/>, or produces fewer than the declared count.
+    /// <para>帧无效、所需解码字节多于 <paramref name="expectedSize"/>，或产出的字节少于声明数量。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedSize"/> is negative.
     /// <para><paramref name="expectedSize"/> 为负数。</para></exception>
     public static byte[] Decompress(ReadOnlySpan<byte> source, int expectedSize)
@@ -260,289 +256,218 @@ public static class ZstdBlockCodec
     }
 
     /// <summary>
-    /// Applies one compression parameter to an owned context and reports the zstd error name when it is rejected.
-    /// <para>向自有上下文应用一个压缩参数，被拒绝时报告 zstd 的错误名。</para>
+    /// Decompresses one standalone zstd frame, or a concatenation of frames, into a fresh array without knowing the
+    /// decoded length up front.
+    /// <para>在不预知解码长度的前提下，把一个独立 zstd 帧或帧的串联解压到新建数组。</para>
     /// </summary>
-    /// <param name="context">Compression context. <para>压缩上下文。</para></param>
-    /// <param name="parameter">Parameter to set. <para>要设置的参数。</para></param>
-    /// <param name="value">Parameter value. <para>参数值。</para></param>
-    /// <exception cref="CompressionException">The context rejected the value.
-    /// <para>上下文拒绝了该值。</para></exception>
-    private static unsafe void SetCompressionParameter(ZSTD_CCtx_s* context, ZSTD_cParameter parameter, int value)
-    {
-        var code = Methods.ZSTD_CCtx_setParameter(context, parameter, value);
-        if (Methods.ZSTD_isError(code))
-        {
-            var error = Methods.ZSTD_getErrorName(code);
-            throw new CompressionException(
-                $"ZSTD rejected compression parameter {parameter} = {value}: {error}. "
-                + $"ZSTD 拒绝了压缩参数 {parameter} = {value}：{error}。");
-        }
-    }
-
-    /// <summary>
-    /// Converts a zstd result code into a byte count, translating an error code into the codec failure.
-    /// <para>把 zstd 的结果码转换为字节数，并把错误码转换为编解码失败。</para>
-    /// </summary>
-    /// <param name="code">Result code returned by a zstd entry point. <para>zstd 入口返回的结果码。</para></param>
-    /// <param name="operation">Operation name used in the failure message. <para>失败消息中使用的操作名。</para></param>
-    /// <returns>The byte count carried by a successful code. <para>成功码携带的字节数。</para></returns>
-    /// <exception cref="CompressionException">The code reports a zstd error.
-    /// <para>该结果码报告了 zstd 错误。</para></exception>
-    private static int EnsureSuccess(nuint code, string operation)
-    {
-        if (Methods.ZSTD_isError(code))
-        {
-            var error = Methods.ZSTD_getErrorName(code);
-            throw new CompressionException($"{operation} failed: {error}. {operation} 失败：{error}。");
-        }
-
-        return (int)code;
-    }
-
-    /// <summary>
-    /// Pools idle compression contexts per level for the block primitives, so a per-cluster loop reuses one context
-    /// instead of building one per block.
-    /// <para>为块原语按级别池化空闲的压缩上下文，使逐 cluster 的循环复用同一上下文而不必每块新建。</para>
-    /// </summary>
+    /// <param name="source">Frame bytes, treated as untrusted. <para>帧字节，按不可信输入处理。</para></param>
+    /// <returns>A new array holding exactly the decoded bytes. <para>恰好保存解码字节的新数组。</para></returns>
     /// <remarks>
-    /// A context is created with its compression level already applied, because the level is the pool key and every
-    /// caller that rents that context wants the same one. The list is unbounded: renting removes the newest entry
-    /// under the lock and hands out an exclusive owner, while a caller arriving with no idle entry creates its own, so
-    /// no caller ever waits on another. Contexts are parked rather than freed, matching the wrapper contexts below,
-    /// which the array and stream facade keeps using because a wrapper owns a native context this type cannot reach.
-    /// <para>上下文在创建时就已经应用压缩级别，因为级别正是池的键，且每个借用该上下文的调用方要的都是同一个级别。列表不设
-    /// 上限：借用会在锁内移除最新条目并给出独占所有者，而没有空闲条目的调用方自行新建，因此不会有调用方等待他人。上下文只是停放
-    /// 而不释放，与下文的包装器上下文一致；数组与流门面继续使用后者，因为包装器持有本类型无法访问的原生上下文。</para>
+    /// When the leading frame records its content size the buffer starts at that declared length; a frame without a
+    /// content size starts from a fixed initial buffer. Both paths pump into a buffer that grows with the plaintext
+    /// the frames actually yield, so the allocation follows the output instead of the declaration alone.
+    /// <para>首帧记录了内容尺寸时缓冲从该声明长度起步；未记录内容尺寸的帧从固定初始缓冲起步。两条路径都泵入一个
+    /// 随各帧实际明文产出而增长的缓冲，使分配跟随产出而非仅跟随声明。</para>
     /// </remarks>
-    internal static class CompressionContextPool
+    /// <exception cref="CompressionException">The frames are malformed or truncated.
+    /// <para>帧无效或被截断。</para></exception>
+    internal static byte[] DecompressAuto(ReadOnlySpan<byte> source)
     {
-        private static readonly Lock Gate = new();
-        private static readonly Dictionary<int, List<IntPtr>> Idle = [];
-
-        /// <summary>
-        /// Rents a context for the given level, creating one when none is parked.
-        /// <para>借用给定级别的上下文；没有停放实例时新建一个。</para>
-        /// </summary>
-        /// <param name="level">Compression level already valid for zstd. <para>已经合法的 zstd 压缩级别。</para></param>
-        /// <returns>An exclusively owned context. <para>被独占持有的上下文。</para></returns>
-        /// <exception cref="CompressionException">The zstd library could not create or configure a context.
-        /// <para>zstd 库无法创建或配置上下文。</para></exception>
-        internal static IntPtr Rent(int level)
+        var initialBytes = UnknownSizeInitialBytes;
+        if (ZstandardDecoder.TryGetMaxDecompressedLength(source, out var declared)
+            && declared > 0
+            && declared <= int.MaxValue)
         {
-            lock (Gate)
+            initialBytes = checked((int)declared);
+        }
+
+        var decoder = DecompressorCache.Rent();
+        try
+        {
+            decoder.Reset();
+            var buffer = new byte[initialBytes];
+            var consumed = 0;
+            var written = 0;
+            while (true)
             {
-                if (Idle.TryGetValue(level, out var idleList))
+                var status = decoder.Decompress(
+                    source[consumed..],
+                    buffer.AsSpan(written),
+                    out var stepConsumed,
+                    out var stepWritten);
+                consumed += stepConsumed;
+                written += stepWritten;
+                switch (status)
                 {
-                    var last = idleList.Count - 1;
-                    var context = idleList[last];
-                    idleList.RemoveAt(last);
-                    if (idleList.Count == 0)
-                    {
-                        Idle.Remove(level);
-                    }
+                    case OperationStatus.Done:
+                        if (consumed == source.Length)
+                        {
+                            var result = new byte[written];
+                            buffer.AsSpan(0, written).CopyTo(result);
+                            return result;
+                        }
 
-                    return context;
-                }
-            }
+                        if (stepConsumed == 0)
+                        {
+                            throw new CompressionException(
+                                "ZSTD block carries unparsable data behind the frames. ZSTD 块在帧之后携带了无法解析的数据。");
+                        }
 
-            unsafe
-            {
-                var created = (IntPtr)Methods.ZSTD_createCCtx();
-                if (created == IntPtr.Zero)
-                {
-                    throw new CompressionException(
-                        "ZSTD could not create a compression context. ZSTD 无法创建压缩上下文。");
-                }
+                        decoder.Reset();
+                        break;
+                    case OperationStatus.DestinationTooSmall:
+                        var grown = new byte[checked(Math.Max(buffer.Length * 2, written + UnknownSizeInitialBytes))];
+                        buffer.AsSpan(0, written).CopyTo(grown);
+                        buffer = grown;
+                        break;
+                    case OperationStatus.NeedMoreData:
+                        if (consumed == 0)
+                        {
+                            throw new CompressionException(
+                                "ZSTD block decompression failed: the frame is truncated. ZSTD 块解压失败：帧被截断。");
+                        }
 
-                try
-                {
-                    SetCompressionParameter((ZSTD_CCtx_s*)created, ZSTD_cParameter.ZSTD_c_compressionLevel, level);
-                    return created;
-                }
-                catch
-                {
-                    Methods.ZSTD_freeCCtx((ZSTD_CCtx_s*)created);
-                    throw;
+                        break;
+                    case OperationStatus.InvalidData:
+                        throw new CompressionException(
+                            "ZSTD block decompression failed: the frame is malformed. ZSTD 块解压失败：帧无效。");
+                    default:
+                        throw new CompressionException(
+                            $"Unexpected Zstd decoder status: {status}. Zstd 解码器返回了意外的状态 {status}。");
                 }
             }
         }
-
-        /// <summary>
-        /// Parks a context for later reuse by the same level.
-        /// <para>把上下文停放供同一级别后续复用。</para>
-        /// </summary>
-        /// <param name="level">Level the context was created with. <para>该上下文创建时使用的级别。</para></param>
-        /// <param name="context">Context being returned. <para>归还的上下文。</para></param>
-        internal static void Return(int level, IntPtr context)
+        finally
         {
-            lock (Gate)
-            {
-                if (!Idle.TryGetValue(level, out var idleList))
-                {
-                    idleList = [];
-                    Idle[level] = idleList;
-                }
-
-                idleList.Add(context);
-            }
+            DecompressorCache.Return(decoder);
         }
     }
 
     /// <summary>
-    /// Pools one idle decompression context for the block primitives, with the same exclusive-rental contract as
-    /// <see cref="CompressionContextPool"/>.
-    /// <para>为块原语池化一个空闲解压上下文，独占借用契约与 <see cref="CompressionContextPool"/> 相同。</para>
+    /// Reads the window a frame declares out of its header and refuses the frame when that window exceeds the
+    /// caller's ceiling, leaving the destination untouched.
+    /// <para>从帧头读出该帧声明的窗口，并在其超出调用方上限时拒绝该帧，目标缓冲区保持未被写入。</para>
     /// </summary>
-    internal static class DecompressionContextPool
+    /// <param name="source">Frame bytes to inspect. <para>待检查的帧字节。</para></param>
+    /// <param name="maximumWindowLog">Window log the declared window must stay within. <para>所声明窗口必须落入的窗口对数上限。</para></param>
+    /// <remarks>
+    /// A header too short to parse or not carrying the zstd magic is left to the decode call, which reports it as
+    /// the malformed frame it is. Only a complete header fills the window, so no window is ever read from an
+    /// unfilled parse.
+    /// <para>短于可解析长度或不带 zstd 魔数的帧头交由解码调用按其真实情况报为无效帧。只有完整的帧头才会给出窗口，
+    /// 因此绝不会从未完成的解析里读出窗口。</para>
+    /// </remarks>
+    /// <exception cref="CompressionException">The declared window is larger than the ceiling.
+    /// <para>所声明的窗口大于上限。</para></exception>
+    private static void RefuseOversizedWindow(ReadOnlySpan<byte> source, int maximumWindowLog)
     {
-        private static readonly Lock Gate = new();
-        private static IntPtr _idle;
-
-        /// <summary>
-        /// Rents the idle context, or creates one when none is parked.
-        /// <para>借用空闲上下文；没有停放实例时新建一个。</para>
-        /// </summary>
-        /// <returns>The exclusively rented context. <para>被独占借用的上下文。</para></returns>
-        /// <exception cref="CompressionException">The zstd library could not create a context.
-        /// <para>zstd 库无法创建上下文。</para></exception>
-        internal static IntPtr Rent()
+        if (ZstdFrameHeader.TryReadWindow(source, out var declaredWindow)
+            != ZstdFrameHeader.ParseResult.Parsed)
         {
-            lock (Gate)
-            {
-                var idle = _idle;
-                if (idle != IntPtr.Zero)
-                {
-                    _idle = IntPtr.Zero;
-                    return idle;
-                }
-            }
-
-            unsafe
-            {
-                var created = (IntPtr)Methods.ZSTD_createDCtx();
-                return created != IntPtr.Zero
-                    ? created
-                    : throw new CompressionException(
-                        "ZSTD could not create a decompression context. ZSTD 无法创建解压上下文。");
-            }
+            return;
         }
 
-        /// <summary>
-        /// Parks a context for later reuse; a context already parked is freed.
-        /// <para>停放一个上下文供后续复用；已停放的那个上下文会被释放。</para>
-        /// </summary>
-        /// <param name="context">Context being returned. <para>归还的上下文。</para></param>
-        internal static void Return(IntPtr context)
+        var ceiling = maximumWindowLog >= 64 ? long.MaxValue : 1L << maximumWindowLog;
+        if (declaredWindow > ceiling)
         {
-            IntPtr displaced;
-            lock (Gate)
-            {
-                displaced = _idle;
-                _idle = context;
-            }
-
-            if (displaced != IntPtr.Zero)
-            {
-                unsafe
-                {
-                    Methods.ZSTD_freeDCtx((ZSTD_DCtx_s*)displaced);
-                }
-            }
+            throw new CompressionException(
+                $"ZSTD block declares a {declaredWindow} byte window above the {ceiling} byte ceiling. "
+                + $"ZSTD 块声明的窗口为 {declaredWindow} 字节，超出 {ceiling} 字节的上限。");
         }
     }
 
     /// <summary>
-    /// Caches idle zstd compression contexts per level so per-cluster loops and parallel chunk batches reuse
-    /// contexts instead of rebuilding one for every block.
-    /// <para>按级别缓存空闲的 zstd 压缩上下文，使逐 cluster 的循环与并行分块批次复用上下文而不必每块重建。</para>
+    /// Pools idle zstd encoders per level and window pair for the block primitives and the array-level compressor,
+    /// so a per-cluster loop reuses one encoder instead of building one per block.
+    /// <para>为块原语与数组级压缩器按级别与窗口组合池化空闲的 zstd 编码器，使逐 cluster 的循环复用同一编码器
+    /// 而不必每块新建。</para>
     /// </summary>
     /// <remarks>
-    /// A zstd context carries the level's window state, so constructing one per block repeats that setup for every
-    /// cluster of an image. The cache keeps an unbounded idle list per level: renting removes the newest entry under
-    /// the lock and hands out an exclusive owner, while a caller arriving with no idle entry constructs its own, so
-    /// no caller ever waits on another. A returned context is only parked, never disposed, and parallel workers that
-    /// return in the same batch are all still available to the next batch. A context is never shared concurrently
-    /// and is therefore never observed in a half-consumed state.
-    /// <para>zstd 上下文承载该级别的窗口状态，每块新建就会让镜像的每个 cluster 重复一次搭建。缓存为每个级别保留
-    /// 不设上限的空闲列表：借用会在锁内移除最新条目并给出独占所有者，而没有空闲条目的调用方自行新建，因此不会有
-    /// 调用方等待他人。归还的上下文只是停放而不释放，同批并行工作者归还的上下文对下一批仍然可用。上下文从不并发
-    /// 共享，也就不会出现处于半消费状态被观测到的情况。</para>
+    /// An encoder is created with its compression level and window already applied, because the pair is the pool key
+    /// and every caller that rents that encoder wants the same one. The list is unbounded: renting removes the newest
+    /// entry under the lock and hands out an exclusive owner, while a caller arriving with no idle entry creates its
+    /// own, so no caller ever waits on another. Encoders are parked rather than freed and every user resets the
+    /// encoder before writing a frame, so no frame inherits another frame's session.
+    /// <para>编码器在创建时就已经应用压缩级别与窗口，因为该组合正是池的键，且每个借用该编码器的调用方要的都是
+    /// 同一个组合。列表不设上限：借用会在锁内移除最新条目并给出独占所有者，而没有空闲条目的调用方自行新建，因此
+    /// 不会有调用方等待他人。编码器只是停放而不释放，且每个使用者在写帧前都会重置编码器，因此没有帧会继承
+    /// 其他帧的会话。</para>
     /// </remarks>
     internal static class CompressorCache
     {
         private static readonly Lock Gate = new();
-        private static readonly Dictionary<int, List<Holder>> Idle = [];
+        private static readonly Dictionary<(int Level, int WindowLog2), List<ZstandardEncoder>> Idle = [];
 
         /// <summary>
-        /// Rents the idle wrapper compressor for one level, or creates one when none is parked.
-        /// <para>借用某级别的空闲包装压缩器；没有停放实例时新建一个。</para>
+        /// Rents an encoder for the given level and window pair, creating one when none is parked.
+        /// <para>借用给定级别与窗口组合的编码器；没有停放实例时新建一个。</para>
         /// </summary>
-        /// <param name="level">Compression level of the rented compressor. <para>借用的压缩器的压缩级别。</para></param>
-        /// <returns>The exclusively rented compressor. <para>被独占借用的压缩器。</para></returns>
-        internal static ZstdSharp.Compressor Rent(int level)
+        /// <param name="level">Compression level already valid for zstd. <para>已经合法的 zstd 压缩级别。</para></param>
+        /// <param name="windowLog2">Window log the encoder was configured with. <para>编码器配置的窗口对数。</para></param>
+        /// <returns>An exclusively owned encoder. <para>被独占持有的编码器。</para></returns>
+        internal static ZstandardEncoder Rent(int level, int windowLog2)
         {
             lock (Gate)
             {
-                if (Idle.TryGetValue(level, out var idleList))
+                if (Idle.TryGetValue((level, windowLog2), out var idleList))
                 {
                     var last = idleList.Count - 1;
-                    var holder = idleList[last];
+                    var encoder = idleList[last];
                     idleList.RemoveAt(last);
                     if (idleList.Count == 0)
                     {
-                        Idle.Remove(level);
+                        Idle.Remove((level, windowLog2));
                     }
 
-                    return holder.Value;
+                    return encoder;
                 }
             }
 
-            return new ZstdSharp.Compressor(level);
+            return new ZstandardEncoder(new ZstandardCompressionOptions
+            {
+                Quality = level,
+                WindowLog2 = windowLog2,
+            });
         }
 
         /// <summary>
-        /// Parks one wrapper compressor for later reuse by the same level.
-        /// <para>停放一个包装压缩器供同一级别后续复用。</para>
+        /// Parks an encoder for later reuse by the same level and window pair.
+        /// <para>把编码器停放供同一级别与窗口组合后续复用。</para>
         /// </summary>
-        /// <param name="level">Level the compressor was created with. <para>该压缩器创建时使用的级别。</para></param>
-        /// <param name="compressor">Compressor being returned. <para>归还的压缩器。</para></param>
-        internal static void Return(int level, ZstdSharp.Compressor compressor)
+        /// <param name="level">Level the encoder was created with. <para>该编码器创建时使用的级别。</para></param>
+        /// <param name="windowLog2">Window log the encoder was configured with. <para>编码器配置的窗口对数。</para></param>
+        /// <param name="encoder">Encoder being returned. <para>归还的编码器。</para></param>
+        internal static void Return(int level, int windowLog2, ZstandardEncoder encoder)
         {
             lock (Gate)
             {
-                if (!Idle.TryGetValue(level, out var idleList))
+                if (!Idle.TryGetValue((level, windowLog2), out var idleList))
                 {
                     idleList = [];
-                    Idle[level] = idleList;
+                    Idle[(level, windowLog2)] = idleList;
                 }
 
-                idleList.Add(new Holder(compressor));
+                idleList.Add(encoder);
             }
-        }
-
-        private sealed class Holder(ZstdSharp.Compressor value)
-        {
-            internal ZstdSharp.Compressor Value { get; } = value;
         }
     }
 
     /// <summary>
-    /// Reuses one zstd decompression context across calls, with the same exclusive-rental contract as
+    /// Reuses one idle zstd decoder across calls, with the same exclusive-rental contract as
     /// <see cref="CompressorCache"/>.
-    /// <para>跨调用复用同一个 zstd 解压上下文，独占借用契约与 <see cref="CompressorCache"/> 相同。</para>
+    /// <para>跨调用复用同一个空闲 zstd 解码器，独占借用契约与 <see cref="CompressorCache"/> 相同。</para>
     /// </summary>
-    public static class DecompressorCache
+    internal static class DecompressorCache
     {
         private static readonly Lock Gate = new();
-        private static ZstdSharp.Decompressor? Idle;
+        private static ZstandardDecoder? Idle;
 
         /// <summary>
-        /// Rents the idle decompression context, or creates one when none is parked.
-        /// <para>借用空闲解压上下文；没有停放实例时新建一个。</para>
+        /// Rents the idle decoder, or creates one when none is parked.
+        /// <para>借用空闲解码器；没有停放实例时新建一个。</para>
         /// </summary>
-        /// <returns>The exclusively rented decompressor. <para>被独占借用的解压器。</para></returns>
-        public static ZstdSharp.Decompressor Rent()
+        /// <returns>The exclusively rented decoder. <para>被独占借用的解码器。</para></returns>
+        internal static ZstandardDecoder Rent()
         {
             lock (Gate)
             {
@@ -554,21 +479,21 @@ public static class ZstdBlockCodec
                 }
             }
 
-            return new ZstdSharp.Decompressor();
+            return new ZstandardDecoder();
         }
 
         /// <summary>
-        /// Parks one decompression context for later reuse; a context already parked is disposed.
-        /// <para>停放一个解压上下文供后续复用；已停放的那个上下文会被释放。</para>
+        /// Parks a decoder for later reuse; a decoder already parked is disposed.
+        /// <para>停放一个解码器供后续复用；已停放的那个解码器会被释放。</para>
         /// </summary>
-        /// <param name="decompressor">Context being returned; null is ignored. <para>归还的上下文；null 会被忽略。</para></param>
-        public static void Return(ZstdSharp.Decompressor decompressor)
+        /// <param name="decoder">Decoder being returned; null is ignored. <para>归还的解码器；null 会被忽略。</para></param>
+        internal static void Return(ZstandardDecoder decoder)
         {
-            ZstdSharp.Decompressor? displaced;
+            ZstandardDecoder? displaced;
             lock (Gate)
             {
                 displaced = Idle;
-                Idle = decompressor;
+                Idle = decoder;
             }
 
             displaced?.Dispose();

@@ -355,7 +355,7 @@ public sealed class AdbSyncV2Tests
 
                 break;
             case AdbSyncCompression.Zstd:
-                using (var zstd = new ZstdSharp.CompressionStream(output, leaveOpen: true))
+                using (var zstd = new ZstandardStream(output, CompressionLevel.Optimal, leaveOpen: true))
                 {
                     zstd.Write(raw);
                 }
@@ -387,7 +387,7 @@ public sealed class AdbSyncV2Tests
 
                 break;
             case AdbSyncCompression.Zstd:
-                using (var zstd = new ZstdSharp.DecompressionStream(input, leaveOpen: true))
+                using (var zstd = new ZstandardStream(input, CompressionMode.Decompress, leaveOpen: true))
                 {
                     zstd.CopyTo(output);
                 }

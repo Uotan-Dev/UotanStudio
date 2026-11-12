@@ -990,9 +990,6 @@ Continue creating the project?</value>
   <data name="About_Project_K4osCompressionLz4" xml:space="preserve">
     <value>LZ4 compression library; the managed layer is MIT and the embedded liblz4 is BSD-2-Clause (Yann Collet).</value>
   </data>
-  <data name="About_Project_ZstdSharpPort" xml:space="preserve">
-    <value>Zstandard compression library; the managed layer is MIT and the embedded zstd is BSD-3-Clause (Meta Platforms).</value>
-  </data>
   <data name="About_Project_LzmaSdk" xml:space="preserve">
     <value>LZMA/LZMA2 decompression; the NuGet wrapper is MIT and the bundled 7-Zip LZMA SDK is public domain.</value>
   </data>

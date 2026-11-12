@@ -7,6 +7,7 @@
     <TargetFramework Condition="'$(TargetFramework)' == ''">net11.0</TargetFramework>
     <CETCompat>false</CETCompat>
     <LangVersion>latest</LangVersion>
+    <Features>runtime-async=on</Features>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>

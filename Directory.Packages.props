@@ -73,7 +73,6 @@
     <PackageVersion Include="System.IO.Hashing" Version="11.0.0" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
-    <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- AVB signature verification (RSASSA-PSS / PKCS#1 v1.5), pure managed & AOT-friendly -->
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />

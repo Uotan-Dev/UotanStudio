@@ -1,16 +1,20 @@
 using System.Buffers;
+using System.IO.Compression;
 using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Compress.Internal;
-using ZstdSharp;
 
 namespace UotanStudio.Compress.Compressors;
 
 /// <summary>
-/// Zstd compression and decompression over byte arrays or streams, backed by ZstdSharp.
-/// <para>基于 ZstdSharp 的 Zstd 字节数组与流式压缩解压。</para>
+/// Zstd compression and decompression over byte arrays or streams, backed by the managed zstd engine the runtime
+/// ships in System.IO.Compression.
+/// <para>基于运行时随 System.IO.Compression 内置的托管 zstd 引擎实现的 Zstd 字节数组与流式压缩解压。</para>
 /// </summary>
 public static class ZstdCompressor
 {
+    private const int MinimumLevel = -5;
+    private const int MaximumLevel = 22;
+
     /// <summary>
     /// Zstd compression.
     /// <para>Zstd 压缩。</para>
@@ -32,7 +36,6 @@ public static class ZstdCompressor
 
         try
         {
-
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
                 (start, count, destination) => CompressChunk(data, start, count, options, destination));
             if (parallel != null)
@@ -40,15 +43,39 @@ public static class ZstdCompressor
                 return parallel;
             }
 
-            var level = options?.Level ?? 3;
-            var compressor = ZstdBlockCodec.CompressorCache.Rent(level);
+            var level = ClampLevel(options?.Level ?? 3);
+            var windowLog2 = ZstandardCompressionOptions.DefaultWindowLog2;
+            var encoder = ZstdBlockCodec.CompressorCache.Rent(level, windowLog2);
             try
             {
-                return compressor.Wrap(data).ToArray();
+                var bound = ZstdEncoder.MaximumCompressedSize(data.Length);
+                var buffer = ArrayPool<byte>.Shared.Rent(bound);
+                try
+                {
+                    encoder.Reset();
+                    encoder.SetSourceLength(data.Length);
+                    var status = encoder.Compress(
+                        data,
+                        buffer.AsSpan(0, bound),
+                        out var consumed,
+                        out var written,
+                        isFinalBlock: true);
+                    if (status != OperationStatus.Done || consumed != data.Length)
+                    {
+                        throw new CompressionException(
+                            $"ZSTD compression did not fit {bound} bytes. ZSTD 压缩无法装入 {bound} 字节。");
+                    }
+
+                    return buffer.AsSpan(0, written).ToArray();
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
             }
             finally
             {
-                ZstdBlockCodec.CompressorCache.Return(level, compressor);
+                ZstdBlockCodec.CompressorCache.Return(level, windowLog2, encoder);
             }
         }
         catch (Exception ex)
@@ -63,15 +90,39 @@ public static class ZstdCompressor
     /// </summary>
     private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
-        var level = options?.Level ?? 3;
-        var compressor = ZstdBlockCodec.CompressorCache.Rent(level);
+        var level = ClampLevel(options?.Level ?? 3);
+        var windowLog2 = ZstandardCompressionOptions.DefaultWindowLog2;
+        var encoder = ZstdBlockCodec.CompressorCache.Rent(level, windowLog2);
         try
         {
-            destination.Write(compressor.Wrap(data.AsSpan(start, count)));
+            var bound = ZstdEncoder.MaximumCompressedSize(count);
+            var buffer = ArrayPool<byte>.Shared.Rent(bound);
+            try
+            {
+                encoder.Reset();
+                encoder.SetSourceLength(count);
+                var status = encoder.Compress(
+                    data.AsSpan(start, count),
+                    buffer.AsSpan(0, bound),
+                    out var consumed,
+                    out var written,
+                    isFinalBlock: true);
+                if (status != OperationStatus.Done || consumed != count)
+                {
+                    throw new CompressionException(
+                        $"ZSTD compression did not fit {bound} bytes. ZSTD 压缩无法装入 {bound} 字节。");
+                }
+
+                destination.Write(buffer, 0, written);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
         finally
         {
-            ZstdBlockCodec.CompressorCache.Return(level, compressor);
+            ZstdBlockCodec.CompressorCache.Return(level, windowLog2, encoder);
         }
     }
 
@@ -93,15 +144,7 @@ public static class ZstdCompressor
 
         try
         {
-            var decompressor = ZstdBlockCodec.DecompressorCache.Rent();
-            try
-            {
-                return decompressor.Unwrap(data).ToArray();
-            }
-            finally
-            {
-                ZstdBlockCodec.DecompressorCache.Return(decompressor);
-            }
+            return ZstdBlockCodec.DecompressAuto(data);
         }
         catch (Exception ex)
         {
@@ -139,7 +182,11 @@ public static class ZstdCompressor
             {
                 return;
             }
-            using var compressor = new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
+            var compressionOptions = new ZstandardCompressionOptions
+            {
+                Quality = ClampLevel(options?.Level ?? 3),
+            };
+            using var compressor = new ZstandardStream(output, compressionOptions, leaveOpen: true);
             ExactCopy.ToEnd(input, compressor);
         }
         catch (Exception ex)
@@ -159,7 +206,13 @@ public static class ZstdCompressor
     /// <returns>A writable frame encoder stream whose dispose closes the frame without closing <paramref name="output"/>.
     /// <para>可写帧编码器流；释放时收尾该帧但不关闭 <paramref name="output"/>。</para></returns>
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
-        => new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
+    {
+        var compressionOptions = new ZstandardCompressionOptions
+        {
+            Quality = ClampLevel(options?.Level ?? 3),
+        };
+        return new ZstandardStream(output, compressionOptions, leaveOpen: true);
+    }
 
     /// <summary>
     /// Compresses a stream through parallel per-chunk frames when parallelism is requested and at least two chunks
@@ -186,7 +239,7 @@ public static class ZstdCompressor
         }
 
         var requestedDegree = options.MaxDegreeOfParallelism.Value;
-        var level = options.Level ?? 3;
+        var level = ClampLevel(options.Level ?? 3);
         var chunkSize = ParallelCompression.DefaultChunkSize;
 
         if (input.CanSeek && TryGetRemainingLength(input, out var remaining))
@@ -253,14 +306,14 @@ public static class ZstdCompressor
         var frames = new byte[degree][];
         var inputLengths = new int[degree];
         var frameLengths = new int[degree];
-        var contexts = new Compressor[degree];
+        var contexts = new ZstandardEncoder[degree];
         try
         {
             for (var slot = 0; slot < degree; slot++)
             {
                 buffers[slot] = ArrayPool<byte>.Shared.Rent(chunkSize);
                 frames[slot] = ArrayPool<byte>.Shared.Rent(frameBound);
-                contexts[slot] = ZstdBlockCodec.CompressorCache.Rent(level);
+                contexts[slot] = ZstdBlockCodec.CompressorCache.Rent(level, ZstandardCompressionOptions.DefaultWindowLog2);
             }
 
             var framesWritten = 0;
@@ -274,8 +327,21 @@ public static class ZstdCompressor
 
                 Parallel.For(0, batch, new ParallelOptions { MaxDegreeOfParallelism = batch }, slot =>
                 {
-                    var written = contexts[slot].Wrap(buffers[slot].AsSpan(0, inputLengths[slot]), frames[slot]);
-                    ArgumentOutOfRangeException.ThrowIfGreaterThan(written, frameBound - 1);
+                    var context = contexts[slot];
+                    context.Reset();
+                    context.SetSourceLength(inputLengths[slot]);
+                    var status = context.Compress(
+                        buffers[slot].AsSpan(0, inputLengths[slot]),
+                        frames[slot].AsSpan(0, frameBound),
+                        out var consumed,
+                        out var written,
+                        isFinalBlock: true);
+                    if (status != OperationStatus.Done || consumed != inputLengths[slot])
+                    {
+                        throw new CompressionException(
+                            $"ZSTD compression did not fit {frameBound} bytes. ZSTD 压缩无法装入 {frameBound} 字节。");
+                    }
+
                     frameLengths[slot] = written;
                 });
                 for (var slot = 0; slot < batch; slot++)
@@ -298,7 +364,7 @@ public static class ZstdCompressor
             {
                 if (contexts[slot] is { } context)
                 {
-                    ZstdBlockCodec.CompressorCache.Return(level, context);
+                    ZstdBlockCodec.CompressorCache.Return(level, ZstandardCompressionOptions.DefaultWindowLog2, context);
                 }
 
                 if (buffers[slot] is { } buffer)
@@ -381,8 +447,8 @@ public static class ZstdCompressor
     }
 
     /// <summary>
-    /// Streaming zstd decompression: pipes through ZstdSharp's DecompressionStream without full buffering, suitable for large inputs.
-    /// <para>流式 Zstd 解压：基于 ZstdSharp 的 DecompressionStream 直接管道， 无需整块缓冲，适合大输入。</para>
+    /// Streaming zstd decompression: pipes through the engine's ZstandardStream without full buffering, suitable for large inputs.
+    /// <para>流式 Zstd 解压：基于引擎的 ZstandardStream 直接管道，无需整块缓冲，适合大输入。</para>
     /// </summary>
     /// <param name="input">Readable compressed stream, consumed to its end and left open; the decoded size is
     /// unbounded, so callers handling untrusted input must cap <paramref name="output"/> themselves.
@@ -406,7 +472,7 @@ public static class ZstdCompressor
 
         try
         {
-            using var decompressor = new DecompressionStream(new NonDisposingStream(input));
+            using var decompressor = new ZstandardStream(input, CompressionMode.Decompress, leaveOpen: true);
             ExactCopy.ToEnd(decompressor, output);
         }
         catch (Exception ex)
@@ -424,7 +490,15 @@ public static class ZstdCompressor
     /// <returns>A readable stream of decoded bytes that never buffers the expansion as a whole and leaves <paramref name="input"/> open when disposed.
     /// <para>解码字节的可读流，解压结果不会整体驻留内存，释放时不关闭 <paramref name="input"/>。</para></returns>
     internal static Stream CreateDecompressionStream(Stream input)
-        => new DecompressionStream(new NonDisposingStream(input));
+        => new ZstandardStream(input, CompressionMode.Decompress, leaveOpen: true);
+
+    /// <summary>
+    /// Clamps a caller-supplied level into the range the zstd engine accepts for this facade.
+    /// <para>把调用方给出的级别夹取到本门面所允许的 zstd 引擎区间。</para>
+    /// </summary>
+    /// <param name="level">Requested compression level. <para>请求的压缩级别。</para></param>
+    /// <returns>The clamped level. <para>夹取后的级别。</para></returns>
+    private static int ClampLevel(int level) => Math.Clamp(level, MinimumLevel, MaximumLevel);
 
     /// <summary>
     /// Detects whether the data is in zstd format (magic 28 B5 2F FD).
