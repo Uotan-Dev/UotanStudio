@@ -94,7 +94,7 @@ public sealed class MetadataBuilder
     public void AddPartition(string name, string groupName, ulong sizeInBytes, uint attributes = 0)
     {
         ValidateName(name, "partition", nameof(name));
-        if (name.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
+        if (!LpMetadata.HasOnlyPartitionNameChars(name))
             throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(name));
         ValidateName(groupName, "group", nameof(groupName));
         if (_partitions.Any(p => p.Name == name))

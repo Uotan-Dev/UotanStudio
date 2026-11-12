@@ -100,16 +100,8 @@ internal sealed class ErofsDirectoryEntry
             }
             else
             {
-                var nameEnd = block.Length;
-                for (var p = nameOff; p < block.Length; p++)
-                {
-                    if (block[p] == 0)
-                    {
-                        nameEnd = p;
-                        break;
-                    }
-                }
-
+                var nullOffset = nameOff < block.Length ? block.Slice(nameOff).IndexOf((byte)0) : -1;
+                var nameEnd = nullOffset < 0 ? block.Length : nameOff + nullOffset;
                 nameLength = nameEnd - nameOff;
             }
 

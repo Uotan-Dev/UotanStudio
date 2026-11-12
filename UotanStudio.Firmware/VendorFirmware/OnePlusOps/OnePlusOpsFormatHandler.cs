@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BlockImage.Sparse;
@@ -638,11 +639,16 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         return segment;
     }
 
+    private static readonly byte[] DefaultSBoxTable = BuildSBoxTable();
+
     /// <summary>
-    /// Builds the default SBox table shared by the static decrypt paths.
-    /// <para>构建静态解密路径共用的默认 SBox 表。</para>
+    /// Returns the default SBox table shared by the decrypt paths; the array is shared across
+    /// callers and must not be mutated.
+    /// <para>返回各解密路径共用的默认 SBox 表；数组为共享实例，调用方不得修改。</para>
     /// </summary>
-    internal static byte[] SBoxTable()
+    internal static byte[] SBoxTable() => DefaultSBoxTable;
+
+    private static byte[] BuildSBoxTable()
     {
         var key = Encoding.UTF8.GetBytes("OnePlus#@!$^&*()_+");
         var sbox = new byte[256];
@@ -662,23 +668,17 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
 
     private static byte[] SBoxDecryptStatic(byte[] data)
     {
-        var key = Encoding.UTF8.GetBytes("OnePlus#@!$^&*()_+");
-        var sbox = new byte[256];
-        for (var i = 0; i < 256; i++)
-        {
-            sbox[i] = (byte)i;
-        }
-
-        for (int i = 255, j = 0; i > 0; i--)
-        {
-            j = (j + key[i % key.Length] + sbox[i]) & 0xFF;
-            (sbox[i], sbox[j]) = (sbox[j], sbox[i]);
-        }
-
         var output = new byte[data.Length];
-        for (var i = 0; i < data.Length; i++)
+        Array.Copy(data, output, data.Length);
+        var sbox = DefaultSBoxTable;
+        var keyOffset = 0;
+        var index = 0;
+        while (index < data.Length)
         {
-            output[i] = (byte)(data[i] ^ sbox[i % 256]);
+            var count = Math.Min(data.Length - index, 256 - keyOffset);
+            SimdOps.XorInPlace(output.AsSpan(index, count), sbox.AsSpan(keyOffset, count));
+            index += count;
+            keyOffset = 0;
         }
 
         return output;
@@ -784,13 +784,22 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         return true;
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string SanitizeFileName(string name)
     {
-        foreach (var c in Path.GetInvalidFileNameChars())
+        if (!name.AsSpan().ContainsAny(InvalidFileNameChars))
         {
-            name = name.Replace(c, '_');
+            return name;
         }
 
-        return name;
+        return string.Create(name.Length, name, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                span[i] = InvalidFileNameChars.Contains(c) ? '_' : c;
+            }
+        });
     }
 }

@@ -97,6 +97,7 @@ internal static class AllwinnerImageWtyFormat
 
     private static readonly RecordLayout V1Records = new(AttributesOffset, 52, 36, 40, 44, 48, Wide: false);
     private static readonly RecordLayout V3Records = new(AttributesOffset, 36, 292, 300, 308, 380, Wide: true);
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>
     /// Reports whether the container starts with the plaintext <c>IMAGEWTY</c> magic.
@@ -390,8 +391,7 @@ internal static class AllwinnerImageWtyFormat
         ArgumentNullException.ThrowIfNull(entry);
         var normalized = entry.Name.Replace('\\', '/');
         var baseName = normalized[(normalized.LastIndexOf('/') + 1)..];
-        var characters = Path.GetInvalidFileNameChars();
-        var cleaned = new string([.. baseName.Where(c => !characters.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
+        var cleaned = new string([.. baseName.Where(c => !InvalidFileNameChars.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
         if (cleaned.Length == 0 || cleaned is "." or "..")
         {
             cleaned = $"image_{index}.bin";

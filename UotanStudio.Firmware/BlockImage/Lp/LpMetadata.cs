@@ -109,7 +109,7 @@ public sealed class LpMetadata
         {
             var name = partitionNames[index];
             ValidateName(name, nameof(Partitions));
-            if (name.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
+            if (!HasOnlyPartitionNameChars(name))
             {
                 throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(Partitions));
             }
@@ -171,6 +171,22 @@ public sealed class LpMetadata
     {
         if (string.IsNullOrEmpty(name) || name.Contains('\0') || Encoding.UTF8.GetByteCount(name) > 36)
             throw new ArgumentException("LP names must contain 1 to 36 UTF-8 bytes without NUL.", parameterName);
+    }
+
+    /// <summary>Checks whether a name consists only of ASCII letters, digits and underscores. <para>检查名称是否只含 ASCII 字母、数字与下划线。</para></summary>
+    /// <param name="name">The name to check. <para>要检查的名称。</para></param>
+    /// <returns>True when every character is allowed. <para>所有字符都在允许集合内时为 true。</para></returns>
+    internal static bool HasOnlyPartitionNameChars(string name)
+    {
+        foreach (var c in name)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c != '_')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

@@ -77,7 +77,7 @@ internal sealed class ErofsExclusions
         string? problem = null;
         string? problemParameter = null;
 
-        foreach (var entry in literalPaths ?? Array.Empty<string>())
+        foreach (var entry in literalPaths ?? [])
         {
             var normalized = Normalize(entry);
             if (normalized.Length == 0)
@@ -95,7 +95,7 @@ internal sealed class ErofsExclusions
             acceptedPaths.Add(normalized);
         }
 
-        foreach (var pattern in regexes ?? Array.Empty<string>())
+        foreach (var pattern in regexes ?? [])
         {
             if (string.IsNullOrWhiteSpace(pattern))
             {

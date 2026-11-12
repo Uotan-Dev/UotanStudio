@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -92,6 +93,8 @@ public sealed record ApkSigningKeyFiles(string PrivateKeyPath, string Certificat
 /// </summary>
 public static class ApkSigningKeyGenerator
 {
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     /// <summary>
     /// Generates the key pair and certificate, round-trips them through
     /// <see cref="ApkSignerKeyMaterial.Load"/> before commit, and writes the files atomically
@@ -263,7 +266,7 @@ public static class ApkSigningKeyGenerator
         if (!string.IsNullOrWhiteSpace(baseName))
         {
             var name = baseName.Trim();
-            if (name.Length > 100 || name.Any(c => Path.GetInvalidFileNameChars().Contains(c)))
+            if (name.Length > 100 || name.AsSpan().ContainsAny(InvalidFileNameChars))
                 throw new ArgumentException("Base file name contains invalid characters. 基础文件名包含非法字符。");
         }
     }

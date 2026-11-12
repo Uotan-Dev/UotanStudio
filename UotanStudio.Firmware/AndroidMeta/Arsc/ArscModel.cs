@@ -321,7 +321,6 @@ public sealed class ResType
     private int _slotCount;
     private List<ResEntry?>? _entriesView;
     private byte[] _configBytes = [];
-    private string? _configDescription;
 
     /// <summary>Package-local resource type identifier. <para>包内资源类型标识。</para></summary>
     /// <value>
@@ -350,8 +349,8 @@ public sealed class ResType
     /// </value>
     public string ConfigDescription
     {
-        get => _configDescription ?? (_configBytes.Length == 0 ? string.Empty : ResConfig.Describe(_configBytes));
-        set => _configDescription = value;
+        get => field ?? (_configBytes.Length == 0 ? string.Empty : ResConfig.Describe(_configBytes));
+        set => field = value;
     }
 
     /// <summary>
@@ -436,7 +435,7 @@ public sealed class ResType
     internal void SetConfig(byte[] bytes, string description)
     {
         _configBytes = bytes;
-        _configDescription = description;
+        ConfigDescription = description;
     }
 
     internal void SetEntry(int index, ResEntry? entry)

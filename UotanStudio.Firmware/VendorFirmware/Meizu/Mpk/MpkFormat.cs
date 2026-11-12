@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Core.Streams;
@@ -68,6 +69,7 @@ internal static class MpkFormat
 
     private static readonly byte[] ArchiveMagic = "!MPK"u8.ToArray();
     private static readonly byte[] EntryMagic = "!F"u8.ToArray();
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>Reads and validates the header and entry table from a seekable stream.
     /// <para>从可寻址流读取并校验头部与条目表。</para></summary>
@@ -198,8 +200,7 @@ internal static class MpkFormat
         ArgumentNullException.ThrowIfNull(entry);
         var normalized = entry.Path.Replace('\\', '/');
         var baseName = normalized[(normalized.LastIndexOf('/') + 1)..];
-        var characters = Path.GetInvalidFileNameChars();
-        var cleaned = new string([.. baseName.Where(c => !characters.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
+        var cleaned = new string([.. baseName.Where(c => !InvalidFileNameChars.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
         if (cleaned.Length == 0 || cleaned is "." or "..")
         {
             cleaned = $"entry_{index}";

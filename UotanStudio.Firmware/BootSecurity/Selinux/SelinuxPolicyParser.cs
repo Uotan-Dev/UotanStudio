@@ -124,7 +124,7 @@ internal static class SelinuxPolicyParser
         var identifierBytes = await ReadExactAsync(stream, checked((int)identifierLength), cancellationToken)
             .ConfigureAwait(false);
         var identifier = Encoding.ASCII.GetString(identifierBytes);
-        if (identifier.Length == 0 || identifier.Any(c => c is < (char)32 or > (char)126))
+        if (identifier.Length == 0 || identifier.AsSpan().IndexOfAnyExceptInRange((char)32, (char)126) >= 0)
             throw new InvalidDataException("SELinux policy identifier is not printable ASCII.");
 
         var first = await ReadUInt32Async(stream, cancellationToken).ConfigureAwait(false);

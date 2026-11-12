@@ -530,10 +530,11 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
         return Md5.ComputeHash(bounded);
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string SanitizeEntryName(string name)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var chars = name.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        var chars = name.Select(c => InvalidFileNameChars.Contains(c) ? '_' : c).ToArray();
         return new string(chars);
     }
 

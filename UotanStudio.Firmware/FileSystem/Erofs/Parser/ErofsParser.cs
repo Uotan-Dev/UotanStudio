@@ -529,15 +529,13 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>赋值为零或负数。</para></exception>
     public long MaximumOutputBytes
     {
-        get => _maximumOutputBytes;
+        get;
         init
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
-            _maximumOutputBytes = value;
+            field = value;
         }
-    }
-
-    private long _maximumOutputBytes = Rebuilding.FileSystemPreservation.RequestedMaximumOutputBytes;
+    } = Rebuilding.FileSystemPreservation.RequestedMaximumOutputBytes;
 
     /// <summary>Number of symlink entries materialized as text files because the host refused a real link.
     /// <para>因宿主拒绝真实链接而改用文本文件物化的符号链接条目数。</para></summary>
@@ -1691,9 +1689,16 @@ public sealed partial class ErofsParser : IDisposable
 
         }
 
-        if (RequireCompleteMetadata && result.GroupBy(entry => entry.Name, StringComparer.Ordinal).Any(group => group.Count() > 1))
+        if (RequireCompleteMetadata)
         {
-            throw new FileSystemCorruptedException("Duplicate EROFS extended attribute.");
+            var seenNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in result)
+            {
+                if (!seenNames.Add(entry.Name))
+                {
+                    throw new FileSystemCorruptedException("Duplicate EROFS extended attribute.");
+                }
+            }
         }
         return result;
     }

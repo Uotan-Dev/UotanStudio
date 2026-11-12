@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text.Json;
@@ -548,10 +549,12 @@ public static partial class DtboFormat
         }
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string LocalFile(string directory, string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.EndsWith('.') || name.EndsWith(' ') || name.IndexOfAny(['/', '\\', ':']) >= 0
-            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || Path.IsPathRooted(name))
+            || name.AsSpan().ContainsAny(InvalidFileNameChars) || Path.IsPathRooted(name))
             throw new InvalidDataException("DTBO manifest paths must be local filenames.");
         var path = Path.Combine(directory, name);
         if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)

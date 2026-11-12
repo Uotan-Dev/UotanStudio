@@ -73,6 +73,8 @@ internal sealed record RockchipLoaderEntry(
     internal string FileName =>
         $"{StageLabel}_{Index.ToString(CultureInfo.InvariantCulture)}_{SanitizeName(Name)}.bin";
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string SanitizeName(string name)
     {
         var text = name.Trim();
@@ -82,11 +84,10 @@ internal sealed record RockchipLoaderEntry(
             text = text[(separator + 1)..];
         }
 
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(text.Length);
         foreach (var character in text)
         {
-            builder.Append(char.IsControl(character) || Array.IndexOf(invalid, character) >= 0 ? '_' : character);
+            builder.Append(char.IsControl(character) || InvalidFileNameChars.Contains(character) ? '_' : character);
         }
 
         var clean = builder.ToString().Trim();
@@ -288,12 +289,12 @@ internal sealed class RockchipLoaderImage
                 $"Rockchip loader header declares {declaredHeaderSize} bytes, outside the {length}-byte image.");
         }
 
-        var tables = new[]
-        {
+        (int Count, long Offset, int EntrySize)[] tables =
+        [
             (Count: (int)header[25], Offset: (long)BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(26)), EntrySize: (int)header[30]),
             (Count: (int)header[31], Offset: (long)BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(32)), EntrySize: (int)header[36]),
             (Count: (int)header[37], Offset: (long)BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(38)), EntrySize: (int)header[42]),
-        };
+        ];
         RockchipLoaderEntryStage[] stages =
         [
             RockchipLoaderEntryStage.Stage471,

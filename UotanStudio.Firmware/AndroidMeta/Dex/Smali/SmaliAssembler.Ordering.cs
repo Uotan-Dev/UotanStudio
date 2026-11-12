@@ -62,13 +62,14 @@ public static partial class SmaliAssembler
                     cls.SourceFileIndex = strings[cls.SourceFileIndex];
                 }
                 cls.InterfaceTypeIndices = state.Interfaces.AsValueEnumerable().Select(index => types[index]).Distinct().Order().ToArray();
+                var fieldIndexes = new HashSet<int>();
                 foreach (var field in cls.AllFields)
                 {
                     field.FieldIndex = fields[field.FieldIndex];
-                }
-                if (cls.AllFields.AsValueEnumerable().Select(field => field.FieldIndex).Distinct().Count() != cls.AllFields.AsValueEnumerable().Count())
-                {
-                    throw new FormatException("A class declares the same field more than once.");
+                    if (!fieldIndexes.Add(field.FieldIndex))
+                    {
+                        throw new FormatException("A class declares the same field more than once.");
+                    }
                 }
                 var staticOrder = cls.StaticFields.Select((field, index) => (field.FieldIndex, index))
                     .OrderBy(item => item.FieldIndex).ToArray();
@@ -83,13 +84,14 @@ public static partial class SmaliAssembler
                 }
                 cls.StaticFields.Sort((left, right) => left.FieldIndex.CompareTo(right.FieldIndex));
                 cls.InstanceFields.Sort((left, right) => left.FieldIndex.CompareTo(right.FieldIndex));
+                var methodIndexes = new HashSet<int>();
                 foreach (var method in cls.AllMethods)
                 {
                     method.MethodIndex = methods[method.MethodIndex];
-                }
-                if (cls.AllMethods.AsValueEnumerable().Select(method => method.MethodIndex).Distinct().Count() != cls.AllMethods.AsValueEnumerable().Count())
-                {
-                    throw new FormatException("A class declares the same method more than once.");
+                    if (!methodIndexes.Add(method.MethodIndex))
+                    {
+                        throw new FormatException("A class declares the same method more than once.");
+                    }
                 }
                 cls.DirectMethods.Sort((left, right) => left.MethodIndex.CompareTo(right.MethodIndex));
                 cls.VirtualMethods.Sort((left, right) => left.MethodIndex.CompareTo(right.MethodIndex));

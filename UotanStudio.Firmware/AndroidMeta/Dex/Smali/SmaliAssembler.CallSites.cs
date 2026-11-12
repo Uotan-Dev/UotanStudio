@@ -49,9 +49,12 @@ public static partial class SmaliAssembler
                 throw new FormatException("A call site requires a name and argument list.");
             }
             var name = text[..open].Trim();
-            if (name.Any(c => char.IsWhiteSpace(c) || "(){}[],;:@\"'".Contains(c)))
+            foreach (var c in name)
             {
-                throw new FormatException("Invalid call-site name.");
+                if (char.IsWhiteSpace(c) || "(){}[],;:@\"'".Contains(c))
+                {
+                    throw new FormatException("Invalid call-site name.");
+                }
             }
             var close = SmaliSyntax.CloseParenthesis(text, open);
             if (close < 0)

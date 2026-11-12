@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Hash.CpbCrc16;
@@ -250,6 +251,8 @@ internal static class CpbFormat
         return Encoding.UTF8.GetString(span).Trim();
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string SanitizeName(ReadOnlySpan<byte> field, int index)
     {
         var end = field.IndexOf((byte)0);
@@ -266,11 +269,10 @@ internal static class CpbFormat
             return "image-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bin";
         }
 
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(text.Length);
         foreach (var character in text)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 ? '_' : character);
+            builder.Append(InvalidFileNameChars.Contains(character) ? '_' : character);
         }
 
         return builder.ToString();

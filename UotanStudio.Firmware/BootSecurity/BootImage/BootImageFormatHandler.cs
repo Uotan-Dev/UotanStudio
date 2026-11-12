@@ -692,9 +692,16 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
         entries.Add(outPath);
     }
 
+    private static readonly char[] InvalidFileNameChars = Path.GetInvalidFileNameChars();
+
     private static string SanitizeFileName(string name)
     {
-        foreach (var c in Path.GetInvalidFileNameChars())
+        if (!name.AsSpan().ContainsAny(InvalidFileNameChars))
+        {
+            return name;
+        }
+
+        foreach (var c in InvalidFileNameChars)
         {
             name = name.Replace(c, '_');
         }

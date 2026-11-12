@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Zip;
@@ -118,6 +119,7 @@ internal sealed class SamsungIncrementalMergeService
     private const int MaximumTriples = 10_000;
 
     private static readonly string[] SlotSuffixes = ["_a", "_b"];
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>Lists the payload's named partitions and their source-dependency flags without touching any image.
     /// <para>仅列出载荷中的有名字分区及其源依赖标记，不读取任何镜像。</para></summary>
@@ -387,7 +389,7 @@ internal sealed class SamsungIncrementalMergeService
         if (!DatFileSet.IsArtifact(leaf) || leaf.Length == 0)
             return;
         var stem = DatFileSet.Stem(leaf);
-        if (stem.Length == 0 || stem.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        if (stem.Length == 0 || stem.AsSpan().ContainsAny(InvalidFileNameChars))
             throw new ArgumentException($"The DAT member name '{leaf}' is not a safe file name.");
         if (!groups.TryGetValue(stem, out var group))
             groups[stem] = group = new SamsungDatTripleGroup(stem, isPhysicalPath);
@@ -606,7 +608,7 @@ internal sealed class SamsungIncrementalMergeService
         foreach (var request in requested)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(request) || request.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            if (string.IsNullOrWhiteSpace(request) || request.AsSpan().ContainsAny(InvalidFileNameChars))
                 throw new ArgumentException($"The selected partition name '{request}' is not usable.");
             var matches = plan.Partitions
                 .Where(partition => MatchesPartition(partition.PartitionName, request))

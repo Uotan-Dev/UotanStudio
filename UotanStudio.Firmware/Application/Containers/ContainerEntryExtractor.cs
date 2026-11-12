@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
@@ -383,12 +384,25 @@ public static class ContainerEntryExtractor
         }
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     /// <summary>Replaces invalid filename characters in an internal entry name. <para>替换内部条目名中的非法文件名字符。</para></summary>
     private static string SanitizeFileName(string name)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var chars = name.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
-        var sanitized = new string(chars).Trim();
+        if (name.Length > 0 && !name.AsSpan().ContainsAny(InvalidFileNameChars)
+            && !char.IsWhiteSpace(name[0]) && !char.IsWhiteSpace(name[^1]))
+        {
+            return name;
+        }
+
+        var sanitized = string.Create(name.Length, name, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                span[i] = InvalidFileNameChars.Contains(c) ? '_' : c;
+            }
+        }).Trim();
         return sanitized.Length == 0 ? "entry" : sanitized;
     }
 }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Compress;
@@ -61,6 +62,8 @@ internal static class OppoSplashFormat
     private const int RecordsOffset = (int)SplashHeaderOffset + 0x120;
     private const int RecordSize = 0x80;
     private const int MaximumEntries = (int)((DataOffset - RecordsOffset) / RecordSize);
+
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>
     /// Reports whether the bytes at <see cref="SplashHeaderOffset"/> hold the splash magic.
@@ -259,8 +262,7 @@ internal static class OppoSplashFormat
         ArgumentNullException.ThrowIfNull(entry);
         var normalized = entry.Name.Replace('\\', '/');
         var baseName = normalized[(normalized.LastIndexOf('/') + 1)..];
-        var characters = Path.GetInvalidFileNameChars();
-        var cleaned = new string([.. baseName.Where(c => !characters.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
+        var cleaned = new string([.. baseName.Where(c => !InvalidFileNameChars.Contains(c) && c > 0x1F)]).TrimEnd('.', ' ');
         if (cleaned.Length == 0 || cleaned is "." or "..")
         {
             cleaned = $"image_{index}.bin";
