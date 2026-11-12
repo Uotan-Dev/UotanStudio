@@ -1,4 +1,4 @@
-using System.Numerics;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Hash.Sums;
 
@@ -9,10 +9,12 @@ namespace UotanStudio.Hash.Sums;
 /// </summary>
 /// <remarks>
 /// HDC reserves <c>0</c> for "checksum absent" and an all-zero payload also sums to <c>0</c>, so a caller must apply
-/// the sentinel rule before comparing. Spans wide enough for a hardware vector accumulate in byte lanes, where every
-/// lane wraps modulo 256 just like the scalar accumulator, so the result is the same modulo-256 sum.
+/// the sentinel rule before comparing. The shared block kernel consumes whole vectors at the widest width the
+/// processor offers and returns the modulo-2^32 sum; keeping its low eight bits is the same modulo-256 sum as the
+/// byte-at-a-time loop, including when no vector ISA is available.
 /// <para>HDC 用 <c>0</c> 表示“无校验和”，而全零负载的累加和同样是 <c>0</c>，因此调用方必须先套用哨兵规则再比较。
-/// 宽度足够容纳硬件向量的区间按字节分道累加，每个通道与标量累加器一样按 mod 256 回卷，因此得到相同的 mod 256 和。</para>
+/// 共享块内核按处理器支持的最宽向量消费整块并返回模 2^32 的和；取其低八位与逐字节循环得到的模 256 和一致，
+/// 在没有任何向量指令集时同样成立。</para>
 /// </remarks>
 public static class ByteSum8
 {
@@ -26,31 +28,5 @@ public static class ByteSum8
     /// <returns>
     /// The sum modulo 256; an empty span returns <c>0</c>. <para>mod 256 的和；空区间返回 <c>0</c>。</para>
     /// </returns>
-    public static byte Compute(ReadOnlySpan<byte> data)
-    {
-        byte sum = 0;
-        var index = 0;
-        if (Vector.IsHardwareAccelerated && data.Length >= Vector<byte>.Count)
-        {
-            var accumulator = Vector<byte>.Zero;
-            var limit = data.Length - Vector<byte>.Count;
-            while (index <= limit)
-            {
-                accumulator += new Vector<byte>(data[index..]);
-                index += Vector<byte>.Count;
-            }
-
-            for (var lane = 0; lane < Vector<byte>.Count; lane++)
-            {
-                sum += accumulator[lane];
-            }
-        }
-
-        for (; index < data.Length; index++)
-        {
-            sum += data[index];
-        }
-
-        return sum;
-    }
+    public static byte Compute(ReadOnlySpan<byte> data) => (byte)SimdOps.SumBytes(data);
 }

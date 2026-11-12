@@ -4,6 +4,7 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
@@ -624,9 +625,14 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         var segment = new byte[length];
         Array.Copy(data, alignedStart, segment, 0, length);
         var sbox = SBoxTable();
-        for (var i = 0; i < length; i++)
+        var keyOffset = alignedStart % 256;
+        var index = 0;
+        while (index < length)
         {
-            segment[i] ^= sbox[(alignedStart + i) % 256];
+            var count = Math.Min(length - index, 256 - keyOffset);
+            SimdOps.XorInPlace(segment.AsSpan(index, count), sbox.AsSpan(keyOffset, count));
+            index += count;
+            keyOffset = 0;
         }
 
         return segment;

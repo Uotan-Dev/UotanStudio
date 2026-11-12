@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 
@@ -165,10 +166,7 @@ internal static class AesCfb128
             }
 
             var decrypted = scan.AsSpan(held, blockSize);
-            for (var i = 0; i < decrypted.Length; i++)
-            {
-                decrypted[i] ^= encrypted[i];
-            }
+            SimdOps.XorInPlace(decrypted, encrypted.AsSpan(0, blockSize));
 
             var searchLength = held + blockSize;
             var found = scan.AsSpan(0, searchLength).IndexOf(pattern);
@@ -334,33 +332,15 @@ internal static class AesCfb128
     }
 
     /// <summary>
-    /// XORs a 16-byte block in place with the encrypted keystream block (vectorized when available).
-    /// <para>就地 XOR 16 字节块与加密密钥流块（可用时向量化）。</para>
+    /// XORs a block in place with the encrypted keystream through the shared hardware dispatch.
+    /// <para>经共享硬件分派把加密密钥流就地异或进数据块。</para>
     /// </summary>
+    /// <param name="data">Bytes to update in place.<para>就地更新的字节。</para></param>
+    /// <param name="encryptedBlock">Keystream block; only its first <paramref name="data"/> bytes are read.
+    /// <para>密钥流块；只读取其中与 <paramref name="data"/> 等长的前缀。</para></param>
     private static void XorBlockInPlace(Span<byte> data, ReadOnlySpan<byte> encryptedBlock)
     {
-        if (System.Numerics.Vector.IsHardwareAccelerated && data.Length >= System.Numerics.Vector<byte>.Count)
-        {
-            var width = System.Numerics.Vector<byte>.Count;
-            var i = 0;
-            for (; i <= data.Length - width; i += width)
-            {
-                System.Numerics.Vector.Xor(
-                    new System.Numerics.Vector<byte>(data.Slice(i, width)),
-                    new System.Numerics.Vector<byte>(encryptedBlock.Slice(i, width)))
-                    .CopyTo(data.Slice(i, width));
-            }
-            for (; i < data.Length; i++)
-            {
-                data[i] ^= encryptedBlock[i];
-            }
-            return;
-        }
-
-        for (var i = 0; i < data.Length; i++)
-        {
-            data[i] ^= encryptedBlock[i];
-        }
+        SimdOps.XorInPlace(data, encryptedBlock.Slice(0, data.Length));
     }
 
     private static void ProcessBlock(byte[] buffer, int offset, int length, byte[] feedback, byte[] encryptedBlock, ICryptoTransform encryptor)
@@ -378,10 +358,7 @@ internal static class AesCfb128
             }
             else
             {
-                for (var i = 0; i < blockSize; i++)
-                {
-                    buffer[offset + i] ^= encryptedBlock[i];
-                }
+                SimdOps.XorInPlace(buffer.AsSpan(offset, blockSize), encryptedBlock.AsSpan(0, blockSize));
             }
 
             offset += blockSize;

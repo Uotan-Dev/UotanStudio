@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Security.Cryptography;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
@@ -221,9 +222,14 @@ internal static class OpsEntryStreamCipher
                 cancellationToken.ThrowIfCancellationRequested();
                 var take = (int)Math.Min(BufferSize, size - position);
                 ReadExactly(source, buffer, take);
-                for (var index = 0; index < take; index++)
+                var keyOffset = (int)(position % 256);
+                var index = 0;
+                while (index < take)
                 {
-                    buffer[index] ^= sbox[(position + index) % 256];
+                    var count = Math.Min(take - index, 256 - keyOffset);
+                    SimdOps.XorInPlace(buffer.AsSpan(index, count), sbox.AsSpan(keyOffset, count));
+                    index += count;
+                    keyOffset = 0;
                 }
 
                 output.Write(buffer, 0, take);

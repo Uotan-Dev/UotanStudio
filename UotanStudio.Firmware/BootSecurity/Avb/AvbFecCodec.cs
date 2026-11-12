@@ -24,12 +24,18 @@ internal static class AvbFecCodec
     /// <para>nibble-split 域乘法处理的通道宽度。</para>
     /// </summary>
     private const int VectorLane = 16;
+    private const int Vector256Lane = 32;
+    private const int Vector512Lane = 64;
 
     /// <summary>
     /// The mask that isolates one nibble of each lane.
     /// <para>隔离每个通道一个半字节的掩码。</para>
     /// </summary>
     private static readonly Vector128<byte> NibbleMask = Vector128.Create((byte)0x0F);
+
+    private static readonly Vector256<byte> NibbleMask256 = Vector256.Create(NibbleMask, NibbleMask);
+
+    private static readonly Vector512<byte> NibbleMask512 = Vector512.Create(NibbleMask256, NibbleMask256);
 
     /// <summary>
     /// Whether the processor lowers a 16-byte lane permute to a single instruction, which the nibble-split field multiply
@@ -77,10 +83,45 @@ internal static class AvbFecCodec
     }
 
     /// <summary>
+    /// Multiplies thirty-two field elements with both 128-bit halves of each table carrying the same sixteen-entry
+    /// nibble table, which keeps the per-lane <c>vpshufb</c> lowering and the whole-register <c>vpermb</c> lowering
+    /// equivalent for nibble indices.
+    /// <para>把三十二个域元素乘以常数；两张表的每个 128 位半区都携带同一张 16 项 nibble 表，使逐道
+    /// <c>vpshufb</c> 下降与整寄存器 <c>vpermb</c> 下降对 nibble 索引等价。</para>
+    /// </summary>
+    /// <param name="value">Thirty-two field elements. <para>三十二个域元素。</para></param>
+    /// <param name="low">Replicated low-nibble product table. <para>复制后的低半字节积表。</para></param>
+    /// <param name="high">Replicated high-nibble product table. <para>复制后的高半字节积表。</para></param>
+    /// <returns>The per-lane products. <para>逐通道的积。</para></returns>
+    private static Vector256<byte> MultiplyVector256(Vector256<byte> value, Vector256<byte> low, Vector256<byte> high)
+    {
+        var lowNibble = value & NibbleMask256;
+        var highNibble = Vector256.ShiftRightLogical(value.AsUInt16(), 4).AsByte() & NibbleMask256;
+        return Vector256.Shuffle(low, lowNibble) ^ Vector256.Shuffle(high, highNibble);
+    }
+
+    /// <summary>
+    /// Multiplies sixty-four field elements through the whole-register <c>vpermb</c> permute over the replicated
+    /// sixteen-entry nibble tables.
+    /// <para>经整寄存器 <c>vpermb</c> 置换，把六十四个域元素乘以复制后的 16 项 nibble 表。</para>
+    /// </summary>
+    /// <param name="value">Sixty-four field elements. <para>六十四个域元素。</para></param>
+    /// <param name="low">Replicated low-nibble product table. <para>复制后的低半字节积表。</para></param>
+    /// <param name="high">Replicated high-nibble product table. <para>复制后的高半字节积表。</para></param>
+    /// <returns>The per-lane products. <para>逐通道的积。</para></returns>
+    private static Vector512<byte> MultiplyVector512(Vector512<byte> value, Vector512<byte> low, Vector512<byte> high)
+    {
+        var lowNibble = value & NibbleMask512;
+        var highNibble = Vector512.ShiftRightLogical(value.AsUInt16(), 4).AsByte() & NibbleMask512;
+        return Vector512.Shuffle(low, lowNibble) ^ Vector512.Shuffle(high, highNibble);
+    }
+
+    /// <summary>
     /// XORs <paramref name="source"/> scaled by <paramref name="coefficient"/> into <paramref name="destination"/>,
-    /// vectorized when the processor can permute a 16-byte lane in one instruction.
+    /// vectorized when the processor can permute a 16-byte lane in one instruction, running 64-byte lanes under
+    /// AVX512BW, 32-byte lanes under AVX2 and 16-byte lanes otherwise.
     /// <para>把按 <paramref name="coefficient"/> 缩放的 <paramref name="source"/> 异或进 <paramref name="destination"/>；
-    /// 处理器能以单条指令置换 16 字节通道时向量化执行。</para>
+    /// 处理器能以单条指令置换 16 字节通道时向量化执行：AVX512BW 下按 64 字节道，AVX2 下按 32 字节道，其余按 16 字节道。</para>
     /// </summary>
     /// <remarks>
     /// A zero coefficient leaves the destination untouched, which reproduces the scalar loop's short circuit on a zero
@@ -109,6 +150,32 @@ internal static class AvbFecCodec
 
         var (low, high) = BuildMultiplyTables(coefficient);
         var offset = 0;
+        if (Avx512BW.IsSupported)
+        {
+            var tableLow = Vector512.Create(Vector256.Create(low, low), Vector256.Create(low, low));
+            var tableHigh = Vector512.Create(Vector256.Create(high, high), Vector256.Create(high, high));
+            for (; offset <= source.Length - Vector512Lane; offset += Vector512Lane)
+            {
+                var product = MultiplyVector512(
+                    Vector512.Create(source.Slice(offset, Vector512Lane)), tableLow, tableHigh);
+                var lane = destination.Slice(offset, Vector512Lane);
+                (product ^ Vector512.Create(lane)).CopyTo(lane);
+            }
+        }
+
+        if (Avx2.IsSupported)
+        {
+            var tableLow = Vector256.Create(low, low);
+            var tableHigh = Vector256.Create(high, high);
+            for (; offset <= source.Length - Vector256Lane; offset += Vector256Lane)
+            {
+                var product = MultiplyVector256(
+                    Vector256.Create(source.Slice(offset, Vector256Lane)), tableLow, tableHigh);
+                var lane = destination.Slice(offset, Vector256Lane);
+                (product ^ Vector256.Create(lane)).CopyTo(lane);
+            }
+        }
+
         for (; offset <= source.Length - VectorLane; offset += VectorLane)
         {
             var product = MultiplyVector(Vector128.Create(source.Slice(offset, VectorLane)), low, high);

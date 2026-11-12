@@ -1,4 +1,4 @@
-using System.Numerics;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Hash.Sums;
 
@@ -12,11 +12,12 @@ namespace UotanStudio.Hash.Sums;
 /// <remarks>
 /// Field-layout rules stay with the caller: ADB reserves <c>0</c> to mean "no checksum present", and TAR sums the
 /// header block only after the eight checksum bytes have been replaced with spaces. An empty input yields <c>0</c>,
-/// which is why the zero sentinel and this checksum cannot be distinguished. Spans wide enough for a hardware vector
-/// widen their bytes into 32-bit lanes, whose wrapping addition is the same modulo-2^32 sum as the scalar accumulator.
+/// which is why the zero sentinel and this checksum cannot be distinguished. The shared block kernel widens bytes
+/// into 32-bit lanes at the widest supported vector width, including AVX-512, AVX10, AVX2, AdvSIMD and ARM SVE, and
+/// uses the scalar loop for the trailing remainder and for processors without a vector ISA.
 /// <para>字段布局规则留在调用方：ADB 用 <c>0</c> 表示“无校验和”，TAR 必须先把 8 个校验字节替换为空格再求和。
-/// 空输入得到 <c>0</c>，因此零哨兵与该校验和无法区分。宽度足够容纳硬件向量的区间把字节扩宽到 32 位分道累加，
-/// 其回卷加法与标量累加器得到相同的 mod 2^32 和。</para>
+/// 空输入得到 <c>0</c>，因此零哨兵与该校验和无法区分。共享块内核按支持的最宽向量把字节扩宽到 32 位通道，
+/// 覆盖 AVX-512、AVX10、AVX2、AdvSIMD 与 ARM SVE，尾部余数及无向量指令集的处理器走标量循环。</para>
 /// </remarks>
 public static class ByteSum32
 {
@@ -30,35 +31,5 @@ public static class ByteSum32
     /// <returns>
     /// The sum modulo 2^32; an empty span returns <c>0</c>. <para>mod 2^32 的和；空区间返回 <c>0</c>。</para>
     /// </returns>
-    public static uint Compute(ReadOnlySpan<byte> data)
-    {
-        uint sum = 0;
-        var index = 0;
-        if (Vector.IsHardwareAccelerated && data.Length >= Vector<byte>.Count)
-        {
-            var accumulator = Vector<uint>.Zero;
-            var limit = data.Length - Vector<byte>.Count;
-            while (index <= limit)
-            {
-                var bytes = new Vector<byte>(data[index..]);
-                Vector.Widen(bytes, out Vector<ushort> lower, out Vector<ushort> upper);
-                Vector.Widen(lower, out Vector<uint> lowerLow, out Vector<uint> lowerHigh);
-                Vector.Widen(upper, out Vector<uint> upperLow, out Vector<uint> upperHigh);
-                accumulator += lowerLow + lowerHigh + upperLow + upperHigh;
-                index += Vector<byte>.Count;
-            }
-
-            for (var lane = 0; lane < Vector<uint>.Count; lane++)
-            {
-                sum += accumulator[lane];
-            }
-        }
-
-        for (; index < data.Length; index++)
-        {
-            sum += data[index];
-        }
-
-        return sum;
-    }
+    public static uint Compute(ReadOnlySpan<byte> data) => SimdOps.SumBytes(data);
 }

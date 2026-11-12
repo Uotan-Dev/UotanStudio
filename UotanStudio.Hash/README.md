@@ -1,6 +1,6 @@
 # UotanStudio.Hash
 
-面向 .NET 10 的校验与摘要类库，根命名空间为 `UotanStudio.Hash`，运行时只依赖 `System.IO.Hashing` 与 BCL，是仓库里最底层的叶子库。**全仓库的校验和与摘要计算都经由本库的公共契约**：磁盘格式规定的非标准初值、寄存器语义、无最终异或、厂商私有变体由本库自己实现；语义与 BCL 完全一致的标准式与摘要族由本库转发，转发即硬件加速实现的位置。
+面向 .NET 11 的校验、摘要与字节块原语类库，根命名空间为 `UotanStudio.Hash`，运行时只依赖 `System.IO.Hashing` 与 BCL，是仓库里最底层的叶子库。**全仓库的校验和与摘要计算都经由本库的公共契约**：磁盘格式规定的非标准初值、寄存器语义、无最终异或、厂商私有变体由本库自己实现；语义与 BCL 完全一致的标准式与摘要族由本库转发，转发即硬件加速实现的位置。`Simd/` 提供跨指令集分派的字节块异或与累加原语，供本库及其它项目复用。
 
 ## 目录与职责
 
@@ -27,6 +27,14 @@
 | `Digests.Md5` / `Sha1` / `Sha256` / `Sha384` / `Sha512` | 转发 `System.Security.Cryptography` | 一次性、目标缓冲区、小写十六进制、同步与异步整流、`CreateAccumulator()` 续算 |
 
 `Crc16CcittReversed` 不声称对应任何目录学名称：不同资料里 “X.25”“CCITT-Reversed” 之类叫法的初值与末异或并不一致，因此类型文档只固定参数串与实测校验值——ASCII `123456789` 得 `0x906E`，空输入得 `0x0000`。`Crc16CcittFalse` 同理：`123456789` 得 `0x29B1`，空输入得 `0xFFFF`，字节 `01..10` 得 `0x0FEF`。`Crc16Xmodem` 与 `Crc16CcittFalse` 只差初值：`123456789` 得 `0x31C3`，空输入得 `0x0000`。
+
+## 硬件加速与软件回退
+
+`Simd/SimdIsa.cs`、`SimdCapabilities.cs` 与 `SimdOps.cs` 是全仓库字节块运算的统一入口。`SimdCapabilities.SupportedIsas` 报告处理器支持的指令族，`ActiveIsa` 与 `ActiveVectorWidthBytes` 报告实际选用的内核与块宽，`Describe()` 输出一行诊断信息；`SimdOps.ForceSoftwareFallback` 是线程级开关，可在诊断或测试中强制走标量路径。
+
+`SimdOps` 按 ARM SVE/SVE2（运行时决定向量宽度）、AVX-512F/BW 与 AVX10 512 位、AVX2 256 位、SSE2/AdvSIMD 128 位、`System.Numerics.Vector<T>` 的顺序选择最宽内核，尾部不足一个整块的字节以及完全没有向量指令集的处理器都交给同一个逐字节标量循环。`XorInPlace`、`XorConstantInPlace`、`SumBytes` 与 `XorFoldWords` 在任意内核、任意长度、任意开关状态下结果一致；`ByteSum8`、`ByteSum16`、`ByteSum32` 直接消费 `SumBytes`，`WordXor16LittleEndian` 在小端处理器上消费 `XorFoldWords`，`UotanStudio.Firmware` 的 OPS/OZIP 流密码与 AES-CFB 反馈 XOR 消费 `XorInPlace`。
+
+ARM SVE intrinsic 在 BCL 中仍标记为实验性（SYSLIB5003），抑制只写在引用它的两个文件内，不做项目级 `NoWarn`。`Adler32`、`Crc32c` 与 `Crc32Register` 各自保留按算法特性定制的指令分派和查表回退，不经 `SimdOps` 转发。逐内核等价性由 `UotanStudio.Tests/Firmware/SimdOpsEquivalenceTests.cs` 钉住，未支持的指令族在测试中自动退化为标量路径。
 
 ## 标准式与寄存器式是两个类型
 

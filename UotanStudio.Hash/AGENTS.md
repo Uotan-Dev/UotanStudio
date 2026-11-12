@@ -17,6 +17,12 @@
 - 标准式流式续算用 `Crc32IeeeAccumulator`，摘要续算用 `Digests` 的 `DigestAccumulator`：`GetHashAndReset()` 定稿并重置，`GetCurrentHash()` 只观察不重置。
 - 新增算法要同时加已知答案向量；CRC-16 与 Adler 的向量还应与类内逐位参考循环交叉验证，不能只钉一个常量。
 
+## 硬件加速
+
+- `Simd/` 是字节块异或与累加的唯一分派门面：`SimdCapabilities` 报告指令族与块宽，`SimdOps` 选择最宽内核，`ForceSoftwareFallback` 是线程级强制回退开关。新增字节块运算先扩展这里，不要在业务项目里各自写 `IsHardwareAccelerated` 分支。
+- 每个内核都必须把整块之外的尾部字节以及无向量 ISA 的处理器交给同一个标量循环；新增 ISA 分支要同时登记到 `SimdIsa`、`SimdCapabilities.DetectSupported`、`SimdOps.SelectKernel` 与 `SimdOpsEquivalenceTests` 的逐内核断言。
+- ARM SVE 的 `SYSLIB5003` 只在引用它的文件内局部抑制，不得加项目级 `NoWarn`。新增 public 成员仍需中英双语 XML 注释。
+
 ## 文档与验证
 
 - 本库全部类型都是 public，公共类型与成员必须有中英双语 XML 注释；`TreatWarningsAsErrors` 会让 `CS1591` 直接失败。仓库不维护 `PublicAPI.*.txt` 基线。

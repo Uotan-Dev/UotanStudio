@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
@@ -112,26 +113,11 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     /// </summary>
     private static void DecryptInPlace(Span<byte> data, ReadOnlySpan<byte> sbox)
     {
-        var width = System.Numerics.Vector<byte>.Count;
         var i = 0;
         while (i < data.Length)
         {
             var period = Math.Min(256, data.Length - i);
-            var j = 0;
-            if (System.Numerics.Vector.IsHardwareAccelerated && period >= width)
-            {
-                for (; j <= period - width; j += width)
-                {
-                    System.Numerics.Vector.Xor(
-                        new System.Numerics.Vector<byte>(data.Slice(i + j, width)),
-                        new System.Numerics.Vector<byte>(sbox.Slice(j, width)))
-                        .CopyTo(data.Slice(i + j, width));
-                }
-            }
-            for (; j < period; j++)
-            {
-                data[i + j] ^= sbox[j];
-            }
+            SimdOps.XorInPlace(data.Slice(i, period), sbox.Slice(0, period));
             i += period;
         }
     }

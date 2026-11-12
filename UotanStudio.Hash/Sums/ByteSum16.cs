@@ -1,4 +1,4 @@
-using System.Numerics;
+using UotanStudio.Hash.Simd;
 
 namespace UotanStudio.Hash.Sums;
 
@@ -8,11 +8,11 @@ namespace UotanStudio.Hash.Sums;
 /// <para>逐字节纯累加校验和并截断到 16 位，MediaTek legacy 与 XFlash 存储帧在每个数据包旁携带的就是该值。</para>
 /// </summary>
 /// <remarks>
-/// Spans wide enough for a hardware vector widen their bytes into 16-bit lanes and accumulate there. A lane that wraps
-/// past 2^16 stays congruent with the exact sum, so the final modulo-2^16 result matches the scalar accumulator for
-/// every input length.
-/// <para>宽度足够容纳硬件向量的区间把字节扩宽到 16 位分道累加。通道越过 2^16 后与真实和仍同余，
-/// 因此任意输入长度下最终的 mod 2^16 结果与标量累加器一致。</para>
+/// The shared block kernel widens bytes into 32-bit lanes before adding them, so no lane can wrap during a realistic
+/// buffer and the low sixteen bits of the modulo-2^32 result equal the byte-at-a-time sum. The same kernel runs on
+/// every processor and falls back to the scalar loop when no vector ISA is available.
+/// <para>共享块内核先把字节扩宽到 32 位通道再累加，实际缓冲长度下通道不会回卷，模 2^32 结果的低十六位与逐字节和相等。
+/// 所有处理器都执行同一内核，无可用向量指令集时回退到标量循环。</para>
 /// </remarks>
 public static class ByteSum16
 {
@@ -26,36 +26,5 @@ public static class ByteSum16
     /// <returns>
     /// The sum modulo 2^16; an empty span returns <c>0</c>. <para>mod 2^16 的和；空区间返回 <c>0</c>。</para>
     /// </returns>
-    public static ushort Compute(ReadOnlySpan<byte> data)
-    {
-        ushort sum = 0;
-        var index = 0;
-        if (Vector.IsHardwareAccelerated && data.Length >= Vector<byte>.Count)
-        {
-            var lower = Vector<ushort>.Zero;
-            var upper = Vector<ushort>.Zero;
-            var limit = data.Length - Vector<byte>.Count;
-            while (index <= limit)
-            {
-                var bytes = new Vector<byte>(data[index..]);
-                Vector.Widen(bytes, out Vector<ushort> widenedLower, out Vector<ushort> widenedUpper);
-                lower += widenedLower;
-                upper += widenedUpper;
-                index += Vector<byte>.Count;
-            }
-
-            for (var lane = 0; lane < Vector<ushort>.Count; lane++)
-            {
-                sum += lower[lane];
-                sum += upper[lane];
-            }
-        }
-
-        for (; index < data.Length; index++)
-        {
-            sum += data[index];
-        }
-
-        return sum;
-    }
+    public static ushort Compute(ReadOnlySpan<byte> data) => (ushort)SimdOps.SumBytes(data);
 }
