@@ -97,7 +97,7 @@ internal partial class LibUsbDevice : UsbDevice
 
     public override int CreateHandle()
     {
-        _context = new UsbContext();
+        _context = LibUsbContextFactory.Create();
 
         LibUsbDotNet.LibUsb.UsbDevice? device;
         using (var candidates = _context.List())
@@ -141,6 +141,7 @@ internal partial class LibUsbDevice : UsbDevice
         }
         catch (Exception ex)
         {
+            OpenFailureDetail = $"libusb_open failed: {ex.GetType().Name}: {ex.Message}";
             UsbTrace.LogErrorFormatted(
                 $"LibUsbDevice.CreateHandle open failed: {ex.GetType().Name}: {ex.Message}");
             (_usbDevice as IDisposable)?.Dispose();
@@ -223,6 +224,7 @@ internal partial class LibUsbDevice : UsbDevice
 
         if (inEndpoint == 0 && outEndpoint == 0)
         {
+            OpenFailureDetail = "the opened device exposes no bulk or interrupt endpoint";
             Dispose();
             return -1;
         }
@@ -240,6 +242,7 @@ internal partial class LibUsbDevice : UsbDevice
             out var claimError);
         if (!claimed)
         {
+            OpenFailureDetail = $"ClaimInterface({targetInterfaceId}) failed: {claimError?.Message}";
             UsbTrace.LogErrorFormatted($"LibUsbDevice.ClaimInterface {targetInterfaceId} failed: {claimError?.Message}");
             Dispose();
             return -1;
@@ -318,6 +321,11 @@ internal partial class LibUsbDevice : UsbDevice
         var writeGateAcquired = TryEnterChunkGate(_writeChunkGate);
         if (!readGateAcquired || !writeGateAcquired)
         {
+            if (_context is { } strandedContext)
+            {
+                GC.SuppressFinalize(strandedContext);
+            }
+
             UsbTrace.LogError(
                 $"LibUsbDevice.Dispose skipped: a chunk transfer still holds the {(readGateAcquired ? "write" : "read")} gate after {DisposalGateTimeoutMs} ms; the device handle and context are intentionally kept so libusb never touches freed memory.");
             return;
@@ -353,8 +361,20 @@ internal partial class LibUsbDevice : UsbDevice
             _interfaceClaimed = false;
             _reader = null;
             _writer = null;
-            _context?.Dispose();
-            _context = null;
+            try
+            {
+                _context?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                UsbTrace.LogErrorFormatted(
+                    $"LibUsbDevice context dispose failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                _context = null;
+            }
+
             _readChunkBuffer = null;
             _writeChunkBuffer = null;
         }

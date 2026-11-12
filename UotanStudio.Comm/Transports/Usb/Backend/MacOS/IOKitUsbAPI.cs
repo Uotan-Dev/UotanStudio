@@ -120,12 +120,48 @@ internal static partial class IOKitUsbAPI
     public const int KCFStringEncodingMacRoman = 0;
 
     public const int KIOReturnSuccess = 0;
+    public const int KIOReturnError = unchecked((int)0xE00002BC);
     public const int KIOReturnNoDevice = unchecked((int)0xE00002C0);
-    public const int KIOReturnAborted = unchecked((int)0xE00002EB);
+    public const int KIOReturnNotPrivileged = unchecked((int)0xE00002C1);
+    public const int KIOReturnBadArgument = unchecked((int)0xE00002C2);
+    public const int KIOReturnExclusiveAccess = unchecked((int)0xE00002C5);
+    public const int KIOReturnInternalError = unchecked((int)0xE00002C9);
+    public const int KIOReturnNotOpen = unchecked((int)0xE00002CD);
+    public const int KIOReturnBusy = unchecked((int)0xE00002D5);
     public const int KIOReturnTimeout = unchecked((int)0xE00002D6);
+    public const int KIOReturnNotPermitted = unchecked((int)0xE00002E2);
+    public const int KIOReturnAborted = unchecked((int)0xE00002EB);
     public const int KIOReturnNotResponding = unchecked((int)0xE00002ED);
-    public const int KIOReturnExclusiveAccess = unchecked((int)0xE00002E5);
-    public const int KIOReturnError = unchecked((int)0xE0000001);
+
+    /// <summary>
+    /// Renders one IOReturn as its symbolic name plus code, so an open failure names the kernel's refusal instead of
+    /// an opaque hex number.
+    /// <para>把一个 IOReturn 渲染为符号名加代码，使打开失败写出内核的拒绝原因而不是不透明的十六进制数。</para>
+    /// </summary>
+    /// <param name="kr">The IOReturn value. <para>IOReturn 值。</para></param>
+    /// <returns>Symbolic name and code, with a short explanation for the open-related codes.
+    /// <para>符号名与代码；与打开相关的代码附带简短说明。</para></returns>
+    internal static string DescribeIoReturn(int kr) => kr switch
+    {
+        KIOReturnSuccess => "kIOReturnSuccess (0x00000000)",
+        KIOReturnError => "kIOReturnError (0xE00002BC)",
+        KIOReturnExclusiveAccess =>
+            "kIOReturnExclusiveAccess (0xE00002C5): another user client already owns this device",
+        KIOReturnNotPrivileged =>
+            "kIOReturnNotPrivileged (0xE00002C1): this process is not allowed to open the device",
+        KIOReturnNotPermitted =>
+            "kIOReturnNotPermitted (0xE00002E2): the device rejected the user client",
+        KIOReturnInternalError =>
+            "kIOReturnInternalError (0xE00002C9): the interface is owned by a system driver",
+        KIOReturnNotOpen =>
+            "kIOReturnNotOpen (0xE00002CD): the device user client was not open",
+        KIOReturnBadArgument => "kIOReturnBadArgument (0xE00002C2)",
+        KIOReturnBusy => "kIOReturnBusy (0xE00002D5)",
+        KIOReturnNoDevice => "kIOReturnNoDevice (0xE00002C0): the device is gone",
+        KIOReturnNotResponding => "kIOReturnNotResponding (0xE00002ED)",
+        KIOReturnTimeout => "kIOReturnTimeout (0xE00002D6)",
+        _ => $"IOReturn 0x{kr:X8}",
+    };
 
     public const uint KIORegistryIterateRecursively = 0x00000001;
     public const uint KIORegistryIterateParents = 0x00000002;

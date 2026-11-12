@@ -46,8 +46,10 @@ internal static class UsbProviderProjection
                     var openError = device.CreateHandle();
                     if (openError != 0)
                     {
-                        UsbTrace.Log(
-                            $"Open {info.DeviceKey} failed with backend error {openError}; "
+                        var detail = device.OpenFailureDetail ?? $"backend error {openError}";
+                        UsbOpenFailures.Record(info.DevicePath, detail);
+                        UsbTrace.LogError(
+                            $"Open {info.DeviceKey} failed with backend error {openError} ({detail}); "
                             + $"interface {info.InterfaceClass:X2}/{info.InterfaceSubClass:X2}/{info.InterfaceProtocol:X2}, "
                             + $"path {info.DevicePath}.");
                         device.Dispose();

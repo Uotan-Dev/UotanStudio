@@ -355,7 +355,9 @@ application, and the content items flow through `ProjectReference`; the host nei
 library for a supported RID.
 
 The libusb backend is enabled only when that platform file is present in the application directory or an explicit
-path is registered. A libusb installed elsewhere on the system does not enable it. `Transports/Usb/Backend/LibUsb/LibUsbRuntime.cs`
+path is registered. A libusb installed elsewhere on the system does not enable it. Availability additionally requires
+that LibUsbDotNet can initialize a context of its own, so a forced backend that cannot resolve the runtime reports
+itself unavailable and logs the reason instead of enumerating an empty device list. `Transports/Usb/Backend/LibUsb/LibUsbRuntime.cs`
 is the public entry a host uses to register the absolute path of a prepared native library; it forwards to the
 internal `LibUsbNativeLoader`, which stays out of reach across assemblies. The same registration is surfaced as
 `CommKit.SetLibusbLibraryPath` and, internally, as `UsbCommunicationLayer.SetLibusbLibraryPath`; the path is

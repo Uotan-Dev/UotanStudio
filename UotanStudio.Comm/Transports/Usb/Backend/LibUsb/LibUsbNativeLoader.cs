@@ -14,24 +14,22 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// </summary>
 /// <remarks>
 /// <b>Why an explicit path.</b> LibUsbDotNet 3.0.224
-/// registers its own <c>NativeLibrary.SetDllImportResolver</c> and probes
-/// for <c>libusb-1.0</c> by bare SONAME, which misses installs that are not
-/// on the loader's default search path. This loader resolves the effective path
-/// (caller-registered first, then the application directory) and pre-loads the
-/// library by absolute path BEFORE any LibUsbDotNet type is JIT'd. The platform
-/// loader then resolves the later bare-SONAME <c>dlopen("libusb-1.0")</c>
-/// against the already-loaded image, so LibUsbDotNet's own resolver succeeds without
-/// a process restart.
+/// registers its own <c>NativeLibrary.SetDllImportResolver</c> and probes one per-platform file name —
+/// <c>libusb-1.0.dll</c>, <c>libusb-1.0.so.0</c> and <c>libusb-1.0.0.dylib</c> — both by bare name and inside every
+/// directory listed in <c>NATIVE_DLL_SEARCH_DIRECTORIES</c>. On macOS a bare name never matches an image that was
+/// loaded by absolute path, so this loader pre-loads the caller-registered or bundled file to answer this assembly's
+/// own imports, while LibUsbDotNet's imports are served by the runtime's default probing of the application
+/// directory (measured with the bundled file next to the application: only <c>libusb-1.0.dylib</c> is required).
 /// <para><b>为何需要显式路径。</b>LibUsbDotNet 3.0.224
-/// 自注册 <c>NativeLibrary.SetDllImportResolver</c> 并以裸 SONAME
-/// <c>libusb-1.0</c> 探测，无法命中不在加载器默认搜索路径上的安装。本加载器解析有效路径
-/// （调用者注册优先，其次程序目录），并在任何 LibUsbDotNet 类型被 JIT 前按绝对路径预加载库。
-/// 平台加载器随后以已加载映像解析后续的裸 SONAME <c>dlopen("libusb-1.0")</c>，
-/// 使 LibUsbDotNet 自身解析器无需重启进程即可成功。</para>
+/// 自注册 <c>NativeLibrary.SetDllImportResolver</c>，按平台探测固定文件名——<c>libusb-1.0.dll</c>、
+/// <c>libusb-1.0.so.0</c> 与 <c>libusb-1.0.0.dylib</c>——既按裸名称，也在
+/// <c>NATIVE_DLL_SEARCH_DIRECTORIES</c> 的每个目录内查找。macOS 上裸名称不会命中按绝对路径加载的映像，
+/// 因此本加载器预加载调用者注册或程序目录中的文件来应答本程序集自己的导入；LibUsbDotNet 的导入由运行时
+/// 对程序目录的默认探测提供（已在程序目录只放 <c>libusb-1.0.dylib</c> 的真机条件下验证）。</para>
 /// <b>Usage.</b> The backend reports itself available only when
 /// <see cref="TryEnsureLoaded"/> can load the caller-registered path or the platform file
-/// copied next to the application (<c>libusb-1.0.dll</c>, <c>libusb-1.0.dylib</c>,
-/// <c>libusb-1.0.so</c> or <c>libusb-1.0.so.0</c>); a libusb installed elsewhere on the
+/// copied next to the application (<c>libusb-1.0.dll</c>, <c>libusb-1.0.dylib</c> or
+/// <c>libusb-1.0.0.dylib</c>, <c>libusb-1.0.so</c> or <c>libusb-1.0.so.0</c>); a libusb installed elsewhere on the
 /// system does not enable it. Register an explicit path with
 /// <c>UsbCommunicationLayer.SetLibusbLibraryPath(path)</c> (or the <c>CommKit</c>
 /// passthrough) before the first enumeration or session open; the path is validated to exist
@@ -39,9 +37,9 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// Switching the runtime after a successful native call is not supported because already
 /// resolved imports keep their original image.
 /// <para><b>用法。</b>只有当 <see cref="TryEnsureLoaded"/> 能加载调用者注册的路径或复制到
-/// 程序目录的平台文件（<c>libusb-1.0.dll</c>、<c>libusb-1.0.dylib</c>、
-/// <c>libusb-1.0.so</c> 或 <c>libusb-1.0.so.0</c>）时，后端才报告可用；仅安装在系统
-/// 其他位置的 libusb 不会启用它。可在首次枚举或打开会话之前用
+/// 程序目录的平台文件（<c>libusb-1.0.dll</c>、<c>libusb-1.0.dylib</c> 或
+/// <c>libusb-1.0.0.dylib</c>、<c>libusb-1.0.so</c> 或 <c>libusb-1.0.so.0</c>）时，后端才报告可用；
+/// 仅安装在系统其他位置的 libusb 不会启用它。可在首次枚举或打开会话之前用
 /// <c>UsbCommunicationLayer.SetLibusbLibraryPath(path)</c>（或 <c>CommKit</c> 透传）
 /// 注册显式路径；路径会立即校验存在并预加载，探测失败之后再注册会重新启用后端。
 /// 已经成功调用原生接口之后再切换运行库不受支持，因为已解析的导入仍指向原映像。</para>
@@ -65,7 +63,7 @@ internal static partial class LibUsbNativeLoader
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? ["libusb-1.0.dll"]
             : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                ? ["libusb-1.0.dylib"]
+                ? ["libusb-1.0.dylib", "libusb-1.0.0.dylib"]
                 : ["libusb-1.0.so", "libusb-1.0.so.0"];
 
     private static string? _libraryPath;
@@ -174,7 +172,7 @@ internal static partial class LibUsbNativeLoader
             }
             catch (Exception ex) when (ex is BadImageFormatException or DllNotFoundException or EntryPointNotFoundException or IOException or UnauthorizedAccessException)
             {
-                UsbTrace.Log($"LibUsbNativeLoader: native library load failed for '{candidate}': {ex.GetType().Name}: {ex.Message}");
+                UsbTrace.LogError($"LibUsbNativeLoader: native library load failed for '{candidate}': {ex.GetType().Name}: {ex.Message}");
                 libraryPath = null;
                 return false;
             }
@@ -241,7 +239,8 @@ internal static partial class LibUsbNativeLoader
 
     private static IntPtr ResolveLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        if (libraryName is "libusb-1.0" or "libusb-1.0.dylib" or "libusb-1.0.so" or "libusb-1.0.dll")
+        if (libraryName is "libusb-1.0" or "libusb-1.0.dylib" or "libusb-1.0.0.dylib"
+            or "libusb-1.0.so" or "libusb-1.0.so.0" or "libusb-1.0.dll")
         {
             lock (Gate)
             {

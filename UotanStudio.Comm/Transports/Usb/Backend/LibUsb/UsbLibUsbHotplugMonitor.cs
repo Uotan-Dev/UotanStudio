@@ -38,7 +38,7 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
 
-        var context = new UsbContext();
+        var context = LibUsbContextFactory.Create();
         try
         {
             context.HotplugOptions.VendorId = filter?.VendorId is ushort vid ? vid : (int)HotplugOptionFlag.LibusbHotplugMatchAny;
@@ -184,7 +184,16 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
             {
                 UsbTrace.Log($"UsbLibUsbHotplugMonitor unregister failed: {ex.GetType().Name}: {ex.Message}");
             }
-            context.Dispose();
+
+            try
+            {
+                context.Dispose();
+            }
+            catch (Exception ex)
+            {
+                UsbTrace.LogErrorFormatted(
+                    $"UsbLibUsbHotplugMonitor context dispose failed: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         _lastSnapshot.Clear();

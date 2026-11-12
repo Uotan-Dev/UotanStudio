@@ -517,7 +517,16 @@ public sealed partial class DeviceMonitorService
 
         if (device.Protocol == DeviceProtocolKind.Fastboot)
         {
-            RunFastboot(device, session => session.Reboot(fastbootTarget));
+            var response = RunFastboot(device, session => session.Reboot(fastbootTarget));
+            if (!response.IsSuccess && fastbootTarget == "edl")
+            {
+                response = RunFastboot(device, session => session.ExecuteCommand("oem edl"));
+            }
+            if (!response.IsSuccess)
+            {
+                return false;
+            }
+            RefreshAfterModeSwitch();
             return true;
         }
 
@@ -533,13 +542,18 @@ public sealed partial class DeviceMonitorService
                 session.ResetDevice();
                 return Task.FromResult(0);
             }, cancellationToken).ConfigureAwait(false);
-            await ForceRefreshAsync().ConfigureAwait(false);
+            RefreshAfterModeSwitch();
             return true;
         }
 
         if (device.Protocol == DeviceProtocolKind.Edl)
         {
-            return await RebootEdlAsync(device, mode, cancellationToken).ConfigureAwait(false);
+            var acknowledged = await RebootEdlAsync(device, mode, cancellationToken).ConfigureAwait(false);
+            if (acknowledged)
+            {
+                RefreshAfterModeSwitch();
+            }
+            return acknowledged;
         }
 
         if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc)
@@ -554,6 +568,7 @@ public sealed partial class DeviceMonitorService
                 session.CreateDeviceServices().Reboot(adbTarget);
                 return true;
             }, cancellationToken);
+            RefreshAfterModeSwitch();
             return true;
         }
 
@@ -571,6 +586,7 @@ public sealed partial class DeviceMonitorService
             {
                 hdc.Connect();
                 hdc.CreateDeviceServices().Reboot(mode);
+                RefreshAfterModeSwitch();
                 return true;
             }
             catch
@@ -580,6 +596,20 @@ public sealed partial class DeviceMonitorService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Drops the cached USB inventory after a mode switch this service triggered: a rebooted endpoint leaves
+    /// the previous protocol's enumeration evidence behind, so the next pass must re-read the bus instead of
+    /// answering for the new endpoint from the cache.
+    /// <para>在本服务触发的模式切换后丢弃缓存的 USB 清单：重启后的端点会留下上一个协议的枚举证据，因此
+    /// 下一轮必须重读总线，而不是用缓存替新端点作答。</para>
+    /// </summary>
+    private void RefreshAfterModeSwitch()
+    {
+        _controller.ResetUsbEnumerationCache();
+        InvalidateUsbInventoryCache();
+        ScheduleChange();
     }
 
     /// <summary>

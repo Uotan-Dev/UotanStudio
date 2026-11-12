@@ -45,6 +45,7 @@ internal class IOKitUsbDevice : UsbDevice
 
     private byte _bulkIn;
     private byte _bulkOut;
+    private string? _lastInterfaceFailure;
 
     /// <inheritdoc/>
     internal override bool IsHandleOpen => _deviceInterface != IntPtr.Zero;
@@ -301,6 +302,8 @@ internal class IOKitUsbDevice : UsbDevice
         UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IORegistryEntryFromPath -> {service}");
         if (service == IntPtr.Zero)
         {
+            OpenFailureDetail = "IORegistryEntryFromPath found no node for the enumerated path";
+            UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}: '{DevicePath}'.");
             return -1;
         }
 
@@ -315,6 +318,8 @@ internal class IOKitUsbDevice : UsbDevice
             UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IOCreatePlugInInterfaceForService kr={kr} plugin={plugin}");
             if (kr != IOKitUsbAPI.Ok || plugin == IntPtr.Zero)
             {
+                OpenFailureDetail = $"the device user client could not be created: {IOKitUsbAPI.DescribeIoReturn(kr)}";
+                UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}.");
                 return -1;
             }
 
@@ -323,7 +328,8 @@ internal class IOKitUsbDevice : UsbDevice
                 var queryInterface = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(plugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
                 if (queryInterface(plugin, IOKitUsbAPI.KIOUSBDeviceInterfaceID, out _deviceInterface) != IOKitUsbAPI.Ok || _deviceInterface == IntPtr.Zero)
                 {
-                    UsbTrace.Log("IOKitUsbDevice.CreateHandle: QueryInterface(KIOUSBDeviceInterfaceID) FAILED");
+                    OpenFailureDetail = "the plugin interface does not expose KIOUSBDeviceInterfaceID";
+                    UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}.");
                     return -1;
                 }
                 UsbTrace.Log($"IOKitUsbDevice.CreateHandle: QueryInterface -> deviceInterface={_deviceInterface}");
@@ -378,8 +384,13 @@ internal class IOKitUsbDevice : UsbDevice
                 };
 
                 var createIter = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCreateInterfaceIteratorDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceCreateInterfaceIterator);
-                if (createIter(_deviceInterface, ref findRequest, out var iter) != IOKitUsbAPI.Ok || iter == IntPtr.Zero)
+                var iteratorResult = createIter(_deviceInterface, ref findRequest, out var iter);
+                if (iteratorResult != IOKitUsbAPI.Ok || iter == IntPtr.Zero)
                 {
+                    OpenFailureDetail =
+                        $"the interface iterator could not be created (device open: {_deviceOpened}): " +
+                        IOKitUsbAPI.DescribeIoReturn(iteratorResult);
+                    UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}.");
                     return -1;
                 }
 
@@ -405,6 +416,9 @@ internal class IOKitUsbDevice : UsbDevice
                 {
                     IOKitUsbAPI.IOObjectRelease(iter);
                 }
+
+                OpenFailureDetail = _lastInterfaceFailure ?? "no interface exposed a bulk or interrupt pipe";
+                UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}.");
             }
             finally
             {
@@ -457,8 +471,10 @@ internal class IOKitUsbDevice : UsbDevice
             try
             {
                 var ifcOpen = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBInterfaceOpenDelegate>(ifcIntf, IOKitUsbAPI.Offset_USBInterfaceOpen);
-                if (ifcOpen(ifcIntf) != IOKitUsbAPI.Ok)
+                var openResult = ifcOpen(ifcIntf);
+                if (openResult != IOKitUsbAPI.Ok)
                 {
+                    _lastInterfaceFailure = $"USBInterfaceOpen refused with {IOKitUsbAPI.DescribeIoReturn(openResult)}";
                     return false;
                 }
 

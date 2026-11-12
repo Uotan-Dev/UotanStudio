@@ -133,6 +133,16 @@ internal abstract partial class UsbDevice : IDisposable
     protected abstract string BackendName { get; }
 
     /// <summary>
+    /// Gets or sets the backend's own text for why the last handle creation was refused, or <see langword="null"/>
+    /// when the backend recorded no native detail. The opener reports it instead of guessing at a cause.
+    /// <para>获取或设置后端对最近一次句柄创建被拒绝给出的原文；后端未记录原生细节时为 <see langword="null"/>。
+    /// 开启器据此上报真实原因，而不是猜测。</para>
+    /// </summary>
+    /// <value>Short text such as <c>kIOReturnExclusiveAccess (0xE00002E5)</c> or a libusb error name.
+    /// <para>例如 <c>kIOReturnExclusiveAccess (0xE00002E5)</c> 或 libusb 错误名。</para></value>
+    internal string? OpenFailureDetail { get; set; }
+
+    /// <summary>
     /// Gets the maximum payload size for a single chunk transfer.
     /// <para>获取单次分块传输的最大载荷大小。</para>
     /// </summary>

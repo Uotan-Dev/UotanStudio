@@ -12,12 +12,17 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 /// interface services and reading their properties has been observed to block
 /// indefinitely inside the IORegistry MIG call when a device is wedged (verified by
 /// stash-controlled A/B testing on this machine; the IOKit classic finder still uses
-/// that table and can hang in the same situation).
+/// that table and can hang in the same situation). A device whose enumeration never
+/// completes stays unpublished, and class matching — IOUSBDevice and IOUSBHostDevice
+/// alike — only returns published services, so such a device is invisible here until
+/// its port is power-cycled.
 /// <para>IOUSBHost 后端的 macOS USB 设备枚举器。发现经 IORegistry 针对 IOUSBDevice
 /// 服务进行，仅做设备级标量属性读取（IdVendor/IdProduct/序列号/服务路径）加子服务
 /// 枚举——刻意不构建全局 IOUSBInterface 表：迭代全部接口服务并读取其属性时，若某
 /// 设备处于异常状态，IORegistry MIG 调用会无限阻塞（已在本机经 stash 对照 A/B 实验
-/// 证实；IOKit 经典查找器仍使用该表，同样情形下会挂起）。</para>
+/// 证实；IOKit 经典查找器仍使用该表，同样情形下会挂起）。枚举始终未完成而停在未发布
+/// 状态的设备对类匹配不可见——IOUSBDevice 与 IOUSBHostDevice 皆只返回已发布服务——
+/// 其端口断电前本查找器看不到它。</para>
 /// </summary>
 /// <remarks>
 /// Enumeration is metadata-only and never opens device user clients; sessions open
@@ -152,6 +157,7 @@ internal static partial class UsbHostFinder
                         Interfaces = [],
                         UsbDeviceType = UsbDeviceType.MacOS,
                     };
+                    ApplyInterfaceTriple(service, device);
                     devices.Add(device);
                     UsbTrace.Log($"UsbHostFinder: dev vid={vid:X4} pid={pid:X4} serial='{serial}' path='{path}'");
                 }
@@ -191,6 +197,84 @@ internal static partial class UsbHostFinder
         => TryReadCFNumberRawU32(service, propertyName, out var raw)
             ? unchecked((ushort)raw)
             : (ushort)0;
+
+    /// <summary>
+    /// Publishes the class/subclass/protocol of this device's own interface children, preferring a vendor-specific
+    /// (0xFF) interface. Discovery needs the triple to classify a direct-USB ADB, fastboot or EDL port, and only the
+    /// per-device children are read — the global interface sweep is what can block on a wedged device.
+    /// <para>公布本设备自身接口子项的 class/subclass/protocol，并优先选用厂商自定义（0xFF）接口。发现层需要该三元组
+    /// 才能把直连 USB 的 adb、fastboot 或 EDL 端口分类出来；这里只读本设备的子项——会在异常设备上阻塞的是全局接口扫描。</para>
+    /// </summary>
+    /// <param name="deviceService">The device service whose children are read. <para>待读取子项的设备服务。</para></param>
+    /// <param name="device">The device record to publish into. <para>接收结果的设备记录。</para></param>
+    private static void ApplyInterfaceTriple(IntPtr deviceService, UsbHostDevice device)
+    {
+        List<uint> children;
+        try
+        {
+            children = UsbHostAPI.GetInterfaceServices((uint)deviceService.ToInt32());
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.Log($"UsbHostFinder: interface children unavailable: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        byte? fallbackClass = null;
+        byte? fallbackSubClass = null;
+        byte? fallbackProtocol = null;
+        try
+        {
+            foreach (var child in children)
+            {
+                var childService = new IntPtr(child);
+                var interfaceClass = ReadByteProperty(childService, "bInterfaceClass");
+                var interfaceSubClass = ReadByteProperty(childService, "bInterfaceSubClass");
+                var interfaceProtocol = ReadByteProperty(childService, "bInterfaceProtocol");
+                if (interfaceClass is null)
+                {
+                    continue;
+                }
+
+                if (interfaceClass == 0xFF)
+                {
+                    device.InterfaceClass = interfaceClass;
+                    device.InterfaceSubClass = interfaceSubClass;
+                    device.InterfaceProtocol = interfaceProtocol;
+                    device.InterfaceMetadataObserved = true;
+                    return;
+                }
+
+                fallbackClass ??= interfaceClass;
+                fallbackSubClass ??= interfaceSubClass;
+                fallbackProtocol ??= interfaceProtocol;
+            }
+        }
+        finally
+        {
+            foreach (var child in children)
+            {
+                IOKitUsbAPI.IOObjectRelease((IntPtr)child);
+            }
+        }
+
+        if (fallbackClass is null)
+        {
+            return;
+        }
+
+        device.InterfaceClass = fallbackClass;
+        device.InterfaceSubClass = fallbackSubClass;
+        device.InterfaceProtocol = fallbackProtocol;
+        device.InterfaceMetadataObserved = true;
+    }
+
+    /// <summary>
+    /// Reads one byte-sized IORegistry property, or <see langword="null"/> when it is absent.
+    /// <para>读取一个字节大小的 IORegistry 属性；缺失时为 <see langword="null"/>。</para>
+    /// </summary>
+    private static byte? ReadByteProperty(IntPtr service, string propertyName)
+        => TryReadCFNumberRawU32(service, propertyName, out var raw) ? unchecked((byte)raw) : null;
 
     private static bool TryReadCFNumberRawU32(IntPtr service, string propertyName, out uint value)
     {

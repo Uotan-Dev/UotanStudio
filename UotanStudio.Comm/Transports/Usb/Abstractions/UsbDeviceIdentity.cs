@@ -29,17 +29,22 @@ internal static class UsbDeviceIdentity
     /// <summary>
     /// Matches a discovery key against the key of an opened session. The serial segment may
     /// differ in casing (Windows registry/device-instance casing vs the USB descriptor casing
-    /// of the same serial — verified on real hardware), and a discovery key with an absent
+    /// of the same serial — verified on real hardware), a discovery key with an absent
     /// serial matches an opened session whether that session left the serial absent or
     /// enriched it (Linux usbfs never reads the serial at discovery time; it is only read by
     /// a control transfer inside <c>CreateHandle</c>, so a device with no serial string
-    /// descriptor stays absent on both sides). Every other segment, including the exact
-    /// device path, must be identical.
+    /// descriptor stays absent on both sides), and a discovery key whose interface class,
+    /// subclass or protocol segment is empty accepts whatever the opened session publishes,
+    /// because the macOS IOUSBHost finder reads device-level properties only and learns the
+    /// interface triple only when the interface is opened. The device path and VID/PID must
+    /// always be identical.
     /// <para>匹配发现键与已打开会话的键。序列号段允许大小写差异（Windows 注册表大小写与
-    /// USB 描述符大小写不同——真机验证），且发现时缺序列号的键与已打开会话匹配时，
+    /// USB 描述符大小写不同——真机验证），发现时缺序列号的键与已打开会话匹配时，
     /// 该会话的序列号既允许仍为空、也允许已被补全（Linux usbfs 在发现期从不读序列号，
     /// 只在 <c>CreateHandle</c> 内经控制传输读出，因此没有序列号字符串描述符的设备
-    /// 在两侧都为空）。其余各段（含精确设备路径）必须完全一致。</para>
+    /// 在两侧都为空）；发现键中接口 class、subclass 或 protocol 段为空时，接受已打开会话
+    /// 公布的任何值，因为 macOS IOUSBHost 查找器只读设备级属性，只有在接口被打开后才得知
+    /// 接口三元组。设备路径与 VID/PID 必须始终一致。</para>
     /// Identity basis while the serial is absent: with no serial on either side the device
     /// path segment is the sole evidence that the opened handle is the enumerated device, so
     /// a discovery key that also lacks a device path matches nothing except a byte-identical
@@ -82,6 +87,17 @@ internal static class UsbDeviceIdentity
             {
                 if (!SerialSegmentsMatch(before, after)) return false;
             }
+            else if (IsInterfaceSegment(i) && before[i].Length == 0)
+            {
+                // Discovery could not read the interface triple (the macOS IOUSBHost finder only reads
+                // device-level properties), while opening the same path necessarily publishes the claimed
+                // interface. An absent discovered segment is "unknown", not a different device; the path,
+                // VID/PID and serial segments above still anchor the identity.
+                // 发现阶段未读到接口三元组（macOS IOUSBHost 查找器只读设备级属性），而打开同一路径必然公布
+                // 被占用的接口。发现侧缺失表示“未知”而不是另一台设备；上面的路径、VID/PID 与序列号段仍然
+                // 锚定身份。
+                continue;
+            }
             else if (!string.Equals(before[i], after[i], StringComparison.Ordinal))
             {
                 return false;
@@ -90,6 +106,15 @@ internal static class UsbDeviceIdentity
 
         return true;
     }
+
+    /// <summary>
+    /// Reports whether a key segment carries one of the interface class/subclass/protocol bytes.
+    /// <para>判断键分段是否承载接口 class/subclass/protocol 之一。</para>
+    /// </summary>
+    /// <param name="index">Zero-based key segment index. <para>从零开始的键分段下标。</para></param>
+    /// <returns><see langword="true"/> for the three interface-code segments.
+    /// <para>三个接口代码分段时为 <see langword="true"/>。</para></returns>
+    private static bool IsInterfaceSegment(int index) => index is 4 or 5 or 6;
 
     /// <summary>
     /// Compares the serial segments of two keys. A serial present at discovery must be

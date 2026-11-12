@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
@@ -8,6 +9,7 @@ using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend.Windows;
+using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -222,19 +224,33 @@ internal sealed class CommDeviceTransportOpener(
             .First(candidate => string.Equals(candidate.DevicePath, usb.Path, StringComparison.OrdinalIgnoreCase))
             .DeviceInstanceId;
         var instance = string.IsNullOrWhiteSpace(instanceId) ? string.Empty : $" (instance '{instanceId}')";
+        var nativeFailure = UsbOpenFailures.TryGet(usb.Path);
+        var detail = string.IsNullOrWhiteSpace(nativeFailure) ? string.Empty : $" The backend reported: {nativeFailure.TrimEnd('.')}.";
         if (IsNonWinUsbInterfacePath(usb.Path))
         {
             return $"{identity}{instance} is still connected, but the enumerated path is a USB-device or COM-port " +
                 $"interface rather than a WinUSB interface: the WinUSB takeover driver is not serving the running " +
-                $"device stack. Replug the device or let the driver restart finish, then retry; the communication " +
-                $"log records the native error of the failed open ({endpoint.Protocol} endpoint).";
+                $"device stack. Replug the device or let the driver restart finish, then retry ({endpoint.Protocol} endpoint)." +
+                detail;
         }
 
-        return $"{identity}{instance} is still connected but no {usb.Backend} backend could open it: another process " +
-            $"most likely holds an exclusive handle to this port, or the device withdrew its interface after a mode " +
-            $"switch (the communication log records the native error of the failed open). Close the other flasher or " +
-            $"debug tool and retry ({endpoint.Protocol} endpoint).";
+        return $"{identity}{instance} is still connected but no {usb.Backend} backend could open it: " +
+            $"{DescribeExclusiveOpenCause()}. Close the other flasher or debug tool and retry " +
+            $"({endpoint.Protocol} endpoint).{detail}";
     }
+
+    /// <summary>
+    /// Describes why an enumerated port refuses a fresh open on the running platform.
+    /// <para>说明当前平台上已枚举端口拒绝新打开的原因。</para>
+    /// </summary>
+    /// <returns>Platform-specific cause text. <para>按平台给出的原因文本。</para></returns>
+    private static string DescribeExclusiveOpenCause()
+        => RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+            ? "IOKit grants each USB device user client to a single owner, so a flasher, VM host or debugger that " +
+                "already opened this port blocks the open, and a device that re-enumerated after a mode switch is a " +
+                "different registry node"
+            : "another process most likely holds an exclusive handle to this port, or the device withdrew its " +
+                "interface after a mode switch";
 
     /// <summary>
     /// Reports whether a Windows device-interface path names the USB-device or COM-port class instead of a

@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using LibUsbDotNet;
-using LibUsbDotNet.LibUsb;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -191,7 +190,7 @@ internal static partial class LibUsbFinder
             return devices;
         }
 
-        using (var context = new UsbContext())
+        using (var context = LibUsbContextFactory.Create())
         using (var deviceList = context.List())
         {
             foreach (var device in deviceList)
@@ -334,25 +333,61 @@ internal static partial class LibUsbFinder
         if (!LibUsbNativeLoader.TryEnsureLoaded(out var libraryPath))
         {
             reason = "native libusb runtime is neither next to the application nor explicitly registered";
-            UsbTrace.Log($"LibUsb runtime probe failed: {reason}");
+            UsbTrace.LogError($"LibUsb runtime probe failed: {reason}");
             return false;
         }
 
         if (!IsNativeRuntimePresent())
         {
             reason = $"native libusb runtime did not resolve from '{libraryPath}'";
-            UsbTrace.Log($"LibUsb runtime probe failed: {reason}");
+            UsbTrace.LogError($"LibUsb runtime probe failed: {reason}");
             return false;
         }
 
         if (!ProbeNativeInit())
         {
             reason = "libusb_init failed";
-            UsbTrace.Log($"LibUsb runtime probe failed: {reason}");
+            UsbTrace.LogError($"LibUsb runtime probe failed: {reason}");
+            return false;
+        }
+
+        if (!ProbeManagedContext(out var managedFailure))
+        {
+            reason = $"LibUsbDotNet could not initialize its own context ({managedFailure})";
+            UsbTrace.LogError($"LibUsb runtime probe failed: {reason}");
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Initializes and disposes one LibUsbDotNet context, which is the library every device session actually goes
+    /// through. The native probe above answers for this assembly's own imports only; LibUsbDotNet resolves the runtime
+    /// with its own resolver and its own platform file name, so without this check a forced libusb backend can report
+    /// itself available and then enumerate nothing.
+    /// <para>初始化并释放一个 LibUsbDotNet 上下文，也就是每个设备会话真正使用的库。上面的原生探测只代表本程序集自己的
+    /// 导入；LibUsbDotNet 用它自己的解析器与平台文件名解析运行库，缺少这一步检查时被强制的 libusb 后端可能报告可用，
+    /// 然后枚举不到任何设备。</para>
+    /// </summary>
+    /// <param name="failure">The underlying failure text when initialization failed.
+    /// <para>初始化失败时的底层失败文本。</para></param>
+    /// <returns><see langword="true"/> when the managed runtime initialized.
+    /// <para>托管运行时初始化成功时为 <see langword="true"/>。</para></returns>
+    private static bool ProbeManagedContext(out string failure)
+    {
+        failure = string.Empty;
+        try
+        {
+            using var context = LibUsbContextFactory.Create();
+            _ = context.HandleId;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            failure = $"{ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
     }
 
     private static bool ProbeNativeInit()

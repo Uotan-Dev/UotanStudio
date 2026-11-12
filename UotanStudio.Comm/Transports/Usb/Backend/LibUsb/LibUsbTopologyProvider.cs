@@ -1,5 +1,4 @@
 using LibUsbDotNet;
-using LibUsbDotNet.LibUsb;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -62,7 +61,7 @@ internal sealed class LibUsbTopologyProvider : IUsbTopologyProvider
         var devices = new List<LibUsbTopologyDevice>();
         try
         {
-            using var context = new UsbContext();
+            using var context = LibUsbContextFactory.Create();
             using var deviceList = context.List();
             foreach (var device in deviceList)
             {

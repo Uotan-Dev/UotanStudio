@@ -6,21 +6,24 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 
 /// <summary>
 /// macOS USB device backed by Apple's official IOUSBHost user-space framework,
-/// driven from C# through the ObjC runtime (no native bridge library). Opens the
-/// device user client via <c>initWithIOService:</c> (which IS the exclusive open),
-/// claims the target interface through an <c>IOUSBHostInterface</c> user client, and
-/// performs bulk I/O through <c>IOUSBHostPipe.sendIORequestWithData:</c>.
+/// driven from C# through the ObjC runtime (no native bridge library). Claims the target
+/// interface through an <c>IOUSBHostInterface</c> user client and performs bulk I/O through
+/// <c>IOUSBHostPipe.sendIORequestWithData:</c>; the optional device user client supplies
+/// device-level control requests and reset.
 /// <para>基于苹果官方 IOUSBHost 用户空间框架的 macOS USB 设备，经 ObjC 运行时从 C#
-/// 直接驱动（无原生桥接库）。通过 <c>initWithIOService:</c> 创建设备用户客户端
-/// （该调用即独占打开），经 <c>IOUSBHostInterface</c> 用户客户端声明目标接口，
-/// 并通过 <c>IOUSBHostPipe.sendIORequestWithData:</c> 执行批量 I/O。</para>
+/// 直接驱动（无原生桥接库）。经 <c>IOUSBHostInterface</c> 用户客户端声明目标接口，
+/// 并通过 <c>IOUSBHostPipe.sendIORequestWithData:</c> 执行批量 I/O；可选的设备级用户客户端
+/// 提供设备级控制请求与复位。</para>
 /// </summary>
 /// <remarks>
-/// Error codes are IOReturn values reported through NSError.code. The device-level
-/// <c>resetWithError:</c> re-enumerates the device (the session must be re-opened
-/// afterwards) — this matches libusb's darwin backend semantics.
-/// <para>错误码为经 NSError.code 上报的 IOReturn 值。设备级 <c>resetWithError:</c>
-/// 会使设备重新枚举（之后必须重开会话）——与 libusb darwin 后端语义一致。</para>
+/// Error codes are IOReturn values reported through NSError.code. Interface access does not require a device user
+/// client, so a device whose interfaces are partly owned by system drivers still yields a working bulk session; only
+/// device-level calls (serial string, configuration, reset) depend on the device client. The device-level
+/// <c>resetWithError:</c> re-enumerates the device (the session must be re-opened afterwards) — this matches libusb's
+/// darwin backend semantics.
+/// <para>错误码为经 NSError.code 上报的 IOReturn 值。接口访问不要求设备级用户客户端，因此即使设备的某些接口被系统驱动
+/// 占用，仍能得到可用的批量会话；只有设备级调用（序列号、配置、复位）依赖设备客户端。设备级
+/// <c>resetWithError:</c> 会使设备重新枚举（之后必须重开会话）——与 libusb darwin 后端语义一致。</para>
 /// </remarks>
 internal class UsbHostDevice : UsbDevice
 {
@@ -36,13 +39,14 @@ internal class UsbHostDevice : UsbDevice
     private IntPtr _interface = IntPtr.Zero;
     private IntPtr _pipeIn = IntPtr.Zero;
     private IntPtr _pipeOut = IntPtr.Zero;
+    private string? _lastInterfaceFailure;
 
     private byte _bulkIn;
     private byte _bulkOut;
     private byte _interfaceNumber;
 
     /// <inheritdoc/>
-    internal override bool IsHandleOpen => _device != IntPtr.Zero;
+    internal override bool IsHandleOpen => _device != IntPtr.Zero || _interface != IntPtr.Zero;
 
     /// <inheritdoc/>
     protected override string BackendName => "macos-usbhost";
@@ -292,9 +296,19 @@ internal class UsbHostDevice : UsbDevice
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The device user client is optional. macOS refuses <c>initWithIOService:</c> on the device whenever any system
+    /// driver owns part of it (MTP, HID, network) or another tool holds the port, which is the state of every phone
+    /// in its normal mode; the interface user client is still grantable and is all a bulk protocol needs. Opening an
+    /// interface therefore does not depend on the device client, and device-level calls stay guarded by
+    /// <see cref="_device"/>.
+    /// <para>设备级 user client 是可选的。只要有系统驱动占用设备的任一部分（MTP、HID、网络）或有其他工具持有该端口，
+    /// macOS 就会拒绝在设备上的 <c>initWithIOService:</c>，而这正是每台手机正常模式的状态；接口级 user client 仍可
+    /// 获准，而批量协议只需要它。因此打开接口不再依赖设备客户端，设备级调用仍由 <see cref="_device"/> 防护。</para>
+    /// </remarks>
     public override int CreateHandle()
     {
-        if (_device != IntPtr.Zero)
+        if (_device != IntPtr.Zero || _interface != IntPtr.Zero)
         {
             return 0;
         }
@@ -314,7 +328,8 @@ internal class UsbHostDevice : UsbDevice
         var service = IOKitUsbAPI.IORegistryEntryFromPath(IntPtr.Zero, DevicePath);
         if (service == IntPtr.Zero)
         {
-            UsbTrace.Log("UsbHostDevice.CreateHandle: IORegistryEntryFromPath failed.");
+            OpenFailureDetail = "IORegistryEntryFromPath found no node for the enumerated path";
+            UsbTrace.LogError($"UsbHostDevice.CreateHandle: {OpenFailureDetail} for '{DevicePath}'.");
             return -1;
         }
 
@@ -322,47 +337,56 @@ internal class UsbHostDevice : UsbDevice
         {
             var device = UsbHostAPI.CreateObject(UsbHostAPI.GetDeviceClass(), (uint)service.ToInt32(), out var kr);
             UsbTrace.Log($"UsbHostDevice.CreateHandle: device user client kr=0x{kr:X} device={device}");
-            if (device == IntPtr.Zero)
+            if (device != IntPtr.Zero)
             {
-                return -1;
+                _device = device;
+            }
+            else
+            {
+                UsbTrace.Log(
+                    $"UsbHostDevice.CreateHandle: device user client refused with {IOKitUsbAPI.DescribeIoReturn(kr)}; continuing with interface-only access.");
             }
 
-            _device = device;
-
-            var openedService = ObjcRuntime.MsgSendUint(_device, ObjcRuntime.sel_registerName(UsbHostAPI.SelIoService));
-            var physicalPortPath = MacUsbPortIdentity.Observe((IntPtr)openedService);
+            var physicalPortPath = MacUsbPortIdentity.Observe(service);
             if (!MacUsbPortIdentity.Matches(PhysicalPortPath, physicalPortPath))
             {
-                UsbHostAPI.Destroy(_device);
-                _device = IntPtr.Zero;
+                OpenFailureDetail =
+                    $"the device reports physical port '{physicalPortPath}' instead of '{PhysicalPortPath}'";
+                UsbTrace.LogError($"UsbHostDevice.CreateHandle: {OpenFailureDetail}.");
+                DestroyDeviceClient();
                 return -1;
             }
             PhysicalPortPath = physicalPortPath;
 
             var children = UsbHostAPI.GetInterfaceServices((uint)service.ToInt32());
             UsbTrace.Log($"UsbHostDevice.CreateHandle: interface children={children.Count}");
-            foreach (var child in children)
+            try
             {
-                try
+                // A composite device exposes several interfaces; when discovery published a triple the session must
+                // bind that one (the adb port's 0xFF interface and an MTP interface both carry bulk pipes).
+                var claimed = InterfaceClass is not null
+                    ? TryOpenFirstInterface(children, InterfaceClass, InterfaceSubClass, InterfaceProtocol)
+                        || TryOpenFirstInterface(children, null, null, null)
+                    : TryOpenFirstInterface(children, null, null, null);
+                if (claimed)
                 {
-                    if (TryOpenInterface(child))
-                    {
-                        UsbTrace.Log($"UsbHostDevice.CreateHandle: interface claimed, bulkIn=0x{_bulkIn:X2} bulkOut=0x{_bulkOut:X2}");
-                        return 0;
-                    }
-
-                    UsbTrace.Log($"UsbHostDevice.CreateHandle: interface child {child:X} not claimable");
+                    UsbTrace.Log($"UsbHostDevice.CreateHandle: interface claimed, bulkIn=0x{_bulkIn:X2} bulkOut=0x{_bulkOut:X2}");
+                    return 0;
                 }
-                finally
+            }
+            finally
+            {
+                foreach (var child in children)
                 {
                     IOKitUsbAPI.IOObjectRelease((IntPtr)child);
                 }
             }
 
-            UsbTrace.Log("UsbHostDevice.CreateHandle: no interface claimed.");
+            OpenFailureDetail = _lastInterfaceFailure
+                ?? "no IOUSBHostInterface child could be opened (the device user client is also unavailable)";
+            UsbTrace.LogError($"UsbHostDevice.CreateHandle: {OpenFailureDetail}.");
 
-            UsbHostAPI.Destroy(_device);
-            _device = IntPtr.Zero;
+            DestroyDeviceClient();
             return -1;
         }
         finally
@@ -371,17 +395,61 @@ internal class UsbHostDevice : UsbDevice
         }
     }
 
+    /// <summary>
+    /// Releases the device user client, if the kernel granted one.
+    /// <para>释放内核授予的设备级 user client（若已获准）。</para>
+    /// </summary>
+    private void DestroyDeviceClient()
+    {
+        if (_device != IntPtr.Zero)
+        {
+            UsbHostAPI.Destroy(_device);
+            _device = IntPtr.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Tries every interface child in order and keeps the first one that opens; when <paramref name="requiredClass"/> is
+    /// given, only an interface whose descriptor matches the requested triple is kept.
+    /// <para>按顺序尝试每个接口子项并保留第一个能打开的接口；给出 <paramref name="requiredClass"/> 时，只保留描述符
+    /// 与请求三元组匹配的接口。</para>
+    /// </summary>
+    /// <param name="children">The device's interface service handles; the caller owns them.
+    /// <para>设备的接口服务句柄；由调用方持有。</para></param>
+    /// <param name="requiredClass">Required interface class, or <see langword="null"/> for any.
+    /// <para>要求的接口类；<see langword="null"/> 表示不限。</para></param>
+    /// <param name="requiredSubClass">Required interface subclass. <para>要求的接口子类。</para></param>
+    /// <param name="requiredProtocol">Required interface protocol. <para>要求的接口协议。</para></param>
+    /// <returns><see langword="true"/> when an interface was opened and kept.
+    /// <para>已打开并保留一个接口时为 <see langword="true"/>。</para></returns>
+    private bool TryOpenFirstInterface(List<uint> children, byte? requiredClass, byte? requiredSubClass, byte? requiredProtocol)
+    {
+        foreach (var child in children)
+        {
+            if (TryOpenInterface(child, requiredClass, requiredSubClass, requiredProtocol))
+            {
+                return true;
+            }
+
+            UsbTrace.Log($"UsbHostDevice: interface child {child:X} not claimable");
+        }
+
+        return false;
+    }
+
     /// <remarks>
     /// Publish the claimed interface's own class triple and endpoints; the finder could not read them
     /// before the interface was opened, and post-open filter matching depends on them.
     /// <para>发布被占用接口自身的类三元组与端点；接口打开之前查找器读不到它们，而打开后的过滤器
     /// 匹配依赖这些值。</para>
     /// </remarks>
-    private bool TryOpenInterface(uint ifcService)
+    private bool TryOpenInterface(uint ifcService, byte? requiredClass = null, byte? requiredSubClass = null,
+        byte? requiredProtocol = null)
     {
-        var usbInterface = UsbHostAPI.CreateObject(UsbHostAPI.GetInterfaceClass(), ifcService, out _);
+        var usbInterface = UsbHostAPI.CreateObject(UsbHostAPI.GetInterfaceClass(), ifcService, out var interfaceError);
         if (usbInterface == IntPtr.Zero)
         {
+            _lastInterfaceFailure = $"IOUSBHostInterface open refused with {IOKitUsbAPI.DescribeIoReturn(interfaceError)}";
             return false;
         }
 
@@ -402,6 +470,15 @@ internal class UsbHostDevice : UsbDevice
                 interfaceProtocol = Marshal.ReadByte(descriptor, 7);
             }
             UsbTrace.Log($"TryOpenInterface: ifc#{interfaceNumber} endpoints={numEndpoints} desc={descriptor}");
+
+            if (requiredClass is byte wantedClass
+                && (interfaceClass != wantedClass
+                    || (requiredSubClass is byte wantedSubClass && interfaceSubClass != wantedSubClass)
+                    || (requiredProtocol is byte wantedProtocol && interfaceProtocol != wantedProtocol)))
+            {
+                UsbTrace.Log($"TryOpenInterface: ifc#{interfaceNumber} class {interfaceClass:X2}/{interfaceSubClass:X2}/{interfaceProtocol:X2} does not match the required {wantedClass:X2}.");
+                return false;
+            }
 
             var config = UsbHostAPI.GetConfigurationDescriptor(usbInterface);
             UsbTrace.Log($"TryOpenInterface: configDescriptor={config}");
@@ -576,6 +653,7 @@ internal class UsbHostDevice : UsbDevice
     {
         if (_device == IntPtr.Zero)
         {
+            UsbTrace.Log("UsbHostDevice.Reset skipped: no device user client (interface-only session).");
             return;
         }
 
