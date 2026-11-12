@@ -74,7 +74,7 @@
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageVersion Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
     <PackageVersion Include="LZMA-SDK" Version="22.1.1" />
-    <PackageVersion Include="SharpCompress" Version="0.50.8" />
+    <PackageVersion Include="SharpCompress" Version="0.50.9" />
     <PackageVersion Include="System.IO.Hashing" Version="11.0.0" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
