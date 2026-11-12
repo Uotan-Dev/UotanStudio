@@ -313,12 +313,9 @@ public sealed class ImageFlasher
                     throw new FlashVerificationException(target.Drive, imageOffset + actualRead);
                 }
 
-                for (var index = 0; index < read; index++)
+                if (!sourceBuffer.AsSpan(0, read).SequenceEqual(verifyBuffer.AsSpan(0, read)))
                 {
-                    if (sourceBuffer[index] != verifyBuffer[index])
-                    {
-                        throw new FlashVerificationException(target.Drive, imageOffset + index);
-                    }
+                    throw new FlashVerificationException(target.Drive, imageOffset + FindMismatch(sourceBuffer.AsSpan(0, read), verifyBuffer.AsSpan(0, read)));
                 }
 
                 processed += read;
@@ -327,6 +324,21 @@ public sealed class ImageFlasher
             imageOffset += read;
             progressReporter.Report(processed, totalBytes);
         }
+    }
+
+    /// <summary>Locates the first differing byte between two equal-length spans. <para>定位两个等长跨度中首个不同的字节。</para></summary>
+    /// <returns>The zero-based mismatch offset, or -1 when the spans are equal. <para>从零起算的差异偏移；两段相等时为 -1。</para></returns>
+    private static int FindMismatch(ReadOnlySpan<byte> expected, ReadOnlySpan<byte> actual)
+    {
+        for (var index = 0; index < expected.Length; index++)
+        {
+            if (expected[index] != actual[index])
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static async ValueTask<int> ReadChunkAsync(
