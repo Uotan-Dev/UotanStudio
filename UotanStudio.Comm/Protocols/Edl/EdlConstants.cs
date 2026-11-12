@@ -342,6 +342,21 @@ internal static class EdlConstants
     public const int ProbeReadChunkBytes = 4096;
 
     /// <summary>
+    /// Per-read slice (ms) while draining a firehose programmer's startup output. The first slice also covers the
+    /// boot window between the Sahara DONE acknowledgement and the programmer's first output.
+    /// <para>排空 firehose programmer 启动输出的单次读取切片（毫秒）。首个切片同时覆盖 Sahara DONE 应答到
+    /// programmer 首个输出之间的启动窗口。</para>
+    /// </summary>
+    public const int ProgrammerStartupDrainSliceMs = 1000;
+
+    /// <summary>
+    /// Upper bound (bytes) for the firehose programmer startup drain, so a target that keeps talking cannot spin
+    /// the drain forever.
+    /// <para>firehose programmer 启动排空的字节上限，防止持续输出的目标让排空无限旋转。</para>
+    /// </summary>
+    public const int MaximumStartupDrainBytes = 65536;
+
+    /// <summary>
     /// Default response timeout in seconds.
     /// <para>默认响应超时（秒）。</para>
     /// </summary>
@@ -366,9 +381,10 @@ internal static class EdlConstants
     public const int PowerResponseTimeoutMs = 3000;
 
     /// <summary>
-    /// Default budget (ms) for verifying that a power reset actually took effect by reading
-    /// target logs until the device disappears.
-    /// <para>通过读取目标日志直到设备消失来验证电源复位是否生效的默认预算（毫秒）。</para>
+    /// Default budget (ms) for draining the link after a power ACK and observing the device disappear.
+    /// A value at or below zero still keeps one bounded read, which the programmer needs to finish the reset.
+    /// <para>power ACK 之后排空链路并观察设备消失的默认预算（毫秒）。小于等于零时仍保留一次有界读取，
+    /// 因为 programmer 需要它才能完成复位。</para>
     /// </summary>
     public const int PowerResetVerifyTimeoutMs = 30000;
 

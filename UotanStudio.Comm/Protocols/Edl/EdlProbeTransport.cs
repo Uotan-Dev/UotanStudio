@@ -28,7 +28,7 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// 只在目标已经吐出一份完整的 Firehose XML 文档之后写入，因此处于 Sahara 的目标绝不会收到会被解析为未知命令的
 /// XML。只要输出 Firehose XML 就证明目标不是等待 HELLO 的 bootrom（这种 bootrom 只会发二进制 HELLO 或什么都不发）。</para>
 /// </remarks>
-internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
+internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport, ICommTransportPushBack
 {
     private const int MaximumProbeBytes = 64 * 1024;
     private const int MaximumProbeMilliseconds = EdlConstants.ProbeReadBudgetMs;
@@ -271,6 +271,39 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     }
 
     /// <summary>
+    /// Pushes bytes the caller read past its own framing boundary back to the head of the read stream, so the
+    /// next read replays them first, ahead of anything buffered or received later. Everything pushed back becomes
+    /// buffered evidence again and is served before the underlying transport, subject to the same freshness
+    /// window as the probe's own capture.
+    /// <para>把调用方读过自身组帧边界的字节回推到读流头部，使下一次读取先于任何已缓冲或后到的字节回放它们。
+    /// 回推的字节重新成为缓冲证据，先于底层传输被服务，并服从与探测自身捕获相同的新鲜度窗口。</para>
+    /// </summary>
+    /// <param name="bytes">The bytes to replay before anything newer.
+    /// <para>要在任何更新的字节之前回放的字节。</para></param>
+    public void PushBack(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.IsEmpty)
+        {
+            return;
+        }
+
+        _buffer ??= new byte[MaximumProbeBytes];
+        Compact();
+        var required = _length + bytes.Length;
+        if (required > _buffer.Length)
+        {
+            var grown = new byte[Math.Max(required, _buffer.Length * 2)];
+            _buffer.AsSpan(0, _length).CopyTo(grown);
+            _buffer = grown;
+        }
+
+        _buffer.AsSpan(0, _length).CopyTo(_buffer.AsSpan(bytes.Length));
+        bytes.CopyTo(_buffer);
+        _length += bytes.Length;
+        _bufferedAtMilliseconds = Environment.TickCount64;
+    }
+
+    /// <summary>
     /// Reports whether the buffered bytes are a Firehose document that has started but not finished, so the
     /// probe keeps waiting instead of discarding a target that is still writing its startup block.
     /// <para>报告缓冲字节是否为已开始但未结束的 Firehose 文档，使探测继续等待，而不是丢弃仍在输出启动块的
@@ -502,6 +535,88 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport
     /// Gets the underlying transport wrapped by this probe transport.
     /// <para>获取本探测传输包装的底层传输。</para>
     /// </summary>
+    /// <summary>
+    /// Reads once and classifies the endpoint without writing anything and without consuming a Sahara announcement, so a
+    /// handshake that runs immediately afterwards can still answer the HELLO the bootrom is holding.
+    /// <para>读取一次并对端点分类，不写入任何内容，也不消费 Sahara 宣告，使紧接着运行的握手仍能应答 bootrom 正在持有的
+    /// HELLO。</para>
+    /// </summary>
+    /// <remarks>
+    /// A bootrom announces HELLO once and then waits for the reply. Any probe that reads it without answering burns that
+    /// announcement, which is why the full probe has to wake the target again. When a handshake follows immediately the
+    /// right move is the opposite: leave the announcement in place and let the handshake answer it. Firehose XML is the
+    /// only evidence worth acting on here, because it proves no Sahara exchange can happen at all.
+    /// <para>bootrom 只宣告一次 HELLO 然后等待应答。任何读取它却不应答的探测都会烧掉这次宣告，这也是完整探测必须
+    /// 重新唤醒目标的原因。当随后立即就有握手时，正确的做法相反：把宣告留在原处，交给握手去应答。此处唯一值得作为
+    /// 依据的证据是 Firehose XML，因为它证明根本不会发生 Sahara 交换。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancels the bounded read. <para>取消有界读取。</para></param>
+    /// <returns><see cref="EdlProtocolState.Firehose"/> for Firehose XML, otherwise <see cref="EdlProtocolState.Unknown"/>.
+    /// <para>Firehose XML 返回 <see cref="EdlProtocolState.Firehose"/>，其余返回 <see cref="EdlProtocolState.Unknown"/>。</para></returns>
+    internal async Task<EdlProtocolState> PeekProtocolAsync(CancellationToken cancellationToken)
+    {
+        _buffer ??= new byte[MaximumProbeBytes];
+        Compact();
+        var started = Environment.TickCount64;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Classify(_buffer.AsSpan(0, _length)) == EdlProtocolState.Firehose)
+            {
+                // Keep every buffered byte: the classification only inspected them, and the Firehose layer must
+                // still read the full document, whose head would be lost if the evidence were wiped here.
+                // 保留全部缓冲字节：分类只是检查了它们，而 Firehose 层仍要读到完整文档——若在此清空证据，
+                // 文档的头部就会丢失。
+                return EdlProtocolState.Firehose;
+            }
+
+            var elapsed = Environment.TickCount64 - started;
+            if (elapsed >= MaximumPeekMilliseconds || _length == MaximumProbeBytes)
+            {
+                // Nothing conclusive arrived. Buffered bytes stay queued for the handshake, which reads them first.
+                // 没有决定性的证据到达。已缓冲的字节继续排队等待握手先读取它们。
+                return EdlProtocolState.Unknown;
+            }
+
+            var chunk = Math.Min(ProbeReadChunkBytes, MaximumProbeBytes - _length);
+            var remaining = (int)Math.Max(1, MaximumPeekMilliseconds - elapsed);
+            int count;
+            try
+            {
+                count = await inner.ReadAsync(_buffer, _length, chunk, Math.Min(ProbeReadSliceMilliseconds, remaining),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is TimeoutException
+                or EdlException { ErrorCode: EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout })
+            {
+                count = 0;
+            }
+            if (count is < 0 or > ProbeReadChunkBytes)
+            {
+                throw new IOException("Invalid EDL peek receive length.");
+            }
+            if (count != 0)
+            {
+                _length += count;
+                _bufferedAtMilliseconds = Environment.TickCount64;
+                continue;
+            }
+
+            if (HasNoProtocolEvidence(_buffer.AsSpan(0, _length)))
+            {
+                return EdlProtocolState.Unknown;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Budget one non-consuming observation may spend before it leaves classification to the handshake. It is shorter
+    /// than the full probe because silence here is not a failure: the handshake's own reads are what decide.
+    /// <para>一次非消费式观测在把分类交给握手之前可用的预算。它短于完整探测，因为此处的静默并非失败：决定权在握手自身
+    /// 的读取上。</para>
+    /// </summary>
+    private const int MaximumPeekMilliseconds = 1000;
+
     internal ICommTransport Inner => inner;
 
     public bool IsConnected => inner.IsConnected;

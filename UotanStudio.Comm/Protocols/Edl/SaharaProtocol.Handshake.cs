@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -38,6 +39,25 @@ public sealed partial class SaharaProtocol
     /// bootrom 仍会在这段预算内重新宣告 HELLO。</para>
     /// </summary>
     private const int StaleRecoveryBudgetMs = EdlConstants.HelloProbeTimeoutMs * 2;
+
+    /// <summary>
+    /// Budget spent waiting for HELLO after an explicit RESET_STATE_MACHINE wake on a link that had already been
+    /// probed. A bootrom that spent its single HELLO on the probe needs one full re-announcement, and usbfs targets
+    /// on slower host controllers take materially longer to service the reset than the plain two-probe budget
+    /// allows, so this wake gets its own wider window instead of reusing <see cref="StaleRecoveryBudgetMs"/>.
+    /// <para>在已经探测过的链路上显式写入 RESET_STATE_MACHINE 唤醒后等待 HELLO 的预算。把唯一一次 HELLO 用在探测上的
+    /// bootrom 需要完整重新宣告一次，而较慢主机控制器上的 usbfs 目标处理复位明显更久，因此这次唤醒使用更宽的窗口，而不是
+    /// 复用 <see cref="StaleRecoveryBudgetMs"/>。</para>
+    /// </summary>
+    private const int ExplicitWakeBudgetMs = EdlConstants.HelloProbeTimeoutMs * 6;
+
+    /// <summary>
+    /// How many escalating recovery steps a failed exchange goes through before the target is reported unrecoverable:
+    /// the state-machine reset, the full Sahara reset, and a speculative HELLO_RESPONSE.
+    /// <para>失败的交换在被报告为不可恢复之前依次尝试的恢复步骤数：状态机复位、完整 Sahara 复位，以及主动
+    /// HELLO_RESPONSE。</para>
+    /// </summary>
+    private const int RecoveryEscalationSteps = 3;
 
     /// <summary>
     /// Per-read slice applied inside the HELLO recovery budget; a slice that ends without a packet spends only that
@@ -151,6 +171,15 @@ public sealed partial class SaharaProtocol
         {
             RequireIdentityNotRequested();
             FirehoseAlreadyRunning = true;
+            // The prefix only proved the link speaks Firehose: push it back so the Firehose layer still reads
+            // the whole queued document, whose head these bytes are.
+            // 前缀只证明了链路使用 Firehose：回推它们，使 Firehose 层仍能读到完整的排队文档——这些字节正是
+            // 文档的头部。
+            if (_transport is ICommTransportPushBack pushBack)
+            {
+                pushBack.PushBack(firstHeader);
+            }
+
             Log("Device is already running Firehose; skipping Sahara handshake.");
             return SaharaMode.ImageTxComplete;
         }
@@ -712,7 +741,8 @@ public sealed partial class SaharaProtocol
         Log("The link stayed silent after both HELLO reads; the bootrom already announced its one HELLO to an " +
             "earlier probe. Writing Sahara RESET_STATE_MACHINE so it announces HELLO again.");
         await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
-        var deadline = Environment.TickCount64 + StaleRecoveryBudgetMs;
+        var deadline = Environment.TickCount64 + ExplicitWakeBudgetMs;
+        var wokenReads = 0;
         while (Environment.TickCount64 < deadline)
         {
             var remainingMs = (int)Math.Max(1, deadline - Environment.TickCount64);
@@ -723,12 +753,14 @@ public sealed partial class SaharaProtocol
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
             {
-                Log($"No packet within {Math.Min(remainingMs, StaleRecoveryReadTimeoutMs)} ms of the wake budget; " +
-                    "keeping the remaining budget open for the HELLO the reset is still bringing back.");
+                wokenReads++;
+                Log($"No packet within {Math.Min(remainingMs, StaleRecoveryReadTimeoutMs)} ms of the wake budget " +
+                    $"(read {wokenReads}); keeping the remaining budget open for the HELLO the reset is still " +
+                    "bringing back.");
             }
         }
 
-        Log($"The woken bootrom did not announce HELLO within {StaleRecoveryBudgetMs} ms.");
+        Log($"The woken bootrom did not announce HELLO within {ExplicitWakeBudgetMs} ms.");
         return null;
     }
 
@@ -747,8 +779,55 @@ public sealed partial class SaharaProtocol
     /// <para>宣告镜像传输的 HELLO；或 <see langword="null"/>。</para></returns>
     private async Task<SaharaHelloPacket?> TryResetTargetAndAwaitHelloAsync(CancellationToken cancellationToken)
     {
-        await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
-        var deadline = Environment.TickCount64 + StaleRecoveryBudgetMs;
+        // A bootrom that answered END_OF_IMAGE with a failure status has left image-transfer mode and will not act on
+        // RESET_STATE_MACHINE alone in every case: some builds ignore it while a transfer is still considered open and
+        // only come back after the full Sahara RESET (0x07) that closes the exchange. Escalate through both resets,
+        // then answer the HELLO slot this host itself would hold, so a target that is waiting for a response rather
+        // than a reset is reached as well.
+        // 以失败状态回应 END_OF_IMAGE 的 bootrom 已经离开镜像传输模式，并非所有构建都会只靠
+        // RESET_STATE_MACHINE 恢复：部分构建在仍视为存在未完成传输时直接忽略它，只有以完整的 Sahara RESET（0x07）
+        // 关闭这次交换后才会回来。因此依次尝试两种复位，再应答本主机自己本会占据的 HELLO 位置，
+        // 使等待应答而不是等待复位的目标也能被覆盖。
+        for (var attempt = 0; attempt < RecoveryEscalationSteps; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            switch (attempt)
+            {
+                case 0:
+                    await TryResetStateMachineAsync(cancellationToken).ConfigureAwait(false);
+                    break;
+                case 1:
+                    Log("The state-machine reset did not bring HELLO back; sending a full Sahara RESET to close the exchange.");
+                    await TrySendFullResetAsync(cancellationToken).ConfigureAwait(false);
+                    break;
+                default:
+                    Log("Neither reset brought HELLO back; answering an assumed open HELLO slot so a target that waits " +
+                        "for a reply proceeds.");
+                    await TrySendSpeculativeHelloResponseAsync(cancellationToken).ConfigureAwait(false);
+                    break;
+            }
+
+            if (await AwaitHelloWithinAsync(ExplicitWakeBudgetMs, cancellationToken).ConfigureAwait(false) is { } hello)
+            {
+                return hello;
+            }
+        }
+
+        Log($"The target did not announce HELLO after {RecoveryEscalationSteps} recovery steps.");
+        return null;
+    }
+
+    /// <summary>
+    /// Waits up to <paramref name="budgetMs"/> for the target to announce a HELLO this host can serve, discarding any
+    /// other packet it sends in the meantime.
+    /// <para>在 <paramref name="budgetMs"/> 内等待目标宣告本主机可服务的 HELLO，并丢弃期间收到的其他数据包。</para>
+    /// </summary>
+    /// <param name="budgetMs">The whole wait budget in milliseconds. <para>整段等待预算（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The HELLO, or <see langword="null"/> when the budget expired. <para>HELLO；预算耗尽时为 <see langword="null"/>。</para></returns>
+    private async Task<SaharaHelloPacket?> AwaitHelloWithinAsync(int budgetMs, CancellationToken cancellationToken)
+    {
+        var deadline = Environment.TickCount64 + budgetMs;
         while (Environment.TickCount64 < deadline)
         {
             var remainingMs = (int)Math.Max(1, deadline - Environment.TickCount64);
@@ -760,8 +839,6 @@ public sealed partial class SaharaProtocol
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
             {
-                Log($"No packet within {Math.Min(remainingMs, StaleRecoveryReadTimeoutMs)} ms of the recovery budget; " +
-                    "keeping the remaining budget open for the HELLO the reset is still bringing back.");
                 continue;
             }
             catch (SaharaException ex)
@@ -772,15 +849,55 @@ public sealed partial class SaharaProtocol
 
             if (TryParseRecoveredHello(received.Header, received.Body, out var hello))
             {
-                Log($"The reset target re-announced HELLO (version {hello.Version}, mode {hello.Mode}).");
+                Log($"The target re-announced HELLO (version {hello.Version}, mode {hello.Mode}).");
                 return hello;
             }
 
-            Log($"Discarded a Sahara {received.Header.Command} packet while waiting for the reset target to announce HELLO.");
+            Log($"Discarded a Sahara {received.Header.Command} packet while waiting for the target to announce HELLO.");
         }
 
-        Log($"The reset target did not announce HELLO within {StaleRecoveryBudgetMs} ms.");
         return null;
+    }
+
+    /// <summary>
+    /// Sends the Sahara RESET (0x07) that closes the current exchange, leaving the bootrom free to accept a new one.
+    /// <para>发送结束当前交换的 Sahara RESET（0x07），使 bootrom 可以接受新的交换。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task completing after the best-effort write. <para>尽力写入后完成的任务。</para></returns>
+    private async Task TrySendFullResetAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteDataAsync(BuildSaharaSimpleCommand(SaharaCommand.Reset), cancellationToken).ConfigureAwait(false);
+            Log("Sent Sahara RESET (0x07) to close the failed exchange.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log($"Best-effort Sahara RESET failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sends an unsolicited HELLO_RESPONSE for image transfer, so a bootrom that is holding an open HELLO slot for a
+    /// reply the earlier probe never sent proceeds instead of waiting forever.
+    /// <para>主动发送镜像传输用的 HELLO_RESPONSE，使正为一个从未得到应答的 HELLO 位置而等待的 bootrom 继续流程，
+    /// 而不是永久等待。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task completing after the best-effort write. <para>尽力写入后完成的任务。</para></returns>
+    private async Task TrySendSpeculativeHelloResponseAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteStructAsync(BuildSpeculativeHelloResponse(imageTransfer: true), cancellationToken)
+                .ConfigureAwait(false);
+            Log("Sent a speculative HELLO_RESPONSE (ImageTxPending) to release any open HELLO slot.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log($"Best-effort speculative HELLO_RESPONSE failed: {ex.Message}");
+        }
     }
 
     /// <summary>

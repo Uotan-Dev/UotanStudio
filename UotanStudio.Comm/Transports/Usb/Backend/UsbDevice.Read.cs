@@ -62,6 +62,20 @@ internal abstract partial class UsbDevice
     }
 #endif
 
+    /// <summary>
+    /// Upper bound on consecutive empty completions one read absorbs before it reports the empty answer. A target that
+    /// keeps completing URBs with no payload must still surface as a timeout instead of spinning inside the backend.
+    /// <para>单次读取在报告空应答之前吸收的连续空完成上限。持续以无负载完成 URB 的目标仍须上报超时，而不是在后端内空转。</para>
+    /// </summary>
+    private const int MaximumEmptyCompletions = 64;
+
+    /// <summary>
+    /// Pause between two reads that were re-issued after an empty completion, so a backend answering them instantly
+    /// cannot spend the whole retry budget before the target produces the payload.
+    /// <para>两次因空完成而重新发起的读取之间的停顿，使瞬间返回空完成的后端无法在目标产出负载之前耗光整段重试预算。</para>
+    /// </summary>
+    private const int EmptyCompletionPauseMs = 20;
+
     /// <summary>Reads bytes into the specified buffer and reports the transfer outcome.
     /// <para>将数据读取到指定缓冲区并报告传输结果。</para><see cref="UsbReadResult.IsTimeout"/> is set when no data arrived before the deadline; <see cref="UsbReadResult.IsShortPacket"/> is set when the device ended the transfer with fewer bytes than requested (the USB Message boundary). Protocol layers use these flags to distinguish "waiting for more data" from "Message complete".<para><see cref="UsbReadResult.IsTimeout"/> 表示在期限内没有数据到达； <see cref="UsbReadResult.IsShortPacket"/> 表示设备以少于请求的字节数结束传输 （USB 消息边界）。协议层用这些标志区分"等待更多数据"与"消息已完成"。</para></summary>
     /// <param name="buffer">The destination buffer.<para>目标缓冲区。</para></param>
@@ -268,6 +282,10 @@ internal abstract partial class UsbDevice
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, DefaultTimeoutMs);
         var lenRemaining = length;
         var count = 0;
+        var emptyCompletions = 0;
+        var readDeadline = effectiveTimeoutMs == UsbTransferPolicies.InfiniteTimeoutMs
+            ? long.MaxValue
+            : Environment.TickCount64 + effectiveTimeoutMs;
 
         var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
         try
@@ -281,6 +299,37 @@ internal abstract partial class UsbDevice
 
                 var chunk = await ReadChunkAsync(ptr, lenToRead, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
                 retryCount += chunk.RetryCount;
+
+                // A successful completion that carried no bytes is not the end of the transfer: several kernels and
+                // host controllers complete one URB of a multi-packet message empty before the payload arrives (usbfs
+                // on xhci, and libusb on the same stack, both do it), and the caller asked for a whole read. Reporting
+                // that as a zero-byte answer makes a protocol loop give up one packet into a healthy exchange, so
+                // re-issue the read while the caller's deadline still has room instead.
+                // The pause matters: an empty completion can arrive in well under a millisecond, so spinning on it
+                // would burn the whole budget of consecutive retries before the target ever had a chance to answer.
+                // 停顿是关键：空完成可能远在一毫秒内到达，空转会在目标有机会应答之前就耗光连续重试的预算。
+                if (chunk.Status == UsbChunkStatus.Success && chunk.Transferred == 0 && count == 0)
+                {
+                    var remainingBudget = readDeadline - Environment.TickCount64;
+                    if (remainingBudget > 0 && emptyCompletions < MaximumEmptyCompletions)
+                    {
+                        emptyCompletions++;
+                        EmitTransfer(UsbTransferOperation.Read, length, 0, effectiveTimeoutMs, retryCount,
+                            chunk.NativeError, stopwatch.ElapsedMilliseconds, UsbTransferOutcome.Success,
+                            CapturePayload(buffer, offset, count));
+                        var pause = (int)Math.Min(EmptyCompletionPauseMs, remainingBudget);
+                        if (pause > 0)
+                        {
+                            await Task.Delay(pause, cancellationToken).ConfigureAwait(false);
+                        }
+
+                        continue;
+                    }
+
+                    lastError = chunk.NativeError;
+                    outcome = UsbTransferOutcome.Timeout;
+                    break;
+                }
 
                 if (chunk.Status == UsbChunkStatus.Timeout)
                 {

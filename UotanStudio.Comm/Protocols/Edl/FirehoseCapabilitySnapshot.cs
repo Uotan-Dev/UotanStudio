@@ -281,8 +281,7 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
 
         var ackPayload = configureResponse.GetInt64("MaxPayloadSizeToTargetInBytes");
         var programSupport = ackPayload is > 0 ? FeatureSupport.Supported : FeatureSupport.Unknown;
-        var evidence = new List<ProtocolEvidence>
-        {
+        List<ProtocolEvidence> evidence = [
             new()
             {
                 Protocol = "edl",
@@ -294,7 +293,7 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
                     : null,
                 ObservedAtUtc = capturedAtUtc
             }
-        };
+        ];
         if (supportedFunctions is not null)
         {
             evidence.Add(new ProtocolEvidence

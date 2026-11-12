@@ -836,15 +836,23 @@ internal class LinuxUsbDevice : UsbDevice
     {
         if (outcome.Status == 0)
         {
-            return outcome.ActualLength > 0
-                ? UsbChunkResult.Success(outcome.ActualLength)
-                : UsbChunkResult.Timeout(ETIMEDOUT);
+            // A zero-length completion is an empty transfer, not a failed wait: the kernel completed this URB
+            // with no payload, which is exactly what a protocol loop needs to see as "nothing this time" so it
+            // can re-issue the read. Reporting it as a timeout aborts a multi-chunk read at the first empty
+            // completion - the Linux shape of the Firehose/Sahara block boundary - instead of letting the
+            // caller's own deadline decide.
+            // 零长度完成是一次空传输而不是失败的等待：内核以无负载完成了这个 URB，协议循环正需要看到
+            // “本次没有数据”才能重新发起读取。把它报成超时会在第一次空完成时就中止跨块读取——也就是
+            // Firehose/Sahara 块边界在 Linux 上的形态——而不是交给调用方自己的截止时间判定。
+            return UsbChunkResult.Success(outcome.ActualLength);
         }
 
         var err = -outcome.Status;
         return err is ENODEV or ESHUTDOWN or EPROTO
             ? throw new UsbDeviceDisconnectedException($"USB async transfer failed: device disconnected (error: {err}).", err)
-            : UsbChunkResult.Error(err);
+            : err == ETIMEDOUT
+                ? UsbChunkResult.Timeout(err)
+                : UsbChunkResult.Error(err);
     }
 
     public override async Task<UsbReadResult> ReadInterruptAsync(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
@@ -941,8 +949,9 @@ internal class LinuxUsbDevice : UsbDevice
     /// <param name="urbType">The usbfs URB type (bulk or interrupt). <para>usbfs URB 类型（bulk 或 interrupt）。</para></param>
     /// <param name="pinnedBuffer">An optional pinned-buffer handle whose ownership moves to this method.
     /// <para>可选的固定缓冲区句柄，其所有权移交本方法。</para></param>
-    /// <returns>The kernel completion; a zero status with zero bytes means the wait ended without a payload.
-    /// <para>内核完成结果；状态为零且字节数为零表示等待结束但没有负载。</para></returns>
+    /// <returns>The kernel completion; an expired wait reports <c>-ETIMEDOUT</c> after the discard, so a timeout never
+    /// masquerades as a successful zero-byte transfer.
+    /// <para>内核完成结果；到期的等待在 discard 之后上报 <c>-ETIMEDOUT</c>，超时绝不会伪装成成功的零字节传输。</para></returns>
     /// <exception cref="UsbDeviceDisconnectedException">The device disconnected while the URB was in flight.
     /// <para>URB 在途时设备断开。</para></exception>
     /// <exception cref="IOException">The submit, poll or discard step failed; on an unconfirmed discard the pinned handles are leaked.
@@ -996,7 +1005,12 @@ internal class LinuxUsbDevice : UsbDevice
                 {
                     DiscardPendingUrb(urbPointer);
                     kernelReferencesUrb = false;
-                    return default;
+                    // Report the expired wait as the timeout it was: the default outcome would masquerade as a
+                    // successful zero-byte transfer and let a write claim "accepted 0 of N bytes" without any
+                    // device round trip ever having failed visibly.
+                    // 把到期的等待如实报为超时：默认结果会伪装成一次成功的零字节传输，让写入在设备往返从未明确失败
+                    // 的情况下报出“接受了 0/N 字节”。
+                    return new UrbOutcome(-ETIMEDOUT, 0);
                 }
 
                 var sliceMs = (int)Math.Min(UrbPollSliceMs, remainingMs);

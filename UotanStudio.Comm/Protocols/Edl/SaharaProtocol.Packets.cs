@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -23,6 +24,25 @@ public sealed partial class SaharaProtocol
     /// 1 KiB 足以覆盖本协议分发的最大数据包（48 字节 HELLO）的整批重复，并留有余量，队列因此不会超出缓冲区。</para>
     /// </summary>
     private const int PacketBurstBufferBytes = 1024;
+
+    /// <summary>
+    /// Bytes a wide read returned beyond the packet it was asked for. A bootrom can queue several announcements of
+    /// the same handshake state, so one read has to be wider than the packet that starts it; everything past the
+    /// requested length belongs to the next packet and is carried here instead of being discarded.
+    /// <para>一次宽读在所求数据包之外多返回的字节。bootrom 可能排下多份同一握手状态的宣告，因此单次读取必须宽于
+    /// 起始它的数据包；超出请求长度的部分属于下一个数据包，保存在这里而不是被丢弃。</para>
+    /// </summary>
+    private byte[]? _carryOver = new byte[PacketBurstBufferBytes];
+
+    /// <summary>The number of unread bytes held in <see cref="_carryOver"/>.
+    /// <para><see cref="_carryOver"/> 中尚未读取的字节数。</para>
+    /// </summary>
+    private int _carryOverBytes;
+
+    /// <summary>The read offset inside <see cref="_carryOver"/>.
+    /// <para><see cref="_carryOver"/> 中的读取偏移。</para>
+    /// </summary>
+    private int _carryOverPosition;
 
     /// <summary>
     /// Reads up to <paramref name="length"/> bytes, returning only the bytes actually received.
@@ -142,8 +162,23 @@ public sealed partial class SaharaProtocol
                 var prefixRoom = bound - total;
                 if (n > prefixRoom)
                 {
-                    Log($"The target answered with {n} byte(s) for a {prefixRoom}-byte packet request; keeping the " +
-                        "prefix and dropping the queued surplus.");
+                    // Everything past the requested prefix is real stream data: push it back so the next read
+                    // replays it, because dropping it would desynchronize every later response framing.
+                    // 请求前缀之外的全部字节都是真实流数据：回推它们让下一次读取先回放，丢弃会使后续所有响应
+                    // 组帧失步。
+                    var surplus = buf.AsSpan(total + prefixRoom, n - prefixRoom);
+                    if (_transport is ICommTransportPushBack pushBack)
+                    {
+                        pushBack.PushBack(surplus);
+                        Log($"The target answered with {n} byte(s) for a {prefixRoom}-byte packet request; keeping the " +
+                            $"prefix and pushing the {n - prefixRoom}-byte surplus back for the next read.");
+                    }
+                    else
+                    {
+                        Log($"The target answered with {n} byte(s) for a {prefixRoom}-byte packet request; keeping the " +
+                            "prefix and dropping the queued surplus.");
+                    }
+
                     n = prefixRoom;
                 }
 
@@ -178,10 +213,27 @@ public sealed partial class SaharaProtocol
     /// <para>数据包被截断，或传输报告了无效长度。</para></exception>
     private async Task<byte[]> ReadExactAsync(int length, int timeoutMs, CancellationToken cancellationToken)
     {
-        var buf = ArrayPool<byte>.Shared.Rent(length);
+        var result = new byte[length];
+        var total = 0;
+
+        // Serve what an earlier wide read already carried over before asking the transport for more.
+        if (_carryOverBytes > 0)
+        {
+            var fromCarry = Math.Min(_carryOverBytes, length);
+            Array.Copy(_carryOver!, _carryOverPosition, result, 0, fromCarry);
+            _carryOverPosition += fromCarry;
+            _carryOverBytes -= fromCarry;
+            if (_carryOverBytes == 0)
+            {
+                _carryOverPosition = 0;
+            }
+
+            total = fromCarry;
+        }
+
+        var buf = ArrayPool<byte>.Shared.Rent(PacketBurstBufferBytes);
         try
         {
-            var total = 0;
             var zeroLengthReads = 0;
             var started = Environment.TickCount64;
             while (total < length)
@@ -194,10 +246,17 @@ public sealed partial class SaharaProtocol
                         $"The Sahara packet receive deadline expired after {timeoutMs} ms with {total} of {length} bytes received" +
                         (zeroLengthReads == 0 ? "." : $" and {zeroLengthReads} zero-length read(s)."));
                 }
+
+                // Ask for a whole burst, never just the bytes still missing: a target answers a declared packet
+                // length with one USB packet, and a request narrower than that packet makes the host controller
+                // abort the transfer as a babble (libusb reports LIBUSB_ERROR_OVERFLOW, usbfs turns it into a bad
+                // TRB length and the kernel drops the data). Everything past <paramref name="length"/> is the next
+                // packet and is carried over rather than dropped.
+                var want = PacketBurstBufferBytes;
                 int n;
                 try
                 {
-                    n = await _transport.ReadAsync(buf, total, length - total, (int)remainingMs, cancellationToken);
+                    n = await _transport.ReadAsync(buf, 0, want, (int)remainingMs, cancellationToken);
                 }
                 catch (TimeoutException ex)
                 {
@@ -211,23 +270,34 @@ public sealed partial class SaharaProtocol
                     }
 
                     // A zero-length read is "nothing arrived yet", not an expired deadline: usbfs reports a
-                    // cleared STALL as a zero-length completion, so failing here would report a stall as a
-                    // timeout. Spend the remaining budget instead and let the deadline decide.
+                    // cleared STALL and a stale endpoint as zero-length completions, so failing here would report
+                    // a stall as a timeout. Spend the remaining budget instead and let the deadline decide.
+                    // A zero-length read also means the transport waited its full slice without a packet, so the
+                    // loop's own deadline check is what ends the wait; delaying again would only shorten the
+                    // budget a Linux bulk read already spent inside the kernel.
                     zeroLengthReads++;
                     Log($"Read returned 0 byte(s) with {remainingMs} ms of budget left " +
                         $"(occurrence {zeroLengthReads}); retrying instead of reporting a timeout.");
-                    await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
-                if (n < 0 || n > length - total)
+                if (n < 0 || n > want)
                 {
                     throw new SaharaException("The transport returned an invalid receive length.");
                 }
 
-                total += n;
+                var take = Math.Min(n, length - total);
+                Array.Copy(buf, 0, result, total, take);
+                total += take;
+                if (n > take)
+                {
+                    _carryOver ??= new byte[PacketBurstBufferBytes];
+                    Array.Copy(buf, take, _carryOver, 0, n - take);
+                    _carryOverBytes = n - take;
+                    _carryOverPosition = 0;
+                    Log($"Kept {n - take} byte(s) beyond the {length}-byte packet for the next read.");
+                }
             }
-            var result = new byte[length];
-            Array.Copy(buf, result, length);
+
             return result;
         }
         finally { ArrayPool<byte>.Shared.Return(buf); }

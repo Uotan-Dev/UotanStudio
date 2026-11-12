@@ -318,15 +318,22 @@ public class EdlSerialBundleServiceTests
         return session;
     }
 
+    /// <summary>
+    /// Extracts the Firehose XML commands the scripted transport received, asserting the session classified the
+    /// target from the buffered observation evidence without a NOP probe round trip.
+    /// <para>提取脚本化传输收到的 Firehose XML 命令，并断言会话凭缓冲的观测证据完成分类而没有 NOP 探测往返。</para>
+    /// </summary>
+    /// <param name="transport">The scripted transport the session wrote to.
+    /// <para>会话写入的脚本化传输。</para></param>
+    /// <returns>The Firehose commands in write order. <para>按写入顺序排列的 Firehose 命令。</para></returns>
     private static XElement[] FirehoseCommands(ScriptedCommTransport transport)
     {
         var commands = transport.Writes
             .Where(bytes => bytes.Length > 0 && bytes[0] == '<')
             .Select(bytes => XDocument.Parse(Encoding.UTF8.GetString(bytes)).Root!.Elements().Single()).ToArray();
         Assert.NotEmpty(commands);
-        Assert.Equal("nop", commands[0].Name.LocalName);
-        Assert.Equal("ping", (string?)commands[0].Attribute("value"));
-        return commands.Where(command => command.Name != "nop").ToArray();
+        Assert.DoesNotContain(commands, command => command.Name.LocalName == "nop");
+        return commands;
     }
 
     private static ScriptedCommTransport Transport(bool rejectProgram = false)

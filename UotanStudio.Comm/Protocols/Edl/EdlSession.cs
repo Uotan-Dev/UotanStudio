@@ -514,6 +514,42 @@ public sealed partial class EdlSession : IProtocolSession
     }
 
     /// <summary>
+    /// Observes only what the very next exchange needs: whether the endpoint is already running Firehose. Unlike the
+    /// full probe it writes nothing and never consumes a Sahara HELLO, so the handshake that follows can still answer
+    /// the announcement the bootrom is holding. A silent endpoint is left Unknown and the caller proceeds with the
+    /// Sahara handshake, which owns its own bounded reads.
+    /// <para>只观测下一次交换真正需要的信息：端点是否已在运行 Firehose。与完整探测不同，它不写入任何内容，也绝不
+    /// 消费 Sahara HELLO，因此随后的握手仍能应答 bootrom 正在持有的宣告。静默端点保持 Unknown，由调用方继续
+    /// 执行自带边界读取的 Sahara 握手。</para>
+    /// </summary>
+    /// <remarks>
+    /// This is the shape a reference client uses: one read decides whether the target is Firehose XML, and everything
+    /// else is Sahara that the handshake consumes itself. The full probe exists for endpoint discovery, where no
+    /// handshake follows and a bounded wake is the only way to learn the state.
+    /// <para>这是参考客户端的形态：一次读取判断目标是 Firehose XML，其余都属于由握手自行消费的 Sahara。完整探测
+    /// 用于端点发现——那种场景后面没有握手，有界唤醒是获知状态的唯一办法。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancels the bounded read. <para>取消有界读取。</para></param>
+    /// <returns>A task completing once the endpoint was classified without touching the HELLO.
+    /// <para>在不触碰 HELLO 的前提下完成端点分类后完成的任务。</para></returns>
+    private async Task ObserveWithoutConsumingHelloAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var state = await _probeTransport.PeekProtocolAsync(cancellationToken).ConfigureAwait(false);
+            if (state != EdlProtocolState.Unknown)
+            {
+                SetProtocolState(state);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            CommTrace.Debug("edl",
+                $"EDL startup observation could not classify the endpoint; the handshake decides instead: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Initializes while the caller holds this session's Firehose operation lease, answering the
     /// <c>Firehose</c> image id with the single supplied stream.
     /// <para>在调用方持有本会话 Firehose 操作租约时初始化，用所给单个流应答 <c>Firehose</c> 镜像标识。</para>
@@ -559,7 +595,12 @@ public sealed partial class EdlSession : IProtocolSession
         }
         if (_protocolState == EdlProtocolState.Unknown)
         {
-            await ProbeProtocolBeforeInitializationAsync(cancellationToken).ConfigureAwait(false);
+            // Classify the endpoint without consuming a Sahara HELLO: the handshake below answers that HELLO itself,
+            // and a full probe here would spend it on a read that answers nothing. Only Firehose evidence is acted on
+            // immediately, because that decides whether a Sahara exchange happens at all.
+            // 在不消费 Sahara HELLO 的前提下分类端点：下面的握手要亲自应答那个 HELLO，而此处做完整探测会把它消耗在
+            // 一次不应答的读取上。只有 Firehose 证据会立即生效，因为它决定是否还要进行 Sahara 交换。
+            await ObserveWithoutConsumingHelloAsync(cancellationToken).ConfigureAwait(false);
         }
         try
         {
@@ -579,6 +620,11 @@ public sealed partial class EdlSession : IProtocolSession
                     previousSahara.LogMessage -= ForwardProtocolLogMessage;
                 }
 
+                // Keep the evidence the observation captured: a bootrom holds the announced HELLO slot open until a
+                // handshake replies, so serving the buffered HELLO to the handshake is the fastest correct exchange,
+                // and the probe transport ages evidence out after its freshness window when the gap really was long.
+                // 保留观测捕获的证据：bootrom 会保持已宣告的 HELLO 位置直到握手应答，因此把缓冲的 HELLO 直接交给
+                // 握手是最快且正确的交换形态；间隔确实很长时，探测传输会在新鲜度窗口过期后自行丢弃证据。
                 Sahara = new SaharaProtocol(Transport)
                 {
                     QudHelloRecoveryEnabled = options?.QudHelloRecoveryEnabled ?? UsesSerialFallback,
@@ -618,6 +664,7 @@ public sealed partial class EdlSession : IProtocolSession
             if (!streamDloadSelected)
             {
                 LinkStage = EdlLinkStage.FirehoseVerifying;
+                await DrainFirehoseStartupOutputAsync(cancellationToken).ConfigureAwait(false);
                 await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true).ConfigureAwait(false);
                 await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
                 IsConfigured = true;
@@ -635,6 +682,59 @@ public sealed partial class EdlSession : IProtocolSession
             LinkStage = EdlLinkStage.Failed;
             PublishRelinkOffer();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Reads away the firehose programmer's startup output before the first command of this session.
+    /// <para>在本会话的第一条命令之前读掉 firehose programmer 的启动输出。</para>
+    /// </summary>
+    /// <remarks>
+    /// A freshly booted programmer announces itself with an XML banner once its main loop starts, and a reconnect
+    /// after an interrupted session can still have a response queued on the wire. Both must be consumed before the
+    /// first configure: the banner would otherwise desynchronize the response parser, and the boot window would
+    /// hold the configure write unacknowledged until it times out.
+    /// <para>刚启动的 programmer 在主循环运转后会以 XML 横幅自报家门，被中断的会话重连后线路上也可能仍挂着一份
+    /// 响应。两者都必须在第一条 configure 之前消费掉：否则横幅会使响应解析器失步，启动窗口会让 configure 写入
+    /// 一直得不到应答直至超时。</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>A task completing once the link is quiet or the drain budget is spent.
+    /// <para>链路归于安静或排空预算耗尽后完成的任务。</para></returns>
+    private async Task DrainFirehoseStartupOutputAsync(CancellationToken cancellationToken)
+    {
+        var buffer = new byte[EdlConstants.ProbeReadChunkBytes];
+        var total = 0;
+        while (total < EdlConstants.MaximumStartupDrainBytes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int count;
+            try
+            {
+                count = await Transport.ReadAsync(buffer, 0, buffer.Length, EdlConstants.ProgrammerStartupDrainSliceMs,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                break;
+            }
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
+            {
+                break;
+            }
+
+            if (count <= 0)
+            {
+                break;
+            }
+
+            total += count;
+        }
+
+        if (total > 0)
+        {
+            ProtocolLogMessage?.Invoke(this,
+                $"Drained {total} byte(s) of firehose startup output before the first command.");
         }
     }
 
