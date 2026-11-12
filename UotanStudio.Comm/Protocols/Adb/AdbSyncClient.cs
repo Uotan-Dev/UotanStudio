@@ -110,10 +110,6 @@ internal sealed partial class AdbSyncClient(AdbConnection connection, uint maxCh
 {
     private const int V1HeaderSize = 8;
 
-    /// <summary>Deadline for waiting on the direct-connection transfer acknowledgement.
-    /// <para>等待直连传输确认的截止时间。</para></summary>
-    private const int ResponseAckTimeoutMs = 10_000;
-
     /// <summary>Byte width of a sync response id, the leading <c>DATA</c>/<c>DONE</c>/<c>FAIL</c> marker.
     /// <para>sync 响应标识的字节宽度，即开头的 <c>DATA</c>/<c>DONE</c>/<c>FAIL</c> 标记。</para></summary>
     private const int IdSize = 4;
@@ -551,27 +547,21 @@ internal sealed partial class AdbSyncClient(AdbConnection connection, uint maxCh
     }
 
     /// <summary>
-    /// Expects an OKAY or FAIL response from the sync service.
-    /// <para>异步等待 sync 服务的 OKAY 或 FAIL 响应。</para>
+    /// Expects an OKAY or FAIL response from the sync service, read from the wire in both the server and the direct
+    /// transport paths exactly like the reference adb client: the device answers SEND with one sync-level OKAY frame
+    /// that must be consumed here or it is mistaken for the next operation's first frame.
+    /// <para>按参考 adb 客户端的语义，在 server 与直连两条路径上都从线上读取 sync 服务的 OKAY 或 FAIL 应答：设备
+    /// 对 SEND 恰好回一帧 sync 层 OKAY，必须在此消费，否则会被下一次操作误读为首帧。</para>
     /// </summary>
     /// <param name="stream">The sync stream.<para>Sync 流。</para></param>
     /// <param name="operation">The operation name for error messages.<para>用于错误消息的操作名称。</para></param>
     /// <param name="cancellationToken">Cancels the reply wait.<para>取消应答等待。</para></param>
+    /// <exception cref="IOException">The sync stream faulted before the reply arrived.
+    /// <para>应答到达前 sync 流失效。</para></exception>
     /// <exception cref="InvalidDataException">The device reported FAIL or answered with an unexpected id.
     /// <para>设备上报 FAIL 或返回了非预期标识。</para></exception>
     private async ValueTask ExpectResponseAsync(AdbStream stream, string operation, CancellationToken cancellationToken)
     {
-        if (!_connection.UsesServer)
-        {
-            await stream.WaitForResponseSignalAsync(ResponseAckTimeoutMs, cancellationToken).ConfigureAwait(false);
-            if (stream.IsFaulted)
-            {
-                throw new IOException($"sync {operation} failed.", stream.Fault);
-            }
-
-            return;
-        }
-
         await ReadExactIntoAsync(stream, _headerScratch, V1HeaderSize, cancellationToken).ConfigureAwait(false);
         var id = _headerScratch.AsSpan(0, IdSize);
         var length = BinaryPrimitives.ReadUInt32LittleEndian(_headerScratch.AsSpan(IdSize));

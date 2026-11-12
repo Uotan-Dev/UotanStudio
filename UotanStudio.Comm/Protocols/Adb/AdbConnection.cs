@@ -19,6 +19,13 @@ internal sealed class AdbConnection : IDisposable
     /// 到达重置该期限。</para></summary>
     private const int TransportDeadlineMs = 5000;
 
+    /// <summary>Deadline for the continuation of a frame that already started arriving before the peer banner; shorter
+    /// than the general transport deadline so the one bounded resynchronization triggered by a stalled handshake frame
+    /// still fits inside the caller's handshake wait.
+    /// <para>横幅到达前已开始到达的帧的续帧期限；比通用传输期限短，使由握手帧停顿触发的唯一一次有界重同步仍能落在
+    /// 调用方的握手等待之内。</para></summary>
+    private const int HandshakeContinuationDeadlineMs = 3000;
+
     /// <summary>Largest frame read directly into its result array instead of through a pooled staging buffer.
     /// <para>直接读入结果数组、而不经池化暂存缓冲的最大帧长度。</para></summary>
     private const int DirectFrameReadThreshold = 64 * 1024;
@@ -33,6 +40,18 @@ internal sealed class AdbConnection : IDisposable
     /// <para>首个入站帧被拒并触发唯一一次有界握手重同步后置位。</para>
     /// </summary>
     private int _handshakeResyncUsed;
+
+    /// <summary>Bytes read during the handshake resynchronization scan that follow a located frame header, handed
+    /// out before the transport on the next reads so the tail of a frame crossing the scan boundary is never lost.
+    /// <para>握手重同步扫描中定位到帧头之后读到的字节；后续读取先于传输消费它们，使跨扫描边界的帧尾部不丢失。</para>
+    /// </summary>
+    private byte[]? _pendingCarry;
+
+    /// <summary>Read offset inside <see cref="_pendingCarry"/>. <para><see cref="_pendingCarry"/> 内的读取偏移。</para></summary>
+    private int _pendingCarryOffset;
+
+    /// <summary>Unconsumed byte count inside <see cref="_pendingCarry"/>. <para><see cref="_pendingCarry"/> 内未消费的字节数。</para></summary>
+    private int _pendingCarryCount;
 
     /// <summary>How long <see cref="Dispose"/> waits for the dispatch loop to observe the shutdown.
     /// <para><see cref="Dispose"/> 等待分发循环观察到关停信号的时长。</para></summary>
@@ -797,16 +816,34 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Reads one inbound frame, or returns <c>null</c> when the bounded handshake resynchronization cleared the pipe
-    /// and re-sent CNXN, in which case the caller reads again.
-    /// <para>读取一条入站帧；有界握手重同步已清零管道并重发 CNXN 时返回 <c>null</c>，由调用方重新读取。</para>
+    /// Reads one inbound frame, or returns <c>null</c> when the bounded handshake resynchronization located the next
+    /// valid frame header, in which case the caller reads again and framing resumes on that header.
+    /// <para>读取一条入站帧；有界握手重同步已定位下一个合法帧头时返回 <c>null</c>，由调用方重新读取并从该头部继续解析。</para>
     /// </summary>
     /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
     /// <returns>The next frame, or <c>null</c> after a resynchronization. <para>下一条帧；重同步后为 <c>null</c>。</para></returns>
     private async ValueTask<AdbMessage?> TryReadFrameAsync(CancellationToken cancellationToken)
     {
-        var header = await ReadExactAsync(AdbConstants.HeaderSize, TransportDeadlineMs, allowIdle: true,
-            cancellationToken).ConfigureAwait(false);
+        var continuationDeadlineMs = Volatile.Read(ref _peerReadyObserved) == 0
+            ? HandshakeContinuationDeadlineMs
+            : TransportDeadlineMs;
+        byte[] header;
+        try
+        {
+            header = await ReadExactAsync(AdbConstants.HeaderSize, continuationDeadlineMs, allowIdle: true,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            if (!await TryResynchronizeHandshakeAsync(rejectedHeader: null, rejectedFrame: null, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                throw;
+            }
+
+            return null;
+        }
+
         var sequence = Interlocked.Increment(ref _inboundMessageCount);
         var headerPreview = PayloadPreview.Format(header, AdbConstants.HeaderSize);
         CommTrace.Write(sequence == 1 ? CommLogLevel.Debug : CommLogLevel.Trace, "adb-link",
@@ -824,7 +861,7 @@ internal sealed class AdbConnection : IDisposable
                 "A plausible command with a wrong magic means the frame started mid-stream; fully foreign bytes mean " +
                 "another reader (adb server, a second host handle, or the wrong USB interface) is splitting the stream.");
 
-            if (await TryResynchronizeHandshakeAsync(headerPreview, cancellationToken).ConfigureAwait(false))
+            if (await TryResynchronizeHandshakeAsync(headerPreview, header, cancellationToken).ConfigureAwait(false))
             {
                 return null;
             }
@@ -838,6 +875,12 @@ internal sealed class AdbConnection : IDisposable
         {
             CommTrace.Error("adb-link",
                 $"rx #{sequence} header ({TransportTag}): {headerPreview} — payload length {payloadLength} exceeds the limit {InboundPayloadLimit()}.");
+            if (await TryResynchronizeHandshakeAsync(headerPreview, header, cancellationToken).ConfigureAwait(false))
+            {
+                return null;
+            }
+
+            await ProbeForeignStreamAsync(sequence, cancellationToken).ConfigureAwait(false);
             throw new InvalidDataException(
                 $"ADB payload length {payloadLength} exceeds the peer's negotiated payload limit.");
         }
@@ -845,8 +888,22 @@ internal sealed class AdbConnection : IDisposable
         byte[]? payload = null;
         if (payloadLength > 0)
         {
-            payload = await ReadExactAsync((int)payloadLength, TransportDeadlineMs, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+            try
+            {
+                payload = await ReadExactAsync((int)payloadLength, continuationDeadlineMs,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                if (!await TryResynchronizeHandshakeAsync(headerPreview, header, cancellationToken)
+                    .ConfigureAwait(false))
+                {
+                    throw;
+                }
+
+                return null;
+            }
+
             CommTrace.Write(CommLogLevel.Trace, "adb-link",
                 $"rx #{sequence} {command} payload {payload.Length} B ({TransportTag}).");
             CommTrace.Payload("adb-link", $"rx #{sequence} {command}", payload);
@@ -914,20 +971,31 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Clears the inbound pipe and re-sends CNXN once when the very first frame of a direct device link is rejected.
-    /// A stale remainder (a previous host session that stopped mid-frame, or bytes still queued in the endpoint when
-    /// the interface was claimed) desynchronizes the stream before the banner, and without this the whole session —
-    /// every later detail query and operation — fails on a link that only needed its pipe cleared.
-    /// <para>直连设备链路的首个帧被拒时清空入站管道并重发一次 CNXN。上一主机会话停在帧中途、或申请接口时端点里仍
-    /// 排着字节，都会在横幅到达前把流弄错位；没有这一步，整条会话（之后每一次详情查询与操作）都会在一个只需清零
-    /// 管道即可恢复的链路上持续失败。</para>
+    /// Recovers frame alignment once when a pre-banner frame of a direct device link is rejected or stalls mid-frame:
+    /// re-sends CNXN and scans the raw inbound stream forward for the next valid handshake frame header instead of
+    /// assuming the pipe resumes at a frame boundary. A stale remainder (a previous host session that stopped
+    /// mid-frame, bytes still queued in the endpoint when the interface was claimed, or the peer's connect banner read
+    /// without its header) desynchronizes the stream before the banner, and the peer's system identity then masquerades
+    /// as a foreign service; scanning is the only reliable recovery because bulk pipes on several stacks keep serving
+    /// buffered bytes across pipe resets, so "clearing" the pipe cannot realign the stream.
+    /// <para>直连设备链路的横幅前帧被拒或中途停顿时恢复一次帧对齐：重发 CNXN 并在原始入站流上向前扫描下一个合法
+    /// 握手帧头，而不是假设管道恰好从帧边界继续。上一主机会话停在帧中途、申请接口时端点里仍排着字节、或对端连接
+    /// 横幅被少读了一个头部，都会在横幅到达前把流弄错位，对端的系统身份字符串随即伪装成陌生服务；扫描是唯一可靠的
+    /// 恢复手段，因为多个栈的批量管道在管道复位后仍会继续吐出已缓冲字节，清管道无法让流重新对齐。</para>
     /// </summary>
-    /// <param name="rejectedHeader">Preview of the rejected frame header for the trace. <para>被拒帧头部的预览文本。</para></param>
+    /// <param name="rejectedHeader">Preview of the rejected frame header, or <see langword="null"/> when the frame
+    /// stalled instead of being rejected. <para>被拒帧头部的预览文本；帧是中途停顿而非被拒时为
+    /// <see langword="null"/>。</para></param>
+    /// <param name="rejectedFrame">Raw rejected frame bytes used to recognize the peer's connect banner, or
+    /// <see langword="null"/> for a stalled frame. <para>被拒帧的原始字节，用于识别对端连接横幅；停顿帧为
+    /// <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Stops the resynchronization when the connection shuts down.
     /// <para>连接关停时停止重同步。</para></param>
-    /// <returns><see langword="true"/> when the pipe was cleared and CNXN re-sent, so the caller reads again.
-    /// <para>已清零管道并重发 CNXN、调用方应重新读取时为 <see langword="true"/>。</para></returns>
-    private async ValueTask<bool> TryResynchronizeHandshakeAsync(string rejectedHeader, CancellationToken cancellationToken)
+    /// <returns><see langword="true"/> when a valid handshake header was located, so the caller reads again and the
+    /// framing resumes on the located header. <para>定位到合法握手帧头时返回 <see langword="true"/>，调用方重新
+    /// 读取，帧解析从定位到的头部继续。</para></returns>
+    private async ValueTask<bool> TryResynchronizeHandshakeAsync(string? rejectedHeader, byte[]? rejectedFrame,
+        CancellationToken cancellationToken)
     {
         if (Volatile.Read(ref _peerReadyObserved) != 0 || _server is not null || _transport is null ||
             _transport is Transports.Tcp.AdbTlsTransport)
@@ -940,25 +1008,204 @@ internal sealed class AdbConnection : IDisposable
             return false;
         }
 
+        var identityNote = rejectedFrame is not null && LooksLikePeerSystemIdentity(rejectedFrame)
+            ? " The rejected frame is the peer's CNXN system identity read without its header, so the endpoint is carrying ADB and only the framing is misaligned."
+            : string.Empty;
+        var trigger = rejectedHeader is null
+            ? "an inbound frame stalled mid-frame before the banner and the transport deadline expired"
+            : $"first inbound frame {rejectedHeader} is not an ADB frame";
         CommTrace.Error("adb-link",
-            $"{DescribeLink()} first inbound frame {rejectedHeader} is not an ADB frame; clearing the inbound pipe and re-sending CNXN once.");
+            $"{DescribeLink()} {trigger};{identityNote} re-sending CNXN once and " +
+            "scanning forward for the next valid ADB header instead of assuming the stream resumes at a frame boundary.");
 
-        Transport.Reset();
         await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);
-        return true;
+        return await ScanForHandshakeHeaderAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Bytes one resynchronization scan step reads from the transport at most.
+    /// <para>重同步扫描单步最多从传输读取的字节数。</para></summary>
+    private const int ResyncScanChunkBytes = 512;
+
+    /// <summary>Total bytes one resynchronization scan may consume before giving up; large enough to cross the peer's
+    /// system identity plus one full CNXN repeat. <para>重同步扫描最多消费的总字节数；足够跨过对端系统身份与一次完整 CNXN 重发。</para></summary>
+    private const int ResyncScanBudgetBytes = 8192;
+
+    /// <summary>Deadline for one scan step read; short enough to keep the whole scan bounded when the peer is silent.
+    /// <para>扫描单步读取的期限；对端静默时保证整段扫描有界。</para></summary>
+    private const int ResyncScanReadDeadlineMs = 2000;
+
+    /// <summary>Wall-clock budget of one resynchronization scan; long enough to span the peer's CNXN resend cadence,
+    /// observed around one second on real devices. <para>重同步扫描的墙钟预算；覆盖真机上约一秒的对端 CNXN 重发节奏。</para></summary>
+    private const int ResyncScanTotalDeadlineMs = 6000;
+
+    /// <summary>
+    /// Consumes raw inbound bytes until a valid handshake frame header (CNXN or AUTH with an inverting magic and a
+    /// plausible payload length) appears, discarding the misaligned prefix and keeping the located header together
+    /// with every byte that follows it for the next framing reads. Read timeouts inside the budget are tolerated
+    /// because the peer may pause before re-sending its connect banner.
+    /// <para>消费原始入站字节，直到出现合法握手帧头（CNXN 或 AUTH，magic 取反匹配且负载长度合理）为止，丢弃错位
+    /// 前缀并把定位到的帧头连同其后全部字节留给后续帧读取。预算内的读取超时可容忍，因为对端重发连接横幅之前可能停顿。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Stops the scan when the connection shuts down. <para>连接关停时停止扫描。</para></param>
+    /// <returns><see langword="true"/> when a header was located and the carry buffer holds its continuation.
+    /// <para>定位到帧头且 carry 缓冲持有其后续字节时为 <see langword="true"/>。</para></returns>
+    private async ValueTask<bool> ScanForHandshakeHeaderAsync(CancellationToken cancellationToken)
+    {
+        var totalDeadline = Environment.TickCount64 + ResyncScanTotalDeadlineMs;
+        var consumedBytes = 0;
+        var window = new byte[AdbConstants.HeaderSize - 1 + ResyncScanChunkBytes];
+        var windowCount = 0;
+        while (consumedBytes < ResyncScanBudgetBytes && Environment.TickCount64 < totalDeadline)
+        {
+            var chunk = Math.Min(ResyncScanChunkBytes, ResyncScanBudgetBytes - consumedBytes);
+            int received;
+            try
+            {
+                received = await Transport.ReadAsync(window, windowCount, chunk, ResyncScanReadDeadlineMs,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when ((ex is TimeoutException or System.ComponentModel.Win32Exception)
+                && Environment.TickCount64 < totalDeadline)
+            {
+                continue;
+            }
+
+            if (received <= 0)
+            {
+                if (!Transport.IsConnected)
+                {
+                    return false;
+                }
+
+                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            windowCount += received;
+            consumedBytes += received;
+            var headerOffset = FindHandshakeHeaderOffset(window.AsSpan(0, windowCount));
+            if (headerOffset < 0)
+            {
+                var keep = Math.Min(windowCount, AdbConstants.HeaderSize - 1);
+                Buffer.BlockCopy(window, windowCount - keep, window, 0, keep);
+                windowCount = keep;
+                continue;
+            }
+
+            var carryCount = windowCount - headerOffset;
+            if (carryCount > 0)
+            {
+                _pendingCarry = new byte[carryCount];
+                Buffer.BlockCopy(window, headerOffset, _pendingCarry, 0, carryCount);
+                _pendingCarryOffset = 0;
+                _pendingCarryCount = carryCount;
+            }
+
+            CommTrace.Write(CommLogLevel.Info, "adb-link",
+                $"{DescribeLink()} resynchronization found a valid ADB header after {consumedBytes} B of scanned foreign bytes; " +
+                "framing resumes on that header.");
+            return true;
+        }
+
+        CommTrace.Error("adb-link",
+            $"{DescribeLink()} resynchronization scanned {consumedBytes} B without finding a valid ADB header; " +
+            "treating the endpoint as not carrying ADB.");
+        return false;
     }
 
     /// <summary>
-    /// Decides whether the endpoint keeps streaming foreign bytes or was only holding one stale remainder. Once the
-    /// single resynchronization has been spent, up to three short follow-up reads measure whether data keeps arriving on
-    /// its own: continuous arrivals mean the bound endpoint carries another service (diagnostics composition, a stopped
-    /// adbd, or a second owner), while silence means the first frame was residual data and the link itself is fine. A TLS
+    /// Reports the offset of the first valid handshake frame header inside a byte window, or a negative value when
+    /// none is present. Only CNXN and AUTH count, because the peer sends nothing else before the banner; the magic
+    /// inversion and the payload-length bound keep payload bytes from being mistaken for headers.
+    /// <para>报告字节窗口内第一个合法握手帧头的偏移；没有则为负值。横幅之前对端只发 CNXN 与 AUTH，因此只认这两者；
+    /// magic 取反与负载长度上限避免把负载字节误判为帧头。</para>
+    /// </summary>
+    /// <param name="window">Raw bytes to scan. <para>待扫描的原始字节。</para></param>
+    /// <returns>The header offset, or <c>-1</c> when no valid header is present.
+    /// <para>帧头偏移；不存在合法帧头时为 <c>-1</c>。</para></returns>
+    private int FindHandshakeHeaderOffset(ReadOnlySpan<byte> window)
+    {
+        for (var offset = 0; offset + AdbConstants.HeaderSize <= window.Length; offset++)
+        {
+            var candidate = window.Slice(offset, AdbConstants.HeaderSize);
+            var command = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(candidate);
+            if ((AdbCommand)command is not (AdbCommand.Cnxn or AdbCommand.Auth))
+            {
+                continue;
+            }
+
+            var magic = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(candidate[20..]);
+            if ((command ^ 0xFFFFFFFF) != magic)
+            {
+                continue;
+            }
+
+            var payloadLength = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(candidate[12..]);
+            if (payloadLength > InboundPayloadLimit())
+            {
+                continue;
+            }
+
+            return offset;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Reports whether a rejected frame carries recognizable fragments of the peer's connect banner; adbd's system
+    /// identity starts with <c>device::ro.product</c> and always lists <c>features=</c>, and either marker proves the
+    /// endpoint itself is carrying ADB data read mid-frame.
+    /// <para>判断被拒帧是否携带对端连接横幅的可识别片段；adbd 的系统身份以 <c>device::ro.product</c> 开头且总是列出
+    /// <c>features=</c>，任一标记都证明端点承载的是 ADB 数据、只是按帧中段读入。</para>
+    /// </summary>
+    /// <param name="framePreview">Raw rejected frame bytes. <para>被拒帧的原始字节。</para></param>
+    /// <returns><see langword="true"/> when the frame contains a banner fragment.
+    /// <para>帧内含有横幅片段时为 <see langword="true"/>。</para></returns>
+    private static bool LooksLikePeerSystemIdentity(ReadOnlySpan<byte> framePreview)
+        => framePreview.IndexOf("device::"u8) >= 0 || framePreview.IndexOf("features="u8) >= 0;
+
+    /// <summary>
+    /// Serves the next framing reads from the bytes the resynchronization scan kept after the located header, so the
+    /// tail of a frame that crossed the scan's read boundary is never lost.
+    /// <para>让后续帧读取先消费重同步扫描留在定位头部之后的字节，使跨过扫描读取边界的帧尾部不丢失。</para>
+    /// </summary>
+    /// <param name="buffer">Destination buffer of the pending read. <para>当前读取的目标缓冲区。</para></param>
+    /// <param name="totalRead">Bytes already placed into <paramref name="buffer"/>. <para>已放入 <paramref name="buffer"/> 的字节数。</para></param>
+    /// <param name="length">Total byte count the pending read needs. <para>当前读取需要的总字节数。</para></param>
+    /// <returns>The updated filled count. <para>更新后的已填充字节数。</para></returns>
+    private int TakeCarryBytes(byte[] buffer, int totalRead, int length)
+    {
+        if (_pendingCarry is null || _pendingCarryOffset >= _pendingCarryCount)
+        {
+            return totalRead;
+        }
+
+        var take = Math.Min(length - totalRead, _pendingCarryCount - _pendingCarryOffset);
+        Buffer.BlockCopy(_pendingCarry, _pendingCarryOffset, buffer, totalRead, take);
+        _pendingCarryOffset += take;
+        if (_pendingCarryOffset >= _pendingCarryCount)
+        {
+            _pendingCarry = null;
+            _pendingCarryOffset = 0;
+            _pendingCarryCount = 0;
+        }
+
+        return totalRead + take;
+    }
+
+    /// <summary>
+    /// Decides whether the endpoint keeps streaming foreign bytes once the resynchronization scan has failed to locate
+    /// a valid frame header: up to three short follow-up reads measure whether data keeps arriving on its own.
+    /// Continuous arrivals containing the peer's connect banner mean a second reader is splitting the stream, while
+    /// other continuous arrivals mean the bound endpoint carries another service (diagnostics composition, a stopped
+    /// adbd, or a second owner), and silence means the first frame was residual data and the link itself is fine. A TLS
     /// transport is not probed: a foreign first frame there cannot be explained by a shared endpoint, and the bounded
     /// probe read would break the record layer of a connection that is already being discarded.
-    /// <para>判定端点是在持续流出陌生字节，还是只残留了一段旧数据。一次性重同步用掉之后，最多再做三次短读，看数据是否
-    /// 自行继续到达：持续到达说明绑定的端点承载的是别的服务（诊断复合、adbd 未运行，或另一占用方），静默则说明首帧只是
-    /// 残留数据、链路本身没问题。TLS 传输不做该探测：其中的陌生首帧无法用端点共用解释，而带期限的探测读取会破坏本就要
-    /// 丢弃的连接上的记录层。</para>
+    /// <para>重同步扫描定位不到合法帧头之后，判定端点是在持续流出陌生字节还是别的情况：最多再做三次短读，看数据是否
+    /// 自行继续到达。持续到达且含有对端连接横幅片段说明有第二个读取者在拆分字节流；其余持续到达说明绑定的端点承载
+    /// 的是别的服务（诊断复合、adbd 未运行，或另一占用方）；静默则说明首帧只是残留数据、链路本身没问题。TLS 传输
+    /// 不做该探测：其中的陌生首帧无法用端点共用解释，而带期限的探测读取会破坏本就要丢弃的连接上的记录层。</para>
     /// </summary>
     /// <param name="sequence">The rejected frame's sequence number for the trace.
     /// <para>被拒帧的序号，用于日志。</para></param>
@@ -973,6 +1220,7 @@ internal sealed class AdbConnection : IDisposable
 
         const int ProbeCount = 3;
         const int ProbeTimeoutMs = 300;
+        var identitySeen = false;
         for (var probe = 1; probe <= ProbeCount; probe++)
         {
             var started = Environment.TickCount64;
@@ -1000,9 +1248,19 @@ internal sealed class AdbConnection : IDisposable
                 return;
             }
 
+            identitySeen |= LooksLikePeerSystemIdentity(next);
             CommTrace.Error("adb-link",
                 $"{DescribeLink()} probe {probe}/{ProbeCount}: still foreign after {elapsed} ms — " +
                 PayloadPreview.Format(next, AdbConstants.HeaderSize));
+        }
+
+        if (identitySeen)
+        {
+            CommTrace.Error("adb-link",
+                $"{DescribeLink()} kept streaming the peer's CNXN system identity without ever producing a valid frame header " +
+                "within the scan budget; the device is speaking ADB but its banner frames never complete, which points at " +
+                "another reader (adb server, a second host handle) or the wrong USB interface consuming part of the byte stream.");
+            return;
         }
 
         var serverListening = await IsAdbServerListeningAsync().ConfigureAwait(false);
@@ -1517,6 +1775,13 @@ internal sealed class AdbConnection : IDisposable
         while (totalRead < length)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+            var servedFromCarry = TakeCarryBytes(buffer, totalRead, length);
+            if (servedFromCarry != totalRead)
+            {
+                totalRead = servedFromCarry;
+                continue;
+            }
+
             var deadlineMs = allowIdle && totalRead == 0 ? Timeout.Infinite : timeoutMs;
             int n;
             try

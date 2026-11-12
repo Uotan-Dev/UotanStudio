@@ -32,7 +32,8 @@ public sealed class AdbHandshakeDiagnosticsTests
         session.Connect();
 
         Assert.True(session.IsConnected);
-        Assert.Equal(1, transport.ResetCount);
+        Assert.Equal(ConnectWriteCount + ResyncWriteCount, transport.Writes.Count);
+        Assert.Equal(0, transport.ResetCount);
     }
 
     [Fact(Timeout = 20000)]
@@ -48,8 +49,33 @@ public sealed class AdbHandshakeDiagnosticsTests
 
         Assert.ThrowsAny<Exception>(session.Connect);
 
-        Assert.Equal(1, transport.ResetCount);
+        Assert.Equal(ConnectWriteCount + ResyncWriteCount, transport.Writes.Count);
+        Assert.Equal(0, transport.ResetCount);
     }
+
+    [Fact(Timeout = 20000)]
+    public void Handshake_CnxnIdentityWithoutHeader_ScansForwardAndConnects()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Assert.False(cancellationToken.IsCancellationRequested);
+        var transport = new ScriptedCommTransport();
+        transport.Enqueue("device::ro.product.name=sm6150;ro"u8.ToArray());
+        transport.Enqueue("duct.model=sm6150;features=cmd"u8.ToArray());
+        transport.Enqueue(CnxnFrame());
+        using var authentication = AdbAuthentication.CreateNew();
+        using var session = new AdbSession(transport, authentication);
+
+        session.Connect();
+
+        Assert.True(session.IsConnected);
+        Assert.Equal("device::ro.product.name=tests;features=cmd,shell_v2", session.PeerBanner);
+        Assert.Equal(ConnectWriteCount + ResyncWriteCount, transport.Writes.Count);
+        Assert.Equal(0, transport.ResetCount);
+    }
+
+    private const int ConnectWriteCount = 2;
+
+    private const int ResyncWriteCount = 2;
 
     private static byte[] CorruptHeader()
     {
