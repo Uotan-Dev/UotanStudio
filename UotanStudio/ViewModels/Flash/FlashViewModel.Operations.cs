@@ -538,6 +538,11 @@ public sealed partial class FlashViewModel
                         return;
                 }
 
+                if (await TryApplyInferredGptFolderPackageAsync(path, cancellation.Token).ConfigureAwait(true))
+                {
+                    return;
+                }
+
                 var dirRows = ParseDirectory(path);
                 Partitions.Apply(0, dirRows);
                 AppendFolderLoadResult(path, Partitions.Count);
@@ -587,6 +592,54 @@ public sealed partial class FlashViewModel
             UpdateEdlButton();
             ApplyImageSectionExpansion();
         }
+    }
+
+    /// <summary>
+    /// Recognises a folder that carries Qualcomm partition-table backups instead of manifests, generates the
+    /// per-LUN XML package into the folder itself with the partition rows bound to the images present, and loads
+    /// the folder through the flat EDL pipeline; a folder without both markers stays on the plain image parser.
+    /// <para>识别携带高通分区表备份而非清单的目录，把每 LUN 的 XML 包生成到该目录内并将分区条目绑定到现有
+    /// 镜像，然后走平铺 EDL 管道加载；缺少两个标记的目录仍走纯镜像解析。</para>
+    /// </summary>
+    /// <param name="folder">The picked folder. <para>所选目录。</para></param>
+    /// <param name="cancellationToken">Cancels the generation. <para>取消生成。</para></param>
+    /// <returns><see langword="true"/> when an inferred package was generated and loaded.
+    /// <para>推断生成并加载了包时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> TryApplyInferredGptFolderPackageAsync(string folder, CancellationToken cancellationToken)
+    {
+        if (!EdlGptFolderXmlInference.HasInferableLayout(folder))
+        {
+            return false;
+        }
+
+        EdlGptXmlPackageSet? packageSet;
+        try
+        {
+            packageSet = await EdlGptFolderXmlInference.TryBuildAsync(folder, cancellationToken)
+                .ConfigureAwait(true);
+        }
+        catch (Exception failure) when (failure is InvalidDataException or IOException
+            or InvalidOperationException or ArgumentException)
+        {
+            AppendError(failure);
+            return false;
+        }
+
+        if (packageSet is null || packageSet.Packages.Count == 0)
+        {
+            return false;
+        }
+
+        if (!ApplyFlatEdlDirectory(folder))
+        {
+            return false;
+        }
+
+        _generatedTablePackagePath = folder;
+        AppendLog(string.Format(CultureInfo.InvariantCulture,
+            _localizer.GetString("Flash_GptXmlInferred"),
+            string.Join('/', packageSet.Packages.Select(package => package.Layout.Lun))));
+        return true;
     }
 
     /// <summary>
@@ -1824,11 +1877,11 @@ public sealed partial class FlashViewModel
     /// </remarks>
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
+        // Package-intrinsic rows (a SpacemiT boot-chain step stages its own file) name a file the run resolves
+        // itself, so their cell is display-only; loader and parameter rows pick their file through this handler.
+        // 包固有行（SpacemiT 引导链步骤自带文件）的文件列仅用于展示，运行自行解析；loader 与 parameter 行
+        // 仍经此处理器选择文件。
         if (_busy || _confirming || sender is not Control { DataContext: FlashPartitionEntry entry } ||
-            // Package-intrinsic rows (a SpacemiT boot-chain step stages its own file) name a file the run resolves
-            // itself, so their cell is display-only; loader and parameter rows pick their file through this handler.
-            // 包固有行（SpacemiT 引导链步骤自带文件）的文件列仅用于展示，运行自行解析；loader 与 parameter 行
-            // 仍经此处理器选择文件。
             !(entry.AcceptsFile || entry.Command is LoaderCommand or ParameterCommand) ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel)
         {
@@ -2884,10 +2937,11 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reads the GPT of the region the LUN box names into the main partition list; the read runs over the same session
-    /// path the named read-back uses, so a device that only carries a programmer is brought to Firehose first.
-    /// <para>把 LUN 框所指区域的 GPT 读入主分区列表；读取走具名回读所用的同一条会话路径，只带 Programmer 的设备会先进入
-    /// Firehose。</para>
+    /// Reads the GPT of every LUN the target reports into the main partition list and writes one XML package per
+    /// LUN; the read runs over the same session path the named read-back uses, so a device that only carries a
+    /// programmer is brought to Firehose first. The scan stops at the first LUN that fails to report a table.
+    /// <para>把目标上报的每个 LUN 的 GPT 读入主分区列表，并为每个 LUN 生成一份 XML 包；读取走具名回读所用的
+    /// 同一条会话路径，只带 Programmer 的设备会先进入 Firehose。扫描在首个读不出表的 LUN 处停止。</para>
     /// </summary>
     /// <param name="device">The selected EDL endpoint. <para>所选 EDL 端点。</para></param>
     private async Task ReadEdlPartitionTableAsync(DetectedDevice device)
@@ -2904,25 +2958,33 @@ public sealed partial class FlashViewModel
         SetBusy(true);
         try
         {
-            EdlGptXmlPackage? package = null;
+            EdlGptXmlPackageSet? packageSet = null;
             await App.DeviceMonitor.RunEdlAsync(device, async edl =>
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
                     .ConfigureAwait(true);
-                var snapshot = await firehose.ReadGptWithPartitionEntryOverridesAsync(SelectedEdlLun,
+                var snapshots = await EdlGptPartitionService.ReadAllLunSnapshotsAsync(firehose,
                     gptEntryLba, gptEntryCount, gptEntrySize, cancellation.Token).ConfigureAwait(true);
-                package = await EdlGptXmlPackageWriter.WriteAsync(firehose, snapshot,
+                if (snapshots.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"No LUN 0..{EdlGptPartitionService.MaxScannedLun} reported a readable GPT. " +
+                        $"LUN 0..{EdlGptPartitionService.MaxScannedLun} 均未能读出 GPT。");
+                }
+
+                packageSet = await EdlGptXmlPackageWriter.WriteAsync(firehose, snapshots,
                     EdlGptXmlPackageDirectory.Create(device.Key), cancellation.Token).ConfigureAwait(true);
                 return true;
             }, cancellation.Token);
-            if (package is null)
+            if (packageSet is null || packageSet.Packages.Count == 0)
             {
                 return;
             }
 
-            LoadEdlXmlPackage(package);
+            LoadEdlXmlPackage(packageSet.Packages[0]);
             AppendLog($"{language.GetString("Flash_ReadPartitionTable")}: {device.DisplayName} · " +
-                $"LUN {package.Layout.Lun} · {package.DirectoryPath}");
+                $"LUN {string.Join('/', packageSet.Packages.Select(package => package.Layout.Lun))} · " +
+                $"{packageSet.DirectoryPath}");
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -3045,8 +3107,12 @@ public sealed partial class FlashViewModel
 
         program.Filename = fileName;
         program.SourceFile = Path.Combine(folder, fileName);
+        var manifestName = File.Exists(Path.Combine(folder,
+                FormattableString.Invariant($"rawprogram{program.PhysicalPartitionNumber}.xml")))
+            ? FormattableString.Invariant($"rawprogram{program.PhysicalPartitionNumber}.xml")
+            : EdlGptXmlPackageWriter.RawProgramFileName;
         if (!await EdlGptXmlPackageWriter.UpdateRawProgramFileNameAsync(
-                Path.Combine(folder, EdlGptXmlPackageWriter.RawProgramFileName),
+                Path.Combine(folder, manifestName),
                 program.Label.Length > 0 ? program.Label : entry.Name,
                 program.PhysicalPartitionNumber, fileName, CancellationToken.None).ConfigureAwait(true))
         {
@@ -4980,14 +5046,14 @@ public sealed partial class FlashViewModel
     {
         var box = Field<ComboBox>("EdlRebootTargetBox");
         var previous = box.SelectedItem is EdlRebootTargetOption option ? option.Target : EdlRebootTarget.System;
-        var items = new[]
-        {
+        EdlRebootTargetOption[] items =
+        [
             new EdlRebootTargetOption(EdlRebootTarget.System, _localizer.GetString("Flash_EdlRebootSystem")),
             new EdlRebootTargetOption(EdlRebootTarget.Recovery, _localizer.GetString("Flash_EdlRebootRecovery")),
             new EdlRebootTargetOption(EdlRebootTarget.Fastbootd, _localizer.GetString("Flash_EdlRebootFastbootd")),
             new EdlRebootTargetOption(EdlRebootTarget.Edl, _localizer.GetString("Flash_EdlRebootEdl")),
             new EdlRebootTargetOption(EdlRebootTarget.PowerOff, _localizer.GetString("Flash_EdlRebootPowerOff")),
-        };
+        ];
         box.ItemsSource = items;
         box.SelectedItem = items.FirstOrDefault(item => item.Target == previous) ?? items[0];
     }

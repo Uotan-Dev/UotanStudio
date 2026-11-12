@@ -128,6 +128,7 @@ internal static class PatchParser
                 SizeInBytes = (long?)element.Attribute("size_in_bytes") ?? 0,
                 PagesPerBlock = (int?)element.Attribute("PAGES_PER_BLOCK") ?? 0,
                 Slot = slotAttr != null ? (int?)slotAttr : null,
+                What = (string?)element.Attribute("what"),
                 Label = (string?)element.Attribute("label")
             };
 

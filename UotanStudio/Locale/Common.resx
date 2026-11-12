@@ -642,6 +642,9 @@ Author: 暮间雾
   <data name="Flash_FolderOnly" xml:space="preserve">
     <value>Select a package, image folder, or HTTP(S) URL.</value>
   </data>
+  <data name="Flash_GptXmlInferred" xml:space="preserve">
+    <value>Inferred GPT XML package for LUN {0} from the partition-table files.</value>
+  </data>
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>images loaded</value>
   </data>

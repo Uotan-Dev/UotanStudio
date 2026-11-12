@@ -642,6 +642,9 @@
   <data name="Flash_FolderOnly" xml:space="preserve">
     <value>请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</value>
   </data>
+  <data name="Flash_GptXmlInferred" xml:space="preserve">
+    <value>已依据分区表文件为 LUN {0} 推断生成 GPT XML 包。</value>
+  </data>
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>个镜像已加载</value>
   </data>

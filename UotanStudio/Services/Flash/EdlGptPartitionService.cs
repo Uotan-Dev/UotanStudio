@@ -31,7 +31,46 @@ internal static class EdlGptPartitionService
 
     /// <summary>The highest LUN number probed by the by-name scan, spanning LUNs zero through seven.
     /// <para>按名扫描时尝试的最高 LUN 编号（0 至 7）。</para></summary>
-    private const int MaxScannedLun = 7;
+    internal const int MaxScannedLun = 7;
+
+    /// <summary>
+    /// Reads the GPT of every LUN the target reports, ordered by LUN; the scan stops at the first LUN whose read
+    /// fails, and an empty result means no region reported a table.
+    /// <para>读取目标上报的每个 LUN 的 GPT（按 LUN 排序）；扫描在首个读取失败的 LUN 处停止，空结果表示没有
+    /// 区域上报表。</para>
+    /// </summary>
+    /// <param name="firehose">The initialized Firehose protocol. <para>已初始化的 Firehose 协议实例。</para></param>
+    /// <param name="partitionEntryLba">Optional override for the entry-array location. <para>可选的条目数组位置覆盖。</para></param>
+    /// <param name="partitionEntryCount">Optional override for the entry-array capacity. <para>可选的条目容量覆盖。</para></param>
+    /// <param name="partitionEntrySize">Optional override for the single-entry size. <para>可选的单条目大小覆盖。</para></param>
+    /// <param name="cancellationToken">Cancels the per-LUN reads. <para>取消逐 LUN 读取。</para></param>
+    /// <returns>One snapshot per readable LUN, ordered by LUN. <para>每个可读 LUN 一份快照，按 LUN 排序。</para></returns>
+    internal static async Task<IReadOnlyList<FirehoseGptSnapshot>> ReadAllLunSnapshotsAsync(
+        FirehoseProtocol firehose, ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(firehose);
+        var snapshots = new List<FirehoseGptSnapshot>();
+        for (var candidate = 0; candidate <= MaxScannedLun; candidate++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            FirehoseGptSnapshot scanned;
+            try
+            {
+                scanned = await firehose.ReadGptWithPartitionEntryOverridesAsync(candidate, partitionEntryLba,
+                    partitionEntryCount, partitionEntrySize, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException
+                and not ObjectDisposedException)
+            {
+                break;
+            }
+
+            snapshots.Add(scanned);
+        }
+
+        return snapshots;
+    }
 
     /// <summary>
     /// Resolves the GPT snapshot holding the named partition: an explicit LUN reads only that LUN,

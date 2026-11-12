@@ -203,6 +203,7 @@ internal static class LocaleKeySets
         "Flash_ClearLog",
         "Flash_LogPlaceholder",
         "Flash_FolderOnly",
+        "Flash_GptXmlInferred",
         "Flash_ImagesLoaded",
         "Flash_EdlPackageImageCopied",
         "Flash_AfterSalesPackage",

@@ -64,6 +64,10 @@ internal sealed class PatchEntry
     /// Gets or sets the partition label name associated with this patch entry.
     /// <para>获取或设置与此 patch 条目关联的分区标签名称。</para>
     /// </summary>
+    /// <summary>Gets or sets the human-readable action description carried by the patch's
+    /// <c>what</c> attribute, when the manifest provides one.
+    /// <para>获取或设置补丁 <c>what</c> 属性携带的人类可读动作描述；清单提供时才有值。</para></summary>
+    public string? What { get; set; }
     public string? Label { get; set; }
 
     /// <summary>
