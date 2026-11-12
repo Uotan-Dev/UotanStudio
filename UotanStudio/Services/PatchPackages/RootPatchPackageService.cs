@@ -252,7 +252,7 @@ public sealed class RootPatchPackageService
                 {
                     LogService.Instance.Write(LogLevel.Warn, "BootPatch",
                         $"Root patch catalog {source.CommandFolderName()} skipped: {DescribeLogDetail(ex.Message)}");
-                    return (IReadOnlyList<RootPatchPackage>)Array.Empty<RootPatchPackage>();
+                    return [];
                 }
             }).ToArray()).ConfigureAwait(false);
         }
@@ -386,7 +386,7 @@ public sealed class RootPatchPackageService
         {
             if (!_catalogs.TryGetValue(source, out var catalog) || !_catalogHasMore.GetValueOrDefault(source))
             {
-                return catalog ?? Array.Empty<RootPatchPackage>();
+                return catalog ?? [];
             }
 
             if (!_catalogMoreLoads.TryGetValue(source, out var pending))
@@ -401,7 +401,7 @@ public sealed class RootPatchPackageService
         await load.WaitAsync(cancellationToken).ConfigureAwait(false);
         lock (_catalogGate)
         {
-            return _catalogs.GetValueOrDefault(source) ?? Array.Empty<RootPatchPackage>();
+            return _catalogs.GetValueOrDefault(source) ?? [];
         }
     }
 
@@ -720,11 +720,10 @@ public sealed class RootPatchPackageService
 
     private static string SanitizeSegment(string value, string fallback)
     {
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(value.Length);
         foreach (var character in value)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 || character is '/' or '\\' or ':' ? '_' : character);
+            builder.Append(PathSearchValues.InvalidFileName.Contains(character) || character is '/' or '\\' or ':' ? '_' : character);
         }
 
         var segment = builder.ToString().Trim();

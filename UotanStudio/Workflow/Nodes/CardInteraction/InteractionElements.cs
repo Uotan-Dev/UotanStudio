@@ -351,7 +351,8 @@ internal static class InteractionElements
     private static Task ExecuteLayoutAsync(InteractionNodeViewModel node, INodeExecutionContext context)
     {
         _ = context;
-        var children = new[] { node.ReadInput("First"), node.ReadInput("Second") }.OfType<InteractionElement>().ToArray();
+        object?[] inputs = [node.ReadInput("First"), node.ReadInput("Second")];
+        var children = inputs.OfType<InteractionElement>().ToArray();
         node.WriteOutput("Component", new InteractionElement
         {
             Id = node.InstanceId,

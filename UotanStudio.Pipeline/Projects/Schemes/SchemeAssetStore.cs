@@ -697,6 +697,8 @@ public sealed class SchemeAssetStore : IDisposable
         return string.Join('/', segments);
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string SanitizeFileName(string? fileName)
     {
         var name = Path.GetFileName(fileName ?? string.Empty);
@@ -707,7 +709,7 @@ public sealed class SchemeAssetStore : IDisposable
             {
                 break;
             }
-            builder.Append(Path.GetInvalidFileNameChars().Contains(character) ? '_' : character);
+            builder.Append(InvalidFileNameChars.Contains(character) ? '_' : character);
         }
         var result = builder.ToString().Trim();
         return result.Length == 0 || result is "." or ".." ? "asset.bin" : result;

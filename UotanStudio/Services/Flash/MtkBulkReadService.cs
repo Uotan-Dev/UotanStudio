@@ -498,7 +498,7 @@ internal static class MtkBulkReadService
     private static string SafeRegionFileName(string regionName)
     {
         if (regionName.Length is 0 or > 126 || regionName is "." or ".."
-            || regionName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            || regionName.AsSpan().ContainsAny(PathSearchValues.InvalidFileName))
         {
             throw new NotSupportedException(
                 $"The download agent reported the region name '{regionName}', which is not a usable file name.");

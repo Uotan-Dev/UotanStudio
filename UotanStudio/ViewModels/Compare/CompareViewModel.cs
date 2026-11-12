@@ -227,15 +227,8 @@ public sealed partial class CompareViewModel : Document, ITool
                 UpdateRowIsSelected(SelectedIndex);
             }
 
-            if (_leftColumn is not null)
-            {
-                _leftColumn.Rows = value;
-            }
-
-            if (_rightColumn is not null)
-            {
-                _rightColumn.Rows = value;
-            }
+            _leftColumn?.Rows = value;
+            _rightColumn?.Rows = value;
         }
     }
 

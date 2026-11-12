@@ -204,7 +204,7 @@ public partial class DeliveryOutputView : UserControl
     internal DeliveryPlan Capture(DeliveryPlan plan)
     {
         OutputImages.CommitEdit();
-        if (_activeDocument is not null) _activeDocument.CaretOffset = ScriptEditor.CaretOffset;
+        _activeDocument?.CaretOffset = ScriptEditor.CaretOffset;
         var files = _model!.Output.Select(i => i.Snapshot()).ToList();
         return plan with
         {
@@ -317,7 +317,7 @@ public partial class DeliveryOutputView : UserControl
     private void OnDocumentSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (DocumentTabs.SelectedItem is not DeliveryScriptDocument document || ReferenceEquals(document, _activeDocument)) return;
-        if (_activeDocument is not null) _activeDocument.CaretOffset = ScriptEditor.CaretOffset;
+        _activeDocument?.CaretOffset = ScriptEditor.CaretOffset;
         _activeDocument = document;
 
         ScriptEditor.Document = document.Document;

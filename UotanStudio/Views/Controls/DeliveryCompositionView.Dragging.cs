@@ -138,7 +138,7 @@ public partial class DeliveryCompositionView
         _isImageDragging = false;
         var pointer = _dragPointer;
         _dragPointer = null;
-        if (DropIndicator is not null) DropIndicator.IsVisible = false;
+        DropIndicator?.IsVisible = false;
         if (OrderedImages is not null)
             foreach (var row in OrderedImages.GetVisualDescendants().OfType<ListBoxItem>()) row.Classes.Remove("dragging");
         if (pointer is not null && pointer.Captured == OrderedImages) pointer.Capture(null);

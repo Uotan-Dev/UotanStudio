@@ -135,13 +135,13 @@ public static class NativeBinCatalog
 
     private static IReadOnlyList<NativeBinUrl> BuildUrls(string official, string fileName)
     {
-        var proxies = new[]
-        {
+        string[] proxies =
+        [
             "https://gh-proxy.com/",
             "https://mirror.ghproxy.com/",
             "https://ghfast.top/",
             "https://ghproxy.net/",
-        };
+        ];
         List<NativeBinUrl> urls = [with(proxies.Length + 1), new(official, IsMirror: false)];
         foreach (var proxy in proxies)
         {

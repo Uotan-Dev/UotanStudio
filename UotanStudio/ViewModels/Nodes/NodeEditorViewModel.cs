@@ -177,9 +177,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         if (connection is not null && !Connections.Contains(connection)) return;
         if (connection is not null) SetSelection([]);
-        if (_selectedConnection is not null) _selectedConnection.IsSelected = false;
+        _selectedConnection?.IsSelected = false;
         _selectedConnection = connection;
-        if (connection is not null) connection.IsSelected = true;
+        connection?.IsSelected = true;
         OnPropertyChanged(nameof(SelectedConnection));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(CanDeleteSelection));

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 
@@ -21,6 +22,8 @@ public static class VisualPluginAssetStore
     private const int BufferSize = 131072;
     private const int MaximumFileNameLength = 255;
     private const int MaximumPublishAttempts = 128;
+
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>Returns the project directory that stores one plugin's resources.
     /// <para>返回存放单个插件资源的工程目录。</para>
@@ -253,11 +256,10 @@ public static class VisualPluginAssetStore
         {
             throw new ArgumentException("The source path has no usable file name.", nameof(sourcePath));
         }
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(name.Length);
         foreach (var character in name)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 || character is '/' or '\\' or ':'
+            builder.Append(InvalidFileNameChars.Contains(character) || character is '/' or '\\' or ':'
                 ? '_'
                 : character);
         }

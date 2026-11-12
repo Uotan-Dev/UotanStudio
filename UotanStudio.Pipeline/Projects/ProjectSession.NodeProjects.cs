@@ -241,7 +241,7 @@ public sealed partial class ProjectSession
         var active = references.FirstOrDefault(dto => dto.IsOpen
             && string.Equals(dto.Name, activeName, StringComparison.OrdinalIgnoreCase))
             ?? references.FirstOrDefault(dto => dto.IsOpen);
-        if (active is not null) active.IsActive = true;
+        active?.IsActive = true;
         return references;
     }
 }

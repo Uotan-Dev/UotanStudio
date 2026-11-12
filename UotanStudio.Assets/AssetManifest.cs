@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 
@@ -5,6 +6,8 @@ namespace UotanStudio.Assets;
 
 internal static class AssetManifest
 {
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     internal const string ManifestResourceName = "assets/manifest.tsv";
 
     private const int ColumnCount = 6;
@@ -180,7 +183,7 @@ internal static class AssetManifest
         {
             if (char.IsControl(character)
                 || character is '/' or '\\' or ':' or '\0'
-                || Array.IndexOf(Path.GetInvalidFileNameChars(), character) >= 0)
+                || InvalidFileNameChars.Contains(character))
             {
                 return false;
             }

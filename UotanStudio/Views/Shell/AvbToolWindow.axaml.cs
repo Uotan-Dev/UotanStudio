@@ -273,7 +273,8 @@ public partial class AvbToolWindow : Window
         try
         {
             await operation();
-            var messages = new[] { model.Status, model.OtaSummary }
+            string[] sources = [model.Status, model.OtaSummary];
+            var messages = sources
                 .Where(message => !string.IsNullOrWhiteSpace(message))
                 .Distinct(StringComparer.Ordinal);
             var message = string.Join(Environment.NewLine + Environment.NewLine, messages);

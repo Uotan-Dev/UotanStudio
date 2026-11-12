@@ -87,7 +87,7 @@ public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
                 $"The private key at '{keyPath}' could not be loaded as an RSA private key.  私钥无法解析为 RSA 私钥。");
 
         var written = await Task.Run(() => AvbSigner.SignVbmetaAsync(vbmetaPath, key, outputPath,
-            Array.Empty<AvbHashDescriptor>(), context.CancellationToken), context.CancellationToken).ConfigureAwait(false);
+            [], context.CancellationToken), context.CancellationToken).ConfigureAwait(false);
 
         if (!written.Success)
         {

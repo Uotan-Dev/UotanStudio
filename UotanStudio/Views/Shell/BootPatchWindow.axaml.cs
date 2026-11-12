@@ -1118,11 +1118,10 @@ public partial class BootPatchWindow : Window
 
     private static string SanitizeToken(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
         var builder = new System.Text.StringBuilder(value.Length);
         foreach (var character in value)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 || char.IsWhiteSpace(character) ? '-' : character);
+            builder.Append(PathSearchValues.InvalidFileName.Contains(character) || char.IsWhiteSpace(character) ? '-' : character);
         }
 
         var token = builder.ToString().Trim('-', '.');

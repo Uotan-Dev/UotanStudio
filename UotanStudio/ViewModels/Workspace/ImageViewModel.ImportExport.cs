@@ -119,11 +119,8 @@ internal partial class ImageViewModel
             StatusText = LanguageService.Instance.GetString("ImageView_OperationDone");
             var history = CreateOutputOperation(HistoryOperationKind.ImportImages,
                 $"Import {imported.Count} image(s)", imported.Select(e => context.ResolvePath(e.RelativePath)!));
-            if (history is not null)
-            {
-                history.Count = imported.Count;
-                history.RelativePaths = [.. imported.Select(e => e.RelativePath)];
-            }
+            history?.Count = imported.Count;
+            history?.RelativePaths = [.. imported.Select(e => e.RelativePath)];
             OperationHistoryService.Instance.Record(
                 $"Import {imported.Count} image(s)", history,
                 () =>

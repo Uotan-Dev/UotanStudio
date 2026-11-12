@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Workflow.Nodes;
 
 /// <summary>
@@ -18,15 +20,16 @@ internal static class NodePortTypeAliases
     /// Retired port type names mapped to the type that absorbed them.
     /// <para>已退役端口类型名称到吸收它的类型的映射。</para>
     /// </summary>
-    private static readonly Dictionary<string, NodePortType> Retired = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["PatchWorkspace"] = NodePortType.Data,
-        ["PatchAsset"] = NodePortType.Data,
-        ["ImageEdits"] = NodePortType.Data,
-        ["Record"] = NodePortType.Data,
-        ["List"] = NodePortType.Data,
-        ["UiForm"] = NodePortType.UiComponent
-    };
+    private static readonly FrozenDictionary<string, NodePortType> Retired =
+        new Dictionary<string, NodePortType>
+        {
+            ["PatchWorkspace"] = NodePortType.Data,
+            ["PatchAsset"] = NodePortType.Data,
+            ["ImageEdits"] = NodePortType.Data,
+            ["Record"] = NodePortType.Data,
+            ["List"] = NodePortType.Data,
+            ["UiForm"] = NodePortType.UiComponent,
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Parses a persisted port type name, resolving retired names to the type that absorbed them.

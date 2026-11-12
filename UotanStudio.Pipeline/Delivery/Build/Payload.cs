@@ -136,7 +136,7 @@ public static class DeliveryPayloadBuilder
         CancellationToken token, IDeliverySigningKeyProvider? signingKeys = null)
     {
         Validate(plan);
-        var fileHash = Array.Empty<byte>();
+        byte[] fileHash = [];
         long fileSize = 0;
         await Task.Run(async () =>
         {

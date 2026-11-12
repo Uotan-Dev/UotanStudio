@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using UotanStudio.Compress;
 
 namespace UotanStudio.DD.Images;
@@ -8,18 +9,9 @@ namespace UotanStudio.DD.Images;
 /// </summary>
 public static class ImageFormatResolver
 {
-    private static readonly HashSet<string> RawExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".img",
-        ".iso",
-        ".bin",
-        ".raw",
-        ".dsk",
-        ".wic",
-        ".hddimg",
-        ".sdcard",
-        ".rpi-sdimg",
-    };
+    private static readonly FrozenSet<string> RawExtensions =
+        FrozenSet.Create(StringComparer.OrdinalIgnoreCase,
+            ".img", ".iso", ".bin", ".raw", ".dsk", ".wic", ".hddimg", ".sdcard", ".rpi-sdimg");
 
     /// <summary>
     /// Resolves the format of <paramref name="path"/>.

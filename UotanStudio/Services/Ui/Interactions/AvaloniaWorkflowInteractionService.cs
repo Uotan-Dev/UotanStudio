@@ -90,11 +90,8 @@ public sealed class AvaloniaWorkflowInteractionService : IWorkflowInteractionSer
         finally
         {
             window?.Close();
-            if (_embeddedHost is not null)
-            {
-                _embeddedHost.Content = previous;
-                _embeddedHost.IsVisible = previous is not null;
-            }
+            _embeddedHost?.Content = previous;
+            _embeddedHost?.IsVisible = previous is not null;
         }
     }
 }

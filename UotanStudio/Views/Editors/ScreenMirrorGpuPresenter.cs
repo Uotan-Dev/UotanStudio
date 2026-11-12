@@ -423,7 +423,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
         MirrorTrace.Write($"detach core host={host?.GetHashCode():x8} surface={surface is not null} size={width}x{height} gen={_recovery.Generation}");
         if (host is not null) ElementComposition.SetElementChildVisual(host, null);
-        if (visual is not null) visual.Visible = false;
+        visual?.Visible = false;
         surface?.Dispose();
         ReleaseImports();
         if (Dispatcher.UIThread.CheckAccess()) EvaluateCompositionCoverage();

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Avalonia.Controls;
 using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Services;
@@ -107,8 +108,8 @@ public sealed partial class FlashViewModel
         "ClearLogButton"
     ];
 
-    internal static readonly HashSet<string> AlwaysEnabledControls =
-        new(AlwaysEnabledControlNames, StringComparer.Ordinal);
+    internal static readonly FrozenSet<string> AlwaysEnabledControls =
+        AlwaysEnabledControlNames.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// The device and page snapshot every control's own condition is evaluated against.

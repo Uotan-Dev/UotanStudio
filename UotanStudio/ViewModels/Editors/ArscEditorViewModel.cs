@@ -212,19 +212,19 @@ public partial class ArscEditorViewModel : Document, ITool, ISearchableDocument,
 
         switch (value.Payload)
         {
-            case ResPackage pkg:
+            case { Value: ResPackage pkg }:
                 AddDetail("Package", $"{pkg.Name} (0x{pkg.Id:x2})");
                 AddDetail("Type tables", pkg.Types.Count.ToString());
                 break;
 
-            case ResType type:
+            case { Value: ResType type }:
                 AddDetail("Type ID", "0x" + type.Id.ToString("x2"));
                 AddDetail("Configuration", type.ConfigDescription);
                 AddDetail("Config hex", type.ConfigHex);
                 AddDetail("Entries", type.Entries.Count.ToString());
                 break;
 
-            case ResEntryEntry entry:
+            case { Value: ResEntryEntry entry }:
                 ShowEntryDetails(entry);
                 break;
         }
@@ -403,13 +403,13 @@ public partial class ArscEditorViewModel : Document, ITool, ISearchableDocument,
         {
             switch (node.Payload)
             {
-                case ResPackage package:
+                case { Value: ResPackage package }:
                     _packageNodes[package] = node;
                     break;
-                case ResType type:
+                case { Value: ResType type }:
                     _typeNodes[type] = node;
                     break;
-                case ResEntryEntry entry:
+                case { Value: ResEntryEntry entry }:
                     _entryNodes[entry.Entry] = node;
                     break;
             }

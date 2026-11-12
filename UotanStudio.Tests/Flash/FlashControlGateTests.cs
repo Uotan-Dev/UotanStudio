@@ -620,9 +620,9 @@ public sealed class FlashControlGateTests
     [Fact]
     public void AlwaysEnabledControls_CoverTheLogAreaAndNeverTheCancelEntry()
     {
-        Assert.Contains("LogBox", FlashViewModel.AlwaysEnabledControls);
-        Assert.Contains("ClearLogButton", FlashViewModel.AlwaysEnabledControls);
-        Assert.DoesNotContain("CancelFlashButton", FlashViewModel.AlwaysEnabledControls);
+        Assert.Contains("LogBox", (IEnumerable<string>)FlashViewModel.AlwaysEnabledControls);
+        Assert.Contains("ClearLogButton", (IEnumerable<string>)FlashViewModel.AlwaysEnabledControls);
+        Assert.DoesNotContain("CancelFlashButton", (IEnumerable<string>)FlashViewModel.AlwaysEnabledControls);
     }
 
     [Fact]
