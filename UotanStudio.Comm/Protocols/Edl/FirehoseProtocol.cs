@@ -249,11 +249,13 @@ public class FirehoseConfiguration
     public int ConfigureFirstAttemptTimeoutMs { get; set; } = EdlConstants.ConfigureFirstAttemptTimeoutMs;
 
     /// <summary>
-    /// Gets or sets the budget in milliseconds for observing transport disconnection after
-    /// a power ACK (0 disables observation). Disconnection does not prove successful boot.
-    /// <para>获取或设置在 power ACK 之后观察传输断开的预算时间（毫秒），0 表示禁用观察。断开不能证明启动成功。</para>
+    /// Gets or sets the budget in milliseconds for draining the link and observing transport disconnection
+    /// after a power ACK. Values at or below zero keep a single bounded read, which the programmer needs to
+    /// finish the reset. Disconnection does not prove successful boot.
+    /// <para>获取或设置在 power ACK 之后排空链路并观察传输断开的预算时间（毫秒）。小于等于零时仍保留一次
+    /// 有界读取，因为 programmer 需要它才能完成复位。断开不能证明启动成功。</para>
     /// </summary>
-    /// <value>The disconnection-observation window in milliseconds; 0 skips the wait. <para>断开观察窗口（毫秒）；0 表示跳过等待。</para></value>
+    /// <value>The disconnection-observation window in milliseconds. <para>断开观察窗口（毫秒）。</para></value>
     public int PowerResetVerifyTimeoutMs { get; set; } = EdlConstants.PowerResetVerifyTimeoutMs;
 
     /// <summary>
@@ -436,7 +438,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs, perAttemptTimeoutMs,
                     tolerateResponseTimeout: true);
             }
-            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout
+                or EdlErrorCode.WritePortTimeout)
             {
                 lastTimeout = ex;
                 DiscardPendingResponseBytes();
@@ -1076,6 +1079,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         catch (TimeoutException ex)
         {
             throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+        }
+        if (written == 0)
+        {
+            // Nothing reached the wire, so the send is replayable: report it as the timeout it was instead of an
+            // invalid parameter, which would also escape every caller's retry-on-timeout handling.
+            // 没有任何字节上线，发送可以重放：如实报为超时，而不是无效参数——后者会逃逸所有调用方的超时重试处理。
+            throw new EdlException(EdlErrorCode.WritePortTimeout,
+                $"The transport accepted 0 of {data.Length} bytes; the write timed out before any packet was acknowledged.");
         }
         if (written != data.Length)
         {

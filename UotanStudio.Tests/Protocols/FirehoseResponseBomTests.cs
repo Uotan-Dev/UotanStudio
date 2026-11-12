@@ -116,9 +116,10 @@ public class FirehoseResponseBomTests
     }
 
     /// <summary>
-    /// The configuration the scripted transports use: the fake transport never drops the connection, so the
-    /// real 30-second disconnection window would only ever be waited out in full.
-    /// <para>脚本传输用法的配置：假传输不会断开连接，因此真实的 30 秒断开观察窗口在这里只会被整段白等。</para>
+    /// The configuration the scripted transports use: the fake transport reports read timeouts and never drops
+    /// the connection, so the real 30-second disconnection window would only ever be waited out in full.
+    /// <para>脚本传输用法的配置：假传输只报读取超时且不会断开连接，因此真实的 30 秒断开观察窗口在这里只会
+    /// 被整段白等。</para>
     /// </summary>
     /// <returns>A configuration with a shortened disconnection-observation budget. <para>断开观察预算被缩短的配置。</para></returns>
     private static FirehoseConfiguration ScriptedPowerConfiguration() => new() { PowerResetVerifyTimeoutMs = 50 };

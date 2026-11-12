@@ -24,10 +24,13 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds the &lt;power&gt; XML command. No DelayInSeconds is emitted: on real hardware the
-    /// delay attribute made devices hang after "Calling handler for power" without resetting.
-    /// <para>构建 &lt;power&gt; XML 命令。不输出 DelayInSeconds：真机上带 delay 属性时设备
-    /// 只回 "Calling handler for power" 后挂起、复位永不执行。</para>
+    /// Builds the self-closing &lt;power&gt; XML command with the <c>DelayInSeconds</c> attribute the Firehose
+    /// schema defines. Real programmers reject an explicit closing tag with an element body, answering
+    /// "Failed to parse xml" and never calling the power handler; the self-closing form is acknowledged and
+    /// executes the requested action.
+    /// <para>构建自闭合的 &lt;power&gt; XML 命令，并携带 Firehose 规范定义的 <c>DelayInSeconds</c> 属性。真机
+    /// programmer 会拒绝带元素内容的显式闭合标签，回 "Failed to parse xml" 且不调用 power 处理器；自闭合形式
+    /// 才会被确认并执行所请求的电源动作。</para>
     /// </summary>
     /// <param name="option">The reboot option. <para>复位选项。</para></param>
     /// <returns>The power XML string. <para>电源 XML 字符串。</para></returns>
@@ -44,7 +47,7 @@ public static partial class FirehoseXmlBuilder
         var sb = new StringBuilder();
         sb.Append(EdlConstants.XmlHeader);
         sb.Append(EdlConstants.DataOpen);
-        sb.Append($"<power value=\"{valueStr}\" />\n");
+        sb.Append($"<power value=\"{valueStr}\" DelayInSeconds=\"1\" />\n");
         sb.Append(EdlConstants.DataClose);
         return sb.ToString();
     }

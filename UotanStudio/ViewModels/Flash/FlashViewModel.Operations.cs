@@ -4396,9 +4396,8 @@ public sealed partial class FlashViewModel
 
 
     /// <summary>
-    /// Resets the selected EDL device over firehose after a best-effort bootable-storage setup; the
-    /// user must confirm before the command is sent.
-    /// <para>经 firehose 复位所选 EDL 设备；复位前会尽力设置可引导存储，执行前需用户确认。</para>
+    /// Resets the selected EDL device over firehose; the user must confirm before the command is sent.
+    /// <para>经 firehose 复位所选 EDL 设备；执行前需用户确认。</para>
     /// </summary>
     internal async void OnEdlResetClick(object? sender, RoutedEventArgs e)
         => await RunEdlPowerRequestAsync("Flash_EdlReset", "Flash_EdlResetConfirm", "Flash_EdlResetDone",

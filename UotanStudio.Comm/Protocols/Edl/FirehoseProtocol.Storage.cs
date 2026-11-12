@@ -1,4 +1,6 @@
-﻿namespace UotanStudio.Comm.Protocols.Edl;
+﻿using UotanStudio.Comm.Transports.Abstractions;
+
+namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>
 /// Firehose protocol health-probe, power and storage-management operations.
@@ -6,6 +8,8 @@
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
+    private const int MinimumPowerObservationSliceMs = 1000;
+
     private volatile FirehosePowerStatus _powerStatus;
 
     /// <summary>
@@ -34,8 +38,10 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>Resets the device (reboot into the system).<para>复位设备（重启进入系统）。</para></summary>
     /// <remarks>
-    /// A best-effort &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only for the storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops the sequence.
-    /// <para>复位前会尽力发送 &lt;setbootablestoragedrive&gt;（UFS→1，eMMC→0），且仅针对拥有可引导逻辑 单元的存储类型：NAND、SPI NOR 与未探测到的存储完全跳过该准备命令。该准备命令返回 NAK 可以容忍， 但结果不确定的响应会中止整个序列。</para>
+    /// The command carries no boot-drive preparation; callers that need a specific bootable unit send
+    /// <see cref="SetBootableStorageDriveAsync"/> separately.
+    /// <para>该命令不带启动驱动器准备；需要指定可引导单元的调用方应单独调用
+    /// <see cref="SetBootableStorageDriveAsync"/>。</para>
     /// </remarks>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
@@ -63,8 +69,13 @@ public sealed partial class FirehoseProtocol
     /// <summary>Sends a &lt;power&gt; command and returns only its actual ACK or NAK.
     /// <para>发送 &lt;power&gt; 命令，且只返回其真实的 ACK 或 NAK。</para></summary>
     /// <remarks>
-    /// An ACK retires the session even if transport disconnection cannot be observed. Missing, malformed or raw-mode responses fail with an uncertain outcome; they are never converted to a successful acknowledgement.
-    /// <para>即使无法观测到传输层断开，ACK 也会使本会话退役。缺失、格式错误或处于原始模式的响应会以 不确定结果失败，绝不被转换成成功确认。</para>
+    /// An ACK retires the session and keeps the link drained while the target executes the reset; the observed
+    /// disconnection is reported through <see cref="LastPowerStatus"/> but never claims a successful boot.
+    /// Missing, malformed, timed-out or raw-mode responses fail with an uncertain outcome and are never converted
+    /// into a successful acknowledgement.
+    /// <para>ACK 会使本会话退役，并在目标执行复位期间持续排空链路；观测到的断开只通过
+    /// <see cref="LastPowerStatus"/> 如实上报，不声称已成功引导。缺失、格式错误、超时或处于原始模式的响应
+    /// 都以结果不确定失败，绝不被转换成成功确认。</para>
     /// </remarks>
     /// <param name="option">The reboot option.<para>复位选项。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
@@ -85,30 +96,6 @@ public sealed partial class FirehoseProtocol
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(Configuration.PowerResponseTimeoutMs);
         ArgumentOutOfRangeException.ThrowIfNegative(Configuration.PowerResetVerifyTimeoutMs);
-
-        if (option == RebootOption.Reset)
-        {
-            int? bootableValue = Configuration.StorageType switch
-            {
-                FirehoseStorageType.Ufs => 1,
-                FirehoseStorageType.Emmc => 0,
-                _ => null
-            };
-            if (bootableValue is { } value)
-            {
-                var preparation = await SetBootableStorageDriveCoreAsync(value, cancellationToken).ConfigureAwait(false);
-                if (preparation.IsRawMode || (!preparation.IsAck && !preparation.IsNak))
-                {
-                    _faulted = true;
-                    throw new FirehoseException("Invalid response to boot-drive preparation; reset was not sent.");
-                }
-
-                if (preparation.IsNak)
-                {
-                    Log("Target rejected boot-drive preparation; continuing with the requested reset.");
-                }
-            }
-        }
 
         var xml = FirehoseXmlBuilder.BuildPower(option);
         cancellationToken.ThrowIfCancellationRequested();
@@ -137,20 +124,8 @@ public sealed partial class FirehoseProtocol
 
         _powerStatus = FirehosePowerStatus.Acknowledged;
         _faulted = true;
-        var start = Environment.TickCount64;
-        var budget = Configuration.PowerResetVerifyTimeoutMs;
-        while (_transport.IsConnected && Environment.TickCount64 - start < budget)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            cancellationToken.ThrowIfCancellationRequested();
-            var remaining = budget - (Environment.TickCount64 - start);
-            if (remaining > 0)
-            {
-                await Task.Delay((int)Math.Min(25, remaining), cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        if (!_transport.IsConnected)
+        if (await ObservePowerDisconnectAsync(Configuration.PowerResetVerifyTimeoutMs, cancellationToken)
+            .ConfigureAwait(false))
         {
             _powerStatus = FirehosePowerStatus.AcknowledgedAndDisconnected;
         }
@@ -161,6 +136,56 @@ public sealed partial class FirehoseProtocol
         return response;
     }
 
+    /// <summary>
+    /// Keeps one bounded read outstanding after a power ACK until the transport reports a disconnect or the
+    /// observation budget ends, so the programmer can emit its trailing logs and execute the reset. Polling
+    /// <see cref="ICommTransport.IsConnected"/> alone is not observation: on Linux a lost USB device only shows up
+    /// as a failed read, and a host that stops reading leaves programmers blocked before the reset.
+    /// <para>在 power ACK 之后保持一次有界读取，直到传输层报告断开或观察预算耗尽，使 programmer 能发完尾随日志
+    /// 并执行复位。只轮询 <see cref="ICommTransport.IsConnected"/> 不构成观察：Linux 上 USB 设备丢失只会表现为
+    /// 读取失败，而主机停止读取会让 programmer 在复位之前一直阻塞。</para>
+    /// </summary>
+    /// <param name="budgetMs">Observation budget in milliseconds; values at or below zero keep a single slice.
+    /// <para>观察预算（毫秒）；小于等于零时仍保留一个读取切片。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns><see langword="true"/> when a transport loss was observed. <para>观测到传输断开时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> ObservePowerDisconnectAsync(int budgetMs, CancellationToken cancellationToken)
+    {
+        var budget = Math.Max(0, budgetMs);
+        var start = Environment.TickCount64;
+        var buffer = new byte[EdlConstants.ProbeReadChunkBytes];
+        var firstRead = true;
+        while (_transport.IsConnected && (firstRead || Environment.TickCount64 - start < budget))
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            var remaining = Math.Max(1, budget - (Environment.TickCount64 - start));
+            var readBudget = firstRead ? Math.Max(remaining, MinimumPowerObservationSliceMs) : remaining;
+            var slice = (int)Math.Max(1, Math.Min(_cmdTimeoutMs, readBudget));
+            firstRead = false;
+            try
+            {
+                await _transport.ReadAsync(buffer, 0, buffer.Length, slice, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(1, cancellationToken).ConfigureAwait(false);
+            }
+            catch (IOException ex)
+            {
+                Log($"The transport disconnected after the power ACK: {ex.Message}");
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                await Task.Delay((int)Math.Min(25, remaining), cancellationToken).ConfigureAwait(false);
+            }
+            catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.ReadPortTimeout or EdlErrorCode.TransportTimeout)
+            {
+                await Task.Delay((int)Math.Min(25, remaining), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return !_transport.IsConnected;
+    }
+
     private async Task<FirehoseResponse> SetBootableStorageDriveCoreAsync(int value, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
@@ -169,11 +194,10 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Sets which storage drive the target boots from via &lt;setbootablestoragedrive&gt;.
-    /// Unlike the best-effort preparation inside <see cref="PowerAsync"/>, this surfaces the real device
-    /// acknowledgement and rejects a NAK.
-    /// <para>通过 &lt;setbootablestoragedrive&gt; 设置目标从哪个存储驱动器引导。不同于
-    /// <see cref="PowerAsync"/> 内部尽力而为的准备命令，本方法会返回设备真实确认并对 NAK 予以拒绝。</para>
+    /// Sets which storage drive the target boots from via &lt;setbootablestoragedrive&gt;, independently of any
+    /// power command, and surfaces the real device acknowledgement while rejecting a NAK.
+    /// <para>通过 &lt;setbootablestoragedrive&gt; 独立于电源命令设置目标从哪个存储驱动器引导；本方法会返回设备
+    /// 真实确认并对 NAK 予以拒绝。</para>
     /// </summary>
     /// <param name="value">The bootable storage drive number; UFS boot LUN 1 and eMMC LUN 0 are the common
     /// values, and the accepted range is 0 through 255. <para>可引导存储驱动器编号；常见值为 UFS 引导 LUN 1
