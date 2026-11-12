@@ -40,8 +40,11 @@ internal static class ServiceRegistration
 {
     /// <summary>
     /// Adds the application and UI services to a service collection using explicit factories; the
-    /// supplied monitor and window service are the instances every resolution returns.
-    /// <para>使用显式工厂把应用服务与 UI 服务加入服务集合；传入的监视器与窗口服务就是每次解析返回的实例。</para>
+    /// supplied monitor and window service are the instances every resolution returns. Static facade
+    /// registrations use their non-resolving defaults, so resolving one from the container never asks
+    /// that facade to resolve itself through <see cref="ServiceHub"/> again.
+    /// <para>使用显式工厂把应用服务与 UI 服务加入服务集合；传入的监视器与窗口服务就是每次解析返回的实例。
+    /// 静态门面注册使用不解析容器的默认实例，避免容器解析门面时门面又经 <see cref="ServiceHub"/> 解析自身。</para>
     /// </summary>
     /// <param name="services">The collection receiving the registrations. <para>接收注册的服务集合。</para></param>
     /// <param name="monitor">The device monitor owned by the composition root. <para>由组合根持有的设备监视器。</para></param>
@@ -68,10 +71,10 @@ internal static class ServiceRegistration
         services.AddTransient<DiskFlashViewModel>(sp => new DiskFlashViewModel(
             sp.GetService<Services.Flash.IDiskFlashService>(),
             sp.GetService<UiAbstractions.IDiskFlashDialogs>()));
-        services.AddSingleton<ILocalizer>(_ => LanguageService.Instance);
-        services.AddSingleton<LanguageService>(_ => LanguageService.Instance);
-        services.AddSingleton<IUnifiedLog>(_ => LogService.Instance);
-        services.AddSingleton<LogService>(_ => LogService.Instance);
+        services.AddSingleton<ILocalizer>(_ => LanguageService.Default);
+        services.AddSingleton<LanguageService>(_ => LanguageService.Default);
+        services.AddSingleton<IUnifiedLog>(_ => LogService.Default);
+        services.AddSingleton<LogService>(_ => LogService.Default);
         if (monitor is not null)
         {
             services.AddSingleton<DeviceMonitorService>(_ => monitor);
@@ -84,8 +87,8 @@ internal static class ServiceRegistration
         services.AddSingleton<McpExposureService>(_ => McpExposureService.Instance);
         services.AddSingleton<McpClientConnectionService>(_ => McpClientConnectionService.Instance);
         services.AddSingleton<IFlashService>(_ => FlashService.Default);
-        services.AddSingleton<ProjectOperationsService>(_ => ProjectOperationsService.Instance);
-        services.AddSingleton<SettingsPersistenceService>(_ => SettingsPersistenceService.Instance);
+        services.AddSingleton<ProjectOperationsService>(_ => ProjectOperationsService.Default);
+        services.AddSingleton<SettingsPersistenceService>(_ => SettingsPersistenceService.Default);
         services.AddSingleton<BinaryDiffService>(_ => BinaryDiffService.Instance);
         services.AddSingleton<FolderCompareService>(_ => FolderCompareService.Instance);
         services.AddSingleton<TextDiffService>(_ => TextDiffService.Instance);

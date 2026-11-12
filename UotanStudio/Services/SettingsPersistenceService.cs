@@ -713,6 +713,14 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
+    /// Gets the lazy default instance without resolving the container, so a registration factory can
+    /// return it without re-entering <c>Instance</c> or the service provider.
+    /// <para>获取不解析容器的惰性默认实例，使注册工厂返回它时不会重新进入 <c>Instance</c> 或服务提供程序。</para>
+    /// </summary>
+    /// <value>The shared default instance. <para>共享的默认实例。</para></value>
+    internal static SettingsPersistenceService Default => LazyInstance.Value;
+
+    /// <summary>
     /// Gets the full path of the settings file.
     /// <para>获取设置文件的完整路径。</para>
     /// </summary>

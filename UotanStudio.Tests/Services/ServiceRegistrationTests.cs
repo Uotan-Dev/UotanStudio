@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Service container")]
 public sealed class ServiceRegistrationTests
 {
     [Fact]
@@ -62,6 +63,43 @@ public sealed class ServiceRegistrationTests
     }
 
     [Fact]
+    public void Register_InitializedHub_EveryRegistrationResolvesWithoutSelfLookup()
+    {
+        ServiceHub.Reset();
+        var services = new ServiceCollection();
+        ServiceRegistration.Register(services, monitor: null, NullWindowService.Instance);
+        using var provider = ServiceRegistration.BuildProvider(services);
+        try
+        {
+            ServiceHub.Initialize(provider);
+            var failures = new List<string>();
+            foreach (var descriptor in services)
+            {
+                try
+                {
+                    _ = provider.GetRequiredService(descriptor.ServiceType);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{descriptor.ServiceType.FullName}: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            Assert.True(failures.Count == 0,
+                "Every registered service must resolve with the hub initialized:\n" + string.Join("\n", failures));
+            Assert.Same(LanguageService.Instance, provider.GetRequiredService<LanguageService>());
+            Assert.Same(LogService.Instance, provider.GetRequiredService<LogService>());
+            Assert.Same(ProjectOperationsService.Instance, provider.GetRequiredService<ProjectOperationsService>());
+            Assert.Same(SettingsPersistenceService.Instance,
+                provider.GetRequiredService<SettingsPersistenceService>());
+        }
+        finally
+        {
+            ServiceHub.Reset();
+        }
+    }
+
+    [Fact]
     public void ServiceHub_Uninitialized_TryGetReturnsNullAndFacadesFallBack()
     {
         ServiceHub.Reset();
@@ -100,3 +138,6 @@ public sealed class ServiceRegistrationTests
         }
     }
 }
+
+[CollectionDefinition("Service container", DisableParallelization = true)]
+public sealed class ServiceContainerCollection;
