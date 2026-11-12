@@ -22,7 +22,7 @@ public sealed class ScrcpyServerOptions
     /// <para>赋值了不属于点分十进制形式的值。</para></exception>
     public string ServerVersion
     {
-        get => _serverVersion;
+        get;
         init
         {
             if (value.Length is 0 or > 16 || !value.All(c => char.IsAsciiDigit(c) || c == '.') || !value.Contains('.', StringComparison.Ordinal))
@@ -30,11 +30,9 @@ public sealed class ScrcpyServerOptions
                 throw new ArgumentException($"'{value}' is not a dotted decimal server version. '{value}' 不是点分十进制的服务端版本。", nameof(ServerVersion));
             }
 
-            _serverVersion = value;
+            field = value;
         }
-    }
-
-    private string _serverVersion = "5.0.1";
+    } = "5.0.1";
 
     /// <summary>Random session identifier shared with the socket name.
     /// <para>与 socket 名称共享的随机会话 ID。</para></summary>
