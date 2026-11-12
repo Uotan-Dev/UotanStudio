@@ -156,8 +156,8 @@ internal static class UsbDeviceIdentity
         var serial = info.SerialNumber ?? string.Empty;
         var devicePath = info.DevicePath ?? string.Empty;
 
-        return string.Join("|", new[]
-        {
+        return string.Join("|",
+        [
             info.ApiName,
             info.SourceApiKind.ToString(),
             info.VendorId.ToString("X4"),
@@ -167,7 +167,7 @@ internal static class UsbDeviceIdentity
             FormatHexByte(info.InterfaceProtocol),
             serial,
             devicePath
-        });
+        ]);
     }
 
     /// <summary>
@@ -183,14 +183,14 @@ internal static class UsbDeviceIdentity
         var serial = string.IsNullOrEmpty(info.SerialNumber) || info.SerialNumber == "UNKNOWN"
             ? info.ApiName + ":" + NormalizeInterfacePath(info.DevicePath) : info.SerialNumber;
 
-        return string.Join("|", new[]
-        {
+        return string.Join("|",
+        [
             info.VendorId.ToString("X4"),
             info.ProductId.ToString("X4"),
             FormatHexByte(info.InterfaceClass),
             FormatHexByte(info.InterfaceSubClass),
             serial
-        });
+        ]);
     }
 
     /// <summary>

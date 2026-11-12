@@ -1,3 +1,4 @@
+using System.Buffers;
 using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -363,10 +364,12 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
     private byte[] BuildFileInitPayload(string remotePath) =>
         Utf8String.Format($"{(Compress ? "-z " : "")}\"{remotePath}\" .");
 
+    private static readonly SearchValues<char> ForbiddenPathChars = SearchValues.Create('\0', '\r', '\n', '"');
+
     internal static void ValidatePath(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (path[0] != '/' || path.Any(c => c is '\0' or '\r' or '\n' or '"'))
+        if (path[0] != '/' || path.AsSpan().ContainsAny(ForbiddenPathChars))
             throw new ArgumentException("An absolute HDC path without quotes or control characters is required.", nameof(path));
     }
 

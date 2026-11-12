@@ -675,7 +675,7 @@ internal partial class LibUsbDevice : UsbDevice
             }
 
             var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-            var zero = Array.Empty<byte>();
+            byte[] zero = [];
             var errorCode = _writer.Write(zero, 0, 0, ToLibusbTimeout(effectiveTimeoutMs), out _);
             if (errorCode == Error.NoDevice)
             {

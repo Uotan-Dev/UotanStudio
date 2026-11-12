@@ -61,9 +61,17 @@ internal sealed class AdbDeviceServices(AdbConnection connection) : IAdbDeviceSe
     /// <para>shell 流仍打开时读取超时。</para></exception>
     public string GetProp(string key)
     {
-        if (string.IsNullOrEmpty(key) || key.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-' and not '@' and not ':'))
+        if (string.IsNullOrEmpty(key))
         {
             throw new ArgumentException("The property key contains characters outside the allowed set.", nameof(key));
+        }
+
+        foreach (var c in key)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-' and not '@' and not ':')
+            {
+                throw new ArgumentException("The property key contains characters outside the allowed set.", nameof(key));
+            }
         }
 
         var shell = new AdbShellClient(_connection, $"getprop {key}");

@@ -24,7 +24,7 @@ internal static class HdcCapabilities
         using var output = new MemoryStream();
         foreach (var (tag, value) in values)
         {
-            if (tag.Length is 0 or > 16 || tag.Any(c => c is < ' ' or > '~'))
+            if (tag.Length is 0 or > 16 || tag.AsSpan().IndexOfAnyExceptInRange(' ', '~') >= 0)
             {
                 throw new ArgumentException("HDC capability tags must be 1-16 ASCII characters.", nameof(values));
             }

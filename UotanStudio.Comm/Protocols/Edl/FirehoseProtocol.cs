@@ -603,8 +603,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     private void AdoptStorageTypeFromNak(FirehoseResponse response, IReadOnlyList<string> targetLogs,
         HashSet<FirehoseStorageType> attemptedStorageTypes)
     {
-        var candidates = new[] { response["MemoryName"], response.RawValue, response.RawXml }
-            .Concat(targetLogs);
+        string?[] responses = [response["MemoryName"], response.RawValue, response.RawXml];
+        var candidates = responses.Concat(targetLogs);
         foreach (var candidate in candidates)
         {
             if (candidate is null || !TryMatchRefusedStorageType(candidate, out var refused)

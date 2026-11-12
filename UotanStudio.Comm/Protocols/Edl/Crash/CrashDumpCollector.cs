@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 
@@ -183,10 +184,11 @@ public sealed class CrashDumpCollector
         return builder.ToString();
     }
 
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string MakeSafeFileName(string name)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var safe = new string(name.Select(character => invalid.Contains(character) ? '_' : character).ToArray());
+        var safe = new string(name.Select(character => InvalidFileNameChars.Contains(character) ? '_' : character).ToArray());
         return safe.Length == 0 ? "region" : safe;
     }
 

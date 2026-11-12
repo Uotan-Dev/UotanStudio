@@ -173,7 +173,7 @@ internal static class WinUsbInventoryCache
         IReadOnlyList<Guid> interfaceGuids)
     {
         ArgumentNullException.ThrowIfNull(interfaceGuids);
-        Update(instanceId, (ref Record record) => record = record with
+        Update(instanceId, (ref record) => record = record with
         {
             VendorId = vendorId != 0 ? vendorId : record.VendorId,
             ProductId = productId != 0 ? productId : record.ProductId,
@@ -217,7 +217,7 @@ internal static class WinUsbInventoryCache
         Guid? containerId,
         string backendKind)
     {
-        Update(instanceId, (ref Record record) => record = record with
+        Update(instanceId, (ref record) => record = record with
         {
             VendorId = vendorId != 0 ? vendorId : record.VendorId,
             ProductId = productId != 0 ? productId : record.ProductId,

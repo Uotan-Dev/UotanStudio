@@ -339,7 +339,7 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
             if (!package.GetProperty("deviceType").EnumerateArray().Any(t => t.GetString() == deviceType)) continue;
             if (package.TryGetProperty("deliveryWithInstall", out var delivery) && !delivery.GetBoolean()) continue;
             var name = package.GetProperty("name").GetString() ?? throw new InvalidDataException("Missing APP module name.");
-            if (name.Length == 0 || name.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')) || name.Contains("..", StringComparison.Ordinal))
+            if (name.Length == 0 || !HasOnlyModuleNameChars(name) || name.Contains("..", StringComparison.Ordinal))
                 throw new InvalidDataException("Unsafe APP module name.");
             var entry = archive.Entries.SingleOrDefault(e => e.FullName == name + ".hap" || e.FullName == name + ".hsp")
                 ?? throw new InvalidDataException("Missing APP module: " + name);
@@ -355,8 +355,11 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
     internal static void ValidateOptions(string options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        if (options.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is ' ' or '-' or '_' or '.')))
-            throw new ArgumentException("Invalid bundle-manager options.", nameof(options));
+        foreach (var c in options)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ' ' and not '-' and not '_' and not '.')
+                throw new ArgumentException("Invalid bundle-manager options.", nameof(options));
+        }
     }
 
     /// <summary>
@@ -369,8 +372,27 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
     internal static void ValidateBundle(string bundle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bundle);
-        if (bundle.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_')))
-            throw new ArgumentException("Invalid bundle name.", nameof(bundle));
+        foreach (var c in bundle)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_')
+                throw new ArgumentException("Invalid bundle name.", nameof(bundle));
+        }
+    }
+
+    /// <summary>Checks whether a module name consists only of ASCII letters, digits, hyphen, underscore and dot. <para>检查模块名是否只含 ASCII 字母、数字、连字符、下划线与点。</para></summary>
+    /// <param name="name">The module name to check. <para>要检查的模块名。</para></param>
+    /// <returns>True when every character is allowed. <para>所有字符都在允许集合内时为 true。</para></returns>
+    private static bool HasOnlyModuleNameChars(string name)
+    {
+        foreach (var c in name)
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not '-' and not '_' and not '.')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

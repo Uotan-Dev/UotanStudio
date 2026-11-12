@@ -98,8 +98,13 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, C
     internal static void ValidateRemoteEndpoint(string endpoint, bool reverse)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(endpoint);
-        if (endpoint.Length > 1024 || endpoint.Any(c => char.IsControl(c) || char.IsWhiteSpace(c) || c is '\'' or '"'))
+        if (endpoint.Length > 1024)
             throw new ArgumentException("Invalid HDC endpoint.", nameof(endpoint));
+        foreach (var c in endpoint)
+        {
+            if (char.IsControl(c) || char.IsWhiteSpace(c) || c is '\'' or '"')
+                throw new ArgumentException("Invalid HDC endpoint.", nameof(endpoint));
+        }
         var split = endpoint.IndexOf(':');
         if (split <= 0 || split == endpoint.Length - 1) throw new ArgumentException("Expected schema:content.", nameof(endpoint));
         var schema = endpoint[..split];

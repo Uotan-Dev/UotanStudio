@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security;
@@ -150,6 +151,10 @@ public sealed class WinUsbDriverInstaller
     /// node-level DeviceInterfaceGUIDs value.
     /// <para>系统内置 USB 设备接口类；当 WinUSB 栈没有节点级 DeviceInterfaceGUIDs 值时作为最后候选。</para></summary>
     private static readonly Guid UsbDeviceInterfaceGuid = new("a5dcbf10-6530-11d2-901f-00c04fb951ed");
+
+    /// <summary>The cached invalid file-name characters used to reject devnode-reported INF names.
+    /// <para>缓存的非法文件名字符集，用于拒绝设备节点上报的 INF 名。</para></summary>
+    private static readonly SearchValues<char> InvalidFileNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
 
     /// <summary>The wait shared by the takeover and vendor package installs for the PnP installation queue
     /// to drain before they queue their own work.
@@ -548,7 +553,7 @@ public sealed class WinUsbDriverInstaller
     internal static bool IsOwnStagedInfName(string? infName)
         => infName is { Length: > 0 } &&
             string.Equals(Path.GetFileName(infName), infName, StringComparison.Ordinal) &&
-            infName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+            !infName.AsSpan().ContainsAny(InvalidFileNameChars) &&
             infName.StartsWith("oem", StringComparison.OrdinalIgnoreCase) &&
             infName.EndsWith(".inf", StringComparison.OrdinalIgnoreCase);
 

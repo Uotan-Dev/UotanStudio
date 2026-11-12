@@ -277,7 +277,7 @@ public sealed class AfcClient : IDisposable
     private byte[] Exchange(ulong operation, byte[] payload, CancellationToken cancellationToken)
     {
         Send(operation, payload, cancellationToken);
-        var data = Array.Empty<byte>();
+        byte[] data = [];
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();

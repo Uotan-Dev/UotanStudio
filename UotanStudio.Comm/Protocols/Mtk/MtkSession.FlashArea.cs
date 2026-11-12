@@ -55,7 +55,7 @@ public sealed partial class MtkSession
         {
             RequireAreaMapSource(area, MtkStorageDiscoverySource.XFlash);
             RequireState(MtkSessionState.XFlashStorageReady);
-            if (!ReferenceEquals(area.XFlashGeometry, XFlashStorage))
+            if (area.Geometry is not { Value: MtkXFlashStorageInfo geometry } || !ReferenceEquals(geometry, XFlashStorage))
             {
                 throw new InvalidOperationException(
                     "The XFlash area map was built from a different storage observation.");
@@ -131,7 +131,7 @@ public sealed partial class MtkSession
         {
             RequireAreaMapSource(area, MtkStorageDiscoverySource.Legacy);
             RequireState(MtkSessionState.LegacyStorageReady);
-            if (!ReferenceEquals(area.LegacyGeometry, LegacyStorage))
+            if (area.Geometry is not { Value: MtkLegacyStorageInfo geometry } || !ReferenceEquals(geometry, LegacyStorage))
             {
                 throw new InvalidOperationException(
                     "The Legacy area map was built from a different storage inventory.");
@@ -208,7 +208,7 @@ public sealed partial class MtkSession
         {
             RequireAreaMapSource(area, MtkStorageDiscoverySource.Xml);
             RequireState(MtkSessionState.XmlStorageGeometryKnown);
-            if (!ReferenceEquals(area.XmlGeometry, XmlStorage))
+            if (area.Geometry is not { Value: MtkXmlStorageInfo geometry } || !ReferenceEquals(geometry, XmlStorage))
             {
                 throw new InvalidOperationException(
                     "The XML area map was built from a different storage geometry.");

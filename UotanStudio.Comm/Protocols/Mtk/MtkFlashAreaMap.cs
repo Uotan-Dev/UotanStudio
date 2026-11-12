@@ -15,6 +15,20 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public sealed record MtkFlashAreaRegion(string RegionName, uint? PhysicalIdentifier, long AbsoluteOffset,
     long CapacityBytes);
 
+/// <summary>
+/// The storage geometry one discovery path reported; exactly one of the three cases is held, so the
+/// identity checks against a session's own geometry object pattern-match this union instead of
+/// comparing three independent nullable members.
+/// <para>单一发现路径上报的存储几何信息；恰持有三个分支之一，与会话自身几何对象的身份校验
+/// 通过对本联合的模式匹配完成，而不是比较三个独立可空成员。</para>
+/// </summary>
+/// <remarks>
+/// The cases are positional: the first is the XFlash geometry, the second the Legacy eMMC inventory,
+/// the third the XML region document.
+/// <para>分支按位置排列：第一个是 XFlash 几何信息，第二个是 Legacy eMMC 清单，第三个是 XML 区域文档。</para>
+/// </remarks>
+internal union MtkFlashAreaGeometry(MtkXFlashStorageInfo, MtkLegacyStorageInfo, MtkXmlStorageInfo);
+
 /// <summary>One contiguous slice of a requested range that lies wholly inside a single region.
 /// <para>请求范围中完全落在单个区域内的一段连续切片。</para></summary>
 /// <param name="RegionName">The canonical region token carrying this slice.
@@ -43,7 +57,7 @@ public sealed class MtkFlashAreaMap
 
     private MtkFlashAreaMap(MtkStorageDiscoverySource source, MtkXFlashStorageKind kind, int alignmentBytes,
         int chunkBytes, MtkStorageCapabilitySnapshot capability, MtkFlashAreaRegion[] regions, long totalBytes,
-        MtkXFlashStorageInfo? xflash, MtkLegacyStorageInfo? legacy, MtkXmlStorageInfo? xml)
+        MtkFlashAreaGeometry geometry)
     {
         Source = source;
         Kind = kind;
@@ -52,9 +66,7 @@ public sealed class MtkFlashAreaMap
         Capability = capability;
         Regions = Array.AsReadOnly(regions);
         TotalBytes = totalBytes;
-        XFlashGeometry = xflash;
-        LegacyGeometry = legacy;
-        XmlGeometry = xml;
+        Geometry = geometry;
     }
 
     /// <summary>Gets the discovery path that produced this address space.
@@ -100,9 +112,9 @@ public sealed class MtkFlashAreaMap
     /// <para>消费会话会与之比对已上报几何信息的不可变快照。</para></value>
     public MtkStorageCapabilitySnapshot Capability { get; }
 
-    internal MtkXFlashStorageInfo? XFlashGeometry { get; }
-    internal MtkLegacyStorageInfo? LegacyGeometry { get; }
-    internal MtkXmlStorageInfo? XmlGeometry { get; }
+    /// <summary>Gets the geometry object the owning discovery path reported, held as one closed union case.
+    /// <para>获取产生本地址空间的发现路径上报的几何对象，以闭合联合分支持有。</para></summary>
+    internal MtkFlashAreaGeometry Geometry { get; }
 
     /// <summary>Builds a walk space from a discovered XFlash geometry.
     /// <para>由已发现的 XFlash 几何信息构建遍历空间。</para></summary>
@@ -129,7 +141,7 @@ public sealed class MtkFlashAreaMap
 
         return Build(MtkStorageDiscoverySource.XFlash, storage.Kind, storage.BlockSize,
             BoundChunk(storage.ReadPacketLength, storage.BlockSize),
-            MtkStorageCapabilitySnapshot.FromXFlash(storage), requireIdentifier: true, storage, null, null);
+            MtkStorageCapabilitySnapshot.FromXFlash(storage), requireIdentifier: true, storage);
     }
 
     /// <summary>Builds a walk space from a discovered Legacy eMMC inventory.
@@ -156,7 +168,7 @@ public sealed class MtkFlashAreaMap
 
         return Build(MtkStorageDiscoverySource.Legacy, storage.Kind, 512,
             BoundChunk(MaximumWalkChunkBytes, 512),
-            MtkStorageCapabilitySnapshot.FromLegacy(storage), requireIdentifier: true, null, storage, null);
+            MtkStorageCapabilitySnapshot.FromLegacy(storage), requireIdentifier: true, storage);
     }
 
     /// <summary>Builds a walk space from a discovered XML geometry.
@@ -175,7 +187,7 @@ public sealed class MtkFlashAreaMap
         return Build(MtkStorageDiscoverySource.Xml,
             storage.Kind == MtkXmlStorageKind.Emmc ? MtkXFlashStorageKind.Emmc : MtkXFlashStorageKind.Ufs,
             storage.BlockSize, BoundChunk(MaximumWalkChunkBytes, storage.BlockSize),
-            MtkStorageCapabilitySnapshot.FromXml(storage), requireIdentifier: false, null, null, storage);
+            MtkStorageCapabilitySnapshot.FromXml(storage), requireIdentifier: false, storage);
     }
 
     /// <summary>Converts a sector number and count into the absolute walk range the raw-sector read uses.
@@ -263,7 +275,7 @@ public sealed class MtkFlashAreaMap
 
     private static MtkFlashAreaMap Build(MtkStorageDiscoverySource source, MtkXFlashStorageKind kind,
         int alignmentBytes, int chunkBytes, MtkStorageCapabilitySnapshot capability, bool requireIdentifier,
-        MtkXFlashStorageInfo? xflash, MtkLegacyStorageInfo? legacy, MtkXmlStorageInfo? xml)
+        MtkFlashAreaGeometry geometry)
     {
         var regions = new List<MtkFlashAreaRegion>(MaximumRegionCount);
         var absolute = 0L;
@@ -301,7 +313,7 @@ public sealed class MtkFlashAreaMap
         }
 
         return new MtkFlashAreaMap(source, kind, alignmentBytes, chunkBytes, capability, [.. regions], absolute,
-            xflash, legacy, xml);
+            geometry);
     }
 
     private static int BoundChunk(int reportedPacketBytes, int alignmentBytes)
