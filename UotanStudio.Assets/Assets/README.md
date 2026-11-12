@@ -9,7 +9,7 @@
 | `fonts/` | `MiSans-Regular.ttf`、`MiSans-Bold.ttf` | MiSans 字形，许可见 `fonts/NOTICE.md`；原始文件取自 `reference/fonts-source/` |
 | `ohos/device/` | `libscrcpy_server*.z.so`、`uitest_agent*.so` | DevEco Studio 随附的设备端原生文件，来源、版本与许可见 `ohos/README.md`；提取脚本 `tools/deveco-mirroring/extract.ps1` |
 | `drivers/rockusb/` | `rockusb.inf`、`rockusb.cat`、`rockusb.sys` | 厂商 Rockusb 驱动包，来源 URL、签名与许可见 `reference/driver-pkg/README.md` |
-| `drivers/mediatek-vcom/`、`drivers/mediatek-full/` | 联发科 `cdc-acm`、MBIM、WPD 与 ADB 的 INF/CAT/SYS 及 amd64 coinstaller | 微软更新目录分发的 MediaTek WHQL 包，随包范围与排除项见 `reference/driver-pkg/README.md` 的打包范围一节 |
+| `drivers/mediatek-vcom/`、`drivers/mediatek-full/` | 联发科 `cdc-acm`（VCOM）与 ADB 的 INF/CAT/SYS 及 amd64 coinstaller | 微软更新目录分发的 MediaTek WHQL 包，随包范围与排除项见 `reference/driver-pkg/README.md` 的打包范围一节 |
 | `drivers/google-usb/`、`drivers/rockchip-adb/` | `android_winusb.inf`、两份 `.cat`、amd64 coinstaller；rockchip 另带 `NOTICE.txt` | Google USB Driver r13 与 Rockchip DriverAssistant 的 ADB 包，只随 amd64 coinstaller |
 | `drivers/qualcomm-qud/`、`drivers/silabs-cp210x/`、`drivers/ftdi-cdm/` | 各厂商 INF/CAT/SYS，按 `__` 编码目录 | 高通 QUD、Silicon Labs CP210x 与 FTDI CDM 官方包，silabs 另带许可文本 |
 | `delivery/` | `update-binary-arm64` | 固定版本的原生 arm64 Edify 更新器，用途、卡刷调用与设备侧边界见 `UotanStudio.Pipeline/README.md` |
