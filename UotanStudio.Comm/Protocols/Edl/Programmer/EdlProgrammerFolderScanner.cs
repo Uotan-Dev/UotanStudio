@@ -191,9 +191,12 @@ public static class EdlProgrammerFolderScanner
             }
 
             string sha256Hex;
+            var requiresVendorAuthentication = false;
             try
             {
                 using var stream = File.Open(candidate, FileMode.Open, FileAccess.Read, FileShare.Read);
+                requiresVendorAuthentication = EdlProgrammerAuthMarker.Detect(stream, cancellationToken);
+                stream.Position = 0;
                 sha256Hex = EdlProgrammerHash.ComputeSha256Hex(stream, cancellationToken);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -218,6 +221,7 @@ public static class EdlProgrammerFolderScanner
                 FileName = fileName,
                 Sha256Hex = sha256Hex,
                 HardwareId = identity!.HardwareId,
+                RequiresVendorAuthentication = requiresVendorAuthentication ? true : null,
                 Provenance = new ResourceProvenance
                 {
                     Origin = ResourceOrigin.UserSupplied,

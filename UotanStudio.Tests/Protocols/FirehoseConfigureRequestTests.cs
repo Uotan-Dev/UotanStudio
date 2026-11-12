@@ -25,6 +25,28 @@ public sealed class FirehoseConfigureRequestTests
     }
 
     [Theory]
+    [InlineData(FirehoseStorageType.Emmc, "eMMC")]
+    [InlineData(FirehoseStorageType.Ufs, "ufs")]
+    public void BuildConfigure_WritesConfiguredMemoryName(FirehoseStorageType storageType, string expected)
+    {
+        var configuration = new FirehoseConfiguration { StorageType = storageType };
+
+        var xml = FirehoseXmlBuilder.BuildConfigure(configuration);
+
+        Assert.Contains($"MemoryName=\"{expected}\"", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FirehoseConfiguration_WithoutChoice_DefaultsToUfs()
+    {
+        var configuration = new FirehoseConfiguration();
+
+        Assert.Equal(FirehoseStorageType.Ufs, configuration.StorageType);
+        Assert.Contains("MemoryName=\"ufs\"", FirehoseXmlBuilder.BuildConfigure(configuration),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData(0u, 10u)]
     [InlineData(AdbConstants.ProtocolVersionMin, 10u)]
     public void PayloadChecksum_BelowSkipChecksumVersion_WritesAdditiveSum(uint version, uint expected)

@@ -40,6 +40,16 @@ public sealed record EdlDetailsSnapshot
     public FirehoseCapabilitySnapshot? Capabilities { get; init; }
 
     /// <summary>
+    /// Whether the running programmer refused configure because it requires a signature exchange first.
+    /// <para>正在运行的 programmer 是否因要求先完成签名交换而拒绝 configure。</para>
+    /// </summary>
+    /// <value><c>true</c> when the probe observed the authentication refusal; the probe then stops configuring the
+    /// same parked session because the programmer keeps refusing until the host supplies a signature.
+    /// <para>探测观测到认证拒绝时为 <c>true</c>；此后探测不再对同一暂存会话发送 configure，因为 programmer 会
+    /// 一直拒绝，直到宿主提供签名。</para></value>
+    public bool RequiresVendorAuthentication { get; init; }
+
+    /// <summary>
     /// The storage geometry reported by getstorageinfo (block size and total blocks).
     /// <para>getstorageinfo 上报的存储几何信息（块大小与总块数）。</para>
     /// </summary>

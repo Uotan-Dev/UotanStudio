@@ -653,7 +653,14 @@ public sealed partial class DeviceMonitorService
             {
                 if (!session.IsConfigured)
                 {
-                    await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception) when (session.VendorAuthenticationRequired)
+                    {
+                        return false;
+                    }
                 }
 
                 var response = await firehose.PowerAsync(option, cancellationToken).ConfigureAwait(false);

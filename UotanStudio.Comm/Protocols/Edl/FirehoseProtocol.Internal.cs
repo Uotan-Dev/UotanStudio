@@ -27,6 +27,7 @@ public sealed partial class FirehoseProtocol
         var document = _responseDocument;
         var length = 0;
         var prefixPending = true;
+        string? lastTargetLog = null;
 
         while (Environment.TickCount64 - start < budget)
         {
@@ -88,12 +89,14 @@ public sealed partial class FirehoseProtocol
                 blockObserver?.Invoke(block);
                 foreach (var log in block.Logs)
                 {
+                    lastTargetLog = log;
                     logObserver?.Invoke(log);
                     OnTargetLog(log);
                 }
 
                 if (block.Response is not null)
                 {
+                    ReclassifyWithPrecedingLog(block.Response, lastTargetLog);
                     AdoptFatalResponse(block.Response);
                     return block.Response;
                 }
@@ -127,6 +130,25 @@ public sealed partial class FirehoseProtocol
         }
 
         _rxBufferBytes = remaining;
+    }
+
+    /// <summary>
+    /// Re-classifies a rejected response with the last target log seen earlier in the same command, because a
+    /// programmer may send its reason as a separate log document before the response document.
+    /// <para>用同一命令中更早出现的最后一条目标日志重新分类被拒响应，因为 programmer 可能把原因作为独立日志文档
+    /// 先于响应文档发出。</para>
+    /// </summary>
+    /// <param name="response">The response about to be returned. <para>即将返回的响应。</para></param>
+    /// <param name="lastTargetLog">The last log value received for this command, or <see langword="null"/>.
+    /// <para>该命令收到的最后一条日志值；没有时为 <see langword="null"/>。</para></param>
+    private static void ReclassifyWithPrecedingLog(FirehoseResponse response, string? lastTargetLog)
+    {
+        if (lastTargetLog is null || response.IsAck || response.IsRawMode || response.IsLog)
+        {
+            return;
+        }
+
+        response.Error = FirehoseErrorClassifier.Classify(response, lastTargetLog) ?? response.Error;
     }
 
     /// <summary>

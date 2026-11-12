@@ -24,7 +24,73 @@ public static partial class FirehoseXmlBuilder
     }
 
     /// <summary>
-    /// Builds the self-closing &lt;power&gt; XML command with the <c>DelayInSeconds</c> attribute the Firehose
+    /// Builds a size-delimited &lt;sig&gt; command, the form every inspected vendor authentication flow sends
+    /// before writing the signature bytes as a raw payload.
+    /// <para>构建按长度声明负载的 &lt;sig&gt; 命令；这是所有已核对厂商认证流程在写入裸签名数据之前发送的形式。</para>
+    /// </summary>
+    /// <param name="targetName">The signature target name, such as <c>sig</c>.
+    /// <para>签名目标名，例如 <c>sig</c>。</para></param>
+    /// <param name="sizeInBytes">The raw signature byte count that follows the command; must be positive.
+    /// <para>命令之后跟进的裸签名字节数；必须为正。</para></param>
+    /// <param name="verbose">Whether the target should report its authentication progress as logs.
+    /// <para>目标是否以日志形式上报认证过程。</para></param>
+    /// <returns>The &lt;sig&gt; XML document. <para>&lt;sig&gt; XML 文档。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="targetName"/> is blank.
+    /// <para><paramref name="targetName"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="sizeInBytes"/> is not positive.
+    /// <para><paramref name="sizeInBytes"/> 非正。</para></exception>
+    public static string BuildSig(string targetName, int sizeInBytes, bool verbose = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeInBytes);
+        var sb = new StringBuilder();
+        sb.Append(EdlConstants.XmlHeader);
+        sb.Append(EdlConstants.DataOpen);
+        sb.Append($"<sig TargetName=\"{EscapeXml(targetName)}\"");
+        sb.Append($" size_in_bytes=\"{sizeInBytes}\"");
+        sb.Append($" verbose=\"{(verbose ? 1 : 0)}\" />\n");
+        sb.Append(EdlConstants.DataClose);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds a self-contained &lt;sig&gt; command that carries the signature in its <c>value</c> attribute,
+    /// the form used by programmers that never enter raw mode for the signature exchange.
+    /// <para>构建把签名放进 <c>value</c> 属性的自包含 &lt;sig&gt; 命令；这是签名交换期间从不进入原始模式的
+    /// programmer 使用的形式。</para>
+    /// </summary>
+    /// <param name="targetName">The signature target name, such as <c>sig</c>.
+    /// <para>签名目标名，例如 <c>sig</c>。</para></param>
+    /// <param name="valueHex">The signature bytes as lowercase or uppercase hexadecimal; must be even length.
+    /// <para>以小写或大写十六进制表示的签名字节；长度必须为偶数。</para></param>
+    /// <param name="verbose">Whether the target should report its authentication progress as logs.
+    /// <para>目标是否以日志形式上报认证过程。</para></param>
+    /// <returns>The &lt;sig&gt; XML document. <para>&lt;sig&gt; XML 文档。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="targetName"/> is blank, or
+    /// <paramref name="valueHex"/> is blank, has an odd length, or contains a non-hexadecimal character.
+    /// <para><paramref name="targetName"/> 为空白，或 <paramref name="valueHex"/> 为空白、长度为奇数，或含非十六进制字符。</para></exception>
+    public static string BuildSigValue(string targetName, string valueHex, bool verbose = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(valueHex);
+        if (valueHex.Length % 2 != 0 || !valueHex.All(char.IsAsciiHexDigit))
+        {
+            throw new ArgumentException(
+                "The signature value must be an even-length hexadecimal string.", nameof(valueHex));
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(EdlConstants.XmlHeader);
+        sb.Append(EdlConstants.DataOpen);
+        sb.Append($"<sig TargetName=\"{EscapeXml(targetName)}\"");
+        sb.Append($" value=\"{EscapeXml(valueHex)}\"");
+        sb.Append($" verbose=\"{(verbose ? 1 : 0)}\" />\n");
+        sb.Append(EdlConstants.DataClose);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds the &lt;power&gt; XML command with the <c>DelayInSeconds</c> attribute the Firehose
     /// schema defines. Real programmers reject an explicit closing tag with an element body, answering
     /// "Failed to parse xml" and never calling the power handler; the self-closing form is acknowledged and
     /// executes the requested action.

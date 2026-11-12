@@ -888,6 +888,12 @@ internal enum EdlErrorCode
     /// <para>设备身份或目录证据尚不足以唯一选定 programmer。</para>
     /// </summary>
     NeedsProgrammerSelection,
+
+    /// <summary>
+    /// The programmer refuses every command except nop and sig until vendor authentication completes.
+    /// <para>programmer 在厂商认证完成前只接受 nop 与 sig 命令。</para>
+    /// </summary>
+    VendorAuthenticationRequired,
 }
 
 /// <summary>

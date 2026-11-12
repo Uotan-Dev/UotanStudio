@@ -69,7 +69,17 @@ public enum FirehoseErrorKind
     /// else stays unclassified by design.
     /// <para>该类取值只清除确认标志而不赋予任何错误码，因此其余取值按设计保持未分类。</para>
     /// </summary>
-    Unrecognized
+    Unrecognized,
+
+    /// <summary>
+    /// The target refused a command because the programmer requires vendor authentication first: before
+    /// authentication only <c>nop</c> and <c>sig</c> are accepted.
+    /// <para>目标拒绝命令，因为 programmer 要求先完成厂商认证：认证前只接受 <c>nop</c> 与 <c>sig</c>。</para>
+    /// This kind is recoverable without reconnecting: the target still answers, so the caller may run the
+    /// signature exchange and then repeat the refused command instead of retrying it unchanged.
+    /// <para>该种类无需重连即可恢复：目标仍在应答，调用方可以执行签名交换后重发被拒命令，而不是原样重试。</para>
+    /// </summary>
+    VendorAuthentication
 }
 
 /// <summary>
@@ -168,6 +178,13 @@ public static class FirehoseErrorClassifier
     private const string PacketHashMismatchToken = "PACKET_HASH_MISMATCH";
     private const string StorageErrorToken = "ERROR";
 
+    /// <summary>
+    /// The literal every inspected vendor programmer emits when it refuses a command before authentication;
+    /// only a target that has not completed the signature exchange produces it.
+    /// <para>所有已核对的厂商 programmer 在认证前拒绝命令时都会输出的字面量；只有尚未完成签名交换的目标才会产生它。</para>
+    /// </summary>
+    private const string VendorAuthenticationToken = "before authentication";
+
     /// <summary>Classifies one response.<para>对单个响应进行分类。</para></summary>
     /// <param name="response">The parsed response.<para>已解析的响应。</para></param>
     /// <param name="lastLogValue">The <c>value</c> text of the last target log observed before this response within the same document, or <see langword="null"/> when none is available.
@@ -189,6 +206,21 @@ public static class FirehoseErrorClassifier
             ? parsed
             : null;
         var assignsAttributes = HasAssignedAttributes(response);
+
+        if (ContainsToken(lastLogValue, VendorAuthenticationToken))
+        {
+            return new FirehoseResponseError
+            {
+                Kind = FirehoseErrorKind.VendorAuthentication,
+                RawValue = rawValue,
+                NumericValue = numeric,
+                LogToken = VendorAuthenticationToken,
+                AssignsTargetAttributes = assignsAttributes,
+                IsFatal = false,
+                Description = "The target refused the command because its programmer requires vendor " +
+                    "authentication; before that exchange only nop and sig are accepted."
+            };
+        }
 
         if (ContainsToken(lastLogValue, PacketHashMismatchToken))
         {

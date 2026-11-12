@@ -57,8 +57,11 @@ public class FirehoseConfiguration
     /// Gets or sets the storage type.
     /// <para>获取或设置存储类型。</para>
     /// </summary>
-    /// <value>The target storage technology; defaults to <see cref="FirehoseStorageType.Emmc"/>. <para>目标存储技术；默认为 <see cref="FirehoseStorageType.Emmc"/>。</para></value>
-    public FirehoseStorageType StorageType { get; set; } = FirehoseStorageType.Emmc;
+    /// <value>The target storage technology; defaults to <see cref="FirehoseStorageType.Ufs"/>, and a programmer
+    /// that refuses that name switches this to eMMC before the next attempt.
+    /// <para>目标存储技术；默认为 <see cref="FirehoseStorageType.Ufs"/>，拒绝该名称的 programmer 会在下一次尝试前
+    /// 把它切换为 eMMC。</para></value>
+    public FirehoseStorageType StorageType { get; set; } = FirehoseStorageType.Ufs;
 
     /// <summary>
     /// Gets or sets the maximum payload to target (bytes).
@@ -317,6 +320,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// </summary>
     private const int CapabilityDiscoveryTimeoutMs = 5000;
 
+    /// <summary>
+    /// Per-attempt bound on the target logs retained from a configure exchange, so a talkative programmer
+    /// cannot grow the retry loop's memory and the media refusal still lands inside the bound.
+    /// <para>单次 configure 交互保留的目标日志条数上限，使健谈的 programmer 无法撑大重试循环的内存，
+    /// 同时介质拒绝仍落在上限之内。</para>
+    /// </summary>
+    private const int MaximumConfigureLogs = 32;
+
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _cmdTimeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
     private readonly byte[] _rxBuffer = new byte[4 * 1024];
@@ -432,10 +443,20 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 ? Configuration.ConfigureFirstAttemptTimeoutMs
                 : (Configuration.ConfigureResponseTimeoutMs > 0 ? Configuration.ConfigureResponseTimeoutMs : (int?)null);
 
+            var attemptLogs = new List<string>();
+            void CollectConfigureLog(string value)
+            {
+                if (attemptLogs.Count < MaximumConfigureLogs)
+                {
+                    attemptLogs.Add(value);
+                }
+            }
+
             FirehoseResponse response;
             try
             {
                 response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs, perAttemptTimeoutMs,
+                    logObserver: CollectConfigureLog,
                     tolerateResponseTimeout: true);
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout
@@ -455,6 +476,15 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
             if (!response.IsAck)
             {
+                if (response.Error is { Kind: FirehoseErrorKind.VendorAuthentication })
+                {
+                    Log("The programmer accepts only nop and sig until vendor authentication completes; " +
+                        "retrying configure cannot succeed, so the attempt budget stops here.");
+                    throw new EdlException(EdlErrorCode.VendorAuthenticationRequired,
+                        "The programmer requires vendor authentication before configure; every command other " +
+                        "than nop and sig is refused until the signature exchange completes.");
+                }
+
                 var maxPayloadStr = response["MaxPayloadSizeToTargetInBytes"];
                 if (maxPayloadStr != null && long.TryParse(maxPayloadStr, out var maxPayload) && maxPayload > 0 && maxPayload != Configuration.MaxPayloadSizeToTarget)
                 {
@@ -483,7 +513,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 }
                 else if (attempt < maxRetries - 1)
                 {
-                    AdoptStorageTypeFromNak(response, attemptedStorageTypes);
+                    AdoptStorageTypeFromNak(response, attemptLogs, attemptedStorageTypes);
                     continue;
                 }
                 else
@@ -557,18 +587,39 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     }
 
     /// <summary>
-    /// Switches the configured storage type when a configure NAK names a different media, so the
-    /// next retry sends a matching <c>MemoryName</c>. Each storage type is attempted at most once
-    /// per configure call; a NAK that names no new type leaves the retry behaviour unchanged.
-    /// <para>当 configure NAK 指明了不同介质时切换所配置的存储类型，使下一次重试发送匹配的
-    /// <c>MemoryName</c>。单次 configure 内每种存储类型至多尝试一次；NAK 未指明新类型时重试
-    /// 行为保持不变。</para>
+    /// Switches the configured storage type when a configure NAK names a media, so the next retry sends a
+    /// matching <c>MemoryName</c>. A programmer that refused the name it was just sent asks for the other
+    /// mainstream media; a NAK naming a third media switches to that one. Each storage type is attempted at
+    /// most once per configure call.
+    /// <para>当 configure NAK 指明介质时切换所配置的存储类型，使下一次重试发送匹配的
+    /// <c>MemoryName</c>。拒绝刚刚收到的名称的 programmer 是在索取另一主流介质；NAK 指明第三种介质时
+    /// 切换到它。单次 configure 内每种存储类型至多尝试一次。</para>
     /// </summary>
     /// <param name="response">The rejected configure response. <para>被拒绝的 configure 应答。</para></param>
+    /// <param name="targetLogs">Target logs received for the same configure attempt; a refusal usually
+    /// arrives there as its own document. <para>同一次 configure 尝试收到的目标日志；拒绝语通常作为独立
+    /// 文档出现在其中。</para></param>
     /// <param name="attemptedStorageTypes">Storage types already sent in this configure call. <para>本次 configure 已发送过的存储类型。</para></param>
-    private void AdoptStorageTypeFromNak(FirehoseResponse response, HashSet<FirehoseStorageType> attemptedStorageTypes)
+    private void AdoptStorageTypeFromNak(FirehoseResponse response, IReadOnlyList<string> targetLogs,
+        HashSet<FirehoseStorageType> attemptedStorageTypes)
     {
-        var candidates = new[] { response["MemoryName"], response.RawValue, response.RawXml };
+        var candidates = new[] { response["MemoryName"], response.RawValue, response.RawXml }
+            .Concat(targetLogs);
+        foreach (var candidate in candidates)
+        {
+            if (candidate is null || !TryMatchRefusedStorageType(candidate, out var refused)
+                || refused != Configuration.StorageType
+                || TryGetAlternateStorageType(refused) is not { } alternate
+                || !attemptedStorageTypes.Add(alternate))
+            {
+                continue;
+            }
+
+            Log($"The programmer refused the {refused} MemoryName; retrying with {alternate}.");
+            Configuration.StorageType = alternate;
+            return;
+        }
+
         foreach (var candidate in candidates)
         {
             if (candidate is null || !TryMatchStorageTypeText(candidate, out var matched)
@@ -581,6 +632,37 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             Configuration.StorageType = matched;
             return;
         }
+    }
+
+    /// <summary>
+    /// Reads the media a programmer names as unsupported in its configure refusal, e.g.
+    /// <c>Not support configure MemoryName UFS</c>.
+    /// <para>读取 programmer 在 configure 拒绝中指明不支持的介质，例如
+    /// <c>Not support configure MemoryName UFS</c>。</para>
+    /// </summary>
+    /// <param name="text">The refusal text (attribute, value or raw XML). <para>拒绝文本（属性、值或原始 XML）。</para></param>
+    /// <param name="refused">The media the text names as unsupported. <para>文本指明不支持的介质。</para></param>
+    /// <returns><see langword="true"/> when the text names an unsupported media.
+    /// <para>文本指明不支持的介质时为 <see langword="true"/>。</para></returns>
+    private static bool TryMatchRefusedStorageType(string text, out FirehoseStorageType refused)
+    {
+        const string Marker = "Not support configure MemoryName";
+        refused = FirehoseStorageType.Unknown;
+        var start = text.IndexOf(Marker, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return false;
+        }
+
+        var rest = text[(start + Marker.Length)..].AsSpan().TrimStart(" \"':");
+        var end = 0;
+        while (end < rest.Length && !char.IsWhiteSpace(rest[end]) && rest[end] is not ('"' or '<' or '/' or '\''))
+        {
+            end++;
+        }
+
+        return end > 0 && TryParseStorageType(rest[..end].ToString(), out refused)
+            && refused != FirehoseStorageType.Unknown;
     }
 
     /// <summary>
@@ -920,6 +1002,14 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         {
             Log($"getstorageinfo failed ({ex.Message}).");
             return (0, false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && RequiresReconnect)
+        {
+            Log($"getstorageinfo as {Configuration.StorageType} lost the link ({ex.GetType().Name}: {ex.Message}). " +
+                "A target addressed with the wrong media usually stops answering at its first storage command, " +
+                $"so this is read as a media mismatch; reconnect and configure " +
+                $"{TryGetAlternateStorageType(Configuration.StorageType)?.ToString() ?? "the media the package was built for"} instead.");
+            throw;
         }
     }
 

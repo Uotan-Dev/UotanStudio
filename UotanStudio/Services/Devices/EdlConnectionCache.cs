@@ -428,7 +428,30 @@ internal sealed class EdlConnectionCache(
     private static async Task<EdlDetailsSnapshot> CollectFirehoseDetailsAsync(EdlSession session,
         string? serialPortName, CancellationToken cancellationToken)
     {
-        await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+        if (session.VendorAuthenticationRequired)
+        {
+            return new EdlDetailsSnapshot
+            {
+                Capabilities = session.Capabilities,
+                SerialPortName = serialPortName,
+                RequiresVendorAuthentication = true,
+            };
+        }
+
+        try
+        {
+            await session.InitializeAsync(null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception) when (session.VendorAuthenticationRequired)
+        {
+            return new EdlDetailsSnapshot
+            {
+                Capabilities = session.Capabilities,
+                SerialPortName = serialPortName,
+                RequiresVendorAuthentication = true,
+            };
+        }
+
         if (session.Backend == EdlDownloadBackend.StreamDload || session.Firehose is not { } firehose)
         {
             return new EdlDetailsSnapshot

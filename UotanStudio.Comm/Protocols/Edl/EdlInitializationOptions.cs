@@ -26,6 +26,20 @@ public sealed record EdlInitializationOptions
     /// <para>默认为 false；为 true 时拒绝仅 Firehose 连接和失败的身份查询。</para></value>
     public bool QueryIdentityBeforeUpload { get; init; }
 
+    /// <summary>Gets the storage media the session configures before its first storage command.
+    /// <para>获取会话在发出第一条存储命令之前所配置的存储介质。</para>
+    /// </summary>
+    /// <remarks>
+    /// A programmer that acknowledges any memory name still opens the media it was told to use, and a target
+    /// whose media is eMMC and told UFS (or the reverse) typically stops answering at its first storage
+    /// command. Declaring the media the package was built for keeps that first command on the correct device.
+    /// <para>对任意 memory 名称都返回确认的 programmer 仍会打开被告知的介质；介质为 eMMC 却被要求 UFS（或反之）
+    /// 的目标通常会在第一条存储命令处停止应答。声明包所针对的介质可使首条存储命令落在正确的设备上。</para>
+    /// </remarks>
+    /// <value>The media to configure, or <see langword="null"/> to keep the configuration's current default.
+    /// <para>要配置的介质；为 <see langword="null"/> 时保持配置当前的默认值。</para></value>
+    public FirehoseStorageType? StorageType { get; init; }
+
     /// <summary>Gets whether a command-mode Sahara target with no programmer image may switch to
     /// the streaming DLOAD backend instead of failing the handshake.
     /// <para>获取在没有 programmer 镜像时，命令模式 Sahara 目标可否切换到流式 DLOAD 后端，而不是
@@ -51,4 +65,18 @@ public sealed record EdlInitializationOptions
     /// <see cref="FirehoseConfiguration.SkipResponseOnReadWrite"/>；读写的原始数据与最终完成仍会被消费，
     /// 且不会缩短任何超时。</para></value>
     public bool SkipResponseOnReadWrite { get; init; }
+
+    /// <summary>Gets the optional signature offered when the programmer refuses commands until vendor
+    /// authentication completes.
+    /// <para>获取 programmer 在厂商认证完成前拒绝命令时提交的可选签名。</para></summary>
+    /// <remarks>
+    /// The payload is a list of consecutive 256-byte signatures tried in order, so one file may carry several
+    /// candidates; the host reads the file and the protocol never touches the file system. No signature is sent
+    /// unless the target itself asked for authentication, so declaring one on an ordinary programmer costs nothing.
+    /// <para>负载是按顺序尝试的连续 256 字节签名列表，因此一个文件可以携带多个候选；文件由宿主读取，协议不接触
+    /// 文件系统。只有目标自身要求认证时才会提交签名，因此在普通 programmer 上声明签名不会产生任何代价。</para>
+    /// </remarks>
+    /// <value>The signature blocks, or <see langword="null"/> when none was supplied.
+    /// <para>签名块；未提供时为 <see langword="null"/>。</para></value>
+    public ReadOnlyMemory<byte>? VendorAuthSignature { get; init; }
 }

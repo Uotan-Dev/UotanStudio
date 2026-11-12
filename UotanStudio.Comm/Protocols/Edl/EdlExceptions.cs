@@ -91,6 +91,8 @@ internal class EdlException : Exception
         EdlErrorCode.XmlParseError => "XML parsing failed.",
         EdlErrorCode.ProgrammerMismatch => "Programmer identity mismatch.",
         EdlErrorCode.NeedsProgrammerSelection => "A programmer selection with explicit matching evidence is required.",
+        EdlErrorCode.VendorAuthenticationRequired =>
+            "The programmer requires vendor authentication before any command other than nop and sig.",
         _ => $"Unknown error code: {code}"
     };
 }

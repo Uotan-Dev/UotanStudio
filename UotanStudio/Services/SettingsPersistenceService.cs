@@ -123,6 +123,16 @@ public class AppSettings : IJsonOnDeserialized
     public string TempDirectory { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the remembered EDL signature file offered when a programmer refuses commands until vendor
+    /// authentication completes.
+    /// <para>获取或设置记住的 EDL 签名文件；programmer 在厂商认证完成前拒绝命令时提交该文件。</para>
+    /// </summary>
+    /// <value>The file path, or an empty string when no signature is configured.
+    /// <para>文件路径；未配置签名时为空字符串。</para></value>
+    [JsonPropertyName("edlSignaturePath")]
+    public string EdlSignaturePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets whether to auto-verify after unpacking.
     /// <para>获取或设置解包后是否自动校验。</para>
     /// </summary>
@@ -991,6 +1001,21 @@ public class SettingsPersistenceService
             default:
                 return false;
         }
+        return TrySaveSettings(settings, out _);
+    }
+
+    /// <summary>
+    /// Remembers the EDL signature file path, merging it into the latest on-disk settings so other keys stay
+    /// untouched; a null or blank path clears the remembered file.
+    /// <para>记住 EDL 签名文件路径，并合并进磁盘上最新的设置以保持其它键不变；null 或空白路径表示清除记住的文件。</para>
+    /// </summary>
+    /// <param name="path">The signature file path, or <see langword="null"/> to clear it.
+    /// <para>签名文件路径；为 <see langword="null"/> 时清除。</para></param>
+    /// <returns>Whether the settings were saved successfully. <para>是否保存成功。</para></returns>
+    public bool UpdateEdlSignaturePath(string? path)
+    {
+        var settings = LoadSettings();
+        settings.EdlSignaturePath = path ?? string.Empty;
         return TrySaveSettings(settings, out _);
     }
 

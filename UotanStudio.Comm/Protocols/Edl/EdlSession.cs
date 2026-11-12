@@ -86,6 +86,16 @@ public sealed partial class EdlSession : IProtocolSession
     /// <value>The observed protocol, or Unknown when no response was verified.<para>已观测到的协议；未校验到响应时为 Unknown。</para></value>
     public EdlProtocolState ProtocolState => _protocolState;
 
+    /// <summary>
+    /// Gets whether the programmer refused initialization because it requires vendor authentication first.
+    /// <para>获取 programmer 是否因要求先完成厂商认证而拒绝初始化。</para>
+    /// </summary>
+    /// <value><see langword="true"/> after a configure refusal whose target log named authentication, until a
+    /// later initialization succeeds. A probe reads it to avoid repeating a command the target keeps refusing.
+    /// <para>configure 被拒且目标日志指明认证之后为 <see langword="true"/>，直到后续初始化成功；探测读取它，
+    /// 以免重复发送目标持续拒绝的命令。</para></value>
+    public bool VendorAuthenticationRequired { get; private set; }
+
     /// <summary>Reports verified protocol changes within this session.<para>报告本会话内经校验的协议变化。</para></summary>
     public event EventHandler<EdlProtocolState>? ProtocolStateChanged;
 
@@ -583,12 +593,20 @@ public sealed partial class EdlSession : IProtocolSession
             {
                 throw new InvalidOperationException("The configured session has no verified Sahara identity report.");
             }
-            return;
+            if (options?.StorageType is not { } requestedMedia
+                || Firehose!.Configuration.StorageType == requestedMedia)
+            {
+                return;
+            }
         }
 
         var skipResponse = options?.SkipResponseOnReadWrite ?? false;
         Firehose!.Configuration.SkipResponseOnErase = skipResponse;
         Firehose.Configuration.SkipResponseOnReadWrite = skipResponse;
+        if (options?.StorageType is { } storageType)
+        {
+            Firehose.Configuration.StorageType = storageType;
+        }
         if (HasProgrammerImages(programmerImages) && !_programmerHashPreflightDone)
         {
             RecordProgrammerHashPreflight(programmerImages!, cancellationToken);
@@ -665,12 +683,22 @@ public sealed partial class EdlSession : IProtocolSession
             {
                 LinkStage = EdlLinkStage.FirehoseVerifying;
                 await DrainFirehoseStartupOutputAsync(cancellationToken).ConfigureAwait(false);
-                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true).ConfigureAwait(false);
-                await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
+                await ConfigureWithVendorAuthenticationOwnedAsync(options, cancellationToken).ConfigureAwait(false);
+                await Firehose!.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
                 IsConfigured = true;
                 LinkStage = EdlLinkStage.FirehoseReady;
                 Backend = EdlDownloadBackend.Firehose;
             }
+        }
+        catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.VendorAuthenticationRequired)
+        {
+            // The target answered every command, so the link, the protocol state and the parked lease stay
+            // usable; only the missing or rejected signature has to change before a retry.
+            Streaming?.Dispose();
+            Streaming = null;
+            Backend = EdlDownloadBackend.None;
+            LinkStage = EdlLinkStage.Failed;
+            throw;
         }
         catch
         {
@@ -683,6 +711,76 @@ public sealed partial class EdlSession : IProtocolSession
             PublishRelinkOffer();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Configures the programmer and answers a vendor authentication demand before the refusal reaches the caller.
+    /// <para>配置 programmer，并在厂商认证要求到达调用方之前先行应答。</para>
+    /// </summary>
+    /// <remarks>
+    /// The refusal itself is ordinary Firehose traffic, so the link stays healthy: the signature is offered on the
+    /// same session and configure is repeated afterwards. Without a declared signature the typed refusal is
+    /// rethrown so the host can ask for one; a signature the target rejects is reported as its own refusal rather
+    /// than as a transport failure.
+    /// <para>拒绝本身是普通 Firehose 流量，链路仍然健康：签名在同一会话上提交，随后重发 configure。未声明签名时
+    /// 原样抛出类型化拒绝，使宿主可以向用户索取；目标拒绝的签名会作为其自身的拒绝上报，而不是传输失败。</para>
+    /// </remarks>
+    /// <param name="options">The session startup requirements, or <see langword="null"/>.
+    /// <para>会话启动要求；没有时为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the configuration and the signature exchange.
+    /// <para>取消配置与签名交换。</para></param>
+    private async Task ConfigureWithVendorAuthenticationOwnedAsync(EdlInitializationOptions? options,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true)
+                .ConfigureAwait(false);
+            VendorAuthenticationRequired = false;
+            return;
+        }
+        catch (EdlException ex) when (ex.ErrorCode == EdlErrorCode.VendorAuthenticationRequired)
+        {
+            VendorAuthenticationRequired = true;
+            if (options?.VendorAuthSignature is not { Length: > 0 } signature)
+            {
+                throw;
+            }
+
+            await SendAuthSignatureBlocksOwnedAsync(signature, cancellationToken).ConfigureAwait(false);
+        }
+
+        await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true)
+            .ConfigureAwait(false);
+        VendorAuthenticationRequired = false;
+    }
+
+    /// <summary>
+    /// Offers each 256-byte signature block in order and stops at the first accepted one.
+    /// <para>按顺序提交每个 256 字节签名块，并在第一个被接受的块处停止。</para>
+    /// </summary>
+    /// <param name="blocks">The signature blocks to try. <para>要尝试的签名块。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange. <para>取消本次交换。</para></param>
+    /// <exception cref="EdlException">No block was accepted by the target. <para>目标未接受任何签名块。</para></exception>
+    private async Task SendAuthSignatureBlocksOwnedAsync(ReadOnlyMemory<byte> blocks, CancellationToken cancellationToken)
+    {
+        for (var offset = 0; offset + FirehoseProtocol.VendorSignatureLength <= blocks.Length;
+            offset += FirehoseProtocol.VendorSignatureLength)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var outcome = await Firehose!.SendVendorSignatureOwnedAsync(
+                blocks.Slice(offset, FirehoseProtocol.VendorSignatureLength), cancellationToken).ConfigureAwait(false);
+            if (outcome == VendorSignatureOutcome.Accepted)
+            {
+                return;
+            }
+
+            ProtocolLogMessage?.Invoke(this,
+                $"Signature block {offset / FirehoseProtocol.VendorSignatureLength + 1} was not accepted ({outcome}).");
+        }
+
+        throw new EdlException(EdlErrorCode.VendorAuthenticationRequired,
+            "The programmer requires vendor authentication and none of the supplied signatures was accepted.");
     }
 
     /// <summary>
@@ -1020,7 +1118,10 @@ public sealed partial class EdlSession : IProtocolSession
     /// <para>确保会话用 programmer 镜像集合初始化；对已配置的会话或已交接给流式 DLOAD 后端的链路直接返回。</para>
     /// </summary>
     /// <remarks>The early return happens before any image is opened, so an already configured endpoint pays no
-    /// extra file I/O.<para>提前返回发生在任何镜像被打开之前，因此已配置的端点不产生额外文件 I/O。</para></remarks>
+    /// extra file I/O; a request for a different storage media than the configured one is not an early return,
+    /// because that media is what the next storage command must address.
+    /// <para>提前返回发生在任何镜像被打开之前，因此已配置的端点不产生额外文件 I/O；请求的存储介质与已配置介质
+    /// 不同时不属于提前返回，因为下一条存储命令必须寻址的就是该介质。</para></remarks>
     /// <param name="programmerImages">The validated image set to upload.
     /// <para>要上传的已校验镜像集合。</para></param>
     /// <param name="initialization">Optional startup requirements.
@@ -1037,7 +1138,13 @@ public sealed partial class EdlSession : IProtocolSession
         ArgumentNullException.ThrowIfNull(programmerImages);
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
-        if (IsConfigured || _protocolState == EdlProtocolState.Streaming)
+        if (IsConfigured && (initialization?.StorageType is not { } requestedMedia
+            || Firehose!.Configuration.StorageType == requestedMedia))
+        {
+            return;
+        }
+
+        if (_protocolState == EdlProtocolState.Streaming)
         {
             return;
         }
