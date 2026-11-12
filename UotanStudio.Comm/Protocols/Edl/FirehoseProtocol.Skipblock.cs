@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl;
@@ -16,6 +17,13 @@ public sealed partial class FirehoseProtocol
     /// 对多 GB 分区做单次摘要查询可能超过目标的摘要计算超时，因此按块逐一比对。</para>
     /// </summary>
     private const long SkipblockChunkBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// Hash staging buffer size; rented from the shared pool once per chunk instead of
+    /// allocating a fresh 64 KiB array on every chunk of a multi-gigabyte partition.
+    /// <para>哈希暂存缓冲大小；从共享池按分块租借，而不是在多 GB 分区的每个分块上都新分配 64 KiB 数组。</para>
+    /// </summary>
+    private const int SkipblockDigestBufferSize = 65536;
 
     /// <summary>
     /// Programs the declared region on an already-owned operation lease, skipping chunks whose
@@ -129,34 +137,41 @@ public sealed partial class FirehoseProtocol
     {
         dataStream.Seek(offset, SeekOrigin.Begin);
         using var hasher = Sha256.CreateAccumulator();
-        var buffer = new byte[65536];
-        long hashed = 0;
-        while (hashed < length)
+        var buffer = ArrayPool<byte>.Shared.Rent(SkipblockDigestBufferSize);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var want = (int)Math.Min(buffer.Length, length - hashed);
-            var read = await dataStream.ReadAsync(buffer.AsMemory(0, want), cancellationToken).ConfigureAwait(false);
-            if (read <= 0)
-            {
-                break;
-            }
-
-            hasher.Append(buffer.AsSpan(0, read));
-            hashed += read;
-        }
-
-        if (hashed < length)
-        {
-            Array.Clear(buffer);
+            long hashed = 0;
             while (hashed < length)
             {
-                var pad = (int)Math.Min(buffer.Length, length - hashed);
-                hasher.Append(buffer.AsSpan(0, pad));
-                hashed += pad;
-            }
-        }
+                cancellationToken.ThrowIfCancellationRequested();
+                var want = (int)Math.Min(SkipblockDigestBufferSize, length - hashed);
+                var read = await dataStream.ReadAsync(buffer.AsMemory(0, want), cancellationToken).ConfigureAwait(false);
+                if (read <= 0)
+                {
+                    break;
+                }
 
-        return hasher.GetHashAndReset();
+                hasher.Append(buffer.AsSpan(0, read));
+                hashed += read;
+            }
+
+            if (hashed < length)
+            {
+                buffer.AsSpan(0, SkipblockDigestBufferSize).Clear();
+                while (hashed < length)
+                {
+                    var pad = (int)Math.Min(SkipblockDigestBufferSize, length - hashed);
+                    hasher.Append(buffer.AsSpan(0, pad));
+                    hashed += pad;
+                }
+            }
+
+            return hasher.GetHashAndReset();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
