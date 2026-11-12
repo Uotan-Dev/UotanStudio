@@ -302,7 +302,7 @@ public static class CompoundFileWriter
             throw new InvalidOperationException("The container layout accounting drifted.");
         }
 
-        var entries = new List<DirectoryEntry> { new("Root Entry", 5, miniStreamStart, miniStreamSize) };
+        List<DirectoryEntry> entries = [new("Root Entry", 5, miniStreamStart, miniStreamSize)];
         foreach (var storage in storages)
         {
             var name = storage.Split('/')[^1];

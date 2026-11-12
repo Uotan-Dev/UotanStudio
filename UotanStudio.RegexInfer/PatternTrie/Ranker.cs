@@ -531,7 +531,7 @@ internal static class Ranker
         var confidence = (0.6 * recall) + (0.25 * precision) + (0.1 * support) + (0.05 * brevity);
         var candidate = new InferredRegex(pattern, exactMatches, expectedOutputs.Count, confidence, negativeLeaks, traceCount);
 
-        return new List<InferredRegex> { candidate };
+        return [candidate];
     }
 
     /// <summary>

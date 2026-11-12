@@ -1322,9 +1322,13 @@ public sealed partial class Ext4Builder
                 enableMetadataCsum,
                 uuid, node.SourceMetadata?.Generation ?? 0);
 
-            var blocks = new List<byte[]>(1 + plan.LeafBlocks.Count + plan.IndexBlocks.Count) { plan.RootBlock };
-            blocks.AddRange(plan.LeafBlocks);
-            blocks.AddRange(plan.IndexBlocks);
+            List<byte[]> blocks =
+            [
+                with(1 + plan.LeafBlocks.Count + plan.IndexBlocks.Count),
+                plan.RootBlock,
+                ..plan.LeafBlocks,
+                ..plan.IndexBlocks
+            ];
 
             node.DirectoryBlocks = blocks;
             node.Size = (long)blocks.Count * blockSize;
@@ -1416,11 +1420,11 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static List<byte[]> BuildDirectoryBlocks(Node dir, int blockSize, byte[] uuid, bool enableMetadataCsum)
     {
-        var entries = new List<(string Name, byte Type, uint Inode)>
-        {
+        List<(string Name, byte Type, uint Inode)> entries =
+        [
             (".", Ext4DirectoryEntry.TypeDirectory, dir.Inode),
             ("..", Ext4DirectoryEntry.TypeDirectory, dir.Parent?.Inode ?? dir.Inode),
-        };
+        ];
         foreach (var child in dir.Children)
         {
             FileSystemNameLimits.ValidateEntryName(child.Name, "EXT4");

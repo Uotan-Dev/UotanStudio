@@ -335,7 +335,7 @@ internal static class AdbMdnsDiscovery
     private static IReadOnlyList<byte[]> BuildUnicastQueries(
         ConcurrentDictionary<string, DeviceAccumulator> byInstance, string? instanceName)
     {
-        var queries = new List<byte[]> { SerializeQuery(AdbTlsService, DnsType.PTR) };
+        List<byte[]> queries = [SerializeQuery(AdbTlsService, DnsType.PTR)];
         if (instanceName is not null)
         {
             var instance = $"{instanceName}.{AdbTlsService}";

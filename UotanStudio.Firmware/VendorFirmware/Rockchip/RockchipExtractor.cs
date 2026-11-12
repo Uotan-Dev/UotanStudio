@@ -76,11 +76,10 @@ internal static class RockchipExtractor
             0x2052444C => "LDR",
             _ => throw new InvalidDataException("Invalid RKFW loader magic.")
         };
-        var entries = new List<RkfwEntry>
-        {
+        List<RkfwEntry> entries = [
             new(loaderName, header.BootOffset, header.BootSize, RkfwEntryType.Boot),
             new("embedded-update.img", header.ImageOffset, header.ImageSize, RkfwEntryType.Image)
-        };
+        ];
         entries.AddRange(ReadRkaf(reader, header.ImageOffset, header.ImageSize, validateChecksum: false)
             .Select(entry => entry with { Name = $"embedded-update.img/{entry.Name}", Offset = header.ImageOffset + entry.Offset }));
         return (header, entries);

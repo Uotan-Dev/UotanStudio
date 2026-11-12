@@ -274,10 +274,11 @@ public static partial class FileSystemPreservation
         if (ActiveProgress.Value is not { } progress) return;
         var root = Path.GetFullPath(extractionDirectory);
         var partition = RepackMetadata.DetectPartitionName(sourceName);
-        var exports = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
+        HashSet<string> exports =
+        [
+            with(StringComparer.OrdinalIgnoreCase),
             partition + "_fs_config", partition + "_file_contexts", partition + "_info"
-        };
+        ];
         var files = new List<(string Path, long Size)>();
         var pending = new Stack<string>();
         pending.Push(root);

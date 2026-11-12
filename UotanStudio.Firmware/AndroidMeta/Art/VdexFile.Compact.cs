@@ -248,7 +248,7 @@ internal static partial class VdexFile
                     units += _shared.U16(pre -= 2);
                     units += (long)_shared.U16(pre -= 2) << 16;
                 }
-                var values = new int[] { (fields >> 12) & 15, (fields >> 8) & 15, (fields >> 4) & 15, fields & 15 };
+                int[] values = [(fields >> 12) & 15, (fields >> 8) & 15, (fields >> 4) & 15, fields & 15];
                 for (var i = 0; i < 4; i++)
                 {
                     if ((flags & (1 << i)) != 0)

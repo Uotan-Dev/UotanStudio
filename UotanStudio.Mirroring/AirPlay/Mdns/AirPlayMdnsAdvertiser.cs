@@ -236,8 +236,9 @@ internal sealed class AirPlayMdnsAdvertiser : IDisposable
 
     private List<string> BuildAirPlayText()
     {
-        var values = new List<string>(12)
-        {
+        List<string> values =
+        [
+            with(12),
             "deviceid=" + _deviceId,
             "features=0x" + AirPlayConstants.Features.ToString("X", System.Globalization.CultureInfo.InvariantCulture),
             "flags=0x4",
@@ -245,7 +246,7 @@ internal sealed class AirPlayMdnsAdvertiser : IDisposable
             "protovers=" + AirPlayConstants.ProtocolVersion,
             "srcvers=" + AirPlayConstants.SourceVersion,
             "vv=2",
-        };
+        ];
 
         if (_publicKey.Length > 0)
         {
@@ -257,8 +258,9 @@ internal sealed class AirPlayMdnsAdvertiser : IDisposable
 
     private List<string> BuildRaopText()
     {
-        var values = new List<string>(16)
-        {
+        List<string> values =
+        [
+            with(16),
             "ch=2",
             "cn=0,1,2,3",
             "da=true",
@@ -275,7 +277,7 @@ internal sealed class AirPlayMdnsAdvertiser : IDisposable
             "vs=" + AirPlayConstants.SourceVersion,
             "vn=65537",
             "vv=2",
-        };
+        ];
         return values;
     }
 

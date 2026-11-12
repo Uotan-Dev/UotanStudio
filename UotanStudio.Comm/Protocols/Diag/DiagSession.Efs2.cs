@@ -108,7 +108,7 @@ public sealed partial class DiagSession
             BinaryPrimitives.WriteUInt32LittleEndian(head.AsSpan(0, 4), (uint)sequence);
             BinaryPrimitives.WriteUInt32LittleEndian(head.AsSpan(4, 4), (uint)chunk);
             BinaryPrimitives.WriteUInt32LittleEndian(head.AsSpan(8, 4), 0);
-            var parts = new List<byte[]>(3) { head, DiagSubsysPacket.EncodeEfsString(path) };
+            List<byte[]> parts = [with(3), head, DiagSubsysPacket.EncodeEfsString(path)];
             if (chunk > 0)
             {
                 parts.Add(content.Slice(offset, chunk).ToArray());

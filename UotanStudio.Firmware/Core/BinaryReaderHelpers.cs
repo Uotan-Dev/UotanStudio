@@ -186,7 +186,7 @@ public static class BinaryReaderHelpers
                     return [];
                 }
 
-                var one = new[] { (byte)single };
+                byte[] one = [(byte)single];
                 var oneEnd = one.Length;
                 while (oneEnd > 0 && one[oneEnd - 1] == 0)
                 {

@@ -162,16 +162,14 @@ internal sealed class LinuxTunDevice : ITunDevice
             start.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(start)
-            ?? throw new IOException("The 'ip' command is not available on this system.");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExitAsync(cancellationToken).GetAwaiter().GetResult();
         cancellationToken.ThrowIfCancellationRequested();
-        if (process.ExitCode != 0)
+        var result = Process.RunAndCaptureText(start);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result.ExitStatus.ExitCode != 0)
         {
             throw new IOException(
-                $"ip {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {error.Trim()} {output.Trim()}".Trim());
+                $"ip {string.Join(' ', arguments)} failed with exit code {result.ExitStatus.ExitCode}: "
+                + $"{result.StandardError.Trim()} {result.StandardOutput.Trim()}".Trim());
         }
     }
 }

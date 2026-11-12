@@ -177,12 +177,13 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         if ((uint)layerIndex >= descriptor.LayerCount) throw new ArgumentOutOfRangeException(nameof(layerIndex));
         DmaBufLayer layer = descriptor.Layers[layerIndex];
         if (layer.Planes is < 1 or > 3) throw new NotSupportedException("EGL import supports one to three planes.");
-        var attributes = new List<int>(6 + (int)layer.Planes * 9)
-        {
+        List<int> attributes =
+        [
+            with(6 + (int)layer.Planes * 9),
             0x3057, checked((int)descriptor.Width),
             0x3056, checked((int)descriptor.Height),
             0x3271, unchecked((int)layer.Format),
-        };
+        ];
         for (var i = 0; i < layer.Planes; i++)
         {
             var objectIndex = layer.ObjectIndices[i];

@@ -200,7 +200,7 @@ public sealed class AdbAuthentication : IDisposable
     public static IReadOnlyList<AdbAuthentication> LoadIdentityChain(string? keyPath = null)
     {
         var userIdentity = LoadOrCreate(keyPath);
-        var chain = new List<AdbAuthentication> { userIdentity };
+        List<AdbAuthentication> chain = [userIdentity];
         var seen = new HashSet<string>([Convert.ToHexString(userIdentity.PublicKeyFingerprint)]);
         foreach (var vendor in EnumerateVendorIdentities(seen))
         {

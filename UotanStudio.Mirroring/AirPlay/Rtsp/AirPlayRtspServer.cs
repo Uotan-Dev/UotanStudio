@@ -178,7 +178,7 @@ internal sealed class AirPlayRtspServer : IDisposable
 
     private bool ServeRequest(NetworkStream stream, byte first)
     {
-        var header = new List<byte>(256) { first };
+        List<byte> header = [with(256), first];
         var complete = false;
         while (header.Count < AirPlayConstants.MaximumHeaderBytes)
         {

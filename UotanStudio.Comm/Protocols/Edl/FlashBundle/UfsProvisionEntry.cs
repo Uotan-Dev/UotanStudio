@@ -1,31 +1,6 @@
 namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 /// <summary>
-/// Represents the type of a UFS provisioning entry.
-/// <para>表示 UFS 配置条目的类型。</para>
-/// </summary>
-internal enum UfsProvisionEntryType
-{
-    /// <summary>
-    /// Common UFS provisioning configuration.
-    /// <para>通用 UFS 配置信息。</para>
-    /// </summary>
-    Common,
-
-    /// <summary>
-    /// Per-LUN body entry in UFS provisioning.
-    /// <para>UFS 配置中每个 LUN 的 body 条目。</para>
-    /// </summary>
-    Body,
-
-    /// <summary>
-    /// Epilogue entry in UFS provisioning.
-    /// <para>UFS 配置中的 epilogue 条目。</para>
-    /// </summary>
-    Epilogue
-}
-
-/// <summary>
 /// The mutable per-entry state every <see cref="UfsProvisionEntry"/> case carries: the slot number
 /// its <c>slot</c> attribute declared.
 /// <para>每个 <see cref="UfsProvisionEntry"/> 分支都携带的可变条目状态：其 <c>slot</c> 属性声明的槽位编号。</para>
@@ -188,96 +163,28 @@ internal sealed class UfsProvisionEpilogue : UfsProvisionEntryState
 }
 
 /// <summary>
-/// A UFS provisioning entry parsed from a UFS provisioning XML file. The case set is closed and
-/// exactly <see cref="UfsProvisionCommon"/>, <see cref="UfsProvisionBody"/> and
-/// <see cref="UfsProvisionEpilogue"/>; a <c>switch</c> over those three shapes plus <c>null</c> is
-/// exhaustive, so no fallback arm can hide a future fourth shape.
-/// <para>从 UFS 配置 XML 文件解析出的 UFS 配置条目。分支集合闭合，恰好为
-/// <see cref="UfsProvisionCommon"/>、<see cref="UfsProvisionBody"/> 与 <see cref="UfsProvisionEpilogue"/>；
-/// 对这三种形态加 <c>null</c> 的 <c>switch</c> 已穷尽，因此不存在能把将来新增的第四种形态藏起来的兜底分支。</para>
+/// A UFS provisioning entry parsed from a UFS provisioning XML file. The case set is exactly
+/// <see cref="UfsProvisionCommon"/>, <see cref="UfsProvisionBody"/> and
+/// <see cref="UfsProvisionEpilogue"/>, so a <c>switch</c> over the union is exhaustive and a case
+/// can only be introduced by changing this file.
+/// <para>从 UFS 配置 XML 文件解析出的 UFS 配置条目。分支集合恰为
+/// <see cref="UfsProvisionCommon"/>、<see cref="UfsProvisionBody"/> 与 <see cref="UfsProvisionEpilogue"/>，
+/// 因此对联合的 <c>switch</c> 已穷尽，新增分支只能通过修改本文件完成。</para>
 /// All three cases are reference types, so holding one boxes nothing. The default value carries no
 /// entry at all, which is why every read either pattern-matches the case or falls back explicitly.
 /// <para>三个分支都是引用类型，因此持有它们不会装箱。默认值不携带任何条目，
 /// 所以每次读取要么对分支做模式匹配，要么显式回退。</para>
 /// </summary>
-internal sealed class UfsProvisionEntry
+internal union UfsProvisionEntry(UfsProvisionCommon, UfsProvisionBody, UfsProvisionEpilogue)
 {
     /// <summary>
-    /// Creates an entry holding one of the three closed case shapes.
-    /// <para>创建持有三种闭合分支形态之一的条目。</para>
+    /// Gets the slot number the entry's <c>slot</c> attribute declared, or zero when the held case
+    /// carries no slot state.
+    /// <para>获取条目 <c>slot</c> 属性声明的槽位编号；所持分支不带槽位状态时为零。</para>
     /// </summary>
-    /// <param name="value">The case instance to hold.
-    /// <para>要持有的分支实例。</para></param>
-    /// <exception cref="ArgumentNullException">The case instance is null.
-    /// <para>分支实例为 null。</para></exception>
-    private UfsProvisionEntry(object value) => Value = value is null
-        ? throw new ArgumentNullException(nameof(value))
-        : value;
-
-    /// <summary>
-    /// Gets the held case instance, which is always one of <see cref="UfsProvisionCommon"/>,
-    /// <see cref="UfsProvisionBody"/> and <see cref="UfsProvisionEpilogue"/> and never null.
-    /// <para>获取持有的分支实例；它始终是三者之一且不为 null。</para>
-    /// </summary>
-    /// <value>The held case instance. <para>持有的分支实例。</para></value>
-    internal object Value { get; }
-
-    /// <summary>
-    /// Creates an entry holding a common case.
-    /// <para>创建持有 common 分支的条目。</para>
-    /// </summary>
-    /// <param name="common">The common case. <para>common 分支。</para></param>
-    public static implicit operator UfsProvisionEntry(UfsProvisionCommon common) => new(common);
-
-    /// <summary>
-    /// Creates an entry holding a body case.
-    /// <para>创建持有 body 分支的条目。</para>
-    /// </summary>
-    /// <param name="body">The body case. <para>body 分支。</para></param>
-    public static implicit operator UfsProvisionEntry(UfsProvisionBody body) => new(body);
-
-    /// <summary>
-    /// Creates an entry holding an epilogue case.
-    /// <para>创建持有 epilogue 分支的条目。</para>
-    /// </summary>
-    /// <param name="epilogue">The epilogue case. <para>epilogue 分支。</para></param>
-    public static implicit operator UfsProvisionEntry(UfsProvisionEpilogue epilogue) => new(epilogue);
-
-    /// <summary>
-    /// Gets the type of this UFS provisioning entry, derived from the case it holds so it can never
-    /// disagree with the case's own shape.
-    /// <para>获取此 UFS 配置条目的类型；它由所持有的分支推导而来，因此绝不可能与分支自身的形态不一致。</para>
-    /// </summary>
-    /// <value>The entry type. <para>条目类型。</para></value>
-    /// <exception cref="InvalidOperationException">The union holds no entry.
-    /// <para>该联合未持有任何条目。</para></exception>
-    internal UfsProvisionEntryType EntryType => Value switch
-    {
-        UfsProvisionCommon => UfsProvisionEntryType.Common,
-        UfsProvisionBody => UfsProvisionEntryType.Body,
-        UfsProvisionEpilogue => UfsProvisionEntryType.Epilogue,
-        _ => throw new InvalidOperationException("The UFS provisioning entry holds no case.")
-    };
-
-    /// <summary>
-    /// Gets or sets the slot number the entry's <c>slot</c> attribute declared. Reading or writing an
-    /// entry that holds no case is a no-op rather than a failure, because the parser assigns the slot
-    /// before the entry is published.
-    /// <para>获取或设置条目 <c>slot</c> 属性声明的槽位编号。对未持有任何条目的联合读写是空操作而非失败，
-    /// 因为解析器在条目发布之前就已写入槽位。</para>
-    /// </summary>
-    /// <value>The declared slot number, or zero when no case is held. <para>声明的槽位编号；未持有分支时为零。</para></value>
-    internal int Slot
-    {
-        get => Value is UfsProvisionEntryState state ? state.Slot : 0;
-        set
-        {
-            if (Value is UfsProvisionEntryState state)
-            {
-                state.Slot = value;
-            }
-        }
-    }
+    /// <value>The declared slot number, or zero when the case carries no slot state.
+    /// <para>声明的槽位编号；分支不带槽位状态时为零。</para></value>
+    internal int Slot => Value is UfsProvisionEntryState state ? state.Slot : 0;
 }
 
 /// <summary>

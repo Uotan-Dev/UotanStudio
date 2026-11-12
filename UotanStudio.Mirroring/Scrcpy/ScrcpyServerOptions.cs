@@ -179,8 +179,7 @@ public sealed class ScrcpyServerOptions
         if (VideoBitRate is < 64000 or > 200000000 || AudioBitRate is < 8000 or > 1000000 || MaxFps is < 0 or > 240 || MaxSize is < 0 or > 16384)
             throw new ArgumentOutOfRangeException(nameof(VideoBitRate), "Invalid capture limits.");
         if (LogLevel is not ("verbose" or "debug" or "info" or "warn" or "error")) throw new ArgumentException("Invalid server log level.", nameof(LogLevel));
-        var args = new List<string>
-        {
+        List<string> args = [
             ServerVersion,
             $"scid={Scid:x8}",
             $"log_level={LogLevel}",
@@ -200,7 +199,7 @@ public sealed class ScrcpyServerOptions
             $"send_stream_meta={Bool(SendStreamMeta)}",
             "cleanup=true",
             "tunnel_forward=true",
-        };
+        ];
         if (!ClipboardAutoSync) args.Add("clipboard_autosync=false");
         if (VideoEncoder.Length > 0) args.Add($"video_encoder={VideoEncoder}");
         return [.. args];

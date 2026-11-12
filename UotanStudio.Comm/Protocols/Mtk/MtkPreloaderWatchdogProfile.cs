@@ -54,15 +54,15 @@ public sealed record MtkPreloaderWatchdogRule(
 /// </remarks>
 public static class MtkPreloaderWatchdogTable
 {
-    private static readonly FrozenSet<ushort> SixtyFourBitHardwareCodes = new HashSet<ushort>
-    {
+    private static readonly FrozenSet<ushort> SixtyFourBitHardwareCodes =
+    [
         0x0907, 0x1229, 0x1236, 0x1296, 0x1375, 0x6899, 0x1471
-    }.ToFrozenSet();
+    ];
 
-    private static readonly FrozenSet<ushort> FixedAddressCodes = new HashSet<ushort>
-    {
+    private static readonly FrozenSet<ushort> FixedAddressCodes =
+    [
         0x2625, 0x2523, 0x7682, 0x7686, 0x5932
-    }.ToFrozenSet();
+    ];
 
     private static readonly FrozenDictionary<ushort, uint> WatchdogBases = new Dictionary<ushort, uint>
     {

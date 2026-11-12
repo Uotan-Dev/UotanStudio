@@ -42,7 +42,7 @@ internal sealed class UfsProvisionPlan
         CheckWord(common.WPeriodicRTCUpdate, nameof(common.WPeriodicRTCUpdate));
         CheckByte(epilogue.LUNumToGrow, nameof(epilogue.LUNumToGrow));
         var ids = new HashSet<int>();
-        var commands = new List<string>(bodies.Count + 2) { FirehoseXmlBuilder.BuildUfsCommon(common, slot) };
+        List<string> commands = [with(bodies.Count + 2), FirehoseXmlBuilder.BuildUfsCommon(common, slot)];
         foreach (var body in bodies)
         {
             ArgumentNullException.ThrowIfNull(body);

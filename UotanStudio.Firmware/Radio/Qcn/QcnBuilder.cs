@@ -61,10 +61,9 @@ public static class QcnBuilder
             }
         }
 
-        var streams = new List<CompoundFileStreamWriterEntry>
-        {
+        List<CompoundFileStreamWriterEntry> streams = [
             new("00000000/default/NV_ITEM_ARRAY", EncodeNvItemArray(items)),
-        };
+        ];
         var version = fileVersion is { Count: > 0 } ? fileVersion : [2, 0, 0];
         var versionBytes = new byte[version.Count * 2];
         for (var i = 0; i < version.Count; i++)

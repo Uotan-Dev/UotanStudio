@@ -461,11 +461,10 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
             }
 
             var imagePath = await PathForToolAsync(temporary, cancellationToken).ConfigureAwait(false);
-            var mkfsArguments = new List<string>
-            {
+            List<string> mkfsArguments = [
                 "-F", "-q", "-t", options.MkfsType, "-T", options.MkfsProfile,
                 "-b", options.BlockSize.ToString(CultureInfo.InvariantCulture)
-            };
+            ];
             if (options.Label is { } label)
             {
                 mkfsArguments.Add("-L");

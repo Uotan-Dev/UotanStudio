@@ -1032,7 +1032,7 @@ public static class AdbQrPairingService
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var advertised = ResolveAdvertisedPortAsync(endpoint, known, observed, stop.Token);
         var scanned = ScanSecurePortsAsync(endpoint.Host, stop.Token);
-        var pending = new List<Task> { advertised, scanned };
+        List<Task> pending = [advertised, scanned];
         var scan = default(SecurePortScan);
         while (pending.Count > 0)
         {

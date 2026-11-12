@@ -409,16 +409,16 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
 
             try
             {
-                using var server = Process.GetProcessById(pid);
-                if (!IsHdcServerProcess(server))
+                if (Process.TryGetProcessById(pid, out var server) && IsHdcServerProcess(server))
                 {
-                    continue;
+                    using (server)
+                    {
+                        server.Kill();
+                        return server.WaitForExit(timeoutMs);
+                    }
                 }
-
-                server.Kill();
-                return server.WaitForExit(timeoutMs);
             }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
+            catch (Exception ex) when (ex is InvalidOperationException
                 or System.ComponentModel.Win32Exception or NotSupportedException)
             {
             }

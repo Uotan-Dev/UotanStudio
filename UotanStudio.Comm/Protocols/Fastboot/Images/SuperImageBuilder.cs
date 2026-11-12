@@ -592,7 +592,7 @@ internal sealed class SuperImageBuilder
             remainingBytes -= size;
         }
 
-        var groups = new HashSet<string>(StringComparer.Ordinal) { "default" };
+        HashSet<string> groups = [with(StringComparer.Ordinal), "default"];
         foreach (var p in partitions)
         {
             var g = string.IsNullOrWhiteSpace(p.GroupName) ? "default" : p.GroupName;

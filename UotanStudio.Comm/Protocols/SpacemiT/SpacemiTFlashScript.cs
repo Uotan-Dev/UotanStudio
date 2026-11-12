@@ -13,7 +13,7 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// <param name="SkipFail">When true, a failure after all retries is skipped instead of aborting the run. <para>为真时，重试耗尽后的失败会被跳过而不是中止整个流程。</para></param>
 /// <param name="Retry">Total attempt count for the action (at least 1). <para>动作的总尝试次数（至少 1）。</para></param>
 /// <param name="Timeout">Per-attempt wire timeout; <see langword="null"/> keeps the session default. <para>单次尝试的线上超时；为 <see langword="null"/> 时沿用会话默认。</para></param>
-public abstract record SpacemiTFlashAction(
+public closed record SpacemiTFlashAction(
     string? SkipWhen,
     bool SkipFail,
     int Retry,

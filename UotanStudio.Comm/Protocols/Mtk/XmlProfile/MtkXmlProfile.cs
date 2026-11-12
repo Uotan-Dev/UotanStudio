@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace UotanStudio.Comm.Protocols.Mtk.XmlProfile;
 
 /// <summary>
@@ -25,13 +27,13 @@ public sealed record MtkXmlProfile
     /// Gets the allowed root envelope names for device-authored messages.
     /// <para>获取设备侧消息允许的信封根名称。</para>
     /// </summary>
-    public required IReadOnlySet<string> EnvelopeNames { get; init; }
+    public required FrozenSet<string> EnvelopeNames { get; init; }
 
     /// <summary>
     /// Gets the top-level field names that carry protocol meaning.
     /// <para>获取承载协议语义的顶层字段名。</para>
     /// </summary>
-    public required IReadOnlySet<string> FieldNames { get; init; }
+    public required FrozenSet<string> FieldNames { get; init; }
 
     /// <summary>
     /// Gets the additional field names that <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> may
@@ -39,32 +41,32 @@ public sealed record MtkXmlProfile
     /// <para>获取 <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> 可降级为 warning 证据的附加字段名；
     /// 它们绝不遮蔽已知字段。</para>
     /// </summary>
-    public required IReadOnlySet<string> IgnorableFieldNames { get; init; }
+    public required FrozenSet<string> IgnorableFieldNames { get; init; }
 
     /// <summary>
     /// Gets the reviewed command tokens, each required to keep the <c>CMD:</c> prefix.
     /// <para>获取经过审阅的命令标记，每个都必须保留 <c>CMD:</c> 前缀。</para>
     /// </summary>
-    public required IReadOnlySet<string> Commands { get; init; }
+    public required FrozenSet<string> Commands { get; init; }
 
     /// <summary>
     /// Gets the reviewed result tokens for terminal <c>CMD:END</c> messages.
     /// <para>获取终态 <c>CMD:END</c> 消息经过审阅的结果标记。</para>
     /// </summary>
-    public required IReadOnlySet<string> ResultTokens { get; init; }
+    public required FrozenSet<string> ResultTokens { get; init; }
 
     /// <summary>
     /// Gets the reviewed storage region name prefixes; concrete regions must additionally have
     /// been reported by the device geometry and must not be authenticated-only.
     /// <para>获取经过审阅的存储区域名前缀；具体区域还必须由设备几何信息上报，且不得为需认证区域。</para>
     /// </summary>
-    public required IReadOnlySet<string> StorageRegionPrefixes { get; init; }
+    public required FrozenSet<string> StorageRegionPrefixes { get; init; }
 
     /// <summary>
     /// Gets the reviewed <c>CMD:BOOT-TO</c> mode tokens.
     /// <para>获取经过审阅的 <c>CMD:BOOT-TO</c> 模式标记。</para>
     /// </summary>
-    public required IReadOnlySet<string> RebootModes { get; init; }
+    public required FrozenSet<string> RebootModes { get; init; }
 
     /// <summary>
     /// Gets the file-request rules that every upload or download callback must satisfy: the exact
@@ -133,24 +135,26 @@ public sealed record MtkXmlProfile
     private static MtkXmlProfile Create(string version) => new()
     {
         Version = version,
-        EnvelopeNames = new HashSet<string>(StringComparer.Ordinal) { "host", "da", "sla", "da_hw_info" },
-        FieldNames = new HashSet<string>(StringComparer.Ordinal) { "version", "command", "result", "arg" },
-        IgnorableFieldNames = new HashSet<string>(StringComparer.Ordinal)
-        {
+        EnvelopeNames = [with(StringComparer.Ordinal), "host", "da", "sla", "da_hw_info"],
+        FieldNames = [with(StringComparer.Ordinal), "version", "command", "result", "arg"],
+        IgnorableFieldNames =
+        [
+            with(StringComparer.Ordinal),
             "status", "info", "log", "debug", "reason", "task_id", "progress"
-        },
-        Commands = new HashSet<string>(StringComparer.Ordinal)
-        {
+        ],
+        Commands =
+        [
+            with(StringComparer.Ordinal),
             "CMD:START", "CMD:END", "CMD:HOST-SUPPORTED-COMMANDS", "CMD:SET-RUNTIME-PARAMETER",
             "CMD:NOTIFY-INIT-HW", "CMD:SET-HOST-INFO", "CMD:GET-SYS-PROPERTY", "CMD:GET-HW-INFO",
             "CMD:UPLOAD-FILE", "CMD:DOWNLOAD-FILE", "CMD:PROGRESS-REPORT", "CMD:READ-FLASH",
             "CMD:WRITE-FLASH", "CMD:ERASE-FLASH", "CMD:FILE-SYS-OPERATION",
             "CMD:SECURITY-GET-DEV-FW-INFO", "CMD:SECURITY-SET-FLASH-POLICY",
             "CMD:SECURITY-SET-ALLINONE-SIGNATURE", "CMD:SET-BOOT-MODE", "CMD:BOOT-TO", "CMD:REBOOT"
-        },
-        ResultTokens = new HashSet<string>(StringComparer.Ordinal) { "OK", "ERR!" },
-        StorageRegionPrefixes = new HashSet<string>(StringComparer.Ordinal) { "EMMC-", "UFS-LUA" },
-        RebootModes = new HashSet<string>(StringComparer.Ordinal) { "FASTBOOT", "META", "ANDROID-TEST-MODE" },
+        ],
+        ResultTokens = [with(StringComparer.Ordinal), "OK", "ERR!"],
+        StorageRegionPrefixes = [with(StringComparer.Ordinal), "EMMC-", "UFS-LUA"],
+        RebootModes = [with(StringComparer.Ordinal), "FASTBOOT", "META", "ANDROID-TEST-MODE"],
         FileRequests = new MtkXmlFileRequestRules
         {
             ChecksumToken = "CHK_NO",

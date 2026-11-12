@@ -509,7 +509,7 @@ internal sealed class XzDecoderStream : Stream
             _check = XzBlockCheck.Create(checkType);
             _checkLength = XzBlockCheck.GetLength(checkType);
             _dataStart = input.BytesRead;
-            var property = new[] { lzma2Properties };
+            byte[] property = [lzma2Properties];
             _lzma = LzmaStream.Create(
                 property,
                 input,

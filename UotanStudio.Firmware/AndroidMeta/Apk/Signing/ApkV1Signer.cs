@@ -33,20 +33,18 @@ internal static class ApkV1Signer
     /// 超过 72 字节按续行折行。</para></returns>
     public static byte[] BuildManifest(IReadOnlyList<(string Name, byte[] Sha256Digest)> entries)
     {
-        var main = new List<(string Name, string Value)>
-        {
+        List<(string Name, string Value)> main = [
             ("Manifest-Version", "1.0"),
             ("Created-By", "1.0 (UotanStudio)"),
-        };
+        ];
         using var buffer = new MemoryStream();
         WriteSection(buffer, main, individualSections: null);
         foreach (var (name, digest) in entries)
         {
-            var section = new List<(string, string)>
-            {
+            List<(string, string)> section = [
                 ("Name", name),
                 ("SHA-256-Digest", Convert.ToBase64String(digest)),
-            };
+            ];
             WriteSection(buffer, null, section);
         }
 
@@ -96,11 +94,10 @@ internal static class ApkV1Signer
 
         var manifestBytes = manifestBuffer.ToArray();
         using var signatureBuffer = new MemoryStream();
-        var main = new List<(string Name, string Value)>
-        {
+        List<(string Name, string Value)> main = [
             ("Signature-Version", "1.0"),
             ("Created-By", "1.0 (UotanStudio)"),
-        };
+        ];
         if (protectedSchemeIds.Count > 0)
         {
             main.Add(("X-Android-APK-Signed", string.Join(", ", protectedSchemeIds)));
@@ -151,11 +148,10 @@ internal static class ApkV1Signer
     /// <para>清单格式无效：某段缺少开头的 <c>Name: </c> 属性或结尾空行。</para></exception>
     public static byte[] BuildSignatureFile(byte[] manifestBytes, IReadOnlyList<int> protectedSchemeIds)
     {
-        var main = new List<(string Name, string Value)>
-        {
+        List<(string Name, string Value)> main = [
             ("Signature-Version", "1.0"),
             ("Created-By", "1.0 (UotanStudio)"),
-        };
+        ];
         if (protectedSchemeIds.Count > 0)
         {
             main.Add(("X-Android-APK-Signed", string.Join(", ", protectedSchemeIds)));

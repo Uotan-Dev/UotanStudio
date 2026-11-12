@@ -300,7 +300,7 @@ internal static class WindowsDeviceApi
                 throw new FlashException($"Windows could not dismount the volume {root}.", LastError());
             }
 
-            var preventRemoval = new byte[] { 1 };
+            byte[] preventRemoval = [1];
             DeviceIoControl(handle, IoctlStorageMediaRemoval, preventRemoval, 1, null, 0, out _, IntPtr.Zero);
             return handle;
         }
@@ -319,7 +319,7 @@ internal static class WindowsDeviceApi
     /// <para>由 <see cref="LockAndDismountVolume"/> 返回的句柄。</para></param>
     internal static void AllowMediaRemoval(SafeFileHandle handle)
     {
-        var preventRemoval = new byte[] { 0 };
+        byte[] preventRemoval = [0];
         DeviceIoControl(handle, IoctlStorageMediaRemoval, preventRemoval, 1, null, 0, out _, IntPtr.Zero);
     }
 

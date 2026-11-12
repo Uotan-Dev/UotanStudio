@@ -208,8 +208,6 @@ public sealed class SpacemiTFlasher
                 case SpacemiTRebootAction reboot:
                     ExecuteReboot(session, reboot, progress, cancellationToken);
                     break;
-                default:
-                    throw new InvalidOperationException($"Unsupported action type {action.GetType().Name}.");
             }
         }
 
