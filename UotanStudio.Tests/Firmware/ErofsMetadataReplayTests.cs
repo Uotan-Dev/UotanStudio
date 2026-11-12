@@ -32,7 +32,7 @@ public class ErofsMetadataReplayTests
 
         foreach (var (path, expected) in SourceAttributes())
         {
-            var actual = entries[path];
+            var actual = entries[path.Length == 0 ? "." : path];
             Assert.Equal(expected.Mode, actual.Mode);
             Assert.Equal(expected.Uid, actual.Uid);
             Assert.Equal(expected.Gid, actual.Gid);
@@ -273,7 +273,7 @@ public class ErofsMetadataReplayTests
 
     private static Dictionary<string, FsConfigEntry> SourceAttributes() => new(StringComparer.Ordinal)
     {
-        ["."] = new FsConfigEntry(0, 0, 0x41ED),
+        [""] = new FsConfigEntry(0, 0, 0x41ED),
         ["meta"] = new FsConfigEntry(2_000, 2_000, 0x41C0),
         ["meta/data.bin"] = new FsConfigEntry(70_000, 70_000, 0x81A4),
         ["meta/tiny.cfg"] = new FsConfigEntry(0, 0, 0x81B4),

@@ -34,26 +34,31 @@ public sealed class CpioOutputSafetyTests : IDisposable
         var sentinel = Path.Combine(output, "sentinel");
         await File.WriteAllTextAsync(sentinel, "previous", Token);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Token);
-        using var watcher = new FileSystemWatcher(_root)
+        var watcher = Task.Run(async () =>
         {
-            IncludeSubdirectories = true,
-            NotifyFilter = NotifyFilters.FileName
-        };
-        watcher.Created += (_, args) =>
-        {
-            if (pack ? args.Name!.EndsWith(".tmp", StringComparison.Ordinal)
-                : args.Name!.Contains("payload.tmp-", StringComparison.Ordinal))
+            while (!cancellation.IsCancellationRequested)
             {
-                cancellation.Cancel();
+                var staged = pack
+                    ? Directory.GetFiles(output, "*.tmp")
+                    : Directory.EnumerateDirectories(_root, ".output.cpio-*")
+                        .SelectMany(directory => Directory.GetFiles(directory, "payload.tmp-*"))
+                        .ToArray();
+                if (staged.Length > 0)
+                {
+                    cancellation.Cancel();
+                    return;
+                }
+
+                await Task.Delay(1, TestContext.Current.CancellationToken);
             }
-        };
-        watcher.EnableRaisingEvents = true;
+        }, TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pack
             ? FirmwareService.Instance.PackCpioAsync(input, sentinel, cancellation.Token)
             : FirmwareService.Instance.UnpackCpioAsync(archive, output, cancellationToken: cancellation.Token));
 
-        watcher.EnableRaisingEvents = false;
+        cancellation.Cancel();
+        await watcher;
         Assert.True(cancellation.IsCancellationRequested);
         Assert.Equal("previous", await File.ReadAllTextAsync(sentinel, Token));
         Assert.Single(Directory.GetFileSystemEntries(output));

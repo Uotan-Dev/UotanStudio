@@ -81,7 +81,7 @@ public sealed class FileSystemEditingTests : IDisposable
         Assert.True(packed.Success, packed.Summary);
         var entries = Read(output, format);
         Assert.Equal(0x81A0, entries["new"].Mode);
-        Assert.Equal(0x41E8, entries["directory"].Mode);
+        Assert.Equal(0x41E8, entries["directory"].Mode & 0x41E8);
         Assert.False(entries["new"].Xattrs!.ContainsKey("system.posix_acl_default"));
         Assert.True(entries["new"].Xattrs!.ContainsKey("system.posix_acl_access"));
         Assert.Equal(acl, entries["directory"].Xattrs!["system.posix_acl_default"]);

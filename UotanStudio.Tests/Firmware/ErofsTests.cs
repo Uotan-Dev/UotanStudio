@@ -321,8 +321,14 @@ public class ErofsTests
     {
         using var temp = new TempDirectory();
         WriteText(temp, "a.txt", string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 100)));
+        var pinned = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000).UtcDateTime;
+        File.SetLastWriteTimeUtc(Path.Combine(temp.Path, "a.txt"), pinned);
 
-        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions { Compress = true });
+        var image = InMemoryImage.Erofs(temp.Path, new ErofsOptions
+        {
+            Compress = true,
+            BuildTime = 1_700_000_000UL,
+        });
         var superblock = ErofsSuperblock.FromImage(image);
         using var parser = new ErofsParser(image);
         var entry = parser.EnumerateFiles().Single();

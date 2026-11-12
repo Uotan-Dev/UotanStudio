@@ -374,12 +374,14 @@ public sealed partial class ErofsBuilder
     /// <c>metadata.json</c> the extraction wrote into the tree root, or one whose shape
     /// <see cref="Core.Repacking.RepackMetadata.IsMetadataFile"/> validates, is skipped
     /// under an active edit plan too, where the plan membership test alone would have collected it. The
-    /// plan test is still applied, so a file the plan does not project stays out as well.
+    /// plan test is still applied, so a file the plan does not project stays out as well. Directory
+    /// children are ordered by ordinal name after collection, so inode numbers and the image layout never
+    /// depend on the host file system's enumeration order.
     /// <para>把一个宿主路径收集为节点树。生成的打包元数据绝不是负载：解包写进目录树根部的
     /// <c>metadata.json</c>，或经
     /// <see cref="Core.Repacking.RepackMetadata.IsMetadataFile"/> 校验过的同形态文件，
     /// 在编辑计划生效时同样跳过，否则仅凭计划成员判定会把它收集进来。计划判定仍然生效，因此计划未投影的
-    /// 文件同样不会进入。</para>
+    /// 文件同样不会进入。目录子项在收集后按名称序数排序，使 inode 编号与镜像布局不依赖宿主文件系统的枚举顺序。</para>
     /// </summary>
     /// <param name="fullPath">Absolute host path to collect. <para>待收集的宿主绝对路径。</para></param>
     /// <param name="imagePath">Image-relative <c>/</c>-separated path of this entry, empty for the build
@@ -485,6 +487,7 @@ public sealed partial class ErofsBuilder
                     exclusions, token));
             }
 
+            node.Children.Sort(static (left, right) => string.CompareOrdinal(left.Name, right.Name));
             return node;
         }
 

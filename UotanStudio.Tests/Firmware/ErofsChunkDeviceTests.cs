@@ -174,6 +174,8 @@ public sealed class ErofsChunkDeviceTests
         var payload = Enumerable.Repeat((byte)0x11, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "data.bin"),
+            DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime);
         var options = PinnedOptions();
         options.ChunkSize = BlockSize;
         options.ExtraDeviceCount = 1;

@@ -30,6 +30,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 3 * BlockSize).ToArray());
+        PinSourceTime(source);
         var options = PinnedOptions();
         options.InodeFormat = ErofsInodeFormat.Compact;
 
@@ -47,6 +48,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x5A, 3 * BlockSize).ToArray());
+        PinSourceTime(source);
         var compactOptions = PinnedOptions();
         compactOptions.InodeFormat = ErofsInodeFormat.Compact;
         var extendedOptions = PinnedOptions();
@@ -70,6 +72,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", new byte[BlockSize]);
+        PinSourceTime(source);
         var options = PinnedOptions();
         options.InodeFormat = ErofsInodeFormat.Compact;
         options.FsConfig = new Dictionary<string, FsConfigEntry>(StringComparer.Ordinal)
@@ -89,6 +92,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", new byte[BlockSize]);
+        PinSourceTime(source);
         var options = PinnedOptions();
         options.InodeFormat = ErofsInodeFormat.Compact;
         var record = SourceRecord("data.bin", BlockSize);
@@ -110,6 +114,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", new byte[3 * BlockSize]);
+        PinSourceTime(source);
         var options = PinnedOptions();
         options.Compress = false;
         options.ChunkSize = BlockSize;
@@ -128,6 +133,7 @@ public sealed class ErofsForcedInodeFormatTests
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", new byte[3 * BlockSize]);
+        PinSourceTime(source);
         var options = PinnedOptions();
         options.Compress = false;
         options.ChunkSize = BlockSize;
@@ -297,6 +303,14 @@ public sealed class ErofsForcedInodeFormatTests
         var written = parser.ReadRebuildOptions().SourceInodesByPath!["data.bin"];
         Assert.True(written.IsExtended);
         Assert.Equal(BlockSize, parser.ReadFileBytes("data.bin").Length);
+    }
+
+    private static void PinSourceTime(TempDirectory source)
+    {
+        Directory.SetLastWriteTimeUtc(source.Path,
+            DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "data.bin"),
+            DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime);
     }
 
     private static ErofsOptions PinnedOptions() => new()

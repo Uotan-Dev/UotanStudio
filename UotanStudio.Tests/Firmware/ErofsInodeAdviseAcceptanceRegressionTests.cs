@@ -68,6 +68,7 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
+        PinSourceTimes(source, "plain.txt", "second.txt");
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
@@ -119,12 +120,14 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x6B, 8 * 1024).ToArray());
         source.WriteBytes("small.txt", "advice"u8.ToArray());
+        PinSourceTimes(source, "data.bin", "small.txt");
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
             Compress = true,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             BlockSize = BlockSize,
+            BuildTime = PinnedBuildTime,
         });
 
         using (var sourceProbe = new ErofsParser(image))
@@ -235,12 +238,14 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var payload = Enumerable.Repeat((byte)0x4C, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
+        PinSourceTimes(source, "data.bin");
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
             ChunkSize = BlockSize,
             SuperblockChecksum = false,
+            BuildTime = PinnedBuildTime,
         });
 
         using var parser = new ErofsParser(image);
@@ -262,12 +267,14 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
         var payload = Enumerable.Repeat((byte)0x4C, 3 * BlockSize).ToArray();
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
+        PinSourceTimes(source, "data.bin");
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
             Compress = false,
             ChunkSize = BlockSize,
             SuperblockChecksum = false,
+            BuildTime = PinnedBuildTime,
         });
 
         var corrupted = RewriteChunkFormat(image, ErofsInode.ChunkFormatAll + 1);
@@ -315,6 +322,15 @@ public sealed class ErofsInodeAdviseAcceptanceRegressionTests
 
         Assert.Equal(3 * BlockSize, content.Length);
         Assert.Equal(payload, content);
+    }
+
+    private static void PinSourceTimes(TempDirectory source, params string[] relativePaths)
+    {
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        foreach (var relativePath in relativePaths)
+        {
+            File.SetLastWriteTimeUtc(Path.Combine(source.Path, relativePath), pinned);
+        }
     }
 
     private static byte[] RewriteChunkFormat(byte[] image, ushort undefinedBit)

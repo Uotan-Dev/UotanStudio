@@ -27,6 +27,7 @@ public sealed class ErofsTerminalPclusterTests
     private const int BlockSize = 4096;
     private const int CheapClusters = 64;
     private const int TotalClusters = 65;
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
     private const byte PlainType = (byte)ZErofsLclusterIndex.LclusterTypePlain;
     private const byte HeadType = (byte)ZErofsLclusterIndex.LclusterTypeHead1;
     private const byte Head2Type = (byte)ZErofsLclusterIndex.LclusterTypeHead2;
@@ -40,6 +41,8 @@ public sealed class ErofsTerminalPclusterTests
         Assert.Equal(TotalClusters * BlockSize, payload.Length);
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", payload);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "data.bin"),
+            DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime);
         var options = new ErofsOptions
         {
             BlockSize = BlockSize,
@@ -47,6 +50,7 @@ public sealed class ErofsTerminalPclusterTests
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = 2 * BlockSize,
             OptimizeCompression = dense,
+            BuildTime = PinnedBuildTime,
         };
 
         var image = InMemoryImage.Erofs(source.Path, options);
@@ -78,6 +82,10 @@ public sealed class ErofsTerminalPclusterTests
         source.WriteBytes("aligned.bin", aligned);
         source.WriteBytes("partial.bin", partial);
         source.WriteBytes("single.bin", single);
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "aligned.bin"), pinned);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "partial.bin"), pinned);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "single.bin"), pinned);
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             BlockSize = BlockSize,
@@ -85,6 +93,7 @@ public sealed class ErofsTerminalPclusterTests
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = 2 * BlockSize,
             UseCompactedIndexes = compacted,
+            BuildTime = PinnedBuildTime,
         });
         using var parser = new ErofsParser(image);
 

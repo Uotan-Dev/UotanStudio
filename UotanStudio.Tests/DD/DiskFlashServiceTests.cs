@@ -11,6 +11,8 @@ public sealed class DiskFlashServiceTests
     [Fact]
     public async Task FlashAsync_WithoutPrivilegeAndDeclined_ReportsDeclinedAndWritesNothing()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(),
+            "Windows-only: the privileged-writer relaunch exists only there, so the PrivilegeMissing elevation flow never starts on other hosts.");
         using var directory = new FlashTestDirectory();
         var data = FlashTestData.CreateImageData(64 * 1024, 11);
         var imagePath = directory.WriteFile("system.img", data);

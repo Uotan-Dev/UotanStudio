@@ -30,11 +30,12 @@ public sealed partial class ErofsBuilder
     {
         var dotNid = node.Nid;
         var dotDotNid = node.Parent?.Nid ?? node.Nid;
-        var entries = new List<DirEntry>(node.Children.Count + 2)
-        {
+        List<DirEntry> entries =
+        [
+            with(node.Children.Count + 2),
             new DirEntry(new ErofsInode { Nid = dotNid, IsDirectory = true, Name = "." }, "."u8.ToArray()),
             new DirEntry(new ErofsInode { Nid = dotDotNid, IsDirectory = true, Name = ".." }, ".."u8.ToArray()),
-        };
+        ];
         entries.AddRange(node.Children.Select(child =>
         {
             FileSystemNameLimits.ValidateEntryName(child.Name, "EROFS");

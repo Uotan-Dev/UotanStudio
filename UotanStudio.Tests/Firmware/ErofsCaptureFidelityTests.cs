@@ -128,6 +128,7 @@ public sealed class ErofsCaptureFidelityTests
         using var source = new TempDirectory();
         source.WriteBytes("plain.txt", "plain payload"u8.ToArray());
         source.WriteBytes("second.txt", "second payload"u8.ToArray());
+        PinSourceTimes(source, "plain.txt", "second.txt");
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             NlinkOneAdviseSupported = true,
@@ -250,5 +251,14 @@ public sealed class ErofsCaptureFidelityTests
         }
 
         return payload;
+    }
+
+    private static void PinSourceTimes(TempDirectory source, params string[] relativePaths)
+    {
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        foreach (var relativePath in relativePaths)
+        {
+            File.SetLastWriteTimeUtc(Path.Combine(source.Path, relativePath), pinned);
+        }
     }
 }

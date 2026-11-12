@@ -80,12 +80,12 @@ public class FatFormatHandlerTests
 
         Assert.True(result.Success, result.Summary);
         AssertFile(target, "README.TXT", readme);
-        AssertFile(target, "logs/启动日志 2026-01-02 记录.txt", log);
+        AssertFile(target, "LOGS/启动日志 2026-01-02 记录.txt", log);
         AssertFile(target, "EMPTY.DAT", []);
         AssertFile(target, "EXACT.BIN", exact);
-        AssertFile(target, "span.bin", span);
+        AssertFile(target, "SPAN.BIN", span);
         Assert.Equal("0", result.Metadata["UnreadableEntries"]);
-        Assert.True(Directory.Exists(Path.Combine(target, "logs")));
+        Assert.True(Directory.Exists(Path.Combine(target, "LOGS")));
     }
 
     [Fact]

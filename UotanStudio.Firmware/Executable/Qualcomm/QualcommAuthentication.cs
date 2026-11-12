@@ -249,6 +249,11 @@ internal static class QualcommAuthentication
         foreach (var root in candidates)
         {
             token.ThrowIfCancellationRequested();
+            if (!HasValidSelfSignature(root))
+            {
+                continue;
+            }
+
             using var chain = new X509Chain();
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
@@ -280,6 +285,66 @@ internal static class QualcommAuthentication
             ? "multiple valid roots without an authenticated selected slot"
             : roots.Length == 0 ? "no embedded self-issued root" :
                 "invalid path, signature, certificate constraints or validity period");
+    }
+
+    /// <summary>
+    /// Verifies a certificate's signature over its own TBS structure with its own public key. Windows chain
+    /// building rejects a corrupted trust-anchor signature while OpenSSL-based chain building on Linux trusts
+    /// the anchor by definition, so the anchor check is made explicit here to keep the verdict identical on
+    /// every operating system.
+    /// <para>用证书自身的公钥验证其对自身 TBS 结构的签名。Windows 的链构建会拒绝被破坏的信任锚签名，而 Linux 上
+    /// 基于 OpenSSL 的链构建按定义信任锚点，因此在这里显式校验锚点，使各操作系统给出一致结论。</para>
+    /// </summary>
+    /// <param name="certificate">The self-issued root candidate to check.
+    /// <para>待校验的自签发根证书候选。</para></param>
+    /// <returns><see langword="true"/> when the signature algorithm is supported and the signature verifies;
+    /// unsupported algorithms and malformed structures are rejected.
+    /// <para>签名算法受支持且签名验证通过时为 <see langword="true"/>；不受支持的算法与畸形结构一律拒绝。</para></returns>
+    private static bool HasValidSelfSignature(X509Certificate2 certificate)
+    {
+        try
+        {
+            var reader = new AsnReader(certificate.RawData, AsnEncodingRules.DER);
+            var fields = reader.ReadSequence();
+            var tbs = fields.ReadEncodedValue().Span;
+            fields.ReadSequence();
+            var signature = fields.ReadBitString(out var unusedBitCount);
+            if (unusedBitCount != 0 || fields.HasData || reader.HasData)
+            {
+                return false;
+            }
+
+            var hash = certificate.SignatureAlgorithm.Value switch
+            {
+                "1.2.840.113549.1.1.5" => HashAlgorithmName.SHA1,
+                "1.2.840.113549.1.1.11" => HashAlgorithmName.SHA256,
+                "1.2.840.113549.1.1.12" => HashAlgorithmName.SHA384,
+                "1.2.840.113549.1.1.13" => HashAlgorithmName.SHA512,
+                "1.2.840.10045.4.3.1" => HashAlgorithmName.SHA1,
+                "1.2.840.10045.4.3.2" => HashAlgorithmName.SHA256,
+                "1.2.840.10045.4.3.3" => HashAlgorithmName.SHA384,
+                "1.2.840.10045.4.3.4" => HashAlgorithmName.SHA512,
+                _ => (HashAlgorithmName?)null,
+            };
+            if (hash is not { } algorithm)
+            {
+                return false;
+            }
+
+            using var rsa = certificate.GetRSAPublicKey();
+            if (rsa is not null)
+            {
+                return rsa.VerifyData(tbs, signature, algorithm, RSASignaturePadding.Pkcs1);
+            }
+
+            using var ecdsa = certificate.GetECDsaPublicKey();
+            return ecdsa is not null
+                && ecdsa.VerifyData(tbs, signature, algorithm, DSASignatureFormat.Rfc3279DerSequence);
+        }
+        catch (Exception exception) when (exception is AsnContentException or CryptographicException)
+        {
+            return false;
+        }
     }
 
     private static QualcommVerificationStatus VerifyMetadataRootDigest(

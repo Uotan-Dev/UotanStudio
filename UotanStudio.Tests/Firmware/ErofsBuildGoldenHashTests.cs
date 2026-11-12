@@ -67,20 +67,44 @@ public sealed class ErofsBuildGoldenHashTests
             "fragments" => new ErofsOptions { Compress = true, Fragments = true, AllFilesAsFragments = true },
             "metabox" => new ErofsOptions { Compress = true, Metabox = true },
             "links" => new ErofsOptions { Compress = true },
-            "wide-ownership" => new ErofsOptions
-            {
-                Compress = false,
-                FsConfig = new Dictionary<string, FsConfigEntry>(StringComparer.Ordinal)
-                {
-                    ["data/multiblock.bin"] = new FsConfigEntry(70_000, 70_001, 0x81A4),
-                },
-            },
+            "wide-ownership" => new ErofsOptions { Compress = false },
             _ => throw new ArgumentOutOfRangeException(nameof(fixture), fixture, "Unknown EROFS golden fixture."),
         };
+        options.FsConfig = GoldenOwnership(fixture);
         options.BlockSize = BlockSize;
         options.Uuid = new byte[16];
         options.BuildTime = BuildTime;
         return options;
+    }
+
+    private static Dictionary<string, FsConfigEntry> GoldenOwnership(string fixture)
+    {
+        Dictionary<string, FsConfigEntry> ownership = new(StringComparer.Ordinal)
+        {
+            [""] = new FsConfigEntry(0, 0, 0x41ED),
+            ["compressible.txt"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["empty.bin"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["emptydir"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["text"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["text/readme.txt"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["data"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["data/block.bin"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["data/multiblock.bin"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["dir"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["dir/one-block.bin"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["dir/sub"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["dir/sub/inner.txt"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["tiny"] = new FsConfigEntry(0, 0, 0x41ED),
+            ["tiny/one.txt"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["hard-block.bin"] = new FsConfigEntry(0, 0, 0x81A4),
+            ["link.txt"] = new FsConfigEntry(0, 0, 0x81FF),
+        };
+        if (fixture == "wide-ownership")
+        {
+            ownership["data/multiblock.bin"] = new FsConfigEntry(70_000, 70_001, 0x81A4);
+        }
+
+        return ownership;
     }
 
     private static void WriteFixture(TempDirectory source, string fixture)
@@ -99,12 +123,11 @@ public sealed class ErofsBuildGoldenHashTests
         {
             File.CreateSymbolicLink(
                 Path.Combine(source.Path, "link.txt"),
-                Path.Combine("text", "readme.txt"));
+                OperatingSystem.IsWindows() ? Path.Combine("text", "readme.txt") : "text\\readme.txt");
             var linked = CreateHardLink(
                 Path.Combine(source.Path, "hard-block.bin"),
-                Path.Combine(source.Path, "data", "block.bin"),
-                IntPtr.Zero);
-            Assert.True(linked, $"CreateHardLink failed with error {Marshal.GetLastWin32Error()}.");
+                Path.Combine(source.Path, "data", "block.bin"));
+            Assert.True(linked, $"CreateHardLink failed with error {Marshal.GetLastPInvokeError()}.");
         }
 
         var pinned = DateTimeOffset.FromUnixTimeSeconds((long)BuildTime).UtcDateTime;
@@ -144,6 +167,24 @@ public sealed class ErofsBuildGoldenHashTests
         return builder.ToString(0, length);
     }
 
-    [DllImport("Kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CreateHardLink(string fileName, string existingFileName, IntPtr securityAttributes);
+    private static bool CreateHardLink(string fileName, string existingFileName)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return CreateHardLinkWindows(fileName, existingFileName, IntPtr.Zero);
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return Link(existingFileName, fileName) == 0;
+        }
+
+        return false;
+    }
+
+    [DllImport("Kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "CreateHardLinkW")]
+    private static extern bool CreateHardLinkWindows(string fileName, string existingFileName, IntPtr securityAttributes);
+
+    [DllImport("libc", CharSet = CharSet.Ansi, SetLastError = true, EntryPoint = "link")]
+    private static extern int Link(string oldPath, string newPath);
 }

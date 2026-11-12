@@ -551,6 +551,9 @@ public sealed class ErofsRebuildFeatureReplayTests
         var source = new TempDirectory();
         source.WriteBytes("data.bin", Enumerable.Repeat((byte)0x53, 64 * 1024).ToArray());
         source.WriteBytes("small.txt", "advice"u8.ToArray());
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "data.bin"), pinned);
+        File.SetLastWriteTimeUtc(Path.Combine(source.Path, "small.txt"), pinned);
         image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,

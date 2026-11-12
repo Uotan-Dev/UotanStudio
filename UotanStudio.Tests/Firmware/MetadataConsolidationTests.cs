@@ -25,7 +25,14 @@ public sealed class MetadataConsolidationTests : IDisposable
     {
         _metadataRoot = Path.Combine(_root, ".uotan", "metadata");
         Directory.CreateDirectory(Path.Combine(_root, "source"));
-        File.WriteAllText(Path.Combine(_root, "source", "hello.txt"), "consolidated metadata test");
+        var hello = Path.Combine(_root, "source", "hello.txt");
+        File.WriteAllText(hello, "consolidated metadata test");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(hello, UnixFileMode.UserRead | UnixFileMode.UserWrite
+                | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        }
+
         RepackMetadata.DefaultMetadataRoot = null;
     }
 

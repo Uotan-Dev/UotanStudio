@@ -724,7 +724,7 @@ public sealed class RootPatchPackageService
         var builder = new StringBuilder(value.Length);
         foreach (var character in value)
         {
-            builder.Append(Array.IndexOf(invalid, character) >= 0 ? '_' : character);
+            builder.Append(Array.IndexOf(invalid, character) >= 0 || character is '/' or '\\' or ':' ? '_' : character);
         }
 
         var segment = builder.ToString().Trim();

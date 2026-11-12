@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
@@ -15,12 +16,16 @@ namespace UotanStudio.Tests.Firmware;
 /// to 85 characters (85 × 3 = 255) and must be rejected from 86 characters (258 bytes) upward. These tests
 /// round-trip in-limit Unicode names through every builder and parser pair, and pin that an over-limit name
 /// fails with a UTF-8 byte measurement before an image is published instead of wrapping the on-disk length
-/// field, emitting a directory the reader lists as empty, or writing the unrepresentable name.
+/// field, emitting a directory the reader lists as empty, or writing the unrepresentable name. Over-limit
+/// names can only be materialized as host files where the host filesystem allows them, so the builder-level
+/// rejection of a source tree runs on Windows and the same <see cref="FileSystemNameLimits"/> guard all three
+/// builders invoke is pinned directly everywhere else.
 /// <para>三种可打包文件系统的目录项名称上限：EXT4_NAME_LEN、EROFS_NAME_LEN 与 F2FS_NAME_LEN 都是 255
 /// <em>字节</em>，因为名称按 UTF-8 存放，所以中文名称在 85 个字符（85 × 3 = 255）内合法，从 86 个字符
 /// （258 字节）起必须被拒绝。本组测试让三种构建器与解析器组合往返校验上限内的 Unicode 名称，并钉住超限名称
 /// 会在镜像发布之前按 UTF-8 字节数失败，而不是让磁盘长度字段回绕、写出解析器读为空目录的目录块，
-/// 或把无法表示的名称直接写入镜像。</para>
+/// 或把无法表示的名称直接写入镜像。超限名称只能在宿主文件系统允许时作为宿主文件存在，因此源目录树的
+/// 构建器级拒绝在 Windows 上运行，其余平台直接钉住三种构建器共用的 <see cref="FileSystemNameLimits"/> 守卫。</para>
 /// </summary>
 public class FileSystemNameLimitTests
 {
@@ -98,107 +103,143 @@ public class FileSystemNameLimitTests
     [Fact]
     public void Ext4Builder_CjkNameOverByteLimit_ThrowsBeforeWriting()
     {
-        var root = CreateTempDirectory("ext4-over");
-        var outputDirectory = CreateTempDirectory("ext4-over-output");
-        try
-        {
-            var overLimitName = new string('文', 90) + ".txt";
-            File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
-            var imagePath = Path.Combine(outputDirectory, "over-limit.ext4");
+        var overLimitName = new string('文', 90) + ".txt";
 
-            var error = Assert.Throws<InvalidOperationException>(() => Ext4Builder.Build(root, imagePath));
+        var error = Assert.Throws<InvalidOperationException>(
+            () => FileSystemNameLimits.ValidateEntryName(overLimitName, "EXT4"));
 
-            Assert.Contains("EXT4 file name is not representable", error.Message);
-            Assert.Contains("255", error.Message);
-            Assert.Contains("UTF-8 bytes", error.Message);
-            Assert.False(File.Exists(imagePath));
-            Assert.Empty(Directory.GetFiles(outputDirectory));
-        }
-        finally
+        Assert.Contains("EXT4 file name is not representable", error.Message);
+        Assert.Contains("255", error.Message);
+        Assert.Contains("UTF-8 bytes", error.Message);
+
+        if (OperatingSystem.IsWindows())
         {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
+            var root = CreateTempDirectory("ext4-over");
+            var outputDirectory = CreateTempDirectory("ext4-over-output");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
+                var imagePath = Path.Combine(outputDirectory, "over-limit.ext4");
+
+                var builderError = Assert.Throws<InvalidOperationException>(() => Ext4Builder.Build(root, imagePath));
+
+                Assert.Contains("EXT4 file name is not representable", builderError.Message);
+                Assert.False(File.Exists(imagePath));
+                Assert.Empty(Directory.GetFiles(outputDirectory));
+            }
+            finally
+            {
+                DeleteRecursive(root);
+                DeleteRecursive(outputDirectory);
+            }
         }
     }
 
     [Fact]
     public void ErofsBuilder_CjkNameOverByteLimit_ThrowsBeforeWriting()
     {
-        var root = CreateTempDirectory("erofs-over");
-        var outputDirectory = CreateTempDirectory("erofs-over-output");
-        try
-        {
-            var overLimitName = new string('文', 90) + ".txt";
-            File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
-            var imagePath = Path.Combine(outputDirectory, "over-limit.erofs");
+        var overLimitName = new string('文', 90) + ".txt";
 
-            var error = Assert.Throws<InvalidOperationException>(
-                () => new ErofsBuilder().Build(root, imagePath, new ErofsOptions { Compress = false }));
+        var error = Assert.Throws<InvalidOperationException>(
+            () => FileSystemNameLimits.ValidateEntryName(overLimitName, "EROFS"));
 
-            Assert.Contains("EROFS file name is not representable", error.Message);
-            Assert.Contains("255", error.Message);
-            Assert.Contains("UTF-8 bytes", error.Message);
-            Assert.False(File.Exists(imagePath));
-            Assert.Empty(Directory.GetFiles(outputDirectory));
-        }
-        finally
+        Assert.Contains("EROFS file name is not representable", error.Message);
+        Assert.Contains("255", error.Message);
+        Assert.Contains("UTF-8 bytes", error.Message);
+
+        if (OperatingSystem.IsWindows())
         {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
+            var root = CreateTempDirectory("erofs-over");
+            var outputDirectory = CreateTempDirectory("erofs-over-output");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
+                var imagePath = Path.Combine(outputDirectory, "over-limit.erofs");
+
+                var builderError = Assert.Throws<InvalidOperationException>(
+                    () => new ErofsBuilder().Build(root, imagePath, new ErofsOptions { Compress = false }));
+
+                Assert.Contains("EROFS file name is not representable", builderError.Message);
+                Assert.False(File.Exists(imagePath));
+                Assert.Empty(Directory.GetFiles(outputDirectory));
+            }
+            finally
+            {
+                DeleteRecursive(root);
+                DeleteRecursive(outputDirectory);
+            }
         }
     }
 
     [Fact]
     public void F2fsBuilder_CjkNameOverByteLimit_ThrowsBeforeWriting()
     {
-        var root = CreateTempDirectory("f2fs-over");
-        var outputDirectory = CreateTempDirectory("f2fs-over-output");
-        try
-        {
-            var overLimitName = new string('文', 90) + ".txt";
-            File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
-            var imagePath = Path.Combine(outputDirectory, "over-limit.f2fs");
+        var overLimitName = new string('文', 90) + ".txt";
 
-            var error = Assert.Throws<InvalidOperationException>(() => F2fsBuilder.Build(root, imagePath));
+        var error = Assert.Throws<InvalidOperationException>(
+            () => FileSystemNameLimits.ValidateEntryName(overLimitName, "F2FS"));
 
-            Assert.Contains("F2FS file name is not representable", error.Message);
-            Assert.Contains("255", error.Message);
-            Assert.Contains("UTF-8 bytes", error.Message);
-            Assert.False(File.Exists(imagePath));
-            Assert.Empty(Directory.GetFiles(outputDirectory));
-        }
-        finally
+        Assert.Contains("F2FS file name is not representable", error.Message);
+        Assert.Contains("255", error.Message);
+        Assert.Contains("UTF-8 bytes", error.Message);
+
+        if (OperatingSystem.IsWindows())
         {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
+            var root = CreateTempDirectory("f2fs-over");
+            var outputDirectory = CreateTempDirectory("f2fs-over-output");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, overLimitName), "超出名称上限的中文文件名");
+                var imagePath = Path.Combine(outputDirectory, "over-limit.f2fs");
+
+                var builderError = Assert.Throws<InvalidOperationException>(() => F2fsBuilder.Build(root, imagePath));
+
+                Assert.Contains("F2FS file name is not representable", builderError.Message);
+                Assert.False(File.Exists(imagePath));
+                Assert.Empty(Directory.GetFiles(outputDirectory));
+            }
+            finally
+            {
+                DeleteRecursive(root);
+                DeleteRecursive(outputDirectory);
+            }
         }
     }
 
     [Fact]
     public void Ext4Builder_CjkNameOverByteLimit_ReportedInUtf8BytesNotCharacters()
     {
-        var root = CreateTempDirectory("ext4-units");
-        var outputDirectory = CreateTempDirectory("ext4-units-output");
-        try
-        {
-            var overLimitName = new string('文', 90) + ".txt";
-            var utf8ByteCount = Encoding.UTF8.GetByteCount(overLimitName);
-            Assert.Equal(90 * 3 + 4, utf8ByteCount);
-            Assert.NotEqual(overLimitName.Length, utf8ByteCount);
-            File.WriteAllText(Path.Combine(root, overLimitName), "字节计数而非字符计数");
-            var imagePath = Path.Combine(outputDirectory, "units.ext4");
+        var overLimitName = new string('文', 90) + ".txt";
+        var utf8ByteCount = Encoding.UTF8.GetByteCount(overLimitName);
+        Assert.Equal(90 * 3 + 4, utf8ByteCount);
+        Assert.NotEqual(overLimitName.Length, utf8ByteCount);
 
-            var error = Assert.Throws<InvalidOperationException>(() => Ext4Builder.Build(root, imagePath));
+        var error = Assert.Throws<InvalidOperationException>(
+            () => FileSystemNameLimits.ValidateEntryName(overLimitName, "EXT4"));
 
-            Assert.Contains($"{utf8ByteCount} UTF-8 bytes exceed the {NameLimitBytes}-byte name limit", error.Message);
-            Assert.DoesNotContain($"{overLimitName.Length} UTF-8 bytes", error.Message);
-            Assert.Contains(overLimitName, error.Message);
-            Assert.False(File.Exists(imagePath));
-        }
-        finally
+        Assert.Contains($"{utf8ByteCount} UTF-8 bytes exceed the {NameLimitBytes}-byte name limit", error.Message);
+        Assert.DoesNotContain($"{overLimitName.Length} UTF-8 bytes", error.Message);
+        Assert.Contains(overLimitName, error.Message);
+
+        if (OperatingSystem.IsWindows())
         {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
+            var root = CreateTempDirectory("ext4-units");
+            var outputDirectory = CreateTempDirectory("ext4-units-output");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, overLimitName), "字节计数而非字符计数");
+                var imagePath = Path.Combine(outputDirectory, "units.ext4");
+
+                var builderError = Assert.Throws<InvalidOperationException>(() => Ext4Builder.Build(root, imagePath));
+
+                Assert.Contains($"{utf8ByteCount} UTF-8 bytes exceed the {NameLimitBytes}-byte name limit", builderError.Message);
+                Assert.False(File.Exists(imagePath));
+            }
+            finally
+            {
+                DeleteRecursive(root);
+                DeleteRecursive(outputDirectory);
+            }
         }
     }
 

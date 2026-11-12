@@ -24,7 +24,11 @@ public sealed class FlashVendorContainerServiceTests
             if (extension == ".nb0")
             {
                 var builder = Nb0Packer.CreateBuilder();
-                foreach (var file in Directory.GetFiles(images)) builder.AddFile(file, Path.GetFileName(file));
+                foreach (var file in Directory.GetFiles(images).OrderBy(file => Path.GetFileName(file), StringComparer.Ordinal))
+                {
+                    builder.AddFile(file, Path.GetFileName(file));
+                }
+
                 builder.Build(path);
             }
             else
