@@ -186,7 +186,10 @@ internal static class EdlInfoFormatter
             rows.Add(new EdlInfoRow(StorageTypeKey, DescribeStorageType(capabilities.StorageType),
                 EdlInfoStage.Firehose));
 
-            if (capabilities.SectorSizeInBytes is { } sectorSize)
+            // A validated geometry reports the sector size with its own row; emitting the capability's sector
+            // size as well would show the same fact twice on one screen.
+            // 经校验的几何信息自带扇区大小行；再输出能力协商的扇区大小会让同一事实在界面上出现两次。
+            if (capabilities.SectorSizeInBytes is { } sectorSize && snapshot.Geometry is null)
             {
                 rows.Add(new EdlInfoRow(SectorSizeKey, $"{sectorSize} " + "B", EdlInfoStage.Firehose));
             }
