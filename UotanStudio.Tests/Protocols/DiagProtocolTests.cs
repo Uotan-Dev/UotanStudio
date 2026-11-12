@@ -67,10 +67,10 @@ public sealed class ScriptedDiagTransport : ICommTransport
 public class DiagNvPacketTests
 {
     [Fact]
-    public void EncodeReadRequest_ItemId_PrependsIdAndPad()
+    public void EncodeReadRequest_ItemId_IsTheTwoByteBody()
     {
         var payload = DiagNvPacket.EncodeReadRequest(0x1177);
-        Assert.Equal(2 + DiagConstants.MaxNvDataBytes, payload.Length);
+        Assert.Equal(2, payload.Length);
         Assert.Equal(0x1177, BinaryPrimitives.ReadUInt16LittleEndian(payload));
     }
 
@@ -92,13 +92,13 @@ public class DiagNvPacketTests
     }
 
     [Fact]
-    public void DecodeReadResponse_StatusIdData()
+    public void DecodeReadResponse_ItemDataTrailingStatus()
     {
-        var response = new byte[] { 0x00, 0x00, 0x0A, 0x00, 0xAA, 0xBB };
-        var (status, itemId, data) = DiagNvPacket.DecodeReadResponse(response);
-        Assert.Equal(0, status);
+        var response = new byte[] { 0x0A, 0x00, 0xAA, 0xBB, 0x00, 0x00 };
+        var (itemId, data, status) = DiagNvPacket.DecodeReadResponse(response);
         Assert.Equal(10, itemId);
         Assert.Equal([0xAA, 0xBB], data);
+        Assert.Equal(0, status);
     }
 }
 
@@ -135,7 +135,7 @@ public class DiagSessionTests
     public async Task ReadNvItemAsync_SuccessReply_ReturnsData()
     {
         var transport = new ScriptedDiagTransport();
-        transport.EnqueueReply([DiagConstants.NvReadResponse, 0x00, 0x00, 0x0A, 0x00, 0x11, 0x22]);
+        transport.EnqueueReply([DiagConstants.NvReadResponse, 0x0A, 0x00, 0x11, 0x22, 0x00, 0x00]);
         using var session = new DiagSession(transport);
         var item = await session.ReadNvItemAsync(10, TestContext.Current.CancellationToken);
         Assert.Equal((ushort)10, item.Id);
@@ -145,10 +145,21 @@ public class DiagSessionTests
     }
 
     [Fact]
+    public async Task ReadNvItemAsync_EchoedRequestCommand_IsAccepted()
+    {
+        var transport = new ScriptedDiagTransport();
+        transport.EnqueueReply([DiagConstants.NvReadRequest, 0x0A, 0x00, 0x11, 0x22, 0x00, 0x00]);
+        using var session = new DiagSession(transport);
+        var item = await session.ReadNvItemAsync(10, TestContext.Current.CancellationToken);
+        Assert.Equal((ushort)10, item.Id);
+        Assert.Equal([0x11, 0x22], item.Data);
+    }
+
+    [Fact]
     public async Task ReadNvItemAsync_ErrorStatus_Throws()
     {
         var transport = new ScriptedDiagTransport();
-        transport.EnqueueReply([DiagConstants.NvReadResponse, 0x05, 0x00, 0x0A, 0x00]);
+        transport.EnqueueReply([DiagConstants.NvReadRequest, 0x0A, 0x00, 0x00, 0x00, 0x05, 0x00]);
         using var session = new DiagSession(transport);
         await Assert.ThrowsAsync<DiagException>(() => session.ReadNvItemAsync(10, TestContext.Current.CancellationToken));
     }
@@ -172,8 +183,8 @@ public class DiagSessionTests
     public async Task BackupQcnAsync_RejectedItems_SkipsAndBuildsQcn()
     {
         var transport = new ScriptedDiagTransport();
-        transport.EnqueueReply([DiagConstants.NvReadResponse, 0x00, 0x00, 0x0A, 0x00, 0x01, 0x02]);
-        transport.EnqueueReply([DiagConstants.NvReadResponse, 0x09, 0x00, 0x0B, 0x00]);
+        transport.EnqueueReply([DiagConstants.NvReadRequest, 0x0A, 0x00, 0x01, 0x02, 0x00, 0x00]);
+        transport.EnqueueReply([DiagConstants.NvReadRequest, 0x0B, 0x00, 0x00, 0x00, 0x09, 0x00]);
         var path = Path.Combine(Path.GetTempPath(), $"uotan-diag-{Guid.NewGuid():N}.qcn");
         try
         {

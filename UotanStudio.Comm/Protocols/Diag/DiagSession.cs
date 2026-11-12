@@ -37,6 +37,10 @@ public sealed partial class DiagSession(ICommTransport transport, int? timeoutMs
     private readonly Lock _wireGate = new();
     private bool _disposed;
 
+    /// <summary>Bound on bytes received without a single complete frame before the port is declared to not be
+    /// speaking the framed DIAG protocol. <para>收到无完整帧字节的上限；超过即判定端口未按封帧 DIAG 协议通信。</para></summary>
+    private const int MaximumUnframedReceptionBytes = 256 * 1024;
+
     /// <summary>
     /// Sends one DIAG payload and returns the reply payload starting at the command byte.
     /// <para>发送一个 DIAG 负载并返回从命令字节开始的应答负载。</para>
@@ -58,13 +62,30 @@ public sealed partial class DiagSession(ICommTransport transport, int? timeoutMs
             throw new DiagException("The transport short-wrote a DIAG request.");
         }
 
-        return await ReceiveReplyAsync(cancellationToken).ConfigureAwait(false);
+        return await ReceiveReplyAsync(request[0], cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<byte[]> ReceiveReplyAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Receives the reply frame whose command byte matches the request command or its response variant (request plus
+    /// one, the convention other DIAG stacks use), scanning the raw wire for frames terminated by the trailing
+    /// <c>0x7E</c> flag and discarding every other frame (for example the log frames a modem streams continuously on
+    /// the DIAG port) until the matching reply or the deadline arrives.
+    /// <para>接收命令字节与请求命令或其应答变体（请求加一，其他 DIAG 栈采用的惯例）匹配的应答帧：在原始线上按
+    /// 尾部 <c>0x7E</c> 界符扫描完整帧并丢弃其余帧（例如调制解调器在 DIAG 端口上持续外发的日志帧），直到匹配的
+    /// 应答或期限到达。</para>
+    /// </summary>
+    /// <param name="requestCommand">The request's command byte. <para>请求的命令字节。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The reply payload starting at the command byte.
+    /// <para>以命令字节开始的应答负载。</para></returns>
+    /// <exception cref="DiagException">The deadline expired before a matching frame arrived, or the wire flooded with
+    /// unframed bytes. <para>期限内在匹配帧到达前耗尽，或线路被无帧字节灌满。</para></exception>
+    private async Task<byte[]> ReceiveReplyAsync(byte requestCommand, CancellationToken cancellationToken)
     {
+        var responseVariant = (byte)(requestCommand + 1);
         var buffer = new byte[4096];
-        var accumulated = new List<byte>();
+        var received = new List<byte>();
+        var discarded = 0;
         var started = Environment.TickCount64;
         while (Environment.TickCount64 - started < _timeoutMs)
         {
@@ -83,16 +104,49 @@ public sealed partial class DiagSession(ICommTransport transport, int? timeoutMs
 
             if (n > 0)
             {
-                accumulated.AddRange(buffer.Take(n));
-                var raw = accumulated.ToArray();
-                if (DiagHdlcCodec.TryDecode(raw, withCrc: true, verifyCrc: false, out var payload) && payload is not null)
+                received.AddRange(buffer.Take(n));
+            }
+
+            var consumed = 0;
+            while (true)
+            {
+                var close = received.IndexOf(DiagHdlcCodec.FrameFlag, consumed);
+                if (close < 0)
+                {
+                    break;
+                }
+
+                var segment = received.GetRange(consumed, close - consumed + 1).ToArray();
+                consumed = close + 1;
+                if (segment.Length <= 1)
+                {
+                    continue;
+                }
+
+                if (DiagHdlcCodec.TryDecode(segment, withCrc: true, verifyCrc: false, out var payload)
+                    && payload is not null && payload.Length > 0
+                    && (payload[0] == requestCommand || payload[0] == responseVariant))
                 {
                     return payload;
                 }
+
+                discarded++;
+            }
+
+            if (consumed > 0)
+            {
+                received.RemoveRange(0, consumed);
+            }
+
+            if (received.Count > MaximumUnframedReceptionBytes)
+            {
+                throw new DiagException(
+                    $"The DIAG wire flooded with {received.Count} unframed byte(s); the port is not speaking the framed DIAG protocol.");
             }
         }
 
-        throw new DiagException("The DIAG reply deadline expired before a complete frame arrived.");
+        throw new DiagException(
+            $"The DIAG reply deadline expired before a frame with command byte 0x{requestCommand:X2} or 0x{responseVariant:X2} arrived; {discarded} other frame(s) were discarded.");
     }
 
     /// <summary>
@@ -108,12 +162,12 @@ public sealed partial class DiagSession(ICommTransport transport, int? timeoutMs
     {
         byte[] request = [DiagConstants.NvReadRequest, .. DiagNvPacket.EncodeReadRequest(itemId)];
         var reply = await ExchangeAsync(request, cancellationToken).ConfigureAwait(false);
-        if (reply.Length < 1 || reply[0] != DiagConstants.NvReadResponse)
+        if (reply.Length < 1 || reply[0] is not (DiagConstants.NvReadRequest or DiagConstants.NvReadResponse))
         {
             throw new DiagException("The reply to the NV read request carried an unexpected command byte.");
         }
 
-        var (status, echo, data) = DiagNvPacket.DecodeReadResponse(reply.AsSpan(1));
+        var (echo, data, status) = DiagNvPacket.DecodeReadResponse(reply.AsSpan(1));
         if (status != 0)
         {
             throw new DiagException($"The device rejected the NV read of item {itemId} with status {status}.");
@@ -150,12 +204,12 @@ public sealed partial class DiagSession(ICommTransport transport, int? timeoutMs
         item.Validate();
         byte[] request = [DiagConstants.NvWriteRequest, .. DiagNvPacket.EncodeWriteRequest(item.Id, item.Data)];
         var reply = await ExchangeAsync(request, cancellationToken).ConfigureAwait(false);
-        if (reply.Length < 1 || reply[0] != DiagConstants.NvWriteResponse)
+        if (reply.Length < 1 || reply[0] is not (DiagConstants.NvWriteRequest or DiagConstants.NvWriteResponse))
         {
             throw new DiagException("The reply to the NV write request carried an unexpected command byte.");
         }
 
-        var (status, echo) = DiagNvPacket.DecodeWriteResponse(reply.AsSpan(1));
+        var (echo, status) = DiagNvPacket.DecodeWriteResponse(reply.AsSpan(1));
         if (status != 0)
         {
             throw new DiagException($"The device rejected the NV write of item {item.Id} with status {status}.");
