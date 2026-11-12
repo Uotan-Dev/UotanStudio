@@ -95,10 +95,10 @@ public partial class UsbTreeWindow : Window
     /// <summary>
     /// Asks for the dangerous-operation confirmation and, when confirmed, configures the clicked row's
     /// device access: on Linux through the udev access configuration with its authorization prompt, on
-    /// Windows through the self-signed WinUSB package; a confirmed Windows success shows an informational
-    /// restart notice, while the Linux configuration applies immediately.
+    /// Windows through the self-signed WinUSB package. A restart notice is shown only when the operation
+    /// reports that Windows still needs a restart or a replug.
     /// <para>弹出危险操作确认，确认后配置点击行对应的设备访问：Linux 上经带授权提示的 udev 访问配置，
-    /// Windows 上经自签名 WinUSB 包；Windows 确定成功后弹出重启提示，Linux 配置立即生效。</para>
+    /// Windows 上经自签名 WinUSB 包；只有操作明确报告仍需重启或重新插拔时才弹出重启提示。</para>
     /// </summary>
     private async void OnConfigureDeviceClick(object? sender, RoutedEventArgs e)
     {
@@ -123,7 +123,8 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        if (await _model.ConfigureDeviceAsync(node) && OperatingSystem.IsWindows())
+        var outcome = await _model.ConfigureDeviceAsync(node);
+        if (outcome == UsbDriverChangeOutcome.RestartRequired && OperatingSystem.IsWindows())
         {
             await ShowRestartRequiredAsync();
         }
@@ -132,11 +133,11 @@ public partial class UsbTreeWindow : Window
     /// <summary>
     /// Asks for the dangerous-operation confirmation and, when confirmed, unconfigures the clicked row's
     /// device access: on Linux by removing the udev access rule and the usb-serial module block, on
-    /// Windows by removing the self-signed package and its certificate; a confirmed Windows success shows
-    /// an informational restart notice, while the Linux unconfiguration applies immediately.
+    /// Windows by uninstalling the self-signed package and its certificate. A restart notice is shown only
+    /// when the device still runs the takeover driver and needs a restart or a replug.
     /// <para>弹出危险操作确认，确认后取消点击行对应的设备访问配置：Linux 上移除 udev 访问规则与
-    /// usb-serial 模块屏蔽，Windows 上移除自签名包与证书；Windows 确定成功后弹出重启提示，Linux 取消
-    /// 配置立即生效。</para>
+    /// usb-serial 模块屏蔽，Windows 上卸载自签名包与证书；只有设备仍运行接管驱动、需要重启或重新插拔时
+    /// 才弹出重启提示。</para>
     /// </summary>
     private async void OnUnconfigureDeviceClick(object? sender, RoutedEventArgs e)
     {
@@ -161,16 +162,17 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        if (await _model.UnconfigureDeviceAsync(node) && OperatingSystem.IsWindows())
+        var outcome = await _model.UnconfigureDeviceAsync(node);
+        if (outcome == UsbDriverChangeOutcome.RestartRequired && OperatingSystem.IsWindows())
         {
             await ShowRestartRequiredAsync();
         }
     }
 
     /// <summary>
-    /// Shows the restart notice after a successful device-configuration change; the dialog only informs
-    /// the user and never restarts the computer on their behalf.
-    /// <para>设备配置状态变更成功后显示重启提示；弹窗仅作告知，不会代替用户重启计算机。</para>
+    /// Shows the restart notice when a device-configuration change cannot finish without a restart or a
+    /// replug; the dialog only informs the user and never restarts the computer on their behalf.
+    /// <para>设备配置变更需要重启或重新插拔才能完成时显示提示；弹窗仅作告知，不会代替用户重启计算机。</para>
     /// </summary>
     private Task ShowRestartRequiredAsync()
     {

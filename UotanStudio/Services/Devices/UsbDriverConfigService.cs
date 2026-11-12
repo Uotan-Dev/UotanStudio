@@ -61,15 +61,19 @@ public interface IUsbDriverConfigService
     WinUsbDriverOperationResult InstallTakeover(WinUsbTakeoverRequest request);
 
     /// <summary>
-    /// Ends the takeover of a device: removes the self-signed package this app installed, deletes the
-    /// takeover certificate and lets the device fall back to a system driver. Requires an administrator
-    /// token obtained the same way as the install.
-    /// <para>结束设备接管：移除本应用安装的自签名包、删除接管证书，并让设备回退系统驱动。需要与管理器安装
-    /// 相同方式获得的管理员令牌。</para>
+    /// Ends the takeover of a device: uninstalls the self-signed package from the devices using it, deletes
+    /// the takeover certificate and lets the device fall back to a system driver. The operation always runs
+    /// in an elevated relaunch of the application because the driver uninstall can block device enumeration.
+    /// <para>结束设备接管：从使用该自签名包的设备上卸载它、删除接管证书，并让设备回退系统驱动。驱动卸载可能
+    /// 长时间占用设备枚举，因此操作一律在应用的提权重启中执行。</para>
     /// </summary>
     /// <param name="instanceId">The device instance id.<para>设备实例 ID。</para></param>
-    /// <returns>The operation result; never throws and fails outside Windows.
-    /// <para>操作结果；绝不抛出，非 Windows 下返回失败。</para></returns>
+    /// <returns>
+    /// The operation result; never throws and fails outside Windows. A device that still runs the takeover
+    /// driver reports <see cref="WinUsbDriverOperationStatus.RestartRequired"/>.
+    /// <para>操作结果；绝不抛出，非 Windows 下返回失败。设备仍在运行接管驱动时返回
+    /// <see cref="WinUsbDriverOperationStatus.RestartRequired"/>。</para>
+    /// </returns>
     WinUsbDriverOperationResult UninstallTakeover(string instanceId);
 
     /// <summary>
@@ -135,13 +139,14 @@ public interface IUsbDriverConfigService
 /// Default <see cref="IUsbDriverConfigService"/> implementation wrapping the single
 /// <see cref="WinUsbDriverInstaller"/> instance. Windows-only members are attributed so the installer
 /// is only reached through guarded paths, while the class itself stays constructible on every platform.
-/// The takeover always runs through an elevated relaunch of the same executable, because its install may
-/// fall back to the synchronous PnP install API; the vendor package operations stay in-process when the
-/// host already holds an administrator token.
+/// Taking over a device and ending that takeover both run through an elevated relaunch of the same
+/// executable, because the install may fall back to the synchronous PnP install API and the uninstall can
+/// block device enumeration; the vendor package operations stay in-process when the host already holds an
+/// administrator token.
 /// <para><see cref="IUsbDriverConfigService"/> 的默认实现，内部唯一持有
 /// <see cref="WinUsbDriverInstaller"/> 实例。Windows 专属成员带平台标注，安装器只经守卫路径触达，
-/// 类本身在任何平台都可构造。接管安装一律通过以管理员身份重启同一个可执行文件完成，因为其安装可能回退到
-/// 同步 PnP 安装 API；宿主已持管理员令牌时，厂商驱动包操作在本进程内执行。</para>
+/// 类本身在任何平台都可构造。接管安装与解除接管一律通过以管理员身份重启同一个可执行文件完成：安装可能回退到
+/// 同步 PnP 安装 API，卸载可能阻塞设备枚举；宿主已持管理员令牌时，厂商驱动包操作在本进程内执行。</para>
 /// </summary>
 public sealed class UsbDriverConfigService : IUsbDriverConfigService
 {
@@ -212,11 +217,6 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
         if (!OperatingSystem.IsWindows())
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, "Windows only");
-        }
-
-        if (WinUsbDriverInstaller.IsElevated)
-        {
-            return Installer.UninstallTakeover(instanceId);
         }
 
         return RunElevated([UsbDriverElevatedCommand.ReleaseSwitch, instanceId]);
@@ -404,6 +404,7 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
         nameof(WinUsbDriverOperationStatus.Succeeded) => WinUsbDriverOperationStatus.Succeeded,
         nameof(WinUsbDriverOperationStatus.ElevationRequired) => WinUsbDriverOperationStatus.ElevationRequired,
         nameof(WinUsbDriverOperationStatus.DeviceNotFound) => WinUsbDriverOperationStatus.DeviceNotFound,
+        nameof(WinUsbDriverOperationStatus.RestartRequired) => WinUsbDriverOperationStatus.RestartRequired,
         nameof(WinUsbDriverOperationStatus.Failed) => WinUsbDriverOperationStatus.Failed,
         _ => null
     };

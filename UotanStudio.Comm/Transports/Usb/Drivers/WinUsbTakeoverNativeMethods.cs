@@ -21,7 +21,13 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
     internal const uint X509AsnEncoding = 0x00010001;
     internal const uint CertX500NameStr = 0x00040000;
     internal const uint CertStoreAddReplaceExisting = 3;
-    internal const uint CertFindSubjectName = 0x000b0000;
+    /// <summary>
+    /// <c>CERT_FIND_SUBJECT_NAME</c>: an exact match of the whole subject name, composed as
+    /// <c>(CERT_COMPARE_NAME &lt;&lt; CERT_COMPARE_SHIFT) | CERT_INFO_SUBJECT_FLAG</c>.
+    /// <para><c>CERT_FIND_SUBJECT_NAME</c>：整个主体名的精确匹配，取值由
+    /// <c>(CERT_COMPARE_NAME &lt;&lt; CERT_COMPARE_SHIFT) | CERT_INFO_SUBJECT_FLAG</c> 组成。</para>
+    /// </summary>
+    internal const uint CertFindSubjectName = 0x00020007;
     internal const uint CertFriendlyNamePropId = 9;
 
     internal const uint CryptMachineKeyset = 0x00000020;

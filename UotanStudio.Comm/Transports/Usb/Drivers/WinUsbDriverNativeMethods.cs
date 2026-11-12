@@ -66,6 +66,10 @@ internal static partial class WinUsbDriverNativeMethods
     /// 不等待 PnP 安装，因为卡住的设备节点可能让其无限期挂起。</para></summary>
     internal const uint CmReenumerateAsynchronous = 0x00000004;
 
+    /// <summary>The <c>INVALID_HANDLE_VALUE</c> a failed <c>SetupDiCreateDeviceInfoList</c> returns.
+    /// <para><c>SetupDiCreateDeviceInfoList</c> 失败时返回的 <c>INVALID_HANDLE_VALUE</c>。</para></summary>
+    internal static readonly IntPtr InvalidHandleValue = new(-1);
+
     /// <summary>The <c>CM_GETIDLIST_FILTER_PRESENT</c> flag for <c>CM_Get_Device_ID_List_Size</c> and
     /// <c>CM_Get_Device_ID_List</c>: list only devnodes whose device is currently present.
     /// <para><c>CM_Get_Device_ID_List_Size</c> 与 <c>CM_Get_Device_ID_List</c> 的 <c>CM_GETIDLIST_FILTER_PRESENT</c>
@@ -188,6 +192,57 @@ internal static partial class WinUsbDriverNativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetupUninstallOEMInfW([MarshalAs(UnmanagedType.LPWStr)] string catalogFileName,
         uint flags, IntPtr reserved);
+
+    /// <summary>
+    /// Removes one driver package from every device using it, installing another matching package or the
+    /// null driver in their place, and then removes the package from the driver store.
+    /// <para>从使用该驱动包的所有设备上移除该包，改用其它匹配包或空驱动，随后把该包从驱动仓库中移除。</para>
+    /// </summary>
+    /// <param name="hwndParent">Parent window handle, or <see cref="IntPtr.Zero"/> for none.
+    /// <para>父窗口句柄；无父窗口时为 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="infPath">Absolute path of the staged INF. <para>已暂存 INF 的绝对路径。</para></param>
+    /// <param name="flags">Zero to remove the package from the driver store.
+    /// <para>为零时同时从驱动仓库移除该包。</para></param>
+    /// <param name="rebootRequired">Non-zero when a system restart is needed to finish the removal.
+    /// <para>非零表示需要重启系统才能完成移除。</para></param>
+    /// <returns><see langword="true"/> when the package was uninstalled.
+    /// <para>驱动包已卸载时为 <see langword="true"/>。</para></returns>
+    [LibraryImport("newdev.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool DiUninstallDriverW(IntPtr hwndParent,
+        [MarshalAs(UnmanagedType.LPWStr)] string infPath, uint flags, out int rebootRequired);
+
+    /// <summary>
+    /// Uninstalls one device node so PnP installs a fresh driver when the device is enumerated again.
+    /// <para>卸载一个设备节点，使设备重新枚举时由 PnP 重新安装驱动。</para>
+    /// </summary>
+    /// <param name="hwndParent">Parent window handle, or <see cref="IntPtr.Zero"/> for none.
+    /// <para>父窗口句柄；无父窗口时为 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="deviceInfoSet">The device information set holding the node.
+    /// <para>承载该设备节点的设备信息集。</para></param>
+    /// <param name="deviceInfoData">The device information element. <para>设备信息元素。</para></param>
+    /// <param name="flags">Reserved; must be zero. <para>保留；必须为零。</para></param>
+    /// <param name="rebootRequired">Non-zero when a system restart is needed to finish the removal.
+    /// <para>非零表示需要重启系统才能完成移除。</para></param>
+    /// <returns><see langword="true"/> when the device node was removed.
+    /// <para>设备节点已移除时为 <see langword="true"/>。</para></returns>
+    [LibraryImport("newdev.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool DiUninstallDevice(IntPtr hwndParent, IntPtr deviceInfoSet,
+        ref SpDevinfoData deviceInfoData, uint flags, out int rebootRequired);
+
+    [LibraryImport("setupapi.dll", SetLastError = true)]
+    internal static partial IntPtr SetupDiCreateDeviceInfoList(IntPtr classGuid, IntPtr hwndParent);
+
+    [LibraryImport("setupapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetupDiOpenDeviceInfoW(IntPtr deviceInfoSet,
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceInstanceId, IntPtr hwndParent, uint openFlags,
+        ref SpDevinfoData deviceInfoData);
+
+    [LibraryImport("setupapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
 
     [LibraryImport("cfgmgr32.dll")]
     internal static partial uint CM_Locate_DevNodeW(out uint devInst,
@@ -314,6 +369,24 @@ internal static partial class WinUsbDriverNativeMethods
     {
         var message = new Win32Exception(Marshal.GetLastWin32Error()).Message;
         return string.IsNullOrEmpty(prefix) ? message : $"{prefix}: {message}";
+    }
+
+    /// <summary>The <c>SP_DEVINFO_DATA</c> layout: size, class GUID, devnode handle and a reserved pointer.
+    /// <para><c>SP_DEVINFO_DATA</c> 的布局：大小、类 GUID、设备节点句柄与保留指针。</para></summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SpDevinfoData
+    {
+        /// <summary>The structure size in bytes. <para>结构字节数。</para></summary>
+        public uint Size;
+
+        /// <summary>The device setup class GUID. <para>设备安装类 GUID。</para></summary>
+        public Guid ClassGuid;
+
+        /// <summary>The devnode handle. <para>设备节点句柄。</para></summary>
+        public uint DevInst;
+
+        /// <summary>Reserved; always zero. <para>保留；恒为零。</para></summary>
+        public IntPtr Reserved;
     }
 
     /// <summary>

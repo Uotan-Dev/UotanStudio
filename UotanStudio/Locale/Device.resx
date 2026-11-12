@@ -769,7 +769,10 @@
     <value>Restart required</value>
   </data>
   <data name="UsbTree_RestartRequiredMessage" xml:space="preserve">
-    <value>To make this device take effect, you need to restart your computer.</value>
+    <value>The driver change is not finished yet. Restart the computer or unplug and plug the device again to complete it.</value>
+  </data>
+  <data name="UsbTree_RestartRequiredStatus" xml:space="preserve">
+    <value>{0} still needs a restart or a replug to finish the driver change</value>
   </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>Driver state query failed: {0}</value>

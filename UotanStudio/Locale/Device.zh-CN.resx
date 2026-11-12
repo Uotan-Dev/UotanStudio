@@ -769,7 +769,10 @@
     <value>需要重新启动计算机</value>
   </data>
   <data name="UsbTree_RestartRequiredMessage" xml:space="preserve">
-    <value>要使这个设备生效，你需要重新启动计算机。</value>
+    <value>驱动变更尚未完成。请重新启动计算机，或拔下并重新插入设备以使其生效。</value>
+  </data>
+  <data name="UsbTree_RestartRequiredStatus" xml:space="preserve">
+    <value>{0} 仍需重启计算机或重新插拔设备才能完成驱动变更</value>
   </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>驱动状态查询失败：{0}</value>

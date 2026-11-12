@@ -3866,6 +3866,7 @@ internal static class LocaleKeySets
         "UsbTree_ConfigurationFailed",
         "UsbTree_RestartRequiredTitle",
         "UsbTree_RestartRequiredMessage",
+        "UsbTree_RestartRequiredStatus",
         "UsbTree_DriverStateRefreshFailed",
         "UsbTree_InstallDriver",
         "UsbTree_DriverInstalling",

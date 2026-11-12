@@ -13,6 +13,24 @@ using UotanStudio.Services.Devices;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
+/// Outcome of one USB-tree driver configuration change, which decides whether the window shows a restart
+/// notice.
+/// <para>USB 树一次驱动配置变更的结果，决定窗口是否弹出重启提示。</para>
+/// </summary>
+public enum UsbDriverChangeOutcome
+{
+    /// <summary>The change did not complete. <para>变更未完成。</para></summary>
+    Failed,
+
+    /// <summary>The change completed and no restart is needed. <para>变更已完成且无需重启。</para></summary>
+    Completed,
+
+    /// <summary>The change was applied but the device needs a restart or a replug.
+    /// <para>变更已应用，但设备需要重启计算机或重新插拔。</para></summary>
+    RestartRequired
+}
+
+/// <summary>
 /// View model of the USB tree window: it reads the USB bus topology through the host device-monitor
 /// service, renders node texts against the reporting backend's capabilities, and supports backend
 /// selection, an Android-only filter, expand/collapse, text export and auto-refresh on device changes.
@@ -263,15 +281,17 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="node">The tree node whose device is configured.<para>要被配置设备的树节点。</para></param>
     /// <returns>
-    /// <see langword="true"/> when the device access was configured successfully; otherwise
-    /// <see langword="false"/>.
-    /// <para>设备访问配置成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// <see cref="UsbDriverChangeOutcome.RestartRequired"/> when Windows needs a restart or a replug,
+    /// <see cref="UsbDriverChangeOutcome.Completed"/> when the change is already in effect, and
+    /// <see cref="UsbDriverChangeOutcome.Failed"/> otherwise.
+    /// <para>Windows 需要重启或重新插拔时为 <see cref="UsbDriverChangeOutcome.RestartRequired"/>；变更已生效时为
+    /// <see cref="UsbDriverChangeOutcome.Completed"/>；其余情况为 <see cref="UsbDriverChangeOutcome.Failed"/>。</para>
     /// </returns>
-    public async Task<bool> ConfigureDeviceAsync(UsbTreeNodeViewModel node)
+    public async Task<UsbDriverChangeOutcome> ConfigureDeviceAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning || _disposed)
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         if (OperatingSystem.IsLinux())
@@ -281,12 +301,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
 
         if (!OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_Configuring", node.DisplayText);
-        var succeeded = false;
+        var outcome = UsbDriverChangeOutcome.Failed;
         try
         {
             var request = new WinUsbTakeoverRequest
@@ -300,7 +320,10 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_Configured", node.DisplayText);
-                    succeeded = true;
+                    outcome = UsbDriverChangeOutcome.Completed;
+                    break;
+                case WinUsbDriverOperationStatus.RestartRequired:
+                    outcome = ReportRestartRequired(node, "Device configuration", result.Message);
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_ConfigurationElevationRequired");
@@ -324,12 +347,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (succeeded)
+        if (outcome is UsbDriverChangeOutcome.Completed or UsbDriverChangeOutcome.RestartRequired)
         {
             await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
 
-        return succeeded;
+        return outcome;
     }
 
     /// <summary>
@@ -340,18 +363,18 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// 模块屏蔽、解绑当前占用者并重新应用规则，使设备节点无需重新插拔即可使用。</para>
     /// </summary>
     /// <param name="node">The tree node whose device is configured.<para>要被配置设备的树节点。</para></param>
-    /// <returns><see langword="true"/> when the configuration was applied.
-    /// <para>配置生效时为 <see langword="true"/>。</para></returns>
-    private async Task<bool> ConfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
+    /// <returns><see cref="UsbDriverChangeOutcome.Completed"/> when the configuration was applied.
+    /// <para>配置生效时为 <see cref="UsbDriverChangeOutcome.Completed"/>。</para></returns>
+    private async Task<UsbDriverChangeOutcome> ConfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
     {
         if (node.Node.VendorId is not { } vendorId || node.Node.ProductId is not { } productId)
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_Configuring", node.DisplayText);
-        var succeeded = false;
+        var outcome = UsbDriverChangeOutcome.Failed;
         try
         {
             var result = await Task.Run(() => LinuxUdevDeviceAccess.Configure(vendorId, productId))
@@ -360,7 +383,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case LinuxDeviceAccessStatus.Succeeded:
                     StatusText = Localized("UsbTree_Configured", node.DisplayText);
-                    succeeded = true;
+                    outcome = UsbDriverChangeOutcome.Completed;
                     break;
                 case LinuxDeviceAccessStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_ConfigurationElevationRequired");
@@ -384,12 +407,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (succeeded)
+        if (outcome is UsbDriverChangeOutcome.Completed or UsbDriverChangeOutcome.RestartRequired)
         {
             await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
 
-        return succeeded;
+        return outcome;
     }
 
     /// <summary>
@@ -404,15 +427,18 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="node">The tree node whose configuration ends.<para>要结束配置的树节点。</para></param>
     /// <returns>
-    /// <see langword="true"/> when the configuration was removed successfully; otherwise
-    /// <see langword="false"/>.
-    /// <para>配置移除成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// <see cref="UsbDriverChangeOutcome.RestartRequired"/> when the package was removed but the device still
+    /// runs the takeover driver, <see cref="UsbDriverChangeOutcome.Completed"/> when the binding was observed
+    /// to leave it, and <see cref="UsbDriverChangeOutcome.Failed"/> otherwise.
+    /// <para>驱动包已移除但设备仍运行接管驱动时为 <see cref="UsbDriverChangeOutcome.RestartRequired"/>；观测到
+    /// 绑定已离开接管驱动时为 <see cref="UsbDriverChangeOutcome.Completed"/>；其余情况为
+    /// <see cref="UsbDriverChangeOutcome.Failed"/>。</para>
     /// </returns>
-    public async Task<bool> UnconfigureDeviceAsync(UsbTreeNodeViewModel node)
+    public async Task<UsbDriverChangeOutcome> UnconfigureDeviceAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning || _disposed)
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         if (OperatingSystem.IsLinux())
@@ -422,12 +448,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
 
         if (!OperatingSystem.IsWindows())
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_Unconfiguring", node.DisplayText);
-        var succeeded = false;
+        var outcome = UsbDriverChangeOutcome.Failed;
         try
         {
             var result = await Task.Run(() => _driverConfig.UninstallTakeover(node.Node.InstanceId))
@@ -436,7 +462,10 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_Unconfigured", node.DisplayText);
-                    succeeded = true;
+                    outcome = UsbDriverChangeOutcome.Completed;
+                    break;
+                case WinUsbDriverOperationStatus.RestartRequired:
+                    outcome = ReportRestartRequired(node, "Device unconfiguration", result.Message);
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_ConfigurationElevationRequired");
@@ -460,12 +489,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (succeeded)
+        if (outcome is UsbDriverChangeOutcome.Completed or UsbDriverChangeOutcome.RestartRequired)
         {
             await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
 
-        return succeeded;
+        return outcome;
     }
 
     /// <summary>
@@ -476,18 +505,18 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// 应用规则，恢复内核原有的驱动行为。</para>
     /// </summary>
     /// <param name="node">The tree node whose device is unconfigured.<para>要被取消配置设备的树节点。</para></param>
-    /// <returns><see langword="true"/> when the configuration was removed.
-    /// <para>配置被移除时为 <see langword="true"/>。</para></returns>
-    private async Task<bool> UnconfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
+    /// <returns><see cref="UsbDriverChangeOutcome.Completed"/> when the configuration was removed.
+    /// <para>配置被移除时为 <see cref="UsbDriverChangeOutcome.Completed"/>。</para></returns>
+    private async Task<UsbDriverChangeOutcome> UnconfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
     {
         if (node.Node.VendorId is not { } vendorId || node.Node.ProductId is not { } productId)
         {
-            return false;
+            return UsbDriverChangeOutcome.Failed;
         }
 
         SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_Unconfiguring", node.DisplayText);
-        var succeeded = false;
+        var outcome = UsbDriverChangeOutcome.Failed;
         try
         {
             var result = await Task.Run(() => LinuxUdevDeviceAccess.Unconfigure(vendorId, productId))
@@ -496,7 +525,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case LinuxDeviceAccessStatus.Succeeded:
                     StatusText = Localized("UsbTree_Unconfigured", node.DisplayText);
-                    succeeded = true;
+                    outcome = UsbDriverChangeOutcome.Completed;
                     break;
                 case LinuxDeviceAccessStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_ConfigurationElevationRequired");
@@ -520,12 +549,34 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             SetDriverOperationRunning(node, false);
         }
 
-        if (succeeded)
+        if (outcome is UsbDriverChangeOutcome.Completed or UsbDriverChangeOutcome.RestartRequired)
         {
             await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
         }
 
-        return succeeded;
+        return outcome;
+    }
+
+    /// <summary>
+    /// Reports a driver change that still needs a restart or a replug: the status bar shows localized text
+    /// and the backend detail goes to the unified log.
+    /// <para>上报仍需重启或重新插拔的驱动变更：状态栏显示本地化文本，后端细节写入统一日志。</para>
+    /// </summary>
+    /// <param name="node">The node whose device changed. <para>发生变更的设备节点。</para></param>
+    /// <param name="operation">The log operation name. <para>日志中的操作名。</para></param>
+    /// <param name="detail">The backend detail. <para>后端返回的细节。</para></param>
+    /// <returns><see cref="UsbDriverChangeOutcome.RestartRequired"/>.
+    /// <para>返回 <see cref="UsbDriverChangeOutcome.RestartRequired"/>。</para></returns>
+    private UsbDriverChangeOutcome ReportRestartRequired(UsbTreeNodeViewModel node, string operation,
+        string? detail)
+    {
+        StatusText = Localized("UsbTree_RestartRequiredStatus", node.DisplayText);
+        if (detail is { Length: > 0 })
+        {
+            LogService.Instance.Write(LogLevel.Warn, "UsbTree", $"{operation} needs a restart: {detail}");
+        }
+
+        return UsbDriverChangeOutcome.RestartRequired;
     }
 
     /// <summary>

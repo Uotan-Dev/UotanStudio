@@ -93,6 +93,13 @@ public enum WinUsbDriverOperationStatus
     /// <summary>The target device instance was not found. <para>目标设备实例未找到。</para></summary>
     DeviceNotFound,
 
+    /// <summary>
+    /// The package was removed but the running driver stack still needs a restart or a replug before the
+    /// device stops using the takeover driver.
+    /// <para>驱动包已移除，但运行中的驱动栈仍需重启计算机或重新插拔设备，设备才会停止使用接管驱动。</para>
+    /// </summary>
+    RestartRequired,
+
     /// <summary>The operation failed; see the message. <para>操作失败；详见消息。</para></summary>
     Failed
 }
@@ -134,6 +141,10 @@ public sealed class WinUsbDriverInstaller
     /// <summary>The upper bound a takeover waits for a WinUSB-openable interface after the binding changes.
     /// <para>绑定变化后，接管等待出现可由 WinUSB 打开的接口的上界。</para></summary>
     private static readonly TimeSpan InterfaceWaitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>The upper bound a release waits for the device to stop reporting the takeover binding.
+    /// <para>解除接管时等待设备不再上报接管绑定的上界。</para></summary>
+    private static readonly TimeSpan ReleaseBindingTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>The in-box USB device interface class, a last candidate when a WinUSB stack publishes no
     /// node-level DeviceInterfaceGUIDs value.
@@ -330,8 +341,8 @@ public sealed class WinUsbDriverInstaller
 
             if (rebootRequired != 0)
             {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    $"Bound the self-signed WinUSB package for '{request.HardwareId}', but Windows requires a reboot before the driver can start; reboot or replug the device and retry.");
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.RestartRequired,
+                    $"Bound the self-signed WinUSB package for '{request.HardwareId}', but Windows requires a reboot before the driver can start; restart the computer or replug the device.");
             }
 
             if (bound && stillProblem == 0 && interfaceReady)
@@ -367,16 +378,23 @@ public sealed class WinUsbDriverInstaller
     }
 
     /// <summary>
-    /// Ends the takeover of a device: removes the staged package with <c>SetupUninstallOEMInf</c>, asks PnP
-    /// to re-enumerate the devnode so the device falls back to a system driver, and deletes the takeover
-    /// certificate from the local-machine <c>Root</c> and <c>TrustedPublisher</c> stores. Requires an
-    /// administrator token and only acts on a binding this application installed.
-    /// <para>结束设备接管：经 <c>SetupUninstallOEMInf</c> 移除暂存的包，请求 PnP 重枚举设备节点使设备回退
-    /// 系统驱动，并从本机 <c>Root</c> 与 <c>TrustedPublisher</c> 存储删除接管证书。需要管理员令牌，
-    /// 且只作用于本应用安装的绑定。</para>
+    /// Ends the takeover of a device: uninstalls the self-signed package from the devices using it so PnP
+    /// installs another matching driver in place, removes the takeover certificate, and reads the binding
+    /// back before reporting success. Requires an administrator token and only acts on a binding this
+    /// application installed.
+    /// <para>结束设备接管：从使用该自签名包的设备上卸载该包，让 PnP 就地改装其它匹配驱动，移除接管证书，
+    /// 并在报告成功前读回绑定。需要管理员令牌，且只作用于本应用安装的绑定。</para>
     /// </summary>
     /// <param name="instanceId">The device instance id.<para>设备实例 ID。</para></param>
-    /// <returns>The operation result; never throws.<para>操作结果；绝不抛出。</para></returns>
+    /// <returns>
+    /// The operation result; never throws. <see cref="WinUsbDriverOperationStatus.Succeeded"/> requires an
+    /// observed binding that is no longer the takeover driver, and
+    /// <see cref="WinUsbDriverOperationStatus.RestartRequired"/> reports a device that still needs a restart
+    /// or replug.
+    /// <para>操作结果；绝不抛出。只有观测到绑定已不再是接管驱动才返回
+    /// <see cref="WinUsbDriverOperationStatus.Succeeded"/>；仍需要重启或重新插拔的设备返回
+    /// <see cref="WinUsbDriverOperationStatus.RestartRequired"/>。</para>
+    /// </returns>
     public WinUsbDriverOperationResult UninstallTakeover(string instanceId)
     {
         if (!OperatingSystem.IsWindows())
@@ -444,37 +462,199 @@ public sealed class WinUsbDriverInstaller
                 "The current driver was not installed by this application's takeover; removal is refused to protect other drivers.");
         }
 
-        if (string.IsNullOrWhiteSpace(infName))
+        var parent = 0u;
+        var hasParent = WinUsbDriverNativeMethods.CmGetParent(out parent, devInst, 0) ==
+            WinUsbDriverNativeMethods.CrSuccess;
+        var stagedInfPath = ResolveOwnStagedInfPath(infName);
+        var rebootRequired = 0;
+        if (stagedInfPath is not null)
         {
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                "The takeover binding does not expose the staged package name; removal is refused.");
+            if (!WinUsbDriverNativeMethods.DiUninstallDriverW(IntPtr.Zero, stagedInfPath, 0,
+                    out rebootRequired))
+            {
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    WinUsbDriverNativeMethods.DescribeLastWin32Error("DiUninstallDriver failed"));
+            }
+        }
+        else if (!RemoveDeviceNode(instanceId, out rebootRequired, out var removalError))
+        {
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, removalError);
         }
 
-        if (!WinUsbDriverNativeMethods.SetupUninstallOEMInfW(infName,
-                WinUsbDriverNativeMethods.SuoiForceDelete, IntPtr.Zero) &&
-            Marshal.GetLastWin32Error() != WinUsbDriverNativeMethods.ErrorFileNotFound)
-        {
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupUninstallOEMInf failed"));
-        }
-
-        var certificateRemovedAfterUninstall = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
+        var certificateCleaned = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
         _ = WinUsbDriverNativeMethods.WaitForNoPendingInstallation(PendingInstallWaitTimeout);
         _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
             WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
             WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
-        if (WinUsbDriverNativeMethods.CmGetParent(out var parent, devInst, 0) ==
-            WinUsbDriverNativeMethods.CrSuccess)
+        if (hasParent)
         {
             _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(parent,
                 WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
                 WinUsbDriverNativeMethods.CmReenumerateAsynchronous);
         }
-        return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
-            certificateRemovedAfterUninstall
-                ? $"Removed the takeover package '{infName}' and its certificate; the device returns to a system driver when it is re-enumerated."
-                : $"Removed the takeover package '{infName}' but the certificate stores could not be cleaned.");
+
+        var status = ClassifyReleaseOutcome(rebootRequired != 0,
+            WaitForBindingRelease(instanceId, ReleaseBindingTimeout));
+        var action = stagedInfPath is not null
+            ? $"Uninstalled the self-signed WinUSB package '{infName}' from the device and the driver store."
+            : "Removed the devnode that still carried the takeover binding; its staged package was already gone.";
+        var certificateNote = certificateCleaned
+            ? " The takeover certificate was removed."
+            : " The takeover certificate stores could not be cleaned.";
+        return status == WinUsbDriverOperationStatus.Succeeded
+            ? new WinUsbDriverOperationResult(status,
+                $"{action} '{instanceId}' no longer reports the takeover binding.{certificateNote}")
+            : new WinUsbDriverOperationResult(status,
+                $"{action} '{instanceId}' still needs a restart or a replug before it stops using the takeover driver.{certificateNote}");
     }
+
+    /// <summary>
+    /// Resolves the staged INF of this application's takeover package, refusing path-carrying names and
+    /// files that another provider now owns. Windows reuses <c>oemN.inf</c> slots, so a name alone does not
+    /// prove ownership.
+    /// <para>解析本应用接管包的暂存 INF，拒绝带路径的名字以及现属其他提供者的文件。Windows 会复用
+    /// <c>oemN.inf</c> 编号，仅凭文件名不能证明归属。</para>
+    /// </summary>
+    /// <param name="infName">The INF name reported by the devnode. <para>设备节点上报的 INF 名。</para></param>
+    /// <returns>The absolute INF path, or <see langword="null"/> when no own staged package exists.
+    /// <para>INF 的绝对路径；不存在本应用暂存包时为 <see langword="null"/>。</para></returns>
+    private static string? ResolveOwnStagedInfPath(string? infName)
+    {
+        if (!IsOwnStagedInfName(infName))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "inf", infName!);
+        if (!File.Exists(path) || !DriverPackageInfReader.TryReadFile(path, out var metadata) ||
+            metadata is null ||
+            !string.Equals(metadata.Provider, WinUsbSelfSignedDriverPackage.ProviderName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// Checks that one devnode-reported INF name is a bare <c>oem*.inf</c> file name, so an unexpected
+    /// value can never turn into a path outside the Windows INF directory.
+    /// <para>校验设备节点上报的 INF 名是纯 <c>oem*.inf</c> 文件名，避免异常值拼出 Windows INF 目录之外的路径。</para>
+    /// </summary>
+    /// <param name="infName">The INF name to check. <para>待校验的 INF 名。</para></param>
+    /// <returns><see langword="true"/> when the name is a bare staged INF file name.
+    /// <para>是纯暂存 INF 文件名时为 <see langword="true"/>。</para></returns>
+    internal static bool IsOwnStagedInfName(string? infName)
+        => infName is { Length: > 0 } &&
+            string.Equals(Path.GetFileName(infName), infName, StringComparison.Ordinal) &&
+            infName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+            infName.StartsWith("oem", StringComparison.OrdinalIgnoreCase) &&
+            infName.EndsWith(".inf", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Removes one devnode whose takeover package has already left the driver store, so PnP installs the
+    /// best remaining driver when the device is enumerated again. No INF of another provider is touched.
+    /// <para>移除接管包已从驱动仓库消失但仍带接管绑定的设备节点，使设备重新枚举时由 PnP 安装剩余的最佳驱动。
+    /// 绝不触碰其他提供者的 INF。</para>
+    /// </summary>
+    /// <param name="instanceId">The device instance id. <para>设备实例 ID。</para></param>
+    /// <param name="rebootRequired">Non-zero when Windows needs a restart to finish the removal.
+    /// <para>非零表示 Windows 需要重启才能完成移除。</para></param>
+    /// <param name="error">The native failure description. <para>原生失败描述。</para></param>
+    /// <returns><see langword="true"/> when the devnode was removed.
+    /// <para>设备节点已移除时为 <see langword="true"/>。</para></returns>
+    private static bool RemoveDeviceNode(string instanceId, out int rebootRequired, out string error)
+    {
+        rebootRequired = 0;
+        error = string.Empty;
+        var deviceInfoSet = WinUsbDriverNativeMethods.SetupDiCreateDeviceInfoList(IntPtr.Zero, IntPtr.Zero);
+        if (deviceInfoSet == IntPtr.Zero || deviceInfoSet == WinUsbDriverNativeMethods.InvalidHandleValue)
+        {
+            error = WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupDiCreateDeviceInfoList failed");
+            return false;
+        }
+
+        try
+        {
+            var data = new WinUsbDriverNativeMethods.SpDevinfoData
+            {
+                Size = (uint)Marshal.SizeOf<WinUsbDriverNativeMethods.SpDevinfoData>()
+            };
+            if (!WinUsbDriverNativeMethods.SetupDiOpenDeviceInfoW(deviceInfoSet, instanceId, IntPtr.Zero, 0,
+                    ref data))
+            {
+                error = WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupDiOpenDeviceInfo failed");
+                return false;
+            }
+
+            if (WinUsbDriverNativeMethods.DiUninstallDevice(IntPtr.Zero, deviceInfoSet, ref data, 0,
+                    out rebootRequired))
+            {
+                return true;
+            }
+
+            error = WinUsbDriverNativeMethods.DescribeLastWin32Error("DiUninstallDevice failed");
+            return false;
+        }
+        finally
+        {
+            _ = WinUsbDriverNativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+        }
+    }
+
+    /// <summary>
+    /// Classifies a completed package removal: a pending reboot or a devnode that still reports the takeover
+    /// binding is a restart requirement, never a success.
+    /// <para>判定已完成的驱动包移除：需要重启或设备节点仍上报接管绑定时是需要重启，绝不报成功。</para>
+    /// </summary>
+    /// <param name="rebootRequired">Whether Windows reported a pending restart.
+    /// <para>Windows 是否报告需要重启。</para></param>
+    /// <param name="bindingReleased">Whether the devnode was observed without the takeover binding.
+    /// <para>是否观测到设备节点不再带接管绑定。</para></param>
+    /// <returns><see cref="WinUsbDriverOperationStatus.Succeeded"/> only for a verified release.
+    /// <para>只有验证通过的解除才返回 <see cref="WinUsbDriverOperationStatus.Succeeded"/>。</para></returns>
+    internal static WinUsbDriverOperationStatus ClassifyReleaseOutcome(bool rebootRequired,
+        bool bindingReleased)
+        => !bindingReleased || rebootRequired
+            ? WinUsbDriverOperationStatus.RestartRequired
+            : WinUsbDriverOperationStatus.Succeeded;
+
+    /// <summary>
+    /// Polls a bounded time until the device no longer reports the takeover binding. A devnode that can no
+    /// longer be located was removed from the tree, so it cannot still run the takeover driver either.
+    /// <para>有界轮询，直到设备不再上报接管绑定。定位不到的设备节点已从设备树移除，同样不可能仍在运行接管
+    /// 驱动。</para>
+    /// </summary>
+    /// <param name="query">Reads the current binding. <para>读取当前绑定的回调。</para></param>
+    /// <param name="timeout">The wait bound. <para>等待上限。</para></param>
+    /// <param name="pollInterval">The interval between two observations.
+    /// <para>两次观测之间的间隔。</para></param>
+    /// <returns><see langword="true"/> when the binding was observed to leave the takeover driver.
+    /// <para>观测到绑定离开接管驱动时为 <see langword="true"/>。</para></returns>
+    internal static bool WaitForBindingRelease(Func<WinUsbDriverState> query, TimeSpan timeout,
+        TimeSpan pollInterval)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            if (query() is { IsTakeoverBinding: false })
+            {
+                return true;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+
+            Thread.Sleep(pollInterval);
+        }
+    }
+
+    private static bool WaitForBindingRelease(string instanceId, TimeSpan timeout)
+        => WaitForBindingRelease(() => new WinUsbDriverInstaller().QueryState(instanceId), timeout,
+            BindingPollInterval);
 
     /// <summary>
     /// Removes every staged OEM INF whose provider matches the takeover package provider, so an absent

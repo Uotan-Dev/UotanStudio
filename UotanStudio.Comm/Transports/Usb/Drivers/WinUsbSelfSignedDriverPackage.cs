@@ -182,6 +182,15 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
                         break;
                     }
                 }
+
+                var remaining = WinUsbTakeoverNativeMethods.CertFindCertificateInStore(store,
+                    WinUsbTakeoverNativeMethods.X509AsnEncoding, 0,
+                    WinUsbTakeoverNativeMethods.CertFindSubjectName, &nameBlob, IntPtr.Zero);
+                if (remaining != IntPtr.Zero)
+                {
+                    cleaned = false;
+                    _ = WinUsbTakeoverNativeMethods.CertFreeCertificateContext(remaining);
+                }
             }
             finally
             {
