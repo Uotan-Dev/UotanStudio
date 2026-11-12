@@ -311,6 +311,8 @@ public partial class FlashView : UserControl
     private void OnMtkRebootClick(object? sender, RoutedEventArgs e) => _model.OnMtkRebootClick(sender, e);
     private void OnMtkXmlPropertyQueryClick(object? sender, RoutedEventArgs e) => _model.OnMtkXmlPropertyQueryClick(sender, e);
     private void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e) => _model.OnEdlChooseProgrammerClick(sender, e);
+    private void OnEdlChooseSignatureClick(object? sender, RoutedEventArgs e) => _model.OnEdlChooseSignatureClick(sender, e);
+    private void OnEdlClearSignatureClick(object? sender, RoutedEventArgs e) => _model.OnEdlClearSignatureClick(sender, e);
     private void OnEdlProgrammerPickChanged(object? sender, SelectionChangedEventArgs e) => _model.OnEdlProgrammerPickChanged(sender, e);
     private void OnEdlReadbackClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadbackClick(sender, e);
     private void OnEdlEraseClick(object? sender, RoutedEventArgs e) => _model.OnEdlEraseClick(sender, e);

@@ -356,6 +356,10 @@ public sealed partial class FlashViewModel
             if (!indeterminate)
             {
                 row.Percent = percent;
+                if (update.BytesTotal is { } transferTotal)
+                {
+                    row.TransferBytes = transferTotal;
+                }
             }
 
             UpdateOverall();
@@ -376,6 +380,7 @@ public sealed partial class FlashViewModel
 
             IsOverallIndeterminate = percent < 0;
             OverallText = update.Message;
+            UpdateBusyProgress();
             return;
         }
 

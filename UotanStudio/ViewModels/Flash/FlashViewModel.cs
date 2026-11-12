@@ -97,6 +97,14 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// </summary>
     public long SizeBytes { get; set; }
 
+    /// <summary>
+    /// Bytes the current run transfers for this row, taken from the staged image or the phase total it reports; 0 when
+    /// the run has not established a measurable length, which excludes the row from the aggregate transfer speed.
+    /// <para>本次运行为该行传输的字节数，取自暂存镜像或阶段上报的总量；运行尚未确定可度量长度时为 0，该行不参与
+    /// 汇总传输速度。</para>
+    /// </summary>
+    public long TransferBytes { get; set; }
+
     /// <summary>The partition offset or sector offset. <para>分区偏移量或扇区偏移。</para></summary>
     [ObservableProperty]
     private string _offset = string.Empty;
@@ -288,6 +296,7 @@ public sealed partial class FlashViewModel : ObservableObject
         _log = log ?? LogService.Instance;
         Partitions.CollectionChanged += OnPartitionsChanged;
         LoadSectionExpansion();
+        LoadEdlSignatureSetting();
     }
 
     private DispatcherTimer CreateLogFlushTimer()

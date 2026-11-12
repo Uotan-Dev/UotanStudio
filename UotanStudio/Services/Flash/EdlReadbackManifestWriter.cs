@@ -39,6 +39,14 @@ public sealed record EdlReadbackManifestEntry
     public required int PhysicalPartitionNumber { get; init; }
 
     /// <summary>
+    /// The total sector count of the LUN this entry was read from; zero leaves the run-wide value in charge.
+    /// <para>该条目所在 LUN 的总扇区数；为零时采用整次运行的值。</para>
+    /// </summary>
+    /// <value>The sector count of the entry's own LUN, or zero when the run-wide value applies.
+    /// <para>该条目自身 LUN 的扇区数；适用整次运行的值时为零。</para></value>
+    public long NumDiskSectors { get; init; }
+
+    /// <summary>
     /// The dumped image file name (without path).
     /// <para>落盘镜像的文件名（不含路径）。</para>
     /// </summary>
@@ -141,17 +149,21 @@ public static class EdlReadbackManifestWriter
 
     /// <summary>
     /// Formats the start sector; generalized mode rewrites entries adjacent to the disk end
-    /// into a relative expression.
-    /// <para>格式化起始扇区：通用化模式下与磁盘末尾相邻的条目改写为相对表达式。</para>
+    /// into a relative expression, measured against the entry's own LUN when it names one.
+    /// <para>格式化起始扇区：通用化模式下与磁盘末尾相邻的条目改写为相对表达式；条目自带 LUN 时以其
+    /// 扇区数为基准。</para>
     /// </summary>
     /// <param name="entry">The read-back entry to format. <para>待格式化的回读条目。</para></param>
-    /// <param name="numDiskSectors">The total sector count of the LUN. <para>所在 LUN 的总扇区数。</para></param>
+    /// <param name="numDiskSectors">The run-wide LUN sector count. <para>整次运行的 LUN 扇区数。</para></param>
     /// <param name="generalized">Whether generalized rewriting is active. <para>通用化改写是否启用。</para></param>
     /// <returns>The formatted start sector expression. <para>格式化后的起始扇区表达式。</para></returns>
     private static string FormatStartSector(EdlReadbackManifestEntry entry, long numDiskSectors, bool generalized)
-        => generalized && numDiskSectors > 0 && entry.StartSector + entry.SectorCount == numDiskSectors
+    {
+        var diskSectors = entry.NumDiskSectors > 0 ? entry.NumDiskSectors : numDiskSectors;
+        return generalized && diskSectors > 0 && entry.StartSector + entry.SectorCount == diskSectors
             ? string.Create(CultureInfo.InvariantCulture, $"NUM_DISK_SECTORS-{entry.SectorCount}.")
             : entry.StartSector.ToString(CultureInfo.InvariantCulture);
+    }
 
     private static void ValidateEntry(EdlReadbackManifestEntry entry)
     {
@@ -178,6 +190,11 @@ public static class EdlReadbackManifestWriter
         if (entry.PhysicalPartitionNumber < 0)
         {
             throw new ArgumentException($"Read-back entry '{entry.PartitionName}' has a negative LUN number.");
+        }
+
+        if (entry.NumDiskSectors < 0)
+        {
+            throw new ArgumentException($"Read-back entry '{entry.PartitionName}' has a negative disk sector count.");
         }
     }
 }

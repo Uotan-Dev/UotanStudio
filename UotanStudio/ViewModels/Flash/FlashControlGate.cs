@@ -134,17 +134,18 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// The partition-table read: offered only on a fastboot endpoint, because that is the one transport whose table is
-    /// enumerated by the same variable dump this page already reads. Every other protocol reads its table through the
-    /// action its own section owns, so the shared entry stays closed there instead of repeating that action; the
-    /// SpacemiT BootROM download mode is closed too, because that stage carries no partition table at all.
-    /// <para>分区表读取：只在 fastboot 端点上提供，因为只有该传输的分区表由本页已读取的同一份变量转储枚举。其它协议都经各自
-    /// 分类拥有的动作读取分区表，因此该通用入口在那里保持关闭，而不是重复那个动作；进迭时空 BootROM 下载模式同样关闭，
-    /// 因为该阶段根本没有分区表。</para>
+    /// The partition-table read: offered on a fastboot endpoint, whose table is enumerated by the same variable dump
+    /// this page already reads, and on an EDL endpoint, whose table is read from the GPT of the region the LUN box
+    /// names. The SpacemiT BootROM download mode and the other protocols stay closed, because that stage carries no
+    /// table at all and the remaining protocols read theirs through the action their own section owns.
+    /// <para>分区表读取：在 fastboot 端点上提供，其分区表由本页已读取的同一份变量转储枚举；EDL 端点也提供，其分区表从
+    /// LUN 框所指区域的 GPT 读出。进迭时空 BootROM 下载模式与其它协议保持关闭，因为该阶段根本没有分区表，而其余协议都经
+    /// 各自分类拥有的动作读取。</para>
     /// </summary>
     internal static FlashControlGate PartitionTableRead(string name, bool busyDisabled = false) => new(name,
-        static context => context.Kind == FlashDeviceKind.Fastboot &&
-            !(context.IsSpacemiTFastboot && context.FastbootStage == SpacemiTBootStage.BromFdl),
+        static context => context.Mode == FlashDeviceMode.Edl ||
+            (context.Kind == FlashDeviceKind.Fastboot &&
+                !(context.IsSpacemiTFastboot && context.FastbootStage == SpacemiTBootStage.BromFdl)),
         busyDisabled);
 
     /// <summary>

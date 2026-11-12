@@ -218,7 +218,15 @@ internal static class FlashEdlBundleService
             throw new InvalidDataException("A bundle requires between one and 256 rawprogram manifests.");
         }
         var programs = RawProgramParser.ParseAll(manifests, directory);
-        foreach (var entry in programs.Where(entry => !string.IsNullOrEmpty(entry.Filename)))
+        // Only the rows this run will program need their image: a label selection narrows the run, so a manifest row the
+        // user left out never blocks the selected ones.
+        // 只有本次运行真要编程的行才需要镜像：标签选择会收窄运行范围，因此用户未选中的清单行不会挡住已选行。
+        var selectedLabels = labels is { Count: > 0 }
+            ? new HashSet<string>(labels, StringComparer.OrdinalIgnoreCase)
+            : null;
+        foreach (var entry in programs.Where(entry => !string.IsNullOrEmpty(entry.Filename) &&
+                     (selectedLabels is null ||
+                         !string.IsNullOrEmpty(entry.Label) && selectedLabels.Contains(entry.Label))))
         {
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(entry.SourceFile) && !skipAbsentSources)

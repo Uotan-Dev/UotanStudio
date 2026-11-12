@@ -298,10 +298,15 @@
                         </StackPanel>
                         <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="False" ZIndex="10"
                                 Background="{DynamicResource CardBackground}" Opacity="0.82">
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-                                <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="32" Height="32"
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                        MaxWidth="360">
+                                <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="52" Height="52"
                                                   HorizontalAlignment="Center" />
-                                <TextBlock Text="{DynamicResource Flash_Busy}" />
+                                <TextBlock Text="{DynamicResource Flash_Busy}" FontSize="17" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" TextAlignment="Center" />
+                                <TextBlock Text="{Binding BusyStatsText}" IsVisible="{Binding HasBusyStats}"
+                                           FontSize="14" Opacity="0.8" HorizontalAlignment="Center"
+                                           TextAlignment="Center" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -522,51 +527,57 @@
                         <Expander Name="EdlExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Edl}" IsExpanded="{Binding IsEdlSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="EdlPane" Spacing="8">
-                                                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
+                                                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                       RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
                                     <CheckBox Grid.Row="0" Grid.Column="0" Name="SkipAbsentSourcesBox"
                                               Content="{DynamicResource Flash_SkipAbsentSources}" HorizontalAlignment="Left" />
                                     <CheckBox Grid.Row="0" Grid.Column="1" Name="ContinueOnFailureBox"
                                               Content="{DynamicResource Flash_ContinueOnFailure}" HorizontalAlignment="Left" />
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Flash_EdlSectorSize}"
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Flash_EdlStorageType}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <ComboBox Grid.Row="1" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
+                                    <ComboBox Grid.Row="1" Grid.Column="1" Name="EdlStorageTypeBox" Height="28"
+                                              HorizontalAlignment="Stretch"
+                                              ItemTemplate="{StaticResource LocalizedOptionTemplate}"
+                                              AutomationProperties.Name="{DynamicResource Flash_EdlStorageType}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Flash_EdlSectorSize}"
+                                               VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
+                                    <ComboBox Grid.Row="2" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
                                               HorizontalAlignment="Stretch"
                                               ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlSectorSize}" />
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Flash_EdlSlot}"
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Flash_EdlSlot}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <ComboBox Grid.Row="2" Grid.Column="1" Name="EdlSlotBox" Height="28"
+                                    <ComboBox Grid.Row="3" Grid.Column="1" Name="EdlSlotBox" Height="28"
                                               HorizontalAlignment="Stretch"
                                               ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlSlot}" />
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Flash_EdlWipeFirst}"
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource Flash_EdlWipeFirst}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="3" Grid.Column="1" Name="EdlWipeFirstBox" Height="28"
+                                    <TextBox Grid.Row="4" Grid.Column="1" Name="EdlWipeFirstBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlWipeFirst}" />
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource Flash_EdlMaxPayload}"
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="{DynamicResource Flash_EdlMaxPayload}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="4" Grid.Column="1" Name="EdlMaxPayloadBox" Height="28"
+                                    <TextBox Grid.Row="5" Grid.Column="1" Name="EdlMaxPayloadBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="1048576" PlaceholderText="1048576"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlMaxPayload}" />
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="{DynamicResource Flash_EdlPagesPerBlock}"
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="{DynamicResource Flash_EdlPagesPerBlock}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="5" Grid.Column="1" Name="EdlPagesPerBlockBox" Height="28"
+                                    <TextBox Grid.Row="6" Grid.Column="1" Name="EdlPagesPerBlockBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlPagesPerBlock}" />
-                                    <CheckBox Grid.Row="6" Grid.Column="0" Name="EdlWipeConfirmBox"
+                                    <CheckBox Grid.Row="7" Grid.Column="0" Name="EdlWipeConfirmBox"
                                               Content="{DynamicResource Flash_EdlWipeConfirm}"
                                               VerticalAlignment="Center" FontSize="12"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlWipeConfirm}" />
-                                    <CheckBox Grid.Row="6" Grid.Column="1" Name="EdlWipeEntireBox"
+                                    <CheckBox Grid.Row="7" Grid.Column="1" Name="EdlWipeEntireBox"
                                               Content="{DynamicResource Flash_EdlWipeEntire}"
                                               VerticalAlignment="Center" FontSize="12"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlWipeEntire}" />
-                                    <TextBlock Grid.Row="7" Grid.Column="0" Name="EdlGptEntryLbaLabel"
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Name="EdlGptEntryLbaLabel"
                                                Text="{DynamicResource Flash_EdlGptEntryLba}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="7" Grid.Column="1" Name="EdlGptEntryLbaBox" Height="28"
+                                    <TextBox Grid.Row="8" Grid.Column="1" Name="EdlGptEntryLbaBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlGptEntryLba}" />
                                 </Grid>
@@ -604,6 +615,26 @@
                                         Click="OnEdlChooseProgrammerClick"
                                         Content="{DynamicResource Flash_EdlChooseCustomProgrammer}"
                                         AutomationProperties.Name="{DynamicResource Flash_EdlChooseCustomProgrammer}" />
+                                <!-- 签名文件只在 programmer 要求认证时使用：按 256 字节分块，初始化时依次尝试。 -->
+                                <!-- The signature file is only consumed when the programmer asks for authentication:
+                                     its 256-byte blocks are tried in order during initialization. -->
+                                <TextBlock Text="{DynamicResource Flash_EdlSignatureFile}" FontSize="12" Opacity="0.8" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <TextBox Name="EdlSignaturePathBox" Grid.Column="0" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             PlaceholderText="{DynamicResource Flash_EdlSignatureHint}"
+                                             AutomationProperties.Name="{DynamicResource Flash_EdlSignatureFile}" />
+                                    <Grid Grid.Column="1" ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <Button Name="EdlChooseSignatureButton" Grid.Column="0" Classes="pane-action"
+                                                Click="OnEdlChooseSignatureClick"
+                                                Content="{DynamicResource Flash_EdlChooseSignature}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlChooseSignature}" />
+                                        <Button Name="EdlClearSignatureButton" Grid.Column="1" Classes="pane-action"
+                                                Click="OnEdlClearSignatureClick"
+                                                Content="{DynamicResource Flash_EdlSignatureClear}"
+                                                AutomationProperties.Name="{DynamicResource Flash_EdlSignatureClear}" />
+                                    </Grid>
+                                </Grid>
                                 <!-- 下面三项是链路兼容开关：只在驱动或 programmer 表现出对应异常时勾选，默认全部关闭。 -->
                                 <!-- The three entries below are link-compatibility switches; enable them only when the
                                      driver or programmer shows the matching failure, and all three stay off by default. -->

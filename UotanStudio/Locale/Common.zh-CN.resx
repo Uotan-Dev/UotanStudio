@@ -645,6 +645,9 @@
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>个镜像已加载</value>
   </data>
+  <data name="Flash_EdlPackageImageCopied" xml:space="preserve">
+    <value>已把 {0} 复制进包目录。</value>
+  </data>
   <data name="Flash_AfterSalesPackage" xml:space="preserve">
     <value>售后包</value>
   </data>
@@ -668,6 +671,12 @@
   </data>
   <data name="Flash_Busy" xml:space="preserve">
     <value>正在处理...</value>
+  </data>
+  <data name="Flash_BusyProgressPercent" xml:space="preserve">
+    <value>已完成 {0}</value>
+  </data>
+  <data name="Flash_BusyProgressEta" xml:space="preserve">
+    <value>{0} · 预计剩余 {1}</value>
   </data>
   <data name="Flash_FileMissing" xml:space="preserve">
     <value>文件不存在。</value>
@@ -1226,6 +1235,9 @@
   </data>
   <data name="Flash_Auto" xml:space="preserve">
     <value>自动</value>
+  </data>
+  <data name="Flash_EdlStorageType" xml:space="preserve">
+    <value>存储介质</value>
   </data>
   <data name="Flash_EdlSectorSize" xml:space="preserve">
     <value>扇区大小</value>
@@ -4013,6 +4025,27 @@
   </data>
   <data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve">
     <value>自选 Programmer 文件</value>
+  </data>
+  <data name="Flash_EdlSignatureFile" xml:space="preserve">
+    <value>EDL 签名文件</value>
+  </data>
+  <data name="Flash_EdlSignatureHint" xml:space="preserve">
+    <value>签名文件路径（按 256 字节分块，依次尝试）</value>
+  </data>
+  <data name="Flash_EdlChooseSignature" xml:space="preserve">
+    <value>选择签名文件</value>
+  </data>
+  <data name="Flash_EdlSignatureClear" xml:space="preserve">
+    <value>清除</value>
+  </data>
+  <data name="Flash_EdlSignatureInvalid" xml:space="preserve">
+    <value>无法接受 {0}：签名文件必须由 256 字节的块组成，且不超过 1 MiB。</value>
+  </data>
+  <data name="Flash_EdlSignatureChosen" xml:space="preserve">
+    <value>已选择签名文件：{0}（{1} 个块）</value>
+  </data>
+  <data name="Flash_Log_SignatureRequired" xml:space="preserve">
+    <value>所选引导程序要求 EDL 签名；未选择签名文件时初始化会失败。</value>
   </data>
   <data name="Flash_Rockchip" xml:space="preserve">
     <value>瑞芯微 Rockchip</value>

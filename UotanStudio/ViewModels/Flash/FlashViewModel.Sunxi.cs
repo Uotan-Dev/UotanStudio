@@ -349,7 +349,13 @@ public sealed partial class FlashViewModel
         try
         {
             var progress = new Progress<SunxiFlashProgress>(report =>
-                SunxiStatusText = FormatSunxiFlashProgress(report, language));
+            {
+                SunxiStatusText = FormatSunxiFlashProgress(report, language);
+                if (report is { BytesCompleted: { } done, BytesTotal: { } total })
+                {
+                    ReportBusyTransfer(done, total);
+                }
+            });
             await App.DeviceMonitor.FlashSunxiAsync(device, SunxiImagePath, options, progress,
                 cancellation.Token).ConfigureAwait(true);
             SunxiStatusText = language.GetString("Flash_SunxiFlashDone");

@@ -205,7 +205,7 @@ public sealed class FlashControlGateTests
     }
 
     [Fact]
-    public void PartitionTableRead_IsOfferedOnlyWhereFastbootEnumeratesTheTable()
+    public void PartitionTableRead_IsOfferedWhereThePageCanReadTheTable()
     {
         var gate = FlashControlGate.PartitionTableRead("ReadPartitionTableButton", busyDisabled: true);
 
@@ -216,11 +216,9 @@ public sealed class FlashControlGateTests
             spacemiTFastboot: true, fastbootStage: SpacemiTBootStage.BromFdl)),
             "the BootROM download mode has no partition table to read");
 
-        // Every other protocol reads its table through the action its own section owns.
-        // 其它协议都经各自分类拥有的动作读取分区表。
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Edl)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Edl)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));

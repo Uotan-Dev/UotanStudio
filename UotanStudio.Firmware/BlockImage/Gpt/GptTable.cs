@@ -207,6 +207,22 @@ public sealed class GptTable
             }
             match = partition;
         }
-        return match ?? throw new KeyNotFoundException("The GPT partition name was not found.");
+        return match ?? throw new KeyNotFoundException(DescribeMissingName(name));
+    }
+
+    /// <summary>The largest number of listed partition names carried by a missing-name report.
+    /// <para>缺失名称报告中列举的分区名上限。</para></summary>
+    private const int ListedNameLimit = 8;
+
+    private string DescribeMissingName(string name)
+    {
+        if (Partitions.Count == 0)
+        {
+            return $"The GPT partition name was not found: '{name}'. The validated table carries no partitions.";
+        }
+
+        var known = string.Join(", ", Partitions.Take(ListedNameLimit).Select(partition => partition.Name));
+        return $"The GPT partition name was not found: '{name}'. The table carries {Partitions.Count} partition(s): " +
+            $"{known}{(Partitions.Count > ListedNameLimit ? ", ..." : string.Empty)}";
     }
 }

@@ -62,6 +62,8 @@ public sealed partial class FlashViewModel
         RefreshRootPartitionOptions();
         UpdateRootControlsState();
 
+        Field<ComboBox>("EdlStorageTypeBox").ItemsSource = _edlStorageTypeOptions.Options;
+        Field<ComboBox>("EdlStorageTypeBox").SelectedIndex = 1;
         Field<ComboBox>("EdlSectorSizeBox").ItemsSource = _edlSectorSizeOptions.Options;
         Field<ComboBox>("EdlSectorSizeBox").SelectedIndex = 0;
         Field<ComboBox>("EdlSlotBox").ItemsSource = _edlSlotOptions.Options;
@@ -80,6 +82,7 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
         SetRkStorageOptions(AllRkStorageOrdinals);
         UpdateEdlProgrammerPickOptions();
+        RefreshEdlSignatureUi();
         WarmRootCatalogs();
         PropertyChanged += OnModelPropertyChanged;
     }

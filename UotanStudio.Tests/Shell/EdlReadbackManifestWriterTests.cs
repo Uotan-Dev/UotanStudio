@@ -114,6 +114,29 @@ public sealed class EdlReadbackManifestWriterTests
     }
 
     [Fact]
+    public async Task WriteAsync_GeneralizedMode_UsesEachEntrysOwnDiskSize()
+    {
+        using var directory = new TempDirectory();
+        var path = Path.Combine(directory.Path, "rawprogram.xml");
+        var endOfLun4 = BootEntry with
+        {
+            StartSector = 4096 - BootEntry.SectorCount,
+            PhysicalPartitionNumber = 4,
+            NumDiskSectors = 4096
+        };
+        var endOfUnstatedDisk = BootEntry with { StartSector = 4096 - BootEntry.SectorCount };
+
+        await EdlReadbackManifestWriter.WriteAsync(
+            path, [endOfLun4, endOfUnstatedDisk], sectorSizeInBytes: 4096, numDiskSectors: 8192,
+            generalized: true, TestContext.Current.CancellationToken);
+
+        var programs = XDocument.Load(path).Descendants("program").ToArray();
+        Assert.Equal("NUM_DISK_SECTORS-1024.", (string?)programs[0].Attribute("start_sector"));
+        Assert.Equal("4", (string?)programs[0].Attribute("physical_partition_number"));
+        Assert.Equal("3072", (string?)programs[1].Attribute("start_sector"));
+    }
+
+    [Fact]
     public async Task WriteAsync_ExistingFile_ReplacedAtomicallyOnSuccess()
     {
         using var directory = new TempDirectory();

@@ -645,6 +645,9 @@ Author: 暮间雾
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>images loaded</value>
   </data>
+  <data name="Flash_EdlPackageImageCopied" xml:space="preserve">
+    <value>Copied {0} into the package folder.</value>
+  </data>
   <data name="Flash_AfterSalesPackage" xml:space="preserve">
     <value>after-sales package</value>
   </data>
@@ -668,6 +671,12 @@ Author: 暮间雾
   </data>
   <data name="Flash_Busy" xml:space="preserve">
     <value>Working...</value>
+  </data>
+  <data name="Flash_BusyProgressPercent" xml:space="preserve">
+    <value>{0} complete</value>
+  </data>
+  <data name="Flash_BusyProgressEta" xml:space="preserve">
+    <value>{0} · {1} left</value>
   </data>
   <data name="Flash_FileMissing" xml:space="preserve">
     <value>File is missing.</value>
@@ -1226,6 +1235,9 @@ Author: 暮间雾
   </data>
   <data name="Flash_Auto" xml:space="preserve">
     <value>Auto</value>
+  </data>
+  <data name="Flash_EdlStorageType" xml:space="preserve">
+    <value>Storage media</value>
   </data>
   <data name="Flash_EdlSectorSize" xml:space="preserve">
     <value>Sector size</value>
@@ -4013,6 +4025,27 @@ Continue?</value>
   </data>
   <data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve">
     <value>Choose Programmer</value>
+  </data>
+  <data name="Flash_EdlSignatureFile" xml:space="preserve">
+    <value>EDL signature file</value>
+  </data>
+  <data name="Flash_EdlSignatureHint" xml:space="preserve">
+    <value>Signature file path (256-byte blocks, tried in order)</value>
+  </data>
+  <data name="Flash_EdlChooseSignature" xml:space="preserve">
+    <value>Choose Signature</value>
+  </data>
+  <data name="Flash_EdlSignatureClear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Flash_EdlSignatureInvalid" xml:space="preserve">
+    <value>Cannot accept {0}: the signature file must consist of 256-byte blocks and stay within 1 MiB.</value>
+  </data>
+  <data name="Flash_EdlSignatureChosen" xml:space="preserve">
+    <value>Signature file chosen: {0} ({1} block(s))</value>
+  </data>
+  <data name="Flash_Log_SignatureRequired" xml:space="preserve">
+    <value>The selected programmer asks for an EDL signature; initialization fails until a signature file is chosen.</value>
   </data>
   <data name="Flash_Rockchip" xml:space="preserve">
     <value>Rockchip</value>

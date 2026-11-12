@@ -110,6 +110,13 @@ public sealed partial class FlashViewModel
     private readonly Dictionary<string, (string Entry, string OutputName)> _oppoEntries = new(StringComparer.OrdinalIgnoreCase);
     private string? _rootPackagePath;
     private readonly Dictionary<FlashPartitionEntry, RawProgramEntry> _edlEntries = [];
+    /// <summary>
+    /// Directory of the XML package this session generated from a device table, or <see langword="null"/> when the page
+    /// holds an ordinary package. Only that directory's manifest is rewritten when a row's file changes.
+    /// <para>本次会话从设备分区表生成的 XML 包目录；页面持有普通包时为 <see langword="null"/>。只有该目录的清单会在行内
+    /// 文件变化时被改写。</para>
+    /// </summary>
+    private string? _generatedTablePackagePath;
     private string? _edlProgrammer;
     private string? _edlProgrammerOverride;
     private bool _isCustomProgrammer;
@@ -158,6 +165,9 @@ public sealed partial class FlashViewModel
 
     private DeviceViewModel? _deviceViewModel;
 
+    private readonly LocalizedOptionSet _edlStorageTypeOptions = LocalizedOptionSet.FromOptions(
+        LocalizedOption.FromText("eMMC"),
+        LocalizedOption.FromText("UFS"));
     private readonly LocalizedOptionSet _edlSectorSizeOptions = LocalizedOptionSet.FromOptions(
         LocalizedOption.FromResource("Flash_Auto"),
         LocalizedOption.FromText("512"),
@@ -322,6 +332,7 @@ public sealed partial class FlashViewModel
         _flashCancellation = cancellation;
         SetBusy(true);
         _loadedPath = path;
+        _generatedTablePackagePath = null;
         _requiredCodeName = null;
         _requiresFastbootd = false;
         _edlEntries.Clear();
@@ -1455,6 +1466,7 @@ public sealed partial class FlashViewModel
                     token.ThrowIfCancellationRequested();
                     SetRowRunning(row, "Flash_Status_Flashing");
                     var totalBytes = row.SizeBytes;
+                    row.TransferBytes = totalBytes;
                     var progress = new Progress<long>(done =>
                     {
                         if (totalBytes > 0)
@@ -1859,6 +1871,11 @@ public sealed partial class FlashViewModel
             _suppressSpecialFileRowCheck = false;
         }
 
+        if (!special)
+        {
+            await SyncPickedFileIntoGeneratedPackageAsync(entry, path).ConfigureAwait(true);
+        }
+
         if (entry.Command != LoaderCommand)
         {
             UpdateSpecialFileRowStatus(entry);
@@ -1997,28 +2014,53 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Builds the EDL startup requirements from the page; outputs null when no compatibility switch is
-    /// requested and every timeout keeps its default.
-    /// <para>按界面选择构造 EDL 启动要求：未请求任何兼容开关且超时保持默认时输出 null。</para>
+    /// Builds the EDL startup requirements from the page; outputs null when no compatibility switch, signature
+    /// file or storage media choice is requested and every timeout keeps its default.
+    /// <para>按界面选择构造 EDL 启动要求：未请求任何兼容开关、签名文件或存储介质选择且超时保持默认时输出 null。</para>
     /// </summary>
     private bool TryBuildEdlInitialization(out EdlInitializationOptions? initialization)
     {
         initialization = null;
+        if (!TryLoadEdlSignature(out var signature))
+        {
+            return false;
+        }
+
+        WarnIfProgrammerRequiresSignature(signature is { Length: > 0 });
         var qudRecovery = Field<CheckBox>("EdlQudRecoveryBox").IsChecked == true;
         var pendingCompletion = Field<CheckBox>("EdlPendingCompletionBox").IsChecked == true;
         var streamDload = Field<CheckBox>("EdlAllowStreamDloadBox").IsChecked == true;
         var skipResponse = Field<CheckBox>("EdlSkipResponseBox").IsChecked == true;
-        initialization = qudRecovery || pendingCompletion || streamDload || skipResponse
+        var storageType = StorageTypeForSelection(Field<ComboBox>("EdlStorageTypeBox").SelectedIndex);
+        initialization = qudRecovery || pendingCompletion || streamDload || skipResponse || signature is { Length: > 0 }
+            || storageType is not null
             ? new EdlInitializationOptions
             {
                 QudHelloRecoveryEnabled = qudRecovery,
                 AllowSingleFirehosePendingCompletion = pendingCompletion,
                 AllowStreamDload = streamDload,
-                SkipResponseOnReadWrite = skipResponse
+                SkipResponseOnReadWrite = skipResponse,
+                VendorAuthSignature = signature,
+                StorageType = storageType
             }
             : null;
         return true;
     }
+
+    /// <summary>
+    /// Maps the storage-media picker selection to the media the session configures.
+    /// <para>把存储介质选择框的选中项映射为会话要配置的介质。</para>
+    /// </summary>
+    /// <param name="selectedIndex">Selected picker index; negative while the picker is not attached.
+    /// <para>选择框的选中索引；未附加界面时为负值。</para></param>
+    /// <returns>The chosen media, or <see langword="null"/> when nothing was selected and the session default
+    /// applies. <para>选中的介质；未选中任何项、沿用会话默认时为 <see langword="null"/>。</para></returns>
+    internal static FirehoseStorageType? StorageTypeForSelection(int selectedIndex) => selectedIndex switch
+    {
+        0 => FirehoseStorageType.Emmc,
+        1 => FirehoseStorageType.Ufs,
+        _ => null
+    };
 
 
     /// <summary>
@@ -2119,6 +2161,12 @@ public sealed partial class FlashViewModel
         RegisterGate("EdlPane", FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true));
         RegisterGate("EdlChooseProgrammerButton",
             FlashControlGate.Section("EdlChooseProgrammerButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlSignaturePathBox",
+            FlashControlGate.Section("EdlSignaturePathBox", FlashDeviceMode.Edl));
+        RegisterGate("EdlChooseSignatureButton",
+            FlashControlGate.Section("EdlChooseSignatureButton", FlashDeviceMode.Edl));
+        RegisterGate("EdlClearSignatureButton",
+            FlashControlGate.Section("EdlClearSignatureButton", FlashDeviceMode.Edl));
         RegisterGate("EdlSetBootableButton",
             FlashControlGate.Section("EdlSetBootableButton", FlashDeviceMode.Edl));
         RegisterGate("EdlPartitionDigestButton",
@@ -2450,6 +2498,11 @@ public sealed partial class FlashViewModel
 
         SetControlEnabled("EdlSetBootableButton", !_busy && edlFirehose);
         SetControlEnabled("EdlPartitionDigestButton", !_busy && edlFirehose);
+        // The shared table read works on fastboot at any stage it offers, and on EDL only once the device answers
+        // Firehose commands, because the table lives in the storage the bootrom cannot address.
+        // 通用分区表读取在 fastboot 上按其门控提供的任何阶段可用；EDL 上只在设备能应答 Firehose 命令后才可用，
+        // 因为分区表位于 bootrom 无法寻址的存储里。
+        SetControlEnabled("ReadPartitionTableButton", !_busy && (!isEdl || edlFirehose));
         var mtkStage = MtkStage;
 
         // The seven option check boxes carry no device condition: each flash path reads the options it can act on and
@@ -2503,6 +2556,7 @@ public sealed partial class FlashViewModel
     {
         _busy = value;
         IsBusy = value;
+        ResetBusyProgress();
         foreach (var (_, gate) in _controlGates.Where(entry => entry.Value.BusyDisabled))
         {
             SetControlEnabled(gate.Name, !value);
@@ -2578,6 +2632,7 @@ public sealed partial class FlashViewModel
             OverallPercent = 0;
             OverallText = string.Empty;
             IsOverallIndeterminate = _overallScrolls;
+            UpdateBusyProgress();
             return;
         }
 
@@ -2609,6 +2664,7 @@ public sealed partial class FlashViewModel
         OverallPercent = share / rows.Count * 100d;
         IsOverallIndeterminate = indeterminate;
         OverallText = string.Format(_localizer.GetString("Flash_OverallProgress"), finished, rows.Count);
+        UpdateBusyProgress();
     }
 
 
@@ -2729,26 +2785,38 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reads the selected fastboot endpoint's partition table into the main partition list: the device's own
-    /// <c>partition-size</c> keys replace what the page held, so the grid describes the device rather than a package's
-    /// layout. A loaded SpacemiT package is kept, because its rows drive the boot-chain and storage actions and the
-    /// read cannot render that package's script steps.
-    /// <para>把所选 fastboot 端点的分区表读入主分区列表：设备自身的 <c>partition-size</c> 键替换页面原有内容，使列表描述
-    /// 设备而不是刷机包的布局。已加载的进迭时空包会保留，因为其条目驱动引导链与存储动作，而该读取无法呈现这个包的脚本步骤。</para>
+    /// Reads the selected endpoint's partition table into the main partition list: on fastboot the device's own
+    /// <c>partition-size</c> keys replace what the page held, and on EDL the GPT of the region the LUN box names does,
+    /// so the grid describes the device rather than a package or folder layout. A loaded SpacemiT package is kept,
+    /// because its rows drive the boot-chain and storage actions and the read cannot render that package's script steps.
+    /// <para>把所选端点的分区表读入主分区列表：fastboot 上是设备自身的 <c>partition-size</c> 键、EDL 上是 LUN 框所指区域的
+    /// GPT 替换页面原有内容，使列表描述设备而不是刷机包或文件夹的布局。已加载的进迭时空包会保留，因为其条目驱动引导链与
+    /// 存储动作，而该读取无法呈现这个包的脚本步骤。</para>
     /// </summary>
     /// <remarks>
-    /// Only fastboot enumerates its table over the same variable dump the information read uses; every other protocol
-    /// reads it through the action its own section owns, so this entry stays closed there. A read that produced no
-    /// table leaves the grid untouched instead of emptying it, because an endpoint that refuses the variable dump has
-    /// not proven the device carries no partitions.
-    /// <para>只有 fastboot 通过与信息读取相同的变量转储枚举分区表；其它协议都经各自分类拥有的动作读取，因此该入口在那里保持
-    /// 关闭。没有读到分区表的读取不会清空列表而是原样保留，因为拒绝变量转储的端点并未证明设备没有分区。</para>
+    /// Fastboot enumerates its table over the same variable dump the information read uses; EDL reads its GPT through the
+    /// same session path the named read-back uses, so the page's own table read is the only entry either protocol needs.
+    /// A fastboot read that produced no table leaves the grid untouched instead of emptying it, because an endpoint that
+    /// refuses the variable dump has not proven the device carries no partitions.
+    /// <para>fastboot 通过与信息读取相同的变量转储枚举分区表；EDL 经具名回读所用的同一条会话路径读取 GPT，因此两种协议都只需
+    /// 页面这个入口。fastboot 上没有读到分区表的读取不会清空列表而是原样保留，因为拒绝变量转储的端点并未证明设备没有分区。</para>
     /// </remarks>
     /// <param name="sender">The read button. <para>读取按钮。</para></param>
     /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
     internal async void OnReadPartitionTableClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device || _busy || _confirming)
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } edl)
+        {
+            await ReadEdlPartitionTableAsync(edl);
+            return;
+        }
+
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device)
         {
             AppendLog(_localizer.GetString(SelectedDevice is null
                 ? "Flash_DeviceNotSelected"
@@ -2816,16 +2884,188 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
+    /// Reads the GPT of the region the LUN box names into the main partition list; the read runs over the same session
+    /// path the named read-back uses, so a device that only carries a programmer is brought to Firehose first.
+    /// <para>把 LUN 框所指区域的 GPT 读入主分区列表；读取走具名回读所用的同一条会话路径，只带 Programmer 的设备会先进入
+    /// Firehose。</para>
+    /// </summary>
+    /// <param name="device">The selected EDL endpoint. <para>所选 EDL 端点。</para></param>
+    private async Task ReadEdlPartitionTableAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        if (!TryBuildEdlInitialization(out var initialization) ||
+            !TryReadEdlGptEntryOverrides(out var gptEntryLba, out var gptEntryCount, out var gptEntrySize))
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            EdlGptXmlPackage? package = null;
+            await App.DeviceMonitor.RunEdlAsync(device, async edl =>
+            {
+                var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
+                    .ConfigureAwait(true);
+                var snapshot = await firehose.ReadGptWithPartitionEntryOverridesAsync(SelectedEdlLun,
+                    gptEntryLba, gptEntryCount, gptEntrySize, cancellation.Token).ConfigureAwait(true);
+                package = await EdlGptXmlPackageWriter.WriteAsync(firehose, snapshot,
+                    EdlGptXmlPackageDirectory.Create(device.Key), cancellation.Token).ConfigureAwait(true);
+                return true;
+            }, cancellation.Token);
+            if (package is null)
+            {
+                return;
+            }
+
+            LoadEdlXmlPackage(package);
+            AppendLog($"{language.GetString("Flash_ReadPartitionTable")}: {device.DisplayName} · " +
+                $"LUN {package.Layout.Lun} · {package.DirectoryPath}");
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendError(ex); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads one generated XML package as the page's flash package: whatever the previously loaded package or folder
+    /// produced is dropped, the grid is rebuilt from the generated rawprogram manifest, and the package path names the
+    /// directory that holds the manifests and the two GPT blobs.
+    /// <para>把生成好的 XML 包作为页面的刷写包加载：先前加载的包或文件夹产生的内容全部丢弃，列表按生成的 rawprogram 清单
+    /// 重建，包路径指向存放清单与两份 GPT 镜像的目录。</para>
+    /// </summary>
+    /// <param name="package">The generated package. <para>生成好的包。</para></param>
+    /// <remarks>
+    /// Rows whose image is not on disk yet show an empty file cell so the row's own picker can supply it; a picked file is
+    /// written back into the manifest, which is what the flash run reads. The rows describe the device table, so none of
+    /// them starts selected.
+    /// <para>镜像尚不在磁盘上的行把文件列留空，由该行自己的选择器补上；选中的文件会被写回清单，而刷写运行的正是该清单。
+    /// 这些行描述的是设备分区表，因此都不预先勾选。</para>
+    /// </remarks>
+    private void LoadEdlXmlPackage(EdlGptXmlPackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ResetLoadedPackageState();
+        var programs = RawProgramParser.ParseAll(
+            FlashManifestSelection.Enumerate(package.DirectoryPath), package.DirectoryPath);
+        _flatBinPackage = true;
+        _generatedTablePackagePath = package.DirectoryPath;
+        var rows = new List<FlashPartitionEntry>(programs.Count);
+        foreach (var program in programs)
+        {
+            var label = program.Label.Trim();
+            if (label.Length == 0)
+            {
+                label = Path.GetFileNameWithoutExtension(program.Filename);
+            }
+
+            if (label.Length == 0)
+            {
+                continue;
+            }
+
+            var sectors = program.NumPartitionSectors > 0
+                ? program.NumPartitionSectors
+                : program.SourceFile.Length > 0 && File.Exists(program.SourceFile) &&
+                    program.SectorSizeInBytes > 0
+                    ? (new FileInfo(program.SourceFile).Length + program.SectorSizeInBytes - 1) /
+                        program.SectorSizeInBytes
+                    : 0;
+            var sectorSize = program.SectorSizeInBytes > 0 ? program.SectorSizeInBytes : package.Layout.SectorSize;
+            var sizeBytes = sectors > 0 ? checked(sectors * sectorSize) : 0;
+            var hasImage = program.SourceFile.Length > 0 && File.Exists(program.SourceFile);
+            var row = new FlashPartitionEntry
+            {
+                Name = label,
+                Command = "flash",
+                FileName = hasImage ? Path.GetFileName(program.SourceFile) : string.Empty,
+                FilePath = hasImage ? program.SourceFile : string.Empty,
+                Size = FormatByteSize(sizeBytes),
+                SizeBytes = sizeBytes,
+                StorageMedium = FormattableString.Invariant($"LUN {program.PhysicalPartitionNumber}"),
+                Offset = DescribeProgramOffset(program),
+                IsSelected = false
+            };
+            rows.Add(row);
+            _edlEntries.Add(row, program);
+        }
+
+        Partitions.Apply(0, rows);
+        _overallRows = [];
+        _overallScrolls = false;
+        UpdateOverall();
+        PackagePath = package.DirectoryPath;
+        _loadedPath = package.DirectoryPath;
+        UpdateEdlButton();
+        AppendLog($"{rows.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
+    }
+
+    /// <summary>
+    /// Writes a file the user picked for one row back into the generated rawprogram manifest, so the flash run programs
+    /// the file the page shows. Only the package this session generated is rewritten; a vendor manifest is never touched.
+    /// <para>把用户为某行所选的文件写回生成的 rawprogram 清单，使刷写运行编程页面显示的文件。只改写本次会话生成的包，
+    /// 绝不改动厂商清单。</para>
+    /// </summary>
+    /// <param name="entry">The row whose file was chosen. <para>刚选好文件的行。</para></param>
+    /// <param name="filePath">Full path of the chosen file. <para>所选文件的完整路径。</para></param>
+    private async Task SyncPickedFileIntoGeneratedPackageAsync(FlashPartitionEntry entry, string filePath)
+    {
+        if (_generatedTablePackagePath is not { Length: > 0 } folder ||
+            !string.Equals(_loadedPath, folder, StringComparison.Ordinal) ||
+            !_edlEntries.TryGetValue(entry, out var program))
+        {
+            return;
+        }
+
+        var fileName = EdlGptXmlPackageWriter.PackageRelativeFileName(folder, filePath);
+        if (Path.IsPathRooted(fileName))
+        {
+            // The manifest may only reference members of its own folder, so a file chosen elsewhere is copied in and the
+            // row keeps naming the file the user picked.
+            // 清单只能引用自己目录内的成员，因此选择在别处的文件会被复制进来，而页面行仍显示用户所选的文件。
+            var extension = Path.GetExtension(filePath);
+            fileName = EdlGptXmlPackageWriter.SafeFileStem(entry.Name, "image") + extension;
+            var destination = Path.Combine(folder, fileName);
+            await using (var source = File.OpenRead(filePath))
+            await using (var target = new FileStream(destination, FileMode.Create, FileAccess.Write,
+                             FileShare.None))
+            {
+                await source.CopyToAsync(target, CancellationToken.None).ConfigureAwait(true);
+            }
+
+            AppendLog(string.Format(CultureInfo.InvariantCulture,
+                _localizer.GetString("Flash_EdlPackageImageCopied"), fileName));
+        }
+
+        program.Filename = fileName;
+        program.SourceFile = Path.Combine(folder, fileName);
+        if (!await EdlGptXmlPackageWriter.UpdateRawProgramFileNameAsync(
+                Path.Combine(folder, EdlGptXmlPackageWriter.RawProgramFileName),
+                program.Label.Length > 0 ? program.Label : entry.Name,
+                program.PhysicalPartitionNumber, fileName, CancellationToken.None).ConfigureAwait(true))
+        {
+            AppendLog($"{entry.Name}: {EdlGptXmlPackageWriter.RawProgramFileName}");
+        }
+    }
+
+    /// <summary>
     /// Drops everything the page derived from a loaded package so the partition grid can describe the device's own
-    /// table: rows, the package path, the EDL and MTK resolutions and the vendor container entries all go, and the two
-    /// package-only actions close until another package provides them.
-    /// <para>清除页面从已加载包派生出的一切，使分区列表可以描述设备自身的分区表：条目、包路径、EDL 与 MTK 解析结果以及厂商
-    /// 容器条目全部清除，两个仅由包提供的操作在另一个包提供之前保持关闭。</para>
+    /// table: rows, the package path, the EDL and MTK resolutions, the EDL manifest entries and the vendor container
+    /// entries all go, and the two package-only actions close until another package provides them.
+    /// <para>清除页面从已加载包派生出的一切，使分区列表可以描述设备自身的分区表：条目、包路径、EDL 与 MTK 解析结果、
+    /// EDL 清单条目以及厂商容器条目全部清除，两个仅由包提供的操作在另一个包提供之前保持关闭。</para>
     /// </summary>
     private void ResetLoadedPackageState()
     {
         Partitions.Clear();
         _loadedPath = string.Empty;
+        _generatedTablePackagePath = null;
         _requiredCodeName = null;
         _requiresFastbootd = false;
         _payloadPath = null;
@@ -2838,6 +3078,9 @@ public sealed partial class FlashViewModel
         _mtkResolution = null;
         _mtkRows.Clear();
         _mtkPartitions.Clear();
+        _edlEntries.Clear();
+        _flatBinPackage = false;
+        _edlBundleReady = false;
         UpdateModeVisibility();
         SetControlEnabled("ExtractSelectedButton", false);
         SetControlEnabled("BuildWiredPackageButton", false);
@@ -3080,6 +3323,7 @@ public sealed partial class FlashViewModel
                 {
                     var percent = (int)Math.Clamp(update.BytesWritten * 100d / update.TotalBytes, 0d, 100d);
                     chunkRunning.Percent = percent;
+                    chunkRunning.TransferBytes = update.TotalBytes;
                     UpdateOverall();
                     if (progressThrottle.ShouldReport(update.EntryKey, percent, "Flash_Status_Flashing",
                             Environment.TickCount64))
@@ -3795,6 +4039,11 @@ public sealed partial class FlashViewModel
                                     edlSources.GetValueOrDefault(row, row.FilePath), language,
                                     cancellation.Token, chunk =>
                                     {
+                                        if (chunk.TotalBytes > 0)
+                                        {
+                                            row.TransferBytes = chunk.TotalBytes;
+                                        }
+
                                         var percent = chunk.TotalBytes > 0
                                             ? (int)Math.Clamp(chunk.BytesWritten * 100 / chunk.TotalBytes, 0, 99)
                                             : 0;
@@ -3946,6 +4195,12 @@ public sealed partial class FlashViewModel
 
                 AppendLog(string.Format(language.GetString("Flash_Log_CommandFile"), command, entry.Name,
                     entry.FileName));
+                if (command is "flash" or "wipe_super" && entry.TransferBytes <= 0)
+                {
+                    var stagedSource = prepared.GetValueOrDefault(entry, entry.FilePath);
+                    entry.TransferBytes = File.Exists(stagedSource) ? new FileInfo(stagedSource).Length : 0;
+                }
+
                 SetRowRunning(entry, erase ? "Flash_Status_Erasing" : "Flash_Status_Flashing");
                 if (command == "wipe_super")
                 {
@@ -4937,8 +5192,13 @@ public sealed partial class FlashViewModel
     /// Reads the selected EDL partitions back into a user directory; with XML generation enabled,
     /// a rawprogram manifest is written from the results and the generalized option rewrites
     /// entries abutting the disk end as relative <c>NUM_DISK_SECTORS-</c> start sectors.
+    /// A row taken from a manifest keeps the manifest's own address; any other row is resolved by
+    /// name on the selected LUN first and then on the remaining LUNs, because one target keeps
+    /// partitions on several regions.
     /// <para>回读所选 EDL 分区到用户目录；勾选生成 XML 时按回读结果写出 rawprogram 清单，
-    /// 通用化选项把与磁盘末尾相邻的条目改写为 <c>NUM_DISK_SECTORS-</c> 相对起始扇区。</para>
+    /// 通用化选项把与磁盘末尾相邻的条目改写为 <c>NUM_DISK_SECTORS-</c> 相对起始扇区。
+    /// 来自清单的行沿用清单自身的地址；其余行先按所选 LUN 查名，查不到再到其余 LUN 查找，
+    /// 因为同一目标会把分区分散在多个区域。</para>
     /// </summary>
     internal async void OnEdlReadbackClick(object? sender, RoutedEventArgs e)
     {
@@ -4961,6 +5221,7 @@ public sealed partial class FlashViewModel
         var generalized = generateXml && Field<CheckBox>("EdlGeneralizedXmlBox").IsChecked == true;
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
+        FlashPartitionEntry? readbackRow = null;
         SetBusy(true);
         try
         {
@@ -4968,7 +5229,6 @@ public sealed partial class FlashViewModel
             var sectorSize = 0L;
             var numDiskSectors = 0L;
             SetRowsQueued(selected);
-            FlashPartitionEntry? readbackRow = null;
             var readbackProgress = new Progress<BackupProgress>(update =>
             {
                 if (readbackRow is null)
@@ -4988,19 +5248,93 @@ public sealed partial class FlashViewModel
                         SelectedEdlLun, cancellation.Token).ConfigureAwait(true)).SectorCount;
                 }
 
-                FirehoseGptSnapshot? deviceGpt = null;
+                // The LUN box names the table the row should be read from, and the operator's entry-array overrides
+                // describe that table, so it is read first. A name it does not carry is then searched on the
+                // remaining LUNs, because one target keeps partitions on several regions; every table is read
+                // once per run and reused by the following rows.
+                // LUN 框给出读行所依据的表，操作者的条目数组覆盖描述的也是那张表，因此先读它。表里没有的名称再到
+                // 其余 LUN 查找，因为同一目标会把分区分散在多个区域；每张表在一次运行中只读一次，供后续行复用。
+                const int LastScannedLun = 7;
+                var selectedLun = SelectedEdlLun;
+                var snapshots = new Dictionary<int, FirehoseGptSnapshot>();
+                async ValueTask<FirehoseGptSnapshot> SnapshotHoldingAsync(string partitionName)
+                {
+                    var primary = await ReadSnapshotAsync(selectedLun, gptEntryLba, gptEntryCount, gptEntrySize)
+                        .ConfigureAwait(true);
+                    if (Carries(primary, partitionName))
+                    {
+                        return primary;
+                    }
+
+                    for (var candidate = 0; candidate <= LastScannedLun; candidate++)
+                    {
+                        if (candidate == selectedLun)
+                        {
+                            continue;
+                        }
+
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        FirehoseGptSnapshot scanned;
+                        try
+                        {
+                            scanned = await ReadSnapshotAsync(candidate, null, null, null).ConfigureAwait(true);
+                        }
+                        catch (Exception failure) when (failure is not OperationCanceledException
+                            and not ObjectDisposedException)
+                        {
+                            continue;
+                        }
+
+                        if (Carries(scanned, partitionName))
+                        {
+                            return scanned;
+                        }
+                    }
+
+                    return primary;
+                }
+
+                async ValueTask<FirehoseGptSnapshot> ReadSnapshotAsync(int region, ulong? entryLba,
+                    uint? entryCount, uint? entrySize)
+                {
+                    if (snapshots.TryGetValue(region, out var cached))
+                    {
+                        return cached;
+                    }
+
+                    var snapshot = await firehose.ReadGptWithPartitionEntryOverridesAsync(region, entryLba,
+                        entryCount, entrySize, cancellationToken: cancellation.Token).ConfigureAwait(true);
+                    snapshots[region] = snapshot;
+                    return snapshot;
+                }
+
+                static bool Carries(FirehoseGptSnapshot snapshot, string partitionName)
+                    => snapshot.Table.Partitions.Any(partition =>
+                        string.Equals(partition.Name, partitionName, StringComparison.Ordinal));
+
                 foreach (var row in selected)
                 {
                     cancellation.Token.ThrowIfCancellationRequested();
-                    var entry = _edlEntries.TryGetValue(row, out var manifestEntry)
-                        ? manifestEntry
-                        : EdlGptPartitionService.ResolveEntry(
-                            deviceGpt ??= await firehose.ReadGptWithPartitionEntryOverridesAsync(SelectedEdlLun,
-                                gptEntryLba, gptEntryCount, gptEntrySize,
-                                cancellationToken: cancellation.Token).ConfigureAwait(true),
-                            row.Name);
-                    SetRowRunning(row, "Flash_Status_Flashing");
                     readbackRow = row;
+                    SetRowRunning(row, "Flash_Status_Flashing");
+                    RawProgramEntry entry;
+                    if (_edlEntries.TryGetValue(row, out var manifestEntry))
+                    {
+                        entry = manifestEntry;
+                    }
+                    else
+                    {
+                        var holder = await SnapshotHoldingAsync(row.Name).ConfigureAwait(true);
+                        entry = EdlGptPartitionService.ResolveEntry(holder, row.Name);
+                        row.StorageMedium = $"LUN {entry.PhysicalPartitionNumber}";
+                        if (entry.PhysicalPartitionNumber != selectedLun)
+                        {
+                            // Data line, matching the storage-medium column: the row was found on another region.
+                            // 数据行，与存储介质列一致：该行是在另一个区域找到的。
+                            AppendLog($"{row.Name} · LUN {entry.PhysicalPartitionNumber}");
+                        }
+                    }
+
                     var displayName = string.IsNullOrEmpty(entry.Label) ? entry.Filename : entry.Label;
                     var outputPath = Path.Combine(destination,
                         entry.Filename.Length > 0 ? entry.Filename : $"{displayName}.img");
@@ -5019,6 +5353,7 @@ public sealed partial class FlashViewModel
                         StartSector = FlashService.ParseStartSectorValue(entry.StartSector, geometry.SectorCount),
                         SectorCount = entry.NumPartitionSectors,
                         PhysicalPartitionNumber = entry.PhysicalPartitionNumber,
+                        NumDiskSectors = geometry.SectorCount,
                         FileName = Path.GetFileName(outputPath)
                     });
                 }
@@ -5036,9 +5371,17 @@ public sealed partial class FlashViewModel
             }
         }
         catch (OperationCanceledException) { MarkUnfinishedSkipped(); }
-        catch (Exception ex) { AppendError(ex); }
+        catch (Exception ex)
+        {
+            AppendError(ex);
+            if (readbackRow is { } failedRow && failedRow.State is FlashRowState.Queued or FlashRowState.Running)
+            {
+                SetRowFinished(failedRow, success: false);
+            }
+        }
         finally
         {
+            MarkUnfinishedSkipped();
             _flashCancellation = null;
             SetBusy(false);
             UpdateOverall();
@@ -5090,6 +5433,10 @@ public sealed partial class FlashViewModel
             row.Percent = update.TotalBytes > 0
                 ? (int)Math.Clamp(update.ProcessedBytes * 100 / update.TotalBytes, 0, 100)
                 : 0;
+            if (update.TotalBytes > 0)
+            {
+                row.TransferBytes = update.TotalBytes;
+            }
             row.StatusText = update.Phase switch
             {
                 MtkFlashPhase.Writing => language.GetString("Flash_Status_Flashing"),
