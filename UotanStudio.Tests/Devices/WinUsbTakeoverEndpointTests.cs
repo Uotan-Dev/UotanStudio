@@ -40,20 +40,19 @@ public sealed class WinUsbTakeoverEndpointTests
     }
 
     [Fact]
-    public void IsWinUsbBoundNode_TakeoverBinding_RefusesSerialFallback()
+    public void IsWinUsbBoundNode_WinUsbService_RefusesSerialFallback()
     {
-        Assert.True(EdlSerialPortFallback.IsWinUsbBoundNode("WINUSB", null));
-        Assert.True(EdlSerialPortFallback.IsWinUsbBoundNode("winusb", null));
-        Assert.True(EdlSerialPortFallback.IsWinUsbBoundNode("qcusbser",
-            new[] { "{fb49d77d-9040-4feb-904b-b119574dbda4}" }));
+        Assert.True(EdlSerialPortFallback.IsWinUsbBoundNode("WINUSB"));
+        Assert.True(EdlSerialPortFallback.IsWinUsbBoundNode("winusb"));
     }
 
     [Fact]
-    public void IsWinUsbBoundNode_RealSerialBinding_AllowsSerialFallback()
+    public void IsWinUsbBoundNode_SerialDrivers_AllowSerialFallback()
     {
-        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode("usbser", null));
-        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode("qcwdfserial", null));
-        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode(null, null));
+        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode("usbser"));
+        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode("qcusbser"));
+        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode("qcwdfserial"));
+        Assert.False(EdlSerialPortFallback.IsWinUsbBoundNode(null));
     }
 
     [Fact]

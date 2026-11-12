@@ -566,7 +566,7 @@ internal static partial class EdlSerialPortFallback
         }
 
         var properties = UsbPnpNative.ReadProperties(devInst, instanceId);
-        if (IsWinUsbBoundNode(properties.DriverService, ReadRegistryDeviceInterfaceGuids(instanceId)))
+        if (IsWinUsbBoundNode(properties.DriverService))
         {
             UsbTrace.LogFormatted($"EDL serial fallback: device node '{instanceId}' is bound to WinUSB and exposes no serial port.");
             return null;
@@ -588,39 +588,20 @@ internal static partial class EdlSerialPortFallback
     }
 
     /// <summary>
-    /// Reports whether a devnode is bound to WinUSB, either by its kernel service or by the
-    /// generated INF's DeviceInterfaceGUIDs marker; such a node exposes no serial port.
-    /// <para>判断设备节点是否已绑定 WinUSB（内核服务名或生成 INF 写入的 DeviceInterfaceGUIDs 标记）；
-    /// 这类节点不暴露串口。</para>
+    /// Reports whether a devnode's current kernel binding is WinUSB, which leaves no serial port. The kernel
+    /// service name is the authority: the takeover INF installs WinUSB as the service, while every serial driver
+    /// (usbser, qcusbser, qcwdfserial) keeps the port. Registered interface GUIDs are deliberately not consulted,
+    /// because a released takeover leaves its DeviceInterfaceGUIDs value behind, which would poison every later
+    /// serial binding on that instance.
+    /// <para>判断设备节点当前的内核绑定是否为 WinUSB——是则没有串口。内核服务名是权威：接管 INF 安装 WinUSB
+    /// 为服务，而所有串口驱动（usbser、qcusbser、qcwdfserial）都保留串口。注册的接口 GUID 一律不参与判定——
+    /// 解除接管会残留 DeviceInterfaceGUIDs 值，毒化该实例之后每次串口绑定的判定。</para>
     /// </summary>
     /// <param name="driverService">The devnode's kernel service name. <para>设备节点的内核服务名。</para></param>
-    /// <param name="deviceInterfaceGuids">The node-level DeviceInterfaceGUIDs value.
-    /// <para>节点级 DeviceInterfaceGUIDs 取值。</para></param>
     /// <returns><see langword="true"/> when a serial fallback must not be attempted.
     /// <para>不应尝试串口回退时为 <see langword="true"/>。</para></returns>
-    internal static bool IsWinUsbBoundNode(string? driverService, object? deviceInterfaceGuids)
-        => string.Equals(driverService, "WinUSB", StringComparison.OrdinalIgnoreCase) ||
-            deviceInterfaceGuids is not null;
-
-    private static object? ReadRegistryDeviceInterfaceGuids(string instanceId)
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            return null;
-        }
-
-        try
-        {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\CurrentControlSet\Enum\" + instanceId + @"\Device Parameters");
-            return key?.GetValue("DeviceInterfaceGUIDs");
-        }
-        catch (Exception ex)
-        {
-            UsbTrace.LogFormatted($"EDL serial fallback: DeviceInterfaceGUIDs read for '{instanceId}' failed: {ex.GetType().Name}");
-            return null;
-        }
-    }
+    internal static bool IsWinUsbBoundNode(string? driverService)
+        => string.Equals(driverService, "WinUSB", StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadRegistryPortName(string instanceId)
     {
