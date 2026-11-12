@@ -183,7 +183,7 @@ public sealed class VisualPluginAsset
             return null;
         }
 
-        var separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        char[] separators = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
         var full = Path.GetFullPath(sourcePath);
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
         if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase))

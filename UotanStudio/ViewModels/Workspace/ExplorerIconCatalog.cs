@@ -27,10 +27,7 @@ public static class ExplorerIconCatalog
     /// <see cref="Services.Firmware.ImageInputService"/> 判定。</para>
     /// </summary>
     private static readonly FrozenSet<string> ImageFileExtensions =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"
-        }.ToFrozenSet(StringComparer.Ordinal);
+        [with(StringComparer.Ordinal), ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"];
 
     /// <summary>
     /// Resolves a node icon: placeholder nodes and unknown extensions use the generic file glyph,

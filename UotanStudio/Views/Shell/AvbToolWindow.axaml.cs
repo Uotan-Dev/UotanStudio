@@ -201,7 +201,7 @@ public partial class AvbToolWindow : Window
             };
             if (patterns.Length > 0)
             {
-                options.FileTypeFilter = new[] { BuildFileType(patterns) };
+                options.FileTypeFilter = [BuildFileType(patterns)];
             }
 
             var files = await StorageProvider.OpenFilePickerAsync(options);

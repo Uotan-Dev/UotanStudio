@@ -1396,11 +1396,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>Rebuilds the filter sources for the current run so only the engine, the editor and node output reach the in-editor log.</summary>
     private void PrepareExecutionLogSources()
     {
-        var sources = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "Engine",
-            "NodeEditor"
-        };
+        HashSet<string> sources = [with(StringComparer.Ordinal), "Engine", "NodeEditor"];
         foreach (var node in Nodes)
         {
             if (!string.IsNullOrWhiteSpace(node.Title))

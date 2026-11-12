@@ -50,7 +50,6 @@ public sealed partial class CompareViewModel : Document, ITool
     private CancellationTokenSource _loadCts = new();
     private CompareTreeNodeViewModel? _compareTreeRoot;
     private CompareHexRowCollection? _currentHexRows;
-    private string _statsText = string.Empty;
     private string _folderSummaryText = string.Empty;
     private string _leftPath = string.Empty;
     private string _rightPath = string.Empty;
@@ -181,15 +180,15 @@ public sealed partial class CompareViewModel : Document, ITool
     /// </summary>
     public CompareMode Mode
     {
-        get => _mode;
+        get => field;
         private set
         {
-            if (_mode == value)
+            if (field == value)
             {
                 return;
             }
 
-            _mode = value;
+            field = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsFolderMode));
             OnPropertyChanged(nameof(IsTextMode));
@@ -197,8 +196,6 @@ public sealed partial class CompareViewModel : Document, ITool
             NotifyColumnsCompareState();
         }
     }
-
-    private CompareMode _mode;
 
     /// <summary>
     /// The current comparison rows; both panes share one list (rendering the left/right cells respectively), so
@@ -209,16 +206,16 @@ public sealed partial class CompareViewModel : Document, ITool
     /// </summary>
     public IReadOnlyList<CompareRowViewModel>? Rows
     {
-        get => _rows;
+        get => field;
         private set
         {
-            if (ReferenceEquals(_rows, value))
+            if (ReferenceEquals(field, value))
             {
                 return;
             }
 
             _hexNavigationOffset = -1;
-            _rows = value;
+            field = value;
             OnPropertyChanged();
             var max = value is null || value.Count == 0 ? -1 : value.Count - 1;
             if (SelectedIndex > max)
@@ -241,8 +238,6 @@ public sealed partial class CompareViewModel : Document, ITool
             }
         }
     }
-
-    private IReadOnlyList<CompareRowViewModel>? _rows;
 
     /// <summary>
     /// Whether folder-compare mode is active.
@@ -548,18 +543,18 @@ public sealed partial class CompareViewModel : Document, ITool
     /// </summary>
     public string StatsText
     {
-        get => _statsText;
+        get => field;
         private set
         {
-            if (_statsText == value)
+            if (field == value)
             {
                 return;
             }
 
-            _statsText = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = string.Empty;
 
     partial void OnSelectedIndexChanged(int value)
     {
@@ -589,14 +584,14 @@ public sealed partial class CompareViewModel : Document, ITool
     private void UpdateRowIsSelected(int targetIndex)
     {
         _selectedRow?.IsSelected = false;
-        if (_rows is CompareHexRowCollection hexRows)
+        if (Rows is CompareHexRowCollection hexRows)
         {
             _selectedRow = null;
             hexRows.SetSelectedIndex(targetIndex);
             return;
         }
-        _selectedRow = _rows is not null && targetIndex >= 0 && targetIndex < _rows.Count
-            ? _rows[targetIndex] : null;
+        _selectedRow = Rows is not null && targetIndex >= 0 && targetIndex < Rows.Count
+            ? Rows[targetIndex] : null;
         _selectedRow?.IsSelected = true;
     }
 

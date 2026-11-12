@@ -40,6 +40,7 @@ internal static class ApplicationRestartService
             Process.Start(new ProcessStartInfo(processPath)
             {
                 UseShellExecute = false,
+                StartDetached = true,
                 Arguments = string.IsNullOrWhiteSpace(solutionPath) ? string.Empty : solutionPath,
             });
         };

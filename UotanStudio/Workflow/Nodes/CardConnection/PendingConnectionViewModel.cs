@@ -12,9 +12,6 @@ namespace UotanStudio.Workflow.Nodes;
 public class PendingConnectionViewModel
 {
     private readonly NodeEditorViewModel _editor;
-    private ConnectorViewModelBase? _source;
-    private object? _previewTarget;
-    private string? _previewText;
 
     /// <summary>
     /// Gets or sets the source connector (output port).
@@ -22,8 +19,8 @@ public class PendingConnectionViewModel
     /// </summary>
     public ConnectorViewModelBase? Source
     {
-        get => _source;
-        set => _source = value;
+        get => field;
+        set => field = value;
     }
 
     /// <summary>
@@ -32,8 +29,8 @@ public class PendingConnectionViewModel
     /// </summary>
     public object? PreviewTarget
     {
-        get => _previewTarget;
-        set => _previewTarget = value;
+        get => field;
+        set => field = value;
     }
 
     /// <summary>
@@ -42,8 +39,8 @@ public class PendingConnectionViewModel
     /// </summary>
     public string? PreviewText
     {
-        get => _previewText;
-        set => _previewText = value;
+        get => field;
+        set => field = value;
     }
 
     /// <summary>

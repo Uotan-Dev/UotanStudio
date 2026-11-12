@@ -12,8 +12,6 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
 {
     private readonly CompareViewModel _owner;
     private CancellationTokenSource _loadCts = new();
-    private IReadOnlyList<CompareRowViewModel>? _rows;
-    private CompareTreeNodeViewModel? _treeRoot;
     private ObservableCollection<CompareRowViewModel>? _ownRows;
     private bool _isDirty;
     private bool _hasEditableRows;
@@ -44,17 +42,16 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     private void UpdateRowIsSelected(int targetIndex)
     {
         _selectedRow?.IsSelected = false;
-        if (_rows is CompareHexRowCollection hexRows)
+        if (Rows is CompareHexRowCollection hexRows)
         {
             _selectedRow = null;
             hexRows.SetSelectedIndex(targetIndex);
             return;
         }
-        _selectedRow = _rows is not null && targetIndex >= 0 && targetIndex < _rows.Count
-            ? _rows[targetIndex] : null;
+        _selectedRow = Rows is not null && targetIndex >= 0 && targetIndex < Rows.Count
+            ? Rows[targetIndex] : null;
         _selectedRow?.IsSelected = true;
     }
-    private CompareColumnSide _side;
 
     /// <summary>
     /// Creates a column belonging to the given compare document; commands route back to that document.
@@ -99,20 +96,20 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <value>The rows shown by this column, or <c>null</c> when it has no content yet. <para>本列显示的行；尚无内容时为 <c>null</c>。</para></value>
     public IReadOnlyList<CompareRowViewModel>? Rows
     {
-        get => _rows;
+        get => field;
         internal set
         {
-            if (ReferenceEquals(_rows, value))
+            if (ReferenceEquals(field, value))
             {
                 return;
             }
 
-            if (_rows is IDisposable disposable)
+            if (field is IDisposable disposable)
             {
                 disposable.Dispose();
             }
 
-            _rows = value;
+            field = value;
             OnPropertyChanged();
             var max = value is null || value.Count == 0 ? -1 : value.Count - 1;
             if (SelectedIndex > max)
@@ -134,15 +131,15 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <value>The browsing tree root, or <c>null</c> when the column is not browsing a folder. <para>浏览目录时的树根；本列不在浏览目录时为 <c>null</c>。</para></value>
     public CompareTreeNodeViewModel? TreeRoot
     {
-        get => _treeRoot;
+        get => field;
         private set
         {
-            if (ReferenceEquals(_treeRoot, value))
+            if (ReferenceEquals(field, value))
             {
                 return;
             }
 
-            _treeRoot = value;
+            field = value;
             OnPropertyChanged();
         }
     }
@@ -154,15 +151,15 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// <value>This column's role in the comparison. <para>本列在对比中的角色。</para></value>
     public CompareColumnSide Side
     {
-        get => _side;
+        get => field;
         internal set
         {
-            if (_side == value)
+            if (field == value)
             {
                 return;
             }
 
-            _side = value;
+            field = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsBrowsing));
             OnPropertyChanged(nameof(IsCompareSide));
@@ -962,7 +959,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         _loadCts.Cancel();
         _loadCts.Dispose();
         _treeExpansionLock.Dispose();
-        (_rows as IDisposable)?.Dispose();
+        (Rows as IDisposable)?.Dispose();
         ClearBrowseHex();
     }
 

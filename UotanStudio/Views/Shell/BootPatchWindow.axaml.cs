@@ -970,10 +970,9 @@ public partial class BootPatchWindow : Window
         var detectedLabel = string.IsNullOrWhiteSpace(_bootKmi)
             ? LanguageService.Instance.GetString("BootPatch_KmiUnknown")
             : _bootKmi;
-        var items = new List<string>
-        {
+        List<string> items = [
             LanguageService.Instance.GetString("BootPatch_AutoDetectKmi", detectedLabel)
-        };
+        ];
         if (detection?.Kmis is { Count: > 0 })
         {
             items.AddRange(detection.Kmis);

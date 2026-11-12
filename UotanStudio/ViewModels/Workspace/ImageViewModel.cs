@@ -257,10 +257,7 @@ internal partial class ImageViewModel : Tool
     /// 与其他保留目录一样不是可打包的解包产物。</para>
     /// </summary>
     private static readonly FrozenSet<string> ReservedDirNames =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "images", "output", "delivery", ".deleted", ".uotan"
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        [with(StringComparer.OrdinalIgnoreCase), "images", "output", "delivery", ".deleted", ".uotan"];
 
     /// <summary>
     /// Returns whether a first-level project folder is reserved, so the pack view never registers it as a

@@ -719,8 +719,7 @@ public static class DocumentFormatPolicy
     /// <para>格式处理器注册表未覆盖但仍属强二进制的残留扩展名（保持 Hex 打开）。</para>
     /// </summary>
     private static readonly FrozenSet<string> _residualBinaryExtensions =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".dat", ".tgz", ".zip", ".el", ".elf", ".so" }
-            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        [with(StringComparer.OrdinalIgnoreCase), ".dat", ".tgz", ".zip", ".el", ".elf", ".so"];
 
     /// <summary>
     /// Static cache of firmware extensions, built on first access by idempotently registering every

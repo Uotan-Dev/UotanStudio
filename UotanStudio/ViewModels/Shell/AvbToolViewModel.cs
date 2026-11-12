@@ -956,15 +956,14 @@ public partial class AvbToolViewModel : ViewModelBase
 
     private static string DescribeImage(AvbImageVerifyResult result)
     {
-        var lines = new List<string>
-        {
+        List<string> lines = [
             result.IsValid ? T("Avb_FooterVerified") : T("Avb_FooterVerifyFailed"),
             Label("Avb_DetailSigned", YesNo(result.IsSigned)),
             Label("Avb_DetailSignature", YesNo(result.SignatureIsValid)),
             Label("Avb_DetailContent", YesNo(result.ContentIsValid)),
             Label("Avb_DetailFec", result.FecIsValid is { } fec ? YesNo(fec) : T("Avb_NotChecked")),
             Label("Avb_DetailDescriptors", result.Descriptors.Count.ToString(CultureInfo.CurrentCulture)),
-        };
+        ];
         if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
         {
             lines.Add(result.ErrorMessage);
@@ -975,7 +974,7 @@ public partial class AvbToolViewModel : ViewModelBase
 
     private static string DescribePatch(AvbOtaPatchResult result)
     {
-        var lines = new List<string> { result.Summary };
+        List<string> lines = [result.Summary];
         if (result.OutputPath is { Length: > 0 } output)
         {
             lines.Add(output);
@@ -988,13 +987,12 @@ public partial class AvbToolViewModel : ViewModelBase
 
     private static string DescribeVerify(AvbOtaVerifyResult result)
     {
-        var lines = new List<string>
-        {
+        List<string> lines = [
             result.Summary,
             Label("Avb_OtaRootTrusted", YesNo(result.RootTrusted)),
             Label("Avb_OtaChain", YesNo(result.ChainSuccess)),
             Label("Avb_OtaPayloadSignature", YesNo(result.PayloadSignatureIsValid)),
-        };
+        ];
         AppendSection(lines, "Avb_OtaWarnings", result.Warnings);
         AppendSection(lines, "Avb_OtaErrors", result.Errors);
         return string.Join(Environment.NewLine, lines);

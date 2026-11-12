@@ -540,11 +540,10 @@ internal static partial class PatchNodePorts
 
     private static NodePortSet ImageXattrEdit(bool withHexValue)
     {
-        var inputs = new List<NodeInputDeclaration>
-        {
+        List<NodeInputDeclaration> inputs = [
             RequiredPath("Node_Patch_ImageXattrEditHint"), FileSystemChoice("EXT4"), ImagePath("/build.prop"),
             new NodeInputDeclaration("Attribute Name", NodePortType.Text, "user.patch")
-        };
+        ];
         if (withHexValue)
         {
             inputs.Add(new NodeInputDeclaration("Hex Value", NodePortType.Text, string.Empty) { Multiline = true });
@@ -655,12 +654,11 @@ internal static partial class PatchNodePorts
             "Config.InitRc.EditArgument" => "Node_Patch_InitRcArgumentHint",
             _ => "Node_Patch_InitRcHint"
         };
-        var inputs = new List<NodeInputDeclaration>
-        {
+        List<NodeInputDeclaration> inputs = [
             MultilineText(hint),
             typeKey == "Config.InitRc.AddCommand" ? AddCommandSectionKind : SectionKind,
             Selector
-        };
+        ];
         if (typeKey == "Config.InitRc.EditHeader")
         {
             inputs.Add(PatchCommonPorts.Text("Replacement", multiline: true));
@@ -752,15 +750,14 @@ internal static partial class PatchNodePorts
 
     private static NodePortSet BinaryPattern(bool isReplace)
     {
-        var inputs = new List<NodeInputDeclaration>
-        {
+        List<NodeInputDeclaration> inputs = [
             RequiredPath(),
             new NodeInputDeclaration("Find", NodePortType.Text, string.Empty)
             {
                 HintResourceKey = isReplace ? "Node_Patch_BinaryReplaceHint" : "Node_Patch_BinaryFindHint"
             },
             new NodeInputDeclaration("Find Mask", NodePortType.Text, string.Empty) { Advanced = true }
-        };
+        ];
         if (isReplace)
         {
             inputs.Add(new NodeInputDeclaration("Replacement", NodePortType.Text, string.Empty));
@@ -801,10 +798,9 @@ internal static partial class PatchNodePorts
 
     private static NodePortSet Structured(bool isJson)
     {
-        var inputs = new List<NodeInputDeclaration>
-        {
+        List<NodeInputDeclaration> inputs = [
             MultilineText(isJson ? "Node_Patch_JsonHint" : "Node_Patch_IniHint")
-        };
+        ];
         if (isJson)
         {
             inputs.Add(new NodeInputDeclaration("JSON Pointer", NodePortType.Text, string.Empty));
@@ -839,20 +835,18 @@ internal static partial class PatchNodePorts
 
     private static NodePortSet Applicability(bool gate)
     {
-        var inputs = new List<NodeInputDeclaration>
-        {
+        List<NodeInputDeclaration> inputs = [
             new NodeInputDeclaration("Compatible", NodePortType.Boolean, false)
             {
                 HintResourceKey = gate ? "Node_Patch_ApplyGateHint" : "Node_Patch_ApplicabilityHint"
             },
             new NodeInputDeclaration("Original State Matches", NodePortType.Boolean, false),
             new NodeInputDeclaration("Desired State Matches", NodePortType.Boolean, false)
-        };
-        var outputs = new List<NodeOutputDeclaration>
-        {
+        ];
+        List<NodeOutputDeclaration> outputs = [
             new NodeOutputDeclaration("Applicability", NodePortType.Text) { ValueResourcePrefix = "Node_Applicability_" },
             new NodeOutputDeclaration("Should Apply", NodePortType.Boolean)
-        };
+        ];
         if (gate)
         {
             outputs.Add(new NodeOutputDeclaration("Apply", NodePortType.Flow, FlowRole: NodeFlowRole.True));

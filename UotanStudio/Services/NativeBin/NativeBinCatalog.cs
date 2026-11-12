@@ -104,8 +104,8 @@ public static class NativeBinCatalog
     private static IReadOnlyList<NativeBinEntry> BuildEntries()
     {
 
-        return new NativeBinEntry[]
-        {
+        return
+        [
             new("win-x64", "libusb-1.0.dll",
                 "5bd409849825009b6fe25861a6147f76d256aab248f07049d78387e3bff12d94",
                 BuildUrls($"{OfficialBase}/{OfficialTag}/libusb-{LibUsbVersion}-bin-win-x64.zip", "libusb-1.0.dll")),
@@ -130,7 +130,7 @@ public static class NativeBinCatalog
             new("linux-loong64", "libusb-1.0.so",
                 "8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897",
                 BuildUrls($"https://github.com/libusb/libusb/releases/latest/download/libusb-{LibUsbVersion}-bin-linux-loong64.tar.gz", "libusb-1.0.so")),
-        };
+        ];
     }
 
     private static IReadOnlyList<NativeBinUrl> BuildUrls(string official, string fileName)
@@ -142,10 +142,7 @@ public static class NativeBinCatalog
             "https://ghfast.top/",
             "https://ghproxy.net/",
         };
-        var urls = new List<NativeBinUrl>(proxies.Length + 1)
-        {
-            new(official, IsMirror: false),
-        };
+        List<NativeBinUrl> urls = [with(proxies.Length + 1), new(official, IsMirror: false)];
         foreach (var proxy in proxies)
         {
             urls.Add(new(NormalizeMirrorUrl(proxy, official, fileName), IsMirror: true));

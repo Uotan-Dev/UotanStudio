@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Projects;
@@ -154,8 +156,9 @@ internal static class NodeTypeAlias
     /// expressible in the node view.
     /// <para>节点库不接受的类型键。携带这些键的工程在加载时被明确拒绝，而不是退化为占位符，因为这些节点承担的操作在节点视图里无法表达。</para>
     /// </summary>
-    internal static IReadOnlySet<string> RefusedTypeKeys { get; } = new HashSet<string>(StringComparer.Ordinal)
-    {
+    internal static FrozenSet<string> RefusedTypeKeys { get; } =
+    [
+        with(StringComparer.Ordinal),
         "Validation.Applicability.Check", "Validation.Assert", "Validation.Changes.Verify",
         "Validation.Format.Detect", "Validation.File.Sha256",
         "Validation.File.Hash", "Validation.Hash.Verify", "Validation.Boolean.Assert", "Validation.Count.Assert",
@@ -168,7 +171,7 @@ internal static class NodeTypeAlias
         "Data.Value.Constant", "Feedback.Log.Write", "Flow.Execution.Start", "Flow.Execution.End",
         "UI.Dialog.Show", "UI.Dialog.Confirm", "UI.Progress.Open", "UI.Progress.Handle",
         "UI.Progress.Update", "UI.Progress.Close", "Validation.Format.Check"
-    };
+    ];
 
     private static IReadOnlyDictionary<string, string> Operation(string value)
         => new Dictionary<string, string> { ["Operation"] = value };

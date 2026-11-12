@@ -282,10 +282,7 @@ internal sealed class ImageInputService
     /// <c>.transfer.list</c>）改由分卷与打开方式入口处理。</para>
     /// </summary>
     private static readonly FrozenSet<string> ConversionSourceExtensions =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image"
-        }.ToFrozenSet(StringComparer.Ordinal);
+        [with(StringComparer.Ordinal), ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image"];
 
     /// <summary>
     /// Determines whether the path is an accepted format-conversion input. The click-time conversion validates

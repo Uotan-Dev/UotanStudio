@@ -245,7 +245,7 @@ public sealed class NodeCatalogReductionTests
     [InlineData("Validation.Format.Check")]
     public void TryCreateNode_RefusedTypeKey_RejectsEvenWhenPlaceholdersAllowed(string typeKey)
     {
-        Assert.True(NodeTypeAlias.RefusedTypeKeys.Contains(typeKey));
+        Assert.Contains(typeKey, (IEnumerable<string>)NodeTypeAlias.RefusedTypeKeys);
         Assert.False(NodeTypeRegistry.Contains(typeKey));
 
         Assert.False(WorkflowReconstruction.TryCreateNode(

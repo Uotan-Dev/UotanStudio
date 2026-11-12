@@ -33,11 +33,10 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
 
         var result = await QualcommImageAnalyzer.AnalyzeAsync(imagePath, options, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var overview = new List<QualcommReportField>
-        {
+        List<QualcommReportField> overview = [
             Field("Recognized", result.Format?.ToString() ?? "Unrecognized"),
             Field("FileSize", result.FileSize.ToString("N0", CultureInfo.CurrentCulture))
-        };
+        ];
         if (result.Mbn is { } mbn)
         {
             overview.Add(Field("MbnVersion", mbn.Version.ToString(CultureInfo.InvariantCulture)));
@@ -95,8 +94,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
             segments.Add(Field("MoreDigests", (result.SegmentDigests.Count - 512).ToString(CultureInfo.InvariantCulture)));
         }
 
-        var verification = new List<QualcommReportField>
-        {
+        List<QualcommReportField> verification = [
             Status("Digest", result.HashStatus),
             Status("Signature", result.SignatureStatus),
             Status("QtiSignature", result.QualcommSignature.SignatureStatus),
@@ -106,7 +104,7 @@ internal sealed partial class QualcommWorkspaceAnalyzer : IQualcommWorkspaceAnal
             Status("MetadataRootHash", result.MetadataRootHashStatus),
             Status("Trust", result.TrustedRootStatus),
             Status("Device", result.DeviceUsabilityStatus)
-        };
+        ];
         foreach (var certificate in result.Certificates.Take(32))
         {
             var group = $"{certificate.Authority} #{certificate.Index}";
