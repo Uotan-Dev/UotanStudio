@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Backend.Linux;
 using UotanStudio.Comm.Transports.Usb.Drivers;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
@@ -249,31 +250,42 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Takes the node's device over with a freshly generated self-signed WinUSB package, which is the
-    /// prerequisite for opening MediaTek preloader, download-mode and other vendor-mode devices through
-    /// the WinUSB path. The node must offer the takeover action and no operation may be running on it;
-    /// the takeover runs in the background, the status bar reports the outcome and the tree refreshes on
-    /// success.
-    /// <para>用新生成的自签名 WinUSB 包接管该节点的设备，这是通过 WinUSB 路径打开联发科预加载器、下载模式
-    /// 及其他厂商模式设备的前提。节点必须提供接管操作且当前无进行中的操作；接管在后台执行，期间树不读取、
+    /// Configures driver-side access for the node's device: on Linux an udev access rule plus the usb-serial
+    /// module block make the device node usable directly, and on Windows a freshly generated self-signed WinUSB
+    /// package replaces the current driver, which is the prerequisite for opening MediaTek preloader,
+    /// download-mode and other vendor-mode devices through the WinUSB path. The node must offer the action and
+    /// no operation may be running on it; the configuration runs in the background, the status bar reports the
+    /// outcome and the tree refreshes on success.
+    /// <para>为该节点的设备配置驱动侧访问：Linux 上通过 udev 访问规则加 usb-serial 模块屏蔽使设备节点可直接
+    /// 使用；Windows 上用新生成的自签名 WinUSB 包替换当前驱动，这是通过 WinUSB 路径打开联发科预加载器、下载
+    /// 模式及其他厂商模式设备的前提。节点必须提供该操作且当前无进行中的操作；配置在后台执行，期间树不读取、
     /// 工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
-    /// <param name="node">The tree node whose device is taken over.<para>要被接管设备的树节点。</para></param>
+    /// <param name="node">The tree node whose device is configured.<para>要被配置设备的树节点。</para></param>
     /// <returns>
-    /// <see langword="true"/> when the takeover package was installed successfully; otherwise
+    /// <see langword="true"/> when the device access was configured successfully; otherwise
     /// <see langword="false"/>.
-    /// <para>接管驱动包安装成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// <para>设备访问配置成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
     /// </returns>
-    public async Task<bool> EnableTakeoverAsync(UsbTreeNodeViewModel node)
+    public async Task<bool> ConfigureDeviceAsync(UsbTreeNodeViewModel node)
     {
-        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
-            _disposed || !OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning || _disposed)
+        {
+            return false;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            return await ConfigureLinuxDeviceAccessAsync(node).ConfigureAwait(true);
+        }
+
+        if (!OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
         {
             return false;
         }
 
         SetDriverOperationRunning(node, true);
-        StatusText = Localized("UsbTree_TakeoverEnabling", node.DisplayText);
+        StatusText = Localized("UsbTree_Configuring", node.DisplayText);
         var succeeded = false;
         try
         {
@@ -287,25 +299,25 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             switch (result.Status)
             {
                 case WinUsbDriverOperationStatus.Succeeded:
-                    StatusText = Localized("UsbTree_TakeoverEnabled", node.DisplayText);
+                    StatusText = Localized("UsbTree_Configured", node.DisplayText);
                     succeeded = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
-                    StatusText = Localized("UsbTree_TakeoverElevationRequired");
+                    StatusText = Localized("UsbTree_ConfigurationElevationRequired");
                     break;
                 default:
                     var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
-                    StatusText = Localized("UsbTree_TakeoverFailed", detail);
+                    StatusText = Localized("UsbTree_ConfigurationFailed", detail);
                     LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                        $"WinUSB takeover failed: {detail}");
+                        $"Device configuration failed: {detail}");
                     break;
             }
         }
         catch (Exception ex)
         {
-            StatusText = Localized("UsbTree_TakeoverFailed", ex.Message);
+            StatusText = Localized("UsbTree_ConfigurationFailed", ex.Message);
             LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                $"WinUSB takeover failed: {ex.Message}");
+                $"Device configuration failed: {ex.Message}");
         }
         finally
         {
@@ -321,29 +333,100 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Ends the takeover of the node's device: the self-signed package and its certificate are deleted and
-    /// the device falls back to a system driver. The node must offer the takeover action and no operation
-    /// may be running on it; the removal runs in the background, the status bar reports the outcome and
-    /// the tree refreshes on success.
-    /// <para>结束该节点设备的接管：删除自签名包与其证书，设备回退系统驱动。节点必须提供接管操作且当前无
-    /// 进行中的操作；移除在后台执行，期间树不读取、工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
+    /// Configures kernel-side access for the node's device on Linux through the udev access configuration: the
+    /// elevated child process installs the per-device rule and the usb-serial module block, unbinds the current
+    /// claimant and re-applies the rules, so the device node becomes usable without a replug.
+    /// <para>在 Linux 上经 udev 访问配置为该节点的设备配置内核侧访问：提权子进程安装按设备规则与 usb-serial
+    /// 模块屏蔽、解绑当前占用者并重新应用规则，使设备节点无需重新插拔即可使用。</para>
     /// </summary>
-    /// <param name="node">The tree node whose takeover ends.<para>要结束接管的树节点。</para></param>
-    /// <returns>
-    /// <see langword="true"/> when the takeover package was removed successfully; otherwise
-    /// <see langword="false"/>.
-    /// <para>接管驱动包移除成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
-    /// </returns>
-    public async Task<bool> CancelTakeoverAsync(UsbTreeNodeViewModel node)
+    /// <param name="node">The tree node whose device is configured.<para>要被配置设备的树节点。</para></param>
+    /// <returns><see langword="true"/> when the configuration was applied.
+    /// <para>配置生效时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> ConfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
     {
-        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
-            _disposed || !OperatingSystem.IsWindows())
+        if (node.Node.VendorId is not { } vendorId || node.Node.ProductId is not { } productId)
         {
             return false;
         }
 
         SetDriverOperationRunning(node, true);
-        StatusText = Localized("UsbTree_TakeoverDisabling", node.DisplayText);
+        StatusText = Localized("UsbTree_Configuring", node.DisplayText);
+        var succeeded = false;
+        try
+        {
+            var result = await Task.Run(() => LinuxUdevDeviceAccess.Configure(vendorId, productId))
+                .ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case LinuxDeviceAccessStatus.Succeeded:
+                    StatusText = Localized("UsbTree_Configured", node.DisplayText);
+                    succeeded = true;
+                    break;
+                case LinuxDeviceAccessStatus.ElevationRequired:
+                    StatusText = Localized("UsbTree_ConfigurationElevationRequired");
+                    break;
+                default:
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    StatusText = Localized("UsbTree_ConfigurationFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"Device configuration failed: {detail}");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = Localized("UsbTree_ConfigurationFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                $"Device configuration failed: {ex.Message}");
+        }
+        finally
+        {
+            SetDriverOperationRunning(node, false);
+        }
+
+        if (succeeded)
+        {
+            await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
+        }
+
+        return succeeded;
+    }
+
+    /// <summary>
+    /// Unconfigures the node's device again: on Linux the udev access rule and the usb-serial module block are
+    /// removed and the kernel regains its original driver behaviour, and on Windows the self-signed package and
+    /// its certificate are deleted so the device falls back to a system driver. The node must offer the action
+    /// and no operation may be running on it; the removal runs in the background, the status bar reports the
+    /// outcome and the tree refreshes on success.
+    /// <para>取消该节点设备的配置：Linux 上移除 udev 访问规则与 usb-serial 模块屏蔽，内核恢复原有驱动行为；
+    /// Windows 上删除自签名包与其证书，设备回退系统驱动。节点必须提供该操作且当前无进行中的操作；移除在后台
+    /// 执行，期间树不读取、工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
+    /// </summary>
+    /// <param name="node">The tree node whose configuration ends.<para>要结束配置的树节点。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when the configuration was removed successfully; otherwise
+    /// <see langword="false"/>.
+    /// <para>配置移除成功时为 <see langword="true"/>；否则为 <see langword="false"/>。</para>
+    /// </returns>
+    public async Task<bool> UnconfigureDeviceAsync(UsbTreeNodeViewModel node)
+    {
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning || _disposed)
+        {
+            return false;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            return await UnconfigureLinuxDeviceAccessAsync(node).ConfigureAwait(true);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        SetDriverOperationRunning(node, true);
+        StatusText = Localized("UsbTree_Unconfiguring", node.DisplayText);
         var succeeded = false;
         try
         {
@@ -352,25 +435,85 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             switch (result.Status)
             {
                 case WinUsbDriverOperationStatus.Succeeded:
-                    StatusText = Localized("UsbTree_TakeoverDisabled", node.DisplayText);
+                    StatusText = Localized("UsbTree_Unconfigured", node.DisplayText);
                     succeeded = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
-                    StatusText = Localized("UsbTree_TakeoverElevationRequired");
+                    StatusText = Localized("UsbTree_ConfigurationElevationRequired");
                     break;
                 default:
                     var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
-                    StatusText = Localized("UsbTree_TakeoverFailed", detail);
+                    StatusText = Localized("UsbTree_ConfigurationFailed", detail);
                     LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                        $"Ending the WinUSB takeover failed: {detail}");
+                        $"Device unconfiguration failed: {detail}");
                     break;
             }
         }
         catch (Exception ex)
         {
-            StatusText = Localized("UsbTree_TakeoverFailed", ex.Message);
+            StatusText = Localized("UsbTree_ConfigurationFailed", ex.Message);
             LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                $"Ending the WinUSB takeover failed: {ex.Message}");
+                $"Device unconfiguration failed: {ex.Message}");
+        }
+        finally
+        {
+            SetDriverOperationRunning(node, false);
+        }
+
+        if (succeeded)
+        {
+            await RefreshAfterDriverChangeAsync().ConfigureAwait(true);
+        }
+
+        return succeeded;
+    }
+
+    /// <summary>
+    /// Removes the udev access configuration from the node's device on Linux: the elevated child process deletes
+    /// the per-device rule and the usb-serial module block and re-applies the rules, restoring the kernel's
+    /// original driver behaviour.
+    /// <para>在 Linux 上移除该节点设备的 udev 访问配置：提权子进程删除按设备规则与 usb-serial 模块屏蔽并重新
+    /// 应用规则，恢复内核原有的驱动行为。</para>
+    /// </summary>
+    /// <param name="node">The tree node whose device is unconfigured.<para>要被取消配置设备的树节点。</para></param>
+    /// <returns><see langword="true"/> when the configuration was removed.
+    /// <para>配置被移除时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> UnconfigureLinuxDeviceAccessAsync(UsbTreeNodeViewModel node)
+    {
+        if (node.Node.VendorId is not { } vendorId || node.Node.ProductId is not { } productId)
+        {
+            return false;
+        }
+
+        SetDriverOperationRunning(node, true);
+        StatusText = Localized("UsbTree_Unconfiguring", node.DisplayText);
+        var succeeded = false;
+        try
+        {
+            var result = await Task.Run(() => LinuxUdevDeviceAccess.Unconfigure(vendorId, productId))
+                .ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case LinuxDeviceAccessStatus.Succeeded:
+                    StatusText = Localized("UsbTree_Unconfigured", node.DisplayText);
+                    succeeded = true;
+                    break;
+                case LinuxDeviceAccessStatus.ElevationRequired:
+                    StatusText = Localized("UsbTree_ConfigurationElevationRequired");
+                    break;
+                default:
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    StatusText = Localized("UsbTree_ConfigurationFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"Device unconfiguration failed: {detail}");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = Localized("UsbTree_ConfigurationFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                $"Device unconfiguration failed: {ex.Message}");
         }
         finally
         {
@@ -698,13 +841,14 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth,
-            candidate => EnableTakeoverAsync(candidate),
-            candidate => CancelTakeoverAsync(candidate),
+            candidate => ConfigureDeviceAsync(candidate),
+            candidate => UnconfigureDeviceAsync(candidate),
             InstallDriverAsync);
         node.ShowDriverAction = _driverConfig.IsSupported &&
-            capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
             branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
-            branch.Node.HardwareIds.Count > 0 &&
+            (capabilities.Backend == UsbTopologyBackendKind.WindowsPnp
+                ? branch.Node.HardwareIds.Count > 0
+                : OperatingSystem.IsLinux() && branch.Node.VendorId is not null && branch.Node.ProductId is not null) &&
             IsFilteredIn(branch.Node);
         node.ShowDriverInstallAction = _driverConfig.IsSupported &&
             capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
@@ -737,6 +881,29 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
 
         _ = Task.Run(() =>
         {
+            if (OperatingSystem.IsLinux())
+            {
+                foreach (var driverNode in takeoverNodes)
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    var configured = driverNode.Node.VendorId is { } vendorId && driverNode.Node.ProductId is { } productId &&
+                        LinuxUdevDeviceAccess.IsConfigured(vendorId, productId);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!_disposed && !driverNode.IsDriverBusy)
+                        {
+                            driverNode.IsConfigured = configured;
+                        }
+                    });
+                }
+
+                return;
+            }
+
             if (!OperatingSystem.IsWindows())
             {
                 return;
@@ -773,7 +940,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
                 {
                     if (!_disposed && !driverNode.IsDriverBusy)
                     {
-                        driverNode.IsTakenOver = takenOver;
+                        driverNode.IsConfigured = takenOver;
                     }
                 });
             }

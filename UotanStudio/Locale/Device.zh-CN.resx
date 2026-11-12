@@ -723,41 +723,47 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>设备接口 GUID</value>
   </data>
-  <data name="UsbTree_EnableTakeover" xml:space="preserve">
-    <value>启用接管</value>
+  <data name="UsbTree_ConfigureDevice" xml:space="preserve">
+    <value>配置设备</value>
   </data>
-  <data name="UsbTree_CancelTakeover" xml:space="preserve">
-    <value>取消接管</value>
+  <data name="UsbTree_UnconfigureDevice" xml:space="preserve">
+    <value>取消配置</value>
   </data>
-  <data name="UsbTree_TakeoverConfirmTitle" xml:space="preserve">
-    <value>启用设备接管</value>
+  <data name="UsbTree_ConfigureConfirmTitle" xml:space="preserve">
+    <value>配置设备访问</value>
   </data>
-  <data name="UsbTree_TakeoverConfirmDetail" xml:space="preserve">
-    <value>将把 {0} 当前的驱动替换为本应用自签名的 WinUSB 驱动包，使设备可通过 WinUSB 打开，并把接管证书加入本机受信任存储。需要管理员权限。</value>
+  <data name="UsbTree_ConfigureDetailWinUsb" xml:space="preserve">
+    <value>将把 {0} 当前的驱动替换为本应用生成的自签名 WinUSB 驱动包，使设备可通过 WinUSB 打开，并把签名证书加入本机受信任存储。需要管理员权限。</value>
   </data>
-  <data name="UsbTree_TakeoverCancelTitle" xml:space="preserve">
-    <value>取消设备接管</value>
+  <data name="UsbTree_ConfigureDetailUdev" xml:space="preserve">
+    <value>将为 {0} 写入 udev 规则，向所有用户授予设备节点读写权限并阻止抢占型串口驱动模块加载，同时解绑当前占用该设备的驱动并重新应用规则。授权将在单独的提示中请求。</value>
   </data>
-  <data name="UsbTree_TakeoverCancelDetail" xml:space="preserve">
+  <data name="UsbTree_UnconfigureConfirmTitle" xml:space="preserve">
+    <value>取消设备访问配置</value>
+  </data>
+  <data name="UsbTree_UnconfigureDetailWinUsb" xml:space="preserve">
     <value>将移除本应用为 {0} 安装的自签名 WinUSB 驱动包与证书，并恢复系统驱动。需要管理员权限。</value>
   </data>
-  <data name="UsbTree_TakeoverEnabling" xml:space="preserve">
-    <value>正在用 WinUSB 接管 {0}...</value>
+  <data name="UsbTree_UnconfigureDetailUdev" xml:space="preserve">
+    <value>将移除本应用为 {0} 写入的 udev 规则与串口驱动模块屏蔽，并重新应用规则，使内核恢复原有的驱动行为。授权将在单独的提示中请求。</value>
   </data>
-  <data name="UsbTree_TakeoverEnabled" xml:space="preserve">
-    <value>已启用 {0} 的 WinUSB 接管</value>
+  <data name="UsbTree_Configuring" xml:space="preserve">
+    <value>正在配置 {0} 的设备访问...</value>
   </data>
-  <data name="UsbTree_TakeoverDisabling" xml:space="preserve">
-    <value>正在取消 {0} 的 WinUSB 接管...</value>
+  <data name="UsbTree_Configured" xml:space="preserve">
+    <value>已配置 {0} 的设备访问</value>
   </data>
-  <data name="UsbTree_TakeoverDisabled" xml:space="preserve">
-    <value>已取消 {0} 的 WinUSB 接管，系统驱动已恢复</value>
+  <data name="UsbTree_Unconfiguring" xml:space="preserve">
+    <value>正在取消 {0} 的设备访问配置...</value>
   </data>
-  <data name="UsbTree_TakeoverElevationRequired" xml:space="preserve">
-    <value>接管设备需要管理员权限</value>
+  <data name="UsbTree_Unconfigured" xml:space="preserve">
+    <value>已取消 {0} 的设备访问配置，系统行为已恢复</value>
   </data>
-  <data name="UsbTree_TakeoverFailed" xml:space="preserve">
-    <value>设备接管失败：{0}</value>
+  <data name="UsbTree_ConfigurationElevationRequired" xml:space="preserve">
+    <value>配置设备需要管理员权限</value>
+  </data>
+  <data name="UsbTree_ConfigurationFailed" xml:space="preserve">
+    <value>设备配置失败：{0}</value>
   </data>
   <data name="UsbTree_RestartRequiredTitle" xml:space="preserve">
     <value>需要重新启动计算机</value>

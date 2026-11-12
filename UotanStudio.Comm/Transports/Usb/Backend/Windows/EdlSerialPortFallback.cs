@@ -108,6 +108,11 @@ internal static partial class EdlSerialPortFallback
     /// </returns>
     internal static SerialTransport? TryOpenConnected(string? devicePath)
     {
+        if (OperatingSystem.IsLinux())
+        {
+            return TryOpenLinuxTty(devicePath);
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             return null;
@@ -141,6 +146,378 @@ internal static partial class EdlSerialPortFallback
 
         UsbTrace.LogFormatted($"EDL serial fallback: '{devicePath}' opened as '{portName}' at {FallbackBaudRate} baud.");
         return transport;
+    }
+
+    /// <summary>
+    /// Resolves the QDLoader tty node Linux bound to the endpoint's usbfs path and opens it. The bus and device
+    /// numbers in <c>/dev/bus/usb/BBB/DDD</c> identify exactly one USB device, and <c>/sys/bus/usb/devices</c> maps
+    /// that device to the <c>ttyUSB*</c> interfaces the serial driver created for it, so identity comes from the
+    /// kernel's own topology rather than from a port name that shifts across re-enumerations. A device with no tty
+    /// interface returns <see langword="null"/>, which is what a WinUSB-bound node looks like.
+    /// <para>解析 Linux 为端点 usbfs 路径绑定的 QDLoader tty 节点并打开。<c>/dev/bus/usb/BBB/DDD</c> 中的总线号与设备号
+    /// 唯一确定一个 USB 设备，<c>/sys/bus/usb/devices</c> 把该设备映射到串口驱动为它创建的 <c>ttyUSB*</c> 接口，因此
+    /// 身份来自内核自身的拓扑，而不是会在重枚举后改变端口号的名称。没有 tty 接口的设备返回
+    /// <see langword="null"/>，这正是绑定了 WinUSB 的节点的形态。</para>
+    /// </summary>
+    /// <param name="devicePath">The usbfs path, such as <c>/dev/bus/usb/005/010</c>.
+    /// <para>usbfs 路径，例如 <c>/dev/bus/usb/005/010</c>。</para></param>
+    /// <returns>A connected transport on the resolved tty node, or <see langword="null"/>.
+    /// <para>已连接的、位于解析出的 tty 节点上的传输；或 <see langword="null"/>。</para></returns>
+    private static SerialTransport? TryOpenLinuxTty(string? devicePath)
+    {
+        if (string.IsNullOrWhiteSpace(devicePath))
+        {
+            return null;
+        }
+
+        // /dev/bus/usb/BBB/DDD carries the bus and device numbers the kernel assigned.
+        var segments = devicePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2
+            || !int.TryParse(segments[^2], out var bus)
+            || !int.TryParse(segments[^1], out var device))
+        {
+            UsbTrace.LogFormatted($"EDL serial fallback: '{devicePath}' is not a usbfs path with bus/device numbers.");
+            return null;
+        }
+
+        string? portName = null;
+        try
+        {
+            foreach (var candidate in Directory.EnumerateDirectories("/sys/bus/usb/devices"))
+            {
+                var busNumber = ReadSysfsInt(candidate, "busnum");
+                var deviceNumber = ReadSysfsInt(candidate, "devnum");
+                if (busNumber != bus || deviceNumber != device)
+                {
+                    continue;
+                }
+
+                portName = FindTtyInterface(candidate);
+                break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            UsbTrace.LogFormatted($"EDL serial fallback: reading /sys/bus/usb/devices failed: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+
+        if (portName is null)
+        {
+            UsbTrace.LogFormatted(
+                $"EDL serial fallback: usbfs device {bus}/{device} exposes no tty interface; no serial port to open.");
+            return null;
+        }
+
+        var linuxTransport = new SerialTransport(portName, FallbackBaudRate, Parity.None, 8, StopBits.One, Handshake.None);
+        try
+        {
+            linuxTransport.Connect();
+        }
+        catch (Exception ex)
+        {
+            linuxTransport.Dispose();
+            UsbTrace.LogFormatted($"EDL serial fallback: opening '{portName}' failed: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+
+        UsbTrace.LogFormatted($"EDL serial fallback: '{devicePath}' opened as '{portName}' at {FallbackBaudRate} baud.");
+        return linuxTransport;
+    }
+
+    /// <summary>
+    /// Returns the <c>/dev/ttyUSB*</c> node one USB device directory owns, or <see langword="null"/> when it has no
+    /// tty interface. The primary mapping walks the kernel's own <c>/sys/class/tty</c> registrations and accepts
+    /// the class device whose <c>device</c> link resolves under the interface directory, then reads the node name
+    /// from that class device's <c>uevent</c> export, so the port comes from the kernel's authoritative device
+    /// registry instead of any name inference. Kernels whose bus-side device directory carries the tty attributes
+    /// directly still resolve through the bus-side scan as the fallback.
+    /// <para>返回某个 USB 设备目录所拥有的 <c>/dev/ttyUSB*</c> 节点；该设备没有 tty 接口时返回
+    /// <see langword="null"/>。主映射遍历内核自身的 <c>/sys/class/tty</c> 注册表，接受 <c>device</c> 链接解析后落在
+    /// 该接口目录之下的类设备，并从其 <c>uevent</c> 导出读取节点名——端口来自内核权威的设备注册表，不做任何
+    /// 名字推测。总线侧设备目录直接携带 tty 属性的内核仍可经总线侧扫描作为回退解析。</para>
+    /// </summary>
+    /// <param name="deviceDirectory">A device directory under <c>/sys/bus/usb/devices</c>.
+    /// <para><c>/sys/bus/usb/devices</c> 下的设备目录。</para></param>
+    /// <returns>A device node path such as <c>/dev/ttyUSB0</c>, or <see langword="null"/>.
+    /// <para>形如 <c>/dev/ttyUSB0</c> 的设备节点路径；或 <see langword="null"/>。</para></returns>
+    private static string? FindTtyInterface(string deviceDirectory)
+    {
+        var classNode = FindClassTtyNode(deviceDirectory);
+        if (classNode is not null)
+        {
+            return classNode;
+        }
+
+        string[] interfaces;
+        try
+        {
+            interfaces = [.. Directory.GetDirectories(deviceDirectory).OrderBy(name => name, StringComparer.Ordinal)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        foreach (var interfaceDirectory in interfaces)
+        {
+            var ttyName = ReadTtyName(interfaceDirectory);
+            if (ttyName is not null)
+            {
+                return ttyName;
+            }
+
+            string[] ttyEntries;
+            try
+            {
+                ttyEntries = Directory.GetDirectories(interfaceDirectory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            foreach (var ttyEntry in ttyEntries)
+            {
+                if (ReadTtyName(ttyEntry) is { } nested)
+                {
+                    return nested;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Walks the kernel's <c>/sys/class/tty</c> registrations and returns the <c>/dev</c> node of the class tty
+    /// device whose <c>device</c> link resolves under the interface directory, reading the node name from the
+    /// class device's own <c>uevent</c> export. This is the kernel's authoritative port mapping: the class entry
+    /// exists exactly when the kernel registered the port, and its <c>DEVNAME</c> names the node udev created.
+    /// <para>遍历内核的 <c>/sys/class/tty</c> 注册表，返回其 <c>device</c> 链接解析后落在该接口目录之下的类 tty
+    /// 设备的 <c>/dev</c> 节点，节点名取自类设备自身的 <c>uevent</c> 导出。这是内核权威的端口映射：类条目存在
+    /// 当且仅当内核注册了该端口，其 <c>DEVNAME</c> 命名 udev 创建的节点。</para>
+    /// </summary>
+    /// <param name="deviceDirectory">The USB device directory the port must belong to.
+    /// <para>端口必须归属的 USB 设备目录。</para></param>
+    /// <returns>A device node path such as <c>/dev/ttyUSB0</c>, or <see langword="null"/>.
+    /// <para>形如 <c>/dev/ttyUSB0</c> 的设备节点路径；或 <see langword="null"/>。</para></returns>
+    private static string? FindClassTtyNode(string deviceDirectory)
+    {
+        var interfacePath = ResolveSysfsPath(deviceDirectory);
+        if (interfacePath is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (var classDirectory in Directory.GetDirectories("/sys/class/tty")
+                .OrderBy(name => name, StringComparer.Ordinal))
+            {
+                var deviceLink = Path.Combine(classDirectory, "device");
+                if (!Directory.Exists(deviceLink))
+                {
+                    continue;
+                }
+
+                var devicePath = ResolveSysfsPath(deviceLink);
+                if (devicePath is null ||
+                    !devicePath.StartsWith(interfacePath + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var node = DevNodeFor(classDirectory);
+                if (node is not null)
+                {
+                    return node;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Follows a sysfs symlink chain to the real device directory it points at, so ownership checks compare
+    /// canonical paths instead of the aliasing <c>/sys/bus/usb/devices</c> and <c>/sys/class</c> views.
+    /// <para>沿 sysfs 符号链接链解析到其指向的真实设备目录，使归属检查比较规范路径，而不是
+    /// <c>/sys/bus/usb/devices</c> 与 <c>/sys/class</c> 的别名视图。</para>
+    /// </summary>
+    /// <param name="path">The sysfs path to resolve. <para>要解析的 sysfs 路径。</para></param>
+    /// <returns>The fully resolved directory path, or <see langword="null"/> when the chain does not settle.
+    /// <para>完全解析后的目录路径；链接链未收敛时为 <see langword="null"/>。</para></returns>
+    private static string? ResolveSysfsPath(string path)
+    {
+        try
+        {
+            var current = path;
+            for (var hop = 0; hop < 8; hop++)
+            {
+                var dir = new DirectoryInfo(current);
+                if (dir.LinkTarget is not { } target)
+                {
+                    return dir.FullName;
+                }
+
+                current = Path.IsPathRooted(target) ? target : Path.GetFullPath(Path.Combine(dir.FullName, target));
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the <c>/dev/ttyUSB*</c> node a usb-serial interface directory owns, or <see langword="null"/> when it
+    /// has no tty interface. A tty class device is recognized by its <c>dev</c> attribute and a <c>subsystem</c>
+    /// link that points at the <c>tty</c> subsystem, which resolves both sysfs layouts kernels ship: the grouped
+    /// <c>interface/tty/ttyUSBn</c> shape and the flat <c>interface/ttyUSBn</c> shape, so the port name always
+    /// comes from the device directory the kernel actually registered.
+    /// <para>返回 usb-serial 接口目录所拥有的 <c>/dev/ttyUSB*</c> 节点；该设备没有 tty 接口时返回
+    /// <see langword="null"/>。tty 类设备由其 <c>dev</c> 属性与指向 <c>tty</c> 子系统的 <c>subsystem</c> 链接识别，
+    /// 因此同时覆盖内核的两种 sysfs 布局：分组式 <c>接口/tty/ttyUSBn</c> 与扁平式 <c>接口/ttyUSBn</c>，
+    /// 端口名始终取自内核实际注册的设备目录。</para>
+    /// </summary>
+    /// <param name="directory">An interface or tty directory under a USB device.
+    /// <para>USB 设备下的接口或 tty 目录。</para></param>
+    /// <returns>A device node path such as <c>/dev/ttyUSB0</c>, or <see langword="null"/>.
+    /// <para>形如 <c>/dev/ttyUSB0</c> 的设备节点路径；或 <see langword="null"/>。</para></returns>
+    private static string? ReadTtyName(string directory)
+    {
+        try
+        {
+            if (IsTtyClassDevice(directory))
+            {
+                return DevNodeFor(directory);
+            }
+
+            var ttyGroup = Path.Combine(directory, "tty");
+            if (!Directory.Exists(ttyGroup))
+            {
+                return null;
+            }
+
+            foreach (var child in Directory.EnumerateDirectories(ttyGroup).OrderBy(name => name, StringComparer.Ordinal))
+            {
+                if (IsTtyClassDevice(child))
+                {
+                    return DevNodeFor(child);
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reports whether a sysfs directory is the class-device directory of a tty: it carries a <c>dev</c> attribute
+    /// and a <c>subsystem</c> link naming the tty subsystem, which together distinguish a registered tty from any
+    /// plain folder in the USB hierarchy.
+    /// <para>报告一个 sysfs 目录是否为 tty 的类设备目录：它必须带有 <c>dev</c> 属性且 <c>subsystem</c> 链接指向
+    /// tty 子系统，二者共同把已注册的 tty 与 USB 层级中的普通目录区分开。</para>
+    /// </summary>
+    /// <param name="directory">The sysfs directory to inspect. <para>要检查的 sysfs 目录。</para></param>
+    /// <returns><see langword="true"/> when the directory registers a tty device.
+    /// <para>目录注册的是 tty 设备时为 <see langword="true"/>。</para></returns>
+    private static bool IsTtyClassDevice(string directory)
+    {
+        try
+        {
+            if (!File.Exists(Path.Combine(directory, "dev")))
+            {
+                return false;
+            }
+
+            var subsystemLink = Path.Combine(directory, "subsystem");
+            var target = new DirectoryInfo(subsystemLink).LinkTarget;
+            return target is not null &&
+                string.Equals(Path.GetFileName(target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                    "tty", StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Maps a tty class-device directory onto its <c>/dev</c> node by reading the kernel's own <c>uevent</c>
+    /// export: <c>DEVNAME</c> names exactly the node udev created for the device, so the resolved path is the
+    /// kernel's authoritative mapping rather than a name inferred from the directory hierarchy.
+    /// <para>通过读取内核自身的 <c>uevent</c> 导出把 tty 类设备目录映射到其 <c>/dev</c> 节点：<c>DEVNAME</c>
+    /// 给出的正是 udev 为该设备创建的节点名，因此解析出的路径是内核的权威映射，而不是从目录层级推测的名字。</para>
+    /// </summary>
+    /// <param name="ttyDirectory">A directory that <see cref="IsTtyClassDevice"/> accepted.
+    /// <para>经 <see cref="IsTtyClassDevice"/> 判定的目录。</para></param>
+    /// <returns>The <c>/dev/&lt;name&gt;</c> node path, or <see langword="null"/> when the kernel has not created the node.
+    /// <para><c>/dev/&lt;name&gt;</c> 节点路径；内核尚未创建该节点时为 <see langword="null"/>。</para></returns>
+    private static string? DevNodeFor(string ttyDirectory)
+    {
+        try
+        {
+            var uevent = Path.Combine(ttyDirectory, "uevent");
+            if (!File.Exists(uevent))
+            {
+                return null;
+            }
+
+            foreach (var line in File.ReadLines(uevent))
+            {
+                if (!line.StartsWith("DEVNAME=", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var name = line["DEVNAME=".Length..].Trim();
+                if (name.Length == 0)
+                {
+                    return null;
+                }
+
+                var node = Path.Combine("/dev", name);
+                return File.Exists(node) ? node : null;
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads one integer sysfs attribute, returning <c>-1</c> when it is absent or malformed.
+    /// <para>读取一个整数 sysfs 属性；缺失或格式非法时返回 <c>-1</c>。</para>
+    /// </summary>
+    /// <param name="directory">The directory holding the attribute.
+    /// <para>持有该属性的目录。</para></param>
+    /// <param name="attribute">The attribute file name. <para>属性文件名。</para></param>
+    /// <returns>The value, or <c>-1</c>. <para>该值；或 <c>-1</c>。</para></returns>
+    private static int ReadSysfsInt(string directory, string attribute)
+    {
+        try
+        {
+            var path = Path.Combine(directory, attribute);
+            return File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var value) ? value : -1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return -1;
+        }
     }
 
     /// <summary>

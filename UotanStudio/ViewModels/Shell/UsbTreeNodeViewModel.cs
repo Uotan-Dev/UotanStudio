@@ -21,8 +21,8 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
 
     private readonly UsbTopologyCapabilities _capabilities;
     private readonly IReadOnlyList<string> _protocols;
-    private readonly Func<UsbTreeNodeViewModel, Task>? _enableTakeover;
-    private readonly Func<UsbTreeNodeViewModel, Task>? _cancelTakeover;
+    private readonly Func<UsbTreeNodeViewModel, Task>? _configureDevice;
+    private readonly Func<UsbTreeNodeViewModel, Task>? _unconfigureDevice;
     private readonly Func<UsbTreeNodeViewModel, Task>? _installDriver;
 
     /// <summary><para>节点是否展开，与 <c>TreeViewItem.IsExpanded</c> 双向绑定。</para>
@@ -30,20 +30,23 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     [ObservableProperty] private bool _isExpanded;
 
     /// <summary>
-    /// Whether the row offers the WinUSB takeover action; only set for Windows PnP device or function
-    /// nodes carrying their own hardware ids and a protocol, so the button appears on exactly the rows
-    /// the "filter mode" switch keeps.
-    /// <para>该行是否提供 WinUSB 接管操作；仅为携带自身硬件 ID 与已识别协议的 Windows PnP 设备/接口
-    /// 节点置位，使按钮只出现在「过滤显示」开关保留的行上。</para>
+    /// Whether the row offers the device access configuration action; set for Windows PnP device or
+    /// function nodes carrying their own hardware ids and a protocol, and for Linux device nodes with an
+    /// identified vendor and product id, so the button appears on exactly the rows the "filter mode"
+    /// switch keeps.
+    /// <para>该行是否提供设备访问配置操作；Windows 上为携带自身硬件 ID 与已识别协议的 PnP 设备/接口节点置位，
+    /// Linux 上为带已识别厂商与产品 ID 的设备节点置位，使按钮只出现在「过滤显示」开关保留的行上。</para>
     /// </summary>
     [ObservableProperty] private bool _showDriverAction;
 
     /// <summary>
-    /// Whether the device is currently bound to the self-signed WinUSB package this application
-    /// installed, deciding whether the row offers takeover or its cancellation.
-    /// <para>设备当前是否绑定到本应用安装的自签名 WinUSB 包，决定该行提供接管还是取消接管。</para>
+    /// Whether the device access is currently configured by this application — on Windows bound to the
+    /// self-signed WinUSB package, on Linux covered by the installed udev access rule — deciding whether
+    /// the row offers configuration or its cancellation.
+    /// <para>设备访问当前是否已由本应用配置——Windows 上为绑定自签名 WinUSB 包，Linux 上为已安装 udev
+    /// 访问规则——决定该行提供配置还是取消配置。</para>
     /// </summary>
-    [ObservableProperty] private bool _isTakenOver;
+    [ObservableProperty] private bool _isConfigured;
 
     /// <summary>
     /// Whether the row may offer the vendor driver installation; the row keeps the action when a bundled
@@ -81,15 +84,17 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// <param name="children">The already-built child view models.<para>已构建的子节点视图模型。</para></param>
     /// <param name="depth">The node depth with the root at 0, used by the default expansion policy.
     /// <para>节点深度，根为 0；用于默认展开策略。</para></param>
-    /// <param name="enableTakeover">
-    /// The optional callback invoked by <c>EnableTakeoverCommand</c> to take the node's device over with
-    /// a self-signed WinUSB package.
-    /// <para><c>EnableTakeoverCommand</c> 调用的可选回调，用自签名 WinUSB 包接管该节点的设备。</para>
+    /// <param name="configureDevice">
+    /// The optional callback invoked by <c>ConfigureDeviceCommand</c> to configure the node's device
+    /// access: on Linux through the udev access configuration, on Windows through a self-signed WinUSB
+    /// package.
+    /// <para><c>ConfigureDeviceCommand</c> 调用的可选回调，配置该节点的设备访问：Linux 上经 udev 访问配置，
+    /// Windows 上经自签名 WinUSB 包。</para>
     /// </param>
-    /// <param name="cancelTakeover">
-    /// The optional callback invoked by <c>CancelTakeoverCommand</c> to remove the self-signed WinUSB
-    /// package this app installed.
-    /// <para><c>CancelTakeoverCommand</c> 调用的可选回调，移除本应用安装的自签名 WinUSB 包。</para>
+    /// <param name="unconfigureDevice">
+    /// The optional callback invoked by <c>UnconfigureDeviceCommand</c> to remove the device access this
+    /// app configured.
+    /// <para><c>UnconfigureDeviceCommand</c> 调用的可选回调，移除本应用配置的设备访问。</para>
     /// </param>
     /// <param name="installDriver">
     /// The optional callback invoked by <c>InstallDriverCommand</c> to install the bundled vendor driver
@@ -98,33 +103,33 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// </param>
     public UsbTreeNodeViewModel(UsbTopologyNode node, UsbTopologyCapabilities capabilities,
         IReadOnlyList<UsbTreeNodeViewModel> children, int depth,
-        Func<UsbTreeNodeViewModel, Task>? enableTakeover = null,
-        Func<UsbTreeNodeViewModel, Task>? cancelTakeover = null,
+        Func<UsbTreeNodeViewModel, Task>? configureDevice = null,
+        Func<UsbTreeNodeViewModel, Task>? unconfigureDevice = null,
         Func<UsbTreeNodeViewModel, Task>? installDriver = null)
     {
         Node = node;
         _capabilities = capabilities;
         Children = children;
         _protocols = CollectProtocols(node, children);
-        _enableTakeover = enableTakeover;
-        _cancelTakeover = cancelTakeover;
+        _configureDevice = configureDevice;
+        _unconfigureDevice = unconfigureDevice;
         _installDriver = installDriver;
         IsExpanded = depth <= 1 || _protocols.Count > 0;
     }
 
     /// <summary>
-    /// Whether the row may offer the takeover action: the takeover action is shown and the device is not
-    /// bound to this application's package yet.
-    /// <para>该行是否可提供接管操作：显示接管操作且设备尚未绑定本应用的驱动包。</para>
+    /// Whether the row may offer the configuration action: the action is shown and the device access is
+    /// not configured by this application yet.
+    /// <para>该行是否可提供配置操作：显示该操作且设备访问尚未由本应用配置。</para>
     /// </summary>
-    public bool CanEnableTakeover => ShowDriverAction && !IsTakenOver;
+    public bool CanConfigureDevice => ShowDriverAction && !IsConfigured;
 
     /// <summary>
-    /// Whether the row may offer the cancellation action: the takeover action is shown and the device is
-    /// bound to this application's package.
-    /// <para>该行是否可提供取消接管操作：显示接管操作且设备已绑定本应用的驱动包。</para>
+    /// Whether the row may offer the cancellation action: the action is shown and the device access is
+    /// configured by this application.
+    /// <para>该行是否可提供取消配置操作：显示该操作且设备访问已由本应用配置。</para>
     /// </summary>
-    public bool CanCancelTakeover => ShowDriverAction && IsTakenOver;
+    public bool CanUnconfigureDevice => ShowDriverAction && IsConfigured;
 
     /// <summary>
     /// Whether the row shows the vendor-driver installation action: the row keeps the action, no driver is
@@ -135,20 +140,20 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         MatchedDriverPackageId is not null;
 
     /// <summary>
-    /// Forwards to the injected takeover callback; without one the command completes without doing
+    /// Forwards to the injected configuration callback; without one the command completes without doing
     /// anything.
-    /// <para>转发到注入的接管回调；未注入时命令直接完成，不做任何事。</para>
+    /// <para>转发到注入的配置回调；未注入时命令直接完成，不做任何事。</para>
     /// </summary>
     [RelayCommand]
-    private Task EnableTakeoverAsync() => _enableTakeover?.Invoke(this) ?? Task.CompletedTask;
+    private Task ConfigureDeviceAsync() => _configureDevice?.Invoke(this) ?? Task.CompletedTask;
 
     /// <summary>
-    /// Forwards to the injected takeover-cancellation callback; without one the command completes
-    /// without doing anything.
-    /// <para>转发到注入的取消接管回调；未注入时命令直接完成，不做任何事。</para>
+    /// Forwards to the injected unconfiguration callback; without one the command completes without
+    /// doing anything.
+    /// <para>转发到注入的取消配置回调；未注入时命令直接完成，不做任何事。</para>
     /// </summary>
     [RelayCommand]
-    private Task CancelTakeoverAsync() => _cancelTakeover?.Invoke(this) ?? Task.CompletedTask;
+    private Task UnconfigureDeviceAsync() => _unconfigureDevice?.Invoke(this) ?? Task.CompletedTask;
 
     /// <summary>
     /// Forwards to the injected driver-install callback; without one the command completes without doing
@@ -160,17 +165,17 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
 
     partial void OnShowDriverActionChanged(bool value)
     {
-        OnPropertyChanged(nameof(CanEnableTakeover));
-        OnPropertyChanged(nameof(CanCancelTakeover));
+        OnPropertyChanged(nameof(CanConfigureDevice));
+        OnPropertyChanged(nameof(CanUnconfigureDevice));
     }
 
     partial void OnShowDriverInstallActionChanged(bool value)
         => OnPropertyChanged(nameof(CanInstallDriver));
 
-    partial void OnIsTakenOverChanged(bool value)
+    partial void OnIsConfiguredChanged(bool value)
     {
-        OnPropertyChanged(nameof(CanEnableTakeover));
-        OnPropertyChanged(nameof(CanCancelTakeover));
+        OnPropertyChanged(nameof(CanConfigureDevice));
+        OnPropertyChanged(nameof(CanUnconfigureDevice));
     }
 
     partial void OnIsDriverInstalledChanged(bool value)

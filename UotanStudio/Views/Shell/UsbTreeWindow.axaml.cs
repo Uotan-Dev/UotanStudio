@@ -93,11 +93,14 @@ public partial class UsbTreeWindow : Window
     }
 
     /// <summary>
-    /// Asks for the dangerous-operation confirmation and, when confirmed, takes the clicked row's device
-    /// over with a self-signed WinUSB package; a confirmed success shows an informational restart notice.
-    /// <para>弹出危险操作确认，确认后用自签名 WinUSB 包接管点击行对应的设备；接管确定成功后弹出重启提示。</para>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, configures the clicked row's
+    /// device access: on Linux through the udev access configuration with its authorization prompt, on
+    /// Windows through the self-signed WinUSB package; a confirmed Windows success shows an informational
+    /// restart notice, while the Linux configuration applies immediately.
+    /// <para>弹出危险操作确认，确认后配置点击行对应的设备访问：Linux 上经带授权提示的 udev 访问配置，
+    /// Windows 上经自签名 WinUSB 包；Windows 确定成功后弹出重启提示，Linux 配置立即生效。</para>
     /// </summary>
-    private async void OnEnableTakeoverClick(object? sender, RoutedEventArgs e)
+    private async void OnConfigureDeviceClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
         {
@@ -105,11 +108,14 @@ public partial class UsbTreeWindow : Window
         }
 
         var language = LanguageService.Instance;
+        var detailKey = OperatingSystem.IsWindows()
+            ? "UsbTree_ConfigureDetailWinUsb"
+            : "UsbTree_ConfigureDetailUdev";
         var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
         {
             TabTitle = language.GetString("Menu_UsbTreeWindow"),
-            Title = language.GetString("UsbTree_TakeoverConfirmTitle"),
-            Detail = language.GetString("UsbTree_TakeoverConfirmDetail", node.DisplayText),
+            Title = language.GetString("UsbTree_ConfigureConfirmTitle"),
+            Detail = language.GetString(detailKey, node.DisplayText),
             DeviceIdentifier = node.Node.InstanceId
         });
         if (!confirmed)
@@ -117,19 +123,22 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        if (await _model.EnableTakeoverAsync(node))
+        if (await _model.ConfigureDeviceAsync(node) && OperatingSystem.IsWindows())
         {
             await ShowRestartRequiredAsync();
         }
     }
 
     /// <summary>
-    /// Asks for the dangerous-operation confirmation and, when confirmed, ends the takeover of the clicked
-    /// row's device by removing the self-signed package and its certificate; a confirmed success shows an
-    /// informational restart notice.
-    /// <para>弹出危险操作确认，确认后移除自签名包与证书，结束点击行对应设备的接管；取消接管确定成功后弹出重启提示。</para>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, unconfigures the clicked row's
+    /// device access: on Linux by removing the udev access rule and the usb-serial module block, on
+    /// Windows by removing the self-signed package and its certificate; a confirmed Windows success shows
+    /// an informational restart notice, while the Linux unconfiguration applies immediately.
+    /// <para>弹出危险操作确认，确认后取消点击行对应的设备访问配置：Linux 上移除 udev 访问规则与
+    /// usb-serial 模块屏蔽，Windows 上移除自签名包与证书；Windows 确定成功后弹出重启提示，Linux 取消
+    /// 配置立即生效。</para>
     /// </summary>
-    private async void OnCancelTakeoverClick(object? sender, RoutedEventArgs e)
+    private async void OnUnconfigureDeviceClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
         {
@@ -137,11 +146,14 @@ public partial class UsbTreeWindow : Window
         }
 
         var language = LanguageService.Instance;
+        var detailKey = OperatingSystem.IsWindows()
+            ? "UsbTree_UnconfigureDetailWinUsb"
+            : "UsbTree_UnconfigureDetailUdev";
         var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
         {
             TabTitle = language.GetString("Menu_UsbTreeWindow"),
-            Title = language.GetString("UsbTree_TakeoverCancelTitle"),
-            Detail = language.GetString("UsbTree_TakeoverCancelDetail", node.DisplayText),
+            Title = language.GetString("UsbTree_UnconfigureConfirmTitle"),
+            Detail = language.GetString(detailKey, node.DisplayText),
             DeviceIdentifier = node.Node.InstanceId
         });
         if (!confirmed)
@@ -149,16 +161,16 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        if (await _model.CancelTakeoverAsync(node))
+        if (await _model.UnconfigureDeviceAsync(node) && OperatingSystem.IsWindows())
         {
             await ShowRestartRequiredAsync();
         }
     }
 
     /// <summary>
-    /// Shows the restart notice after a successful takeover change; the dialog only informs the user and
-    /// never restarts the computer on their behalf.
-    /// <para>接管状态变更成功后显示重启提示；弹窗仅作告知，不会代替用户重启计算机。</para>
+    /// Shows the restart notice after a successful device-configuration change; the dialog only informs
+    /// the user and never restarts the computer on their behalf.
+    /// <para>设备配置状态变更成功后显示重启提示；弹窗仅作告知，不会代替用户重启计算机。</para>
     /// </summary>
     private Task ShowRestartRequiredAsync()
     {

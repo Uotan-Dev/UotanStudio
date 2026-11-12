@@ -144,12 +144,12 @@
                   <Button Grid.Column="3" Classes="node-action" Click="OnInstallDriverClick"
                           Content="{DynamicResource UsbTree_InstallDriver}"
                           IsVisible="{Binding CanInstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
-                  <Button Grid.Column="4" Classes="node-action" Click="OnEnableTakeoverClick"
-                          Content="{DynamicResource UsbTree_EnableTakeover}"
-                          IsVisible="{Binding CanEnableTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
-                  <Button Grid.Column="4" Classes="node-action" Click="OnCancelTakeoverClick"
-                          Content="{DynamicResource UsbTree_CancelTakeover}"
-                          IsVisible="{Binding CanCancelTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="4" Classes="node-action" Click="OnConfigureDeviceClick"
+                          Content="{DynamicResource UsbTree_ConfigureDevice}"
+                          IsVisible="{Binding CanConfigureDevice}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="4" Classes="node-action" Click="OnUnconfigureDeviceClick"
+                          Content="{DynamicResource UsbTree_UnconfigureDevice}"
+                          IsVisible="{Binding CanUnconfigureDevice}" IsEnabled="{Binding !IsDriverBusy}" />
                 </Grid>
                 <TextBlock Classes="node-meta" Text="{Binding DiagnosticsText}"
                            IsVisible="{Binding HasDiagnostics}" />

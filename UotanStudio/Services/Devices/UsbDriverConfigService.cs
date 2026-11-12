@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using UotanStudio.Comm.Transports.Usb.Backend.Linux;
 using UotanStudio.Comm.Transports.Usb.Drivers;
 
 namespace UotanStudio.Services.Devices;
@@ -15,11 +16,12 @@ namespace UotanStudio.Services.Devices;
 public interface IUsbDriverConfigService
 {
     /// <summary>
-    /// Gets whether driver configuration is supported here, which requires Windows.
-    /// <para>获取当前环境是否支持驱动配置；仅 Windows 支持。</para>
+    /// Gets whether driver configuration is supported here: Windows with the driver backend available, or
+    /// Linux with a usable privilege-escalation launcher for the udev access configuration.
+    /// <para>获取当前环境是否支持驱动配置：Windows 需驱动后端可用；Linux 需可用于 udev 访问配置的提权启动器。</para>
     /// </summary>
-    /// <value><see langword="true"/> only on Windows with the driver backend available.
-    /// <para>仅在 Windows 且驱动后端可用时为 <see langword="true"/>。</para></value>
+    /// <value><see langword="true"/> on a platform whose configuration backend is available.
+    /// <para>平台配置后端可用时为 <see langword="true"/>。</para></value>
     bool IsSupported { get; }
 
     /// <summary>
@@ -91,6 +93,42 @@ public interface IUsbDriverConfigService
     /// <returns>The operation result; never throws and fails outside Windows.
     /// <para>操作结果；绝不抛出，非 Windows 下返回失败。</para></returns>
     WinUsbDriverOperationResult UninstallPackage(string packageId);
+
+    /// <summary>
+    /// Reports whether the Linux udev access configuration for this vendor/product pair is installed. The
+    /// check is read-only, needs no elevation, and reports <see langword="false"/> outside Linux.
+    /// <para>报告该厂商/产品组合的 Linux udev 访问配置是否已安装。检查只读、无需提权，Linux 之外返回
+    /// <see langword="false"/>。</para>
+    /// </summary>
+    /// <param name="vendorId">The USB vendor id. <para>USB 厂商 ID。</para></param>
+    /// <param name="productId">The USB product id. <para>USB 产品 ID。</para></param>
+    /// <returns><see langword="true"/> when the access rule is installed.
+    /// <para>访问规则已安装时为 <see langword="true"/>。</para></returns>
+    bool IsDeviceAccessConfigured(ushort vendorId, ushort productId);
+
+    /// <summary>
+    /// Installs the Linux udev access configuration for this vendor/product pair: the elevated child
+    /// process writes the per-device rule and the usb-serial module block, unbinds the current claimant
+    /// and re-applies the rules. Fails outside Linux.
+    /// <para>为该厂商/产品组合安装 Linux udev 访问配置：提权子进程写入按设备规则与 usb-serial 模块屏蔽、
+    /// 解绑当前占用者并重新应用规则。Linux 之外返回失败。</para>
+    /// </summary>
+    /// <param name="vendorId">The USB vendor id. <para>USB 厂商 ID。</para></param>
+    /// <param name="productId">The USB product id. <para>USB 产品 ID。</para></param>
+    /// <returns>The operation result; never throws. <para>操作结果；绝不抛出。</para></returns>
+    LinuxDeviceAccessResult ConfigureDeviceAccess(ushort vendorId, ushort productId);
+
+    /// <summary>
+    /// Removes the Linux udev access configuration for this vendor/product pair: the elevated child
+    /// process deletes the per-device rule and the usb-serial module block and re-applies the rules.
+    /// Fails outside Linux.
+    /// <para>移除该厂商/产品组合的 Linux udev 访问配置：提权子进程删除按设备规则与 usb-serial 模块屏蔽并
+    /// 重新应用规则。Linux 之外返回失败。</para>
+    /// </summary>
+    /// <param name="vendorId">The USB vendor id. <para>USB 厂商 ID。</para></param>
+    /// <param name="productId">The USB product id. <para>USB 产品 ID。</para></param>
+    /// <returns>The operation result; never throws. <para>操作结果；绝不抛出。</para></returns>
+    LinuxDeviceAccessResult UnconfigureDeviceAccess(ushort vendorId, ushort productId);
 }
 
 /// <summary>
@@ -126,7 +164,9 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
     private static WinUsbDriverInstaller Installer => _installer ??= new WinUsbDriverInstaller();
 
     /// <summary>Whether driver configuration is supported here. <para>当前环境是否支持驱动配置。</para></summary>
-    public bool IsSupported => OperatingSystem.IsWindows() && WinUsbDriverInstaller.IsSupported;
+    public bool IsSupported =>
+        (OperatingSystem.IsWindows() && WinUsbDriverInstaller.IsSupported) ||
+        (OperatingSystem.IsLinux() && LinuxUdevDeviceAccess.IsLauncherAvailable);
 
     /// <summary>Whether the process runs with an administrator token. <para>进程是否持有管理员令牌。</para></summary>
     public bool IsElevated => OperatingSystem.IsWindows() && WinUsbDriverInstaller.IsElevated;
@@ -198,6 +238,22 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
 
         return RunElevated([UsbDriverElevatedCommand.PackageInstallSwitch, packageId]);
     }
+
+    /// <inheritdoc cref="IUsbDriverConfigService.IsDeviceAccessConfigured" />
+    public bool IsDeviceAccessConfigured(ushort vendorId, ushort productId)
+        => OperatingSystem.IsLinux() && LinuxUdevDeviceAccess.IsConfigured(vendorId, productId);
+
+    /// <inheritdoc cref="IUsbDriverConfigService.ConfigureDeviceAccess" />
+    public LinuxDeviceAccessResult ConfigureDeviceAccess(ushort vendorId, ushort productId)
+        => OperatingSystem.IsLinux()
+            ? LinuxUdevDeviceAccess.Configure(vendorId, productId)
+            : new LinuxDeviceAccessResult(LinuxDeviceAccessStatus.Failed, "Linux only");
+
+    /// <inheritdoc cref="IUsbDriverConfigService.UnconfigureDeviceAccess" />
+    public LinuxDeviceAccessResult UnconfigureDeviceAccess(ushort vendorId, ushort productId)
+        => OperatingSystem.IsLinux()
+            ? LinuxUdevDeviceAccess.Unconfigure(vendorId, productId)
+            : new LinuxDeviceAccessResult(LinuxDeviceAccessStatus.Failed, "Linux only");
 
     /// <inheritdoc cref="IUsbDriverConfigService.UninstallPackage" />
     [SupportedOSPlatform("windows")]

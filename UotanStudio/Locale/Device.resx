@@ -723,41 +723,47 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>Device-interface GUIDs</value>
   </data>
-  <data name="UsbTree_EnableTakeover" xml:space="preserve">
-    <value>Enable takeover</value>
+  <data name="UsbTree_ConfigureDevice" xml:space="preserve">
+    <value>Configure device</value>
   </data>
-  <data name="UsbTree_CancelTakeover" xml:space="preserve">
-    <value>Cancel takeover</value>
+  <data name="UsbTree_UnconfigureDevice" xml:space="preserve">
+    <value>Unconfigure device</value>
   </data>
-  <data name="UsbTree_TakeoverConfirmTitle" xml:space="preserve">
-    <value>Enable device takeover</value>
+  <data name="UsbTree_ConfigureConfirmTitle" xml:space="preserve">
+    <value>Configure device access</value>
   </data>
-  <data name="UsbTree_TakeoverConfirmDetail" xml:space="preserve">
-    <value>This replaces the current driver of {0} with a self-signed WinUSB package so the device can be opened through WinUSB, and adds the takeover certificate to the local machine trusted stores. Administrator rights are required.</value>
+  <data name="UsbTree_ConfigureDetailWinUsb" xml:space="preserve">
+    <value>This replaces the current driver of {0} with a self-signed WinUSB package so the device can be opened through WinUSB, and adds the signing certificate to the local machine trusted stores. Administrator rights are required.</value>
   </data>
-  <data name="UsbTree_TakeoverCancelTitle" xml:space="preserve">
-    <value>Cancel device takeover</value>
+  <data name="UsbTree_ConfigureDetailUdev" xml:space="preserve">
+    <value>This installs an udev rule for {0} that grants every user read/write access to the device node and keeps claiming serial-driver modules away from it, then unbinds the driver currently holding the device and applies the rules. Authorization is requested in a separate prompt.</value>
   </data>
-  <data name="UsbTree_TakeoverCancelDetail" xml:space="preserve">
+  <data name="UsbTree_UnconfigureConfirmTitle" xml:space="preserve">
+    <value>Unconfigure device access</value>
+  </data>
+  <data name="UsbTree_UnconfigureDetailWinUsb" xml:space="preserve">
     <value>This removes the self-signed WinUSB package and certificate this app installed for {0} and restores the system driver. Administrator rights are required.</value>
   </data>
-  <data name="UsbTree_TakeoverEnabling" xml:space="preserve">
-    <value>Taking over {0} with WinUSB...</value>
+  <data name="UsbTree_UnconfigureDetailUdev" xml:space="preserve">
+    <value>This removes the udev rule and the serial-driver module block this app installed for {0} and re-applies the rules, so the kernel regains its original driver behaviour. Authorization is requested in a separate prompt.</value>
   </data>
-  <data name="UsbTree_TakeoverEnabled" xml:space="preserve">
-    <value>WinUSB takeover enabled for {0}</value>
+  <data name="UsbTree_Configuring" xml:space="preserve">
+    <value>Configuring device access for {0}...</value>
   </data>
-  <data name="UsbTree_TakeoverDisabling" xml:space="preserve">
-    <value>Ending the WinUSB takeover of {0}...</value>
+  <data name="UsbTree_Configured" xml:space="preserve">
+    <value>Device access configured for {0}</value>
   </data>
-  <data name="UsbTree_TakeoverDisabled" xml:space="preserve">
-    <value>WinUSB takeover ended for {0}; the system driver is restored</value>
+  <data name="UsbTree_Unconfiguring" xml:space="preserve">
+    <value>Unconfiguring device access for {0}...</value>
   </data>
-  <data name="UsbTree_TakeoverElevationRequired" xml:space="preserve">
-    <value>Administrator rights are required to take a device over</value>
+  <data name="UsbTree_Unconfigured" xml:space="preserve">
+    <value>Device access unconfigured for {0}; the system behaviour is restored</value>
   </data>
-  <data name="UsbTree_TakeoverFailed" xml:space="preserve">
-    <value>Device takeover failed: {0}</value>
+  <data name="UsbTree_ConfigurationElevationRequired" xml:space="preserve">
+    <value>Configuring a device requires administrator rights</value>
+  </data>
+  <data name="UsbTree_ConfigurationFailed" xml:space="preserve">
+    <value>Device configuration failed: {0}</value>
   </data>
   <data name="UsbTree_RestartRequiredTitle" xml:space="preserve">
     <value>Restart required</value>

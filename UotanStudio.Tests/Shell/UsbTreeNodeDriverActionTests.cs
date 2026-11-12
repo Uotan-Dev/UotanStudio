@@ -5,11 +5,11 @@ using Xunit;
 namespace UotanStudio.Tests.Shell;
 
 /// <summary>
-/// Verifies the row states of a USB tree node that offer the takeover and vendor driver installation
-/// actions: the install action stays available while no driver is bound and a bundled package covers the
-/// device, and it disappears as soon as a driver is bound.
-/// <para>验证 USB 树节点提供接管与厂商驱动安装操作的行状态：设备尚未绑定驱动且捆绑包覆盖时保留安装操作，
-/// 一旦绑定驱动即消失。</para>
+/// Verifies the row states of a USB tree node that offer the device access configuration and vendor driver
+/// installation actions: the install action stays available while no driver is bound and a bundled package
+/// covers the device, and it disappears as soon as a driver is bound.
+/// <para>验证 USB 树节点提供设备访问配置与厂商驱动安装操作的行状态：设备尚未绑定驱动且捆绑包覆盖时保留
+/// 安装操作，一旦绑定驱动即消失。</para>
 /// </summary>
 public sealed class UsbTreeNodeDriverActionTests
 {
@@ -34,7 +34,7 @@ public sealed class UsbTreeNodeDriverActionTests
         node.MatchedDriverPackageId = "rockusb";
 
         Assert.True(node.CanInstallDriver);
-        Assert.False(node.CanEnableTakeover);
+        Assert.False(node.CanConfigureDevice);
     }
 
     [Fact]
@@ -60,11 +60,11 @@ public sealed class UsbTreeNodeDriverActionTests
         node.MatchedDriverPackageId = "rockusb";
         node.ShowDriverInstallAction = false;
         Assert.False(node.CanInstallDriver);
-        Assert.False(node.CanEnableTakeover);
+        Assert.False(node.CanConfigureDevice);
     }
 
     [Fact]
-    public void CanEnableTakeover_TakenOverNodeWithDriverInstallAction_KeepsIndependentStates()
+    public void CanConfigureDevice_ConfiguredNodeWithDriverInstallAction_KeepsIndependentStates()
     {
         var node = CreateNode();
         node.ShowDriverAction = true;
@@ -73,11 +73,11 @@ public sealed class UsbTreeNodeDriverActionTests
         node.MatchedDriverPackageId = "rockusb";
 
         Assert.False(node.CanInstallDriver);
-        Assert.True(node.CanEnableTakeover);
+        Assert.True(node.CanConfigureDevice);
 
-        node.IsTakenOver = true;
-        Assert.False(node.CanEnableTakeover);
-        Assert.True(node.CanCancelTakeover);
+        node.IsConfigured = true;
+        Assert.False(node.CanConfigureDevice);
+        Assert.True(node.CanUnconfigureDevice);
         Assert.False(node.CanInstallDriver);
     }
 }
