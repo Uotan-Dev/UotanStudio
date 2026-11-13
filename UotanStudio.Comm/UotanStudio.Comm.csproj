@@ -18,12 +18,15 @@
 
   <ItemGroup>
     <None Remove="Native\LibUsb\**\*" />
+    <!-- Always copy, never PreserveNewest: the per-RID files share the checkout's LastWriteTime, so switching
+         the RID over a reused output/publish directory compares equal timestamps, skips the copy and leaves the
+         previous architecture's library next to a binary of the new one. Always makes the switch self-heal. -->
     <Content Include="Native\LibUsb\$(LibUsbRuntimeIdentifier)\*"
              Condition="Exists('Native\LibUsb\$(LibUsbRuntimeIdentifier)\')"
              Link="%(Filename)%(Extension)"
              TargetPath="%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
+             CopyToOutputDirectory="Always"
+             CopyToPublishDirectory="Always" />
     <Content Include="Native\LibUsb\COPYING"
              Link="libusb-LICENSE.txt"
              TargetPath="libusb-LICENSE.txt"

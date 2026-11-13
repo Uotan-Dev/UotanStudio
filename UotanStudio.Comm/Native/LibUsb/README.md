@@ -10,9 +10,14 @@
 
 `UotanStudio.Comm.csproj` 按显式 `RuntimeIdentifier` 选择对应目录；普通无 RID
 构建使用 `NETCoreSdkRuntimeIdentifier`，显式 `PlatformTarget` 可覆盖主机架构。
-选中的文件作为 Content 使用 `CopyToOutputDirectory=PreserveNewest` 和
-`CopyToPublishDirectory=PreserveNewest`，直接放在程序目录，不保留源码子目录。
+选中的文件作为 Content 使用 `CopyToOutputDirectory=Always` 和
+`CopyToPublishDirectory=Always`，直接放在程序目录，不保留源码子目录。
 项目引用会传递这些内容文件，消费者无需手工复制 DLL 或设置绝对加载路径。
+不用 `PreserveNewest` 的原因：各 RID 目录里的文件共享同一次 checkout 的
+LastWriteTime，把 RID 切换到复用过的输出/发布目录时源与目标时间戳相等，
+复制会被跳过，留下旧架构的库与二进制并存（表现为 macOS 上 x64 应用加载到
+arm64 的 `libusb-1.0.dylib`）。Always 让切换自愈；NuGet 运行时包的原生库
+不受本项控制，切换 RID 发布时仍建议使用干净的输出目录。
 
 Comm 和应用层 UotanStudio 都设置 `IsRidAgnostic=false`，使 Desktop 的目标 RID
 能穿过项目引用到达 Comm，避免在 Windows x64 主机发布 ARM64 时复制错误架构。
