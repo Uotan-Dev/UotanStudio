@@ -37,7 +37,7 @@ internal static class DevicePropertyReader
     /// <param name="getProperty">Resolves one property name and returns the cleaned value; a missing key resolves to "--".<para>解析单个属性名并返回清理后的值；缺失的键解析为 "--"。</para></param>
     /// <param name="names">Property names in fallback order.<para>按回退顺序排列的属性名。</para></param>
     /// <returns>The first available value, or "--" when every property is missing.<para>第一个有值的属性值；全部缺失时返回 "--"。</para></returns>
-    private static string FirstAvailable(Func<string, string> getProperty, params string[] names)
+    private static string FirstAvailable(Func<string, string> getProperty, params ReadOnlySpan<string> names)
     {
         foreach (var name in names)
         {

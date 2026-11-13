@@ -333,7 +333,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             return;
         }
 
-        _ = CloseDockablesAsync(children.ToArray(), excluded: null);
+        _ = CloseDockablesAsync([.. children], excluded: null);
     }
 
     public override void CloseOtherDockables(IDockable dockable)
@@ -343,7 +343,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             return;
         }
 
-        _ = CloseDockablesAsync(children.ToArray(), dockable);
+        _ = CloseDockablesAsync([.. children], dockable);
     }
 
     private async Task CloseDockableAsync(IDockable? dockable)

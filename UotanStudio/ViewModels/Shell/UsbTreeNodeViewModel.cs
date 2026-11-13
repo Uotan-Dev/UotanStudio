@@ -529,11 +529,32 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
         _ => "UsbTree_Speed_Unknown"
     });
 
-    private static string FirstText(params string?[] values)
-        => values.FirstOrDefault(value => !string.IsNullOrEmpty(value)) ?? string.Empty;
+    private static string FirstText(params ReadOnlySpan<string?> values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
+        }
 
-    private static string JoinNonEmpty(params string[] values)
-        => string.Join(TextSeparator, values.Where(value => value.Length > 0));
+        return string.Empty;
+    }
+
+    private static string JoinNonEmpty(params ReadOnlySpan<string> values)
+    {
+        var joined = string.Empty;
+        foreach (var value in values)
+        {
+            if (value.Length > 0)
+            {
+                joined = joined.Length == 0 ? value : string.Concat(joined, TextSeparator, value);
+            }
+        }
+
+        return joined;
+    }
 
     private static string JoinLines(IReadOnlyList<string> values)
         => values.Count == 0 ? Localized("UsbTree_None") : string.Join("\n", values);

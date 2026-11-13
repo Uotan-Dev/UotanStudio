@@ -937,12 +937,32 @@ public sealed partial class FlashViewModel
     /// <para>返回目录内唯一一个具有给定扩展名的文件；没有或存在多个时返回 <see langword="null"/>，
     /// 避免含义不明的容器压过明确的镜像。</para>
     /// </summary>
-    private static string? FindSingleFolderFile(string folder, params string[] extensions)
+    private static string? FindSingleFolderFile(string folder, params ReadOnlySpan<string> extensions)
     {
-        var matches = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-            .ToArray();
-        return matches.Length == 1 ? matches[0] : null;
+        string? single = null;
+        var count = 0;
+        foreach (var path in Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly))
+        {
+            var extension = Path.GetExtension(path);
+            foreach (var candidate in extensions)
+            {
+                if (!extension.Equals(candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                count++;
+                if (count > 1)
+                {
+                    return null;
+                }
+
+                single = path;
+                break;
+            }
+        }
+
+        return single;
     }
 
     /// <summary>

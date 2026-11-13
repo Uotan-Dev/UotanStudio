@@ -98,10 +98,20 @@ public sealed class LocalizedOptionSet
     /// <para>按给定顺序用语言资源键初始化集合。</para>
     /// </summary>
     /// <param name="resourceKeys">The locale resource keys. <para>语言资源键。</para></param>
-    public LocalizedOptionSet(params string[] resourceKeys)
-        : this((resourceKeys ?? throw new ArgumentNullException(nameof(resourceKeys)))
-            .Select(LocalizedOption.FromResource).ToArray())
+    public LocalizedOptionSet(params ReadOnlySpan<string> resourceKeys)
+        : this(CreateFromResourceKeys(resourceKeys))
     {
+    }
+
+    private static LocalizedOption[] CreateFromResourceKeys(ReadOnlySpan<string> resourceKeys)
+    {
+        var options = new LocalizedOption[resourceKeys.Length];
+        for (var i = 0; i < options.Length; i++)
+        {
+            options[i] = LocalizedOption.FromResource(resourceKeys[i]);
+        }
+
+        return options;
     }
 
     private LocalizedOptionSet(LocalizedOption[] options)

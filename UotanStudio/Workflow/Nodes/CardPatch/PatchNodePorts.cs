@@ -915,8 +915,18 @@ internal static partial class PatchNodePorts
                 "AddStatement", "AddSection", "FindReferences"]);
         var text = PatchCommonPorts.Text("Text", multiline: true);
 
-        bool IsFormat(FlowNodeViewModel node, params string[] formats)
-            => formats.Any(value => NodePortVisibility.MayEqualAny(format, value)(node));
+        bool IsFormat(FlowNodeViewModel node, params ReadOnlySpan<string> formats)
+        {
+            foreach (var value in formats)
+            {
+                if (NodePortVisibility.MayEqualAny(format, value)(node))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         static string TextOf(FlowNodeViewModel node, NodeInputDeclaration port)
             => Convert.ToString(node.Input.First(input => input.Title == port.Title).Data
