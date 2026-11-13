@@ -240,6 +240,11 @@ public sealed class AdbSyncV2Tests
 
     private const uint SyncFlagsZstd = 4;
 
+    /// <summary>Width of one sync packet: a four-character id and a little-endian value.
+    /// <para>单个 sync 数据包的宽度：四个字符的标识加一个小端数值。</para>
+    /// </summary>
+    private const int SyncIdPacketBytes = 8;
+
     private static byte[] Cnxn(string banner) =>
         AdbMessaging.Serialize(new AdbMessage(AdbCommand.Cnxn, AdbConstants.ProtocolVersion,
             AdbConstants.MaxPayload, Encoding.UTF8.GetBytes(banner)));
@@ -521,7 +526,20 @@ public sealed class AdbSyncV2Tests
                 _writes.Add(frame);
             }
 
-            if (frame.Length < 24)
+            // The sync stream's payloads travel as their own transport writes right after the 24-byte WRTE header, so
+            // the DONE that ends a push reaches this double as an 8-byte payload rather than as part of a WRTE frame.
+            // A device answers it with a sync OKAY carried in a WRTE payload; without that packet a push waits for
+            // bytes the script never produced and sits until the test timeout.
+            // sync 流的负载紧跟 24 字节 WRTE 头之后作为独立写入到达，因此结束推送的 DONE 在这里是 8 字节负载而不是
+            // WRTE 帧的一部分。设备用 WRTE 负载里的 sync OKAY 应答它；缺少这条数据包时，推送会等待脚本从未产生的
+            // 字节，一直挂到测试超时。
+            if (IsSyncDone(frame))
+            {
+                Deliver(PayloadFrame([.. "OKAY"u8, .. Le32(0)]));
+                return;
+            }
+
+            if (frame.Length < AdbConstants.HeaderSize)
             {
                 return;
             }
@@ -559,6 +577,9 @@ public sealed class AdbSyncV2Tests
                 }
             }
         }
+
+        private static bool IsSyncDone(byte[] frame)
+            => frame.Length == SyncIdPacketBytes && frame.AsSpan(0, 4).SequenceEqual("DONE"u8);
 
         private void Deliver(byte[] chunk)
         {
