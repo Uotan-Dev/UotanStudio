@@ -308,6 +308,12 @@
                                 <TextBlock Text="{Binding BusyStatsText}" IsVisible="{Binding HasBusyStats}"
                                            FontSize="14" Opacity="0.8" HorizontalAlignment="Center"
                                            TextAlignment="Center" TextWrapping="Wrap" />
+                                <!-- 中断后的收尾进度：取消 Firehose 读取无法停在任意字节，目标仍要发完已声明的负载。 -->
+                                <!-- Unwind progress after an interrupt: a cancelled Firehose read cannot stop at an
+                                     arbitrary byte, so the target still owes the payload it declared. -->
+                                <TextBlock Text="{Binding BusyStopText}" IsVisible="{Binding HasBusyStop}"
+                                           FontSize="14" Opacity="0.9" HorizontalAlignment="Center"
+                                           TextAlignment="Center" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
                     </Grid>

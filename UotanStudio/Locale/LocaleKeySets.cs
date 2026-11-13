@@ -216,6 +216,7 @@ internal static class LocaleKeySets
         "Flash_Busy",
         "Flash_BusyProgressPercent",
         "Flash_BusyProgressEta",
+        "Flash_BusyStopping",
         "Flash_FileMissing",
         "Flash_PackageChanged",
         "Flash_ProductMismatch",

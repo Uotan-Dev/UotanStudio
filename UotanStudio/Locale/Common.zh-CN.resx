@@ -681,6 +681,9 @@
   <data name="Flash_BusyProgressEta" xml:space="preserve">
     <value>{0} · 预计剩余 {1}</value>
   </data>
+  <data name="Flash_BusyStopping" xml:space="preserve">
+    <value>正在安全停止 — 已回收 {0} / {1}</value>
+  </data>
   <data name="Flash_FileMissing" xml:space="preserve">
     <value>文件不存在。</value>
   </data>

@@ -276,11 +276,14 @@ public static class BackupService
     /// <param name="entry">The target rawprogram entry (provides the sector geometry). <para>目标 rawprogram 条目（提供扇区几何信息）。</para></param>
     /// <param name="outPath">Full path of the output file. <para>落盘文件完整路径。</para></param>
     /// <param name="progress">Optional backup progress reporter. <para>可选的备份进度报告器。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for the bytes a cancelled read takes back before the target
+    /// returns to command mode; those bytes are discarded and never part of the backup.
+    /// <para>可选报告器；取消的读取为让目标回到命令模式而收回的字节，这些字节被丢弃且不属于备份内容。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The backup result. <para>备份结果。</para></returns>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string outPath,
-        IProgress<BackupProgress>? progress, CancellationToken ct)
+        IProgress<BackupProgress>? progress, IProgress<EdlQuiesceProgress>? stoppingProgress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(entry);
@@ -306,7 +309,7 @@ public static class BackupService
         return await BackupEdlToFileAsync(
             session, displayName, entry.Filename, entry.PhysicalPartitionNumber,
             startSector, entry.NumPartitionSectors, sectorSize,
-            outPath, progress, ct).ConfigureAwait(false);
+            outPath, progress, stoppingProgress, ct).ConfigureAwait(false);
     }
 
     /// <summary>EDL backup core (geometry-based): streams a partition to disk with an explicit start sector and sector count via a Firehose <c>read</c>.
@@ -349,7 +352,7 @@ public static class BackupService
 
         return await BackupEdlToFileAsync(
             session, partition, partition, 0, startSector, sectorCount, sectorSize,
-            outPath, progress, ct).ConfigureAwait(false);
+            outPath, progress, stoppingProgress: null, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -404,12 +407,15 @@ public static class BackupService
     /// <param name="sectorSize">The sector size in bytes. <para>扇区大小（字节）。</para></param>
     /// <param name="outPath">Full path of the output file. <para>落盘文件完整路径。</para></param>
     /// <param name="progress">Optional backup progress reporter. <para>可选的备份进度报告器。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for the bytes a cancelled read takes back; never part of the
+    /// backup. <para>可选报告器；取消的读取收回的字节，不属于备份内容。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The backup result. <para>备份结果。</para></returns>
     private static async Task<BackupResult> BackupEdlToFileAsync(
         EdlSession session, string displayName, string filename, int physicalPartition,
         long startSector, long sectorCount, long sectorSize,
-        string outPath, IProgress<BackupProgress>? progress, CancellationToken ct)
+        string outPath, IProgress<BackupProgress>? progress, IProgress<EdlQuiesceProgress>? stoppingProgress,
+        CancellationToken ct)
     {
         if (sectorCount <= 0)
         {
@@ -425,7 +431,7 @@ public static class BackupService
         var stagingPath = Path.Combine(directory, Path.GetFileName(fullPath) + "." + Guid.NewGuid().ToString("N") + ".partial");
         var totalBytes = checked(sectorCount * sectorSize);
         var read = await SessionStreamReadAsync(session, stagingPath, displayName, filename, physicalPartition,
-            startSector, sectorCount, totalBytes, progress, ct).ConfigureAwait(false);
+            startSector, sectorCount, totalBytes, progress, stoppingProgress, ct).ConfigureAwait(false);
         File.Move(read.tempPath, fullPath, true);
 
         Report(progress, displayName, 100, FlashLogText.Format("Flash_Progress_EdlBackupDone", displayName));
@@ -453,18 +459,21 @@ public static class BackupService
     /// <param name="sectorCount">The number of sectors to read. <para>要读取的扇区数。</para></param>
     /// <param name="totalBytes">The expected total byte count. <para>预期总字节数。</para></param>
     /// <param name="progress">Optional backup progress reporter. <para>可选的备份进度报告器。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for the bytes a cancellation takes back; never part of the
+    /// backup. <para>可选报告器；取消时收回的字节，不属于备份内容。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The structured read result and the staging file path. <para>结构化读取结果与临时文件路径。</para></returns>
     private static async Task<(EdlStreamReadResult result, string tempPath)> SessionStreamReadAsync(
         EdlSession session, string stagingPath, string displayName, string filename, int physicalPartition,
-        long startSector, long sectorCount, long totalBytes, IProgress<BackupProgress>? progress, CancellationToken ct)
+        long startSector, long sectorCount, long totalBytes, IProgress<BackupProgress>? progress,
+        IProgress<EdlQuiesceProgress>? stoppingProgress, CancellationToken ct)
     {
         try
         {
             await using var fs = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             var byteProgress = new PartitionByteProgress(displayName, totalBytes, progress);
             var result = await session.ReadPartitionToStreamAsync(fs, startSector, sectorCount, filename,
-                physicalPartition, byteProgress, expectedSha256Hex: null, ct).ConfigureAwait(false);
+                physicalPartition, byteProgress, expectedSha256Hex: null, stoppingProgress, ct).ConfigureAwait(false);
             if (!result.DeviceAcknowledged)
             {
                 throw new IOException(FlashLogText.Format("Flash_Exception_ReadNotAcknowledged", displayName));

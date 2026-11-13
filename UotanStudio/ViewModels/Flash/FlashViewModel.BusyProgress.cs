@@ -34,6 +34,17 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private bool _hasBusyStats;
 
+    /// <summary>The localized line shown while a cancelled transfer is being taken back from the target, naming how
+    /// much of the declared payload has been reclaimed; empty outside that window.
+    /// <para>被取消的传输正在从目标收回时显示的本地化文案，标出已回收多少声明负载；不在该窗口时为空。</para></summary>
+    [ObservableProperty]
+    private string _busyStopText = string.Empty;
+
+    /// <summary>Whether <see cref="BusyStopText"/> is showing a stopping transfer.
+    /// <para><see cref="BusyStopText"/> 是否正在显示停止中的传输。</para></summary>
+    [ObservableProperty]
+    private bool _hasBusyStop;
+
     /// <summary>
     /// Clears every sample and weight so a new busy scope starts from zero; called when the page enters or leaves a
     /// busy operation.
@@ -46,6 +57,40 @@ public sealed partial class FlashViewModel
         _busyRowWeights.Clear();
         _busyManualTransfer = false;
         ClearBusyStats();
+        ClearSafeStopping();
+    }
+
+    /// <summary>
+    /// Shows how much of an interrupted transfer has been taken back from the target while the protocol layer returns
+    /// it to the command boundary. Cancelling an EDL raw read cannot stop it at an arbitrary byte, so this is the only
+    /// signal that the interrupt is progressing rather than hung.
+    /// <para>显示被中断的传输已被从目标收回多少，此时协议层正在把它送回命令边界。取消 EDL 原始读取无法停在任意字节，
+    /// 因此这是“中断正在推进而不是卡死”的唯一信号。</para>
+    /// </summary>
+    /// <param name="drainedBytes">Bytes already reclaimed from the target. <para>已从目标回收的字节数。</para></param>
+    /// <param name="totalBytes">Whole payload the target declared. <para>目标声明的完整负载。</para></param>
+    internal void ReportSafeStopping(long drainedBytes, long totalBytes)
+    {
+        if (totalBytes <= 0)
+        {
+            ClearSafeStopping();
+            return;
+        }
+
+        BusyStopText = string.Format(CultureInfo.CurrentCulture, _localizer.GetString("Flash_BusyStopping"),
+            ProgressMeter.FormatSize(Math.Clamp(drainedBytes, 0, totalBytes)), ProgressMeter.FormatSize(totalBytes));
+        HasBusyStop = true;
+    }
+
+    /// <summary>
+    /// Removes the stopping line once the interrupt finished, either because the target returned to command mode or
+    /// because the link was reset and the session has to be reconnected.
+    /// <para>中断结束后移除停止文案，无论是目标已回到命令模式，还是链路被复位而会话需要重新连接。</para>
+    /// </summary>
+    internal void ClearSafeStopping()
+    {
+        BusyStopText = string.Empty;
+        HasBusyStop = false;
     }
 
     /// <summary>

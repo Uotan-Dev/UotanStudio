@@ -681,6 +681,9 @@ Author: 暮间雾
   <data name="Flash_BusyProgressEta" xml:space="preserve">
     <value>{0} · {1} left</value>
   </data>
+  <data name="Flash_BusyStopping" xml:space="preserve">
+    <value>Stopping safely — {0} of {1} reclaimed</value>
+  </data>
   <data name="Flash_FileMissing" xml:space="preserve">
     <value>File is missing.</value>
   </data>

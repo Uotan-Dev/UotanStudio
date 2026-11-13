@@ -5371,6 +5371,13 @@ public sealed partial class FlashViewModel
                 readbackRow.Percent = Math.Clamp(update.Percent, 0, 100);
                 UpdateOverall();
             });
+            // Cancelling a Firehose read cannot stop it at an arbitrary byte: the target keeps sending the payload it
+            // already declared and the host has to take it back before the link returns to command mode. Those bytes
+            // are discarded, so they are reported on their own channel instead of the saved-bytes progress above.
+            // 取消 Firehose 读取无法停在任意字节：目标会继续发送已声明的负载，主机必须先收回它，链路才回到命令模式。
+            // 这些字节是被丢弃的，因此单独上报，不混入上面的“已保存字节”进度。
+            var stoppingProgress = new Progress<EdlQuiesceProgress>(update =>
+                ReportSafeStopping(update.DrainedBytes, update.TotalBytes));
             await App.DeviceMonitor.RunEdlAsync(device, async edl =>
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
@@ -5484,6 +5491,7 @@ public sealed partial class FlashViewModel
                 foreach (var row in selected)
                 {
                     cancellation.Token.ThrowIfCancellationRequested();
+                    ClearSafeStopping();
                     readbackRow = row;
                     SetRowRunning(row, "Flash_Status_Flashing");
                     RawProgramEntry entry;
@@ -5508,7 +5516,7 @@ public sealed partial class FlashViewModel
                     var outputPath = Path.Combine(destination,
                         entry.Filename.Length > 0 ? entry.Filename : $"{displayName}.img");
                     var result = await BackupService.BackupEdlPartitionAsync(
-                        edl, entry, outputPath, readbackProgress, cancellation.Token).ConfigureAwait(true);
+                        edl, entry, outputPath, readbackProgress, stoppingProgress, cancellation.Token).ConfigureAwait(true);
                     AppendLog(result.Summary);
                     SetRowFinished(row, result.Success);
                     if (!result.Success) return false;
@@ -5554,6 +5562,7 @@ public sealed partial class FlashViewModel
         finally
         {
             MarkUnfinishedSkipped();
+            ClearSafeStopping();
             _flashCancellation = null;
             SetBusy(false);
             UpdateOverall();
