@@ -244,8 +244,8 @@ internal static class TraceBuilder
         var output = expected.Substring(outputStart, outputEnd - outputStart);
 
         return new Trace(
-            new[] { leading, output, trailing },
-            new[] { 1 },
+            [leading, output, trailing],
+            [1],
             positiveIndex);
     }
 
