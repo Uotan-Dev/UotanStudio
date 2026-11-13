@@ -300,8 +300,9 @@
                                 Background="{DynamicResource CardBackground}" Opacity="0.82">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
                                         MaxWidth="360">
-                                <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="52" Height="52"
-                                                  HorizontalAlignment="Center" />
+                                <Viewbox Width="52" Height="52" HorizontalAlignment="Center">
+                                    <ursa:LoadingIcon Classes="Large" IsLoading="{Binding IsBusy}" />
+                                </Viewbox>
                                 <TextBlock Text="{DynamicResource Flash_Busy}" FontSize="17" FontWeight="SemiBold"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="{Binding BusyStatsText}" IsVisible="{Binding HasBusyStats}"
