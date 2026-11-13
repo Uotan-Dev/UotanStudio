@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       rid:
-        description: "Stable: win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64 (empty = all six); experimental opt-in only: linux-riscv64, linux-loongarch64; comma-separated list allowed"
+        description: "Comma-separated RIDs (empty = all eight stable)"
         required: false
         default: ""
       version:
-        description: "Override version prefix or full version (defaults to Version.props / git tag)"
+        description: "Override version (defaults to Version.props / git tag)"
         required: false
         default: ""
       channel:
-        description: "Distribution channel (auto follows Version.props / tag suffix)"
+        description: "release / beta / auto"
         required: false
         type: choice
         options:
@@ -20,10 +20,6 @@ on:
           - release
           - beta
         default: auto
-      sdk_version:
-        description: "Experimental RIDs only: community SDK version prefix (e.g. 11.0.100, 12.0.100-rc.1); empty = newest SDK matching the project's TFM major"
-        required: false
-        default: ""
   push:
     tags:
       - "v*"
@@ -60,27 +56,27 @@ jobs:
             [win-arm64]=windows-11-arm
             [linux-x64]=ubuntu-24.04
             [linux-arm64]=ubuntu-24.04-arm
-            [osx-x64]=macos-26
-            [osx-arm64]=macos-26
-            [linux-riscv64]=ubuntu-24.04
-            [linux-loongarch64]=ubuntu-24.04
+            # The musl rids publish inside the official alpine SDK container (musl
+            # toolchain is not available on the glibc runners); the runner only hosts docker.
+            [linux-musl-x64]=ubuntu-24.04
+            [linux-musl-arm64]=ubuntu-24.04-arm
+            # Both osx RIDs are pinned to macOS 15 (the oldest supported GA image): the macos-26
+            # pool repeatedly failed to come online (assignment loops). macos-15-intel is the
+            # x64-native image for osx-x64; macos-15 is the arm64 image for osx-arm64.
+            [osx-x64]=macos-15-intel
+            [osx-arm64]=macos-15
           )
           declare -A platforms=(
             [win-x64]=windows
             [win-arm64]=windows
             [linux-x64]=linux
             [linux-arm64]=linux
+            [linux-musl-x64]=linux
+            [linux-musl-arm64]=linux
             [osx-x64]=macos
             [osx-arm64]=macos
-            [linux-riscv64]=linux
-            [linux-loongarch64]=linux
           )
-          # Experimental RIDs are opt-in only: never part of the default set or tag-triggered publishes.
-          declare -A experimental=(
-            [linux-riscv64]=1
-            [linux-loongarch64]=1
-          )
-          all_rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
+          all_rids=(win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64)
 
           requested="${RID_INPUT:-}"
           selected=()
@@ -94,7 +90,7 @@ jobs:
                 continue
               fi
               if [ -z "${runners[$rid]+x}" ]; then
-                echo "::error::Unsupported RID '$rid'. Stable: ${all_rids[*]}; experimental: linux-riscv64, linux-loongarch64 (comma-separated), or leave empty for all stable RIDs." >&2
+                echo "::error::Unsupported RID '$rid'. Stable RIDs: ${all_rids[*]}, or leave empty for all." >&2
                 exit 1
               fi
               if [ -z "${seen[$rid]+x}" ]; then
@@ -106,11 +102,7 @@ jobs:
 
           entries=()
           for rid in "${selected[@]}"; do
-            flag=false
-            if [ -n "${experimental[$rid]+x}" ]; then
-              flag=true
-            fi
-            entries+=("{\"rid\":\"$rid\",\"os\":\"${platforms[$rid]}\",\"runner\":\"${runners[$rid]}\",\"experimental\":$flag}")
+            entries+=("{\"rid\":\"$rid\",\"os\":\"${platforms[$rid]}\",\"runner\":\"${runners[$rid]}\"}")
           done
           joined=$(IFS=,; printf '%s' "${entries[*]}")
           echo "matrix={\"include\":[$joined]}" >> "$GITHUB_OUTPUT"
@@ -123,7 +115,6 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.experimental }}
 
     steps:
       - uses: actions/checkout@v5
@@ -180,24 +171,13 @@ jobs:
           echo "Resolved version: $version ($channel)"
 
       - name: Setup .NET
+        if: ${{ !contains(matrix.rid, 'musl') }}
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "11.0.x"
 
-      - name: Setup QEMU (experimental)
-        if: matrix.experimental
-        uses: docker/setup-qemu-action@v3
-
-      - name: Experimental RID notice
-        if: matrix.experimental
-        shell: bash
-        env:
-          EXPERIMENTAL_RID: ${{ matrix.rid }}
-        run: |
-          echo "::warning::$EXPERIMENTAL_RID is experimental: publishing inside a QEMU-emulated target-architecture container with the newest compatible community SDK resolved at run time. This path is unverified and may fail on SDK, runtime pack or emulation limits."
-
       - name: Install NativeAOT toolchain (Linux)
-        if: ${{ matrix.os == 'linux' && !matrix.experimental }}
+        if: ${{ matrix.os == 'linux' && !contains(matrix.rid, 'musl') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang zlib1g-dev libicu-dev
@@ -211,7 +191,7 @@ jobs:
           clang --version
 
       - name: Publish NativeAOT (${{ matrix.rid }})
-        if: ${{ !matrix.experimental }}
+        if: ${{ !contains(matrix.rid, 'musl') }}
         shell: bash
         run: |
           dotnet publish "$PUBLISH_PROJECT" \
@@ -224,168 +204,30 @@ jobs:
             -p:VersionChannel="${{ steps.ver.outputs.channel }}" \
             -o "$RUNNER_TEMP/publish"
 
-      - name: "Publish NativeAOT under QEMU (${{ matrix.rid }})"
-        if: matrix.experimental
-        timeout-minutes: 180
+      - name: Publish NativeAOT in alpine container (${{ matrix.rid }})
+        if: ${{ contains(matrix.rid, 'musl') }}
         shell: bash
         env:
-          RID: ${{ matrix.rid }}
           VERSION: ${{ steps.ver.outputs.version }}
           CHANNEL: ${{ steps.ver.outputs.channel }}
-          SDK_VERSION: ${{ github.event.inputs.sdk_version }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          case "$RID" in
-            linux-riscv64)
-              repo="filipnavara/dotnet-riscv"
-              arch="riscv64"
-              platform="linux/riscv64"
-              image="riscv64/ubuntu:24.04"
-              ;;
-            linux-loongarch64)
-              repo="loongson/dotnet"
-              arch="loongarch64"
-              platform="linux/loong64"
-              image="cr.loongnix.cn/library/ubuntu:24.04"
-              ;;
-            *)
-              echo "::error::No QEMU SDK profile for $RID" >&2
-              exit 1
-              ;;
-          esac
-
-          work="$RUNNER_TEMP/qemu-$RID"
-          mkdir -p "$work/sdk" "$work/src" "$work/out" "$work/home"
-          command -v jq >/dev/null || { echo "::error::jq is required to resolve community SDK releases" >&2; exit 1; }
-
-          # No version pin: default to the repository TFM major (net11.0 -> 11.0) so the
-          # community SDK stays compatible; sdk_version can override with any version prefix.
-          tfm=$(sed -n 's/.*<TargetFramework[^>]*>net\([0-9][0-9.]*\).*<\/TargetFramework>.*/\1/p' Directory.Build.props | head -1)
-          default_series=$(printf '%s' "$tfm" | cut -d. -f1,2)
-          if [ -z "$default_series" ]; then
-            echo "::error::Cannot derive the SDK series from Directory.Build.props; set the sdk_version input." >&2
-            exit 1
-          fi
-          want="${SDK_VERSION:-$default_series}"
-          if ! [[ "$want" =~ ^[0-9][0-9A-Za-z.-]*$ ]]; then
-            echo "::error::Invalid sdk_version '$want'; use a version prefix such as 11.0.100 or 12.0.100-rc.1." >&2
-            exit 1
-          fi
-
-          echo "Resolving the newest $repo SDK release whose version starts with '$want'"
-          curl -fsSL --retry 3 \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -o "$work/releases.json" \
-            "https://api.github.com/repos/$repo/releases?per_page=100"
-
-          # GitHub returns releases newest-first; sort explicitly by published_at so
-          # re-published assets do not depend on creation order. Only a plain (non-musl)
-          # SDK tarball matches; musl and Private.SourceBuilt artifacts are excluded.
-          resolved=$(jq -r --arg arch "$arch" --arg want "$want" '
-            [ .[]
-              | select(.draft == false)
-              | . as $rel
-              | (.assets // [])[]
-              | select(.state == "uploaded")
-              | select(.name | startswith("dotnet-sdk-"))
-              | select(.name | endswith("-linux-" + $arch + ".tar.gz"))
-              | {
-                  tag: $rel.tag_name,
-                  published: ($rel.published_at // ""),
-                  name: .name,
-                  url: .browser_download_url,
-                  digest: (.digest // ""),
-                  version: (.name | sub("^dotnet-sdk-"; "") | sub("-linux-.*$"; ""))
-                }
-            ]
-            | map(select(.version | startswith($want)))
-            | sort_by(.published) | reverse | .[0]
-            | if . == null then "" else [.tag, .version, .name, .url, .digest] | @tsv end
-          ' "$work/releases.json")
-
-          if [ -z "$resolved" ]; then
-            echo "::error::No $repo release provides a dotnet-sdk-*-linux-$arch.tar.gz asset whose version starts with '$want'." >&2
-            exit 1
-          fi
-          IFS=$'\t' read -r sdk_tag sdk_version sdk_asset sdk_url sdk_digest <<< "$resolved"
-          echo "::notice::Community SDK for $RID: $sdk_tag / $sdk_asset (SDK $sdk_version, requested prefix $want)"
-
-          echo "Downloading $sdk_url"
-          curl -fL --retry 3 -o "$work/sdk.tar.gz" "$sdk_url"
-          if [[ "$sdk_digest" == sha256:* ]]; then
-            echo "${sdk_digest#sha256:}  $work/sdk.tar.gz" | sha256sum -c -
-          else
-            echo "::warning::$sdk_asset has no sha256 digest on GitHub; skipping the integrity check."
-          fi
-          tar -xzf "$work/sdk.tar.gz" -C "$work/sdk"
-
-          echo "Staging a writable source copy (SDK pin relaxed in global.json)"
-          tar -C "$GITHUB_WORKSPACE" --exclude='./reference' --exclude='./.git' \
-            --exclude='*/obj' --exclude='*/bin' -cf - . | tar -C "$work/src" -xf -
-          python3 - "$work/src/global.json" <<'PY'
-          import json, sys
-          path = sys.argv[1]
-          with open(path, encoding="utf-8") as handle:
-              data = json.load(handle)
-          data.pop("sdk", None)
-          with open(path, "w", encoding="utf-8") as handle:
-              json.dump(data, handle, indent=2)
-              handle.write("\n")
-          PY
-
-          echo "Checking QEMU emulation for $platform ($image)"
-          if ! docker run --rm --platform "$platform" "$image" uname -m; then
-            echo "::error::QEMU emulation for $platform is unavailable; check binfmt registration and the base image tag $image." >&2
-            exit 1
-          fi
-
-          cat > "$work/container.sh" <<'CONTAINER'
-          set -euo pipefail
-          export DOTNET_ROOT=/work/sdk
-          export PATH="/work/sdk:$PATH"
-          export DOTNET_CLI_HOME=/work/home
-          export DOTNET_CLI_TELEMETRY_OPTOUT=1
-          export DOTNET_NOLOGO=1
-          export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
-          apt-get update
-          apt-get install -y --no-install-recommends clang zlib1g-dev libicu-dev ca-certificates curl
-          clang --version
-          dotnet --info
-          cd /work/src
-
-          # The LoongArch runtime/ILCompiler packages are published by the community feed,
-          # not nuget.org. Only enable it for linux-loongarch64; every other RID keeps the
-          # default source set.
-          restore_args=""
-          if [ "$RID" = "linux-loongarch64" ]; then
-            echo "Enabling the LoongArch community NuGet feed for $RID"
-            echo "::warning::$RID restores part of its runtime/ILCompiler packages from https://lnuget.loongnix.cn/v3/index.json, a third-party feed trusted only over HTTPS."
-            if ! curl -fsSL --max-time 60 -o /dev/null "https://lnuget.loongnix.cn/v3/index.json"; then
-              echo "::warning::The LoongArch NuGet feed is not reachable from this runner; restore may fail with NU1301."
-            fi
-            restore_args="-p:RestoreAdditionalProjectSources=https://lnuget.loongnix.cn/v3/index.json"
-          fi
-
-          dotnet publish "$PUBLISH_PROJECT" \
-            -c Release -r "$RID" --self-contained true \
-            -p:DebugType=none -p:DebugSymbols=false \
-            -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
-            $restore_args \
-            -o /work/out
-          CONTAINER
-
-          docker run --rm --platform "$platform" \
-            -v "$work:/work" \
-            -e RID="$RID" -e VERSION="$VERSION" -e CHANNEL="$CHANNEL" \
+          mkdir -p "$RUNNER_TEMP/publish" "$RUNNER_TEMP/home"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -v "$RUNNER_TEMP/publish:/out" \
+            -v "$RUNNER_TEMP/home:/dotnet-home" \
+            -e VERSION="$VERSION" -e CHANNEL="$CHANNEL" \
             -e PUBLISH_PROJECT="$PUBLISH_PROJECT" \
-            "$image" bash /work/container.sh
-
-          mkdir -p "$RUNNER_TEMP/publish"
-          cp -R "$work/out/." "$RUNNER_TEMP/publish/"
+            -e MATRIX_RID="${{ matrix.rid }}" \
+            mcr.microsoft.com/dotnet/sdk:11.0-alpine \
+            sh -c 'apk add --no-cache clang zlib-dev >/dev/null &&
+              export DOTNET_CLI_HOME=/dotnet-home DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 &&
+              dotnet publish "/src/$PUBLISH_PROJECT" \
+                -c Release -r "$MATRIX_RID" --self-contained true \
+                -p:DebugType=none -p:DebugSymbols=false \
+                -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
+                -o /out'
 
       - name: "Package (Windows: zip)"
         if: matrix.os == 'windows'
