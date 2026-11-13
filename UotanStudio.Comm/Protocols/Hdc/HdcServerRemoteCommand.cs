@@ -15,17 +15,22 @@ internal static class HdcServerRemoteCommand
     private const string RemoteMarker = "remote";
 
     /// <summary>
-    /// Builds one remote-client command line with the host working directory appended as the <c>-cwd</c>
-    /// option. <para>构建一条 remote-client 命令行，并追加宿主工作目录作为 <c>-cwd</c> 选项。</para>
+    /// Builds one remote-client command line with the supplied host directory appended as the <c>-cwd</c>
+    /// option. <para>构建一条 remote-client 命令行，并把给定宿主目录追加为 <c>-cwd</c> 选项。</para>
     /// </summary>
     /// <param name="command">Command words such as <c>file send</c>. <para>命令词，例如 <c>file send</c>。</para></param>
+    /// <param name="hostDirectory">Host directory broadcast as the <c>-cwd</c> option; callers pass the directory of
+    /// the local file involved so the command never depends on the process working directory. <see langword="null"/>
+    /// or blank falls back to the process working directory.
+    /// <para>作为 <c>-cwd</c> 选项广播的宿主目录；调用方传入本次本地文件所在目录，使命令不依赖进程工作目录。
+    /// 为 <see langword="null"/> 或空白时回退到进程工作目录。</para></param>
     /// <param name="arguments">Path or option arguments appended in order; empty strings are skipped.
     /// <para>按顺序追加的路径或选项参数；空串会被跳过。</para></param>
     /// <returns>The complete command text sent NUL-terminated to the host server.
     /// <para>以 NUL 结尾发送到宿主 server 的完整命令文本。</para></returns>
     /// <exception cref="ArgumentException">An argument contains a quote or NUL character.
     /// <para>某个参数包含引号或 NUL 字符。</para></exception>
-    internal static string Build(string command, params string[] arguments)
+    internal static string Build(string command, string? hostDirectory, params string[] arguments)
     {
         var builder = new StringBuilder(command);
         foreach (var argument in arguments)
@@ -34,7 +39,7 @@ internal static class HdcServerRemoteCommand
             builder.Append(' ').Append(Quote(argument));
         }
 
-        builder.Append(' ').Append(RemoteMarker).Append(" -cwd ").Append('"').Append(HostDirectory()).Append('"');
+        builder.Append(' ').Append(RemoteMarker).Append(" -cwd ").Append('"').Append(HostDirectory(hostDirectory)).Append('"');
         return builder.ToString();
     }
 
@@ -55,9 +60,9 @@ internal static class HdcServerRemoteCommand
         return value.Any(char.IsWhiteSpace) ? "\"" + value + "\"" : value;
     }
 
-    private static string HostDirectory()
+    private static string HostDirectory(string? requested)
     {
-        var directory = Environment.CurrentDirectory;
+        var directory = string.IsNullOrWhiteSpace(requested) ? Environment.CurrentDirectory : requested;
         if (directory.Length == 0 || directory.Contains('"') || directory.Contains('\0'))
         {
             directory = Path.GetTempPath();

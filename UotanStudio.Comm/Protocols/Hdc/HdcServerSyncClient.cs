@@ -127,7 +127,8 @@ public sealed class HdcServerSyncClient : Contracts.IHdcSyncClient
         ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumFiles, 1);
         var (root, files) = HdcTransferEngine.CollectDirectoryFiles(localPath, maximumBytes, maximumFiles, cancellationToken);
-        using var channel = OpenChannel(HdcServerRemoteCommand.Build("file send", root.FullName, remotePath), cancellationToken);
+        using var channel = OpenChannel(HdcServerRemoteCommand.Build(
+            "file send", root.FullName, root.FullName, remotePath), cancellationToken);
         HdcTransferEngine.Expect(channel, HdcCommand.FileInit, cancellationToken);
         channel.SendCommand(HdcCommand.WakeupSlaveTask, []);
         HdcTransferEngine.SendDirectory(channel, root, files, remotePath, holdTimestamp, Compress, Progress, cancellationToken);
@@ -169,7 +170,9 @@ public sealed class HdcServerSyncClient : Contracts.IHdcSyncClient
         ArgumentOutOfRangeException.ThrowIfNegative(fileSize);
         HdcSyncClient.ValidatePath(remotePath);
         var localPath = source is FileStream named ? named.Name : remotePath;
-        using var channel = OpenChannel(HdcServerRemoteCommand.Build("file send", localPath, remotePath), cancellationToken);
+        var hostDirectory = source is FileStream namedFile ? Path.GetDirectoryName(namedFile.Name) : null;
+        using var channel = OpenChannel(HdcServerRemoteCommand.Build(
+            "file send", hostDirectory, localPath, remotePath), cancellationToken);
         HdcTransferEngine.Expect(channel, HdcCommand.FileInit, cancellationToken);
         channel.SendCommand(HdcCommand.WakeupSlaveTask, []);
         HdcTransferEngine.SendStream(channel, source, remotePath, fileSize, holdTimestamp, Compress, Progress, cancellationToken);
@@ -303,8 +306,8 @@ public sealed class HdcServerSyncClient : Contracts.IHdcSyncClient
 
     private string RecvCommand(string remotePath, string localArgument)
         => Compress
-            ? HdcServerRemoteCommand.Build("file recv", "-z", remotePath, localArgument)
-            : HdcServerRemoteCommand.Build("file recv", remotePath, localArgument);
+            ? HdcServerRemoteCommand.Build("file recv", null, "-z", remotePath, localArgument)
+            : HdcServerRemoteCommand.Build("file recv", null, remotePath, localArgument);
 
     private HdcServerTaskChannel OpenChannel(string command, CancellationToken cancellationToken)
     {

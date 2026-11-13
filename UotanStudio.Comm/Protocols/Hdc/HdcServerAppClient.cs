@@ -239,7 +239,8 @@ public sealed class HdcServerAppClient : Contracts.IHdcAppClient
         var extension = Path.GetExtension(path).ToLowerInvariant();
         using var input = File.OpenRead(path);
         var config = HdcAppClient.BuildInstallConfig(input.Length, extension, options);
-        using var channel = OpenChannel(HdcServerRemoteCommand.Build("install", path), cancellationToken);
+        using var channel = OpenChannel(HdcServerRemoteCommand.Build(
+            "install", Path.GetDirectoryName(path), path), cancellationToken);
         HdcTransferEngine.Expect(channel, HdcCommand.AppInit, cancellationToken);
         channel.SendCommand(HdcCommand.WakeupSlaveTask, []);
         channel.SendCommand(HdcCommand.AppCheck, HdcTransferCodec.EncodeConfig(config));
