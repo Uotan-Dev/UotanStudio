@@ -1,0 +1,647 @@
+name: Package installers
+
+# Repackages build artifacts into Windows MSIX (self-signed), macOS DMG and Linux
+# deb/rpm. Sources: the newest successful runs of release.yml, riscv-publish.yml and
+# loongarch-publish.yml (run_id picks a specific release.yml run), or an already
+# published release tag via `tag` (stable rids only).
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "release.yml run id (empty = newest success)"
+        required: false
+        default: ""
+      tag:
+        description: "Package a published release tag instead (stable rids)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  APP_NAME: "UotanStudio"
+  EXE_NAME: "UotanStudio.Desktop"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      packages: ${{ steps.src.outputs.packages }}
+      ver: ${{ steps.src.outputs.ver }}
+    steps:
+      - name: Resolve sources
+        id: src
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          fetch() {
+            if [ -n "$RUN_ID" ] && [ "$1" = release.yml ]; then echo "$RUN_ID"; else
+              gh run list --workflow="$1" --status=success --limit 1 --json databaseId -q '.[0].databaseId' || true
+            fi
+          }
+
+          json='{}'
+          if [ -n "$TAG" ]; then
+            ver="${TAG#v}"
+            for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
+              json=$(jq -c --arg rid "$rid" --arg ver "$ver" --arg tag "$TAG" \
+                '. + {($rid): {run_id: "", artifact: "", ver: $ver, mode: "release", tag: $tag}}' <<< "$json")
+            done
+          fi
+          for wf in release.yml riscv-publish.yml loongarch-publish.yml; do
+            run_id=$(fetch "$wf")
+            [ -n "$run_id" ] || { echo "::warning::No successful $wf run found; skipping its artifacts."; continue; }
+            while IFS= read -r name; do
+              [ -n "$name" ] || continue
+              rid=$(printf '%s' "$name" | sed -E 's/.*-((win|linux|osx)-[a-z0-9-]+)$/\1/')
+              ver=$(printf '%s' "$name" | sed -E 's/^uotanstudio-(.*)-((win|linux|osx)-[a-z0-9-]+)$/\1/')
+              json=$(jq -c --arg rid "$rid" --arg run "$run_id" --arg art "$name" --arg ver "$ver" \
+                '. + {($rid): {run_id: $run, artifact: $art, ver: $ver, mode: "run", tag: ""}}' <<< "$json")
+            done < <(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" --paginate \
+              -q '.artifacts[].name' | grep '^uotanstudio-' || true)
+          done
+
+          if [ "$(jq 'length' <<< "$json")" -eq 0 ]; then
+            echo "::error::No uotanstudio-* artifacts found in any workflow run." >&2
+            exit 1
+          fi
+          distinct=$(jq -r '[.[].ver] | unique | length' <<< "$json")
+          if [ "$distinct" -gt 1 ]; then
+            echo "::warning::Artifacts carry mixed versions:" >&2
+            jq -r 'to_entries[] | "  \(.key): \(.value.ver)"' <<< "$json" >&2
+          fi
+          base=$(jq -r '."linux-x64".ver // .[to_entries[0].key].ver' <<< "$json")
+          echo "packages=$json" >> "$GITHUB_OUTPUT"
+          echo "ver=$base" >> "$GITHUB_OUTPUT"
+          echo "::notice::Packageable rids: $(jq -r 'keys | join(", ")' <<< "$json")"
+
+  windows:
+    name: MSIX ${{ matrix.rid }}
+    needs: prepare
+    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64]
+    steps:
+      - name: Fetch build artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkgs = '${{ needs.prepare.outputs.packages }}' | ConvertFrom-Json
+          $info = $pkgs.'${{ matrix.rid }}'
+          "VER=$($info.ver)" >> $env:GITHUB_ENV
+          if ($info.mode -eq 'release') {
+            gh release download $info.tag --repo $env:GITHUB_REPOSITORY --pattern "uotanstudio-$($info.ver)-${{ matrix.rid }}.zip" --clobber
+            Expand-Archive "uotanstudio-$($info.ver)-${{ matrix.rid }}.zip" -DestinationPath publish
+          } else {
+            gh run download $info.run_id --repo $env:GITHUB_REPOSITORY --name $info.artifact -D artifact
+            Expand-Archive (Get-ChildItem artifact -Filter 'uotanstudio-*.zip').FullName -DestinationPath publish
+          }
+
+      - name: Build MSIX
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'msix'
+          Copy-Item publish -Destination $stage -Recurse -Force
+
+          # Icons from the published Assets folder.
+          Add-Type -AssemblyName System.Drawing
+          $ico = Join-Path $stage 'Assets\uotan.ico'
+          $icon = [System.Drawing.Icon]::new($ico, 256, 256)
+          function Save-Png([int]$size, [string]$name) {
+            $bmp = New-Object System.Drawing.Bitmap($size, $size)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.InterpolationMode = 'HighQualityBicubic'
+            $g.DrawImage($icon.ToBitmap(), 0, 0, $size, $size)
+            $bmp.Save((Join-Path $stage "Assets\$name"), [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          Save-Png 44 'Square44x44Logo.targetsize-44_altform-unplated.png'
+          Save-Png 150 'Square150x150Logo.png'
+          Save-Png 50 'StoreLogo.png'
+
+          $verParts = ($env:VER -replace '-beta.*','' -replace '-release.*','').Split('.')
+          $rev = if ($env:VER -match '\.(\d+)$' -and $env:VER -match '-') { $Matches[1] } else { '0' }
+          $msixVersion = "$(,$verParts[0..2] -join '.').$rev"
+
+          @(
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"'
+            '         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"'
+            '         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">'
+            '  <Identity Name="UotanStudio.UotanStudio" Publisher="CN=UotanStudio" Version="' + $msixVersion + '" />'
+            '  <Properties>'
+            '    <DisplayName>UotanStudio</DisplayName>'
+            '    <PublisherDisplayName>UotanStudio</PublisherDisplayName>'
+            '    <Logo>Assets\StoreLogo.png</Logo>'
+            '  </Properties>'
+            '  <Dependencies>'
+            '    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />'
+            '  </Dependencies>'
+            '  <Resources><Resource Language="en-us" /></Resources>'
+            '  <Applications>'
+            '    <Application Id="App" Executable="' + $env:EXE_NAME + '.exe" EntryPoint="Windows.FullTrustApplication">'
+            '      <uap:VisualElements DisplayName="UotanStudio" Description="UotanStudio desktop toolkit"'
+            '        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"'
+            '        Square44x44Logo="Assets\Square44x44Logo.targetsize-44_altform-unplated.png">'
+            '        <uap:DefaultTile Wide310x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.targetsize-44_altform-unplated.png" />'
+            '      </uap:VisualElements>'
+            '    </Application>'
+            '  </Applications>'
+            '  <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>'
+            '</Package>'
+          ) | Set-Content (Join-Path $stage 'AppxManifest.xml') -Encoding utf8
+
+          $sdkBin = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory |
+            Where-Object { $_.Name -match '^\d' } | Sort-Object Name -Descending | Select-Object -First 1
+          $makeappx = Join-Path $sdkBin.FullName 'x64\makeappx.exe'
+          $signtool = Join-Path $sdkBin.FullName 'x64\signtool.exe'
+
+          & $makeappx pack /d $stage /p "$env:RUNNER_TEMP\uotanstudio-$env:VER-${{ matrix.rid }}.msix" /nv | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'makeappx failed' }
+
+          # MSIX requires a signature; use a throwaway self-signed cert and ship the
+          # .cer so users can trust it before installing.
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=UotanStudio' `
+            -KeyUsage DigitalSignature -FriendlyName 'UotanStudio MSIX packaging' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
+          $pfx = "$env:RUNNER_TEMP\package.pfx"
+          $pwdSec = ConvertTo-SecureString -String 'uotanstudio' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $pwdSec | Out-Null
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\UotanStudio.cer" | Out-Null
+          & $signtool sign /fd SHA256 /f $pfx /p uotanstudio "$env:RUNNER_TEMP\uotanstudio-$env:VER-${{ matrix.rid }}.msix"
+          if ($LASTEXITCODE -ne 0) { throw 'signtool failed' }
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-msix
+          path: |
+            ${{ runner.temp }}\uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}.msix
+            ${{ runner.temp }}\UotanStudio.cer
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    name: DMG ${{ matrix.rid }}
+    needs: prepare
+    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: osx-arm64, runner: macos-15 }
+          - { rid: osx-x64, runner: macos-15-intel }
+    steps:
+      - name: Fetch build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ver='${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].ver }}'
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
+            gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
+              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
+            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+          else
+            gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
+              --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
+            src=$(find artifact -name 'uotanstudio-*.tar.gz' | head -1)
+          fi
+          mkdir -p publish
+          tar -xzf "$src" -C publish
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/UotanStudio.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp -R publish/. "$app/Contents/MacOS/"
+          chmod +x "$app/Contents/MacOS/$EXE_NAME"
+
+          if [ -f "$app/Contents/MacOS/Assets/uotan.ico" ]; then
+            sips -s format png "$app/Contents/MacOS/Assets/uotan.ico" --out /tmp/icon.png >/dev/null || true
+            if [ -s /tmp/icon.png ]; then
+              mkdir -p /tmp/icon.iconset
+              for s in 16 32 64 128 256 512; do
+                sips -z "$s" "$s" /tmp/icon.png --out "/tmp/icon.iconset/icon_${s}x${s}.png" >/dev/null
+                d=$((s * 2))
+                sips -z "$d" "$d" /tmp/icon.png --out "/tmp/icon.iconset/icon_${s}x${s}@2x.png" >/dev/null
+              done
+              iconutil -c icns /tmp/icon.iconset -o "$app/Contents/Resources/UotanStudio.icns"
+            fi
+          fi
+
+          cat > "$app/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>UotanStudio</string>
+            <key>CFBundleDisplayName</key><string>UotanStudio</string>
+            <key>CFBundleIdentifier</key><string>club.openatom.uotanstudio.desktop</string>
+            <key>CFBundleExecutable</key><string>UotanStudio.Desktop</string>
+            <key>CFBundleIconFile</key><string>UotanStudio</string>
+            <key>CFBundleShortVersionString</key><string>VER_PLACEHOLDER</string>
+            <key>CFBundleVersion</key><string>VER_PLACEHOLDER</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' "s/VER_PLACEHOLDER/$VER/g" "$app/Contents/Info.plist"
+
+          # Ad-hoc signature (no developer ID; unsigned apps are blocked by Gatekeeper).
+          codesign --force --deep -s - "$app"
+
+          mkdir -p "$RUNNER_TEMP/dmgstage"
+          cp -R "$app" "$RUNNER_TEMP/dmgstage/"
+          ln -s /Applications "$RUNNER_TEMP/dmgstage/Applications"
+          hdiutil create -volname "UotanStudio" -srcfolder "$RUNNER_TEMP/dmgstage" \
+            -ov -format UDZO "$RUNNER_TEMP/uotanstudio-$VER-${{ matrix.rid }}.dmg"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-dmg
+          path: ${{ runner.temp }}/uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}.dmg
+          if-no-files-found: error
+          retention-days: 30
+
+  linux:
+    name: DEB/RPM ${{ matrix.rid }}
+    needs: prepare
+    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-x64, arch_deb: amd64, arch_rpm: x86_64 }
+          - { rid: linux-arm64, arch_deb: arm64, arch_rpm: aarch64 }
+          - { rid: linux-riscv64, arch_deb: riscv64, arch_rpm: riscv64 }
+          - { rid: linux-loongarch64, arch_deb: loong64, arch_rpm: loongarch64 }
+    steps:
+      - name: Fetch build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ver='${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].ver }}'
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
+            gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
+              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
+            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+          else
+            gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
+              --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
+            src=$(find artifact -name 'uotanstudio-*.tar.gz' | head -1)
+          fi
+          mkdir -p publish
+          tar -xzf "$src" -C publish
+
+      - name: Build DEB
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch_deb }}
+        run: |
+          set -euo pipefail
+          pkg="$RUNNER_TEMP/deb/uotanstudio_$VER-1_$ARCH"
+          mkdir -p "$pkg/DEBIAN" "$pkg/opt/$APP_NAME" \
+            "$pkg/usr/share/applications" "$pkg/usr/share/icons/hicolor/256x256/apps"
+          cp -R publish/. "$pkg/opt/$APP_NAME/"
+          chmod +x "$pkg/opt/$APP_NAME/$EXE_NAME"
+
+          if [ -f "$pkg/opt/$APP_NAME/Assets/uotan.ico" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick >/dev/null
+            convert "$pkg/opt/$APP_NAME/Assets/uotan.ico[0]" -resize 256x256 \
+              "$pkg/usr/share/icons/hicolor/256x256/apps/uotanstudio.png"
+          fi
+
+          cat > "$pkg/usr/share/applications/uotanstudio.desktop" <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=UotanStudio
+          Comment=UotanStudio desktop toolkit
+          Exec=/opt/UotanStudio/UotanStudio.Desktop
+          Icon=uotanstudio
+          Categories=Development;Utility;
+          Terminal=false
+          DESKTOP
+
+          cat > "$pkg/DEBIAN/control" <<CONTROL
+          Package: uotanstudio
+          Version: $VER-1
+          Section: utils
+          Priority: optional
+          Architecture: $ARCH
+          Maintainer: UotanStudio <uotan@openatom.club>
+          Depends: libc6 (>= 2.23), libstdc++6, libfontconfig1, libssl3, libx11-6,
+           libxext6, libxfixes3, libxcursor1, libxrandr2, libice6, libglib2.0-0,
+           libwayland-cursor0, libwayland-egl1, libxkbcommon0, libgbm1, libdrm2, libegl1
+          Recommends: libgtk-3-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good,
+           gstreamer1.0-plugins-bad, gstreamer1.0-libav
+          Description: UotanStudio desktop toolkit
+           Firmware flashing, device communication and image toolkit.
+           GStreamer 1.24+ enables screen-mirror audio and video decoding.
+          CONTROL
+
+          dpkg-deb --build --root-owner-group "$pkg" \
+            "$RUNNER_TEMP/uotanstudio-$VER-${{ matrix.rid }}.deb"
+
+      - name: Build RPM
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch_rpm }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq rpm >/dev/null
+          rpmver="${VER%%-*}"
+          mkdir -p "$RUNNER_TEMP/rpmbuild"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          tar -czf "$RUNNER_TEMP/rpmbuild/SOURCES/uotanstudio-$rpmver.tar.gz" -C publish .
+          cat > "$RUNNER_TEMP/rpmbuild/SPECS/uotanstudio.spec" <<SPEC
+          Name:           uotanstudio
+          Version:        $rpmver
+          Release:        1%{?dist}
+          Summary:        UotanStudio desktop toolkit
+          License:        GPL-3.0-only
+          URL:            https://github.com/UotanStudio/UotanStudio
+          Source0:        uotanstudio-$rpmver.tar.gz
+          BuildArch:      $ARCH
+          Requires:       glibc >= 2.23, libstdc++, fontconfig, openssl-libs,
+          Requires:       libX11, libXext, libXfixes, libXcursor, libXrandr, libICE,
+          Requires:       glib2, libwayland-cursor, libwayland-egl, libxkbcommon,
+          Requires:       mesa-libgbm, libdrm, mesa-libEGL
+          Recommends:     gtk3, gstreamer1-plugins-base, gstreamer1-plugins-good,
+          Recommends:     gstreamer1-plugins-bad-free
+
+          %description
+          Firmware flashing, device communication and image toolkit.
+
+          %prep
+          %setup -q -c
+
+          %install
+          mkdir -p %{buildroot}/opt/$APP_NAME %{buildroot}/usr/share/applications %{buildroot}/usr/share/icons/hicolor/256x256/apps
+          cp -R . %{buildroot}/opt/$APP_NAME/
+          chmod +x %{buildroot}/opt/$APP_NAME/$EXE_NAME
+          cat > %{buildroot}/usr/share/applications/uotanstudio.desktop <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=UotanStudio
+          Comment=UotanStudio desktop toolkit
+          Exec=/opt/UotanStudio/UotanStudio.Desktop
+          Icon=uotanstudio
+          Categories=Development;Utility;
+          Terminal=false
+          DESKTOP
+
+          %files
+          /opt/$APP_NAME
+          /usr/share/applications/uotanstudio.desktop
+
+          %changelog
+          SPEC
+          rpmbuild -bb --target "$ARCH" \
+            --define "_topdir $RUNNER_TEMP/rpmbuild" \
+            "$RUNNER_TEMP/rpmbuild/SPECS/uotanstudio.spec"
+          find "$RUNNER_TEMP/rpmbuild/RPMS" -name "*.rpm" -exec cp {} "$RUNNER_TEMP/" \;
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-linux-packages
+          path: |
+            ${{ runner.temp }}/*.deb
+            ${{ runner.temp }}/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  alpine:
+    name: APK ${{ matrix.rid }}
+    needs: prepare
+    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-musl-x64, apk_arch: x86_64, runner: ubuntu-24.04 }
+          - { rid: linux-musl-arm64, apk_arch: aarch64, runner: ubuntu-24.04-arm }
+    steps:
+      - name: Fetch build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ver='${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].ver }}'
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
+            gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
+              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
+            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+          else
+            gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
+              --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
+            src=$(find artifact -name 'uotanstudio-*.tar.gz' | head -1)
+          fi
+          mkdir -p publish
+          tar -xzf "$src" -C publish
+          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick >/dev/null
+          convert publish/Assets/uotan.ico[0] -resize 256x256 "$RUNNER_TEMP/icon.png"
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/apkbuild"
+          pkgver="${VER%%-*}"
+          mkdir -p "$work/out" "$work/build"
+          tar -czf "$work/build/uotanstudio.tar.gz" -C publish .
+          cp "$RUNNER_TEMP/icon.png" "$work/build/icon.png"
+          cat > "$work/build/uotanstudio.desktop" <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=UotanStudio
+          Comment=UotanStudio desktop toolkit
+          Exec=/opt/UotanStudio/UotanStudio.Desktop
+          Icon=uotanstudio
+          Categories=Development;Utility;
+          Terminal=false
+          DESKTOP
+          cat > "$work/build/APKBUILD" <<APKBUILD
+          pkgname=uotanstudio
+          pkgver=$pkgver
+          pkgrel=0
+          pkgdesc="UotanStudio desktop toolkit (screen-mirror AV needs GStreamer 1.24+)"
+          url="https://github.com/UotanStudio/UotanStudio"
+          arch="${{ matrix.apk_arch }}"
+          license="GPL-3.0-only"
+          depends="musl libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr
+           libxext libxfixes libice glib wayland libxkbcommon mesa-egl mesa-gbm libdrm"
+          options="!check"
+          source="uotanstudio.tar.gz"
+          package() {
+            install -d "\$pkgdir"/opt/uotanstudio \\
+              "\$pkgdir"/usr/share/applications \\
+              "\$pkgdir"/usr/share/icons/hicolor/256x256/apps
+            cp -R "\$srcdir"/uotanstudio/. "\$pkgdir"/opt/uotanstudio/
+            find "\$pkgdir"/opt/uotanstudio -name '*.pdb' -delete
+            chmod +x "\$pkgdir"/opt/uotanstudio/UotanStudio.Desktop
+            convert "\$srcdir"/icon.png \\
+              "\$pkgdir"/usr/share/icons/hicolor/256x256/apps/uotanstudio.png
+            install -m 644 "\$srcdir"/uotanstudio.desktop \\
+              "\$pkgdir"/usr/share/applications/uotanstudio.desktop
+          }
+          APKBUILD
+
+          docker run --rm -v "$work:/work" -e PKGVER="$pkgver" alpine:3.20 sh -c '
+            set -eu
+            apk add --no-cache alpine-sdk >/dev/null
+            abuild-keygen -a -n -i >/dev/null 2>&1 || true
+            cd /work/build
+            abuild checksum >/dev/null
+            abuild -F
+            find /root/packages -name "*.apk" -exec cp {} /work/out/ \;
+            cp /root/.abuild/*.pub /work/out/ 2>/dev/null || true
+          '
+          find "$work/out" -type f -ls
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-alpine-packages
+          path: |
+            ${{ runner.temp }}/apkbuild/out/*.apk
+            ${{ runner.temp }}/apkbuild/out/*.pub
+          if-no-files-found: error
+          retention-days: 30
+
+  arch:
+    name: PACMAN ${{ matrix.rid }}
+    needs: prepare
+    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-x64, pkg_arch: x86_64, runner: ubuntu-24.04 }
+          - { rid: linux-arm64, pkg_arch: aarch64, runner: ubuntu-24.04-arm }
+          - { rid: linux-riscv64, pkg_arch: riscv64, runner: ubuntu-24.04 }
+          - { rid: linux-loongarch64, pkg_arch: loongarch64, runner: ubuntu-24.04 }
+    steps:
+      - name: Fetch build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ver='${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].ver }}'
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
+            gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
+              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
+            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+          else
+            gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
+              --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
+            src=$(find artifact -name 'uotanstudio-*.tar.gz' | head -1)
+          fi
+          mkdir -p publish
+          tar -xzf "$src" -C publish
+          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick >/dev/null
+          convert publish/Assets/uotan.ico[0] -resize 256x256 "$RUNNER_TEMP/icon.png"
+
+      - name: Build pacman package
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/archbuild"
+          pkgver="${VER%%-*}"
+          mkdir -p "$work/out" "$work/build"
+          tar -czf "$work/build/uotanstudio.tar.gz" -C publish .
+          cp "$RUNNER_TEMP/icon.png" "$work/build/icon.png"
+          cat > "$work/build/uotanstudio.desktop" <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=UotanStudio
+          Comment=UotanStudio desktop toolkit
+          Exec=/opt/UotanStudio/UotanStudio.Desktop
+          Icon=uotanstudio
+          Categories=Development;Utility;
+          Terminal=false
+          DESKTOP
+          cat > "$work/build/PKGBUILD" <<PKGBUILD
+          pkgname=uotanstudio
+          pkgver=$pkgver
+          pkgrel=1
+          pkgdesc="UotanStudio desktop toolkit"
+          url="https://github.com/UotanStudio/UotanStudio"
+          arch=('x86_64' 'aarch64' 'riscv64' 'loongarch64')
+          license=('GPL-3.0-only')
+          depends=('glibc' 'gcc-libs' 'fontconfig' 'openssl' 'libx11' 'libxext'
+                   'libxfixes' 'libxcursor' 'libxrandr' 'libice' 'glib2' 'wayland'
+                   'libxkbcommon' 'mesa' 'libdrm')
+          optdepends=('gtk3: GTK file dialogs'
+                      'gstreamer: screen-mirror audio and video (1.24+)'
+                      'gst-plugins-base: GStreamer base plugins'
+                      'gst-plugins-good: GStreamer good plugins'
+                      'gst-plugins-bad: GStreamer bad plugins'
+                      'gst-libav: GStreamer ffmpeg codecs')
+          source=(uotanstudio.tar.gz)
+          sha256sums=('SKIP')
+          package() {
+            install -d "\$pkgdir"/opt/uotanstudio \\
+              "\$pkgdir"/usr/share/applications \\
+              "\$pkgdir"/usr/share/icons/hicolor/256x256/apps
+            cp -R "\$srcdir"/uotanstudio/. "\$pkgdir"/opt/uotanstudio/
+            find "\$pkgdir"/opt/uotanstudio -name '*.pdb' -delete
+            chmod +x "\$pkgdir"/opt/uotanstudio/UotanStudio.Desktop
+            install -Dm 644 "\$srcdir"/icon.png \\
+              "\$pkgdir"/usr/share/icons/hicolor/256x256/apps/uotanstudio.png
+            install -Dm 644 "\$srcdir"/uotanstudio.desktop \\
+              "\$pkgdir"/usr/share/applications/uotanstudio.desktop
+          }
+          PKGBUILD
+
+          docker run --rm -v "$work:/work" -e PKG_ARCH="${{ matrix.pkg_arch }}" archlinux:latest bash -c '
+            set -eu
+            pacman -Syu --noconfirm base-devel >/dev/null
+            useradd -m builder
+            echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+            cd /work/build
+            chown -R builder:builder .
+            # riscv64/loongarch64 packages are built on the x64 host with an overridden
+            # CARCH: packaging only copies files, no target binaries are executed.
+            su builder -c "cd /work/build && CARCH=$PKG_ARCH makepkg -f --ignorearch"
+            find /work/build -name "*.pkg.tar.zst" -exec cp {} /work/out/ \;
+          '
+          find "$work/out" -type f -ls
+
+      - name: Upload pacman package
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-arch-packages
+          path: ${{ runner.temp }}/archbuild/out/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 30
