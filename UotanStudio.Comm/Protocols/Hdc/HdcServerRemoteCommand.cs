@@ -30,7 +30,7 @@ internal static class HdcServerRemoteCommand
     /// <para>以 NUL 结尾发送到宿主 server 的完整命令文本。</para></returns>
     /// <exception cref="ArgumentException">An argument contains a quote or NUL character.
     /// <para>某个参数包含引号或 NUL 字符。</para></exception>
-    internal static string Build(string command, string? hostDirectory, params string[] arguments)
+    internal static string Build(string command, string? hostDirectory, params ReadOnlySpan<string> arguments)
     {
         var builder = new StringBuilder(command);
         foreach (var argument in arguments)

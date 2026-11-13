@@ -149,7 +149,7 @@ internal sealed class LinuxTunDevice : ITunDevice
         RunIp(cancellationToken, "link", "set", "dev", name, "up");
     }
 
-    private static void RunIp(CancellationToken cancellationToken, params string[] arguments)
+    private static void RunIp(CancellationToken cancellationToken, params ReadOnlySpan<string> arguments)
     {
         var start = new ProcessStartInfo("ip")
         {
