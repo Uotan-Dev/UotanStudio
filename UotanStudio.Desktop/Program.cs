@@ -38,10 +38,10 @@ sealed class Program
             return global::UotanStudio.DD.Writing.FlashJobChild.Run(args);
         }
 
+        Services.AppPaths.MigrateLegacyLocations();
         var settings = Services.SettingsPersistenceService.Instance.LoadSettings();
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
-        LogService.Instance.ConfigureFileLogging(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio", "logs"));
+        LogService.Instance.ConfigureFileLogging(Services.AppPaths.Logs);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => LogService.Instance.FlushFileLog();
 
         if (args is ["--managed-device-shell", var protocolName, var serial])
@@ -111,10 +111,16 @@ sealed class Program
 
         if (Mcp.McpLauncher.IsCompanionRequested(args))
         {
+            // The companion runs with the persisted MCP sandbox root instead of the process working
+            // directory, which is meaningless for a desktop launch; an explicit --mcp-root still wins.
+            var companionRoot = HasMcpRoot(args)
+                ? null
+                : settings.McpExposeRootDirectory?.Trim() ?? string.Empty;
             _ = Task.Run(() => Mcp.McpLauncher.RunCompanionAsync(
                 args, new Services.Mcp.DesktopDeviceManagerGateway(),
                 () => new Services.Delivery.DeliveryKeyProvider(),
-                audit: Services.Mcp.McpToolCallLog.Instance));
+                audit: Services.Mcp.McpToolCallLog.Instance,
+                sandboxRoot: companionRoot));
         }
 
         var mirrorFlag = Array.IndexOf(args, "--open-screen-mirror");
@@ -127,6 +133,16 @@ sealed class Program
         BuildAvaloniaApp(settings).StartWithClassicDesktopLifetime(args);
         return 0;
     }
+
+    /// <summary>
+    /// Reports whether the launch arguments carry an explicit MCP sandbox root.
+    /// <para>报告启动参数是否携带显式的 MCP 沙箱根目录。</para>
+    /// </summary>
+    /// <param name="args">Launch arguments. <para>启动参数。</para></param>
+    /// <returns><see langword="true"/> when any argument equals <c>--mcp-root</c>.
+    /// <para>任一参数等于 <c>--mcp-root</c> 时为 <see langword="true"/>。</para></returns>
+    private static bool HasMcpRoot(string[] args) => Array.Exists(args,
+        static argument => string.Equals(argument, "--mcp-root", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Configures and returns the Avalonia application builder using the persisted rendering preferences.

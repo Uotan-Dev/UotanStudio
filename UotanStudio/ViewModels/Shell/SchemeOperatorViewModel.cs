@@ -99,7 +99,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     {
         _runAsync = runAsync ?? RunWithSchemeRunnerAsync;
         _workflowLoader = workflowLoader ?? LoadProjectWorkflowAsync;
-        _trustStore = trustStore ?? new PublisherTrustStore();
+        _trustStore = trustStore ?? new PublisherTrustStore(Services.AppPaths.PublisherTrustFile);
         _confirm = confirm;
         _projectRootProvider = projectRootProvider ?? LoadProjectRoot;
         _temporaryDirectory = temporaryDirectory ?? (() => null);

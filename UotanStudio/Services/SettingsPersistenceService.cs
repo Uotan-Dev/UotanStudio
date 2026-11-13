@@ -739,9 +739,7 @@ public class SettingsPersistenceService
 
     private SettingsPersistenceService()
     {
-        _settingsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "UotanStudio");
+        _settingsDirectory = AppPaths.Root;
         _settingsFilePath = Path.Combine(_settingsDirectory, "settings.json");
     }
 

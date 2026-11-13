@@ -8,10 +8,10 @@ public interface INativeBinSettings
 {
     /// <summary>
     /// Directory under which per-RID native libraries are cached. Empty or
-    /// <see cref="string.Empty"/> falls back to
-    /// <c>%LOCALAPPDATA%/UotanStudio/Native</c>.
-    /// <para>各 RID 原生库的缓存目录。空字符串表示使用
-    /// <c>%LOCALAPPDATA%/UotanStudio/Native</c> 默认路径。</para>
+    /// <see cref="string.Empty"/> falls back to the <c>Native</c> directory under the unified per-user
+    /// data root (<c>%APPDATA%/UotanStudio</c> on Windows).
+    /// <para>各 RID 原生库的缓存目录。空字符串表示使用统一按用户数据根目录
+    /// （Windows 为 <c>%APPDATA%/UotanStudio</c>）下的 <c>Native</c> 默认路径。</para>
     /// </summary>
     /// <value>Absolute or empty cache root directory.<para>绝对缓存根目录，允许为空。</para></value>
     string CacheDir { get; }
@@ -37,11 +37,7 @@ public interface INativeBinSettings
 /// </summary>
 public sealed class NativeBinSettingsStore : INativeBinSettings
 {
-    private static string DefaultCacheDir()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "UotanStudio", "Native");
-    }
+    private static string DefaultCacheDir() => AppPaths.Native;
 
     private readonly SettingsPersistenceService _settings;
 

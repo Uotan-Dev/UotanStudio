@@ -55,7 +55,19 @@ internal static class WorkspaceSessionCapture
         }
     }
 
-    internal static List<OpenDocumentDto> Documents(IDockable? root, string rootDirectory)
+    /// <summary>
+    /// Captures the open documents, storing each path relative to <paramref name="rootDirectory"/> or absolute
+    /// when the base is <see langword="null"/>.
+    /// <para>捕获已打开文档；路径相对 <paramref name="rootDirectory"/> 存放，基准为 <see langword="null"/> 时存绝对路径。</para>
+    /// </summary>
+    /// <param name="root">The dock layout root. <para>停靠布局根。</para></param>
+    /// <param name="rootDirectory">
+    /// Base directory the paths are stored relative to; <see langword="null"/> stores absolute paths so the
+    /// snapshot never depends on the process working directory.
+    /// <para>路径的相对基准目录；为 <see langword="null"/> 时存绝对路径，使快照不依赖进程工作目录。</para>
+    /// </param>
+    /// <returns>One DTO per open document. <para>每个已打开文档一个 DTO。</para></returns>
+    internal static List<OpenDocumentDto> Documents(IDockable? root, string? rootDirectory)
     {
         List<OpenDocumentDto> result = [];
         foreach (var item in Enumerate(root))
@@ -72,7 +84,9 @@ internal static class WorkspaceSessionCapture
             result.Add(new()
             {
                 Kind = kind,
-                RelativePath = path is null ? string.Empty : Path.GetRelativePath(rootDirectory, Path.GetFullPath(path)),
+                RelativePath = path is null ? string.Empty
+                    : rootDirectory is null ? Path.GetFullPath(path)
+                    : Path.GetRelativePath(rootDirectory, Path.GetFullPath(path)),
                 OpenMode = item is FileViewModel text ? (int)text.OpenMode : 0,
                 IsActive = item.Owner is IDock owner && ReferenceEquals(owner.ActiveDockable, item),
                 CompareLeftPath = item is CompareViewModel compare ? compare.LeftPath : null,

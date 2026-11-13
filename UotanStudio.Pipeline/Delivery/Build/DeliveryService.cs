@@ -34,12 +34,24 @@ public sealed class DeliveryService(HttpClient httpClient, string? toolCacheDire
         : this(httpClient: null!, toolCacheDirectory: null, signingKeys: signingKeys, tools: tools)
     {
     }
-    /// <summary><para>默认工具缓存目录（当前用户 LocalApplicationData 下）。</para>
-    /// Default tool cache directory under the current user's local application data.</summary>
+    /// <summary><para>默认工具缓存目录：统一按用户数据根目录（Windows <c>%APPDATA%</c>、macOS
+    /// <c>~/Library/Application Support</c>、Linux XDG 数据目录）下的 <c>UotanStudio/delivery-tools</c>。</para>
+    /// Default tool cache directory under the unified per-user data root (<c>%APPDATA%</c> on Windows,
+    /// <c>~/Library/Application Support</c> on macOS, the XDG data home on Linux).</summary>
     /// <value>The absolute, once-resolved cache directory used when no explicit tool cache is supplied.
     /// <para>未显式提供工具缓存时使用的绝对路径，仅解析一次。</para></value>
-    public static string DefaultToolCacheDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools");
+    public static string DefaultToolCacheDirectory { get; } = Path.Combine(DefaultUserDataRoot(), "delivery-tools");
+
+    /// <summary>
+    /// Resolves the unified per-user data root, mirroring the host <c>AppPaths</c> rule so library defaults
+    /// agree with the application without a host reference.
+    /// <para>解析统一的按用户数据根目录，与宿主 <c>AppPaths</c> 规则一致，使库内默认值在无宿主引用时仍与应用对齐。</para>
+    /// </summary>
+    /// <returns>The absolute per-user data root. <para>按用户数据根目录的绝对路径。</para></returns>
+    private static string DefaultUserDataRoot() => OperatingSystem.IsMacOS()
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Application Support", "UotanStudio")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio");
 
     /// <summary>Validates a delivery plan; returns <see langword="null"/> when valid, otherwise the first error message.
     /// <para>校验交付计划；合法返回 <see langword="null"/>，否则返回首条错误消息。</para></summary>

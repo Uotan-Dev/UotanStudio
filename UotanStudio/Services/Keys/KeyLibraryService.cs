@@ -70,8 +70,7 @@ public sealed class KeyLibraryService
 {
     public string Root { get; }
 
-    public KeyLibraryService(string? root = null) => Root = Path.GetFullPath(root ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio", "keys"));
+    public KeyLibraryService(string? root = null) => Root = Path.GetFullPath(root ?? AppPaths.Keys);
 
     public IReadOnlyList<ManagedKey> List()
     {

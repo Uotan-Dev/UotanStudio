@@ -136,8 +136,8 @@ public partial class NewProjectWindow : Window, INewProjectDialog
 
     /// <summary>
     /// Parameterless constructor (recognized by the XAML runtime loader): equivalent to Solution
-    /// mode with the app-directory defaults.
-    /// <para>无参构造（供 XAML 运行时加载器识别）：等价于 Solution 模式 + 应用所在目录默认值。</para>
+    /// mode with the default projects root.
+    /// <para>无参构造（供 XAML 运行时加载器识别）：等价于 Solution 模式 + 默认项目根目录。</para>
     /// </summary>
     public NewProjectWindow() : this(NewProjectWindowMode.Solution, null, null)
     {
@@ -146,8 +146,9 @@ public partial class NewProjectWindow : Window, INewProjectDialog
     /// <summary>Initializes the form: the location defaults to <c>&lt;baseDirectory&gt;/&lt;default name&gt;</c>, where the default name is the first free NewProjectN under the base directory (names in <paramref name="reservedNames"/> count as taken too).
     /// <para>初始化新建表单：位置默认 <c>&lt;baseDirectory&gt;/&lt;默认名&gt;</c>， 默认名为基础目录下第一个空闲的 NewProjectN（<paramref name="reservedNames"/> 亦视为占用）。</para></summary>
     /// <param name="mode">Semantic mode of the form.<para>表单语义模式。</para></param>
-    /// <param name="baseDirectory">Default base directory; null uses the app directory (next to the toolbox).
-    /// <para>默认基础目录；null 时使用应用所在目录（工具箱同级）。</para></param>
+    /// <param name="baseDirectory">Default base directory; null uses the default projects root
+    /// (<c>Services.AppPaths.DefaultProjectsRoot</c>, under the user's Documents folder).
+    /// <para>默认基础目录；null 时使用默认项目根目录（<c>Services.AppPaths.DefaultProjectsRoot</c>，位于用户文档目录下）。</para></param>
     /// <param name="reservedNames"> <para>额外视为占用的名称（如现有子项目名）。</para>Additional taken names (e.g.
     /// existing sub-projects). </param>
     public NewProjectWindow(
@@ -164,7 +165,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         Closed += (_, _) => ResetProgressStats();
         Mode = mode;
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
-            ? AppContext.BaseDirectory
+            ? Services.AppPaths.DefaultProjectsRoot
             : baseDirectory!;
         ReservedNames = reservedNames?.ToArray() ?? [];
 

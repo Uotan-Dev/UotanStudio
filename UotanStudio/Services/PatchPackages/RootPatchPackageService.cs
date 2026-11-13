@@ -676,8 +676,7 @@ public sealed class RootPatchPackageService
             return parent;
         }
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio");
+        return AppPaths.Root;
     }
 
     private static async Task<bool> MatchesStoredAsync(string path, RootPatchPackage package,

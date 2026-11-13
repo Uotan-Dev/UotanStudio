@@ -118,12 +118,10 @@ public sealed class VisualPluginManager
     public VisualPluginManager(string? directory = null, IPluginRegistry? registry = null,
         PublisherTrustStore? trustStore = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "UotanStudio", "visual-plugins");
+        _directory = directory ?? AppPaths.VisualPlugins;
         _statePath = Path.Combine(_directory, "state.json");
         _registry = registry ?? PluginRegistry.Shared;
-        _trustStore = trustStore ?? new PublisherTrustStore();
+        _trustStore = trustStore ?? new PublisherTrustStore(AppPaths.PublisherTrustFile);
         Refresh();
     }
 

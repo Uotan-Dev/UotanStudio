@@ -155,17 +155,16 @@ public sealed class ScrcpyServerService
 
     /// <summary>Store root holding the manifest and the per-version jars.
     /// <para>保存清单与按版本存放的 jar 的存储根目录。</para></summary>
-    /// <value>Absolute directory path: the constructor override, then the persisted setting, then
-    /// <c>%APPDATA%/UotanStudio/ScrcpyServer</c>. <para>绝对目录路径：优先构造函数覆盖值，其次是持久化设置，
-    /// 最后是 <c>%APPDATA%/UotanStudio/ScrcpyServer</c>。</para></value>
+    /// <value>Absolute directory path: the constructor override, then the persisted setting, then the
+    /// <c>ScrcpyServer</c> directory under the unified per-user data root. <para>绝对目录路径：优先构造函数覆盖值，
+    /// 其次是持久化设置，最后是统一按用户数据根目录下的 <c>ScrcpyServer</c> 目录。</para></value>
     public string CacheRoot { get; }
 
     private static string DefaultCacheRoot()
     {
         var configured = ScrcpyServerSettingsStore.CacheDir;
         if (!string.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(configured);
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio", "ScrcpyServer");
+        return AppPaths.ScrcpyServer;
     }
 
     /// <summary>Candidate paths of a jar placed next to the executable by a portable install, in lookup order.

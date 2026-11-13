@@ -60,18 +60,60 @@ public static class McpLauncher
     /// <para>停止 stdio 循环；默认不取消。</para></param>
     /// <param name="audit">Sink observing every served tool call; <see langword="null"/> records nothing.
     /// <para>观察每次工具调用的接收端；为 <see langword="null"/> 时不记录。</para></param>
+    /// <param name="sandboxRoot">
+    /// Explicit sandbox root supplied by the desktop host, overriding the argument-derived root;
+    /// <see langword="null"/> keeps the argument behavior (defaulting to the process working directory),
+    /// an empty or whitespace value selects the unrestricted sandbox with the flash gate closed, and an
+    /// invalid path falls back the same way.
+    /// <para>由桌面宿主提供的显式沙箱根目录，覆盖来自启动参数的根；为 <see langword="null"/> 时保持参数行为
+    /// （默认取进程工作目录），空白表示不受限沙箱并关闭刷写门控，路径非法时同样回退。</para>
+    /// </param>
     /// <returns>A task that completes when the transport closes or cancellation is observed.
     /// <para>在传输关闭或观察到取消时完成的任务。</para></returns>
     public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
         Func<UotanStudio.Pipeline.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null,
         CancellationToken cancellationToken = default,
-        Tools.IMcpToolCallAudit? audit = null)
+        Tools.IMcpToolCallAudit? audit = null,
+        string? sandboxRoot = null)
     {
         var config = McpServerConfig.Parse(args);
+        var (sandbox, allowFlash) = sandboxRoot is null
+            ? (new PathSandbox(config.RootDirectory), config.AllowFlash)
+            : BuildSandbox(sandboxRoot, config.AllowFlash);
         var host = new McpServerHost(
-            new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager,
+            sandbox, allowFlash, deviceManager,
             CreateDesktopDeliveryTools(), signingKeys);
         await host.RunAsync(cancellationToken, audit).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the sandbox for an explicitly supplied companion root, mirroring the desktop exposure service:
+    /// a blank root selects the unrestricted sandbox with the flash gate closed, and an invalid path falls
+    /// back the same way.
+    /// <para>为显式提供的伴随模式根目录构建沙箱，与桌面暴露服务一致：空白根目录选择不受限沙箱并关闭刷写门控，
+    /// 非法路径同样回退。</para>
+    /// </summary>
+    /// <param name="sandboxRoot">Explicit sandbox root from the host. <para>宿主提供的显式沙箱根目录。</para></param>
+    /// <param name="requestedAllowFlash">Flash gate requested through the launch arguments.
+    /// <para>启动参数请求的刷写门控。</para></param>
+    /// <returns>The sandbox and the effective flash gate. <para>沙箱与生效的刷写门控。</para></returns>
+    private static (PathSandbox Sandbox, bool AllowFlash) BuildSandbox(string sandboxRoot, bool requestedAllowFlash)
+    {
+        var root = sandboxRoot.Trim();
+        if (root.Length == 0)
+        {
+            return (PathSandbox.Unrestricted, false);
+        }
+
+        try
+        {
+            return (new PathSandbox(root), requestedAllowFlash);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException
+                                   or NotSupportedException or System.Security.SecurityException)
+        {
+            return (PathSandbox.Unrestricted, false);
+        }
     }
 
     /// <summary>
@@ -86,9 +128,7 @@ public static class McpLauncher
         static () =>
             new UotanStudio.Pipeline.Delivery.DeliveryToolService(
                 new HttpClient { Timeout = Timeout.InfiniteTimeSpan },
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "UotanStudio", "delivery-tools"));
+                UotanStudio.Pipeline.Delivery.DeliveryService.DefaultToolCacheDirectory);
 
     private static bool HasFlag(string[] args, string flag) => args.Any(a =>
         string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));

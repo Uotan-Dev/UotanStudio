@@ -60,7 +60,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     {
         var sb = new System.Text.StringBuilder(64);
         sb.Append("project:").Append(_projects.CurrentProjectPath ?? "<none>").Append('|');
-        var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
+        var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, null);
         sb.Append(documents.Count).Append('|');
         foreach (var document in documents)
             sb.Append(document.Kind).Append(':').Append(document.RelativePath).Append(':')
@@ -107,7 +107,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 var snapshot = await JsonSerializer.DeserializeAsync(input, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot);
                 if (snapshot is { Version: 1, Documents: not null, Panels: not null, Docks: not null })
                 {
-                    var hasStartupDocuments = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory).Count > 0;
+                    var hasStartupDocuments = WorkspaceSessionCapture.Documents(_workspace.Layout, null).Count > 0;
                     if (_projects.CurrentProjectPath is not null && !hasStartupDocuments && string.Equals(_projects.CurrentProjectPath, snapshot.ProjectPath,
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                         await _workspace.RestoreDocumentsAsync(snapshot.Documents, string.Empty);
@@ -257,9 +257,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             var signature = ComputeSessionSignature();
             if (string.Equals(signature, _lastSessionSignature, StringComparison.Ordinal)) return;
 
-            var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
-            foreach (var document in documents)
-                if (document.RelativePath.Length > 0) document.RelativePath = Path.GetFullPath(document.RelativePath);
+            var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, null);
             var snapshot = new WorkspaceSessionSnapshot
             {
                 ProjectPath = _projects.CurrentProjectPath,

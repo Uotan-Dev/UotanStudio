@@ -6,11 +6,13 @@
 
 | 平台 | 最近验证 | 结果 |
 | --- | --- | --- |
+| Windows x64，Debug | 2026-11-14 | 全量 9440 用例，9422 通过，0 失败，18 跳过；构建 0 警告 0 错误 |
 | Windows x64，Debug | 2026-11-13 | 全量 9428 用例，9403 通过，0 失败，25 跳过；构建 0 警告 0 错误 |
 | Linux ARM64，Debug | 2026-11-12 | 全量 9334 用例，9304 通过，0 失败，30 跳过 |
 | RISC-V（SpacemiT X60），Debug | 2026-11-12 | 全量 9334 用例，9287 通过，11 失败，36 跳过；失败均为平台环境缺口 |
 
 - Windows 的 `dotnet format whitespace` 与 `style --verify-no-changes` 均为零退出码；NativeAOT win-x64 发布成功，无本仓库程序集产生的裁剪/AOT 警告。剩余 IL2026 来自 Avalonia XAML、Dock 等第三方程序集与 SDK 的实验性 GC 提示。
+- 本体目录收敛（2026-11-14）：`AppPaths` 统一按用户数据根（Windows `%APPDATA%`、macOS `~/Library/Application Support`、Linux XDG），`Program.Main` 首跑幂等迁移 `%LOCALAPPDATA%` 的 `apple-lockdown`/`delivery-tools` 与 macOS 旧 XDG 根；新建解决方案默认目录改为 `Documents\UotanStudio`；伴随 MCP 沙箱根改用持久化 `McpExposeRootDirectory`（空白回退不受限并关闭刷写门控），hdc `-cwd` 改为调用方注入本地文件目录。`InstallDirectoryBoundaryTests` 冻结 `AppContext.BaseDirectory` 只读例外与工作目录依赖清单；迁移幂等性由 `AppPathsMigrationTests` 覆盖。AOT 发布 39 条警告与既有基线一致。MSIX 打包、macOS .app 打包与打包态安装冒烟未验证；首跑迁移仅经单元测试，真实升级路径未实测。
 - Linux ARM64 构建 0 警告 0 错误，失败清零后完成上述全量测试；SIMD 内核在 AdvSIMD、SVE、SVE2 硬件上执行，`Vector<T>` 宽度为 128 位。
 - RISC-V 当前 SDK 的 Roslyn 编译存在多核/R2R 冻结缺陷。测试环境使用 `DOTNET_ReadyToRun=0`、`DOTNET_PROCESSOR_COUNT=4`、`DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`，并关闭构建期裁剪分析器与 Roslyn 分析器。11 个失败中 10 个来自 SkiaSharp 缺少 `linux-riscv64` 原生资产，1 个为单类复跑可通过的时序断言。
 - Windows 真机已覆盖 EDL 设备识别、WinUSB 接管与取消接管往返、ADB 与初始 USB 快照；取消接管后设备恢复 `qcwdfserial`，Problem 0。Windows 串口 `COMn` 回退未验证。
