@@ -45,7 +45,7 @@ public sealed class AirPlayRtspParserTests
     [Fact]
     public void Parse_AnnounceWithPlistBody_KeepsBodyBytes()
     {
-        var body = new byte[] { 0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0x00 };
+        byte[] body = [0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0x00];
         var header = HeaderBlockWithoutTerminator("ANNOUNCE", "rtsp://127.0.0.1/1",
             "CSeq: 2", "Content-Type: application/x-apple-binary-plist",
             "Content-Length: " + body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -115,7 +115,7 @@ public sealed class AirPlayRtspParserTests
     [Fact]
     public void Serialize_ResponseWithBody_WritesStatusHeadersAndBody()
     {
-        var body = new byte[] { 1, 2, 3, 4 };
+        byte[] body = [1, 2, 3, 4];
         var response = AirPlayRtspResponse.Ok(body, ("Content-Type", "application/x-apple-binary-plist"));
 
         var packet = AirPlayRtspParser.Serialize(response, 42);

@@ -75,9 +75,9 @@ public sealed class NodeExecutionEngineTests
         var target = new TestNodeViewModel("Target", NodeCategory.Data);
         target.Input.Add(new NodeConnectorViewModel { Title = "In" });
 
-        var nodes = new[] { source, target };
-        var connections = new[]
-        {
+        TestNodeViewModel[] nodes = [source, target];
+        NodeConnection[] connections =
+[
             new NodeConnection
             {
                 SourceInstanceId = source.InstanceId,
@@ -85,7 +85,7 @@ public sealed class NodeExecutionEngineTests
                 TargetInstanceId = target.InstanceId,
                 TargetConnector = "In"
             }
-        };
+       ];
 
         var result = await engine.ExecuteAsync(nodes, connections, TestContext.Current.CancellationToken);
 
@@ -120,11 +120,11 @@ public sealed class NodeExecutionEngineTests
         var engine = new NodeExecutionEngine(new MemoryLog());
         var a = new TestNodeViewModel("A", NodeCategory.Flow);
         var b = new TestNodeViewModel("B", NodeCategory.Flow);
-        var connections = new[]
-        {
+        NodeConnection[] connections =
+[
             new NodeConnection { SourceInstanceId = a.InstanceId, SourceConnector = "O", TargetInstanceId = b.InstanceId, TargetConnector = "I" },
             new NodeConnection { SourceInstanceId = b.InstanceId, SourceConnector = "O", TargetInstanceId = a.InstanceId, TargetConnector = "I" }
-        };
+       ];
         var result = await engine.ExecuteAsync([a, b], connections, TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Failed, result.Status);
     }
@@ -203,11 +203,11 @@ public sealed class NodeExecutionEngineTests
         onTrue.Action = _ => { executed.Add("true"); return Task.CompletedTask; };
         onFalse.Action = _ => { executed.Add("false"); return Task.CompletedTask; };
 
-        var connections = new[]
-        {
+        NodeConnection[] connections =
+[
             Conn(branch, "True", onTrue, "Flow"),
             Conn(branch, "False", onFalse, "Flow")
-        };
+       ];
 
         var result = await engine.ExecuteAsync([branch, onTrue, onFalse], connections, TestContext.Current.CancellationToken);
 
@@ -233,13 +233,13 @@ public sealed class NodeExecutionEngineTests
         onFalse.Action = _ => { executed.Add("false"); onFalse.WriteOutput("Flow", true); return Task.CompletedTask; };
         merge.Action = _ => { executed.Add("merge"); return Task.CompletedTask; };
 
-        var connections = new[]
-        {
+        NodeConnection[] connections =
+[
             Conn(branch, "True", onTrue, "Flow"),
             Conn(branch, "False", onFalse, "Flow"),
             Conn(onTrue, "Flow", merge, "Flow"),
             Conn(onFalse, "Flow", merge, "Flow")
-        };
+       ];
 
         var result = await engine.ExecuteAsync([branch, onTrue, onFalse, merge], connections, TestContext.Current.CancellationToken);
 
@@ -306,12 +306,12 @@ public sealed class NodeExecutionEngineTests
         loop.Input[0].InitialValue = 3.0;
         body1.Action = _ => { runs++; return Task.CompletedTask; };
 
-        var connections = new[]
-        {
+        NodeConnection[] connections =
+[
             Conn(loop, "Body", body1, "Flow"),
             Conn(body1, "Flow", body2, "Flow"),
             Conn(loop, "Body", after, "Flow")
-        };
+       ];
 
         var result = await engine.ExecuteAsync([loop, body1, body2, after], connections, TestContext.Current.CancellationToken);
 
@@ -332,7 +332,7 @@ public sealed class NodeExecutionEngineTests
         loop.Input[0].InitialValue = 2.0;
         body.Action = _ => { indexes.Add(loop.Output.First(o => o.Title == "Index").Data); return Task.CompletedTask; };
 
-        var connections = new[] { Conn(loop, "Body", body, "Flow") };
+        NodeConnection[] connections = [Conn(loop, "Body", body, "Flow")];
 
         var result = await engine.ExecuteAsync([loop, body], connections, TestContext.Current.CancellationToken);
 
@@ -543,11 +543,11 @@ public sealed class NodeExecutionEngineTests
         a.Action = Track;
         b.Action = Track;
 
-        var connections = new[]
-        {
+        NodeConnection[] connections =
+[
             Conn(parallel, "Branch A", a, "Flow"),
             Conn(parallel, "Branch B", b, "Flow")
-        };
+       ];
 
         var result = await engine.ExecuteAsync([parallel, a, b], connections, TestContext.Current.CancellationToken);
 
@@ -650,7 +650,7 @@ public sealed class NodeExecutionEngineTests
         loop.Input[0].InitialValue = (double)NodeExecutionEngine.MaxLoopIterations * 10;
         body.Action = _ => { runs++; return Task.CompletedTask; };
 
-        var connections = new[] { Conn(loop, "Body", body, "Flow") };
+        NodeConnection[] connections = [Conn(loop, "Body", body, "Flow")];
 
         var result = await engine.ExecuteAsync([loop, body], connections, TestContext.Current.CancellationToken);
 

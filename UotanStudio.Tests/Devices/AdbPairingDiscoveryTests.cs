@@ -20,10 +20,10 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void BuildAliasMap_InstanceOnlyServerRow_MatchesFullServerSerial()
     {
-        var entries = new[]
-        {
+        AdbServerMdnsEntry[] entries =
+[
             new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "192.0.2.31", 37177)
-        };
+       ];
 
         var aliases = AdbServerDiscoverySource.BuildAliasMap(entries);
 
@@ -145,15 +145,15 @@ public sealed class AdbPairingDiscoveryTests
     public void SelectConnectPorts_SameHostNameOverDifferentAddressFamilies_PrefersHostNameMatch()
     {
         IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
-        var candidates = new[]
-        {
+        MdnsDevice[] candidates =
+[
             new MdnsDevice("adb-other._adb-tls-connect._tcp.local", "other.local", 40404, ["192.0.2.99"],
                 properties, AdbMdnsDiscovery.AdbTlsService),
             new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["fe80::1"],
                 properties, AdbMdnsDiscovery.AdbTlsService),
             new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
                 properties, AdbMdnsDiscovery.AdbTlsService)
-        };
+       ];
 
         var ports = AdbQrPairingService.SelectConnectPorts(candidates, "192.0.2.40", "phone.local");
 
@@ -165,13 +165,13 @@ public sealed class AdbPairingDiscoveryTests
     public void SelectConnectPorts_PairingInstanceOnSameAddress_IsIgnored()
     {
         IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
-        var candidates = new[]
-        {
+        MdnsDevice[] candidates =
+[
             new MdnsDevice("ADB_WIFI_x._adb-tls-pairing._tcp.local", "phone.local", 45678, ["192.0.2.40"],
                 properties, AdbMdnsDiscovery.AdbTlsPairingService),
             new MdnsDevice("adb-x._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
                 properties, AdbMdnsDiscovery.AdbTlsService)
-        };
+       ];
 
         Assert.Equal([37177], AdbQrPairingService.SelectConnectPorts(candidates, "192.0.2.40", "phone.local"));
     }
@@ -240,11 +240,11 @@ public sealed class AdbPairingDiscoveryTests
     public void SelectConnectPort_UnrelatedDevice_ReturnsZero()
     {
         IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
-        var candidates = new[]
-        {
+        MdnsDevice[] candidates =
+[
             new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
                 properties, AdbMdnsDiscovery.AdbTlsService)
-        };
+       ];
 
         Assert.Equal(0, AdbQrPairingService.SelectConnectPort(candidates, "198.51.100.7", "tablet.local"));
         Assert.False(AdbQrPairingService.IsSameDevice(candidates[0], "198.51.100.7", "tablet.local"));
@@ -254,11 +254,11 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void MatchServerConnection_AutoConnectedInstanceKeyedTarget_ResolvesTheDialableAddress()
     {
-        var targets = new[] { new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP") };
-        var table = new[]
-        {
+        AdbTargetInfo[] targets = [new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP")];
+        AdbServerMdnsEntry[] table =
+[
             new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "192.0.2.31", 37177)
-        };
+       ];
 
         var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
 
@@ -270,7 +270,7 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void MatchServerConnection_ExplicitEndpointTarget_IsRecognizedWithoutTheTable()
     {
-        var targets = new[] { new AdbTargetInfo("192.0.2.31:37177", "device", "TCP") };
+        AdbTargetInfo[] targets = [new AdbTargetInfo("192.0.2.31:37177", "device", "TCP")];
 
         var match = AdbQrPairingService.MatchServerConnection(targets, [], "192.0.2.31");
 
@@ -281,11 +281,11 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void MatchServerConnection_DualStackTableRow_MatchesThePairingIpv4Address()
     {
-        var targets = new[] { new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP") };
-        var table = new[]
-        {
+        AdbTargetInfo[] targets = [new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP")];
+        AdbServerMdnsEntry[] table =
+[
             new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "::ffff:192.0.2.31", 37177)
-        };
+       ];
 
         var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
 
@@ -295,11 +295,11 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void MatchServerConnection_OtherDevice_IsIgnored()
     {
-        var targets = new[] { new AdbTargetInfo("adb-XYZ._adb-tls-connect._tcp", "device", "TCP") };
-        var table = new[]
-        {
+        AdbTargetInfo[] targets = [new AdbTargetInfo("adb-XYZ._adb-tls-connect._tcp", "device", "TCP")];
+        AdbServerMdnsEntry[] table =
+[
             new AdbServerMdnsEntry("adb-XYZ", "_adb-tls-connect._tcp", "192.0.2.77", 40222)
-        };
+       ];
 
         Assert.Null(AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31"));
     }
@@ -309,7 +309,7 @@ public sealed class AdbPairingDiscoveryTests
     [InlineData("")]
     public void MatchServerConnection_UnusableState_IsIgnored(string state)
     {
-        var targets = new[] { new AdbTargetInfo("192.0.2.31:37177", state, "TCP") };
+        AdbTargetInfo[] targets = [new AdbTargetInfo("192.0.2.31:37177", state, "TCP")];
 
         Assert.Null(AdbQrPairingService.MatchServerConnection(targets, [], "192.0.2.31"));
     }
@@ -317,15 +317,15 @@ public sealed class AdbPairingDiscoveryTests
     [Fact]
     public void MatchServerConnection_DeviceState_IsPreferredOverUnauthorized()
     {
-        var targets = new[]
-        {
+        AdbTargetInfo[] targets =
+[
             new AdbTargetInfo("192.0.2.31:37177", "unauthorized", "TCP"),
             new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP")
-        };
-        var table = new[]
-        {
+       ];
+        AdbServerMdnsEntry[] table =
+[
             new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "192.0.2.31", 37177)
-        };
+       ];
 
         var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
 

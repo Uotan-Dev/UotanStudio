@@ -290,11 +290,11 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
     [Fact]
     public async Task DzBuilder_RebuildFromDecodedChunks_PreservesContentAndDigests()
     {
-        var payloads = new[]
-        {
+        (string, byte[], uint)[] payloads =
+[
             (Name: "one.bin", Payload: "one payload"u8.ToArray(), Sector: 10u),
             (Name: "two.bin", Payload: "second payload"u8.ToArray(), Sector: 12u)
-        };
+       ];
         var sourceBytes = BuildDz(payloads);
         var fileHeader = sourceBytes[..DzFileHeader.Size];
         BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(4), 2);

@@ -126,7 +126,7 @@ public sealed class WorkflowGraphValidationTests
         var second = new TestNode(() => { });
         first.Output.Add(new() { Title = "Value" });
         second.Output.Add(new() { Title = "Value" });
-        var nodes = new[] { first, second };
+        TestNode[] nodes = [first, second];
 
         var resolved = WorkflowReconstruction.ResolveEndpoint(nodes, nodes.ToDictionary(node => node.InstanceId,
             node => (FlowNodeViewModel)node), null, "Value", true);

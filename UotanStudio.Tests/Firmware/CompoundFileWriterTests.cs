@@ -25,7 +25,7 @@ public class CompoundFileWriterTests
             }
 
             var small = "UotanStudio mini stream payload"u8.ToArray();
-            var tiny = new byte[] { 0x01, 0x02, 0x03 };
+            byte[] tiny = [0x01, 0x02, 0x03];
             var nested = new byte[5000];
             Random.Shared.NextBytes(nested);
             var streams = new List<CompoundFileStreamWriterEntry>
@@ -71,8 +71,8 @@ public class CompoundFileWriterTests
         {
             var streams = new List<CompoundFileStreamWriterEntry>
             {
-                new("A", new byte[] { 1 }),
-                new("a", new byte[] { 2 }),
+                new("A", (byte[])[1]),
+                new("a", (byte[])[2]),
             };
             await Assert.ThrowsAsync<ArgumentException>(() =>
                 CompoundFileWriter.BuildAsync(path, streams, TestContext.Current.CancellationToken));

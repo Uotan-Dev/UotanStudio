@@ -451,7 +451,7 @@ public sealed class QualcommImageAnalyzerTests
         BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(96), 256);
         BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(104), 256);
         "program\0read\0configure\0"u8.CopyTo(image.AsSpan(0x200));
-        var names = new ulong[] { 0x2000, 0x2008, 0x200d };
+        ulong[] names = [0x2000, 0x2008, 0x200d];
         for (var i = 0; i < names.Length; i++)
         {
             BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(0x250 + i * 16), names[i]);

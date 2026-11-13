@@ -219,7 +219,7 @@ public sealed class ErofsFeatureDeclarationTests
         IReadOnlyList<ErofsXattrEntry> shared =
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
-        ];
+       ];
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             IshareXattrs = true,
@@ -254,7 +254,7 @@ public sealed class ErofsFeatureDeclarationTests
         IReadOnlyList<ErofsXattrEntry> shared =
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
-        ];
+       ];
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             Metabox = true,
@@ -504,7 +504,7 @@ public sealed class ErofsFeatureDeclarationTests
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             BuildTime = 1_700_000_000UL,
-            Uuid = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 },
+            Uuid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
             Features = features,
         });
 }

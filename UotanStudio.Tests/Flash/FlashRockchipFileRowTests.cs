@@ -307,8 +307,8 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         image[43] = (byte)'S';
         image[44] = 1;
 
-        var offsets = new[] { HeaderSize, HeaderSize + EntrySize, HeaderSize + (2 * EntrySize) };
-        var counts = new byte[] { 1, 1, 1 };
+        int[] offsets = [HeaderSize, HeaderSize + EntrySize, HeaderSize + (2 * EntrySize)];
+        byte[] counts = [1, 1, 1];
         image[25] = counts[0];
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(26), (uint)offsets[0]);
         image[30] = EntrySize;

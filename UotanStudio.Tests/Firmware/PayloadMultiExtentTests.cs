@@ -38,7 +38,7 @@ public class PayloadMultiExtentTests
         op.SrcExtents.Add(new Extent { StartBlock = 3, NumBlocks = 1 });
         op.DstExtents.Add(new Extent { StartBlock = 4, NumBlocks = 2 });
 
-        var output = Extract(new[] { op }, baseData, []);
+        var output = Extract([op], baseData, []);
 
         var expected = (byte[])baseData.Clone();
         baseData[0..4].CopyTo(expected, 16);
@@ -66,7 +66,7 @@ public class PayloadMultiExtentTests
         op.DstExtents.Add(new Extent { StartBlock = 4, NumBlocks = 1 });
         op.DstExtents.Add(new Extent { StartBlock = 6, NumBlocks = 1 });
 
-        var output = Extract(new[] { op }, baseData, []);
+        var output = Extract([op], baseData, []);
 
         var expected = (byte[])baseData.Clone();
         baseData[0..4].CopyTo(expected, 16);
@@ -103,7 +103,7 @@ public class PayloadMultiExtentTests
         op.DstExtents.Add(new Extent { StartBlock = 4, NumBlocks = 1 });
         op.DstExtents.Add(new Extent { StartBlock = 6, NumBlocks = 1 });
 
-        var output = Extract(new[] { op }, baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]);
+        var output = Extract([op], baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]);
 
         var expected = (byte[])baseData.Clone();
         newData[0..4].CopyTo(expected, 16);
@@ -134,7 +134,7 @@ public class PayloadMultiExtentTests
         op.DstExtents.Add(new Extent { StartBlock = 3, NumBlocks = 1 });
         op.DstExtents.Add(new Extent { StartBlock = 5, NumBlocks = 1 });
 
-        var output = Extract(new[] { op }, baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]);
+        var output = Extract([op], baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]);
 
         var expected = (byte[])baseData.Clone();
         newData[0..4].CopyTo(expected, 12);
@@ -159,7 +159,7 @@ public class PayloadMultiExtentTests
         op.SrcExtents.Add(new Extent { StartBlock = 0, NumBlocks = 2 });
         op.DstExtents.Add(new Extent { StartBlock = 2, NumBlocks = 2 });
 
-        Assert.ThrowsAny<Exception>(() => Extract(new[] { op }, baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]));
+        Assert.ThrowsAny<Exception>(() => Extract([op], baseData, [new KeyValuePair<InstallOperation, byte[]>(op, patch)]));
     }
 
     private static byte[] Extract(

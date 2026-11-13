@@ -666,7 +666,7 @@ public sealed class PatchNodeTests : IDisposable
     {
         var token = TestContext.Current.CancellationToken;
         var input = Path.Combine(_root, "invalid.prop");
-        await File.WriteAllBytesAsync(input, new byte[] { 0xc0, 0xaf }, token);
+        await File.WriteAllBytesAsync(input, [0xc0, 0xaf], token);
         await Assert.ThrowsAsync<DecoderFallbackException>(() => PatchFileService.ReadAsync(input, token));
     }
 
@@ -738,7 +738,7 @@ public sealed class PatchNodeTests : IDisposable
                 Outputs = [new VisualPluginPortDefinition { Id = "result", Name = "Text", NodeInstanceId = edit.InstanceId, PortId = "text", PortType = "Text" }]
             });
         }
-        var connections = new[] { Connect(read, "Text", operation, composite ? "source" : "Text"), Connect(operation, composite ? "result" : "Text", write, "Text"), Connect(read, "Encoding", write, "Encoding") };
+        NodeConnection[] connections = [Connect(read, "Text", operation, composite ? "source" : "Text"), Connect(operation, composite ? "result" : "Text", write, "Text"), Connect(read, "Encoding", write, "Encoding")];
         var preview = await new NodeExecutionEngine(new MemoryLog()).ExecuteAsync([read, operation, write], connections, token,
             new NodeExecutionOptions { Preview = true });
         Assert.Equal(ExecutionStatus.Succeeded, preview.Status);

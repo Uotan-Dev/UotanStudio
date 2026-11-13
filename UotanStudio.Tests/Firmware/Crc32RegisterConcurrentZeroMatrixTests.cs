@@ -24,7 +24,7 @@ public class Crc32RegisterConcurrentZeroMatrixTests
             payload[i] = (byte)(i * 71 + 29);
         }
 
-        var lengths = new[] { 128 * 1024, 131_072 + 512, 200_000, 262_144, 299_999 };
+        int[] lengths = [128 * 1024, 131_072 + 512, 200_000, 262_144, 299_999];
         var references = new uint[lengths.Length];
         for (var i = 0; i < lengths.Length; i++)
         {

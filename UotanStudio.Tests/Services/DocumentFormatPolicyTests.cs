@@ -22,7 +22,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_ExtensionlessGzip_RoutesToFirmwarePanel()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var gzip = new byte[] { 0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03 };
+        byte[] gzip = [0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03];
         var path = WriteTempFile("sample", gzip);
         try
         {
@@ -128,7 +128,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_RenamedDtbMagic_RoutesToDtbEditor()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var dtb = new byte[] { 0xD0, 0x0D, 0xFE, 0xED, 0x00, 0x00, 0x00, 0x28 };
+        byte[] dtb = [0xD0, 0x0D, 0xFE, 0xED, 0x00, 0x00, 0x00, 0x28];
         var path = WriteTempFile("renamed.bin", dtb);
         try
         {
@@ -145,7 +145,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_RenamedDtboMagic_RoutesToDtbEditor()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var dtbo = new byte[] { 0xD7, 0xB7, 0xAB, 0x1E, 0x00, 0x00, 0x00, 0x20 };
+        byte[] dtbo = [0xD7, 0xB7, 0xAB, 0x1E, 0x00, 0x00, 0x00, 0x20];
         var path = WriteTempFile("table", dtbo);
         try
         {
@@ -162,7 +162,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_ExtensionlessDexMagic_RoutesToDexEditor()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var dex = new byte[] { (byte)'d', (byte)'e', (byte)'x', (byte)'\n', (byte)'0', (byte)'3', (byte)'5', 0, 0, 0 };
+        byte[] dex = [(byte)'d', (byte)'e', (byte)'x', (byte)'\n', (byte)'0', (byte)'3', (byte)'5', 0, 0, 0];
         var path = WriteTempFile("classes", dex);
         try
         {
@@ -233,7 +233,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_ExtensionlessZipMagic_RoutesToFileManager()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var zip = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00 };
+        byte[] zip = [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00];
         var path = WriteTempFile("package", zip);
         try
         {
@@ -250,7 +250,7 @@ public sealed class DocumentFormatPolicyTests
     public void ResolveMode_ApkAndJarExtensions_KeepDedicatedEditorsOverZipMagic()
     {
         FirmwareFormatRegistry.RegisterAll();
-        var zip = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00 };
+        byte[] zip = [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00];
         Assert.Equal(EditorOpenMode.Apk, DocumentFormatPolicy.ResolveMode("app.apk", zip));
         Assert.Equal(EditorOpenMode.Dex, DocumentFormatPolicy.ResolveMode("lib.jar", zip));
     }
@@ -267,7 +267,7 @@ public sealed class DocumentFormatPolicyTests
     [Fact]
     public void ResolveMode_Ole2MagicAlone_DoesNotRouteToQcnEditor()
     {
-        var ole2 = new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+        byte[] ole2 = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
         Assert.NotEqual(EditorOpenMode.Qcn, DocumentFormatPolicy.ResolveMode("document.doc", ole2));
         Assert.NotEqual(EditorOpenMode.Qcn, DocumentFormatPolicy.ResolveMode("installer", ole2));
     }

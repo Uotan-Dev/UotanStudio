@@ -112,7 +112,7 @@ public class McpSandboxTests : IDisposable
         foreach (var expected in new[]
         {
             "dex_disassemble", "dex_decompile", "dex_assemble", "dex_info",
-            "axml_parse", "arsc_parse", "apk_strip_signatures",
+            "axml_parse", "arsc_parse", "apk_strip_signatures", "dex_repartition",
         })
         {
             Assert.Contains(expected, names);

@@ -64,7 +64,7 @@ public class PayloadDeltaTests
         var outputDir = CreateTempDir();
         try
         {
-            PayloadParser.Extract(payloadPath, new[] { "system" }, outputDir,
+            PayloadParser.Extract(payloadPath, ["system"], outputDir,
                 sourceImages: new Dictionary<string, string> { ["system"] = basePath });
 
             var output = File.ReadAllBytes(Path.Combine(outputDir, "system.img"));
@@ -111,7 +111,7 @@ public class PayloadDeltaTests
         try
         {
             var ex = Assert.Throws<PartitionExtractionException>(() =>
-                PayloadParser.Extract(payloadPath, new[] { "system" }, outputDir));
+                PayloadParser.Extract(payloadPath, ["system"], outputDir));
             Assert.Equal("system", ex.PartitionName);
         }
         finally
@@ -128,7 +128,7 @@ public class PayloadDeltaTests
 
     private static byte[] BuildStoredLz4Patch(int length, byte[] inner)
     {
-        var blocks = new[] { new StoredBlock(0, (ulong)length, (ulong)length) };
+        StoredBlock[] blocks = [new StoredBlock(0, (ulong)length, (ulong)length)];
         var header = Message(writer =>
         {
             Bytes(writer, 1, Info(blocks));
@@ -222,7 +222,7 @@ public class PayloadDeltaTests
         try
         {
             using var payloadStream = File.OpenRead(payloadPath);
-            PayloadParser.Extract(payloadStream, new[] { "system" }, outputDir,
+            PayloadParser.Extract(payloadStream, ["system"], outputDir,
                 sourceImages: new Dictionary<string, string> { ["system"] = basePath });
 
             var output = File.ReadAllBytes(Path.Combine(outputDir, "system.img"));
@@ -266,7 +266,7 @@ public class PayloadDeltaTests
             var ex = Assert.Throws<PartitionExtractionException>(() =>
             {
                 using var payloadStream = File.OpenRead(payloadPath);
-                PayloadParser.Extract(payloadStream, new[] { "system" }, outputDir);
+                PayloadParser.Extract(payloadStream, ["system"], outputDir);
             });
             Assert.Equal("system", ex.PartitionName);
         }
@@ -322,7 +322,7 @@ public class PayloadDeltaTests
         var outputDir = CreateTempDir();
         try
         {
-            PayloadParser.Extract(deltaPayloadPath, new[] { "system" }, outputDir, sourcePayloadPath: sourcePayloadPath);
+            PayloadParser.Extract(deltaPayloadPath, ["system"], outputDir, sourcePayloadPath: sourcePayloadPath);
 
             var output = File.ReadAllBytes(Path.Combine(outputDir, "system.img"));
             var expected = new byte[32];

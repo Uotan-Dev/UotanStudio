@@ -103,7 +103,7 @@ public sealed class DtboByteFidelityTests : IDisposable
     [Fact]
     public void Repack_ExtendedEntriesOffsetWithGapAndPadding_IsByteIdentical()
     {
-        var blobs = new[] { BuildDtb("overlay-x"), BuildDtb("overlay-y") };
+        byte[][] blobs = [BuildDtb("overlay-x"), BuildDtb("overlay-y")];
         var original = BuildExtendedImage(blobs, pageSize: 2048,
             totalSize: (uint)(64 + 2 * 32 + blobs[0].Length + blobs[1].Length),
             fileLength: 4096);
@@ -120,7 +120,7 @@ public sealed class DtboByteFidelityTests : IDisposable
     public void UnpackThenPackDirectory_UnchangedOverlays_IsByteIdenticalWithExtendedHeader()
     {
         var shared = BuildDtb("shared-overlay");
-        var blobs = new[] { shared, shared };
+        byte[][] blobs = [shared, shared];
         var original = BuildExtendedImage(blobs, pageSize: 4096,
             totalSize: (uint)(64 + 2 * 32 + shared.Length),
             fileLength: (uint)(64 + 2 * 32 + 2 * shared.Length));
@@ -152,7 +152,7 @@ public sealed class DtboByteFidelityTests : IDisposable
     [Fact]
     public void PackDirectory_ModifiedOverlay_RebuildsWithoutExtendedHeaderLoss()
     {
-        var blobs = new[] { BuildDtb("keep-a"), BuildDtb("keep-b") };
+        byte[][] blobs = [BuildDtb("keep-a"), BuildDtb("keep-b")];
         var original = BuildExtendedImage(blobs, pageSize: 2048,
             totalSize: (uint)(64 + 2 * 32 + blobs[0].Length + blobs[1].Length),
             fileLength: (uint)(64 + 2 * 32 + blobs[0].Length + blobs[1].Length));

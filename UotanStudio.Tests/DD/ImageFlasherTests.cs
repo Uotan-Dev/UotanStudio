@@ -2,6 +2,7 @@ using System.IO.Compression;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Zip;
 using UotanStudio.DD;
+using UotanStudio.DD.Drives;
 using UotanStudio.DD.Images;
 using UotanStudio.DD.Writing;
 using Xunit;
@@ -18,11 +19,11 @@ public class ImageFlasherTests
         var image = ImageProbe.Probe(directory.WriteFile("system.img", data));
         var firstPath = directory.Combine("target-a.bin");
         var secondPath = directory.Combine("target-b.bin");
-        var drives = new[]
-        {
+        FlashDrive[] drives =
+[
             FlashTestData.CreateDrive(firstPath, data.Length + 4096),
             FlashTestData.CreateDrive(secondPath, data.Length + 4096),
-        };
+       ];
         var progress = new RecordingProgress();
 
         var result = await new ImageFlasher(FileDiskTargetFactory.Instance).FlashAsync(

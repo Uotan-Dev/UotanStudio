@@ -35,7 +35,7 @@ public class Crc32cTests
     public void Compute_RandomLengthsAndSeeds_MatchesBitwiseReference()
     {
         var random = new Random(0x5EED1234);
-        var seeds = new uint[] { 0x00000000u, 0x1CF96D7Cu, 0x5045B54Au, 0x82F63B78u, 0xF2F52010u, 0xFFFFFFFFu };
+        uint[] seeds = [0x00000000u, 0x1CF96D7Cu, 0x5045B54Au, 0x82F63B78u, 0xF2F52010u, 0xFFFFFFFFu];
 
         foreach (var length in Crc32Lengths)
         {
@@ -131,7 +131,7 @@ public class Crc32Tests
     public void Compute_RandomLengthsAndSeeds_MatchesBitwiseReference()
     {
         var random = new Random(0x5EED4321);
-        var seeds = new uint[] { 0x00000000u, 0x340BC6D9u, 0xEDB88320u, 0xF2F52010u, 0xFFFFFFFFu };
+        uint[] seeds = [0x00000000u, 0x340BC6D9u, 0xEDB88320u, 0xF2F52010u, 0xFFFFFFFFu];
 
         foreach (var length in Crc32Lengths)
         {

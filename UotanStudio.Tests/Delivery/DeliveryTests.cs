@@ -434,7 +434,7 @@ public sealed class DeliveryTests : IDisposable
     [Fact]
     public async Task DownloadRechecksCacheAndRejectsCorruption()
     {
-        var data = new byte[] { 1, 2, 3, 4 };
+        byte[] data = [1, 2, 3, 4];
         var handler = new DownloadHandler(data);
         using var http = new HttpClient(handler);
         var service = new DeliveryToolService(http, Path.Combine(Root, "cache"));

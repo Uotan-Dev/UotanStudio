@@ -109,7 +109,7 @@ public sealed class ErofsChunkDeviceTests
         [
             new ErofsDeviceSpec("blob1.img", 4 * BlockSize),
             new ErofsDeviceSpec("blob2.img", 4 * BlockSize),
-        ];
+       ];
         options.BlobDeviceIds = [1, 2];
 
         var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
@@ -204,7 +204,7 @@ public sealed class ErofsChunkDeviceTests
 
         var device = new byte[2 * BlockSize];
         Array.Fill(device, (byte)0xAB, BlockSize, BlockSize);
-        var streams = new Stream[] { new MemoryStream(image, writable: false), new MemoryStream(device, writable: false) };
+        Stream[] streams = [new MemoryStream(image, writable: false), new MemoryStream(device, writable: false)];
         using var multiDevice = new ErofsParser(streams);
         var content = multiDevice.ReadFileBytes("data.bin");
 

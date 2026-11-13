@@ -141,7 +141,7 @@ public sealed class RootPatchPackageTests : IDisposable
     public async Task EnsurePackageAsync_CachedVerbatimFile_IsReturnedWithoutNetwork()
     {
         var root = NewRoot();
-        var payload = new byte[] { 7, 7, 7, 7 };
+        byte[] payload = [7, 7, 7, 7];
         var package = Package(RootPatchPackageSource.Magisk, "28.1", payload.Length, Sha256Hex(payload));
         var service = NewService(new HttpClient(new StubHandler(_ =>
             throw new HttpRequestException("the network must not be touched"))), root, useMirrorList: false);

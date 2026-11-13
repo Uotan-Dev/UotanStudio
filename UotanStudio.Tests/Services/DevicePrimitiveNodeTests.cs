@@ -61,7 +61,7 @@ public sealed class DevicePrimitiveNodeTests
     [Fact]
     public void TableRead_NameSizeText_SplitsIntoNamesAndFields()
     {
-        var entries = new object[] { "boot=67108864", "vendor_boot=100663296" };
+        object[] entries = ["boot=67108864", "vendor_boot=100663296"];
         var split = Factory("Data.List.ElementAt");
         var item = entries[1] as string;
         var index = item!.IndexOf('=', StringComparison.Ordinal);

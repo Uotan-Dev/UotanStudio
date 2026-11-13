@@ -279,10 +279,10 @@ public sealed class AllwinnerImageWtyTests : IDisposable
     public void Read_EncryptedContainer_DecryptsHeaderRecordsAndPayloads(int headerVersion)
     {
         var payload = CreatePayload(256, 0x9D);
-        var entries = new[]
-        {
+        EntrySpec[] entries =
+[
             new EntrySpec("u-boot-efex.fex", "12345678", "UBOOT_0000000000", payload)
-        };
+       ];
         var plain = BuildImage(headerVersion, entries);
         var encrypted = Encrypt(plain, headerVersion, entries);
 
@@ -421,11 +421,11 @@ public sealed class AllwinnerImageWtyTests : IDisposable
     public async Task UnpackAsync_EncryptedContainer_WritesDecryptedPayloadsAndSkipsEmptyEntries()
     {
         var payload = CreatePayload(512, 0x5A);
-        var entries = new[]
-        {
+        EntrySpec[] entries =
+[
             new EntrySpec("u-boot-efex.fex", "12345678", "UBOOT_0000000000", payload),
             new EntrySpec("empty.fex", "COMMON", "BOARD_CONFIG_BIN", [])
-        };
+       ];
         var image = Encrypt(BuildImage(VersionThree, entries), VersionThree, entries);
         var path = Path.Combine(_root, "unpack.img");
         await File.WriteAllBytesAsync(path, image, TestContext.Current.CancellationToken);

@@ -74,7 +74,7 @@ public sealed class CareMapTests : IDisposable
     [Fact]
     public void FromBytes_TruncatedMessage_Throws()
     {
-        Assert.ThrowsAny<Exception>(() => CareMap.FromBytes(new byte[] { 0x0A, 0x40, 0x0A }));
+        Assert.ThrowsAny<Exception>(() => CareMap.FromBytes([0x0A, 0x40, 0x0A]));
     }
 
     [Fact]

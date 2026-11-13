@@ -228,8 +228,8 @@ public class BoundedFormatSecurityTests
     [Fact]
     public void VendorBootV3_StreamingExtractionIsRangeBounded()
     {
-        var ramdisk = new byte[] { 1, 2, 3, 4 };
-        var dtb = new byte[] { 5, 6, 7, 8, 9, 10 };
+        byte[] ramdisk = [1, 2, 3, 4];
+        byte[] dtb = [5, 6, 7, 8, 9, 10];
         var data = VendorBootV3(ramdisk, dtb);
         using var parser = new VendorBootParser();
         parser.Parse(data);
@@ -247,7 +247,7 @@ public class BoundedFormatSecurityTests
     [Fact]
     public void VendorBootV3_ExtractComponentToFileMatchesByteArray()
     {
-        var ramdisk = new byte[] { 0xAA, 0xBB, 0xCC };
+        byte[] ramdisk = [0xAA, 0xBB, 0xCC];
         var data = VendorBootV3(ramdisk, null);
         using var parser = new VendorBootParser();
         parser.Parse(data);

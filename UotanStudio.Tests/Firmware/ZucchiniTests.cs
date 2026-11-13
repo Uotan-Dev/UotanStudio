@@ -59,7 +59,7 @@ public class ZucchiniTests
     [Fact]
     public void Apply_PureExtraInsertion_ProducesNewData()
     {
-        var oldData = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        byte[] oldData = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
         var newData = Enumerable.Range(0, oldData.Length).Select(i => (byte)(0x50 + i)).ToArray();
 
         var patch = BuildPatch(oldData, newData, []);
@@ -71,8 +71,8 @@ public class ZucchiniTests
     [Fact]
     public void Apply_EquivalenceCopyPlusRawDelta_ProducesNewData()
     {
-        var oldData = new byte[] { 0x55, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x20, 0x21, 0x22, 0x23 };
-        var newData = new byte[] { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0xAA, 0xBB, 0x22, 0x23 };
+        byte[] oldData = [0x55, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x20, 0x21, 0x22, 0x23];
+        byte[] newData = [0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0xAA, 0xBB, 0x22, 0x23];
 
         var patch = BuildPatch(oldData, newData, [(Src: 0, Dst: 0, Len: 8), (Src: 10, Dst: 10, Len: 2)]);
         var result = ZucchiniPatchApplier.Apply(oldData, patch, newData.Length);
@@ -83,7 +83,7 @@ public class ZucchiniTests
     [Fact]
     public void Apply_WrongCrc_ThrowsZucchiniChecksumException()
     {
-        var oldData = new byte[] { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+        byte[] oldData = [0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17];
         var newData = oldData.Select(b => (byte)(b ^ 0xFF)).ToArray();
 
         var patch = BuildPatch(oldData, newData, [(Src: 0, Dst: 0, Len: 8)]);
@@ -97,8 +97,8 @@ public class ZucchiniTests
     [Fact]
     public void Apply_WrongMagic_ThrowsZucchiniFormatException()
     {
-        var oldData = new byte[] { 1, 2, 3, 4 };
-        var newData = new byte[] { 5, 6, 7, 8 };
+        byte[] oldData = [1, 2, 3, 4];
+        byte[] newData = [5, 6, 7, 8];
 
         var patch = BuildPatch(oldData, newData, []);
         patch[0] ^= 0xFF;
@@ -111,8 +111,8 @@ public class ZucchiniTests
     [Fact]
     public void Apply_NonRawExecutableType_ThrowsZucchiniUnsupportedExecutableTypeException()
     {
-        var oldData = new byte[] { 1, 2, 3, 4 };
-        var newData = new byte[] { 5, 6, 7, 8 };
+        byte[] oldData = [1, 2, 3, 4];
+        byte[] newData = [5, 6, 7, 8];
 
         var patch = BuildPatch(oldData, newData, [], exeType: (ZucchiniExecutableType)1);
 
@@ -127,8 +127,8 @@ public class ZucchiniTests
     [Fact]
     public void Apply_TruncatedPatch_ThrowsZucchiniFormatException()
     {
-        var oldData = new byte[] { 1, 2, 3, 4 };
-        var newData = new byte[] { 5, 6, 7, 8 };
+        byte[] oldData = [1, 2, 3, 4];
+        byte[] newData = [5, 6, 7, 8];
 
         var patch = BuildPatch(oldData, newData, []);
         Assert.Throws<ZucchiniFormatException>(() =>
@@ -177,7 +177,7 @@ public class ZucchiniTests
         try
         {
             using var payloadStream = File.OpenRead(payloadPath);
-            PayloadParser.Extract(payloadStream, new[] { "system" }, outputDir,
+            PayloadParser.Extract(payloadStream, ["system"], outputDir,
                 sourceImages: new Dictionary<string, string> { ["system"] = basePath });
 
             var output = File.ReadAllBytes(Path.Combine(outputDir, "system.img"));
@@ -221,7 +221,7 @@ public class ZucchiniTests
             var ex = Assert.Throws<PartitionExtractionException>(() =>
             {
                 using var payloadStream = File.OpenRead(payloadPath);
-                PayloadParser.Extract(payloadStream, new[] { "system" }, outputDir);
+                PayloadParser.Extract(payloadStream, ["system"], outputDir);
             });
             Assert.Equal("system", ex.PartitionName);
         }

@@ -245,7 +245,7 @@ public class PayloadIncrementalBuilderTests
         File.WriteAllBytes(sourcePath, source);
         var output = Path.Combine(temp.Path, "out");
         Directory.CreateDirectory(output);
-        var existing = new byte[] { 1, 2, 3 };
+        byte[] existing = [1, 2, 3];
         File.WriteAllBytes(Path.Combine(output, "system.img"), existing);
         await Assert.ThrowsAsync<PartitionExtractionException>(() => PayloadParser.ExtractAsync(payload, ["system"], output,
             cancellationToken: TestContext.Current.CancellationToken,

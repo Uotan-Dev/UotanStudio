@@ -63,7 +63,7 @@ public class ZucchiniExecutableTypePreflightTests
         var blob = Brotli(BuildPatch([(ExeType: (uint)ZucchiniExecutableType.Raw, NewOffset: 0u)]));
         using var payload = Payload(blob);
         payload.Position = 3;
-        var operations = new[] { ZucchiniOperation((ulong)blob.Length) };
+        InstallOperation[] operations = [ZucchiniOperation((ulong)blob.Length)];
 
         ZucchiniExecutableTypeScanner.ScanOperations(payload, operations, 0, TestContext.Current.CancellationToken);
 
@@ -177,7 +177,7 @@ public class ZucchiniExecutableTypePreflightTests
     public void ScanOperations_MixedSequentialOperations_OnlyReadsZucchiniBlobs()
     {
         var zucchini = Brotli(BuildPatch([(ExeType: UnsupportedExeType, NewOffset: 0u)]));
-        var unrelated = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        byte[] unrelated = [1, 2, 3, 4, 5, 6, 7, 8];
         using var payload = Payload([.. zucchini, .. unrelated]);
         var copy = new InstallOperation
         {
@@ -185,7 +185,7 @@ public class ZucchiniExecutableTypePreflightTests
             DataOffset = (ulong)zucchini.Length,
             DataLength = (ulong)unrelated.Length
         };
-        var operations = new[] { copy, ZucchiniOperation((ulong)zucchini.Length) };
+        InstallOperation[] operations = [copy, ZucchiniOperation((ulong)zucchini.Length)];
 
         Assert.True(ZucchiniExecutableTypeScanner.HasZucchiniOperation(operations));
         var exception = Assert.Throws<ZucchiniUnsupportedExecutableTypeException>(() =>
@@ -199,7 +199,7 @@ public class ZucchiniExecutableTypePreflightTests
     {
         var blob = Brotli(BuildPatch([(ExeType: UnsupportedExeType, NewOffset: 0u)]));
         using var forward = new NonSeekableReadStream(blob);
-        var operations = new[] { ZucchiniOperation((ulong)blob.Length) };
+        InstallOperation[] operations = [ZucchiniOperation((ulong)blob.Length)];
 
         ZucchiniExecutableTypeScanner.ScanOperations(forward, operations, 0, TestContext.Current.CancellationToken);
 
@@ -209,12 +209,12 @@ public class ZucchiniExecutableTypePreflightTests
     [Fact]
     public void HasZucchiniOperation_NoZucchiniOperations_ReportsFalse()
     {
-        var operations = new[]
-        {
+        InstallOperation[] operations =
+[
             new InstallOperation { Type = InstallOperation.Types.Type.Replace },
             new InstallOperation { Type = InstallOperation.Types.Type.SourceCopy },
             new InstallOperation { Type = InstallOperation.Types.Type.Puffdiff }
-        };
+       ];
 
         Assert.False(ZucchiniExecutableTypeScanner.HasZucchiniOperation(operations));
     }

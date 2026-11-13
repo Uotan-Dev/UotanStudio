@@ -45,7 +45,7 @@ public class PayloadToolTests
     [Fact]
     public void IsPayload_Bytes_ReadsMagicAsBigEndian()
     {
-        var littleEndianMagic = new byte[] { 0x55, 0x41, 0x72, 0x43, 0, 0, 0, 0 };
+        byte[] littleEndianMagic = [0x55, 0x41, 0x72, 0x43, 0, 0, 0, 0];
 
         Assert.False(PayloadTool.IsPayload(littleEndianMagic));
         Assert.Equal((byte)0x43, CrAuMagic[0]);

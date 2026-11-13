@@ -11,7 +11,7 @@ public sealed class AvbDescriptorReaderTests
     [Fact]
     public void ExtractHashDescriptors_FullHeader_MatchesStrictParserOnPinnedDescriptor()
     {
-        var salt = new byte[] { 0x10, 0x20, 0x30 };
+        byte[] salt = [0x10, 0x20, 0x30];
         var digest = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
         var bytes = Container(
             Descriptor(0, PropertyBody("avb.test", [1, 2])),

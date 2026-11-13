@@ -71,7 +71,7 @@ public sealed class ApplePlistTests
     [Fact]
     public void Parse_TruncatedBinaryHeader_Throws()
     {
-        var payload = new byte[] { (byte)'b' };
+        byte[] payload = [(byte)'b'];
         Assert.Throws<InvalidDataException>(() => ApplePlist.Parse(payload));
     }
 
@@ -82,7 +82,7 @@ public sealed class ApplePlistTests
         payload.AddRange("bplist00"u8);
         payload.Add(0xD0);
         payload.Add(0x4F);
-        payload.AddRange(new byte[] { 0x11, 0xFF, 0xFF });
+        payload.AddRange([0x11, 0xFF, 0xFF]);
         payload.AddRange(new byte[32]);
         Assert.Throws<InvalidDataException>(() => ApplePlist.Parse([.. payload]));
     }

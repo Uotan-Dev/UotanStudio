@@ -94,7 +94,7 @@ public class DiagNvPacketTests
     [Fact]
     public void DecodeReadResponse_ItemDataTrailingStatus()
     {
-        var response = new byte[] { 0x0A, 0x00, 0xAA, 0xBB, 0x00, 0x00 };
+        byte[] response = [0x0A, 0x00, 0xAA, 0xBB, 0x00, 0x00];
         var (itemId, data, status) = DiagNvPacket.DecodeReadResponse(response);
         Assert.Equal(10, itemId);
         Assert.Equal([0xAA, 0xBB], data);

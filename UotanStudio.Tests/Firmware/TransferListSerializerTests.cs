@@ -95,7 +95,7 @@ public class TransferListSerializerTests
     [Fact]
     public void Serialize_InvalidVersion_Throws()
     {
-        var commands = new[] { new TransferListCommand(TransferListCommandKind.New, [new BlockRange(0, 1)]) };
+        TransferListCommand[] commands = [new TransferListCommand(TransferListCommandKind.New, [new BlockRange(0, 1)])];
         var bad = new TransferList(5, 1, 0, 0, commands);
         Assert.Throws<ArgumentOutOfRangeException>(() => TransferListSerializer.Serialize(bad));
     }

@@ -35,7 +35,7 @@ public sealed class DebugBridgeIdentityTests : IDisposable
         var adb = Path.Combine(_root, "adbkey"); var hdc = Path.Combine(_root, "hdckey");
         var libraryRoot = Path.Combine(_root, "library");
         DebugBridgeIdentityService.EnsureDefaults(adb, hdc, libraryRoot);
-        var paths = new[] { adb, hdc, adb + ".pub", hdc + ".pub" };
+        string[] paths = [adb, hdc, adb + ".pub", hdc + ".pub"];
         var before = paths.ToDictionary(p => p, File.ReadAllBytes);
         DebugBridgeIdentityService.EnsureDefaults(adb, hdc, libraryRoot);
         foreach (var path in paths) Assert.Equal(before[path], File.ReadAllBytes(path));

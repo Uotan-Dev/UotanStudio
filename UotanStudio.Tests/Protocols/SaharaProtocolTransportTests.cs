@@ -132,7 +132,7 @@ public class SaharaRamDumpTests
     public async Task CollectRamDumpAsync_MemoryDebugHelloAndOneRegion_WritesRegionFileAndResets()
     {
         var transport = new ScriptedSaharaTransport();
-        var regionData = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        byte[] regionData = [1, 2, 3, 4, 5, 6, 7, 8];
         var table = DebugTable(0x1000, (ulong)regionData.Length, "DDR", "DDR.BIN");
         transport.EnqueueRead(
             HelloPacket(2),
@@ -184,7 +184,7 @@ public class SaharaRamDumpTests
             HelloPacket(2),
             MemoryDebug64Packet(0x3000, 128),
             table,
-            new byte[] { 9, 9, 9, 9 },
+            [9, 9, 9, 9],
             ResetResponsePacket());
 
         var sahara = new SaharaProtocol(transport);

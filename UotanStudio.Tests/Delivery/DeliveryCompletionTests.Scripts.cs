@@ -213,7 +213,7 @@ public sealed partial class DeliveryCompletionTests
         {
             Assert.Skip("Batch banner execution requires cmd.exe on Windows.");
         }
-        var lines = new[] { "作者", "100% & \"quotes\" ! ^ | < > ( )", "\"& echo INJECTED > injected.txt &\"", "%PATH%", "", "O'Brien $() `text` \\path" };
+        string[] lines = ["作者", "100% & \"quotes\" ! ^ | < > ( )", "\"& echo INJECTED > injected.txt &\"", "%PATH%", "", "O'Brien $() `text` \\path"];
         var script = Path.Combine(_root, "banner.bat");
         await File.WriteAllTextAsync(script, "@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\n"
             + string.Join("\r\n", lines.Select(DeliveryScriptGenerator.BatchEcho)) + "\r\n", new UTF8Encoding(false), Token);

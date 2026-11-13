@@ -86,7 +86,7 @@ public sealed partial class DeliveryCompletionTests : IDisposable
     [Fact]
     public async Task SuperPreservesMultipleGroupCapacityAndSourceMembership()
     {
-        var files = new[] { Image("system_a"), Image("vendor_a") };
+        DeliveryFile[] files = [Image("system_a"), Image("vendor_a")];
         var groups = DeliveryGroups.Parse("main_a 16384 system_a\nother_a 8192 vendor_a");
         var options = new DeliverySuperOptions { DeviceSize = 4 * 1024 * 1024, Groups = groups };
         var path = Path.Combine(_root, "super.img");
@@ -104,7 +104,7 @@ public sealed partial class DeliveryCompletionTests : IDisposable
     [Fact]
     public async Task OversizedPartitionsReportRequiredBytesAndMinimumSize()
     {
-        var files = new[] { Image("system_a"), Image("vendor_a") };
+        DeliveryFile[] files = [Image("system_a"), Image("vendor_a")];
         var options = new DeliverySuperOptions { DeviceSize = 409_600 };
         var path = Path.Combine(_root, "too-small.img");
         var error = await Assert.ThrowsAsync<InvalidDataException>(() => DeliverySuperBuilder.BuildAsync(files, options, path, token: Token));

@@ -82,10 +82,10 @@ public sealed class AirPlayMdnsMessageTests
     [Fact]
     public void Parse_A_RecordExposesAddress()
     {
-        var records = new[]
-        {
+        MdnsRecord[] records =
+[
             MdnsRecord.AddressRecord("uotan-aabbccddeeff.local", IPAddress.Parse("192.168.1.42")),
-        };
+       ];
 
         var message = MdnsMessage.Parse(MdnsMessage.BuildResponse(records));
 
@@ -140,7 +140,7 @@ public sealed class AirPlayMdnsMessageTests
 
     private static byte[] BuildPointerAnswerWithCompression()
     {
-        var owner = new byte[] { 3, (byte)'s', (byte)'v', (byte)'c', 5, (byte)'l', (byte)'o', (byte)'c', (byte)'a', (byte)'l', 0 };
+        byte[] owner = [3, (byte)'s', (byte)'v', (byte)'c', 5, (byte)'l', (byte)'o', (byte)'c', (byte)'a', (byte)'l', 0];
         var target = new byte[]
         {
             6, (byte)'t', (byte)'a', (byte)'r', (byte)'g', (byte)'e', (byte)'t', 5, (byte)'l', (byte)'o', (byte)'c',

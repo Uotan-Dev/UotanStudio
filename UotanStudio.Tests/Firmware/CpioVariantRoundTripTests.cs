@@ -20,7 +20,7 @@ public sealed partial class CpioVariantRoundTripTests
         ArchiveFormat.HpOldAscii,
         ArchiveFormat.Binary,
         ArchiveFormat.HpBinary,
-    ];
+   ];
 
     [Theory]
     [MemberData(nameof(AllDialectsData))]
@@ -86,8 +86,8 @@ public sealed partial class CpioVariantRoundTripTests
     {
         var payload = BuildBytes(2069, 17);
         var archive = new CpioArchive();
-        var entries = new[]
-        {
+        ArchiveEntry[] entries =
+[
             new ArchiveEntry
             {
                 Name = "streamed",
@@ -103,7 +103,7 @@ public sealed partial class CpioVariantRoundTripTests
                     ModificationTimeUnixSeconds = 1_700_000_050,
                 },
             },
-        };
+       ];
 
         var packed = Write(archive, entries, format);
         var unpacked = Read(archive, packed, format);
@@ -117,8 +117,8 @@ public sealed partial class CpioVariantRoundTripTests
     [InlineData(ArchiveFormat.HpBinary)]
     public void SaveAll_HpDialectWithSpecialDevices_PacksDeviceNumbersIntoSizeFieldAndRepacksByteIdentically(ArchiveFormat format)
     {
-        var entries = new[]
-        {
+        ArchiveEntry[] entries =
+[
             new ArchiveEntry
             {
                 Name = "console",
@@ -149,7 +149,7 @@ public sealed partial class CpioVariantRoundTripTests
                     RDeviceMinor = 0,
                 },
             },
-        };
+       ];
         var archive = new CpioArchive();
 
         var packed = Write(archive, entries, format);
@@ -175,8 +175,8 @@ public sealed partial class CpioVariantRoundTripTests
     public void SaveAll_HpSpecialDeviceWithPayload_ThrowsCorruption(ArchiveFormat format)
     {
         var archive = new CpioArchive();
-        var entries = new[]
-        {
+        ArchiveEntry[] entries =
+[
             new ArchiveEntry
             {
                 Name = "bad",
@@ -190,7 +190,7 @@ public sealed partial class CpioVariantRoundTripTests
                     RDeviceMinor = 1,
                 },
             },
-        };
+       ];
 
         Assert.Throws<ArchiveCorruptedException>(() => Write(archive, entries, format));
     }
@@ -205,8 +205,8 @@ public sealed partial class CpioVariantRoundTripTests
     public void SaveAll_HardlinkedGroup_RoundTripsThroughDataCarrierFolding(ArchiveFormat format)
     {
         var payload = BuildBytes(64, 7);
-        var entries = new[]
-        {
+        ArchiveEntry[] entries =
+[
             new ArchiveEntry
             {
                 Name = "carrier",
@@ -233,7 +233,7 @@ public sealed partial class CpioVariantRoundTripTests
                     ModificationTimeUnixSeconds = 1_700_000_070,
                 },
             },
-        };
+       ];
         var archive = new CpioArchive();
 
         var packed = Write(archive, entries, format);
@@ -295,7 +295,7 @@ public sealed partial class CpioVariantRoundTripTests
                 DeviceMajor = 3,
             },
         },
-    ];
+   ];
 
     private static byte[] Write(CpioArchive archive, IEnumerable<ArchiveEntry> entries, ArchiveFormat format)
     {

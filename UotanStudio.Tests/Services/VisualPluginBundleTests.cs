@@ -361,7 +361,7 @@ public sealed class VisualPluginBundleTests
         var root = Path.Combine(temp.Path, "project");
         Directory.CreateDirectory(root);
         var outside = Path.Combine(temp.Path, "outside.bin");
-        var bytes = new byte[] { 1, 2, 3, 4 };
+        byte[] bytes = [1, 2, 3, 4];
         await File.WriteAllBytesAsync(outside, bytes, TestContext.Current.CancellationToken);
         var package = CreatePackage();
         package.Assets.Add(new VisualPluginAsset

@@ -62,7 +62,7 @@ public sealed class RkdlFlashGeometryDecodeTests
     [Fact]
     public void Decode_CapabilityWord_MapsDirectLbaAndFirst4MAccessBits()
     {
-        var capability = RkCapability.Decode(new byte[] { 0x05, 0, 0, 0, 0, 0, 0, 0 });
+        var capability = RkCapability.Decode([0x05, 0, 0, 0, 0, 0, 0, 0]);
 
         Assert.True(capability.DirectLba);
         Assert.True(capability.First4MAccess);

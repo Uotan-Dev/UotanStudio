@@ -10,8 +10,8 @@ public sealed class OhscrcpyProtocolTests
     [Fact]
     public void BuildAnnexBConfiguration_PrefixesBothNalUnitsWithFourByteStartCodes()
     {
-        var sps = new byte[] { 0x67, 0x01 };
-        var pps = new byte[] { 0x68, 0x02 };
+        byte[] sps = [0x67, 0x01];
+        byte[] pps = [0x68, 0x02];
 
         var annexB = OhscrcpyProtocol.BuildAnnexBConfiguration(sps, pps);
 
@@ -22,8 +22,8 @@ public sealed class OhscrcpyProtocolTests
     public void TryGetParameterSets_ExtractsSpsAndPpsFromAnnexB()
     {
         var sps = BuildSps(widthInMacroblocks: 80, heightInMapUnits: 45, cropBottom: 0);
-        var pps = new byte[] { 0x68, 0xCE, 0x3C, 0x80 };
-        var idr = new byte[] { 0x65, 0x88, 0x84 };
+        byte[] pps = [0x68, 0xCE, 0x3C, 0x80];
+        byte[] idr = [0x65, 0x88, 0x84];
         var accessUnit = AnnexB(sps, pps, idr);
 
         Assert.True(OhscrcpyProtocol.TryGetParameterSets(accessUnit, out var parsedSps, out var parsedPps));
@@ -34,7 +34,7 @@ public sealed class OhscrcpyProtocolTests
     [Fact]
     public void TryGetParameterSets_MissingPps_ReturnsFalse()
     {
-        var accessUnit = AnnexB(BuildSps(80, 45, 0), new byte[] { 0x65, 0x88 });
+        var accessUnit = AnnexB(BuildSps(80, 45, 0), [0x65, 0x88]);
 
         Assert.False(OhscrcpyProtocol.TryGetParameterSets(accessUnit, out var sps, out var pps));
         Assert.NotEmpty(sps);
@@ -44,8 +44,8 @@ public sealed class OhscrcpyProtocolTests
     [Fact]
     public void IsKeyFrame_DetectsIdrAndIgnoresNonIdr()
     {
-        var idr = AnnexB(new byte[] { 0x67, 0x42 }, new byte[] { 0x65, 0x88 });
-        var nonIdr = AnnexB(new byte[] { 0x67, 0x42 }, new byte[] { 0x41, 0x9A });
+        var idr = AnnexB([0x67, 0x42], [0x65, 0x88]);
+        var nonIdr = AnnexB([0x67, 0x42], [0x41, 0x9A]);
 
         Assert.True(OhscrcpyProtocol.IsKeyFrame(idr));
         Assert.False(OhscrcpyProtocol.IsKeyFrame(nonIdr));
@@ -78,13 +78,13 @@ public sealed class OhscrcpyProtocolTests
         var sps = BuildSps(80, 45, 0);
 
         Assert.False(OhscrcpyProtocol.TryParseSpsDimensions(sps.AsSpan(0, 3), out _, out _));
-        Assert.False(OhscrcpyProtocol.TryParseSpsDimensions(new byte[] { 0x67, 0xFF, 0xFF, 0xFF, 0xFF }, out _, out _));
+        Assert.False(OhscrcpyProtocol.TryParseSpsDimensions([0x67, 0xFF, 0xFF, 0xFF, 0xFF], out _, out _));
     }
 
     [Fact]
     public void TryParseReply_ReadsDataReplyTypeAndVideoPayload()
     {
-        var video = new byte[] { 0, 0, 0, 1, 0x65, 0x88 };
+        byte[] video = [0, 0, 0, 1, 0x65, 0x88];
         var payload = BuildReply(video, "ok", 3);
 
         Assert.True(OhscrcpyGrpcProtocol.TryParseReply(payload, out var reply));
@@ -115,14 +115,14 @@ public sealed class OhscrcpyProtocolTests
     [Fact]
     public void TryParseEndResult_ReadsResult()
     {
-        Assert.True(OhscrcpyGrpcProtocol.TryParseEndResult(new byte[] { 0x08, 0x00 }, out var result));
+        Assert.True(OhscrcpyGrpcProtocol.TryParseEndResult([0x08, 0x00], out var result));
         Assert.Equal(0, result);
     }
 
     [Fact]
     public async Task ReadMessageAsync_RoundTripsFrame()
     {
-        var expected = new byte[] { 1, 2, 3, 4, 5 };
+        byte[] expected = [1, 2, 3, 4, 5];
         using var stream = new MemoryStream(BuildGrpcFrame(expected));
 
         var actual = await OhscrcpyGrpcProtocol.ReadMessageAsync(

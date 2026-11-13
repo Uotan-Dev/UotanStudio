@@ -431,8 +431,8 @@ public sealed class ErofsRebuildFeatureReplayTests
 
         var legacy = ErofsRebuildMetadata.Restore(legacyShape);
         var pinned = ErofsRebuildMetadata.Restore(pinnedShape);
-        legacy.Uuid = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-        pinned.Uuid = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+        legacy.Uuid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        pinned.Uuid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
         legacy.BuildTime = 1_700_000_000UL;
         pinned.BuildTime = 1_700_000_000UL;
 
@@ -636,7 +636,7 @@ public sealed class ErofsRebuildFeatureReplayTests
         IReadOnlyList<ErofsXattrEntry> shared =
         [
             new ErofsXattrEntry { Name = "user.role", Value = "system"u8.ToArray() },
-        ];
+       ];
         var image = InMemoryImage.Erofs(source.Path, new ErofsOptions
         {
             XattrNameFilter = true,

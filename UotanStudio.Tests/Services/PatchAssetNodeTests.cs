@@ -80,7 +80,7 @@ public sealed class PatchAssetNodeTests
         using var temp = new TempDirectory();
         var token = TestContext.Current.CancellationToken;
         var source = Path.Combine(temp.Path, "invalid");
-        await File.WriteAllBytesAsync(source, new byte[] { 0xc0, 0xaf }, token);
+        await File.WriteAllBytesAsync(source, [0xc0, 0xaf], token);
         var package = new VisualPluginPackage
         {
             Kind = VisualPluginKind.CompositeNode,

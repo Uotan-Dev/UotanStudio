@@ -487,7 +487,7 @@ public sealed class NodeOperationFailureTests
     {
         var encrypt = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Cipher.Encrypt").Factory();
         var decrypt = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "Data.Cipher.Decrypt").Factory();
-        var plain = new byte[] { 1, 2, 3, 4, 5 };
+        byte[] plain = [1, 2, 3, 4, 5];
         encrypt.Input.Single(port => port.Title == "Data").InitialValue = plain;
         encrypt.Input.Single(port => port.Title == "Key").InitialValue = new byte[] { 6, 7, 8 };
         decrypt.Input.Single(port => port.Title == "Key").InitialValue = new byte[] { 6, 7, 8 };

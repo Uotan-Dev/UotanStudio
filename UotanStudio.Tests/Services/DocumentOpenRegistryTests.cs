@@ -13,12 +13,12 @@ public class DocumentOpenRegistryTests
     [Fact]
     public void DocumentScopeKinds_MatchCurrentSessionCaptureSet()
     {
-        var expected = new[]
-        {
+        string[] expected =
+[
             "Text", "Firmware", "FileManager", "Dtb", "Dex", "Elf", "Qualcomm",
             "Manifest", "Arsc", "Hex", "Apk", "Partition", "Compare", "RockchipConfig",
             "ImageViewer", "LogoPartition"
-        };
+       ];
 
         var actual = DocumentOpenRegistry.All
             .Where(d => d.IsDocument)
@@ -64,15 +64,15 @@ public class DocumentOpenRegistryTests
     [Fact]
     public void MenuEntries_Order_MatchesExplorerContextMenuSequence()
     {
-        var expected = new[]
-        {
+        EditorOpenMode[] expected =
+[
             EditorOpenMode.Elf, EditorOpenMode.Qualcomm, EditorOpenMode.Qcn,
             EditorOpenMode.Partition, EditorOpenMode.Text, EditorOpenMode.Log,
             EditorOpenMode.Hex, EditorOpenMode.Dtb, EditorOpenMode.Dex,
             EditorOpenMode.Axml, EditorOpenMode.Arsc, EditorOpenMode.Apk,
             EditorOpenMode.Firmware, EditorOpenMode.FileSystem, EditorOpenMode.RockchipConfig,
             EditorOpenMode.Image, EditorOpenMode.LogoPartition
-        };
+       ];
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.Mode!.Value).ToList();
 
@@ -82,15 +82,15 @@ public class DocumentOpenRegistryTests
     [Fact]
     public void MenuEntries_LocaleKeys_MatchExplorerOpenAsResources()
     {
-        var expected = new[]
-        {
+        string[] expected =
+[
             "Explorer_OpenAsElf", "Explorer_OpenAsQualcomm", "Explorer_OpenAsQcn",
             "Explorer_OpenAsPartition", "Explorer_OpenAsText", "Explorer_OpenAsLog",
             "Explorer_OpenAsHex", "Explorer_OpenAsDtb", "Explorer_OpenAsDex",
             "Explorer_OpenAsAxml", "Explorer_OpenAsArsc", "Explorer_OpenAsApk",
             "Explorer_OpenAsFirmware", "Explorer_OpenAsFileSystem", "Explorer_OpenAsRockchipConfig",
             "Explorer_OpenAsImage", "Explorer_OpenAsLogo"
-        };
+       ];
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.LocaleKey).ToList();
 

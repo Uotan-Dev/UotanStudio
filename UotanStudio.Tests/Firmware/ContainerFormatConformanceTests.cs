@@ -70,7 +70,7 @@ public class ContainerFormatConformanceTests
     [InlineData(2u)]
     public void SparseRawChunk_MustMatchDeclaredTotalBlocks(uint totalBlocks)
     {
-        var image = SparseImage(totalBlocks, 0, (0xcac1, 1, new byte[] { 1, 2, 3, 4 }));
+        var image = SparseImage(totalBlocks, 0, (0xcac1, 1, [1, 2, 3, 4]));
         Assert.Throws<InvalidDataException>(() => SparseReader.FromBuffer(image));
     }
 
@@ -83,8 +83,8 @@ public class ContainerFormatConformanceTests
     {
         byte[] expanded = [1, 2, 3, 4, 0x10, 0x20, 0x30, 0x40, 0x10, 0x20, 0x30, 0x40, 0, 0, 0, 0];
         var expected = ReferenceCrc32(expanded);
-        var image = SparseImage(4, expected, (0xcac1, 1, new byte[] { 1, 2, 3, 4 }),
-            (0xcac2, 2, new byte[] { 0x10, 0x20, 0x30, 0x40 }), (0xcac3, 1, Array.Empty<byte>()));
+        var image = SparseImage(4, expected, (0xcac1, 1, [1, 2, 3, 4]),
+            (0xcac2, 2, [0x10, 0x20, 0x30, 0x40]), (0xcac3, 1, Array.Empty<byte>()));
         using (var parsed = SparseReader.FromBuffer(image, validateCrc: true)) Assert.Equal(4u, parsed.Header.TotalBlocks);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(24), expected ^ 1);
         Assert.Throws<InvalidDataException>(() => SparseReader.FromBuffer(image, validateCrc: true));
@@ -98,7 +98,7 @@ public class ContainerFormatConformanceTests
     public void SparseCrcChunk_MustNotClaimOutputBlocks(bool validateCrc)
     {
         var crc = new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(crc, ReferenceCrc32([1, 2, 3, 4]));
-        var image = SparseImage(2, 0, (0xcac1, 1, new byte[] { 1, 2, 3, 4 }), (0xcac4, 1, crc));
+        var image = SparseImage(2, 0, (0xcac1, 1, [1, 2, 3, 4]), (0xcac4, 1, crc));
         Assert.Throws<InvalidDataException>(() => SparseReader.FromBuffer(image, validateCrc));
     }
 
@@ -106,7 +106,7 @@ public class ContainerFormatConformanceTests
     public void SparseCrcChunk_ZeroBlocksValidatesPrecedingData()
     {
         var crc = new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(crc, ReferenceCrc32([1, 2, 3, 4]));
-        var image = SparseImage(1, 0, (0xcac1, 1, new byte[] { 1, 2, 3, 4 }), (0xcac4, 0, crc));
+        var image = SparseImage(1, 0, (0xcac1, 1, [1, 2, 3, 4]), (0xcac4, 0, crc));
         using (var parsed = SparseReader.FromBuffer(image, validateCrc: true)) Assert.Equal(1u, parsed.Header.TotalBlocks);
         image[^1] ^= 1;
         Assert.Throws<InvalidDataException>(() => SparseReader.FromBuffer(image, validateCrc: true));

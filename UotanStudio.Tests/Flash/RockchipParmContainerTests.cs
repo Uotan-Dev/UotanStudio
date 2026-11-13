@@ -65,7 +65,7 @@ public sealed class RockchipParmContainerTests
     [Fact]
     public void Unwrap_ForeignMagic_IsRejected()
     {
-        var data = new byte[] { 0x45, 0x46, 0x49, 0x20, 0, 0, 0, 0, 1, 2, 3, 4 };
+        byte[] data = [0x45, 0x46, 0x49, 0x20, 0, 0, 0, 0, 1, 2, 3, 4];
 
         Assert.Throws<InvalidDataException>(() => RockchipParmContainer.Unwrap(data));
     }

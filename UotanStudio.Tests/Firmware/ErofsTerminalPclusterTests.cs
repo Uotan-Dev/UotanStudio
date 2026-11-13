@@ -97,7 +97,7 @@ public sealed class ErofsTerminalPclusterTests
         });
         using var parser = new ErofsParser(image);
 
-        var payloads = new[] { ("aligned.bin", aligned), ("partial.bin", partial), ("single.bin", single) };
+        (string, byte[])[] payloads = [("aligned.bin", aligned), ("partial.bin", partial), ("single.bin", single)];
         var probedHeads = 0;
         foreach (var (path, payload) in payloads)
         {

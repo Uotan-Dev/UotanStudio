@@ -151,13 +151,13 @@ public class EdlUfsProvisionServiceTests
         Assert.Contains("4 UFS provisioning command(s) sent on slot 2", result.Summary, StringComparison.Ordinal);
         Assert.Contains("commit=persisted", result.Summary, StringComparison.Ordinal);
         Assert.Equal(5, transport.Writes.Count);
-        var expected = new[]
-        {
+        string[] expected =
+[
             FirehoseXmlBuilder.BuildUfsCommon(common, 2),
             FirehoseXmlBuilder.BuildUfsBody(bodies[0], 2),
             FirehoseXmlBuilder.BuildUfsBody(bodies[1], 2),
             FirehoseXmlBuilder.BuildUfsEpilogue(epilogue, true, 2)
-        };
+       ];
         var actual = transport.Writes.Skip(1).Select(Encoding.UTF8.GetString).ToArray();
         Assert.Equal(expected, actual);
         var last = XDocument.Parse(Encoding.UTF8.GetString(transport.Writes[^1])).Root!.Element("ufs")!;

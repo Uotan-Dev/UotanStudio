@@ -68,13 +68,13 @@ public sealed class QsbTests : IDisposable
     [Fact]
     public void GroupChunks_NamesWithNumericSegment_SortsByIndex()
     {
-        var programs = new[]
-        {
+        QsbProgram[] programs =
+[
             new QsbProgram("l", "system_2.img", 0, 1, 0, 512),
             new QsbProgram("l", "system_10.img", 0, 1, 0, 512),
             new QsbProgram("l", "system_1.img", 0, 1, 0, 512),
             new QsbProgram("l", "boot.img", 0, 1, 0, 512)
-        };
+       ];
 
         var groups = QsbRawprogram.GroupChunks(programs);
 
@@ -123,7 +123,7 @@ public sealed class QsbTests : IDisposable
     {
         var package = Path.Combine(_root, "missing");
         Directory.CreateDirectory(package);
-        var programs = new[] { new QsbProgram("l", "system_0.img", 0, 1, 0, 512) };
+        QsbProgram[] programs = [new QsbProgram("l", "system_0.img", 0, 1, 0, 512)];
 
         await Assert.ThrowsAsync<InvalidDataException>(() => QsbRawprogram.MergeGroupAsync(
             package, "system", programs, Path.Combine(package, "out"), 1 << 20,
@@ -136,7 +136,7 @@ public sealed class QsbTests : IDisposable
         var package = Path.Combine(_root, "ceiling");
         Directory.CreateDirectory(package);
         await File.WriteAllBytesAsync(Path.Combine(package, "system_0.img"), new byte[600], TestContext.Current.CancellationToken);
-        var programs = new[] { new QsbProgram("l", "system_0.img", 0, 1, 100, 512) };
+        QsbProgram[] programs = [new QsbProgram("l", "system_0.img", 0, 1, 100, 512)];
 
         await Assert.ThrowsAsync<InvalidDataException>(() => QsbRawprogram.MergeGroupAsync(
             package, "system", programs, Path.Combine(package, "out"), 512,

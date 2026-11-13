@@ -43,7 +43,7 @@ public sealed class RootPatchReleaseClientTests
             new("KernelSU_v1.0.5.zip", "https://github.com/x/sources.zip", 4, null),
             new("KernelSU_v1.0.5_12000-release.apk", "https://github.com/x/release.apk", 2, null),
             new("KernelSU_v1.0.5_12000.apk", "https://github.com/x/plain.apk", 1, null),
-        ];
+       ];
 
         var selected = RootPatchReleaseClient.SelectPackageAsset(assets);
 
@@ -58,7 +58,7 @@ public sealed class RootPatchReleaseClientTests
         [
             new("stub-release.apk", "https://github.com/x/stub.apk", 28_400, null),
             new("Magisk-v24.0.apk", "https://github.com/x/magisk.apk", 1, null),
-        ];
+       ];
 
         var selected = RootPatchReleaseClient.SelectPackageAsset(assets);
 
@@ -81,7 +81,7 @@ public sealed class RootPatchReleaseClientTests
         [
             new("apk-legacy-release.apk", "https://github.com/x/legacy.apk", 2, null),
             new("app-release.apk", "https://github.com/x/app.apk", 1, null),
-        ];
+       ];
 
         Assert.Equal("app-release.apk", RootPatchReleaseClient.SelectPackageAsset(assets)!.Name);
     }
@@ -93,7 +93,7 @@ public sealed class RootPatchReleaseClientTests
         [
             new("SukiSU_v4.3.0_41100-release-spoofed.apk", "https://github.com/x/spoofed.apk", 2, null),
             new("SukiSU_v4.3.0_41100-release.apk", "https://github.com/x/release.apk", 1, null),
-        ];
+       ];
 
         Assert.Equal("SukiSU_v4.3.0_41100-release.apk", RootPatchReleaseClient.SelectPackageAsset(assets)!.Name);
     }
@@ -143,7 +143,7 @@ public sealed class RootPatchReleaseClientTests
                 [new GitHubAsset("KernelSU_v1.0.5_release.apk", "https://github.com/x/apk", 1, null)]),
             new(vendor.Owner, vendor.Repository, "v1.0.4", "1.0.4",
                 [new GitHubAsset("KernelSU_v1.0.4.tar.gz", "https://github.com/x/sources", 2, null)]),
-        ];
+       ];
 
         var packages = RootPatchReleaseClient.FromReleases(vendor, releases);
 
@@ -193,11 +193,11 @@ public sealed class RootPatchReleaseClientTests
                 Content = new StringContent(ReleaseJson("28.1"), Encoding.UTF8, "application/json")
             };
         }));
-        var sources = new[]
-        {
+        Uri[] sources =
+[
             new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
             new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
-        };
+       ];
 
         var page = await RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,
             cancellationToken: TestContext.Current.CancellationToken, sources: sources);
@@ -219,11 +219,11 @@ public sealed class RootPatchReleaseClientTests
                 Content = new StringContent(ReleaseJson("28.1"), Encoding.UTF8, "application/json")
             };
         }));
-        var sources = new[]
-        {
+        Uri[] sources =
+[
             new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
             new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
-        };
+       ];
 
         var page = await RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,
             cancellationToken: TestContext.Current.CancellationToken, sources: sources);
@@ -237,11 +237,11 @@ public sealed class RootPatchReleaseClientTests
     {
         using var client = new HttpClient(new StubHandler(_ =>
             throw new HttpRequestException("every source is down in this test")));
-        var sources = new[]
-        {
+        Uri[] sources =
+[
             new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
             new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
-        };
+       ];
 
         var error = await Assert.ThrowsAsync<HttpRequestException>(() =>
             RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,

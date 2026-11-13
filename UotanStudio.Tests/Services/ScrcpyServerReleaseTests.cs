@@ -97,7 +97,7 @@ public sealed class ScrcpyServerReleaseTests : IDisposable
     {
         var root = NewStoreRoot();
         var service = new ScrcpyServerService(new HttpClient(), cacheRoot: root);
-        var payload = new byte[] { 1, 2, 3, 4, 5 };
+        byte[] payload = [1, 2, 3, 4, 5];
         Directory.CreateDirectory(Path.GetDirectoryName(service.JarPathFor("9.9.9"))!);
         File.WriteAllBytes(service.JarPathFor("9.9.9"), payload);
         WriteInstall(root, new ScrcpyServerInstall("9.9.9", Sha256Hex(payload), ServerAsset, ServerUrl, ServerUrl, 1));
@@ -191,7 +191,7 @@ public sealed class ScrcpyServerReleaseTests : IDisposable
     [Fact]
     public async Task EnsureLatest_UnreachableFeed_KeepsTheLocalArtifact()
     {
-        var payload = new byte[] { 1, 2, 3, 4, 5 };
+        byte[] payload = [1, 2, 3, 4, 5];
         var root = NewStoreRoot();
         var service = new ScrcpyServerService(
             new HttpClient(new StubHandler(_ => throw new HttpRequestException("offline"))),

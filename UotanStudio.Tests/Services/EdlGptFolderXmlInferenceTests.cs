@@ -17,8 +17,8 @@ public sealed class EdlGptFolderXmlInferenceTests
         Directory.CreateDirectory(folder);
         try
         {
-            var ablBytes = new byte[] { 1, 2, 3, 4 };
-            var xblBytes = new byte[] { 5, 6, 7, 8 };
+            byte[] ablBytes = [1, 2, 3, 4];
+            byte[] xblBytes = [5, 6, 7, 8];
             File.WriteAllBytes(Path.Combine(folder, "abl.bin"), ablBytes);
             File.WriteAllBytes(Path.Combine(folder, "xbl.img"), xblBytes);
             GptFixtureImage.Write(Path.Combine(folder, "gpt_main0.bin"), 16 * 1024 * 1024,

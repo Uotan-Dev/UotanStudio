@@ -17,7 +17,7 @@ public sealed class AvbFecRepairTests
         var blocks = 6L;
         var (image, paritySize, original) = await BuildSignedImage(blocks, (uint)roots, token);
         var storedParity = image[(int)(blocks * Block)..].ToArray();
-        var bad = new long[] { 0, 2 };
+        long[] bad = [0, 2];
         foreach (var block in bad)
         {
             Corrupt(image, block);
@@ -42,7 +42,7 @@ public sealed class AvbFecRepairTests
         var rounds = (blocks + dataSymbols - 1) / dataSymbols;
         Assert.True(rounds >= 2);
         var (image, paritySize, original) = await BuildSignedImage(blocks, (uint)roots, token);
-        var bad = new long[] { 0, 1, 2, 3 };
+        long[] bad = [0, 1, 2, 3];
         foreach (var block in bad)
         {
             Corrupt(image, block);

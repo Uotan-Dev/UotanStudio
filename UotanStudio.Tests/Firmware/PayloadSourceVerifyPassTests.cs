@@ -200,7 +200,7 @@ public class PayloadSourceVerifyPassTests
         using var temp = new TempDirectory();
         var outputDirectory = Path.Combine(temp.Path, "out");
         Directory.CreateDirectory(outputDirectory);
-        var existing = new byte[] { 1, 2, 3 };
+        byte[] existing = [1, 2, 3];
         File.WriteAllBytes(Path.Combine(outputDirectory, "system.img"), existing);
         var payload = WritePayload(temp, partition, operation, patch);
         var basePath = temp.WriteBytes("base.img", corrupt);

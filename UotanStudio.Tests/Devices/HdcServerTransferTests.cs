@@ -148,7 +148,7 @@ public sealed class HdcServerTransferTests
         try
         {
             var source = Path.Combine(root, "payload.bin");
-            await File.WriteAllBytesAsync(source, new byte[] { 1, 2, 3, 4 }, cancellationToken);
+            await File.WriteAllBytesAsync(source, [1, 2, 3, 4], cancellationToken);
             await using var server = ScriptedServer.Start(async (stream, connectKey) =>
             {
                 _ = await ReadTextCommandAsync(stream, cancellationToken);
@@ -314,7 +314,7 @@ public sealed class HdcServerTransferTests
             var bundle = Path.Combine(root, "bundle.app");
             CreateAppBundle(bundle,
                 """{"packages":[{"deviceType":["phone"],"name":"entry","deliveryWithInstall":true}]}""",
-                ("entry.hap", new byte[] { 1, 2, 3 }));
+                ("entry.hap", [1, 2, 3]));
             var client = new HdcServerAppClient(new HdcServerClient("127.0.0.1", 1), ConnectKey);
             Assert.Throws<NotSupportedException>(() => client.InstallAppBundle(
                 bundle, "tablet", cancellationToken: TestContext.Current.CancellationToken));

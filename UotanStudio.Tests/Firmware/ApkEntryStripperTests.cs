@@ -56,12 +56,12 @@ public class ApkEntryStripperTests
     [Fact]
     public void Rewrite_EmptyRequest_ReproducesEveryEntryByteForByte()
     {
-        var entries = new[]
-        {
+        (string, byte[])[] entries =
+[
             ("classes.dex", Encoding.UTF8.GetBytes("dex-bytes")),
             ("META-INF/MANIFEST.MF", Encoding.UTF8.GetBytes("Manifest-Version: 1.0\r\n\r\n")),
             ("resources.arsc", new byte[8192])
-        };
+       ];
         using var temp = new TempDirectory();
         var input = WriteApk(temp, "input.apk", entries);
         var output = Path.Combine(temp.Path, "output.apk");
@@ -79,15 +79,15 @@ public class ApkEntryStripperTests
     [Fact]
     public void Rewrite_StripV1SignatureEntries_DropsOnlySignatureArtifacts()
     {
-        var entries = new[]
-        {
+        (string, byte[])[] entries =
+[
             ("classes.dex", Encoding.UTF8.GetBytes("dex-bytes")),
             ("META-INF/MANIFEST.MF", Encoding.UTF8.GetBytes("Manifest-Version: 1.0\r\n\r\n")),
             ("META-INF/UOTAN.SF", Encoding.UTF8.GetBytes("Signature-Version: 1.0\r\n\r\n")),
-            ("META-INF/UOTAN.RSA", new byte[] { 0x30, 0x82, 0x01, 0x22 }),
+            ("META-INF/UOTAN.RSA", [0x30, 0x82, 0x01, 0x22]),
             ("META-INF/services/javax.script.ScriptEngineFactory", Encoding.UTF8.GetBytes("com.example.Engine")),
             ("lib/arm64-v8a/libnative.so", new byte[4096])
-        };
+       ];
         using var temp = new TempDirectory();
         var input = WriteApk(temp, "input.apk", entries);
         var output = Path.Combine(temp.Path, "output.apk");
@@ -215,12 +215,12 @@ public class ApkEntryStripperTests
     [Fact]
     public void RewriteWithSigningBlock_MatchesRewriteThenManualBlockInsertion()
     {
-        var entries = new[]
-        {
+        (string, byte[])[] entries =
+[
             ("classes.dex", Encoding.UTF8.GetBytes("dex-bytes")),
             ("META-INF/MANIFEST.MF", Encoding.UTF8.GetBytes("Manifest-Version: 1.0\r\n\r\n")),
             ("lib/arm64-v8a/libnative.so", new byte[4096])
-        };
+       ];
         using var temp = new TempDirectory();
         var input = WriteApk(temp, "input.apk", entries);
         var request = new ApkEntryStripper.RewriteRequest

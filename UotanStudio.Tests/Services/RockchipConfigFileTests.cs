@@ -424,7 +424,7 @@ public sealed class RockchipConfigFileTests
     [Fact]
     public void Serialize_PathLongerThanItsField_Throws()
     {
-        var entries = new[] { new RockchipConfigEntry { Name = "boot", Path = new string('p', 256) } };
+        RockchipConfigEntry[] entries = [new RockchipConfigEntry { Name = "boot", Path = new string('p', 256) }];
 
         Assert.Throws<ArgumentException>(() => RockchipConfigFile.Serialize(RockchipConfigFile.CreateHeader(), entries));
     }

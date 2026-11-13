@@ -86,8 +86,8 @@ public class FirmwareContextDependencyScannerTests
     [Fact]
     public void ScanFile_SyntheticMutualReferences_FindContextCycleReportsBothContexts()
     {
-        var files = new[]
-        {
+        (string, string)[] files =
+[
             ("UotanStudio.Firmware/FileSystem/F2fs/F2fsBuilder.cs", """
                 public sealed class F2fsBuilder
                 {
@@ -100,7 +100,7 @@ public class FirmwareContextDependencyScannerTests
                     public void Read() => UotanStudio.Firmware.FileSystem.F2fs.F2fsBuilder.Write();
                 }
                 """),
-        };
+       ];
 
         var edges = files
             .SelectMany(file => FirmwareContextDependencyScanner.ScanFile(file.Item1, file.Item2, KnownContextNames))
@@ -119,12 +119,12 @@ public class FirmwareContextDependencyScannerTests
     [Fact]
     public void FindContextCycle_SyntheticForwardOnlyChain_ReportsNoCycle()
     {
-        var edges = new[]
-        {
+        FirmwareContextEdge[] edges =
+[
             new FirmwareContextEdge("FileSystem", "Compression", 5),
             new FirmwareContextEdge("BlockImage", "FileSystem", 4),
             new FirmwareContextEdge("BootSecurity", "BlockImage", 2),
-        };
+       ];
 
         var cycle = FirmwareContextDependencyScanner.FindContextCycle(edges);
 
@@ -134,12 +134,12 @@ public class FirmwareContextDependencyScannerTests
     [Fact]
     public void FindContextCycle_SyntheticThreeContextRing_ReportsClosedPath()
     {
-        var edges = new[]
-        {
+        FirmwareContextEdge[] edges =
+[
             new FirmwareContextEdge("Archive", "Compression", 5),
             new FirmwareContextEdge("Compression", "DeviceTree", 1),
             new FirmwareContextEdge("DeviceTree", "Archive", 2),
-        };
+       ];
 
         var cycle = FirmwareContextDependencyScanner.FindContextCycle(edges);
 

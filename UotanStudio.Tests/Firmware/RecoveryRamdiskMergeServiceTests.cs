@@ -213,7 +213,7 @@ public class RecoveryRamdiskMergeServiceTests
     public async Task MergeAsync_CorruptGzipRamdisk_ThrowsInvalidData()
     {
         using var temp = new TempDirectory();
-        var gzipHeader = new byte[] { 0x1F, 0x8B, 0x08, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0, 3, 1, 2, 3, 4, 5, 6 };
+        byte[] gzipHeader = [0x1F, 0x8B, 0x08, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0, 3, 1, 2, 3, 4, 5, 6];
         var source = BootImage(temp, "boot.img", gzipHeader);
         var recovery = BootImage(temp, "recovery.img", Cpio(("init", RecoveryInit)));
 

@@ -79,7 +79,7 @@ public class DexModernFormatTests
     {
         using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write(new byte[168]);
-        var strings = new[] { "LFixture;", "V", "bootstrap", "call" };
+        string[] strings = ["LFixture;", "V", "bootstrap", "call"];
         var offsets = new uint[strings.Length];
         for (var i = 0; i < strings.Length; i++)
         {

@@ -70,7 +70,7 @@ public sealed class ExportSlotRingTests
     public void Constructor_WhenCreateSlotThrows_DestroysCreatedSlots()
     {
         var destroyed = new List<Slot>();
-        var slots = new[] { new Slot(), new Slot() };
+        Slot[] slots = [new Slot(), new Slot()];
         Assert.Throws<InvalidOperationException>(() => _ = new ExportSlotRing<Slot>(2,
             index => index == 0 ? slots[0] : throw new InvalidOperationException(),
             slot => destroyed.Add(slot),

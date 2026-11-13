@@ -152,7 +152,7 @@ public sealed class PatchGateTests
         var secondTarget = Path.Combine(temp.Path, "second");
         var write = Writer(firstTarget);
         var engine = new NodeExecutionEngine(new Log());
-        var connections = new[] { Connect(gate, "Apply", write, "Flow") };
+        NodeConnection[] connections = [Connect(gate, "Apply", write, "Flow")];
         var token = TestContext.Current.CancellationToken;
         var first = await engine.ExecuteAsync([gate, write], connections, token);
         Assert.Equal(ExecutionStatus.Succeeded, first.Status);

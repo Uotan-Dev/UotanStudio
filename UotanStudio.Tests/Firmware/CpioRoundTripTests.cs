@@ -16,8 +16,8 @@ public class CpioRoundTripTests
     [Fact]
     public void PackUnpackNewc_RoundTripsEntriesAndRepacksByteIdentically()
     {
-        var entries = new[]
-        {
+        ArchiveEntry[] entries =
+[
             new ArchiveEntry
             {
                 Name = "dir/",
@@ -63,7 +63,7 @@ public class CpioRoundTripTests
                     UnixPermissions = 0x1A4,
                 },
             },
-        };
+       ];
 
         var archive = new CpioArchive();
 
@@ -137,11 +137,11 @@ public class CpioRoundTripTests
             File.WriteAllBytes(fileA, contentA);
             File.WriteAllBytes(fileB, contentB);
 
-            var entries = new[]
-            {
+            ArchiveEntry[] entries =
+[
                 BuildStreamedEntry("a.bin", fileA),
                 BuildStreamedEntry("b.bin", fileB),
-            };
+           ];
 
             var archive = new CpioArchive();
             byte[] packed;
@@ -178,11 +178,11 @@ public class CpioRoundTripTests
             File.WriteAllBytes(fileA, contentA);
             File.WriteAllBytes(fileB, contentB);
 
-            var entries = new[]
-            {
+            ArchiveEntry[] entries =
+[
                 BuildStreamedEntry("a.bin", fileA),
                 BuildStreamedEntry("b.bin", fileB),
-            };
+           ];
 
             var archive = new CpioArchive();
             byte[] packed;

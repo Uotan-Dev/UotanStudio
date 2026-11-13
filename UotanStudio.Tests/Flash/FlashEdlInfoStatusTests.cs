@@ -16,12 +16,12 @@ public sealed class FlashEdlInfoStatusTests
     [Fact]
     public void EdlInfoRows_ProjectOntoTheStatusTable()
     {
-        var rows = new[]
-        {
+        EdlInfoRow[] rows =
+[
             new EdlInfoRow("Flash_EdlInfo_SaharaVersion", "2", EdlInfoStage.Sahara),
             new EdlInfoRow("Flash_EdlInfo_Serial", "0x1234", EdlInfoStage.Sahara),
             new EdlInfoRow("Flash_EdlInfo_Storage", "UFS 128 GiB", EdlInfoStage.Firehose)
-        };
+       ];
 
         var status = FlashViewModel.BuildEdlStatusRows(rows, new EchoLocalizer());
 

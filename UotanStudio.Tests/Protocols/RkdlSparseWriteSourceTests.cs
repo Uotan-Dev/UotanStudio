@@ -16,7 +16,7 @@ public class RkdlSparseWriteSourceTests
     [Fact]
     public void FromFill_Read_RepeatsTheLittleEndianPattern()
     {
-        var bytes = new byte[] { 0x44, 0x33, 0x22, 0x11, 0x44, 0x33, 0x22, 0x11 };
+        byte[] bytes = [0x44, 0x33, 0x22, 0x11, 0x44, 0x33, 0x22, 0x11];
         using var source = SparseWriteSource.FromFill(0x11223344, bytes.Length);
 
         var buffer = new byte[bytes.Length];
@@ -43,7 +43,7 @@ public class RkdlSparseWriteSourceTests
     [Fact]
     public void FromProvider_Read_AdvancingOffsets()
     {
-        var payload = new byte[] { 1, 2, 3, 4, 5, 6 };
+        byte[] payload = [1, 2, 3, 4, 5, 6];
         using var provider = new MemoryDataProvider(payload);
         using var source = SparseWriteSource.FromProvider(provider);
 

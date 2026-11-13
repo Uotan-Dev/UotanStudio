@@ -99,7 +99,7 @@ public sealed class NodeCatalogReductionTests
             ("Device.Rkdl.ReadPartition", DeviceRequiredState.Rkdl, false),
             ("Device.Rkdl.Wait", DeviceRequiredState.Rkdl, false),
             ("Device.Wait.ForDevice", DeviceRequiredState.AnyDevice, false)
-        ];
+       ];
 
         Assert.Equal(27, expected.Length);
         foreach (var (typeKey, state, confirming) in expected)
@@ -295,8 +295,8 @@ public sealed class NodeCatalogReductionTests
     public void Descriptors_AllAliases_TargetARegisteredNodeType()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var retired = new[]
-        {
+        string[] retired =
+[
             "Image.Text.Read", "Image.Text.Stage", "Image.File.ReadAttributes", "Image.File.SetAttributes",
             "Image.Xattr.Read", "Image.Xattr.Set", "Image.Xattr.Delete", "Resource.Asset.Open", "Resource.Asset.ReadText",
             "Binary.Pattern.Find", "Binary.Pattern.Replace", "Workspace.File.Find", "Workspace.File.Exists",
@@ -311,7 +311,7 @@ public sealed class NodeCatalogReductionTests
             "UI.Field.File", "UI.Field.Directory", "UI.Field.SavePath", "UI.Layout.Row", "UI.Layout.Column",
             "UI.Layout.Group", "UI.Layout.Pages", "UI.Content.Text", "UI.Content.Divider", "UI.Content.Image",
             "Network.GitHub.Download"
-        };
+       ];
 
         foreach (var typeKey in retired)
         {

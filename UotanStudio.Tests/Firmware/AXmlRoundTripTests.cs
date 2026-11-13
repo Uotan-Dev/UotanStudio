@@ -51,7 +51,7 @@ public class AXmlRoundTripTests
     [Fact]
     public void Parse_ThrowsOnInvalidMagic()
     {
-        var data = new byte[] { 0x01, 0x00, 0x08, 0x00, 0x10, 0x00, 0x00, 0x00 };
+        byte[] data = [0x01, 0x00, 0x08, 0x00, 0x10, 0x00, 0x00, 0x00];
         Assert.Throws<AXmlException>(() => AXmlParser.Parse(data));
     }
 
@@ -60,7 +60,7 @@ public class AXmlRoundTripTests
     {
         var bytes = AXmlWriter.Write(BuildDocument());
         Assert.True(AXmlParser.IsAxml(bytes));
-        Assert.False(AXmlParser.IsAxml(new byte[] { 1, 2, 3 }));
+        Assert.False(AXmlParser.IsAxml([1, 2, 3]));
     }
 
     [Fact]

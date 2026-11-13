@@ -45,12 +45,12 @@ public sealed class HttpDownloadMirrorUrlTests
     public void MirrorUrl_InListSites_ResolveToDistinctReachableShapes()
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var sites = new[]
-        {
+        GitHubMirrorSite[] sites =
+[
             new GitHubMirrorSite { Name = "a", BaseUrl = "https://gh-proxy.org/https://github.com" },
             new GitHubMirrorSite { Name = "b", BaseUrl = "https://xget.xi-xu.me/gh" },
             new GitHubMirrorSite { Name = "c", BaseUrl = "https://cors.isteed.cc/github.com" },
-        };
+       ];
 
         foreach (var site in sites) seen.Add(HttpDownload.MirrorUrl(site, new Uri(ReleaseUrl)).ToString());
 

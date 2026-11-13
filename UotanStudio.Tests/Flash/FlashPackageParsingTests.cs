@@ -30,8 +30,8 @@ public sealed class FlashPackageParsingTests
             File.WriteAllBytes(superEmptyImg, new byte[512]);
 
             var scriptPath = Path.Combine(tempDir, "flash_all.bat");
-            var lines = new[]
-            {
+            string[] lines =
+[
                 "@echo off",
                 "echo Flashing images...",
                 "fastboot %* erase metadata",
@@ -40,7 +40,7 @@ public sealed class FlashPackageParsingTests
                 "fastboot %* set_active a",
                 "pause",
                 "fastboot %* reboot"
-            };
+           ];
 
             var rows = FlashViewModel.ParseScript(scriptPath, lines);
 
@@ -97,14 +97,14 @@ public sealed class FlashPackageParsingTests
             File.WriteAllBytes(bootImg, new byte[2048]);
 
             var scriptPath = Path.Combine(tempDir, "flash_all.sh");
-            var lines = new[]
-            {
+            string[] lines =
+[
                 "#!/bin/bash",
                 "echo \"Starting flash\"",
                 "fastboot $* flash boot `dirname $0`/images/boot.img",
                 "fastboot delete-logical-partition product_a",
                 "fastboot create-logical-partition product_a 0"
-            };
+           ];
 
             var rows = FlashViewModel.ParseScript(scriptPath, lines);
 
@@ -137,8 +137,8 @@ public sealed class FlashPackageParsingTests
             File.WriteAllBytes(bootImg, new byte[4096]);
 
             var txtPath = Path.Combine(tempDir, "flash_fastbootd.txt");
-            var lines = new[]
-            {
+            string[] lines =
+[
                 "# Comments should be ignored",
                 "codename: raphael",
                 "mode:fastbootd",
@@ -147,7 +147,7 @@ public sealed class FlashPackageParsingTests
                 "system create",
                 "boot",
                 "vendor_boot images/vendor_boot.img"
-            };
+           ];
 
             var rows = FlashViewModel.ParseManifestText(txtPath, lines, out var codeName, out var requiresFastbootd);
 

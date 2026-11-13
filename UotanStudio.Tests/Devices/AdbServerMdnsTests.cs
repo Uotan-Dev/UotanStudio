@@ -116,11 +116,11 @@ public sealed class AdbServerMdnsTests
     [InlineData("_adb-tls-connect._tcp.local")]
     public void BuildConnectAliases_ConnectRow_ResolvesBareAndFullInstanceKeys(string serviceType)
     {
-        var entries = new[]
-        {
+        AdbServerMdnsEntry[] entries =
+[
             new AdbServerMdnsEntry("adb-ABC", serviceType, "192.0.2.31", 37177),
             new AdbServerMdnsEntry("adb-ABC-pair", "_adb-tls-pairing._tcp", "192.0.2.31", 45678)
-        };
+       ];
 
         var aliases = AdbServerMdns.BuildConnectAliases(entries, ["_adb-tls-connect._tcp"]);
         var serviceName = serviceType.TrimEnd('.').Replace(".local", string.Empty, StringComparison.Ordinal);

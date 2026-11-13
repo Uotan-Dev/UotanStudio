@@ -251,7 +251,7 @@ public class FileSystemNameLimitTests
         try
         {
             var directoryName = "外部 目录";
-            var names = new[] { "café.txt", "中文说明.md", "Straße.cfg", "日本語 テスト.txt" };
+            string[] names = ["café.txt", "中文说明.md", "Straße.cfg", "日本語 テスト.txt"];
             Directory.CreateDirectory(Path.Combine(root, directoryName));
             var expected = new string[names.Length];
             for (var i = 0; i < names.Length; i++)

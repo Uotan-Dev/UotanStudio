@@ -99,7 +99,7 @@ public sealed class CpioNameSizeTests
     {
         var name = "系统/lib 配置(中文).rc";
         var nameBytes = Encoding.UTF8.GetBytes(name);
-        var payload = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        byte[] payload = [1, 2, 3, 4, 5, 6, 7, 8];
         var headerSize = HeaderSize(format);
 
         var packed = Write(format, [RegularEntry(name, payload)]);

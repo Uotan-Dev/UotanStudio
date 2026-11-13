@@ -215,8 +215,8 @@ public sealed class AirPlayReceiverSessionTests
         _ = Send(stream, "SETUP", "rtsp://127.0.0.1/1", SetupBody(AirPlayConstants.VideoPayloadType), 2);
         _ = Send(stream, "RECORD", "rtsp://127.0.0.1/1", null, 3);
         var sps = OhscrcpyTestData.BuildSps(80, 45, 0);
-        var pps = new byte[] { 0x68, 0xCE, 0x3C, 0x80 };
-        var idr = new byte[] { 0x65, 0x88, 0x84, 0x00, 0x33 };
+        byte[] pps = [0x68, 0xCE, 0x3C, 0x80];
+        byte[] idr = [0x65, 0x88, 0x84, 0x00, 0x33];
 
         SendInterleaved(stream, AirPlayConstants.VideoPayloadType, VideoPacket(1_000, sps, pps, idr));
 

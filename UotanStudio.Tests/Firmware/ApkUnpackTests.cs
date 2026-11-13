@@ -95,7 +95,7 @@ public class ApkUnpackTests
         using (var stream = File.Create(path))
         using (var writer = new BinaryWriter(stream))
         {
-            var data = new byte[] { 1, 2, 3 };
+            byte[] data = [1, 2, 3];
             writer.Write(0x04034b50);
             writer.Write((ushort)20);
             writer.Write((ushort)0);

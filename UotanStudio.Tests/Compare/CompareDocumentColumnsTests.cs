@@ -232,12 +232,12 @@ public sealed class CompareDocumentColumnsTests : IDisposable
     [Fact]
     public async Task AddedPaths_TakeOneColumnEachWithoutStartingAComparison()
     {
-        var paths = new[]
-        {
+        string[] paths =
+[
             WriteFile("a.txt", "a"),
             WriteFile("b.txt", "b"),
             WriteFile("c.txt", "c"),
-        };
+       ];
 
         Assert.True(await _document.TryAddPathsAsync(paths));
 

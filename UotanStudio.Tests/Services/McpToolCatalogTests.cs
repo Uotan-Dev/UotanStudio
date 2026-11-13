@@ -66,6 +66,7 @@ public sealed class McpToolCatalogTests
         "axml_parse",
         "arsc_parse",
         "apk_strip_signatures",
+        "dex_repartition",
         "download_file",
         "get_env"
     ];

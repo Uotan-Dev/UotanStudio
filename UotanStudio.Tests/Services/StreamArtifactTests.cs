@@ -238,7 +238,7 @@ public sealed class StreamArtifactTests
         try
         {
             await File.WriteAllTextAsync(path, "from path", token);
-            var payload = new byte[] { 1, 2, 3 };
+            byte[] payload = [1, 2, 3];
 
             Assert.Null(NodeDataUtil.OpenRead(null));
             Assert.Equal(payload, await ReadAllAsync(NodeDataUtil.OpenRead(payload), token));
