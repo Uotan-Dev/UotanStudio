@@ -76,8 +76,23 @@ public sealed partial class FirehoseProtocol
                 skipResponseAcknowledgement: Configuration.SkipResponseOnReadWrite ? SkipResponseAcknowledgement(true) : null);
             RequireRawMode(response, EdlErrorCode.ReadFailed);
             transferStarted = true;
-            await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken, progress);
+            var outcome = await ReadRawPayloadToStreamAsync(destination, totalBytes, cancellationToken, progress);
+            if (outcome is not RawPayloadOutcome.Completed)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             return await ReceiveTransferCompletionAsync(EdlErrorCode.ReadFailed, cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            if (_faulted || !transferStarted)
+            {
+                InvalidateCancelledTransfer("the read stopped before its raw payload reached the command boundary");
+            }
+
+            RecordFailure(ex, transferStarted, payloadSent: false);
+            throw;
         }
         catch (Exception ex)
         {
@@ -248,9 +263,23 @@ public sealed partial class FirehoseProtocol
 
             RequireRawMode(response, EdlErrorCode.PeekFailed);
             using var ms = new MemoryStream();
-            await ReadRawPayloadToStreamAsync(ms, sizeInBytes, cancellationToken);
+            var outcome = await ReadRawPayloadToStreamAsync(ms, sizeInBytes, cancellationToken);
+            if (outcome is not RawPayloadOutcome.Completed)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.PeekFailed, cancellationToken);
             return (completion, ms.ToArray());
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (_faulted)
+            {
+                InvalidateCancelledTransfer("the peek stopped before its raw payload reached the command boundary");
+            }
+
+            throw;
         }
         catch
         {
@@ -274,10 +303,11 @@ public sealed partial class FirehoseProtocol
     /// <param name="destination">The destination stream. <para>目标流。</para></param>
     /// <param name="totalBytes">The number of raw bytes to read. <para>待读取的原始字节数。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
+    /// <returns>The outcome of the payload phase; a cancellation is quiesced before this returns.
+    /// <para>负载阶段的结果；返回前已完成取消的收尾。</para></returns>
     /// <param name="progress">Optional cumulative raw bytes; not evidence of final completion.<para>可选的累计原始字节数；不能作为最终完成的证据。</para></param>
-    private async Task ReadRawPayloadToStreamAsync(Stream destination, long totalBytes, CancellationToken cancellationToken,
-        IProgress<long>? progress = null)
+    private async Task<RawPayloadOutcome> ReadRawPayloadToStreamAsync(Stream destination, long totalBytes,
+        CancellationToken cancellationToken, IProgress<long>? progress = null)
     {
         long bytesRead = 0;
         var chunkBytes = GetRawReadChunkSize();
@@ -285,75 +315,86 @@ public sealed partial class FirehoseProtocol
         var silentReads = 0;
         var deadline = Environment.TickCount64 + RawPayloadTransferBudgetMs;
 
-        while (bytesRead < totalBytes)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            byte[] chunkBuffer;
-            int chunkLength;
-            if (_rxBufferBytes > 0)
+            while (bytesRead < totalBytes)
             {
-                var fromRx = Math.Min(_rxBufferBytes, (int)Math.Min(totalBytes - bytesRead, int.MaxValue));
-                chunkBuffer = _rxBuffer;
-                chunkLength = fromRx;
-            }
-            else
-            {
-                var toRead = (int)Math.Min(chunkBytes, totalBytes - bytesRead);
-                var remainingMs = deadline - Environment.TickCount64;
-                if (remainingMs <= 0)
+                cancellationToken.ThrowIfCancellationRequested();
+                byte[] chunkBuffer;
+                int chunkLength;
+                if (_rxBufferBytes > 0)
                 {
-                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
-                        $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
+                    var fromRx = Math.Min(_rxBufferBytes, (int)Math.Min(totalBytes - bytesRead, int.MaxValue));
+                    chunkBuffer = _rxBuffer;
+                    chunkLength = fromRx;
                 }
-
-                int n;
-                try
+                else
                 {
-                    n = await _transport.ReadAsync(rawBuffer, 0, toRead,
-                        (int)Math.Min(_cmdTimeoutMs, remainingMs), cancellationToken).ConfigureAwait(false);
-                }
-                catch (TimeoutException ex)
-                {
-                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
-                        $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.", ex);
-                }
-                if (n < 0 || n > toRead)
-                {
-                    throw new EdlException(EdlErrorCode.ReadPortTimeout,
-                        $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
-                }
-                if (n == 0)
-                {
-                    // A zero-length completion is not an expired deadline: the programmer ends each
-                    // negotiated payload block with one, so the transport answers the next request with
-                    // "nothing yet" at every block boundary. Treating it as a timeout aborts a healthy
-                    // transfer exactly one payload size into the read. Silence still has to end, so the
-                    // reads are bounded in count and the whole transfer stays inside one budget.
-                    if (++silentReads > MaximumSilentRawReads)
+                    var toRead = (int)Math.Min(chunkBytes, totalBytes - bytesRead);
+                    var remainingMs = deadline - Environment.TickCount64;
+                    if (remainingMs <= 0)
                     {
                         throw new EdlException(EdlErrorCode.ReadPortTimeout,
-                            $"Raw payload read went silent after {bytesRead}/{totalBytes} bytes.");
+                            $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
                     }
 
-                    await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
-                    continue;
+                    int n;
+                    try
+                    {
+                        n = await _transport.ReadAsync(rawBuffer, 0, toRead,
+                            (int)Math.Min(_cmdTimeoutMs, remainingMs), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (TimeoutException ex)
+                    {
+                        throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                            $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.", ex);
+                    }
+                    if (n < 0 || n > toRead)
+                    {
+                        throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                            $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
+                    }
+                    if (n == 0)
+                    {
+                        // A zero-length completion is not an expired deadline: the programmer ends each
+                        // negotiated payload block with one, so the transport answers the next request with
+                        // "nothing yet" at every block boundary. Treating it as a timeout aborts a healthy
+                        // transfer exactly one payload size into the read. Silence still has to end, so the
+                        // reads are bounded in count and the whole transfer stays inside one budget.
+                        if (++silentReads > MaximumSilentRawReads)
+                        {
+                            throw new EdlException(EdlErrorCode.ReadPortTimeout,
+                                $"Raw payload read went silent after {bytesRead}/{totalBytes} bytes.");
+                        }
+
+                        await Task.Delay(ZeroLengthReadRetryDelayMs, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    silentReads = 0;
+                    chunkBuffer = rawBuffer;
+                    chunkLength = n;
                 }
 
-                silentReads = 0;
-                chunkBuffer = rawBuffer;
-                chunkLength = n;
+                // One iteration is accounted for as a whole: writing the destination must not be interrupted by the
+                // already-cancelled token after the bytes left the endpoint, or the quiesce would over-read.
+                // 一次迭代整体记账：字节离开端点后，写目标流不得再被已取消的令牌打断，否则收尾会多读。
+                await destination.WriteAsync(chunkBuffer.AsMemory(0, chunkLength), CancellationToken.None);
+                bytesRead += chunkLength;
+
+                if (chunkBuffer == _rxBuffer)
+                {
+                    ShiftRxBufferLeft(chunkLength);
+                }
+                progress?.Report(bytesRead);
             }
 
-            await destination.WriteAsync(chunkBuffer.AsMemory(0, chunkLength), cancellationToken);
-            bytesRead += chunkLength;
-
-            if (chunkBuffer == _rxBuffer)
-            {
-                ShiftRxBufferLeft(chunkLength);
-            }
-            progress?.Report(bytesRead);
+            return RawPayloadOutcome.Completed;
         }
-
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return await QuiesceCancelledRawReadAsync(totalBytes - bytesRead, chunkBytes).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

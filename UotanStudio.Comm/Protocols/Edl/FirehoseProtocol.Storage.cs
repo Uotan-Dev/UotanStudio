@@ -173,6 +173,19 @@ public sealed partial class FirehoseProtocol
                 Log($"The transport disconnected after the power ACK: {ex.Message}");
                 return true;
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Closing a serial or USB handle cancels its pending read; the caller did not cancel, so this is the
+                // disconnect the reset was expected to produce, not a failed operation.
+                // 关闭串口或 USB 句柄会取消其挂起读取；调用方并未取消，因此这是复位本应产生的断开，而不是失败。
+                Log("The transport read was cancelled by the closing handle after the power ACK.");
+                return true;
+            }
+            catch (ObjectDisposedException)
+            {
+                Log("The transport was disposed after the power ACK.");
+                return true;
+            }
             catch (TimeoutException)
             {
                 await Task.Delay((int)Math.Min(25, remaining), cancellationToken).ConfigureAwait(false);

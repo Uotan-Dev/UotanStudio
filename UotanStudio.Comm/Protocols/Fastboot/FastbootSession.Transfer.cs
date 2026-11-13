@@ -390,9 +390,9 @@ public sealed partial class FastbootSession
     private void ReadDataPayload(long size, Stream output, IProgress<long>? progress, CancellationToken cancellationToken)
     {
         var chunkBuffer = ArrayPool<byte>.Shared.Rent(FastbootConstants.TransferChunkSize);
+        long bytesRead = 0;
         try
         {
-            long bytesRead = 0;
             while (bytesRead < size)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -413,10 +413,99 @@ public sealed partial class FastbootSession
                 progress?.Report(bytesRead);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AbortUpload(size - bytesRead, chunkBuffer);
+            throw;
+        }
         finally
         {
             ArrayPool<byte>.Shared.Return(chunkBuffer);
         }
+    }
+
+    /// <summary>
+    /// Upper bound for draining the payload a bootloader still sends after an abandoned upload. A stalled target must
+    /// not hold the caller indefinitely, so exceeding the budget resets the transport instead.
+    /// <para>弃单上传后排空 bootloader 仍在发送的负载的上限。卡住的目标不能无限拖住调用方，超预算即重置传输。</para>
+    /// </summary>
+    private const int AbortUploadDrainBudgetMs = 60_000;
+
+    /// <summary>
+    /// Completes an abandoned upload: drains the payload bytes the bootloader is still sending, then consumes the
+    /// trailing terminal frame so the download state machine returns to idle and the next command does not read a
+    /// stale reply. A silent or unresponsive target leaves the session unrecoverable through the protocol alone, so
+    /// the transport is reset and the retained response bytes are dropped.
+    /// <para>完成一次被弃单的上传：排空 bootloader 仍在发送的负载字节，随后消费尾部的终止帧，使下载状态机回到
+    /// 空闲，下一条命令不会读到过期应答。沉默或无应答的目标仅靠协议无法恢复，因此重置传输并丢弃保留的响应字节。</para>
+    /// </summary>
+    /// <param name="remaining">Payload bytes the device still has to send.<para>设备仍需发送的负载字节数。</para></param>
+    /// <param name="buffer">Reusable scratch buffer owned by the caller.<para>调用方持有的可复用暂存缓冲。</para></param>
+    private void AbortUpload(long remaining, byte[] buffer)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!TryDrainUpload(remaining, buffer))
+        {
+            ResetTransportAfterAbandon();
+            return;
+        }
+
+        try
+        {
+            var terminal = ReceiveResponse(Math.Min(_timeoutMs, AbortDrainTimeoutMs));
+            if (terminal.State is not (FastbootResponseState.Success or FastbootResponseState.Fail
+                or FastbootResponseState.Unknown))
+            {
+                ResetTransportAfterAbandon();
+            }
+        }
+        catch (Exception ex) when (ex is FastbootException or IOException or TimeoutException)
+        {
+            ResetTransportAfterAbandon();
+        }
+    }
+
+    /// <summary>
+    /// Discards the remainder of an abandoned upload within one bounded wall-clock budget.
+    /// <para>在一个有界的墙上时间预算内丢弃弃单上传的剩余负载。</para>
+    /// </summary>
+    /// <param name="remaining">Payload bytes the device still has to send.<para>设备仍需发送的负载字节数。</para></param>
+    /// <param name="buffer">Reusable scratch buffer owned by the caller.<para>调用方持有的可复用暂存缓冲。</para></param>
+    /// <returns><see langword="true"/> when the declared payload was fully consumed.
+    /// <para>声明的负载已全部消费时为 <see langword="true"/>。</para></returns>
+    private bool TryDrainUpload(long remaining, byte[] buffer)
+    {
+        var deadline = Environment.TickCount64 + AbortUploadDrainBudgetMs;
+        try
+        {
+            while (remaining > 0 && Environment.TickCount64 < deadline)
+            {
+                var toRead = (int)Math.Min(buffer.Length, remaining);
+                var sliceMs = (int)Math.Min(_timeoutMs, Math.Max(1, deadline - Environment.TickCount64));
+                var read = TakePendingBytes(buffer, 0, toRead);
+                if (read < toRead)
+                {
+                    read += Transport.Read(buffer, read, toRead - read, sliceMs);
+                }
+
+                if (read <= 0 || read > toRead)
+                {
+                    return false;
+                }
+
+                remaining -= read;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException)
+        {
+            return false;
+        }
+
+        return remaining <= 0;
     }
 
     /// <summary>

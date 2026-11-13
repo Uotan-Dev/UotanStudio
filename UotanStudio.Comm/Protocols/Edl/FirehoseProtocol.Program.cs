@@ -147,10 +147,15 @@ public sealed partial class FirehoseProtocol
             responseReceived = true;
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             transferStarted = true;
-            await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, payloadDigest,
+            var outcome = await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, payloadDigest,
                 bytesWritten => chunkProgress?.Invoke(
                     new EdlProgramChunkProgress(null, filename, physicalPartition, bytesWritten, totalBytes)),
                 cancellationToken);
+            if (outcome is not RawPayloadOutcome.Completed)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             payloadSent = true;
             var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
             if (payloadDigest is not null)
@@ -160,6 +165,16 @@ public sealed partial class FirehoseProtocol
             }
 
             return completion;
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            if (_faulted || !transferStarted)
+            {
+                InvalidateCancelledTransfer("the program stopped before its raw payload reached the command boundary");
+            }
+
+            RecordFailure(ex, transferStarted, payloadSent);
+            throw;
         }
         catch (Exception ex)
         {
@@ -496,16 +511,17 @@ public sealed partial class FirehoseProtocol
     /// accepted byte count; <see langword="null"/> keeps the previous silent behaviour.
     /// <para>可选回调；每块被接受后以累计已接受字节数触发，为 <see langword="null"/> 时保持原有的无回调行为。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
-    private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload,
-        DigestAccumulator? digest, Action<long>? chunkWritten, CancellationToken cancellationToken)
+    /// <returns>The outcome of the payload phase; a cancellation is quiesced before this returns.
+    /// <para>负载阶段的结果；返回前已完成取消的收尾。</para></returns>
+    private async Task<RawPayloadOutcome> SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes,
+        int maxPayload, DigestAccumulator? digest, Action<long>? chunkWritten, CancellationToken cancellationToken)
     {
         var zlpTimeout = GetZlpTimeoutMs();
         var buffer = ArrayPool<byte>.Shared.Rent(maxPayload);
+        long bytesWritten = 0;
         try
         {
             var dataBytes = totalBytes - tailPaddingBytes;
-            long bytesWritten = 0;
             while (bytesWritten < totalBytes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -551,6 +567,12 @@ public sealed partial class FirehoseProtocol
                 bytesWritten += toRead;
                 chunkWritten?.Invoke(bytesWritten);
             }
+
+            return RawPayloadOutcome.Completed;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return await QuiesceCancelledRawWriteAsync(totalBytes - bytesWritten, maxPayload).ConfigureAwait(false);
         }
         finally
         {
