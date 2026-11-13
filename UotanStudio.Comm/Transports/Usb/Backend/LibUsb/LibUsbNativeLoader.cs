@@ -210,6 +210,35 @@ internal static partial class LibUsbNativeLoader
         return null;
     }
 
+    /// <summary>
+    /// Attempts to load the platform libusb file next to the application and reports whether a usable image could be
+    /// bound, so callers can predict whether LibUsbDotNet's own import probing of the application directory will
+    /// succeed before LibUsbDotNet allocates its context.
+    /// <para>尝试加载程序目录中的平台 libusb 文件并报告能否绑定到可用映像，使调用方能在 LibUsbDotNet
+    /// 分配其上下文之前预判它对程序目录的导入探测是否会成功。</para>
+    /// </summary>
+    /// <returns><c>true</c> when the platform file next to the application exists and loads; loading an already
+    /// loaded image returns <c>true</c> immediately.
+    /// <para>程序目录中的平台文件存在且可加载时为 <c>true</c>；已加载的映像会立即返回 <c>true</c>。</para></returns>
+    internal static bool TryLoadApplicationDirectoryLibrary()
+    {
+        var candidate = FindProgramDirectoryLibrary();
+        if (candidate is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            LoadNative(candidate);
+            return true;
+        }
+        catch (Exception ex) when (ex is BadImageFormatException or DllNotFoundException or EntryPointNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static IntPtr LoadNative(string fullPath)
     {
 #if NET5_0_OR_GREATER
