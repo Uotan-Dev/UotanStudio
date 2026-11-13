@@ -1,7 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -351,12 +350,7 @@ public sealed class HdcAuthentication : IDisposable
     /// <returns>The UTF-8 encoded handshake payload.<para>UTF-8 编码的握手负载。</para></returns>
     public byte[] BuildDaemonPublicKeyPayload()
     {
-        using var buffer = Utf8String.CreateWriter(out var writer);
-        writer.Append(HostName);
-        writer.Append(BufferSeparator);
-        writer.Append(BuildPublicKeyFileText(_rsa));
-        writer.Flush();
-        return buffer.ToArray();
+        return Encoding.UTF8.GetBytes($"{HostName}{BufferSeparator}{BuildPublicKeyFileText(_rsa)}");
     }
 
     /// <summary>

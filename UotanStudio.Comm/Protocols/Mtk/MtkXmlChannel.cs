@@ -1,7 +1,6 @@
 using System.Text;
 using System.Xml.Linq;
 using UotanStudio.Comm.Transports.Abstractions;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -25,7 +24,12 @@ internal sealed class MtkXmlChannel(ICommTransport transport, int timeoutMs)
     internal Task AcknowledgeValueAsync(ulong value, CancellationToken cancellationToken)
     {
         RequireReady(cancellationToken);
-        return _frames.SendAsync(1, Utf8String.Format($"OK@0x{value:x}\0"), cancellationToken);
+        Span<byte> frame = stackalloc byte[32];
+        if (!System.Text.Unicode.Utf8.TryWrite(frame, $"OK@0x{value:x}\0", out var written))
+        {
+            return _frames.SendAsync(1, Utf8.GetBytes($"OK@0x{value:x}\0"), cancellationToken);
+        }
+        return _frames.SendAsync(1, frame[..written].ToArray(), cancellationToken);
     }
 
     internal Task SendStreamAsync(Stream source, int length, CancellationToken cancellationToken)

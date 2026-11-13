@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Text;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Firmware.Core.Text;
-using Utf8StringInterpolation;
 using ZLinq;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -147,14 +146,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             throw new ArgumentException("Invalid HDC command.", nameof(command));
         using var client = await OpenAsync(connectKey, cancellationToken).ConfigureAwait(false);
         var stream = client.GetStream();
-        byte[] commandFrame;
-        using (var buffer = Utf8String.CreateWriter(out var writer))
-        {
-            writer.Append(command);
-            writer.Append('\0');
-            writer.Flush();
-            commandFrame = buffer.ToArray();
-        }
+        var commandFrame = Encoding.UTF8.GetBytes($"{command}\0");
 
         await WriteFrameAsync(stream, commandFrame, cancellationToken).ConfigureAwait(false);
         var headerScratch = new byte[4];

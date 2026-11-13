@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Channels;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -151,7 +150,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, C
             if (reverse)
             {
                 _channel = connection.OpenChannel(HdcCommand.ForwardInit,
-                    Utf8String.Format($"{remoteEndpoint} tcp:{localPort}"));
+                    Encoding.UTF8.GetBytes($"{remoteEndpoint} tcp:{localPort}"));
                 var check = HdcTransferEngine.Expect(_channel, HdcCommand.ForwardCheck, ct);
                 var id = ValidateEndpoint(check.Payload ?? []);
                 Send(HdcCommand.ForwardCheckResult, id, [1]);

@@ -1,5 +1,5 @@
 using System.Buffers;
-using Utf8StringInterpolation;
+using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -356,13 +356,13 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
     }
 
     /// <summary>
-    /// Builds the <c>file send/recv</c> init payload as UTF-8 bytes without materializing an intermediate string.
-    /// <para>以 UTF-8 字节构建 <c>file send/recv</c> 初始化负载，不产生中间字符串。</para>
+    /// Builds the <c>file send/recv</c> init payload as UTF-8 bytes.
+    /// <para>以 UTF-8 字节构建 <c>file send/recv</c> 初始化负载。</para>
     /// </summary>
     /// <param name="remotePath">Absolute device path, quoted in the payload. <para>负载中带引号的绝对设备路径。</para></param>
     /// <returns>The UTF-8 payload handed to the <c>FileInit</c> channel. <para>交给 <c>FileInit</c> 通道的 UTF-8 负载。</para></returns>
     private byte[] BuildFileInitPayload(string remotePath) =>
-        Utf8String.Format($"{(Compress ? "-z " : "")}\"{remotePath}\" .");
+        Encoding.UTF8.GetBytes($"{(Compress ? "-z " : "")}\"{remotePath}\" .");
 
     private static readonly SearchValues<char> ForbiddenPathChars = SearchValues.Create('\0', '\r', '\n', '"');
 

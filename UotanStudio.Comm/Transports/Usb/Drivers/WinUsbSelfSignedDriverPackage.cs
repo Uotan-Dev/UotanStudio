@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Hash.Digests;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Comm.Transports.Usb.Drivers;
 
@@ -291,7 +290,7 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
 
     private static Guid DeriveInterfaceGuid(string instanceId)
     {
-        var digest = Sha256.ComputeHash(Utf8String.Format($"UotanStudio|{instanceId}"));
+        var digest = Sha256.ComputeHash(Encoding.UTF8.GetBytes($"UotanStudio|{instanceId}"));
         Span<byte> bytes = stackalloc byte[16];
         digest.AsSpan(0, 16).CopyTo(bytes);
         bytes[7] = (byte)((bytes[7] & 0x0F) | 0x40);
