@@ -21,6 +21,21 @@ internal sealed class EdlConnectionCache(
     private bool _disposed;
 
     /// <summary>
+    /// How long an explicit probe waits for a probe already running on the same endpoint before reporting the state
+    /// that probe leaves behind. A caller asking for the state is asking for the result of a probe, so returning the
+    /// value the entry held before the in-flight probe ran reports a stale <see cref="EdlProtocolState.Unknown"/> for
+    /// a target that is about to be classified — which is exactly what a caller arriving right after discovery sees,
+    /// because discovery starts its own probe. The window covers one full probe (read budget, wake and the loader
+    /// transition) without letting a pathological holder block the caller; the caller's token still bounds it.
+    /// <para>显式探测在同一端点上已有探测运行时最多等多久，之后回报那次探测留下的状态。向调用方索取状态就是索取一次
+    /// 探测的结果，因此返回正在进行的探测运行之前的旧值，会把一个即将被分类的目标报成过期的
+    /// <see cref="EdlProtocolState.Unknown"/>——而这正是设备刚被发现后立刻赶到的调用方所看到的情形，因为发现流程
+    /// 自己会启动一次探测。该窗口覆盖一次完整探测（读取预算、唤醒与 loader 切换），又不让异常持有者阻塞调用方；
+    /// 调用方自己的令牌仍是等待的真正上界。</para>
+    /// </summary>
+    private const int ProbeJoinBudgetMs = 6_000;
+
+    /// <summary>
     /// Optional generation-liveness probe supplied after construction; the constructor delegate wins when both are
     /// present. Without a probe, liveness relies on the session's own connection state.
     /// <para>构造之后提供的可选代际判活探针；与构造参数同时存在时构造参数优先。没有探针时仅按会话自身的连接状态判活。</para>
@@ -146,8 +161,11 @@ internal sealed class EdlConnectionCache(
     internal async Task<EdlProtocolState> ProbeAsync(DetectedDevice device, CancellationToken cancellationToken)
     {
         var entry = GetEntry(device);
-        if (!await entry.Operation.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        if (!await entry.Operation.WaitAsync(ProbeJoinBudgetMs, cancellationToken).ConfigureAwait(false))
         {
+            // A probe on this endpoint has been running longer than one should take; report what it leaves behind
+            // instead of opening a second probe on the same handle.
+            // 该端点上的探测已超过一次探测应有的时长；回报它留下的状态，而不是在同一个句柄上再开一次探测。
             return entry.State;
         }
         try
