@@ -184,7 +184,7 @@ internal sealed class EdlConnectionCache(
         }
         catch
         {
-            Publish(entry, EdlProtocolState.Unknown);
+            PublishFailure(entry, device.Key, "probe");
             throw;
         }
         finally
@@ -270,7 +270,7 @@ internal sealed class EdlConnectionCache(
         }
         catch
         {
-            Publish(entry, EdlProtocolState.Unknown);
+            PublishFailure(entry, device.Key, "operation");
             throw;
         }
         finally
@@ -386,6 +386,27 @@ internal sealed class EdlConnectionCache(
         {
             changed();
         }
+    }
+
+    /// <summary>
+    /// Keeps the last stage that was actually observed when a probe or operation fails, so a transient timeout cannot
+    /// turn a known Sahara or Firehose endpoint back into <see cref="EdlProtocolState.Unknown"/>. Entries are dropped
+    /// when the endpoint disappears, so a retained stage never describes a different device.
+    /// <para>探测或操作失败时保留最后一次真正观测到的阶段，使一次瞬时超时不会把已知的 Sahara 或 Firehose 端点
+    /// 变回 <see cref="EdlProtocolState.Unknown"/>。端点消失时条目会被移除，因此保留的阶段绝不会描述另一台设备。</para>
+    /// </summary>
+    /// <param name="entry">The endpoint entry.<para>端点条目。</para></param>
+    /// <param name="key">The endpoint cache key, for the diagnostic log.<para>端点缓存键，用于诊断日志。</para></param>
+    /// <param name="source">Which operation failed.<para>失败的操作。</para></param>
+    private void PublishFailure(Entry entry, string key, string source)
+    {
+        if (entry.State == EdlProtocolState.Unknown)
+        {
+            return;
+        }
+
+        LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            $"EDL {source} for '{key}' ended without a conclusion; keeping the last observed stage {entry.State}.");
     }
 
     /// <summary>

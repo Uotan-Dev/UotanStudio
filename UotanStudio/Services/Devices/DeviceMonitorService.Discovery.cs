@@ -13,8 +13,11 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     private const int SlowScanMilliseconds = 120;
+    private const int AutomaticEdlProbeTimeoutSeconds = 20;
     private static readonly TimeSpan ScanLockWait = TimeSpan.FromMilliseconds(250);
     private readonly Lock _scanLock = new();
+    private readonly Lock _scheduledEdlProbesGate = new();
+    private readonly HashSet<string> _scheduledEdlProbes = new(StringComparer.Ordinal);
     private volatile IReadOnlyList<DetectedDevice>? _lastScan;
     /// <summary>
     /// Full scan of the direct-USB endpoints plus the adb and HDC server targets, cached until the
@@ -63,11 +66,90 @@ public sealed partial class DeviceMonitorService
                 _cachedScan = devices;
             }
 
+            ScheduleEdlStageProbes(devices);
             return devices;
         }
         finally
         {
             _scanLock.Exit();
+        }
+    }
+
+    /// <summary>
+    /// Probes every newly discovered EDL endpoint once in the background, so the device list shows the real
+    /// Sahara/Firehose stage instead of staying at the default unknown value until the details page is opened. A probe
+    /// that is already running is skipped by the connection cache, and a failed probe keeps the last observed stage.
+    /// <para>在后台对每个新发现的 EDL 端点探测一次，使设备列表显示真实的 Sahara/Firehose 阶段，而不是在打开详情页
+    /// 之前一直停留在默认的未知值。正在运行的探测由连接缓存跳过，失败的探测保留上次观测到的阶段。</para>
+    /// </summary>
+    /// <param name="devices">The devices produced by this scan.<para>本次扫描得到的设备。</para></param>
+    private void ScheduleEdlStageProbes(IReadOnlyList<DetectedDevice> devices)
+    {
+        foreach (var device in devices)
+        {
+            if (device.Protocol != DeviceProtocolKind.Edl || device.EdlProtocol != EdlProtocolState.Unknown)
+            {
+                continue;
+            }
+
+            lock (_scheduledEdlProbesGate)
+            {
+                if (!_scheduledEdlProbes.Add(device.Key))
+                {
+                    continue;
+                }
+            }
+
+            _ = ProbeEdlStageInBackgroundAsync(device);
+        }
+    }
+
+    /// <summary>
+    /// Runs one automatic stage probe and forgets the key again when it produced no conclusion, so a later scan can
+    /// retry a device that was busy or silent during this attempt.
+    /// <para>执行一次自动阶段探测；未得出结论时再次忘记该键，使后续扫描可以重试本次繁忙或静默的设备。</para>
+    /// </summary>
+    /// <param name="device">The EDL endpoint to classify.<para>要分类的 EDL 端点。</para></param>
+    private async Task ProbeEdlStageInBackgroundAsync(DetectedDevice device)
+    {
+        try
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(AutomaticEdlProbeTimeoutSeconds));
+            var state = await ProbeEdlProtocolAsync(device, budget.Token).ConfigureAwait(false);
+            if (state != EdlProtocolState.Unknown)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                    $"Automatic EDL stage probe classified '{device.Key}' as {state}.");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Automatic EDL stage probe for '{device.Key}' ended without a conclusion: " +
+                $"{ex.GetType().Name}: {ex.Message}");
+        }
+
+        lock (_scheduledEdlProbesGate)
+        {
+            _scheduledEdlProbes.Remove(device.Key);
+        }
+    }
+
+    /// <summary>
+    /// Forgets scheduled probes whose endpoint disappeared, so a reconnected device is classified again instead of
+    /// inheriting the scheduling state of a previous attachment.
+    /// <para>忘记端点已消失的探测记录，使重新连接的设备再次被分类，而不是继承上一次连接的计划状态。</para>
+    /// </summary>
+    /// <param name="devices">The devices produced by this scan.<para>本次扫描得到的设备。</para></param>
+    private void ForgetRemovedEdlProbes(IReadOnlyList<DetectedDevice> devices)
+    {
+        var live = devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
+            .Select(device => device.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        lock (_scheduledEdlProbesGate)
+        {
+            _scheduledEdlProbes.RemoveWhere(key => !live.Contains(key));
         }
     }
 
@@ -248,6 +330,7 @@ public sealed partial class DeviceMonitorService
 
         _edlConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
             .Select(device => device.Key).ToHashSet(StringComparer.Ordinal));
+        ForgetRemovedEdlProbes(devices);
         return CoalesceSameEndpoint(devices);
     }
 
