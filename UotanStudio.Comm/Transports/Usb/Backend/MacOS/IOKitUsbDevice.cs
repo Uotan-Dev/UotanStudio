@@ -38,6 +38,14 @@ internal class IOKitUsbDevice : UsbDevice
 
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
+    /// <summary>Bounded retries for a device whose previous user client is still being torn down.
+    /// <para>设备上一个用户客户端仍在拆除时的有界重试次数。</para></summary>
+    private const int ExclusiveAccessRetryAttempts = 40;
+
+    /// <summary>Delay between exclusive-access retries, in milliseconds.
+    /// <para>独占访问重试之间的延迟（毫秒）。</para></summary>
+    private const int ExclusiveAccessRetryDelayMs = 500;
+
     private IntPtr _pluginInterface = IntPtr.Zero;
     private IntPtr _deviceInterface = IntPtr.Zero;
     private bool _deviceOpened;
@@ -188,7 +196,17 @@ internal class IOKitUsbDevice : UsbDevice
                 var lenToSend = Math.Min(lenRemaining, maxLenToSend);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + count);
                 var kr = writePipe(_interfaceInterface, _bulkOut, ptr, (uint)lenToSend, (uint)effectiveTimeoutMs, (uint)effectiveTimeoutMs);
-                if (kr != IOKitUsbAPI.KIOReturnSuccess)
+                if (kr == IOKitUsbAPI.KIOUSBPipeStalled)
+                {
+                    // The device consumed the payload and answered the handshake with a stall — exactly
+                    // what a Qualcomm programmer does after each Firehose command. The bytes are on the
+                    // wire, so clear the condition and report the chunk as written instead of failing.
+                    var clear = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ClearPipeStallBothEndsDelegate>(
+                        _interfaceInterface, IOKitUsbAPI.Offset_ClearPipeStallBothEnds);
+                    var cleared = clear(_interfaceInterface, _bulkOut);
+                    UsbTrace.Log($"IOKitUsbDevice.Write: pipe stall after {lenToSend} bytes (expected for a Firehose command); clear=0x{cleared:X}");
+                }
+                else if (kr != IOKitUsbAPI.KIOReturnSuccess)
                 {
                     if (kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted)
                     {
@@ -309,12 +327,45 @@ internal class IOKitUsbDevice : UsbDevice
 
         try
         {
-            var kr = IOKitUsbAPI.IOCreatePlugInInterfaceForService(
-                service,
-                IOKitUsbAPI.KIOUSBDeviceUserClientTypeID,
-                IOKitUsbAPI.KIOCFPlugInInterfaceID,
-                out var plugin,
-                out _);
+            var deviceClientType = IOKitUsbAPI.CreateCoreFoundationUuid(IOKitUsbAPI.KIOUSBDeviceUserClientTypeID);
+            var pluginInterfaceType = IOKitUsbAPI.CreateCoreFoundationUuid(IOKitUsbAPI.KIOCFPlugInInterfaceID);
+            int kr;
+            IntPtr plugin;
+            try
+            {
+                // A device whose previous owner is still tearing down answers kIOReturnExclusiveAccess
+                // for a short window; the bootrom clears it once the old user client is gone, so a
+                // bounded retry is what makes consecutive EDL sessions work without a physical replug.
+                kr = IOKitUsbAPI.IOCreatePlugInInterfaceForServiceWithUuid(
+                    service, deviceClientType, pluginInterfaceType, out plugin, out _);
+                for (var attempt = 1;
+                     attempt < ExclusiveAccessRetryAttempts
+                     && kr is IOKitUsbAPI.KIOReturnExclusiveAccess
+                         or IOKitUsbAPI.KIOReturnUnsupported
+                         or IOKitUsbAPI.KIOReturnNotPermitted
+                         or IOKitUsbAPI.KIOReturnNotPrivileged
+                         or IOKitUsbAPI.KIOReturnBusy;
+                     attempt++)
+                {
+                    Thread.Sleep(ExclusiveAccessRetryDelayMs);
+                    kr = IOKitUsbAPI.IOCreatePlugInInterfaceForServiceWithUuid(
+                        service, deviceClientType, pluginInterfaceType, out plugin, out _);
+                    UsbTrace.Log($"IOKitUsbDevice.CreateHandle: exclusive-access retry {attempt} kr=0x{kr:X}");
+                }
+            }
+            finally
+            {
+                if (deviceClientType != IntPtr.Zero)
+                {
+                    IOKitUsbAPI.CFRelease(deviceClientType);
+                }
+
+                if (pluginInterfaceType != IntPtr.Zero)
+                {
+                    IOKitUsbAPI.CFRelease(pluginInterfaceType);
+                }
+            }
+
             UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IOCreatePlugInInterfaceForService kr={kr} plugin={plugin}");
             if (kr != IOKitUsbAPI.Ok || plugin == IntPtr.Zero)
             {
@@ -326,7 +377,9 @@ internal class IOKitUsbDevice : UsbDevice
             try
             {
                 var queryInterface = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(plugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
-                if (queryInterface(plugin, IOKitUsbAPI.KIOUSBDeviceInterfaceID, out _deviceInterface) != IOKitUsbAPI.Ok || _deviceInterface == IntPtr.Zero)
+                var deviceInterfaceId = new IOKitUsbAPI.CfUuidBytes(IOKitUsbAPI.KIOUSBDeviceInterfaceID);
+                var queryResult = queryInterface(plugin, deviceInterfaceId, out _deviceInterface);
+                if (queryResult != IOKitUsbAPI.Ok || _deviceInterface == IntPtr.Zero)
                 {
                     OpenFailureDetail = "the plugin interface does not expose KIOUSBDeviceInterfaceID";
                     UsbTrace.LogError($"IOKitUsbDevice.CreateHandle: {OpenFailureDetail}.");
@@ -449,12 +502,27 @@ internal class IOKitUsbDevice : UsbDevice
 
     private bool TryOpenInterface(IntPtr ifcService)
     {
-        var kr = IOKitUsbAPI.IOCreatePlugInInterfaceForService(
-            ifcService,
-            IOKitUsbAPI.KIOUSBInterfaceUserClientTypeID,
-            IOKitUsbAPI.KIOCFPlugInInterfaceID,
-            out var ifcPlugin,
-            out _);
+        var interfaceClientType = IOKitUsbAPI.CreateCoreFoundationUuid(IOKitUsbAPI.KIOUSBInterfaceUserClientTypeID);
+        var interfacePlugInType = IOKitUsbAPI.CreateCoreFoundationUuid(IOKitUsbAPI.KIOCFPlugInInterfaceID);
+        int kr;
+        IntPtr ifcPlugin;
+        try
+        {
+            kr = IOKitUsbAPI.IOCreatePlugInInterfaceForServiceWithUuid(
+                ifcService, interfaceClientType, interfacePlugInType, out ifcPlugin, out _);
+        }
+        finally
+        {
+            if (interfaceClientType != IntPtr.Zero)
+            {
+                IOKitUsbAPI.CFRelease(interfaceClientType);
+            }
+
+            if (interfacePlugInType != IntPtr.Zero)
+            {
+                IOKitUsbAPI.CFRelease(interfacePlugInType);
+            }
+        }
         if (kr != IOKitUsbAPI.Ok || ifcPlugin == IntPtr.Zero)
         {
             return false;
@@ -463,7 +531,9 @@ internal class IOKitUsbDevice : UsbDevice
         try
         {
             var ifcQuery = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(ifcPlugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
-            if (ifcQuery(ifcPlugin, IOKitUsbAPI.KIOUSBInterfaceInterfaceID190, out var ifcIntf) != IOKitUsbAPI.Ok || ifcIntf == IntPtr.Zero)
+            var ifcId = new IOKitUsbAPI.CfUuidBytes(IOKitUsbAPI.KIOUSBInterfaceInterfaceID190);
+            var ifcQueryResult = ifcQuery(ifcPlugin, ifcId, out var ifcIntf);
+            if (ifcQueryResult != IOKitUsbAPI.Ok || ifcIntf == IntPtr.Zero)
             {
                 return false;
             }
