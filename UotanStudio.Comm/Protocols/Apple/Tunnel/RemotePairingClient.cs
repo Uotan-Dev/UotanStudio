@@ -37,9 +37,7 @@ public sealed class RemotePairingRecordStore
     /// <param name="directory">The storage directory, or <see langword="null"/> for the default. <para>存储目录；<see langword="null"/> 用默认。</para></param>
     public RemotePairingRecordStore(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "UotanStudio", "apple-lockdown");
+        _directory = directory ?? Protocols.Apple.ApplePairingRecordPaths.DefaultDirectory;
         Directory.CreateDirectory(_directory);
     }
 

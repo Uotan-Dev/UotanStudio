@@ -14,16 +14,15 @@ public sealed class LockdownPairingRecordStore
     private readonly string _directory;
 
     /// <summary>
-    /// Creates a store rooted at the supplied directory, defaulting to
-    /// <c>%LOCALAPPDATA%/UotanStudio/apple-lockdown</c>.
-    /// <para>以给定目录为根创建存储，默认为 <c>%LOCALAPPDATA%/UotanStudio/apple-lockdown</c>。</para>
+    /// Creates a store rooted at the supplied directory, defaulting to the shared per-user data root's
+    /// <c>apple-lockdown</c> directory (<see cref="ApplePairingRecordPaths.DefaultDirectory"/>).
+    /// <para>以给定目录为根创建存储，默认为按用户数据根下的 <c>apple-lockdown</c> 目录
+    /// （<see cref="ApplePairingRecordPaths.DefaultDirectory"/>）。</para>
     /// </summary>
     /// <param name="directory">The storage directory, or <see langword="null"/> for the default. <para>存储目录；<see langword="null"/> 时使用默认。</para></param>
     public LockdownPairingRecordStore(string? directory = null)
     {
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "UotanStudio", "apple-lockdown");
+        _directory = directory ?? ApplePairingRecordPaths.DefaultDirectory;
         Directory.CreateDirectory(_directory);
     }
 
