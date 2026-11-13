@@ -25,10 +25,10 @@
 
 ## 发布与验证
 
-- 发布以 `.github/workflows/release.yml` 为准：六个 RID（`win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、`osx-arm64`），`dotnet publish ... -c Release -r <rid> --self-contained`。`PublishAot` 由 csproj 声明，不要再用命令行 `-p:PublishAot=true` 传入：那会把属性变成全局属性传给所有被引用项目。Release 默认 `DebugType=none`（不产 PDB），与 CI 一致。`Properties/PublishProfiles/FolderProfile.pubxml` 是本机 win-x64/单文件配置，不代表 CI。
+- 发布以 `.github/workflows/release.yml` 为准：八个 RID（`win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`linux-musl-x64`、`linux-musl-arm64`、`osx-x64`、`osx-arm64`），`dotnet publish ... -c Release -r <rid> --self-contained`。musl 两个 RID 在官方 `dotnet/sdk:11.0-alpine` 容器内发布（glibc runner 缺 musl 工具链）。`PublishAot` 由 csproj 声明，不要再用命令行 `-p:PublishAot=true` 传入：那会把属性变成全局属性传给所有被引用项目。Release 默认 `DebugType=none`（不产 PDB），与 CI 一致。`Properties/PublishProfiles/FolderProfile.pubxml` 是本机 win-x64/单文件配置，不代表 CI。
 - `workflow_dispatch` 的 `rid` 输入可指定单个 RID 或逗号分隔的多个 RID，留空与 tag 推送都全量发布六个 RID；`prepare` job 校验 RID、去重并生成 `include` 矩阵交给 `build`，非法 RID 直接失败。
-- `linux-riscv64` 与 `linux-loongarch64` 是实验 RID，只接受规范 RID、不设别名（csproj 的 `UseSatoriGC=false` 回退靠 `riscv64`/`loongarch64` 子串命中）：仅在 `rid` 输入显式指定时进入矩阵，留空全量与 tag 推送都不跑；矩阵条目带 `experimental` 标记，`build` job 对它们允许失败并打印警告。
-- 实验 RID 的 QEMU 发布、SDK 选择与包源配置以 `.github/workflows/release.yml` 为准；发布产物复用标准打包步骤。QEMU 全链路、容器镜像与构建时长尚无验证记录。
+- `linux-riscv64` 与 `linux-loongarch64` 是实验 RID，只接受规范 RID、不设别名（csproj 的 `UseSatoriGC=false` 回退靠 `riscv64`/`loongarch64` 子串命中）：由独立工作流手动触发（`riscv-publish.yml` / `loongarch-publish.yml`），不参与 `release.yml` 的六 RID 矩阵。
+- `riscv-publish.yml` 用混合交叉：官方 x64 SDK + 社区托管树（`Microsoft.NET.Build.Tasks` 认 riscv64 包）+ qemu-user 仅模拟 ilc（guest ld.so 显式加载 + `LD_LIBRARY_PATH`），`DOTNET_ReadyToRun=0` 防社区 dll 的 riscv64 R2R 被 x64 拒载，`NETCoreSdkPortableRuntimeIdentifier=linux-x64` 修正 host 架构推导，ILCompiler targets 补 `CrossCompileArch` fallback。2026-11-14 已用 hello world NativeAOT 闭环验证（产物 riscv64 ELF、qemu 运行通过）；SkiaSharp 无 riscv64 原生资产的缺口不变。`loongarch-publish.yml` 同构（镜像 `azurelinux-3.0-net10.0-cross-loongarch64`），端到端未执行过。
 - 自包含发布使用 csproj 指定的 `PublishWithSatoriGC` SDK；`riscv64`/`loongarch64` 显式设置 `UseSatoriGC=false` 并使用默认 GC。运行时通过 `GC.GetConfigurationVariables()` 的 `SatoriGC` 键检测 GC；`NETCoreSdkVersion` 写入 `AssemblyMetadata.DotNetSdkVersion` 供设置页展示。
 - `WindowsCompositionRoots.xml` 只在 win RID 发布时作为 `TrimmerRootDescriptor` 注入，保留 `Avalonia.Win32.WindowImpl.CompositionEffectsSurface` 供设置页报告实际合成宿主；不要改成无条件引用，否则 Linux/macOS 发布会保留 Win32 平台实现。
 - `UotanStudio.Tests` 不引用 Desktop，`Program.cs` 与命令行没有自动化测试。改动后必须 Release 构建 + 对应 RID 发布，并手工冒烟 GUI、`--managed-device-shell`、`--mcp-headless`、`--mcp` 四种模式；不能写成“已测试”。

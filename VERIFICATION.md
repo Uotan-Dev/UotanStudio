@@ -75,6 +75,6 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 
 - 日志窗口、比较窗、设备信息表、烧录页行状态与文件选择热区的视觉布局未逐项目视；桌面键鼠交互、弹层与设置页 GC 区块未人工实测。
 - 长会话下的 64 Mi 字符日志预算、单文件磁盘占用与磁盘写满路径未压测；真实 `%AppData%/UotanStudio/logs` 会话未跑完。
-- 除 win-x64 外的 RID 发布未执行；riscv64/loongarch64 的 QEMU 实验发布未在 CI 或本机运行，社区 SDK、容器镜像与模拟构建时长未验证。
+- 除 win-x64 外的 RID 发布未执行。riscv64 的混合交叉（官方 x64 SDK + 社区托管树 + qemu-user 仅模拟 ilc）已于 2026-11-14 在本机以 hello world NativeAOT 闭环验证（产物 riscv64 ELF、qemu 运行通过；`UotanStudio.Desktop` 全量发布与 SkiaSharp riscv64 原生库缺口未解）；loongarch64 同构方案（`loongarch-publish.yml`）与 riscv64 大工程交叉耗时未实测。release.yml 新增的 musl 两个 RID（alpine 容器发布）与 package.yml 的 MSIX/DMG/deb/rpm/apk/pacman 打包链均未在 runner 上运行。
 - CI `dotnet test --solution` 路径与 Runner 机器未实测；Satori GC 的延迟与吞吐特性只在合成负载测量，应用混合负载与长期运行未验证。
 - `CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
