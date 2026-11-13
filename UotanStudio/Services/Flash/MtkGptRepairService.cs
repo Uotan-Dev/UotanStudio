@@ -28,30 +28,44 @@ internal static class MtkGptRepairService
         {
             var snapshot = await session.ReadXFlashGptAsync(MtkScatterPackage.GetPhysicalPartition(kind), ct)
                 .ConfigureAwait(false);
-            return new MtkGptWritePreparation(session, family, snapshot, MtkGptWritePlanner.Plan(snapshot),
-                snapshot.Table.MetadataSha256);
+            return new MtkGptWritePreparation(session, family, snapshot,
+                MtkGptWritePlanner.Plan(snapshot), snapshot.Table.MetadataSha256);
         }
 
         if (family == MtkDaProtocol.Legacy)
         {
             var snapshot = await session.ReadLegacyGptAsync(MtkScatterPackage.GetLegacyPhysicalPartition(kind), ct)
                 .ConfigureAwait(false);
-            return new MtkGptWritePreparation(session, family, snapshot, MtkGptWritePlanner.Plan(snapshot),
-                snapshot.Table.MetadataSha256);
+            return new MtkGptWritePreparation(session, family, snapshot,
+                MtkGptWritePlanner.Plan(snapshot), snapshot.Table.MetadataSha256);
         }
 
         if (family == MtkDaProtocol.Xml)
         {
             var snapshot = await session.ReadXmlGptAsync(MtkScatterPackage.GetXmlRegionName(kind),
                 cancellationToken: ct).ConfigureAwait(false);
-            return new MtkGptWritePreparation(session, family, snapshot, MtkGptWritePlanner.Plan(snapshot),
-                snapshot.Table.MetadataSha256);
+            return new MtkGptWritePreparation(session, family, snapshot,
+                MtkGptWritePlanner.Plan(snapshot), snapshot.Table.MetadataSha256);
         }
 
         throw new ArgumentOutOfRangeException(nameof(family),
             "The partition-table write-back supports the XFlash, XML and Legacy download agent families.");
     }
 }
+
+/// <summary>
+/// A closed GPT observation handed to the write-back: exactly one of the XFlash, Legacy eMMC or XML
+/// region snapshots the session produced.
+/// <para>交给写回的封闭分区表观测：会话产出的 XFlash、Legacy eMMC 或 XML 区域快照之一。</para>
+/// </summary>
+/// <remarks>
+/// The cases are positional: the first is the XFlash snapshot, the second the Legacy snapshot and the
+/// third the XML snapshot. The caller always knows the family it read, so every consumer switches over
+/// the held case directly.
+/// <para>分支按位置排列：第一个是 XFlash 快照，第二个是 Legacy 快照，第三个是 XML 快照。
+/// 调用方总是知道自己读取的家族，因此消费方直接对所持分支做模式匹配。</para>
+/// </remarks>
+internal union MtkGptWriteSnapshot(MtkGptSnapshot, MtkLegacyGptSnapshot, MtkXmlGptSnapshot);
 
 /// <summary>
 /// A prepared partition-table write-back: the extents it can preview, a one-shot lifecycle, and
@@ -62,12 +76,12 @@ public sealed class MtkGptWritePreparation : IMtkFlashPlanPreview
 {
     private readonly MtkSession _session;
     private readonly MtkDaProtocol _family;
-    private readonly object _snapshot;
+    private readonly MtkGptWriteSnapshot _snapshot;
     private readonly Lock _gate = new();
     private MtkFlashPlanState _state = MtkFlashPlanState.Prepared;
     private bool _disposed;
 
-    internal MtkGptWritePreparation(MtkSession session, MtkDaProtocol family, object snapshot,
+    internal MtkGptWritePreparation(MtkSession session, MtkDaProtocol family, MtkGptWriteSnapshot snapshot,
         IReadOnlyList<MtkGptWriteExtent> extents, string tableMetadataSha256)
     {
         _session = session;
@@ -138,16 +152,16 @@ public sealed class MtkGptWritePreparation : IMtkFlashPlanPreview
         var succeeded = false;
         try
         {
-            var result = _family switch
+            var result = (_family, _snapshot.Value) switch
             {
-                MtkDaProtocol.XFlash => await _session
-                    .WriteXFlashGptAsync((MtkGptSnapshot)_snapshot, progress, cancellationToken)
+                (MtkDaProtocol.XFlash, MtkGptSnapshot xflash) => await _session
+                    .WriteXFlashGptAsync(xflash, progress, cancellationToken)
                     .ConfigureAwait(false),
-                MtkDaProtocol.Legacy => await _session
-                    .WriteLegacyGptAsync((MtkLegacyGptSnapshot)_snapshot, progress, cancellationToken)
+                (MtkDaProtocol.Legacy, MtkLegacyGptSnapshot legacy) => await _session
+                    .WriteLegacyGptAsync(legacy, progress, cancellationToken)
                     .ConfigureAwait(false),
-                MtkDaProtocol.Xml => await _session
-                    .WriteXmlGptAsync((MtkXmlGptSnapshot)_snapshot, progress, cancellationToken)
+                (MtkDaProtocol.Xml, MtkXmlGptSnapshot xml) => await _session
+                    .WriteXmlGptAsync(xml, progress, cancellationToken)
                     .ConfigureAwait(false),
                 _ => throw new ArgumentOutOfRangeException(nameof(_family),
                     "The partition-table write-back supports the XFlash, XML and Legacy download agent families.")
