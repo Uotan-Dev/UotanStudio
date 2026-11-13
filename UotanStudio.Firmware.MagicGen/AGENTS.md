@@ -4,11 +4,10 @@
 
 ## 边界与产物
 
-- 本工具写两处生成物：规则表单帧 `UotanStudio.Assets/Assets/firmware/magic/CompiledMagicData.zst`（由 `UotanStudio.Assets` 作为 `firmware/magic` bundle 内嵌），以及只含常量的 `UotanStudio.Firmware/Core/Magic/Generated/CompiledMagicData.g.cs`。两者不再同目录；固件库经 `UotanStudio.Assets` 的 `AssetCatalog`/`AssetStore` 读取该帧。`UotanStudio.Firmware` 不得反向引用本工程，生成物是唯一交界。
+- 生成物为 `UotanStudio.Assets/Assets/firmware/magic/CompiledMagicData.zst` 与 `UotanStudio.Firmware/Core/Magic/Generated/CompiledMagicData.g.cs`。固件库经 `AssetCatalog`/`AssetStore` 读取规则帧，不得反向引用本工程。
 - 重生成后必须运行 `dotnet run tools/compress-embedded-assets.cs` 更新 `UotanStudio.Assets/Assets/manifest.tsv` 中 `firmware/magic` 行的长度与摘要：该脚本只索引生成帧，不重新压缩，清单缺失或不符会让 `UotanStudio.Assets` 构建失败。
 - 不要手改 `CompiledMagicData.g.cs`；改解析器、发射器或语料后重新生成，并把生成物的差异一起审查。
-- `corpus/` 是 vendored 的 `file/file` 上游 magic 语料，`corpus/LOAD_ORDER.txt` 的顺序取自上游 `magic/Makefile.am` 的 `MAGIC_FRAGMENTS`，决定同一输入的规则优先级。不得为“看起来更整齐”重排语料或 manifest。
-- 语料与上游 file(1) 的 BSD-4-Clause 许可说明保留在 `corpus/README.md`；新增或替换语料要保留来源、版本与许可信息。
+- `corpus/LOAD_ORDER.txt` 决定规则优先级，不得重排语料或清单；语料的来源与许可信息维护在 `corpus/README.md`。
 
 ## 生成器行为
 

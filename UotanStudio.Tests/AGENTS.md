@@ -28,10 +28,10 @@
 - 异步测试用 `async Task` + `await` + `TestContext.Current.CancellationToken`。测试方法里禁止 `.Result`、`.Wait()` 与 `.GetAwaiter().GetResult()`；同步等待只能留在明确的同步基础设施边界，且不得因此触发 xUnit analyzer 报警。
 - 断言的偏移与长度要从几何推导，不要从被测缓冲区自身的长度反推；`out` 参数的 `TryParse` 在拒绝分支仍可能保留已解析值，别断言零。
 - 本目录不使用行间 `//` 或 `/* */` 注释。跳过原因必须来自代码里的 `Skip = "…"` 文案，夹具意图写在测试名与断言里。
-- 测试不引用已过时的整镜像内存型构建 API；需要内存镜像字节时经 `InMemoryImage` 走流式重载构建。生产代码必须走文件路径或流式重载。不要用项目级 `NoWarn` 掩盖生产警告、空引用、裁剪或异步问题。
+- 测试不引用整镜像内存型构建 API；需要内存镜像字节时经 `InMemoryImage` 走流式重载构建。生产代码必须走文件路径或流式重载。不要用项目级 `NoWarn` 掩盖生产警告、空引用、裁剪或异步问题。
 - 共享进程全局状态（节点类型注册表、语言服务、`WeakReferenceMessenger`、静态缓存）的测试要显式登记并清理，不能依赖别的类先跑过；单跑一个类必须给出与全量一致的结果，否则算隔离缺陷而不是偶发。
 - 会因首次生成而泄漏环境参数的工具目录测试固定在同一个 collection（`"MCP tool generation"`）里串行。
-- 构建镜像并断言 inode 形态、advise 位或镜像字节的用例必须固定时间：给 `ErofsOptions.BuildTime` 一个常量，源时间早于该常量时同时用 `File.SetLastWriteTimeUtc`/`Directory.SetLastWriteTimeUtc` 固定源时间，不得依赖墙钟。构建默认把超级块纪元取作当前秒，源 mtime 早于纪元会命中 `NeedsExtendedInodeTime` 的 `timestamp < epoch` 分支而写成扩展 inode，扩展记录不再写 nlink-one/dot-omitted advise 位，于是同一条用例在并行负载下会随机换成另一种布局。
+- 构建镜像并断言 inode 形态、advise 位或镜像字节的用例必须固定时间：给 `ErofsOptions.BuildTime` 一个常量，源时间早于该常量时同时用 `File.SetLastWriteTimeUtc`/`Directory.SetLastWriteTimeUtc` 固定源时间，不得依赖墙钟。构建默认把超级块纪元取作当前秒，源 mtime 早于纪元会命中 `NeedsExtendedInodeTime` 的 `timestamp < epoch` 分支而写成扩展 inode，扩展记录不写 nlink-one/dot-omitted advise 位，于是同一条用例在并行负载下会随机换成另一种布局。
 
 ## 环境门控
 

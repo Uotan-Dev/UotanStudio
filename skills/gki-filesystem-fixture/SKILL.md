@@ -23,7 +23,7 @@ Test-Path UotanStudio.FilesystemFixture/UotanStudio.FilesystemFixture.csproj
 ```
 
 - 两者都存在：按本 skill 运行并验收。
-- 任一缺失：本 skill 是目标契约与实现规格，不得用旧日志、旧容器结果或托管的内部往返替代真实内核验收，也不得声称已通过。
+- 任一缺失：不得用托管内部往返替代真实内核验收，也不得声称已通过。
 
 约定入口：
 
@@ -100,7 +100,7 @@ pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Kernels 5.10,6.6,6.18 -Stage All
 # 失败诊断：保留镜像、源码树和容器工作卷
 pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -KeepWork
 
-# 清理夹具缓存卷（先确认不再需要复用内核）
+# 清理夹具缓存卷（确认无需复用内核后执行）
 pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -PruneCache
 ```
 
@@ -283,4 +283,4 @@ artifacts/gki-fs-lab/<run-id>/
 - 本夹具只验证 x86_64 QEMU 客户机中的文件系统内核路径；arm64 客户机不属于验收路径，不证明真实 Android 设备、厂商内核、AVB 或分区表。
 - GKI 配置片段会关闭 DEBUG_INFO/BTF 并开启 virtio；这些是测试环境改动，需在报告中与 stock GKI 区分。
 - 容器无 `CAP_SYS_ADMIN` 是设计边界；不要把容器内“无法挂载”误判为镜像损坏。
-- 当前项目规则要求测试与诊断临时文件落到主机 `%TEMP%`；生产代码的原子替换临时文件仍留在目标同目录/同卷，不适用本夹具的临时文件迁移。
+- 测试与诊断临时文件落到主机 `%TEMP%`；生产代码的原子替换临时文件留在目标同目录或同卷。

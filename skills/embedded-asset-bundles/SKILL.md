@@ -11,7 +11,7 @@ license: MIT
 
 # 内嵌资源包增删
 
-本 skill 定义往仓库里加一批随程序集分发的二进制负载的流程：负载 → `BundleSpec` → csproj 的 `EmbeddedResource` → 帧与清单 → 消费方经 `AssetCatalog`/`AssetStore` 读取。所有项目都不再自己内嵌资源，`UotanStudio.Assets/Assets/manifest.tsv` 是唯一清单。
+本 skill 定义随程序集分发二进制负载的流程：负载 → `BundleSpec` → `EmbeddedResource` → 帧与清单 → `AssetCatalog`/`AssetStore`。资源统一由 `UotanStudio.Assets` 管理，唯一清单是 `UotanStudio.Assets/Assets/manifest.tsv`。
 
 ## 何时使用
 

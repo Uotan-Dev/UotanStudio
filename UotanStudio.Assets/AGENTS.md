@@ -19,7 +19,7 @@
 ## 清单
 
 - 唯一清单是 `Assets/manifest.tsv`，以逻辑名 `assets/manifest.tsv` 内嵌；六列制表符分隔：`bundle`、`path`、解压长度、小写 SHA-256、编码（当前只接受 `zstd`）、`origin`。
-- `origin=source` 表示帧由同目录的原始负载压缩得到；`origin=generated` 表示负载本身由生成器产出。当前只有 `firmware/magic` 的 `CompiledMagicData.zst` 是 `generated`：它由 `UotanStudio.Firmware.MagicGen` 生成，生成脚本只读取并索引它，不再压缩。两种来源的帧都必须与清单行的长度、SHA-256 逐字节一致。
+- `origin=source` 表示帧由同目录的原始负载压缩得到；`origin=generated` 表示负载由生成器产出。`firmware/magic` 的 `CompiledMagicData.zst` 使用 `generated`，由 `UotanStudio.Firmware.MagicGen` 生成，脚本只读取并索引。两种来源的帧都必须与清单行的长度、SHA-256 逐字节一致。
 - 清单由 `tools/compress-embedded-assets.cs` 生成，含两行头部注释、正文按 `bundle` 与 `path` 序数排序；不得手改。改负载后重跑脚本并审查差异。该脚本是 `dotnet run` 单文件工具，直连 `ZstdSharp.Port` 编码并直用 BCL `SHA256.HashData` 与 `ZipFile.OpenRead`，属于构建期流程，不在哈希/压缩边界门的扫描范围；其 `#:package` 版本必须与 `Directory.Packages.props` 的中央版本保持一致（当前 0.8.8），否则与解码端的帧语义会漂移。
 
 ## 新增 bundle
@@ -34,7 +34,7 @@
 
 ## MagicGen 引导顺序
 
-`firmware/magic` 的帧由外部生成器产出，帧缺失时按以下顺序恢复，不要跳过第一步：
+`firmware/magic` 的帧由 `UotanStudio.Firmware.MagicGen` 产出，帧缺失时按以下顺序恢复：
 
 1. 先让本工程可构建（`manifest.tsv` 存在且至少有一个 `*.zst` 帧即可通过 csproj 的 `ValidateBundledAssets` 粗粒度门禁），因为 `UotanStudio.Firmware.MagicGen` 依赖本工程才能运行。
 2. 运行 MagicGen 重生成 `Assets/firmware/magic/CompiledMagicData.zst`。
