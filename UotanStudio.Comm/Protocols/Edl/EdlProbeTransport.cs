@@ -473,18 +473,7 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport, 
         {
             var command = (SaharaCommand)BinaryPrimitives.ReadUInt32LittleEndian(bytes);
             var length = BinaryPrimitives.ReadUInt32LittleEndian(bytes[4..]);
-            var expected = command switch
-            {
-                SaharaCommand.Hello => 48,
-                SaharaCommand.ReadData => 20,
-                SaharaCommand.EndOfImage => 16,
-                SaharaCommand.DoneResponse => 12,
-                SaharaCommand.ResetResponse or SaharaCommand.CommandReady => 8,
-                SaharaCommand.MemoryDebug or SaharaCommand.ExecuteResponse => 16,
-                SaharaCommand.MemoryDebug64 => 24,
-                SaharaCommand.ReadData64 => 32,
-                _ => 0
-            };
+            var expected = ExpectedSaharaPacketLength(command);
             if (expected != 0 && length == expected && bytes.Length >= expected)
             {
                 if (command != SaharaCommand.Hello)
@@ -679,8 +668,76 @@ internal sealed class EdlProbeTransport(ICommTransport inner) : ICommTransport, 
             return false;
         }
 
-        return !IsBufferedEvidenceStale() && _position < _length;
+        if (IsBufferedEvidenceStale())
+        {
+            return false;
+        }
+
+        if (!IsProtocolCompatiblePrefix(_buffer.AsSpan(_position, _length - _position)))
+        {
+            CommTrace.Write(CommLogLevel.Debug, "edl",
+                $"EDL probe discarded {_length - _position} buffered byte(s) that cannot begin a Sahara packet or a " +
+                "Firehose document; replaying them would fabricate a first packet the target never sent.");
+            _length = 0;
+            _position = 0;
+            _bufferedAtMilliseconds = 0;
+            return false;
+        }
+
+        return _position < _length;
     }
+
+    /// <summary>
+    /// Reports whether a buffered prefix could still grow into an EDL message, so bytes a probe captured for its own
+    /// classification are never replayed to a protocol layer that would parse them as a command.
+    /// <para>报告缓冲前缀是否仍可能长成一条 EDL 报文，使探测为自身分类而捕获的字节不会被回放给会把它解析成命令的
+    /// 协议层。</para>
+    /// </summary>
+    /// <remarks>
+    /// A probe that runs while the target is still streaming the payload of an interrupted Firehose read captures
+    /// partition data, not protocol traffic. Those bytes classify as unknown, but they used to stay replayable for
+    /// <see cref="BufferedEvidenceMaxAgeMs"/> and were then handed to the Sahara handshake as its first packet, which
+    /// reported the first four payload bytes as an unsupported command and hid the real condition: the target never
+    /// left raw mode. Bytes are only kept when they can still start a Sahara header or an XML document, which is the
+    /// only thing either protocol layer can consume.
+    /// <para>目标仍在发送被中断的 Firehose 读取所剩负载时运行的探测，捕获到的是分区数据而不是协议流量。这些字节被
+    /// 归类为未知，但过去仍会在 <see cref="BufferedEvidenceMaxAgeMs"/> 内可回放，随后被当作首包交给 Sahara 握手，
+    /// 于是把前四个负载字节报成不支持的命令，掩盖了真实情况：目标从未离开原始模式。只有当字节仍可能开始一个
+    /// Sahara 头或一份 XML 文档时才会保留——这也是两种协议层唯一能消费的内容。</para>
+    /// </remarks>
+    /// <param name="bytes">The buffered prefix.<para>缓冲前缀。</para></param>
+    /// <returns><see langword="true"/> when the prefix can still become a protocol message.
+    /// <para>前缀仍可能成为协议报文时为 <see langword="true"/>。</para></returns>
+    internal static bool IsProtocolCompatiblePrefix(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < sizeof(uint))
+        {
+            // Fewer than four bytes cannot name a command; the next read completes the header.
+            // 不足四个字节无法构成命令，下一次读取会补全头部。
+            return true;
+        }
+
+        if (ExpectedSaharaPacketLength((SaharaCommand)BinaryPrimitives.ReadUInt32LittleEndian(bytes)) != 0)
+        {
+            return true;
+        }
+
+        var start = EdlConstants.MeasureDocumentPrefix(bytes);
+        return start < bytes.Length && bytes[start] == (byte)'<';
+    }
+
+    private static int ExpectedSaharaPacketLength(SaharaCommand command) => command switch
+    {
+        SaharaCommand.Hello => 48,
+        SaharaCommand.ReadData => 20,
+        SaharaCommand.EndOfImage => 16,
+        SaharaCommand.DoneResponse => 12,
+        SaharaCommand.ResetResponse or SaharaCommand.CommandReady => 8,
+        SaharaCommand.MemoryDebug or SaharaCommand.ExecuteResponse => 16,
+        SaharaCommand.MemoryDebug64 => 24,
+        SaharaCommand.ReadData64 => 32,
+        _ => 0
+    };
 
     public long Write(byte[] data, int offset, int length, int timeoutMs) => inner.Write(data, offset, length, timeoutMs);
 

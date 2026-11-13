@@ -225,6 +225,50 @@ public class EdlProbeDetectionTests
         => Assert.Equal(EdlProtocolState.Unknown, EdlProbeTransport.Classify(
             System.Text.Encoding.UTF8.GetBytes("<data><log value=\"startup\"/></data>")));
 
+    /// <summary>
+    /// A probe that runs while a cancelled Firehose read is still streaming captures partition data. Those bytes must
+    /// never be replayed to a protocol layer as its first packet: the reported failure did exactly that and reported
+    /// the first four payload bytes (0xD5BE44A7) as an unsupported Sahara command.
+    /// <para>在被取消的 Firehose 读取仍在发送数据时运行的探测捕获到的是分区数据。这些字节绝不能作为首包回放给协议层：
+    /// 上报的故障正是这么做的，并把前四个负载字节（0xD5BE44A7）报成了不支持的 Sahara 命令。</para>
+    /// </summary>
+    [Fact]
+    public void IsProtocolCompatiblePrefix_RawPayloadFromACancelledRead_IsRejected()
+    {
+        // The first bytes the target streamed for `super` in the reported log.
+        // 上报日志中目标为 super 发送的前几个字节。
+        byte[] payload = [0xA7, 0x44, 0xBE, 0xD5, 0x22, 0xD5, 0x13, 0xD2, 0x56, 0x49, 0x77, 0x4B, 0x08, 0xFC, 0x19, 0x6E];
+
+        Assert.False(EdlProbeTransport.IsProtocolCompatiblePrefix(payload));
+    }
+
+    [Fact]
+    public void IsProtocolCompatiblePrefix_SaharaHeader_IsAccepted()
+        => Assert.True(EdlProbeTransport.IsProtocolCompatiblePrefix(Hello(SaharaMode.ImageTxPending)));
+
+    [Fact]
+    public void IsProtocolCompatiblePrefix_FirehoseDocument_IsAccepted()
+        => Assert.True(EdlProbeTransport.IsProtocolCompatiblePrefix(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><data><response value=\"ACK\" rawmode=\"false\"/></data>"u8));
+
+    [Fact]
+    public void IsProtocolCompatiblePrefix_ShortPrefix_IsKeptForTheNextRead()
+        => Assert.True(EdlProbeTransport.IsProtocolCompatiblePrefix([0x01, 0x00, 0x00]));
+
+    [Fact]
+    public async Task ProbeThenRead_NonProtocolBytes_AreDiscardedInsteadOfReplayed()
+    {
+        var inner = new ScriptedCommTransport();
+        inner.Enqueue([.. Enumerable.Range(0, 1024).Select(index => (byte)(index * 37 + 11))]);
+        using var probe = new EdlProbeTransport(inner);
+
+        var state = await probe.ProbeAsync(TestContext.Current.CancellationToken);
+        var read = await probe.ReadAsync(new byte[1024], 0, 1024, 250, TestContext.Current.CancellationToken);
+
+        Assert.Equal(EdlProtocolState.Unknown, state);
+        Assert.Equal(0, read);
+    }
+
     private static byte[] Hello(SaharaMode mode, uint version = DeviceHelloVersion,
         uint minVersion = DeviceHelloMinVersion, uint maxCommandLength = DeviceHelloMaxCommandLength)
     {

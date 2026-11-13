@@ -560,6 +560,13 @@ public sealed partial class SaharaProtocol
     /// wire description this host can follow, so the command is refused rather than approximated.
     /// <para>本主机不实现版本 3.0 的 WRITE_DATA 镜像推送：该传输布局没有本主机可遵循的线协议描述，
     /// 因此直接拒绝而不是近似实现。</para>
+    /// A value that is no command at all means the link is carrying something other than Sahara. The case seen in
+    /// practice is a target a cancelled Firehose read left in raw mode: it keeps streaming the payload it already
+    /// promised, so the first four bytes are partition data. Naming that condition is the difference between a report
+    /// a person can act on and one that only quotes a number.
+    /// <para>完全不是命令的值意味着链路承载的不是 Sahara。实际见到的情况是：被取消的 Firehose 读取把目标留在原始
+    /// 模式，它继续发送已承诺的负载，于是前四个字节就是分区数据。把这种情况说出来，才是一份人能据以行动的诊断，
+    /// 而不是只念出一个数字。</para>
     /// </remarks>
     /// <param name="command">The command code reported by the device.
     /// <para>设备报告的命令码。</para></param>
@@ -571,7 +578,11 @@ public sealed partial class SaharaProtocol
             "The device sent RESET_STATE (protocol version 2.9); the host implements image transfer only."),
         (uint)SaharaCommand.WriteData => new SaharaException(
             "The device requested the protocol version 3.0 WRITE_DATA image push, which has no public reference implementation and is not supported by this host."),
-        _ => new SaharaException($"Unexpected Sahara command: {command}")
+        _ => new SaharaException(
+            $"The link delivered 0x{command:X8} where a Sahara command was required, so it is not speaking Sahara. " +
+            "A target left in raw mode by a cancelled or interrupted Firehose read keeps sending the payload it " +
+            "already promised, and that payload is what arrives here; the host cannot know its length, so the target " +
+            "must be re-entered into EDL before the next attempt.")
     };
 
     private async Task AcknowledgeImageHelloAsync(SaharaHelloPacket hello, CancellationToken token)
