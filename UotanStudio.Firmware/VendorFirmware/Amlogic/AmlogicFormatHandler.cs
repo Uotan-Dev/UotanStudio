@@ -462,7 +462,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
             FileExtraction.ValidateRange(item.Offset, item.Size, image.Length, $"AMLogic item '{GetEntryName(item)}'");
         }
 
-        var ranges = image.Items.AsValueEnumerable().OrderBy(item => item.Offset).ThenBy(item => item.Size).ToArray();
+        var ranges = image.Items.OrderBy(item => item.Offset).ThenBy(item => item.Size).ToArray();
         for (var index = 1; index < ranges.Length; index++)
         {
             var previous = ranges[index - 1];

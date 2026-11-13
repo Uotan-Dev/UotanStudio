@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.FileSystem.Metadata;
-using ZLinq;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
@@ -43,7 +42,7 @@ internal sealed class FileSystemEditPlan
         var encodedNames = manifest.ImagePaths.Where(p => Name(p.Key) != Name(p.Value))
             .GroupBy(p => Name(p.Value), StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(p => Name(p.Key)).Distinct(StringComparer.Ordinal).Single(), StringComparer.Ordinal);
-        foreach (var pair in projection.AsValueEnumerable().OrderBy(p => p.Key.AsSpan().AsValueEnumerable().Count(c => c == '/')).ThenBy(p => p.Key, StringComparer.Ordinal))
+        foreach (var pair in projection.OrderBy(p => p.Key.AsSpan().Count('/')).ThenBy(p => p.Key, StringComparer.Ordinal))
         {
             if (pair.Value.StartsWith("link:", StringComparison.Ordinal))
                 throw new FileSystemUnsupportedFeatureException($"New host symbolic links are not supported: {pair.Key}");

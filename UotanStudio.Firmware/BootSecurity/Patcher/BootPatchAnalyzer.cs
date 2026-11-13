@@ -268,7 +268,7 @@ public static class BootPatchAnalyzer
         var hasBootPatchScript = names.AsValueEnumerable().Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
         if (!hasApatch && hasBootPatchScript)
         {
-            var script = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+            var script = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (script is not null)
             {
                 using var reader = new StreamReader(script.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: false);
@@ -291,7 +291,7 @@ public static class BootPatchAnalyzer
         var kmiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (kind == BootPatchKind.Unknown)
         {
-            var kernelEntry = zip.Entries.AsValueEnumerable().FirstOrDefault(e => GkiKernelEntryNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase));
+            var kernelEntry = zip.Entries.FirstOrDefault(e => GkiKernelEntryNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase));
             if (kernelEntry is not null)
             {
                 var bytes = await ReadBoundedAsync(kernelEntry.Open(), cancellationToken).ConfigureAwait(false);
@@ -330,7 +330,7 @@ public static class BootPatchAnalyzer
         var supportedOptions = new HashSet<BootPatchOption>();
         if (kind == BootPatchKind.Magisk)
         {
-            var util = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("util_functions.sh", StringComparison.OrdinalIgnoreCase));
+            var util = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("util_functions.sh", StringComparison.OrdinalIgnoreCase));
             if (util is not null)
             {
                 using var reader = new StreamReader(util.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
@@ -338,7 +338,7 @@ public static class BootPatchAnalyzer
                 var match = Regex.Match(body, "(?m)^\\s*MAGISK_VER\\s*=\\s*['\\\"]([^'\\\"]+)", RegexOptions.CultureInvariant);
                 version = match.Success ? match.Groups[1].Value : null;
             }
-            var patchScript = zip.Entries.AsValueEnumerable().FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+            var patchScript = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (patchScript is not null)
             {
                 using var scriptReader = new StreamReader(patchScript.Open(), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);

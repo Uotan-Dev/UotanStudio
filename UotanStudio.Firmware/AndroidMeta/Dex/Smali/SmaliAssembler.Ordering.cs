@@ -61,7 +61,7 @@ public static partial class SmaliAssembler
                 {
                     cls.SourceFileIndex = strings[cls.SourceFileIndex];
                 }
-                cls.InterfaceTypeIndices = state.Interfaces.AsValueEnumerable().Select(index => types[index]).Distinct().Order().ToArray();
+                cls.InterfaceTypeIndices = state.Interfaces.Select(index => types[index]).Distinct().Order().ToArray();
                 var fieldIndexes = new HashSet<int>();
                 foreach (var field in cls.AllFields)
                 {

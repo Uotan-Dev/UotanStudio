@@ -466,7 +466,7 @@ internal static class FileSystemMetadataGenerator
             string? label = null;
             if (entry.Xattrs is not null)
             {
-                var selinux = entry.Xattrs.AsValueEnumerable().FirstOrDefault(x => x.Name == SelinuxXattrName);
+                var selinux = entry.Xattrs.FirstOrDefault(x => x.Name == SelinuxXattrName);
                 if (selinux?.Name is not null)
                 {
                     var decoded = Encoding.UTF8.GetStringTrimNul(selinux.Value);
