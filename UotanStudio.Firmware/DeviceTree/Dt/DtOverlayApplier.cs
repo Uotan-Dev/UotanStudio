@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
-using Utf8StringInterpolation;
 using DtTree = UotanStudio.Firmware.DeviceTree.Dt.DeviceTree;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
@@ -51,7 +50,7 @@ internal static class DtOverlayApplier
                         throw new InvalidDataException("Overlay symbol is outside a fragment overlay.");
                     var destination = targetPath.TrimEnd('/') + "/" + string.Join('/', parts.Skip(2));
                     destination = destination.Length > 1 ? destination.TrimEnd('/') : destination;
-                    SetProperty(output, property.Name, Utf8String.Format($"{destination}\0"));
+                    SetProperty(output, property.Name, Encoding.UTF8.GetBytes($"{destination}\0"));
                 }
             }
         }

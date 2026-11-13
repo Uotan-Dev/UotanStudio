@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
-using Utf8StringInterpolation;
 using DtTree = UotanStudio.Firmware.DeviceTree.Dt.DeviceTree;
 
 namespace UotanStudio.Firmware.DeviceTree.Dt;
@@ -613,14 +612,7 @@ internal sealed class DtsParser
             Advance();
         }
 
-        using var buffer = Utf8String.CreateWriter(out var writer);
-        foreach (var chunk in sb.GetChunks())
-        {
-            writer.AppendFormatted(chunk.Span);
-        }
-        writer.Append('\0');
-        writer.Flush();
-        return buffer.ToArray();
+        return Encoding.UTF8.GetBytes($"{sb}\0");
     }
 
     private byte[] ParseByteString()
@@ -722,7 +714,7 @@ internal sealed class DtsParser
                 if (_isPlugin)
                 {
                     var fixups = tree.Root.FindChild("__fixups__") ?? tree.Root.AddChild("__fixups__");
-                    var location = Utf8String.Format($"{node.GetPath()}:{propName}:{offset}\0");
+                    var location = Encoding.UTF8.GetBytes($"{node.GetPath()}:{propName}:{offset}\0");
                     if (fixups.FindProperty(label) is { } existing)
                     {
                         var merged = new byte[existing.ValueBytes.Length + location.Length];

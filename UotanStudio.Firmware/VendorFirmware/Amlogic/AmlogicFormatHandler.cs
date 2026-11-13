@@ -5,7 +5,6 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Hash.Crc32Register;
 using UotanStudio.Hash.Digests;
-using Utf8StringInterpolation;
 using ZLinq;
 
 namespace UotanStudio.Firmware.VendorFirmware.Amlogic;
@@ -589,7 +588,7 @@ internal sealed class AmlogicFormatHandler : IFormatHandler
                 if (item.IsVerify)
                 {
                     var digest = hashes[item.Source.SubType];
-                    var text = Utf8String.Format($"sha1sum {Convert.ToHexStringLower(digest)}");
+                    var text = Encoding.UTF8.GetBytes($"sha1sum {Convert.ToHexStringLower(digest)}");
                     await output.WriteAsync(text, cancellationToken).ConfigureAwait(false);
                     crcState.Append(text);
                     var padding = VerifyDataSize - text.Length;

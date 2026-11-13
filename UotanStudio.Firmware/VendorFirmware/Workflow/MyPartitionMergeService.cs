@@ -2,7 +2,6 @@ using System.Text;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Patching;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Firmware.VendorFirmware.Workflow;
 
@@ -326,13 +325,7 @@ public sealed class MyPartitionMergeService
             }
         }
         output.Append(ReadSidecar(sourcePath));
-        using var sidecarBuffer = Utf8String.CreateWriter(out var sidecarWriter);
-        foreach (var chunk in output.GetChunks())
-        {
-            sidecarWriter.AppendFormatted(chunk.Span);
-        }
-        sidecarWriter.Flush();
-        var sidecarPayload = sidecarBuffer.ToArray();
+        var sidecarPayload = Encoding.UTF8.GetBytes(output.ToString());
         FileExtraction.WriteAtomic(targetPath, stream => stream.Write(sidecarPayload),
             cancellationToken: cancellationToken);
     }

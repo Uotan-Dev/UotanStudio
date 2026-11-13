@@ -68,7 +68,6 @@
     <!-- Zero-allocation LINQ over arrays, lists and spans for per-item firmware/metadata loops (source-generated, AOT-safe). -->
     <PackageVersion Include="ZLinq" Version="1.6.1" />
     <!-- UTF-8 string interpolation handler for protocol frames that are encoded straight to bytes. -->
-    <PackageVersion Include="Utf8StringInterpolation" Version="1.3.2" />
     <PackageVersion Include="BsDiff" Version="1.1.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />

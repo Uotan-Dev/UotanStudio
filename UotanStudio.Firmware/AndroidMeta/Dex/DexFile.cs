@@ -1,6 +1,5 @@
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
-using Utf8StringInterpolation;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
 
@@ -29,7 +28,7 @@ public sealed class DexFile
         Header = new DexHeader
         {
             Version = version,
-            Magic = Utf8String.Format($"dex\n{version}\0")
+            Magic = Encoding.UTF8.GetBytes($"dex\n{version}\0")
         };
     }
 
