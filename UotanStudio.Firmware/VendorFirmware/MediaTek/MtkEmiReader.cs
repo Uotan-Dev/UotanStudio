@@ -7,6 +7,7 @@ namespace UotanStudio.Firmware.VendorFirmware.MediaTek;
 public static class MtkEmiReader
 {
     private const int MaximumBlockLength = 1024 * 1024;
+    private static readonly byte[] MmmHeaderPrefix = [0x4D, 0x4D, 0x4D, 1, 0x38, 0, 0, 0];
 
     /// <summary>Extracts the unsigned trailing EMI block from an explicitly located MMM preloader header.
     /// <para>从显式定位的 MMM preloader 头部中提取未签名的尾部 EMI 块。</para></summary>
@@ -41,7 +42,7 @@ public static class MtkEmiReader
             source.Position = headerOffset;
             Span<byte> header = stackalloc byte[56];
             source.ReadExactly(header);
-            if (!header[..8].SequenceEqual(new byte[] { 0x4D, 0x4D, 0x4D, 1, 0x38, 0, 0, 0 }))
+            if (!header[..8].SequenceEqual(MmmHeaderPrefix))
             {
                 throw new InvalidDataException("The selected offset does not contain a supported MMM preloader header.");
             }

@@ -199,7 +199,7 @@ public sealed partial class ErofsBuilder
         string directoryPath,
         out ErofsInode root,
         ErofsOptions? options,
-        params string[] excludedPaths)
+        params ReadOnlySpan<string> excludedPaths)
     {
         Rebuilding.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
         ArgumentNullException.ThrowIfNull(directoryPath);
@@ -210,11 +210,16 @@ public sealed partial class ErofsBuilder
 
         var effective = options ?? new ErofsOptions();
         effective.Validate();
-        var excludedHostPaths = excludedPaths.Length == 0
-            ? null
-            : new HashSet<string>(
-                excludedPaths.Select(Path.GetFullPath),
+        HashSet<string>? excludedHostPaths = null;
+        if (excludedPaths.Length != 0)
+        {
+            excludedHostPaths = new HashSet<string>(
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            foreach (var excludedPath in excludedPaths)
+            {
+                excludedHostPaths.Add(Path.GetFullPath(excludedPath));
+            }
+        }
         var imageExclusions = new ErofsExclusions(effective.ExcludePaths, effective.ExcludeRegexes);
         imageExclusions.Validate();
         root = CollectNodes(directoryPath, excludedHostPaths, imageExclusions, effective.CancellationToken);

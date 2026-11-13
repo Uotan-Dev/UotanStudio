@@ -119,7 +119,7 @@ internal sealed partial class UpdateAppFormatHandler : IFormatHandler, IRepackMe
         {
             var selected = options?.CreateSelectedEntrySet();
             var count = UpdateAppProcessor.Extract(filePath, outputDirectory,
-                selected?.ToList(),
+                selected is null ? null : [.. selected],
                 overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} partitions to {outputDirectory}"));
         }

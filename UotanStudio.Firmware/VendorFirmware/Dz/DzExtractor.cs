@@ -32,6 +32,7 @@ public sealed class DzChunk
 /// <para>解析、提取并重建 LG DZ 固件容器中的块，输入一律视为不可信。</para></summary>
 internal static class DzExtractor
 {
+    private static readonly byte[] ZstdMagic = [0x28, 0xB5, 0x2F, 0xFD];
     /// <summary>Reconstructs one partition using an explicit physical layout and verifies every decoded chunk.
     /// <para>按显式物理布局重建一个分区，并校验每个解压块；空洞填零。</para></summary>
     /// <param name="dzPath">The DZ source path.<para>DZ 源路径。</para></param>
@@ -266,7 +267,7 @@ internal static class DzExtractor
         Span<byte> magic = stackalloc byte[4];
         data.ReadExactly(magic);
         data.Position = 0;
-        var format = magic.SequenceEqual(new byte[] { 0x28, 0xB5, 0x2F, 0xFD }) ? CompressionFormat.Zstd
+        var format = magic.SequenceEqual(ZstdMagic) ? CompressionFormat.Zstd
             : (magic[0] & 15) == 8 && ((magic[0] << 8) | magic[1]) % 31 == 0 ? CompressionFormat.Zlib
             : throw new InvalidDataException($"DZ chunk '{chunk.Name}' has an unsupported compression header.");
         var start = output.Position;

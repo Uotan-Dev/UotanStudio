@@ -7,6 +7,8 @@ namespace UotanStudio.Firmware.VendorFirmware.Dz;
 
 internal sealed partial class DzFormatHandler
 {
+    private static readonly byte[] ZstdMagic = [0x28, 0xB5, 0x2F, 0xFD];
+
     private static void CaptureDz(RepackMetadata metadata, string sourcePath, CancellationToken token)
     {
         using var source = File.OpenRead(sourcePath);
@@ -36,7 +38,7 @@ internal sealed partial class DzFormatHandler
                 throw new InvalidDataException("Truncated DZ compressed chunk.");
             }
             source.ReadExactly(magic);
-            var compression = magic.AsSpan().SequenceEqual(new byte[] { 0x28, 0xB5, 0x2F, 0xFD }) ? "zstd"
+            var compression = magic.AsSpan().SequenceEqual(ZstdMagic) ? "zstd"
                 : (magic[0] & 15) == 8 && ((magic[0] << 8) | magic[1]) % 31 == 0 ? "zlib"
                 : throw new InvalidDataException("Unsupported DZ compression.");
             chunks.Add((JsonNode)new JsonObject

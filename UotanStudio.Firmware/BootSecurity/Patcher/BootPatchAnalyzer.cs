@@ -370,7 +370,7 @@ public static class BootPatchAnalyzer
             }
         }
         return new(kind, abis, version, kind == BootPatchKind.Magisk ? supportedOptions : null,
-            kmiNames.AsValueEnumerable().OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
+            [.. kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)],
             kind == BootPatchKind.KernelPatch || hasKernelPatchImage, unsupportedReason);
     }
 

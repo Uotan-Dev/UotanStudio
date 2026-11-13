@@ -10,6 +10,10 @@ internal static class ZImageTool
 {
     private const int MagicOffset = 0x24;
     private const int HeaderSize = 0x40;
+    private static readonly byte[] MagicLe000Feed = [0xED, 0xFE, 0x0F, 0x00];
+    private static readonly byte[] MagicBe000Feed = [0x00, 0x0F, 0xFE, 0xED];
+    private static readonly byte[] MagicLe016F2818 = [0x18, 0x28, 0x6F, 0x01];
+    private static readonly byte[] MagicBe016F2818 = [0x01, 0x6F, 0x28, 0x18];
 
     /// <summary>
     /// Outcome of a zImage header parse: validity, byte order, header addresses and the located payload.
@@ -96,10 +100,10 @@ internal static class ZImageTool
         if (data.Length < HeaderSize)
             return false;
         var magic = data.Slice(MagicOffset, 4);
-        return magic.SequenceEqual(new byte[] { 0xED, 0xFE, 0x0F, 0x00 }) ||
-            magic.SequenceEqual(new byte[] { 0x00, 0x0F, 0xFE, 0xED }) ||
-            magic.SequenceEqual(new byte[] { 0x18, 0x28, 0x6F, 0x01 }) ||
-            magic.SequenceEqual(new byte[] { 0x01, 0x6F, 0x28, 0x18 });
+        return magic.SequenceEqual(MagicLe000Feed) ||
+            magic.SequenceEqual(MagicBe000Feed) ||
+            magic.SequenceEqual(MagicLe016F2818) ||
+            magic.SequenceEqual(MagicBe016F2818);
     }
 
     /// <summary>Parses the zImage header, decodes its address fields with the detected byte order, and copies the compressed payload found by scanning forward from offset 0x40 for a recognized compressed stream.
@@ -123,8 +127,8 @@ internal static class ZImageTool
             return new() { ErrorMessage = "Invalid zImage magic." };
 
         var littleMagic = ReadUInt32(data[MagicOffset..], false);
-        var bigEndian = data.Slice(MagicOffset, 4).SequenceEqual(new byte[] { 0x00, 0x0F, 0xFE, 0xED }) ||
-            data.Slice(MagicOffset, 4).SequenceEqual(new byte[] { 0x01, 0x6F, 0x28, 0x18 });
+        var bigEndian = data.Slice(MagicOffset, 4).SequenceEqual(MagicBe000Feed) ||
+            data.Slice(MagicOffset, 4).SequenceEqual(MagicBe016F2818);
         var magic = ReadUInt32(data[MagicOffset..], bigEndian);
         if (littleMagic is not (0x000FFEEDu or 0x016F2818u or 0x18286F01u or 0xEDFE0F00u))
             return new() { ErrorMessage = "Unsupported zImage magic." };

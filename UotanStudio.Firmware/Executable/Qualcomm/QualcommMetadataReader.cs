@@ -228,7 +228,7 @@ internal static class QualcommMetadataReader
         });
         return declarations.Count == 1
             ? new(declarations[0], false, [])
-            : new(null, declarations.Count > 1, declarations.Select(value => value.Name!).ToArray());
+            : new(null, declarations.Count > 1, [.. declarations.Select(value => value.Name!)]);
     }
 
     private static bool TryEnumerateOrganizationalUnits(byte[] subject, int? maximumValues,

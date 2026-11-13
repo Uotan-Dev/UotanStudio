@@ -207,7 +207,7 @@ public sealed class DeviceTreeNode
     /// <para>单元值，按最高有效字节在前序列化；空数组产生零长度属性。</para></param>
     /// <returns>The appended <see cref="DeviceTreeProperty"/> whose value is <c>cells.Length × 4</c> bytes.
     /// <para>已追加的 <see cref="DeviceTreeProperty"/>，其值长度为 <c>cells.Length × 4</c> 字节。</para></returns>
-    public DeviceTreeProperty AddPropertyCells(string name, params uint[] cells)
+    public DeviceTreeProperty AddPropertyCells(string name, params ReadOnlySpan<uint> cells)
     {
         var bytes = new byte[cells.Length * 4];
         for (var i = 0; i < cells.Length; i++)
