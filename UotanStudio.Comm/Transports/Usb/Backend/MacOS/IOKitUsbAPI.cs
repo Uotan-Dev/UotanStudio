@@ -172,6 +172,16 @@ internal static partial class IOKitUsbAPI
 
     public const string IOUSBDeviceClassName = "IOUSBDevice";
 
+    /// <summary>
+    /// Class name of the per-port services that parent every attached USB device, claimed
+    /// or not. <c>IOUSBHostPort</c> is not a matchable class name on macOS 27 (it matches
+    /// nothing); <c>AppleUSBHostPort</c> matches the ports.
+    /// <para>承载每个已连接 USB 设备（无论是否有驱动认领）的端口服务类名。在 macOS 27 上
+    /// <c>IOUSBHostPort</c> 不是可匹配的类名（匹配不到任何对象）；<c>AppleUSBHostPort</c>
+    /// 才能匹配端口。</para>
+    /// </summary>
+    public const string AppleUsbHostPortClassName = "AppleUSBHostPort";
+
     public const string IOServicePlane = "IOService";
 
     public static readonly Guid KIOUSBDeviceUserClientTypeID = new("9d7d2100-ba54-11d4-8113-0005020c020c");

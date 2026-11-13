@@ -585,6 +585,96 @@ internal static partial class UsbHostAPI
         return result;
     }
 
+    /// <summary>
+    /// Enumerates every IOUSBHostDevice reachable from the USB port nodes, including
+    /// devices no driver has claimed.
+    /// <para>从 USB 端口节点递归枚举所有 IOUSBHostDevice，包含没有任何驱动认领的设备。</para>
+    /// </summary>
+    /// <remarks>
+    /// Class matching (<c>IOServiceMatching("IOUSBDevice")</c> / <c>"IOUSBHostDevice"</c>)
+    /// only returns services the kernel matched to a driver, so a device with no matching
+    /// personality — a Qualcomm EDL node in <c>QUSB__BULK</c> state is the observed case —
+    /// stays invisible even though it enumerated completely and its properties are readable.
+    /// Walking the port nodes reaches it: IORegistry paths resolve, properties read, and the
+    /// IOUSBDevice plug-in interface opens normally. Only the recursive child walk is used
+    /// here, never a global interface sweep (that sweep is what blocks on wedged devices).
+    /// <para>类匹配（<c>IOServiceMatching("IOUSBDevice")</c> / <c>"IOUSBHostDevice"</c>）只返回
+    /// 内核已匹配到驱动的服务，因此没有匹配 personality 的设备——实测为处于 <c>QUSB__BULK</c>
+    /// 状态的高通 EDL 节点——即使枚举完整、属性可读也始终不可见。沿端口节点遍历可以到达它：
+    /// IORegistry 路径可解析、属性可读、IOUSBDevice 插件接口可正常打开。这里只做递归子项遍历，
+    /// 绝不做全局接口扫描（那个扫描正是在异常设备上会阻塞的操作）。</para>
+    /// </remarks>
+    /// <returns>Device io_service_t values; caller releases each. <para>设备 io_service_t 列表；调用方负责逐个释放。</para></returns>
+    public static List<uint> GetPortAttachedDeviceServices()
+    {
+        var result = new List<uint>();
+        var matching = IOServiceMatching(AppleUsbHostPortClassName);
+        if (matching == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        IntPtr ports = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(IntPtr.Zero, matching, out ports);
+        if (kr != Ok || ports == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        try
+        {
+            uint port;
+            while ((port = IOIteratorNext(ports)) != 0)
+            {
+                try
+                {
+                    if (IORegistryEntryCreateIterator(port, IOServicePlane, KIORegistryIterateRecursively, out var children) != Ok)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        uint child;
+                        while ((child = IOIteratorNext(children)) != 0)
+                        {
+                            var keep = false;
+                            try
+                            {
+                                keep = HasProperty(child, "bDeviceClass") && HasProperty(child, "idVendor");
+                                if (keep)
+                                {
+                                    result.Add(child);
+                                }
+                            }
+                            finally
+                            {
+                                if (!keep)
+                                {
+                                    IOObjectRelease((IntPtr)child);
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        IOObjectRelease(children);
+                    }
+                }
+                finally
+                {
+                    IOObjectRelease((IntPtr)port);
+                }
+            }
+        }
+        finally
+        {
+            IOObjectRelease(ports);
+        }
+
+        return result;
+    }
+
     private static bool HasProperty(uint entry, string propertyName)
     {
         var key = CFStringCreateWithCString(IntPtr.Zero, propertyName, KCFStringEncodingUTF8);

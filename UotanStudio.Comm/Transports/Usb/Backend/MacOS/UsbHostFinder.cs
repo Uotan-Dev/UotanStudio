@@ -188,9 +188,113 @@ internal static partial class UsbHostFinder
             }
         }
 
+        AppendUnclaimedPortDevices(devices, filter, ref scanned);
+
+        LastScannedDeviceCount = scanned;
         LastMatchedDeviceCount = devices.Count;
         UsbTrace.Log($"UsbHostFinder: done, scanned {scanned}, matched {devices.Count}");
         return devices;
+    }
+
+    /// <summary>
+    /// Appends devices reached through the USB port nodes that class matching missed.
+    /// <para>补充经 USB 端口节点到达、但被类匹配漏掉的设备。</para>
+    /// </summary>
+    /// <remarks>
+    /// A device with no matching kernel personality never appears in the
+    /// <c>IOUSBDevice</c>/<c>IOUSBHostDevice</c> class match even though it enumerated and
+    /// exposes readable properties — a Qualcomm EDL target in <c>QUSB__BULK</c> state is the
+    /// observed case (verified on macOS 27: the node resolves by path, its descriptors are
+    /// complete, and the IOUSBDevice plug-in interface opens and selects configuration 1,
+    /// yet both class matches report it absent). Those devices are exactly the ones the EDL
+    /// bootstrap needs, so the port walk runs after the class match and skips services it
+    /// already published.
+    /// <para>没有匹配内核 personality 的设备即使完成枚举并暴露可读属性，也永远不出现在
+    /// <c>IOUSBDevice</c>/<c>IOUSBHostDevice</c> 类匹配结果里——实测为处于 <c>QUSB__BULK</c>
+    /// 状态的高通 EDL 目标（在 macOS 27 上验证：节点可按路径解析、描述符完整、IOUSBDevice
+    /// 插件接口可打开并成功选择配置 1，但两个类匹配都报告它不存在）。这些设备正是 EDL
+    /// 引导所需的，因此在类匹配之后补跑端口遍历，并跳过已发布的重复服务。</para>
+    /// </remarks>
+    private static void AppendUnclaimedPortDevices(List<UsbDevice> devices, UsbDeviceFilter? filter, ref int scanned)
+    {
+        List<uint> services;
+        try
+        {
+            services = UsbHostAPI.GetPortAttachedDeviceServices();
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.Log($"UsbHostFinder: port walk unavailable: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        try
+        {
+            foreach (var serviceValue in services)
+            {
+                var service = new IntPtr(serviceValue);
+                try
+                {
+                    scanned++;
+                    var vid = ReadCFNumberUshort(service, "idVendor");
+                    var pid = ReadCFNumberUshort(service, "idProduct");
+                    if (vid == 0 && pid == 0)
+                    {
+                        continue;
+                    }
+
+                    var path = TryGetServicePath(service) ?? $"IOKit:{vid:X4}:{pid:X4}";
+                    if (devices.Any(existing => string.Equals(existing.DevicePath, path, StringComparison.Ordinal)))
+                    {
+                        continue;
+                    }
+
+                    if (filter?.VendorId is ushort filterVid && vid != filterVid)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.ProductId is ushort filterPid && pid != filterPid)
+                    {
+                        continue;
+                    }
+
+                    var serial = ReadCFString(service, "USB Serial Number")
+                                 ?? ReadCFString(service, "serial number");
+                    if (!string.IsNullOrWhiteSpace(filter?.SerialNumber) &&
+                        !string.Equals(serial, filter.SerialNumber, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var device = new UsbHostDevice
+                    {
+                        DevicePath = path,
+                        PhysicalPortPath = MacUsbPortIdentity.Observe(service),
+                        VendorId = vid,
+                        ProductId = pid,
+                        SerialNumber = serial ?? string.Empty,
+                        InterfaceMetadataObserved = false,
+                        Interfaces = [],
+                        UsbDeviceType = UsbDeviceType.MacOS,
+                    };
+                    ApplyInterfaceTriple(service, device);
+                    devices.Add(device);
+                    UsbTrace.Log($"UsbHostFinder: port-walk dev vid={vid:X4} pid={pid:X4} serial='{serial}' path='{path}'");
+                }
+                catch (Exception ex)
+                {
+                    UsbTrace.Log($"UsbHostFinder: port-walk device read failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            foreach (var serviceValue in services)
+            {
+                IOKitUsbAPI.IOObjectRelease((IntPtr)serviceValue);
+            }
+        }
     }
 
     private static ushort ReadCFNumberUshort(IntPtr service, string propertyName)

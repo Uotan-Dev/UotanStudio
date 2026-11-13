@@ -189,8 +189,108 @@ internal static partial class IOKitUsbFinder
             }
         }
 
+        AppendUnclaimedPortDevices(devices, interfaceTable, filter);
+
         LastMatchedDeviceCount = devices.Count;
         return devices;
+    }
+
+    /// <summary>
+    /// Appends devices reachable through the USB port nodes that class matching missed, building the
+    /// classic <see cref="IOKitUsbDevice"/> objects used for unconfigured targets.
+    /// <para>补充经 USB 端口节点到达、但被类匹配漏掉的设备，并构造未选配置目标所用的经典
+    /// <see cref="IOKitUsbDevice"/> 对象。</para>
+    /// </summary>
+    /// <remarks>
+    /// A bootrom that has not selected a configuration has no kernel driver personality, so
+    /// <c>IOServiceMatching("IOUSBDevice")</c> never returns it even though the node enumerates and its
+    /// properties read normally. This classic backend is the one that can drive such a device: it
+    /// selects configuration 1 through <c>IOUSBDeviceInterface</c> itself. The port walk therefore runs
+    /// after the class match so those targets reach this backend instead of being reported absent.
+    /// <para>尚未选择配置的 bootrom 没有内核驱动 personality，因此 <c>IOServiceMatching("IOUSBDevice")</c>
+    /// 即使节点已枚举、属性可正常读取也永远不返回它。能驱动这类设备的是本经典后端：它自己经
+    /// <c>IOUSBDeviceInterface</c> 选择配置 1。因此类匹配之后补跑端口遍历，使这些目标进入本后端而不是
+    /// 被报告为不存在。</para>
+    /// </remarks>
+    private static void AppendUnclaimedPortDevices(List<UsbDevice> devices,
+        Dictionary<(ushort Vid, ushort Pid), List<UsbInterfaceInfo>> interfaceTable, UsbDeviceFilter? filter)
+    {
+        List<uint> services;
+        try
+        {
+            services = UsbHostAPI.GetPortAttachedDeviceServices();
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.Log($"IOKitUsbFinder: port walk unavailable: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        try
+        {
+            foreach (var serviceValue in services)
+            {
+                var service = new IntPtr(serviceValue);
+                try
+                {
+                    if (!TryReadDeviceMetadata(service, interfaceTable, out var vid, out var pid, out var serial,
+                            out var registryEntryId, out var interfaces, out var ifcClass, out var ifcSubClass,
+                            out var ifcProtocol))
+                    {
+                        continue;
+                    }
+
+                    if (devices.Any(existing => existing is IOKitUsbDevice known && known.RegistryEntryId == registryEntryId))
+                    {
+                        continue;
+                    }
+
+                    if (filter?.VendorId is ushort filterVid && vid != filterVid)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.ProductId is ushort filterPid && pid != filterPid)
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(filter?.SerialNumber) &&
+                        !string.Equals(serial, filter.SerialNumber, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var path = TryGetServicePath(service) ?? $"IOKit:{vid:X4}:{pid:X4}";
+                    devices.Add(new IOKitUsbDevice
+                    {
+                        DevicePath = path,
+                        VendorId = vid,
+                        ProductId = pid,
+                        SerialNumber = serial ?? string.Empty,
+                        RegistryEntryId = registryEntryId,
+                        InterfaceClass = ifcClass,
+                        InterfaceSubClass = ifcSubClass,
+                        InterfaceProtocol = ifcProtocol,
+                        Interfaces = interfaces,
+                        InterfaceMetadataObserved = interfaces.Count > 0,
+                        UsbDeviceType = UsbDeviceType.MacOS,
+                    });
+                    UsbTrace.Log($"IOKitUsbFinder: port-walk dev rid={registryEntryId} vid={vid:X4} pid={pid:X4} path='{path}'");
+                }
+                catch (Exception ex)
+                {
+                    UsbTrace.Log($"IOKitUsbFinder: port-walk read failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            foreach (var serviceValue in services)
+            {
+                IOKitUsbAPI.IOObjectRelease((IntPtr)serviceValue);
+            }
+        }
     }
 
     private static bool TryReadDeviceMetadata(
