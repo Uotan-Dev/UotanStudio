@@ -2937,13 +2937,20 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reads the GPT of every LUN the target reports into the main partition list and writes one XML package per
-    /// LUN; the read runs over the same session path the named read-back uses, so a device that only carries a
-    /// programmer is brought to Firehose first. The scan stops at the first LUN that fails to report a table.
-    /// <para>把目标上报的每个 LUN 的 GPT 读入主分区列表，并为每个 LUN 生成一份 XML 包；读取走具名回读所用的
-    /// 同一条会话路径，只带 Programmer 的设备会先进入 Firehose。扫描在首个读不出表的 LUN 处停止。</para>
+    /// Enumerates the LUNs the target reports, reads every readable region's GPT into the main partition list and writes
+    /// one XML package per readable LUN; the read runs over the same session path the named read-back uses, so a device
+    /// that only carries a programmer is brought to Firehose first.
+    /// <para>枚举目标上报的 LUN，把每个可读区域的 GPT 读入主分区列表，并为每个可读 LUN 生成一份 XML 包；读取走具名回读
+    /// 所用的同一条会话路径，只带 Programmer 的设备会先进入 Firehose。</para>
     /// </summary>
     /// <param name="device">The selected EDL endpoint. <para>所选 EDL 端点。</para></param>
+    /// <remarks>
+    /// The LUN box decides which region the operator's entry-array overrides describe, never which regions are read: a
+    /// skipped LUN does not end the enumeration, and the log names both the readable and the skipped numbers so a target
+    /// that keeps partitions on several regions is reported as it really is.
+    /// <para>LUN 框只决定操作者的条目数组覆盖描述哪个区域，绝不决定读哪些区域：被跳过的 LUN 不会结束枚举，日志同时给出
+    /// 可读与跳过的编号，使把分区分散在多个区域的目标被如实呈现。</para>
+    /// </remarks>
     private async Task ReadEdlPartitionTableAsync(DetectedDevice device)
     {
         var language = _localizer;
@@ -2953,38 +2960,49 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        var selectedLun = SelectedEdlLun;
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         SetBusy(true);
         try
         {
             EdlGptXmlPackageSet? packageSet = null;
+            EdlLunScan? scan = null;
             await App.DeviceMonitor.RunEdlAsync(device, async edl =>
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token)
                     .ConfigureAwait(true);
-                var snapshots = await EdlGptPartitionService.ReadAllLunSnapshotsAsync(firehose,
-                    gptEntryLba, gptEntryCount, gptEntrySize, cancellation.Token).ConfigureAwait(true);
-                if (snapshots.Count == 0)
+                scan = await EdlGptPartitionService.ScanLunSnapshotsAsync(firehose, gptEntryLba, gptEntryCount,
+                    gptEntrySize, cancellation.Token, selectedLun).ConfigureAwait(true);
+                if (scan is null)
+                {
+                    // A stopped enumeration left the link unusable, and no later command can describe the target.
+                    // 停止的枚举意味着链路已不可用，后续命令也无法描述目标。
+                    throw new InvalidOperationException(
+                        "The LUN enumeration stopped before it finished; the target no longer answers. " +
+                        "LUN 枚举在完成前停止，目标已不再应答。");
+                }
+
+                if (scan.IsEmpty)
                 {
                     throw new InvalidOperationException(
                         $"No LUN 0..{EdlGptPartitionService.MaxScannedLun} reported a readable GPT. " +
                         $"LUN 0..{EdlGptPartitionService.MaxScannedLun} 均未能读出 GPT。");
                 }
 
-                packageSet = await EdlGptXmlPackageWriter.WriteAsync(firehose, snapshots,
+                packageSet = await EdlGptXmlPackageWriter.WriteAsync(firehose, scan.Snapshots,
                     EdlGptXmlPackageDirectory.Create(device.Key), cancellation.Token).ConfigureAwait(true);
                 return true;
             }, cancellation.Token);
-            if (packageSet is null || packageSet.Packages.Count == 0)
+            if (scan is null || packageSet is null || packageSet.Packages.Count == 0)
             {
                 return;
             }
 
+            PublishDetectedEdlLuns(scan);
             LoadEdlXmlPackage(packageSet.Packages[0]);
             AppendLog($"{language.GetString("Flash_ReadPartitionTable")}: {device.DisplayName} · " +
-                $"LUN {string.Join('/', packageSet.Packages.Select(package => package.Layout.Lun))} · " +
-                $"{packageSet.DirectoryPath}");
+                DescribeLunScan(scan, language) + $" · {packageSet.DirectoryPath}");
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex) { AppendError(ex); }
@@ -2993,6 +3011,55 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             _flashCancellation = null;
         }
+    }
+
+    /// <summary>
+    /// Lists the readable and the skipped LUN numbers of one enumeration through the resource dictionary, so a run states
+    /// both what the page now describes and which regions the target refused to report.
+    /// <para>经资源字典列出一次枚举的可读与跳过 LUN 编号，使运行同时说明页面现在描述哪些区域、以及目标拒绝上报哪些区域。</para>
+    /// </summary>
+    /// <param name="scan">The completed enumeration. <para>已完成的枚举。</para></param>
+    /// <param name="language">The active localizer. <para>当前本地化器。</para></param>
+    /// <returns>The localized media-list text. <para>本地化的介质列表文本。</para></returns>
+    internal static string DescribeLunScan(EdlLunScan scan, ILocalizer language)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        ArgumentNullException.ThrowIfNull(language);
+        var readable = scan.Snapshots.Count > 0
+            ? string.Join(',', scan.Snapshots.Select(snapshot => snapshot.Geometry.PhysicalPartitionNumber))
+            : FormattableString.Invariant($"0..{EdlGptPartitionService.MaxScannedLun}");
+        var text = string.Format(CultureInfo.CurrentCulture, language.GetString("Flash_EdlLunScan"), readable);
+        if (scan.Skipped.Count == 0)
+        {
+            return text;
+        }
+
+        var skipped = string.Join(' ', scan.Skipped.Select(item => string.Format(CultureInfo.CurrentCulture,
+            language.GetString("Flash_EdlLunSkipped"), item.Lun)));
+        return $"{text} · {skipped}";
+    }
+
+    /// <summary>
+    /// Replaces the LUN picker's entries with the readable LUNs one enumeration found, keeping the current pick when the
+    /// target still reports it and falling back to the first readable one otherwise, so the box names a region that
+    /// really answered instead of a fixed window.
+    /// <para>用一次枚举找到的可读 LUN 替换 LUN 下拉框的条目：目标仍上报当前选择时保留它，否则退回首个可读区域，
+    /// 使下拉框给出真正应答过的区域而不是固定窗口。</para>
+    /// </summary>
+    /// <param name="scan">The completed enumeration. <para>已完成的枚举。</para></param>
+    private void PublishDetectedEdlLuns(EdlLunScan scan)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        if (scan.Snapshots.Count == 0)
+        {
+            return;
+        }
+
+        var luns = scan.Snapshots.Select(snapshot => snapshot.Geometry.PhysicalPartitionNumber).ToArray();
+        var box = Field<ComboBox>("EdlLunBox");
+        var previous = SelectedEdlLun;
+        box.ItemsSource = luns;
+        box.SelectedItem = luns.Contains(previous) ? previous : luns[0];
     }
 
     /// <summary>
@@ -5259,11 +5326,11 @@ public sealed partial class FlashViewModel
     /// a rawprogram manifest is written from the results and the generalized option rewrites
     /// entries abutting the disk end as relative <c>NUM_DISK_SECTORS-</c> start sectors.
     /// A row taken from a manifest keeps the manifest's own address; any other row is resolved by
-    /// name on the selected LUN first and then on the remaining LUNs, because one target keeps
-    /// partitions on several regions.
+    /// name on the selected LUN first and then on every other LUN the enumeration found readable,
+    /// because one target keeps partitions on several regions.
     /// <para>回读所选 EDL 分区到用户目录；勾选生成 XML 时按回读结果写出 rawprogram 清单，
     /// 通用化选项把与磁盘末尾相邻的条目改写为 <c>NUM_DISK_SECTORS-</c> 相对起始扇区。
-    /// 来自清单的行沿用清单自身的地址；其余行先按所选 LUN 查名，查不到再到其余 LUN 查找，
+    /// 来自清单的行沿用清单自身的地址；其余行先按所选 LUN 查名，查不到再到枚举出的每个可读 LUN 查找，
     /// 因为同一目标会把分区分散在多个区域。</para>
     /// </summary>
     internal async void OnEdlReadbackClick(object? sender, RoutedEventArgs e)
@@ -5293,7 +5360,6 @@ public sealed partial class FlashViewModel
         {
             List<EdlReadbackManifestEntry> manifest = [];
             var sectorSize = 0L;
-            var numDiskSectors = 0L;
             SetRowsQueued(selected);
             var readbackProgress = new Progress<BackupProgress>(update =>
             {
@@ -5308,33 +5374,65 @@ public sealed partial class FlashViewModel
             await App.DeviceMonitor.RunEdlAsync(device, async edl =>
             {
                 var firehose = await ConfigureEdlAsync(edl, initialization, cancellation.Token).ConfigureAwait(true);
-                if (generalized)
+                // The LUN box names the region the operator expects a row on and the table the entry-array overrides
+                // describe, so that region is searched first; the run then enumerates every readable LUN rather than the
+                // box alone, because one target keeps partitions on several regions. Each table is read once per run
+                // and handed to the following rows. A device that refuses the enumeration still gets the selected
+                // region tried, so a target that reports the box's table alone keeps working.
+                // LUN 框给出操作者预期的区域，也是条目数组覆盖所描述的表，因此先查这个区域；随后本次运行枚举每个可读
+                // LUN 而不止下拉框这一个，因为同一目标会把分区分散在多个区域。每张表在一次运行中只读一次，供后续行
+                // 复用。拒绝枚举的设备仍会试所选区域，使只上报下拉框那张表的目标继续可用。
+                var selectedLun = SelectedEdlLun;
+                var scan = await EdlGptPartitionService.ScanLunSnapshotsAsync(firehose, gptEntryLba,
+                    gptEntryCount, gptEntrySize, cancellation.Token, selectedLun).ConfigureAwait(true);
+                if (scan is null)
                 {
-                    numDiskSectors = (await firehose.GetStorageGeometryAsync(
-                        SelectedEdlLun, cancellation.Token).ConfigureAwait(true)).SectorCount;
+                    // A stopped enumeration left the link unusable, so the rows could not be read either.
+                    // 停止的枚举意味着链路已不可用，条目同样读不出来。
+                    throw new InvalidOperationException(
+                        "The LUN enumeration stopped before it finished; the target no longer answers. " +
+                        "LUN 枚举在完成前停止，目标已不再应答。");
                 }
 
-                // The LUN box names the table the row should be read from, and the operator's entry-array overrides
-                // describe that table, so it is read first. A name it does not carry is then searched on the
-                // remaining LUNs, because one target keeps partitions on several regions; every table is read
-                // once per run and reused by the following rows.
-                // LUN 框给出读行所依据的表，操作者的条目数组覆盖描述的也是那张表，因此先读它。表里没有的名称再到
-                // 其余 LUN 查找，因为同一目标会把分区分散在多个区域；每张表在一次运行中只读一次，供后续行复用。
-                const int LastScannedLun = 7;
-                var selectedLun = SelectedEdlLun;
+                if (scan.IsEmpty)
+                {
+                    // Without one readable table no row can be resolved, so the run reports that instead of a row error.
+                    // 没有一张可读表时任何条目都无法解析，因此运行报告这一点而不是某一行出错。
+                    throw new InvalidOperationException(
+                        $"No LUN 0..{EdlGptPartitionService.MaxScannedLun} reported a readable GPT. " +
+                        $"LUN 0..{EdlGptPartitionService.MaxScannedLun} 均未能读出 GPT。");
+                }
+
+                PublishDetectedEdlLuns(scan);
+                AppendLog($"{_localizer.GetString("Flash_EdlReadbackSelected")} · " +
+                    DescribeLunScan(scan, _localizer));
                 var snapshots = new Dictionary<int, FirehoseGptSnapshot>();
+                foreach (var snapshot in scan.Snapshots)
+                {
+                    snapshots[snapshot.Geometry.PhysicalPartitionNumber] = snapshot;
+                }
+
+                // A region the enumeration already proved unreadable is not asked again: the same target answers the same
+                // way, and re-reading it would spend the run's time on a table it never reported.
+                // 枚举已证明读不出的区域不再重问：同一目标会给出同样的应答，重读只会把本次运行的时间花在它从未上报的表上。
+                var unreadable = scan.Skipped.Select(skipped => skipped.Lun).ToHashSet();
+
                 async ValueTask<FirehoseGptSnapshot> SnapshotHoldingAsync(string partitionName)
                 {
-                    var primary = await ReadSnapshotAsync(selectedLun, gptEntryLba, gptEntryCount, gptEntrySize)
-                        .ConfigureAwait(true);
-                    if (Carries(primary, partitionName))
+                    FirehoseGptSnapshot? primary = null;
+                    if (!unreadable.Contains(selectedLun))
                     {
-                        return primary;
+                        primary = await ReadSnapshotAsync(selectedLun, gptEntryLba, gptEntryCount, gptEntrySize)
+                            .ConfigureAwait(true);
+                        if (Carries(primary, partitionName))
+                        {
+                            return primary;
+                        }
                     }
 
-                    for (var candidate = 0; candidate <= LastScannedLun; candidate++)
+                    for (var candidate = 0; candidate < EdlGptPartitionService.ScannedLunCount; candidate++)
                     {
-                        if (candidate == selectedLun)
+                        if (candidate == selectedLun || unreadable.Contains(candidate))
                         {
                             continue;
                         }
@@ -5357,7 +5455,12 @@ public sealed partial class FlashViewModel
                         }
                     }
 
-                    return primary;
+                    // Nothing readable carries the name, so the run reports it against the region the operator pointed at,
+                    // and against the first readable region when that one was unreadable; the row then fails with that
+                    // table's own missing-partition error instead of the whole read-back aborting on an unreadable box.
+                    // 可读区域都没有这个名称时，运行按操作者所指的区域报错；该区域读不出时退回首个可读区域。于是这一行
+                    // 会以那张表自身的缺分区错误失败，而不是整次回读因下拉框指向的区域读不出而中止。
+                    return primary ?? scan.Snapshots[0];
                 }
 
                 async ValueTask<FirehoseGptSnapshot> ReadSnapshotAsync(int region, ulong? entryLba,
@@ -5429,8 +5532,11 @@ public sealed partial class FlashViewModel
             if (generateXml && manifest.Count > 0)
             {
                 var manifestPath = Path.Combine(destination, "rawprogram_readback.xml");
+                // Each entry carries the sector count of its own LUN, so generalization never falls back to one run-wide
+                // disk size that would be wrong for the rows living on another region.
+                // 每条条目各自携带其 LUN 的扇区数，因此通用化不会退回到一个对其它区域的行并不成立的整次运行盘尺寸。
                 await EdlReadbackManifestWriter.WriteAsync(
-                    manifestPath, manifest, sectorSize, numDiskSectors, generalized,
+                    manifestPath, manifest, sectorSize, numDiskSectors: 0, generalized,
                     cancellation.Token).ConfigureAwait(true);
                 AppendLog(string.Format(CultureInfo.InvariantCulture,
                     _localizer.GetString("Flash_Log_ManifestWritten"), Path.GetFileName(manifestPath)));

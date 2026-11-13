@@ -333,6 +333,8 @@ internal static class LocaleKeySets
         "Flash_EdlRegionConfirmBody",
         "Flash_EdlReadLunResult",
         "Flash_EdlReadLun",
+        "Flash_EdlLunScan",
+        "Flash_EdlLunSkipped",
         "Flash_EdlBootableValueHint",
         "Flash_EdlSetBootable",
         "Flash_EdlBootableValueInvalid",

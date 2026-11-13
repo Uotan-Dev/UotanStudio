@@ -1107,6 +1107,12 @@ Author: 暮间雾
   <data name="Flash_EdlSerial" xml:space="preserve">
     <value>Device serial</value>
   </data>
+  <data name="Flash_EdlLunScan" xml:space="preserve">
+    <value>Readable regions: LUN {0}</value>
+  </data>
+  <data name="Flash_EdlLunSkipped" xml:space="preserve">
+    <value>no table on LUN {0}</value>
+  </data>
   <data name="Flash_EdlReadbackSelected" xml:space="preserve">
     <value>Read back selected partitions</value>
   </data>

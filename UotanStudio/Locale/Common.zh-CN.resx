@@ -1107,6 +1107,12 @@
   <data name="Flash_EdlSerial" xml:space="preserve">
     <value>设备序列号</value>
   </data>
+  <data name="Flash_EdlLunScan" xml:space="preserve">
+    <value>可读区域：LUN {0}</value>
+  </data>
+  <data name="Flash_EdlLunSkipped" xml:space="preserve">
+    <value>LUN {0} 未上报分区表</value>
+  </data>
   <data name="Flash_EdlReadbackSelected" xml:space="preserve">
     <value>回读选中分区</value>
   </data>

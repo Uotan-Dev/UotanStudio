@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Flash;
@@ -78,7 +79,12 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("MtkStorageKindBox").SelectedIndex = 0;
         Field<ComboBox>("MtkLegacyCompletionBox").ItemsSource = Enum.GetNames<MtkLegacyCompletionProfile>();
         Field<ComboBox>("MtkLegacyCompletionBox").SelectedIndex = 0;
-        Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable.Range(0, 8).ToArray();
+        // The picker starts on the whole probe window; a partition-table or read-back run replaces it with the LUNs the
+        // device actually reported, so the box never claims a region the target does not answer for.
+        // 下拉框先给出整个探测窗口；一次分区表读取或回读运行会用设备真正上报的 LUN 替换它，使下拉框不会声称一个
+        // 目标并不应答的区域。
+        Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable
+            .Range(0, EdlGptPartitionService.ScannedLunCount).ToArray();
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
         SetRkStorageOptions(AllRkStorageOrdinals);
         UpdateEdlProgrammerPickOptions();

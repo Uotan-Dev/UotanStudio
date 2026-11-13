@@ -19,6 +19,28 @@ internal sealed record EdlGptProgramRequest(long StartSector, long SectorCount, 
     byte[] Bytes);
 
 /// <summary>
+/// One LUN number the enumeration could not read, together with the failure that skipped it.
+/// <para>枚举读不出的一个 LUN 编号，以及跳过它的失败。</para>
+/// </summary>
+/// <param name="Lun">The skipped physical partition number. <para>被跳过的物理分区号。</para></param>
+/// <param name="Failure">The failure the single LUN read raised. <para>该 LUN 读取抛出的失败。</para></param>
+internal sealed record EdlSkippedLun(int Lun, Exception Failure);
+
+/// <summary>
+/// The result of one LUN enumeration: the readable regions and the ones the target would not report.
+/// <para>一次 LUN 枚举的结果：可读区域与目标拒绝上报的区域。</para>
+/// </summary>
+/// <param name="Snapshots">One validated table per readable LUN, ordered by LUN.
+/// <para>每个可读 LUN 一份已校验表，按 LUN 排序。</para></param>
+/// <param name="Skipped">The LUN numbers that failed, in scan order. <para>读取失败的 LUN 编号，按扫描顺序。</para></param>
+internal sealed record EdlLunScan(IReadOnlyList<FirehoseGptSnapshot> Snapshots, IReadOnlyList<EdlSkippedLun> Skipped)
+{
+    /// <summary>Gets whether not one LUN reported a table. <para>获取是否没有任何 LUN 上报分区表。</para></summary>
+    /// <value><see langword="true"/> when <see cref="Snapshots"/> is empty. <para><see cref="Snapshots"/> 为空时为 <see langword="true"/>。</para></value>
+    internal bool IsEmpty => Snapshots.Count == 0;
+}
+
+/// <summary>
 /// Runs named-partition EDL program, erase and backup against the device's own GPT without any
 /// rawprogram manifest.
 /// <para>按分区名直接对设备自身的 GPT 执行 EDL 刷写、擦除与备份；不依赖 rawprogram 清单。</para>
@@ -29,48 +51,82 @@ internal static class EdlGptPartitionService
     /// <para>流式后端设备分区表的 DIAG 读取地址，从偏移 0 起读取。</para></summary>
     private const uint StreamingPartitionTableAddress = 0u;
 
-    /// <summary>The highest LUN number probed by the by-name scan, spanning LUNs zero through seven.
-    /// <para>按名扫描时尝试的最高 LUN 编号（0 至 7）。</para></summary>
-    internal const int MaxScannedLun = 7;
+    /// <summary>The amount of LUN numbers one enumeration probes, covering LUNs zero through seven.
+    /// <para>一次枚举探测的 LUN 编号数量，覆盖 0 至 7 号 LUN。</para></summary>
+    internal const int ScannedLunCount = 8;
+
+    /// <summary>The highest LUN number one enumeration probes; LUNs above it are never addressed.
+    /// <para>一次枚举探测的最高 LUN 编号；高于它的 LUN 绝不会被寻址。</para></summary>
+    internal const int MaxScannedLun = ScannedLunCount - 1;
 
     /// <summary>
-    /// Reads the GPT of every LUN the target reports, ordered by LUN; the scan stops at the first LUN whose read
-    /// fails, and an empty result means no region reported a table.
-    /// <para>读取目标上报的每个 LUN 的 GPT（按 LUN 排序）；扫描在首个读取失败的 LUN 处停止，空结果表示没有
-    /// 区域上报表。</para>
+    /// Enumerates every readable LUN of the target instead of assuming the main region: each LUN number in
+    /// <see cref="ScannedLunCount"/> is queried on its own, a region that fails is recorded with the reason it failed and
+    /// skipped, and the scan continues to the last number so a target whose only table sits on one LUN is still found.
+    /// Cancellation and disposal stay fatal, while a failure that lost the link stops the scan because no later number
+    /// can be read.
+    /// <para>枚举目标的每个可读 LUN，而不是假定主区域：<see cref="ScannedLunCount"/> 内的每个编号都单独查询，读取失败的
+    /// 区域连同失败原因记录下来并跳过，扫描继续到最后一个编号，因此分区表只落在某一个 LUN 上的目标仍能被找到。
+    /// 取消与释放保持致命；丢失链路的失败会结束扫描，因为后续编号也无法读取。</para>
     /// </summary>
     /// <param name="firehose">The initialized Firehose protocol. <para>已初始化的 Firehose 协议实例。</para></param>
     /// <param name="partitionEntryLba">Optional override for the entry-array location. <para>可选的条目数组位置覆盖。</para></param>
     /// <param name="partitionEntryCount">Optional override for the entry-array capacity. <para>可选的条目容量覆盖。</para></param>
     /// <param name="partitionEntrySize">Optional override for the single-entry size. <para>可选的单条目大小覆盖。</para></param>
     /// <param name="cancellationToken">Cancels the per-LUN reads. <para>取消逐 LUN 读取。</para></param>
-    /// <returns>One snapshot per readable LUN, ordered by LUN. <para>每个可读 LUN 一份快照，按 LUN 排序。</para></returns>
-    internal static async Task<IReadOnlyList<FirehoseGptSnapshot>> ReadAllLunSnapshotsAsync(
-        FirehoseProtocol firehose, ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize,
-        CancellationToken cancellationToken)
+    /// <param name="partitionEntryOverridesLun">The one LUN the three overrides describe; every other LUN is read with
+    /// the dimensions its own header declares. <see langword="null"/> applies the overrides to every LUN.
+    /// <para>三个覆盖值所描述的那一个 LUN；其余 LUN 按其自身头部声明的维度读取。为 <see langword="null"/> 时覆盖作用于每个 LUN。</para></param>
+    /// <returns>The readable LUNs ordered by number plus the LUNs that were skipped, or <see langword="null"/> when the
+    /// scan stopped early and the caller has to discard the partial result.
+    /// <para>按编号排序的可读 LUN 与跳过的 LUN；扫描提前结束时为 <see langword="null"/>，调用方必须丢弃部分结果。</para></returns>
+    internal static async Task<EdlLunScan?> ScanLunSnapshotsAsync(FirehoseProtocol firehose,
+        ulong? partitionEntryLba, uint? partitionEntryCount, uint? partitionEntrySize,
+        CancellationToken cancellationToken, int? partitionEntryOverridesLun = null)
     {
         ArgumentNullException.ThrowIfNull(firehose);
-        var snapshots = new List<FirehoseGptSnapshot>();
-        for (var candidate = 0; candidate <= MaxScannedLun; candidate++)
+        var snapshots = new List<FirehoseGptSnapshot>(ScannedLunCount);
+        var skipped = new List<EdlSkippedLun>();
+        for (var candidate = 0; candidate < ScannedLunCount; candidate++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var scoped = partitionEntryOverridesLun is null || partitionEntryOverridesLun == candidate;
             FirehoseGptSnapshot scanned;
             try
             {
-                scanned = await firehose.ReadGptWithPartitionEntryOverridesAsync(candidate, partitionEntryLba,
-                    partitionEntryCount, partitionEntrySize, cancellationToken).ConfigureAwait(false);
+                scanned = await firehose.ReadGptWithPartitionEntryOverridesAsync(candidate,
+                    scoped ? partitionEntryLba : null, scoped ? partitionEntryCount : null,
+                    scoped ? partitionEntrySize : null, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception failure) when (failure is not OperationCanceledException
                 and not ObjectDisposedException)
             {
-                break;
+                skipped.Add(new EdlSkippedLun(candidate, failure));
+                if (!IsLunSkippable(failure))
+                {
+                    return null;
+                }
+
+                continue;
             }
 
             snapshots.Add(scanned);
         }
 
-        return snapshots;
+        return new EdlLunScan(snapshots, skipped);
     }
+
+    /// <summary>
+    /// Whether one LUN's failure leaves the rest of the enumeration readable: a target that rejects a region, reports no
+    /// usable geometry for it or answers with a protocol error still holds its link, so the next LUN number is worth
+    /// asking for. A lost link ends the scan because every later number would report the same failure.
+    /// <para>某个 LUN 的失败是否仍允许继续枚举：目标拒绝该区域、未报出可用几何或给出协议错误时链路仍在，因此下一个
+    /// LUN 编号仍值得查询。链路丢失会结束扫描，因为后续每个编号都只会报同一种失败。</para>
+    /// </summary>
+    /// <param name="failure">The observed failure. <para>观测到的失败。</para></param>
+    /// <returns><see langword="true"/> when the scan continues. <para>继续扫描时为 <see langword="true"/>。</para></returns>
+    private static bool IsLunSkippable(Exception failure) =>
+        EdlFailureClassification.Classify(failure) != EdlFailureKind.ConnectionLost;
 
     /// <summary>
     /// Resolves the GPT snapshot holding the named partition: an explicit LUN reads only that LUN,
