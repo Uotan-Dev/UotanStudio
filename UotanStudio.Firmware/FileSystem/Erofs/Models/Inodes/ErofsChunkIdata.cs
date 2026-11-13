@@ -6,7 +6,7 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 /// <para>chunk-based 寻址：存放在 <c>u</c> 低半部的 chunk 格式字、从索引表解码出的逐 chunk 首块，
 /// 以及负载所在设备。</para>
 /// </summary>
-internal sealed class ErofsChunkIdata : IErofsIdata
+internal sealed class ErofsChunkIdata
 {
     /// <summary>Chunk format word (<c>u.chunkformat</c>): chunk size log2 in the low 5 bits plus the
     /// index and 48-bit address flags.

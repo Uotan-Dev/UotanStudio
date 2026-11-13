@@ -7,7 +7,7 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 /// <para>平坦与内联尾部的寻址：文件整个按块对齐的前缀存放在 <see cref="BlockAddress"/>，
 /// 仅不完整块尾部（内联布局）位于 inode 记录旁（<c>u.i_blkaddr</c>）。</para>
 /// </summary>
-internal sealed class ErofsFlatIdata : IErofsIdata
+internal sealed class ErofsFlatIdata
 {
     /// <summary>First physical block of the data.
     /// <para>数据的首个物理块。</para></summary>

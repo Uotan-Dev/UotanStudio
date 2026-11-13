@@ -10,7 +10,7 @@ using UnifiedChunkIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.Er
 using UnifiedCompressedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsCompressedIdata;
 using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
 using UnifiedFlatIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsFlatIdata;
-using UnifiedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.IErofsIdata;
+using UnifiedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsIdata;
 using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
@@ -111,7 +111,7 @@ internal static class ErofsRebuildMetadata
 
         if (options.SourceCompressionOptions is { } codecs)
         {
-            foreach (var codec in codecs.AsValueEnumerable().OrderBy(pair => pair.Key))
+            foreach (var codec in codecs.OrderBy(pair => pair.Key))
             {
                 parameters.Codecs.Add(new ErofsRebuildCodec
                 {
@@ -143,10 +143,10 @@ internal static class ErofsRebuildMetadata
 
         if (options.SourceInodes is { } inodes)
         {
-            foreach (var inode in inodes.AsValueEnumerable().OrderBy(pair => pair.Key))
+            foreach (var inode in inodes.OrderBy(pair => pair.Key))
             {
                 var source = inode.Value;
-                var extentState = source.Idata as UnifiedCompressedIdata;
+                var extentState = source.Idata.Value as UnifiedCompressedIdata;
                 parameters.Inodes.Add(new ErofsRebuildInode
                 {
                     Nid = inode.Key,
@@ -385,7 +385,7 @@ internal static class ErofsRebuildMetadata
             options.SourceCompressionOptions = codecs;
             if (!codecs.ContainsKey(options.Algorithm))
             {
-                options.Algorithm = codecs.Keys.AsValueEnumerable().OrderBy(algorithm => algorithm).First();
+                options.Algorithm = codecs.Keys.OrderBy(algorithm => algorithm).First();
             }
         }
 

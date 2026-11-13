@@ -223,7 +223,7 @@ internal sealed class ErofsInode
     /// <summary>Addressing state of the <c>u</c> field. <para><c>u</c> 字段的寻址状态。</para></summary>
     /// <value>A flat, compressed or chunk-based instance matching <see cref="DataLayout"/>.
     /// <para>与 <see cref="DataLayout"/> 对应的平坦、压缩或 chunk-based 实例。</para></value>
-    internal IErofsIdata Idata { get; set; } = new ErofsFlatIdata();
+    internal ErofsIdata Idata { get; set; } = new ErofsFlatIdata();
 
     /// <summary>File size in bytes (<c>i_size</c>). <para>文件字节大小（<c>i_size</c>）。</para></summary>
     /// <value>32-bit in the compact record and 64-bit in the extended record.
@@ -892,9 +892,9 @@ internal sealed class ErofsInode
         }
     }
 
-    private ErofsCompressedIdata? CompressedState => Idata as ErofsCompressedIdata;
+    private ErofsCompressedIdata? CompressedState => Idata.Value as ErofsCompressedIdata;
 
-    private ErofsChunkIdata? ChunkState => Idata as ErofsChunkIdata;
+    private ErofsChunkIdata? ChunkState => Idata.Value as ErofsChunkIdata;
 
     private ErofsCompressedIdata EnsureCompressedState()
     {
@@ -1082,7 +1082,7 @@ internal sealed class ErofsInode
     /// <para>文件系统块大小的 log2。</para></param>
     /// <returns>The flat, compressed or chunk-based addressing state.
     /// <para>平坦、压缩或 chunk-based 寻址状态。</para></returns>
-    internal static IErofsIdata CreateIdataForLayout(ErofsDataLayout layout, uint addressField, ulong size, int blockSizeBits)
+    internal static ErofsIdata CreateIdataForLayout(ErofsDataLayout layout, uint addressField, ulong size, int blockSizeBits)
     {
         switch (layout)
         {

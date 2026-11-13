@@ -909,7 +909,7 @@ public sealed partial class ErofsBuilder
                 node.FlatBlocks = CeilDiv((long)node.Size, BlockSize);
             }
 
-            var chunkIdata = (ErofsChunkIdata)node.Idata;
+            var chunkIdata = (ErofsChunkIdata)node.Idata.Value;
             chunkIdata.ChunkFormat = (ushort)(chunkBits
                 | (usesIndexes ? ErofsInode.ChunkFormatIndexes : 0)
                 | (recordedFormat & ErofsInode.ChunkFormat48Bit));

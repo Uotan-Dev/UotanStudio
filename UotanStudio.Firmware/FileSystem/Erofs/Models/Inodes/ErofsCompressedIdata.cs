@@ -6,7 +6,7 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 /// <para>压缩寻址：存放在 <c>u.i_blocks</c> 的压缩块数量，加上 inode 之后
 /// <c>z_erofs_map_header</c> 解码出的 pcluster 规划与索引形态标志。</para>
 /// </summary>
-internal sealed class ErofsCompressedIdata : IErofsIdata
+internal sealed class ErofsCompressedIdata
 {
     /// <summary>Number of blocks the compressed payload occupies.
     /// <para>压缩负载占用的块数量。</para></summary>

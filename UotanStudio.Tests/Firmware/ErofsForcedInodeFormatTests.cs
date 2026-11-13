@@ -179,7 +179,7 @@ public sealed class ErofsForcedInodeFormatTests
         options.ChunkIndexKind = ErofsChunkIndexKind.BlockMap;
         var record = SourceRecord("data.bin", 2 * BlockSize, ErofsInode.ChunkFormatIndexes);
         record.ChunkIndex = [4UL, 5UL];
-        ((ErofsChunkIdata)record.Idata).ChunkFormat = ErofsInode.ChunkFormatIndexes;
+        ((ErofsChunkIdata)record.Idata.Value).ChunkFormat = ErofsInode.ChunkFormatIndexes;
         options.Features = ErofsFeatureSet.Auto.With(ErofsFeature.ChunkedFile);
         options.SourceInodes = new Dictionary<ulong, ErofsInode> { [ulong.MaxValue - 1] = record };
         options.SourceInodesByPath = new Dictionary<string, ErofsInode>(StringComparer.Ordinal)
@@ -371,7 +371,7 @@ public sealed class ErofsForcedInodeFormatTests
         if (chunkBased)
         {
             record.Idata = new ErofsChunkIdata();
-            ((ErofsChunkIdata)record.Idata).ChunkFormat = (ushort)chunkFormat;
+            ((ErofsChunkIdata)record.Idata.Value).ChunkFormat = (ushort)chunkFormat;
         }
         else
         {
