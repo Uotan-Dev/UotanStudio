@@ -39,7 +39,6 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     private readonly ConcurrentQueue<DecodedVideoFrame> _frames = new();
     private readonly ConcurrentQueue<IosurfaceVideoFrame> _exportFrames = new();
     private volatile bool _gpuExportEnabled;
-    private Action<IosurfaceVideoFrame>? _iosurfaceFrameCallback;
     private long _exportDropped;
     private ExceptionDispatchInfo? _error;
     private int _thread;
@@ -84,7 +83,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// <para>在 <see cref="GpuExportEnabled"/> 开启时接收 IOSurface 支撑的 BGRA 帧；回调在所属线程执行且不得
     /// 重入解码器。呈现方必须对每帧在 finally 中恰好调用一次 <see cref="IosurfaceVideoFrame.MarkPresented"/>。</para>
     /// </summary>
-    public Action<IosurfaceVideoFrame>? IosurfaceFrameCallback { get => _iosurfaceFrameCallback; set => _iosurfaceFrameCallback = value; }
+    public Action<IosurfaceVideoFrame>? IosurfaceFrameCallback { get; set; }
 
     /// <summary>
     /// Gets how many decoded frames were dropped because the presenter was busy or the buffer carried no
@@ -93,7 +92,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// </summary>
     public long ExportDroppedFrames => Interlocked.Read(ref _exportDropped);
 
-    private bool ExportActive => _gpuExportEnabled && _iosurfaceFrameCallback is not null;
+    private bool ExportActive => _gpuExportEnabled && IosurfaceFrameCallback is not null;
 
     /// <summary>
     /// Gets the pixel layout this decoder will deliver on the next frame.
@@ -412,7 +411,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                 continue;
             }
             _inCallback = true;
-            try { _iosurfaceFrameCallback!(exported); }
+            try { IosurfaceFrameCallback!(exported); }
             catch { exported.MarkPresented(); throw; }
             finally { _inCallback = false; }
         }

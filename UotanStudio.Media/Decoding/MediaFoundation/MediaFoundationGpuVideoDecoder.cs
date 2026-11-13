@@ -60,7 +60,6 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private byte[]? _readbackBuffer;
     private ExportSlotRing<MediaFoundationExportSlot>? _exportRing;
     private volatile bool _gpuExportEnabled;
-    private Action<D3D11SharedVideoFrame>? _gpuExportFrameCallback;
     private long _exportDropped;
     private const int ExportSlotCount = 4;
     private const int InputViewCacheCapacity = 4;
@@ -100,7 +99,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// <para>在 <see cref="GpuExportEnabled"/> 开启时接收 GPU 导出的共享纹理帧；回调在所属线程执行且不得重入
     /// 解码器。呈现方必须对每帧在 finally 中恰好调用一次 <see cref="D3D11SharedVideoFrame.MarkPresented"/>。</para>
     /// </summary>
-    public Action<D3D11SharedVideoFrame>? GpuExportFrameCallback { get => _gpuExportFrameCallback; set => _gpuExportFrameCallback = value; }
+    public Action<D3D11SharedVideoFrame>? GpuExportFrameCallback { get; set; }
 
     /// <summary>
     /// Gets how many frames were dropped because every shared texture was still owned by the compositor.
@@ -114,7 +113,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// </summary>
     public long ExportSubmittedFrames => _exportRing?.SubmittedFrames ?? 0;
 
-    private bool ExportActive => _gpuExportEnabled && _exportRing is not null && _gpuExportFrameCallback is not null;
+    private bool ExportActive => _gpuExportEnabled && _exportRing is not null && GpuExportFrameCallback is not null;
 
     /// <summary>
     /// Gets the pixel layout this decoder will deliver on the next frame.
@@ -861,7 +860,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         var frame = new D3D11SharedVideoFrame(ring, slot, slot.SharedHandle, _width, _height, timestampTicks,
             _colorMatrix, _colorRange);
         _inCallback = true;
-        try { _gpuExportFrameCallback!(frame); }
+        try { GpuExportFrameCallback!(frame); }
         catch
         {
             frame.MarkPresented();
