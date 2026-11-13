@@ -671,7 +671,7 @@ internal static partial class OhscrcpyServerManager
         ParseProcessIds(ExcludeProcessLines(OhscrcpyShell.Run(session, "ps -ef"), ShellWrapperMarker),
             extensionMarker);
 
-    private static string ExcludeProcessLines(string psOutput, params string[] fragments)
+    private static string ExcludeProcessLines(string psOutput, params ReadOnlySpan<string> fragments)
     {
         if (string.IsNullOrEmpty(psOutput))
         {
