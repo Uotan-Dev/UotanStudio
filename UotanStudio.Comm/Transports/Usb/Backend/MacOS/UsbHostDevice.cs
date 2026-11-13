@@ -359,6 +359,19 @@ internal class UsbHostDevice : UsbDevice
             PhysicalPortPath = physicalPortPath;
 
             var children = UsbHostAPI.GetInterfaceServices((uint)service.ToInt32());
+            if (children.Count == 0)
+            {
+                // A device that exposes no interface children has not selected a configuration, which
+                // IOUSBHost cannot do: the device client refuses SET_CONFIGURATION while it holds the
+                // device, and creating a classic client alongside it faults the process. Report the
+                // condition so the provider can hand this device to the classic IOKit backend, which
+                // implements exactly that selection.
+                OpenFailureDetail = "the device exposes no interface children (no configuration is selected)";
+                UsbTrace.Log($"UsbHostDevice.CreateHandle: {OpenFailureDetail}; leaving it to the classic IOKit backend.");
+                DestroyDeviceClient();
+                return -1;
+            }
+
             UsbTrace.Log($"UsbHostDevice.CreateHandle: interface children={children.Count}");
             try
             {
@@ -394,6 +407,8 @@ internal class UsbHostDevice : UsbDevice
             IOKitUsbAPI.IOObjectRelease(service);
         }
     }
+
+
 
     /// <summary>
     /// Releases the device user client, if the kernel granted one.

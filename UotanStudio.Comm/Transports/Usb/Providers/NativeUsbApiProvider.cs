@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
 using UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
@@ -104,16 +105,69 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
                 return IOKitUsbFinder.FindDevice(filter);
             }
 
-            if (usbHostDevices.Count > 0)
+            if (usbHostDevices.Count == 0)
             {
-                return usbHostDevices;
+                var iokitDevices = IOKitUsbFinder.FindDevice(filter);
+                return iokitDevices.Count > 0 ? iokitDevices : usbHostDevices;
             }
 
-            var iokitDevices = IOKitUsbFinder.FindDevice(filter);
-            return iokitDevices.Count > 0 ? iokitDevices : usbHostDevices;
+            return SplitByOpenability(usbHostDevices, filter);
         }
 
         return [];
+    }
+
+    /// <summary>
+    /// Replaces IOUSBHost entries that expose no interface with the classic IOKit objects that can
+    /// select a configuration.
+    /// <para>把不暴露任何接口的 IOUSBHost 条目替换为能够选择配置的经典 IOKit 对象。</para>
+    /// </summary>
+    /// <remarks>
+    /// A bootrom in EDL state (<c>bDeviceClass=0</c>, one configuration, none selected) enumerates and
+    /// exposes readable properties but publishes no interface children, and <c>IOUSBHostDevice</c>
+    /// cannot select a configuration while its own device client holds the device: the request is
+    /// refused with no transfer. Replacing those entries with <see cref="IOKitUsbDevice"/> is what lets
+    /// the same native provider session reach them — that backend selects configuration 1 through
+    /// <c>IOUSBDeviceInterface</c> and then performs bulk I/O. Devices that expose interface metadata
+    /// keep the IOUSBHost path unchanged, including every adb and fastboot target.
+    /// <para>EDL 状态的 bootrom（<c>bDeviceClass=0</c>、单一配置且未选择）能枚举并暴露可读属性，但不发布
+    /// 任何接口子项；而 <c>IOUSBHostDevice</c> 在自己的设备客户端持有设备时无法选择配置——该请求会被拒绝且
+    /// 没有传输。把这些条目替换为 <see cref="IOKitUsbDevice"/>，同一 native 提供器的会话才能到达它们：
+    /// 该后端经 <c>IOUSBDeviceInterface</c> 选择配置 1 后再做批量 I/O。暴露接口元数据的设备（包括所有
+    /// adb 与 fastboot 目标）继续走原 IOUSBHost 路径。</para>
+    /// </remarks>
+    /// <param name="usbHostDevices">Devices the IOUSBHost finder reported. <para>IOUSBHost 查找器报告的设备。</para></param>
+    /// <param name="filter">The active discovery filter. <para>当前发现过滤器。</para></param>
+    /// <returns>The device list whose every entry this provider can open.
+    /// <para>每一项都能被本提供器打开的设备清单。</para></returns>
+    private static List<UsbDevice> SplitByOpenability(List<UsbDevice> usbHostDevices, UsbDeviceFilter? filter)
+    {
+        if (!usbHostDevices.Any(device => device.Interfaces.Count == 0 && device.InterfaceClass is null))
+        {
+            return usbHostDevices;
+        }
+
+        var usable = new List<UsbDevice>(usbHostDevices.Count);
+        List<UsbDevice>? classic = null;
+        foreach (var device in usbHostDevices)
+        {
+            if (device.Interfaces.Count == 0 && device.InterfaceClass is null)
+            {
+                classic ??= IOKitUsbFinder.FindDevice(filter);
+                var replacement = classic.FirstOrDefault(candidate =>
+                    candidate.VendorId == device.VendorId && candidate.ProductId == device.ProductId);
+                if (replacement is not null)
+                {
+                    UsbTrace.Log($"NativeUsbApiProvider: routing {device.VendorId:X4}:{device.ProductId:X4} to the classic IOKit backend (no interface, no selected configuration)");
+                    usable.Add(replacement);
+                    continue;
+                }
+            }
+
+            usable.Add(device);
+        }
+
+        return usable;
     }
 
     /// <summary>
