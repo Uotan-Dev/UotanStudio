@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
@@ -170,7 +170,7 @@ public sealed partial class FirehoseProtocol
         {
             if (_faulted || !transferStarted)
             {
-                InvalidateCancelledTransfer("the program stopped before its raw payload reached the command boundary");
+                InvalidateTransfer("the program stopped before its raw payload reached the command boundary");
             }
 
             RecordFailure(ex, transferStarted, payloadSent);
@@ -572,7 +572,21 @@ public sealed partial class FirehoseProtocol
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return await QuiesceCancelledRawWriteAsync(totalBytes - bytesWritten, maxPayload).ConfigureAwait(false);
+            return await QuiesceCancelledRawWriteAsync(totalBytes - bytesWritten, maxPayload, totalBytes, null)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Every failure that leaves the declared payload unfinished — a write timeout, a short write, or the
+            // source stream failing between blocks — also leaves the target waiting for bytes that will never arrive.
+            // The link cannot be handed back as reusable: the next command would meet a device still in its data
+            // phase and parse whatever it kept streaming. This mirrors the read side, which now has no wall clock and
+            // therefore the same rule: reach the command boundary, or reset and require a reconnect.
+            // 每一种让声明负载未完成的失败——写超时、短写、或块之间源流失败——都让目标继续等待永远不会到达的字节。
+            // 链路不能作为可复用交回：下一条命令会遇到仍停在数据阶段的设备，并解析它还在发送的东西。这与读取侧一致：
+            // 读取侧现在没有墙钟，因此遵守同一条规则——要么到达命令边界，要么复位并要求重连。
+            InvalidateTransfer($"the program left its raw payload unfinished: {ex.Message}");
+            throw;
         }
         finally
         {

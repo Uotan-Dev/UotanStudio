@@ -1218,6 +1218,9 @@ public sealed partial class EdlSession : IProtocolSession
     /// <para>可选的累计传输字节；不是完成证据。</para></param>
     /// <param name="expectedSha256Hex">Optional lowercase hex SHA-256 the transferred bytes must match.
     /// <para>可选的十六进制小写 SHA-256；传输字节必须匹配。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for the discarded bytes a cancellation takes back before it
+    /// returns the target to command mode; never evidence of saved data.
+    /// <para>可选报告器；取消后为把目标送回命令模式而收回并丢弃的字节，不能作为数据已保存的证据。</para></param>
     /// <param name="cancellationToken">Cancellation token threaded through transport and destination writes.
     /// <para>贯穿传输与目标写入的取消令牌。</para></param>
     /// <returns>The measured result with length, hash, and the device acknowledgement.
@@ -1226,13 +1229,14 @@ public sealed partial class EdlSession : IProtocolSession
     /// <para>短读、缺失完成确认或哈希矛盾时抛出；部分写入的目标保持未发布。</para></exception>
     public async Task<EdlStreamReadResult> ReadPartitionToStreamAsync(Stream destination, long startSector, long numSectors,
         string filename = "partition.bin", int physicalPartition = 0, IProgress<long>? progress = null,
-        string? expectedSha256Hex = null, CancellationToken cancellationToken = default)
+        string? expectedSha256Hex = null, IProgress<EdlQuiesceProgress>? stoppingProgress = null,
+        CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(destination);
         await EnsureInitializedAsync(cancellationToken: cancellationToken);
         return await Firehose!.ReadPartitionToStreamAsync(destination, startSector, numSectors, filename,
-            physicalPartition, progress, expectedSha256Hex, cancellationToken).ConfigureAwait(false);
+            physicalPartition, progress, expectedSha256Hex, stoppingProgress, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

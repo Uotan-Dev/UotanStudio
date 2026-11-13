@@ -192,37 +192,53 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Conservative throughput used to size the budget for moving the remainder of a cancelled raw transfer, plus the
-    /// floor and ceiling that keep a final XML acknowledgement possible and a stalled target bounded. The final XML
-    /// acknowledgement is read with its own short budget.
-    /// <para>按保守吞吐率为取消后原始传输剩余部分的收尾估时的下界与上界，使最后的 XML 确认仍有时间到达、
-    /// 卡住的目标也不会无限拖住调用方；最后的 XML 确认使用独立短预算。</para>
+    /// The final XML acknowledgement after a drained payload gets its own short budget: the payload itself is bounded
+    /// by the length the target declared, while an acknowledgement that never arrives must not keep the caller waiting.
+    /// <para>排空后的最后一条 XML 确认使用独立的短预算：负载本身由目标声明的长度设界，而永不到达的确认不应继续
+    /// 拖住调用方。</para>
     /// </summary>
-    private const long QuiesceThroughputBytesPerSecond = 2 * 1024 * 1024;
-    private const int MinimumQuiesceBudgetMs = 30_000;
-    private const int MaximumQuiesceBudgetMs = 5 * 60 * 1000;
     private const int CancelledCompletionTimeoutMs = 15_000;
 
     /// <summary>
-    /// Keeps the endpoint reset idempotent when both the quiesce and the outer command handler observe the same
-    /// failed cancellation.
-    /// <para>当收尾与外层命令处理都观测到同一次失败的取消时，保证端点只复位一次。</para>
+    /// Default silence window for a raw payload phase: how long a link that delivers nothing is tolerated before the
+    /// target is treated as stopped rather than slow. This is not a cap on a transfer — a target that keeps
+    /// delivering its declared payload is read to the end, however long that takes, because the bytes it still owes
+    /// are the only way back to command mode. It is the initializer for <see cref="RawSilenceTimeoutMs"/>, so the
+    /// payload read and the cancelled unwind share one definition of "stopped".
+    /// <para>原始负载阶段的默认静默窗口：链路在多长时间内不供数就认为目标已停而不是慢。这不是传输的上界——
+    /// 只要目标还在发送声明的负载就一路读到结束，无论多久，因为它欠的字节是回到命令模式的唯一途径。它是
+    /// <see cref="RawSilenceTimeoutMs"/> 的初始值，使负载读取与取消收尾共用同一个“已停”的定义。</para>
     /// </summary>
-    private bool _cancelledTransferInvalidated;
+    private const int QuiesceSilenceTimeoutMs = 60_000;
 
     /// <summary>
-    /// Bounds the time spent returning a cancelled raw transfer to the command boundary by the bytes still owed.
-    /// <para>按仍需搬运的字节数为取消后回到命令边界的收尾设界。</para>
+    /// Progress cadence for the caller's stopping indicator: one report per this many drained bytes, so a gigabyte of
+    /// unwind does not flood the UI thread while the operator still sees the number move.
+    /// <para>调用方“正在停止”指示的上报节奏：每排空这么多字节上报一次，使数 GB 的收尾不会淹没界面线程，操作者
+    /// 又能看到数字在动。</para>
     /// </summary>
-    /// <param name="remainingBytes">Bytes the target still has to send or receive.<para>目标仍需发送或接收的字节数。</para></param>
-    /// <returns>The budget in milliseconds.<para>预算（毫秒）。</para></returns>
-    private static int QuiesceBudgetMs(long remainingBytes)
-    {
-        var estimated = remainingBytes <= 0
-            ? (double)MinimumQuiesceBudgetMs
-            : (double)remainingBytes / QuiesceThroughputBytesPerSecond * 1000;
-        return (int)Math.Clamp(estimated, MinimumQuiesceBudgetMs, MaximumQuiesceBudgetMs);
-    }
+    private const long QuiesceProgressStepBytes = 1 * 1024 * 1024;
+
+    /// <summary>
+    /// How long a raw payload phase tolerates a link that delivers nothing before it treats the target as stopped
+    /// rather than slow. This is not a cap on the transfer: a target that keeps delivering its declared payload is
+    /// read to the end, however long that takes, because the bytes it still owes are the only way back to command
+    /// mode. Only silence ends a read now that no wall clock does.
+    /// <para>原始负载阶段在多长时间内收不到任何字节就认为目标已停而不是慢。这不是传输的上界：只要目标还在发送声明的
+    /// 负载就一路读到结束，无论多久，因为它欠的字节是回到命令模式的唯一途径。既然不再有墙钟，只有静默能结束一次读取。</para>
+    /// </summary>
+    /// <remarks>
+    /// Kept settable so a test can compress a minute of silence into milliseconds instead of waiting it out.
+    /// <para>保持可写，使测试能把一分钟的静默压缩成毫秒，而不必真的等。</para>
+    /// </remarks>
+    internal int RawSilenceTimeoutMs { get; set; } = QuiesceSilenceTimeoutMs;
+
+    /// <summary>
+    /// Keeps the endpoint reset idempotent when the quiesce, a stall and the outer command handler all observe the
+    /// same abandoned raw transfer.
+    /// <para>当收尾、停摆与外层命令处理都观测到同一次被放弃的原始传输时，保证端点只复位一次。</para>
+    /// </summary>
+    private bool _transferInvalidated;
 
     /// <summary>
     /// Drains the bytes a Firehose target is still sending after a cancelled read, then consumes its final XML
@@ -233,31 +249,45 @@ public sealed partial class FirehoseProtocol
     /// <param name="remainingBytes">Declared payload bytes not yet consumed.<para>尚未消费的声明负载字节数。</para></param>
     /// <param name="chunkBytes">Width of one transport read, matched to the negotiated payload size.
     /// <para>单次传输读取宽度，与协商负载大小一致。</para></param>
+    /// <param name="totalBytes">Whole payload the target declared, so the caller can show drained/total.
+    /// <para>目标声明的完整负载，使调用方可以显示“已排空/总量”。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for how much of the remainder has been taken back.
+    /// <para>可选的报告器，上报已收回多少剩余量。</para></param>
     /// <returns>The outcome of the quiesce.<para>收尾结果。</para></returns>
-    private async Task<RawPayloadOutcome> QuiesceCancelledRawReadAsync(long remainingBytes, int chunkBytes)
+    private async Task<RawPayloadOutcome> QuiesceCancelledRawReadAsync(long remainingBytes, int chunkBytes,
+        long totalBytes, IProgress<EdlQuiesceProgress>? stoppingProgress)
     {
-        var deadline = Environment.TickCount64 + QuiesceBudgetMs(remainingBytes);
         var buffer = new byte[chunkBytes];
         var remaining = remainingBytes;
         var silentReads = 0;
+        var lastDeliveryAt = Environment.TickCount64;
+        var lastReported = totalBytes - remaining;
+        stoppingProgress?.Report(new EdlQuiesceProgress(lastReported, totalBytes));
         try
         {
-            while (remaining > 0 && Environment.TickCount64 < deadline)
+            while (remaining > 0)
             {
+                if (Environment.TickCount64 - lastDeliveryAt > RawSilenceTimeoutMs)
+                {
+                    Log($"The target delivered nothing for {RawSilenceTimeoutMs} ms with {remaining} byte(s) " +
+                        "still owed; treating it as stopped rather than slow.");
+                    break;
+                }
+
                 if (_rxBufferBytes > 0)
                 {
                     var buffered = (int)Math.Min(_rxBufferBytes, remaining);
                     ShiftRxBufferLeft(buffered);
                     remaining -= buffered;
+                    ReportQuiesceProgress(stoppingProgress, totalBytes, totalBytes - remaining, ref lastReported);
                     continue;
                 }
 
                 var toRead = (int)Math.Min(buffer.Length, remaining);
-                var sliceMs = (int)Math.Min(_cmdTimeoutMs, Math.Max(1, deadline - Environment.TickCount64));
                 int received;
                 try
                 {
-                    received = await _transport.ReadAsync(buffer, 0, toRead, sliceMs, CancellationToken.None)
+                    received = await _transport.ReadAsync(buffer, 0, toRead, _cmdTimeoutMs, CancellationToken.None)
                         .ConfigureAwait(false);
                 }
                 catch (TimeoutException)
@@ -282,12 +312,14 @@ public sealed partial class FirehoseProtocol
                 }
 
                 silentReads = 0;
+                lastDeliveryAt = Environment.TickCount64;
                 remaining -= received;
+                ReportQuiesceProgress(stoppingProgress, totalBytes, totalBytes - remaining, ref lastReported);
             }
 
             if (remaining > 0 || !await ConsumeCancelledCompletionAsync().ConfigureAwait(false))
             {
-                InvalidateCancelledTransfer("the target did not finish the declared payload and its completion");
+                InvalidateTransfer("the target did not finish the declared payload and its completion");
                 return RawPayloadOutcome.Unrecoverable;
             }
 
@@ -297,9 +329,33 @@ public sealed partial class FirehoseProtocol
         }
         catch (Exception ex)
         {
-            InvalidateCancelledTransfer(ex.Message);
+            InvalidateTransfer(ex.Message);
             return RawPayloadOutcome.Unrecoverable;
         }
+    }
+
+    /// <summary>
+    /// Reports how much of a cancelled transfer has been taken back, at most once per
+    /// <see cref="QuiesceProgressStepBytes"/>, so the caller's stopping indicator moves without flooding its thread.
+    /// <para>上报取消的传输已收回多少，最多每 <see cref="QuiesceProgressStepBytes"/> 一次，使调用方的“正在停止”
+    /// 指示在移动而不会淹没其线程。</para>
+    /// </summary>
+    /// <param name="stoppingProgress">The caller's reporter; <see langword="null"/> disables reporting.
+    /// <para>调用方的报告器；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="totalBytes">Whole payload the target declared.<para>目标声明的完整负载。</para></param>
+    /// <param name="drainedBytes">Bytes taken back so far.<para>目前收回的字节数。</para></param>
+    /// <param name="lastReported">Cumulative value of the previous report, updated in place.
+    /// <para>上次上报的累计值，就地更新。</para></param>
+    private static void ReportQuiesceProgress(IProgress<EdlQuiesceProgress>? stoppingProgress, long totalBytes,
+        long drainedBytes, ref long lastReported)
+    {
+        if (stoppingProgress is null || drainedBytes - lastReported < QuiesceProgressStepBytes)
+        {
+            return;
+        }
+
+        lastReported = drainedBytes;
+        stoppingProgress.Report(new EdlQuiesceProgress(drainedBytes, totalBytes));
     }
 
     /// <summary>
@@ -310,16 +366,22 @@ public sealed partial class FirehoseProtocol
     /// </summary>
     /// <param name="remainingBytes">Declared payload bytes not yet written.<para>尚未写入的声明负载字节数。</para></param>
     /// <param name="payloadSize">Width of one negotiated payload block.<para>单个协商负载块的宽度。</para></param>
+    /// <param name="totalBytes">Whole payload the target declared, so the caller can show drained/total.
+    /// <para>目标声明的完整负载，使调用方可以显示“已排空/总量”。</para></param>
+    /// <param name="stoppingProgress">Optional reporter for how much of the remainder has been zero-filled.
+    /// <para>可选的报告器，上报已补零多少剩余量。</para></param>
     /// <returns>The outcome of the quiesce.<para>收尾结果。</para></returns>
-    private async Task<RawPayloadOutcome> QuiesceCancelledRawWriteAsync(long remainingBytes, int payloadSize)
+    private async Task<RawPayloadOutcome> QuiesceCancelledRawWriteAsync(long remainingBytes, int payloadSize,
+        long totalBytes, IProgress<EdlQuiesceProgress>? stoppingProgress)
     {
-        var deadline = Environment.TickCount64 + QuiesceBudgetMs(remainingBytes);
         var buffer = new byte[payloadSize];
         var remaining = remainingBytes;
+        var lastReported = totalBytes - remaining;
+        stoppingProgress?.Report(new EdlQuiesceProgress(lastReported, totalBytes));
         var zlpTimeout = GetZlpTimeoutMs();
         try
         {
-            while (remaining > 0 && Environment.TickCount64 < deadline)
+            while (remaining > 0)
             {
                 var slice = (int)Math.Min(buffer.Length, remaining);
                 var written = await _transport.WriteAsync(buffer, 0, slice, zlpTimeout, CancellationToken.None)
@@ -336,11 +398,12 @@ public sealed partial class FirehoseProtocol
                 }
 
                 remaining -= slice;
+                ReportQuiesceProgress(stoppingProgress, totalBytes, totalBytes - remaining, ref lastReported);
             }
 
             if (remaining > 0 || !await ConsumeCancelledCompletionAsync().ConfigureAwait(false))
             {
-                InvalidateCancelledTransfer("the target did not accept the remaining payload and acknowledge completion");
+                InvalidateTransfer("the target did not accept the remaining payload and acknowledge completion");
                 return RawPayloadOutcome.Unrecoverable;
             }
 
@@ -350,7 +413,7 @@ public sealed partial class FirehoseProtocol
         }
         catch (Exception ex)
         {
-            InvalidateCancelledTransfer(ex.Message);
+            InvalidateTransfer(ex.Message);
             return RawPayloadOutcome.Unrecoverable;
         }
     }
@@ -370,20 +433,25 @@ public sealed partial class FirehoseProtocol
     }
 
     /// <summary>
-    /// Marks a cancelled transfer that could not be quiesced as unusable, drops retained response bytes and resets
-    /// the endpoint, so stale raw payload can neither be attributed to the next command nor block the port.
-    /// <para>把无法收尾的取消传输标记为不可用，丢弃残留响应字节并复位端点，使过期的原始负载既不会被算到
-    /// 下一条命令头上，也不会堵住端口。</para>
+    /// Marks a raw transfer that could not be returned to the command boundary as unusable, drops retained response
+    /// bytes and resets the endpoint, so stale raw payload can neither be attributed to the next command nor block
+    /// the port. Every exit that abandons a declared payload mid-flight lands here: a cancelled unwind that never
+    /// finished, and a target that stopped delivering. Leaving the session reusable after either would hand the next
+    /// command whatever the target was still streaming.
+    /// <para>把无法回到命令边界的原始传输标记为不可用，丢弃残留响应字节并复位端点，使过期的原始负载既不会被算到
+    /// 下一条命令头上，也不会堵住端口。每一处在声明负载未完成时放弃的出口都走到这里：未能收尾的取消，以及不再
+    /// 供数的目标。这两种情况之后若仍把会话当成可复用，下一条命令读到的就是目标还在发送的东西。</para>
     /// </summary>
-    /// <param name="reason">Why the quiesce failed, for the diagnostic log.<para>收尾失败原因，用于诊断日志。</para></param>
-    private void InvalidateCancelledTransfer(string reason)
+    /// <param name="reason">Why the transfer was abandoned, for the diagnostic log.
+    /// <para>放弃该传输的原因，用于诊断日志。</para></param>
+    private void InvalidateTransfer(string reason)
     {
-        if (_cancelledTransferInvalidated)
+        if (_transferInvalidated)
         {
             return;
         }
 
-        _cancelledTransferInvalidated = true;
+        _transferInvalidated = true;
         _faulted = true;
         DiscardPendingResponseBytes();
         try
@@ -392,10 +460,10 @@ public sealed partial class FirehoseProtocol
         }
         catch (Exception ex)
         {
-            Log($"Best-effort transport reset after a cancelled raw transfer failed: {ex.Message}");
+            Log($"Best-effort transport reset after an abandoned raw transfer failed: {ex.Message}");
         }
 
-        Log($"The cancelled raw transfer could not be returned to the Firehose command boundary ({reason}); " +
+        Log($"The raw transfer could not be returned to the Firehose command boundary ({reason}); " +
             "the endpoint was reset and the target must be reconnected before another operation.");
     }
 }
