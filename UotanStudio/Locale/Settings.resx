@@ -67,13 +67,13 @@
     <value>Parallel workers</value>
   </data>
   <data name="Settings_FirmwareParallelismHint" xml:space="preserve">
-    <value>Default: detected physical core count. Range: 1-64. Applies to new firmware packing and extraction tasks that support parallel processing. More workers generally use more memory.</value>
+    <value>Worker count for supported firmware tasks, from 1 to 64. Higher values use more memory.</value>
   </data>
   <data name="Settings_ErofsRebuildOptimization" xml:space="preserve">
     <value>EROFS rebuild search</value>
   </data>
   <data name="Settings_ErofsRebuildOptimizationHint" xml:space="preserve">
-    <value>Records bounded compression candidate estimates while extracting, then rebuilds a preserved EROFS image up to three times to keep the smallest candidate. Off by default. Re-extract an image before its rebuild can use the search, and rebuilds that carry packing overrides skip the preserved path entirely, so this toggle has no effect on them.</value>
+    <value>While packing EROFS, rebuilds up to three times to keep the smallest result. Re-extract the image before enabling.</value>
   </data>
   <data name="Settings_Flash" xml:space="preserve">
     <value>Flash</value>
@@ -140,6 +140,36 @@
   </data>
   <data name="Settings_Appearance" xml:space="preserve">
     <value>Appearance</value>
+  </data>
+  <data name="Settings_PageDescription" xml:space="preserve">
+    <value>Configure appearance, performance, device access, and services.</value>
+  </data>
+  <data name="Settings_GeneralDescription" xml:space="preserve">
+    <value>Manage appearance, project behavior, rendering, and device access in one place.</value>
+  </data>
+  <data name="Settings_FirmwareDescription" xml:space="preserve">
+    <value>Configure firmware performance and rebuild behavior.</value>
+  </data>
+  <data name="Settings_DevelopersDescription" xml:space="preserve">
+    <value>The people who build and maintain UotanStudio.</value>
+  </data>
+  <data name="Settings_ThemeHint" xml:space="preserve">
+    <value>Choose a fixed light or dark mode, or follow the system setting.</value>
+  </data>
+  <data name="Settings_AutoSaveHint" xml:space="preserve">
+    <value>Saves edits to workspace files.</value>
+  </data>
+  <data name="Settings_DebugModeHint" xml:space="preserve">
+    <value>Writes more detailed logs to make troubleshooting easier.</value>
+  </data>
+  <data name="Settings_UsbBackendHint" xml:space="preserve">
+    <value>Select the USB implementation used for device connections.</value>
+  </data>
+  <data name="Settings_McpExposeHint" xml:space="preserve">
+    <value>Allows local MCP clients to connect and call tools.</value>
+  </data>
+  <data name="Settings_McpExposeFlashHint" xml:space="preserve">
+    <value>Allows MCP tools to erase, flash, and reboot devices.</value>
   </data>
   <data name="Settings_ThemePreview" xml:space="preserve">
     <value>Theme Preview</value>
@@ -217,7 +247,7 @@
     <value>MCP</value>
   </data>
   <data name="Settings_McpHint" xml:space="preserve">
-    <value>Maintain MCP server connections and the local exposure port here; values are written to the application settings when saved.</value>
+    <value>Manage MCP client connections and local server exposure.</value>
   </data>
   <data name="Settings_McpServerName" xml:space="preserve">
     <value>Name</value>
@@ -262,13 +292,13 @@
     <value>Select the MCP sandbox root</value>
   </data>
   <data name="Settings_McpExposeRootHint" xml:space="preserve">
-    <value>Every file path an MCP client sends must resolve inside this directory. Leaving it empty exposes the whole filesystem, the behavior this setting replaces.</value>
+    <value>All MCP file paths must stay inside this folder. Leave empty for unrestricted access.</value>
   </data>
   <data name="Settings_McpExposeFlash" xml:space="preserve">
     <value>Allow flash tools</value>
   </data>
   <data name="Settings_McpExposeFlashWarning" xml:space="preserve">
-    <value>Warning: enabling this registers the wiping, flashing and reboot tools on the loopback port, so any local process that can reach that port can erase or rewrite partitions on a connected device and reboot it. Keep it off unless you trust every program running on this machine.</value>
+    <value>Enabling this lets any local process that can reach the loopback port erase or rewrite connected devices. Keep it off unless you trust every program on this machine.</value>
   </data>
   <data name="Settings_Developers" xml:space="preserve">
     <value>Developers</value>
@@ -325,10 +355,10 @@
     <value>The setting was saved, but automatic restart failed. Restart the application manually.</value>
   </data>
   <data name="Settings_AdbServer" xml:space="preserve">
-    <value>ADB server</value>
+    <value>ADB Server</value>
   </data>
   <data name="Settings_HdcServer" xml:space="preserve">
-    <value>HDC server</value>
+    <value>HDC Server</value>
   </data>
   <data name="Settings_ServerUnchecked" xml:space="preserve">
     <value>Not checked</value>
@@ -343,25 +373,25 @@
     <value>Unknown (connection error or timeout)</value>
   </data>
   <data name="Settings_StopAdbServer" xml:space="preserve">
-    <value>Stop ADB server</value>
+    <value>Stop ADB Server</value>
   </data>
   <data name="Settings_StopHdcServer" xml:space="preserve">
-    <value>Stop HDC server</value>
+    <value>Stop HDC Server</value>
   </data>
   <data name="Settings_ServerStopping" xml:space="preserve">
-    <value>Stopping server…</value>
+    <value>Stopping Server…</value>
   </data>
   <data name="Settings_ServerStopped" xml:space="preserve">
     <value>Server stop confirmed. Device list refresh requested.</value>
   </data>
   <data name="Settings_ServerStopFailed" xml:space="preserve">
-    <value>Could not stop server: {0}</value>
+    <value>Could not stop Server: {0}</value>
   </data>
   <data name="Settings_RouteMode" xml:space="preserve">
     <value>Route mode</value>
   </data>
   <data name="Settings_RouteModeAuto" xml:space="preserve">
-    <value>Automatic (server when listening, otherwise direct USB)</value>
+    <value>Automatic</value>
   </data>
   <data name="Settings_RouteModeServerOnly" xml:space="preserve">
     <value>Server only</value>
@@ -370,10 +400,10 @@
     <value>Direct USB only</value>
   </data>
   <data name="Settings_RouteModeStartupFrozen" xml:space="preserve">
-    <value>Frozen at startup</value>
+    <value>Keep the initial automatic detection</value>
   </data>
   <data name="Settings_RouteModeHint" xml:space="preserve">
-    <value>The route mode is applied at the next start. Direct-only and frozen modes refuse direct access while a server is listening; server-only fails when the server is absent.</value>
+    <value>Server mode shares the official program with other apps; direct USB uses fully native communication. Restart to apply.</value>
   </data>
   <data name="Settings_RouteModeRestartTitle" xml:space="preserve">
     <value>Restart required</value>
@@ -442,7 +472,7 @@
     <value>The rendering backend is applied at the next start.</value>
   </data>
   <data name="Settings_CompositionModeHint" xml:space="preserve">
-    <value>Composition mode is Windows-only and takes effect only when ANGLE/EGL obtains D3D11; other backends ignore it and use the redirection surface.</value>
+    <value>Windows only; applies when ANGLE/EGL uses D3D11. Other backends ignore it.</value>
   </data>
   <data name="Settings_RenderingRestartTitle" xml:space="preserve">
     <value>Restart required</value>

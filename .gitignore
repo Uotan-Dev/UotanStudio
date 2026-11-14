@@ -62,6 +62,9 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 
+# Local tooling and temporary preview output
+.tools/
+
 # Tye
 .tye/
 
