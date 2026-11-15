@@ -21,7 +21,7 @@ public sealed class DexRepartitionerTests
     {
         var dex = CreateDex(classCount: 3, methodsPerClass: 4, nameOffset: 0);
         var original = dex.ToArray();
-        var parts = DexRepartitioner.Split(original);
+        var parts = DexRepartitioner.Split(original, TestContext.Current.CancellationToken);
         Assert.Single(parts);
         Assert.Equal(original, parts[0]);
     }

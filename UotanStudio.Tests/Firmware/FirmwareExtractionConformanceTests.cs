@@ -290,7 +290,7 @@ public sealed class FirmwareExtractionConformanceTests : IDisposable
     [Fact]
     public async Task DzBuilder_RebuildFromDecodedChunks_PreservesContentAndDigests()
     {
-        (string, byte[], uint)[] payloads =
+        (string Name, byte[] Payload, uint Sector)[] payloads =
 [
             (Name: "one.bin", Payload: "one payload"u8.ToArray(), Sector: 10u),
             (Name: "two.bin", Payload: "second payload"u8.ToArray(), Sector: 12u)

@@ -87,9 +87,12 @@ public sealed class ApkCorpusTests
             Assert.DoesNotContain(strippedModel.Strings, s => s.Contains("DebugInfoMarkerThatCannotExist", StringComparison.Ordinal));
 
             var originalModel = DexFile.Load(bytes);
-            DexRepairReport repairReport = default;
-            var repaired = await Task.Run(
-                () => DexPostProcessor.Repair(bytes, out repairReport),
+            var (repaired, repairReport) = await Task.Run(
+                () =>
+                {
+                    var rebuilt = DexPostProcessor.Repair(bytes, out var report);
+                    return (rebuilt, report);
+                },
                 TestContext.Current.CancellationToken);
             // Repair rebuilds with fresh tables, signature and checksum, so the byte length is free to change: some
             // production DEX files carry large unmapped payloads past the last map item, and rebuilding drops them.
