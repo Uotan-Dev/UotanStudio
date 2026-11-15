@@ -17,9 +17,22 @@ internal static class DexReader
     /// <para>至少 0x70 字节的完整小端 DEX 镜像，其头部文件大小字段必须等于 <c>data.Length</c>，且头部声明的 Adler-32 校验和必须与偏移 12 至结尾的字节一致；接受 035、037、038、039、040 版本，且因输入按不可信处理，各表范围均经过边界检查。<see langword="null"/> 会被拒绝。</para></param>
     /// <returns>The model holding the validated header plus the decoded string, type, prototype, field, method and class tables; call-site and method-handle entries are added when the map list declares them.
     /// <para>返回的模型包含已校验的头部以及解码得到的 string、type、proto、field、method 与 class 各表； map list 声明了调用点与方法句柄时一并加入。</para></returns>
-    public static DexFile Parse(byte[] data)
+    public static DexFile Parse(byte[] data) => Parse(data, options: null);
+
+    /// <summary>Parses a DEX image with explicit strictness controls; the parameterless overload equals the strict defaults.
+    /// <para>以显式严格度控制解析 DEX 镜像；无参重载等价于严格默认值。</para></summary>
+    /// <param name="data">Complete DEX image. <para>完整 DEX 镜像。</para></param>
+    /// <param name="options">Strictness controls; <see langword="null"/> applies the strict defaults.
+    /// <para>严格度控制；为 <see langword="null"/> 时应用严格默认值。</para></param>
+    /// <returns>The parsed model. <para>解析出的模型。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="DexException">The image fails the checks that the options did not relax.
+    /// <para>镜像未通过未被选项放宽的检查。</para></exception>
+    public static DexFile Parse(byte[] data, DexParseOptions? options)
     {
         ArgumentNullException.ThrowIfNull(data);
+        options ??= DexParseOptions.Default;
         if (data.Length < 0x70) throw new DexException("File too small to be a DEX (header is 0x70 bytes)");
 
         var magic = data.AsSpan(0, 8);
@@ -38,12 +51,28 @@ internal static class DexReader
         }
 
         var header = ReadHeader(data);
-        if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
-            throw new DexException("DEX header size or file size does not match the input.");
-        var checksum = Hash.Adler32.Adler32.Compute(data.AsSpan(12));
-        if (checksum != header.Checksum)
+        if (header.HeaderSize != 0x70)
+            throw new DexException("DEX header size does not match the input.");
+        if (header.FileSize != data.Length)
         {
-            throw new DexException($"DEX Adler-32 checksum 0x{checksum:X8} does not match the declared header checksum 0x{header.Checksum:X8}.");
+            if (!options.StrictFileSize)
+            {
+                if (header.FileSize > data.Length)
+                    throw new DexException($"DEX header declares {header.FileSize} bytes but the image holds only {data.Length}; the missing tail cannot be repaired.");
+                data = data[..checked((int)header.FileSize)];
+            }
+            else
+            {
+                throw new DexException("DEX header size or file size does not match the input.");
+            }
+        }
+        if (options.VerifyChecksum)
+        {
+            var checksum = Hash.Adler32.Adler32.Compute(data.AsSpan(12));
+            if (checksum != header.Checksum)
+            {
+                throw new DexException($"DEX Adler-32 checksum 0x{checksum:X8} does not match the declared header checksum 0x{header.Checksum:X8}.");
+            }
         }
         ValidateTable(data, header.StringIdsOffset, header.StringIdsSize, 4, "string_ids");
         ValidateTable(data, header.TypeIdsOffset, header.TypeIdsSize, 4, "type_ids");
@@ -71,6 +100,7 @@ internal static class DexReader
             || (count != 0 && offset < 0x70)) throw new DexException($"Invalid {name} range.");
     }
 
+
     private static void ReadModernIds(byte[] data, DexFile dex)
     {
         if (dex.Header.MapOffset == 0) return;
@@ -79,11 +109,23 @@ internal static class DexReader
         var count = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(map));
         if (count > (data.Length - map - 4) / 12) throw new DexException("Truncated map_list.");
         var seen = new HashSet<ushort>();
+        var hiddenApiOffset = 0;
         for (var i = 0; i < count; i++)
         {
             var item = map + 4 + i * 12;
             var kind = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(item));
             if (!seen.Add(kind)) throw new DexException("Duplicate map_list item.");
+            if (kind == 0xF000)
+            {
+                var sectionOffset = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(item + 8));
+                if (sectionOffset > data.Length || sectionOffset < 0x70 || sectionOffset > map)
+                {
+                    throw new DexException("Invalid hiddenapi_class_data_item section offset.");
+                }
+                hiddenApiOffset = checked((int)sectionOffset);
+                dex.HiddenApiMapSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(item + 4));
+                continue;
+            }
             if (kind is not (7 or 8)) continue;
             if (string.CompareOrdinal(dex.Header.Version, "038") < 0)
                 throw new DexException("Method handles and call sites require DEX 038 or newer.");
@@ -125,6 +167,25 @@ internal static class DexReader
                 || dex.MethodHandles[site[0].AsIndex()].Kind != 4)
                 throw new DexException("Invalid call-site bootstrap arguments.");
         }
+        if (hiddenApiOffset != 0)
+        {
+            dex.HiddenApiClassData = SliceHiddenApiSection(data, hiddenApiOffset, map);
+        }
+    }
+
+    /// <summary>Captures the raw <c>hiddenapi_class_data_item</c> bytes, whose leading uint declares the section's total size.
+    /// <para>捕获 <c>hiddenapi_class_data_item</c> 的原始字节；段开头的 uint 声明段总大小。</para></summary>
+    /// <exception cref="DexException">The declared size is smaller than one offsets entry or runs past the map list.
+    /// <para>声明的大小小于一个偏移条目，或越出 map 列表。</para></exception>
+    private static byte[] SliceHiddenApiSection(byte[] data, int sectionOffset, int mapOffset)
+    {
+        if (data.Length - sectionOffset < 4) throw new DexException("Truncated hiddenapi_class_data_item header.");
+        var declaredSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(sectionOffset));
+        if (declaredSize < 8 || sectionOffset + declaredSize > mapOffset)
+        {
+            throw new DexException("Invalid hiddenapi_class_data_item declared size.");
+        }
+        return data[sectionOffset..(sectionOffset + (int)declaredSize)];
     }
 
     private static bool IsValidMagic(ReadOnlySpan<byte> magic)
@@ -889,4 +950,21 @@ internal static class DexReader
             throw new DexException($"{what} out of range (offset=0x{offset:X}, length={length}, file={data.Length})");
         }
     }
+}
+
+/// <summary>
+/// Strictness controls for parsing a DEX image; the defaults verify the checksum and require the
+/// declared file size to match the input.
+/// <para>解析 DEX 镜像的严格度控制；默认校验校验和并要求声明的文件大小与输入一致。</para>
+/// </summary>
+public sealed class DexParseOptions
+{
+    /// <summary>Strict defaults: checksum verified and file-size equality enforced. <para>严格默认：校验校验和并强制文件大小一致。</para></summary>
+    public static DexParseOptions Default { get; } = new();
+
+    /// <summary>Verifies the declared Adler-32 checksum against the image bytes. <para>对照镜像字节校验声明的 Adler-32 校验和。</para></summary>
+    public bool VerifyChecksum { get; init; } = true;
+
+    /// <summary>Requires the header's declared file size to equal the input length; when relaxed, trailing bytes beyond the declared size are cut away. <para>要求头部声明的文件大小等于输入长度；放宽时超出声明大小的尾部字节被切除。</para></summary>
+    public bool StrictFileSize { get; init; } = true;
 }

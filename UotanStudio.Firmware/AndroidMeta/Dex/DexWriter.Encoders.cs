@@ -18,6 +18,28 @@ internal static partial class DexWriter
         return version;
     }
 
+    /// <summary>Rejects models whose index tables exceed the 16-bit DEX index range before any bytes are written, so an overflowing image can never be produced silently.
+    /// <para>在写出任何字节前拒绝索引表超出 DEX 16 位索引范围的模型，避免静默产出溢出的镜像。</para></summary>
+    /// <param name="dex">Model to validate. <para>待校验的模型。</para></param>
+    /// <exception cref="DexException">The type, proto, field, method, method-handle or call-site table holds more than 65 536 entries. The message points at DEX repartition as the remedy.
+    /// <para>类型、原型、字段、方法、方法句柄或调用点表条目超过 65 536 条；错误信息会指向 DEX 重新分配作为补救手段。</para></exception>
+    private static void ValidateTableLimits(DexFile dex)
+    {
+        const int MaximumIndexedEntries = 0x10000;
+        if (dex.Types.Count > MaximumIndexedEntries)
+            throw new DexException($"Type count {dex.Types.Count} exceeds the DEX limit of {MaximumIndexedEntries}; use DEX repartition to split classes across multiple dex files. 类型数 {dex.Types.Count} 超过 DEX 上限 {MaximumIndexedEntries}，请使用 DEX 重新分配把类拆分到多个 dex 文件。");
+        if (dex.Protos.Count > MaximumIndexedEntries)
+            throw new DexException($"Prototype count {dex.Protos.Count} exceeds the DEX limit of {MaximumIndexedEntries}; use DEX repartition to split classes across multiple dex files. 原型数 {dex.Protos.Count} 超过 DEX 上限 {MaximumIndexedEntries}，请使用 DEX 重新分配把类拆分到多个 dex 文件。");
+        if (dex.Fields.Count > MaximumIndexedEntries)
+            throw new DexException($"Field count {dex.Fields.Count} exceeds the DEX limit of {MaximumIndexedEntries}; use DEX repartition to split classes across multiple dex files. 字段数 {dex.Fields.Count} 超过 DEX 上限 {MaximumIndexedEntries}，请使用 DEX 重新分配把类拆分到多个 dex 文件。");
+        if (dex.Methods.Count > MaximumIndexedEntries)
+            throw new DexException($"Method count {dex.Methods.Count} exceeds the DEX limit of {MaximumIndexedEntries}; use DEX repartition to split classes across multiple dex files. 方法数 {dex.Methods.Count} 超过 DEX 上限 {MaximumIndexedEntries}，请使用 DEX 重新分配把类拆分到多个 dex 文件。");
+        if (dex.MethodHandles.Count > MaximumIndexedEntries)
+            throw new DexException($"Method handle count {dex.MethodHandles.Count} exceeds the DEX limit of {MaximumIndexedEntries}. 方法句柄数 {dex.MethodHandles.Count} 超过 DEX 上限 {MaximumIndexedEntries}。");
+        if (dex.CallSites.Count > MaximumIndexedEntries)
+            throw new DexException($"Call-site count {dex.CallSites.Count} exceeds the DEX limit of {MaximumIndexedEntries}. 调用点数 {dex.CallSites.Count} 超过 DEX 上限 {MaximumIndexedEntries}。");
+    }
+
     private static void WriteStringData(BinaryWriter w, string value)
     {
         var mutf8 = Mutf8.Encode(value);

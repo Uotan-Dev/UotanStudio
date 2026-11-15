@@ -212,6 +212,106 @@ public static class JarDexContainer
         ReplaceEntry(path, entryName, entryBytes, cancellationToken);
     }
 
+    /// <summary>Rewrites the DEX entry set of a container: existing <c>classes*.dex</c> entries are replaced by the supplied set (surplus old entries are dropped), every other entry is preserved byte-for-byte, and optional v1 signature entries are stripped. The rewrite always drops an existing APK Signing Block because the rebuilt archive invalidates v2/v3 signatures, so callers must re-sign afterwards.
+    /// <para>重写容器的 DEX 条目集合：既有 <c>classes*.dex</c> 条目被给定集合替换（多余的旧条目被删除），其余条目逐字节保留，并按需剥离 v1 签名条目。重建归档会使 v2/v3 签名失效，因此重写总是丢弃既有 APK 签名块，调用方随后必须重新签名。</para></summary>
+    /// <param name="path">The container file path; the file itself is never modified.
+    /// <para>容器文件路径；文件本身不被修改。</para></param>
+    /// <param name="dexEntries">The new DEX entry set in write order, typically <c>classes.dex</c>, <c>classes2.dex</c> and so on; every name must pass <see cref="IsDexEntryName"/> and the set must be free of duplicates.
+    /// <para>按写出顺序排列的新 DEX 条目集合，通常是 <c>classes.dex</c>、<c>classes2.dex</c> 等；每个名称都须通过 <see cref="IsDexEntryName"/>，且集合不得重名。</para></param>
+    /// <param name="stripSignatureEntries">When <see langword="true"/>, v1 signature artifacts under <c>META-INF/</c> are not carried over, which is required for a consistent re-sign.
+    /// <para>为 <see langword="true"/> 时不保留 <c>META-INF/</c> 下的 v1 签名工件，重新签名时必需。</para></param>
+    /// <param name="cancellationToken">Cancels between entry copies; a cancelled run deletes the temporary output.
+    /// <para>在条目复制之间取消；取消时会删除临时输出文件。</para></param>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The container exceeds the entry-count cap, a DEX entry name is invalid or duplicated, or a carried-over entry exceeds the per-entry cap.
+    /// <para>容器超出条目数上限、DEX 条目名非法或重名，或被保留的条目超出单条目上限。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled mid-copy.
+    /// <para>复制中途 <paramref name="cancellationToken"/> 被取消。</para></exception>
+    public static void RewriteDexEntries(
+        string path,
+        IReadOnlyList<(string Name, byte[] Content)> dexEntries,
+        bool stripSignatureEntries,
+        CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"容器文件不存在: {path} / Container file not found: {path}", path);
+        }
+        if (dexEntries.Count == 0)
+        {
+            throw new InvalidDataException("DEX 条目集合不能为空。/ The DEX entry set must not be empty.");
+        }
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, _) in dexEntries)
+        {
+            if (!IsDexEntryName(name))
+            {
+                throw new InvalidDataException($"条目名 {name} 不是合法的 classes*.dex 名称。/ Entry name {name} is not a valid classes*.dex name.");
+            }
+            if (!seen.Add(name))
+            {
+                throw new InvalidDataException($"DEX 条目名 {name} 重复。/ DEX entry name {name} is duplicated.");
+            }
+        }
+        if (dexEntries.Count + 1 > MaxEntryCount)
+        {
+            throw new InvalidDataException($"条目数超过上限 {MaxEntryCount}。/ Entry count exceeds the cap.");
+        }
+
+        var directory = Path.GetDirectoryName(fullPath)!;
+        var temporary = Path.Combine(directory, Path.GetRandomFileName());
+        try
+        {
+            using (var sourceStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan))
+            using (var sourceArchive = ZipContainer.OpenRead(sourceStream))
+            using (var targetStream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var targetArchive = ZipContainer.Create(targetStream))
+            {
+                foreach (var entry in sourceArchive.Entries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var isDex = IsDexEntryName(entry.FullName);
+                    if (isDex || (stripSignatureEntries && IsSignatureEntry(entry.FullName)))
+                    {
+                        continue;
+                    }
+                    var created = targetArchive.CreateEntry(
+                        entry.FullName,
+                        entry.Length != entry.CompressedLength ? CompressionLevel.Optimal : CompressionLevel.NoCompression);
+                    using (var destination = created.Open())
+                    using (var input = entry.Open())
+                    {
+                        if (entry.Length > MaxEntryBytes)
+                        {
+                            throw new InvalidDataException(
+                                $"条目 {entry.FullName} 解压大小超过上限 {MaxEntryBytes}。/ Entry {entry.FullName} exceeds the per-entry cap.");
+                        }
+                        input.CopyTo(destination, 64 * 1024);
+                    }
+                }
+                foreach (var (name, content) in dexEntries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (content.Length > MaxEntryBytes)
+                    {
+                        throw new InvalidDataException(
+                            $"条目 {name} 大小超过上限 {MaxEntryBytes}。/ Entry {name} exceeds the per-entry cap.");
+                    }
+                    var created = targetArchive.CreateEntry(name, CompressionLevel.Optimal);
+                    using var destination = created.Open();
+                    destination.Write(content);
+                }
+            }
+            AtomicPublish.Publish(temporary, fullPath);
+        }
+        finally
+        {
+            try { File.Delete(temporary); } catch { }
+        }
+    }
+
     /// <summary>Extracts a resource entry to the target file (the directory is created; the write is bounded and committed atomically).
     /// <para>导出容器内的资源条目到目标文件（目标目录自动创建，写入有界并原子提交）。</para></summary>
     /// <param name="path">The container file path.<para>容器文件路径。</para></param>

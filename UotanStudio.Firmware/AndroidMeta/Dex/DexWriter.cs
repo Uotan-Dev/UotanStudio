@@ -22,6 +22,7 @@ internal static partial class DexWriter
         var version = NormalizeVersion(dex.Header.Version);
         if ((dex.MethodHandles.Count > 0 || dex.CallSites.Count > 0) && string.CompareOrdinal(version, "038") < 0)
             throw new DexException("Method handles and call sites require DEX 038 or newer.");
+        ValidateTableLimits(dex);
         using var ms = new MemoryStream(EstimateCapacity(dex));
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
@@ -433,6 +434,13 @@ internal static partial class DexWriter
         var dataEnd = (int)ms.Position;
 
         Align(w, 4);
+        if (dex.HiddenApiClassData is { Length: > 0 } hiddenApi)
+        {
+            var hiddenApiOffset = (uint)ms.Position;
+            w.Write(hiddenApi);
+            Align(w, 4);
+            mapItems.Add((0xF000, dex.HiddenApiMapSize != 0 ? dex.HiddenApiMapSize : (uint)dex.Classes.Count, hiddenApiOffset));
+        }
         var mapOffset = (int)ms.Position;
         mapItems.Add((0x0000, 1, 0));
         mapItems.Add((0x1000, 1, (uint)mapOffset));

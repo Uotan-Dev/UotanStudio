@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
@@ -263,6 +264,34 @@ public partial class DexEditorViewModel : Document, ITool, ISearchableDocument
     public IAsyncRelayCommand SignJarCommand { get; }
 
     /// <summary>
+    /// The DEX repartition command: rebalances the container's <c>classes*.dex</c> entries into a
+    /// new container whose every entry stays inside the 16-bit identifier-table limits.
+    /// <para>DEX 重新分配命令：把容器的 <c>classes*.dex</c> 条目重新均衡到一个新容器，
+    /// 使每个条目都满足 16 位标识符表上限。</para>
+    /// </summary>
+    public IAsyncRelayCommand RepartitionCommand { get; }
+
+    /// <summary>
+    /// The debug-strip command: removes every debug stream (and the class source file names) from
+    /// the selected entry or file and writes the rebuilt image beside it.
+    /// <para>剥离调试命令：删除所选条目或文件的每条调试流（含类源文件名），重建镜像写到旁边。</para>
+    /// </summary>
+    public IAsyncRelayCommand StripDebugCommand { get; }
+
+    /// <summary>
+    /// The one-key repair command: leniently re-parses and fully rebuilds the selected entry or file.
+    /// <para>一键修复命令：宽松重解析并全量重建所选条目或文件。</para>
+    /// </summary>
+    public IAsyncRelayCommand RepairCommand { get; }
+
+    /// <summary>
+    /// The obfuscation counter-measure command: renames look-alike/invisible names and reports a
+    /// ProGuard-style mapping, writing the rebuilt image beside the source.
+    /// <para>混淆对抗命令：改名形近/不可见名称并报告 ProGuard 风格 mapping，重建镜像写到源文件旁。</para>
+    /// </summary>
+    public IAsyncRelayCommand DeobfuscateCommand { get; }
+
+    /// <summary>
     /// Creates the DEX editor view model and initializes commands.
     /// <para>创建 DEX 编辑器视图模型并初始化命令。</para>
     /// </summary>
@@ -272,6 +301,10 @@ public partial class DexEditorViewModel : Document, ITool, ISearchableDocument
         ExportResourceCommand = new RelayCommand(ExportSelectedResource);
         ReplaceResourceCommand = new RelayCommand(ReplaceSelectedResource);
         SignJarCommand = new AsyncRelayCommand(SignJarAsync);
+        RepartitionCommand = new AsyncRelayCommand(RepartitionAsync);
+        StripDebugCommand = new AsyncRelayCommand(StripDebugAsync);
+        RepairCommand = new AsyncRelayCommand(RepairAsync);
+        DeobfuscateCommand = new AsyncRelayCommand(DeobfuscateAsync);
     }
 
     /// <summary>
@@ -585,6 +618,157 @@ public partial class DexEditorViewModel : Document, ITool, ISearchableDocument
         catch (Exception ex)
         {
             SignStatus = UserError.Describe(ex);
+        }
+    }
+
+    /// <summary>
+    /// Repartitions the container's DEX entries into a new container
+    /// <c>&lt;name&gt;-repartitioned&lt;ext&gt;</c> beside the source; the result reports part
+    /// count, class count and the re-signing reminder.
+    /// <para>把容器的 DEX 条目重新分配到同目录新容器 <c>&lt;name&gt;-repartitioned&lt;ext&gt;</c>；
+    /// 结果报告分区数、类数与重签提醒。</para>
+    /// </summary>
+    public async Task RepartitionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FilePath))
+        {
+            return;
+        }
+
+        var extension = Path.GetExtension(FilePath);
+        var output = Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(FilePath))!,
+            Path.GetFileNameWithoutExtension(FilePath) + "-repartitioned" + extension);
+        try
+        {
+            IsBusy = true;
+            var result = await Task.Run(
+                () => DexService.Instance.RepartitionDexAsync(FilePath, output),
+                default).ConfigureAwait(true);
+            SignStatus = result.Success
+                ? LanguageService.Instance.GetString("Dock_Dex_Repartition_Done") + " " + output
+                : UserError.WithDetails(result.Summary, "UserError_RepartitionFailed");
+            if (result.Success)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DexEditor", $"Repartitioned DEX written to {output}");
+            }
+        }
+        catch (Exception ex)
+        {
+            SignStatus = UserError.Describe(ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Strips debug information from the current file or selected container entry, writing the
+    /// rebuilt image to <c>&lt;name&gt;-nodebug&lt;ext&gt;</c> beside the source.
+    /// <para>剥离当前文件或所选容器条目的调试信息，重建镜像写到同目录 <c>&lt;name&gt;-nodebug&lt;ext&gt;</c>。</para>
+    /// </summary>
+    public async Task StripDebugAsync()
+    {
+        await RunPostProcessingAsync("nodebug", () => DexService.Instance.StripDebugInfoAsync(FilePath!, PostProcessOutputPath("nodebug"), SelectedEntry));
+    }
+
+    /// <summary>
+    /// Repairs the current file or selected container entry via lenient re-parse and full rebuild,
+    /// writing the result to <c>&lt;name&gt;-repaired&lt;ext&gt;</c> beside the source.
+    /// <para>宽松重解析并全量重建当前文件或所选容器条目，结果写到同目录 <c>&lt;name&gt;-repaired&lt;ext&gt;</c>。</para>
+    /// </summary>
+    public async Task RepairAsync()
+    {
+        await RunPostProcessingAsync("repaired", () => DexService.Instance.RepairDexAsync(FilePath!, PostProcessOutputPath("repaired"), SelectedEntry));
+    }
+
+    /// <summary>
+    /// Runs the obfuscation counter-measures on the current file or selected container entry,
+    /// writing the rebuilt image and a mapping file beside the source.
+    /// <para>对当前文件或所选容器条目执行混淆对抗，重建镜像与 mapping 文件写到源文件旁。</para>
+    /// </summary>
+    public async Task DeobfuscateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FilePath))
+        {
+            return;
+        }
+
+        var output = PostProcessOutputPath("deobfuscated");
+        var mappingPath = Path.ChangeExtension(output, ".mapping.txt");
+        var entry = SelectedEntry;
+        try
+        {
+            IsBusy = true;
+            var result = await Task.Run(
+                () => DexService.Instance.DeobfuscateDexAsync(FilePath, output, entry, [], decryptStrings: true),
+                default).ConfigureAwait(true);
+            if (result.Success)
+            {
+                var mapping = result.Summary[(result.Summary.IndexOf("mapping:", StringComparison.Ordinal) + "mapping:".Length)..];
+                var end = mapping.IndexOf("written to", StringComparison.Ordinal);
+                if (end > 0) mapping = mapping[..end];
+                await File.WriteAllTextAsync(mappingPath, mapping.Trim(), Encoding.UTF8).ConfigureAwait(true);
+                LogService.Instance.Write(LogLevel.Info, "DexEditor", $"Deobfuscated DEX written to {output}, mapping to {mappingPath}");
+                SignStatus = output + " (mapping: " + mappingPath + ")";
+            }
+            else
+            {
+                SignStatus = UserError.WithDetails(result.Summary, "UserError_RebuildFailed");
+            }
+        }
+        catch (Exception ex)
+        {
+            SignStatus = UserError.Describe(ex);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Derives the post-processing output path beside the source file with the given suffix.
+    /// <para>按给定后缀推导源文件同目录的后处理输出路径。</para>
+    /// </summary>
+    private string PostProcessOutputPath(string suffix)
+    {
+        var extension = Path.GetExtension(FilePath!);
+        return Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(FilePath!))!,
+            Path.GetFileNameWithoutExtension(FilePath) + "-" + suffix + extension);
+    }
+
+    /// <summary>
+    /// Runs one post-processing operation with busy state, logging and status reporting.
+    /// <para>以忙碌状态、日志与状态上报执行一个后处理操作。</para>
+    /// </summary>
+    private async Task RunPostProcessingAsync(string label, Func<Task<UotanStudio.Firmware.Core.FirmwareOpResult>> operation)
+    {
+        if (string.IsNullOrWhiteSpace(FilePath))
+        {
+            return;
+        }
+
+        var output = PostProcessOutputPath(label);
+        try
+        {
+            IsBusy = true;
+            var result = await Task.Run(operation, default).ConfigureAwait(true);
+            SignStatus = result.Success ? output : UserError.WithDetails(result.Summary, "UserError_RebuildFailed");
+            if (result.Success)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DexEditor", $"{label} output written to {output}");
+            }
+        }
+        catch (Exception ex)
+        {
+            SignStatus = UserError.Describe(ex);
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 

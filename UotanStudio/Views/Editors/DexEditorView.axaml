@@ -94,6 +94,18 @@
           <Button Classes="Small"
                   Content="{DynamicResource Dock_Dex_Sign}"
                   Command="{Binding SignJarCommand}" />
+          <Button Classes="Small"
+                  Content="{DynamicResource Dock_Dex_Repartition}"
+                  Command="{Binding RepartitionCommand}" />
+          <Button Classes="Small"
+                  Content="{DynamicResource Dock_Dex_StripDebug}"
+                  Command="{Binding StripDebugCommand}" />
+          <Button Classes="Small"
+                  Content="{DynamicResource Dock_Dex_Repair}"
+                  Command="{Binding RepairCommand}" />
+          <Button Classes="Small"
+                  Content="{DynamicResource Dock_Dex_Deobfuscate}"
+                  Command="{Binding DeobfuscateCommand}" />
         </StackPanel>
       </DockPanel>
     </Border>

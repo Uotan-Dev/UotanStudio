@@ -98,6 +98,30 @@ public sealed class DexFile
     public List<List<EncodedValue>> CallSites { get; } = [];
 
     /// <summary>
+    /// The raw Android <c>hiddenapi_class_data_item</c> section (map item type <c>0xF000</c>) as
+    /// captured from the input image, or <see langword="null"/> when the image has no such section.
+    /// <para>从输入镜像捕获的 Android <c>hiddenapi_class_data_item</c> 段（map 项类型 <c>0xF000</c>）原始字节；
+    /// 镜像没有该段时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>Verbatim section bytes: a leading total <c>size</c> uint, then the uint[] offsets table
+    /// indexed by <c>class_idx</c> (zero means the class has no flags data), then the concatenated
+    /// per-class uleb128 flag arrays. Assigned on parse and written back verbatim on rebuild, so the
+    /// parser neither re-encodes nor validates the internal flag layout; <see cref="Dex.DexPostProcessor"/>
+    /// operates on this section.
+    /// <para>段原始字节：开头的 <c>size</c>（uint，段总大小）、按 <c>class_idx</c> 索引的 uint[] 偏移表
+    /// （零值表示该类没有标志数据）、随后是各类级联的 uleb128 标志数组。解析时赋值、重建时逐字写回，
+    /// 解析器不重新编码也不校验内部标志布局；<see cref="Dex.DexPostProcessor"/> 对该段做清除/剥离操作。</para></value>
+    public byte[]? HiddenApiClassData { get; set; }
+
+    /// <summary>
+    /// The <c>map_item.size</c> value captured from the input's <c>0xF000</c> map entry.
+    /// <para>从输入的 <c>0xF000</c> map 项捕获的 <c>map_item.size</c> 值。</para>
+    /// </summary>
+    /// <value>Reused verbatim when writing a captured section; zero makes the writer fall back to the
+    /// class count. <para>写出捕获的段时原样复用；为零时写出器回退为类数量。</para></value>
+    public uint HiddenApiMapSize { get; set; }
+
+    /// <summary>
     /// Memoized operand names shared by the instruction decoders of this model.
     /// <para>本模型的指令解码器共享的操作数名称记忆缓存。</para>
     /// </summary>
@@ -141,6 +165,23 @@ public sealed class DexFile
     {
         ArgumentNullException.ThrowIfNull(data);
         return DexReader.Parse(data);
+    }
+
+    /// <summary>Loads a DEX from a byte array with explicit strictness controls.
+    /// <para>以显式严格度控制从字节数组加载 DEX。</para></summary>
+    /// <param name="data">Complete DEX image; the checks that <paramref name="options"/> relaxes are skipped, everything else stays bounds-checked.
+    /// <para>完整 DEX 镜像；被 <paramref name="options"/> 放宽的检查会被跳过，其余仍做边界检查。</para></param>
+    /// <param name="options">Strictness controls; <see langword="null"/> applies the strict defaults.
+    /// <para>严格度控制；为 <see langword="null"/> 时应用严格默认值。</para></param>
+    /// <returns>The parsed model. <para>解析出的模型。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="DexException">The image fails the checks that the options did not relax.
+    /// <para>镜像未通过未被选项放宽的检查。</para></exception>
+    public static DexFile Load(byte[] data, DexParseOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        return DexReader.Parse(data, options);
     }
 
     /// <summary>
