@@ -320,7 +320,7 @@ public sealed class ErofsExtentIndexTests
         inode.AttachMapHeader(headerBytes, 12);
 
         Assert.Equal(ErofsDataLayout.CompactIndexes, inode.DataLayout);
-        var compressed = Assert.IsType<ErofsCompressedIdata>(inode.Idata);
+        var compressed = Assert.IsType<ErofsCompressedIdata>(inode.Idata.Value);
         Assert.Equal(ZErofsMapHeader.AdviseExtents, ZErofsMapHeader.AdviseCompacted2B);
         Assert.True((inode.ZAdvise & ZErofsMapHeader.AdviseExtents) != 0);
         Assert.True(compressed.Compiled2B);

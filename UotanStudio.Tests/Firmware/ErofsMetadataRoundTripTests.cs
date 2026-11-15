@@ -60,7 +60,7 @@ public sealed class ErofsMetadataRoundTripTests
         Assert.Equal(WideChunkFormat, chunk.ChunkFormat);
         Assert.Equal(ErofsInode.FlagExtended | ErofsInode.AdviseBitNlinkOneOrDotOmitted, chunk.IFormat);
         Assert.True(chunk.SourceIFormatRecorded);
-        var chunkIdata = Assert.IsType<ErofsChunkIdata>(chunk.Idata);
+        var chunkIdata = Assert.IsType<ErofsChunkIdata>(chunk.Idata.Value);
         Assert.Equal(1u, chunkIdata.DeviceId);
         Assert.NotNull(chunkIdata.ChunkIndex);
         Assert.Equal(new ulong[] { 0x0000_0123UL, (2UL << 32) | 0x0000_4567UL }, chunkIdata.ChunkIndex!);
@@ -72,7 +72,7 @@ public sealed class ErofsMetadataRoundTripTests
             compressed.ZAdvise);
         Assert.Equal((ushort)0, compressed.IFormat);
         Assert.True(compressed.SourceIFormatRecorded);
-        var compressedIdata = Assert.IsType<ErofsCompressedIdata>(compressed.Idata);
+        var compressedIdata = Assert.IsType<ErofsCompressedIdata>(compressed.Idata.Value);
         Assert.True(compressedIdata.Compiled2B);
         Assert.True(compressedIdata.InterlacedPlainPclusters);
     }
@@ -110,7 +110,7 @@ public sealed class ErofsMetadataRoundTripTests
         var chunk = restored.SourceInodes![7];
         Assert.Equal(ErofsDataLayout.ChunkBased, chunk.DataLayout);
         Assert.Equal((ushort)2, chunk.ChunkFormat);
-        Assert.Null(Assert.IsType<ErofsChunkIdata>(chunk.Idata).ChunkIndex);
+        Assert.Null(Assert.IsType<ErofsChunkIdata>(chunk.Idata.Value).ChunkIndex);
         Assert.Equal((ushort)0, chunk.ZAdvise);
         Assert.False(chunk.SourceIFormatRecorded);
 

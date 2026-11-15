@@ -101,7 +101,7 @@ public class ErofsInodeModelEquivalenceTests
             Assert.Equal(record.IsExtended, flat.IsExtended);
             Assert.Equal(record.SourceAlgorithm, (ErofsCompressionAlgorithm)unified.ZAlgorithmTypeHead1);
 
-            var compressed = Assert.IsType<ErofsCompressedIdata>(unified.Idata);
+            var compressed = Assert.IsType<ErofsCompressedIdata>(unified.Idata.Value);
             Assert.Equal(record.DataLayout == ErofsDataLayout.CompactIndexes, compressed.CompactedIndexes);
             Assert.Equal(header.HasBigPcluster1 || header.HasBigPcluster2, compressed.BigPcluster);
             Assert.Equal(header.HasInlinePcluster, compressed.InlineCompressedTail);
@@ -138,7 +138,7 @@ public class ErofsInodeModelEquivalenceTests
     {
         var flatRecord = BuildCompactRecord(ErofsInode.DataLayoutFlat, address: 0x1234, size: 9000, mode: ErofsInode.ModeRegularFile);
         var flat = ErofsInode.FromBytes(flatRecord, 7, BlockSizeBits);
-        var flatIdata = Assert.IsType<ErofsFlatIdata>(flat.Idata);
+        var flatIdata = Assert.IsType<ErofsFlatIdata>(flat.Idata.Value);
         Assert.Equal(0x1234u, flatIdata.BlockAddress);
         Assert.Equal(3u, flatIdata.Blocks);
         Assert.Equal(32, flat.InodeISize);
@@ -146,13 +146,13 @@ public class ErofsInodeModelEquivalenceTests
 
         var inlineRecord = BuildCompactRecord(ErofsInode.DataLayoutInline, address: 0x2000, size: 9000, mode: ErofsInode.ModeRegularFile);
         var inline = ErofsInode.FromBytes(inlineRecord, 8, BlockSizeBits);
-        var inlineIdata = Assert.IsType<ErofsFlatIdata>(inline.Idata);
+        var inlineIdata = Assert.IsType<ErofsFlatIdata>(inline.Idata.Value);
         Assert.Equal(0x2000u, inlineIdata.BlockAddress);
         Assert.Equal(2u, inlineIdata.Blocks);
 
         var extendedRecord = BuildExtendedRecord(ErofsInode.DataLayoutCompressed, address: 0x33, size: 1UL << 40, uid: 70_000, gid: 70_001);
         var extended = ErofsInode.FromBytes(extendedRecord, 9, BlockSizeBits);
-        var extendedIdata = Assert.IsType<ErofsCompressedIdata>(extended.Idata);
+        var extendedIdata = Assert.IsType<ErofsCompressedIdata>(extended.Idata.Value);
         Assert.Equal(0x33u, extendedIdata.Blocks);
         Assert.Equal(64, extended.InodeISize);
         Assert.Equal(1UL << 40, extended.Size);
@@ -162,7 +162,7 @@ public class ErofsInodeModelEquivalenceTests
         var extentRecord = BuildCompactRecord(ErofsInode.DataLayoutCompressed, address: 0x44, size: 4096, mode: ErofsInode.ModeRegularFile);
         var extents = ErofsInode.FromBytes(extentRecord, 10, BlockSizeBits);
         extents.AttachMapHeader(BuildMapHeader(extentCount: 3, recordSize: 16), BlockSizeBits);
-        var extentsIdata = Assert.IsType<ErofsCompressedIdata>(extents.Idata);
+        var extentsIdata = Assert.IsType<ErofsCompressedIdata>(extents.Idata.Value);
         Assert.Equal(0x44u, extentsIdata.Blocks);
         Assert.Equal(ZErofsMapHeader.AdviseExtents | (2 << ZErofsMapHeader.ExtRecSizeBit), extents.ZAdvise);
         Assert.Equal(3UL, extents.ZExtents);
@@ -174,7 +174,7 @@ public class ErofsInodeModelEquivalenceTests
         var fullExtentRecord = BuildCompactRecord(ErofsInode.DataLayoutCompressed, address: 0x45, size: 4096, mode: ErofsInode.ModeRegularFile);
         var fullExtents = ErofsInode.FromBytes(fullExtentRecord, 11, BlockSizeBits);
         fullExtents.AttachMapHeader(BuildMapHeader(extentCount: 5, recordSize: 32), BlockSizeBits);
-        var fullExtentIdata = Assert.IsType<ErofsCompressedIdata>(fullExtents.Idata);
+        var fullExtentIdata = Assert.IsType<ErofsCompressedIdata>(fullExtents.Idata.Value);
         Assert.Equal(32, fullExtentIdata.ExtentRecordSize);
         Assert.Equal(5UL, fullExtentIdata.ExtentCount);
         Assert.False(fullExtentIdata.Compiled2B);
@@ -186,7 +186,7 @@ public class ErofsInodeModelEquivalenceTests
                 | ZErofsMapHeader.AdviseBigPcluster1
                 | ZErofsMapHeader.AdviseBigPcluster2),
             BlockSizeBits);
-        var compact2BIdata = Assert.IsType<ErofsCompressedIdata>(compact2B.Idata);
+        var compact2BIdata = Assert.IsType<ErofsCompressedIdata>(compact2B.Idata.Value);
         Assert.True(compact2BIdata.CompactedIndexes);
         Assert.True(compact2BIdata.Compiled2B);
         Assert.True(compact2BIdata.BigPcluster);
@@ -196,7 +196,7 @@ public class ErofsInodeModelEquivalenceTests
         var fullBitZeroRecord = BuildCompactRecord(ErofsInode.DataLayoutCompressed, address: 0x47, size: 4096, mode: ErofsInode.ModeRegularFile);
         var fullBitZero = ErofsInode.FromBytes(fullBitZeroRecord, 13, BlockSizeBits);
         fullBitZero.AttachMapHeader(BuildPlainMapHeader(ZErofsMapHeader.AdviseExtents), BlockSizeBits);
-        var fullBitZeroIdata = Assert.IsType<ErofsCompressedIdata>(fullBitZero.Idata);
+        var fullBitZeroIdata = Assert.IsType<ErofsCompressedIdata>(fullBitZero.Idata.Value);
         Assert.False(fullBitZeroIdata.Compiled2B);
         Assert.False(fullBitZeroIdata.CompactedIndexes);
 
@@ -211,7 +211,7 @@ public class ErofsInodeModelEquivalenceTests
         var wideChunkRecord = BuildCompactRecord(ErofsInode.DataLayoutChunkBased, address: chunkFormat, size: 5 * (BlockSize << 2), mode: ErofsInode.ModeRegularFile);
         var wideChunk = ErofsInode.FromBytes(wideChunkRecord, 15, BlockSizeBits);
         wideChunk.AttachChunkIndex(BuildChunkIndexTable([((ulong)1 << 32) | 0x100, 0x200], wide: true));
-        var wideIdata = Assert.IsType<ErofsChunkIdata>(wideChunk.Idata);
+        var wideIdata = Assert.IsType<ErofsChunkIdata>(wideChunk.Idata.Value);
         Assert.Equal(chunkFormat, wideIdata.ChunkFormat);
         Assert.Equal([((ulong)1 << 32) | 0x100, 0x200UL], wideIdata.ChunkIndex!);
         Assert.Equal(0u, wideIdata.DeviceId);
@@ -222,7 +222,7 @@ public class ErofsInodeModelEquivalenceTests
         var narrowChunkRecord = BuildCompactRecord(ErofsInode.DataLayoutChunkBased, address: (ushort)(0x40 | 1), size: 3 * (BlockSize << 1), mode: ErofsInode.ModeRegularFile);
         var narrowChunk = ErofsInode.FromBytes(narrowChunkRecord, 16, BlockSizeBits);
         narrowChunk.AttachChunkIndex(BuildChunkIndexTable([0x10, 0x20, 0x30], wide: false));
-        var narrowIdata = Assert.IsType<ErofsChunkIdata>(narrowChunk.Idata);
+        var narrowIdata = Assert.IsType<ErofsChunkIdata>(narrowChunk.Idata.Value);
         Assert.Equal([0x10UL, 0x20UL, 0x30UL], narrowIdata.ChunkIndex!);
         Assert.False(narrowChunk.UsesChunkIndexes);
         Assert.Equal(1, narrowChunk.ChunkFormatBlkBits);
@@ -395,7 +395,7 @@ public class ErofsInodeModelEquivalenceTests
         {
             case ErofsDataLayout.Flat:
             case ErofsDataLayout.Inline:
-                var flatIdata = Assert.IsType<ErofsFlatIdata>(unified.Idata);
+                var flatIdata = Assert.IsType<ErofsFlatIdata>(unified.Idata.Value);
                 Assert.Equal(flat.RawBlockAddress, flatIdata.BlockAddress);
                 var expectedBlocks = unified.DataLayout == ErofsDataLayout.Inline
                     ? flat.Size / BlockSize
@@ -404,11 +404,11 @@ public class ErofsInodeModelEquivalenceTests
                 break;
             case ErofsDataLayout.Compressed:
             case ErofsDataLayout.CompactIndexes:
-                var compressedIdata = Assert.IsType<ErofsCompressedIdata>(unified.Idata);
+                var compressedIdata = Assert.IsType<ErofsCompressedIdata>(unified.Idata.Value);
                 Assert.Equal(flat.CompressedBlocks, compressedIdata.Blocks);
                 break;
             case ErofsDataLayout.ChunkBased:
-                var chunkIdata = Assert.IsType<ErofsChunkIdata>(unified.Idata);
+                var chunkIdata = Assert.IsType<ErofsChunkIdata>(unified.Idata.Value);
                 Assert.Equal(flat.ChunkFormat, chunkIdata.ChunkFormat);
                 break;
         }
