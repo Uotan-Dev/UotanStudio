@@ -1,8 +1,10 @@
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Firmware.HarmonyMeta.Hap;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Harmony;
 using UotanStudio.Services.Ui;
 
 namespace UotanStudio.ViewModels.Devices;
@@ -292,6 +294,22 @@ public partial class DeviceViewModel
                     ? await DialogService.InputAsync(owner, language.GetString("Device_HdcRemotePath"), "/data/local/tmp/" + Path.GetFileName(path))
                     : null;
                 if (operation == "Send" && remote is null) return;
+                if (operation == "Install" && Path.GetExtension(path) is ".hap" or ".hsp"
+                    && !HapInspector.IsSigned(path))
+                {
+                    var signTitle = language.GetString("Agc_SignConfirmTitle");
+                    if (await DialogService.ConfirmAsync(owner, signTitle, language.GetString("Agc_SignConfirmMessage")))
+                    {
+                        var signing = new HapSigningService();
+                        var progress = new Progress<string>(step =>
+                        {
+                            StatusText = $"{signTitle}: {step}";
+                        });
+                        path = (await signing.EnsureSignedAsync(path, device.Device, progress, cancellationToken)
+                            .ConfigureAwait(true)).PackagePath;
+                    }
+                }
+
                 if (!await DialogService.ConfirmAsync(owner, title, $"{device.Serial}\n{path}\n{remote}")) return;
                 result = operation == "Install" ? await monitor.HdcInstallAsync(device.Device, path, cancellationToken)
                     : await monitor.HdcSendFileAsync(device.Device, path, remote!, cancellationToken);

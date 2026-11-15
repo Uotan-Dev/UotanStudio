@@ -25,6 +25,12 @@
 - 元数据文件名、JSON schema、版本与字段构成当前持久化契约，改动会影响已保存工程；不能把它当作内部临时格式随手改。
 - `FileSystem/Metadata`、`FileSystem/Extraction`、`FileSystem/Rebuilding` 的职责分工保持现状；Sparse 与 LP/Super 归 `BlockImage`，DAT/Payload 归 `OtaDelta`。
 
+## HarmonyMeta
+
+- `HarmonyMeta/Hap` 实现 OpenHarmony/HarmonyOS HAP 签名方案：签名块（V2 `HAP Sig Block 42`/V3 `<hap sign block>`）、1 MiB 分块内容摘要（`0x5a`/`0xa5` 前缀、区段 [entries][空块段][CD][EOCD(cd_off=块偏移)]、可选块值按序拼入）、attached CMS 摘要消息与 Profile（`.p7b`）内嵌。全部常量经官方 `hap-sign-tool` 产物字节级标定，改动前先跑 `HapSigningTests` 的差分用例（环境变量 `UOTAN_HAP_SIGN_TOOL_JAR`）。
+- 摘要一律经 `UotanStudio.Hash.Digests`；签名块插入前对首条目做 4096 对齐（零填充 extra，局部与中央同步），后续 stored 条目 4 对齐，遇第一条 deflated 条目即停（官方策略）。ZIP64 容器直接拒绝。
+- fs-verity code-sign（property 块 0x20000003 内嵌 0x30000001）由 `HapCodeSigner` 实现，经 `HapSigningOptions.IncludeCodeSign` 启用（默认关闭，保持既有只含 profile+signature 的输出）。四处已标定的字节约定不可凭记忆改动：ECDSA 签名用 RFC 3279 DER、证书集顺序 root→sub→leaf（叶子最后）、fs-verity 段字段在偏移 4/5/6、signInfo +52 为扩展计数。改动后必须跑 `HapCodeSignerTests` 的差分用例（`UOTAN_HAP_SIGN_TOOL_JAR` + 真实 `UOTAN_HAP_JAVA`）。
+
 ## 文档与验证
 
 - 本库设置 `GenerateDocumentationFile` 与 `TreatWarningsAsErrors`；公共类型和成员必须有中英双语 XML 注释，缺注释直接构建失败。说明性内容优先写 XML 注释，不堆积与实现重复的行间注释。

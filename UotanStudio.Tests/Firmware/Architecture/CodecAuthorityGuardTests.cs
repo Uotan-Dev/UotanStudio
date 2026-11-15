@@ -32,6 +32,8 @@ public sealed class CodecAuthorityGuardTests
             "APK member surgery rewrites stored members in place and cannot re-encode the archive.",
         ["UotanStudio.Firmware/AndroidMeta/Apk/ApkRepacker.cs"] =
             "APK repacking keeps original member offsets, so it works on the end record directly.",
+        ["UotanStudio.Firmware/HarmonyMeta/Hap/HapZipArchive.cs"] =
+            "HAP signing rebuilds the archive with the signing block before the central directory and a pre-block EOCD for the digest; the format owns its end record.",
         ["UotanStudio/Services/Firmware/RemoteRomService.cs"] =
             "Header sniffing over a remote HTTP response only inspects the end record signature.",
         ["UotanStudio.Pipeline/Projects/ProjectPackageIndex.cs"] =

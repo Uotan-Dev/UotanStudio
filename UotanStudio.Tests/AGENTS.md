@@ -43,6 +43,8 @@
 - `UOTAN_SAHARA_MANIFEST_SAMPLE` 指向厂商 `qsahara_device_programmer.xml` 多镜像清单，用于解析真实镜像表。
 - `UOTAN_FLASH_PACKAGE_CORPUS` 指向真实烧录包目录，用于布局语料用例。
 - `UOTAN_HDC_MIRROR_DIRECT` 指向 HDC connect key（例如 `5XM0225C18001159`）或直连 HDC 守护进程 `host:port`（例如 `127.0.0.1:5555`），用于启用 `OhscrcpyHdcIntegrationTests`；直连 USB 在 HDC server 运行时会被 Comm 的 fail-closed 策略拒绝，跳过/失败都不算通过。
+- `UOTAN_HAP_SIGN_TOOL_JAR` 指向 DevEco SDK 的 `hap-sign-tool.jar`；设置后 `HapSigningTests` 跑官方工具差分互验（本方产物过官方 verify-app、官方产物过本方解析器），缺省 `Assert.Skip`。
+- `UOTAN_HAP_JAVA` 可选，差分用例使用的 `java` 可执行文件，缺省取 PATH 上的 `java`。
 - `UOTAN_DEVICE_SHELL_TARGET` 指向 ADB `host:port` 目标，用于启用 `DeviceShellConnectionTests.Connection_RealAdbTarget_ProducesShellOutput`；目标在本机不可见时按未检测到跳过，进程内设备 shell 的其余用例只走假 relay，不需要设备。
 
 跳过原因里必须写出对应变量名。原生工具互操作（mkfs、e2fsck、fsck.erofs、fsck.f2fs 与环回挂载）和 TB 级大数据构建不由测试工程驱动，其取证在仓库外工装完成。

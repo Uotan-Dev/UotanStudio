@@ -22,6 +22,7 @@ public class FirmwareArchitectureGuardTests
     private static readonly HashSet<string> AllowedCrossContextEdges =
     [
         "AndroidMeta -> Executable",
+        "HarmonyMeta -> AndroidMeta",
         "Archive -> FileSystem",
         "BootSecurity -> Archive",
         "BootSecurity -> BlockImage",

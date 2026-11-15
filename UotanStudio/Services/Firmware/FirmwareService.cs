@@ -19,6 +19,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Firmware.HarmonyMeta.Hap;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.VendorFirmware.Oppo;
@@ -537,6 +538,82 @@ public sealed class FirmwareService
     {
         ArgumentNullException.ThrowIfNull(options);
         return await Task.Run(() => ApkSigningKeyGenerator.Generate(options, outputDirectory, baseName, exportPfx), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Signs a HAP/HSP container with the OpenHarmony application signature scheme.
+    /// <para>以 OpenHarmony 应用签名方案签署 HAP/HSP 容器。</para></summary>
+    /// <param name="inputPath">Unsigned (or previously signed) container path.
+    /// <para>未签（或已签）容器路径。</para></param>
+    /// <param name="outputPath">Destination path, never equal to the input.
+    /// <para>目标路径，不得等于输入。</para></param>
+    /// <param name="keystorePath">PKCS#12 keystore path. <para>PKCS#12 keystore 路径。</para></param>
+    /// <param name="keystorePassword">Keystore password. <para>keystore 口令。</para></param>
+    /// <param name="keyAlias">Keystore alias. <para>keystore 别名。</para></param>
+    /// <param name="certificatePath">Application certificate chain file (PEM/DER, leaf first).
+    /// <para>应用证书链文件（PEM/DER，叶子在前）。</para></param>
+    /// <param name="profilePath">Signed provisioning profile (<c>.p7b</c>) path.
+    /// <para>已签 Profile（<c>.p7b</c>）路径。</para></param>
+    /// <param name="compatibleSdkVersion">Minimum compatible SDK version; below 8 selects scheme version 2.
+    /// <para>最小兼容 SDK 版本；低于 8 走方案版本 2。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOperationResult> SignHapAsync(
+        string inputPath,
+        string outputPath,
+        string keystorePath,
+        string keystorePassword,
+        string keyAlias,
+        string certificatePath,
+        string profilePath,
+        uint compatibleSdkVersion = 9,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                using var material = HapSignerMaterial.Load(
+                    File.ReadAllBytes(keystorePath), keystorePassword, keyAlias,
+                    File.ReadAllBytes(certificatePath), File.ReadAllBytes(profilePath));
+                var result = HapSigner.Sign(inputPath, outputPath, material, new HapSigningOptions
+                {
+                    CompatibleSdkVersion = compatibleSdkVersion,
+                    Algorithm = material.Key is RSA
+                        ? HapDigestAlgorithm.RsaPssSha256
+                        : HapDigestAlgorithm.EcdsaSha256,
+                }, cancellationToken);
+                return new FirmwareOperationResult
+                {
+                    Success = true,
+                    Summary = $"HAP signed (scheme {result.SchemeVersion})  HAP 已签名（方案 {result.SchemeVersion}）",
+                    Entries = [outputPath],
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOperationResult.Fail($"HAP sign failed: {ex.Message}  HAP 签名失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>Generates a HAP signing keystore and its certificate signing request.
+    /// <para>生成 HAP 签名 keystore 与其证书签名请求。</para></summary>
+    /// <param name="options">Generation options. <para>生成选项。</para></param>
+    /// <param name="outputDirectory">Target directory. <para>目标目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Paths of the generated files. <para>生成文件的路径。</para></returns>
+    public async Task<HapSigningKeyMaterial> GenerateHapSigningKeyAsync(
+        HapSigningKeyOptions options,
+        string outputDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return await Task.Run(() => HapSigningKeyGenerator.Generate(options, outputDirectory, cancellationToken), cancellationToken)
             .ConfigureAwait(false);
     }
 
