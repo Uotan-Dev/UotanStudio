@@ -67,6 +67,10 @@ public sealed class McpToolCatalogTests
         "arsc_parse",
         "apk_strip_signatures",
         "dex_repartition",
+        "dex_strip_debug",
+        "dex_repair",
+        "dex_deobfuscate",
+        "apk_verify_signatures",
         "download_file",
         "get_env"
     ];
