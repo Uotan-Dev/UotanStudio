@@ -13,7 +13,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | 项目 | 职责 | 项目指令 |
 | --- | --- | --- |
 | `UotanStudio.Hash` | 校验和与摘要的唯一公共入口，叶子库 | [AGENTS.md](UotanStudio.Hash/AGENTS.md) |
-| `UotanStudio.Net` | HTTP 下载、GitHub 镜像与 Release/版本查询，叶子库 | [AGENTS.md](UotanStudio.Net/AGENTS.md) |
+| `UotanStudio.Net` | HTTP 下载、GitHub 镜像、Release/版本查询与 AGC 签名材料客户端，叶子库 | [AGENTS.md](UotanStudio.Net/AGENTS.md) |
 | `UotanStudio.Compress` | 通用压缩、解压与容器编解码 | [AGENTS.md](UotanStudio.Compress/AGENTS.md) |
 | `UotanStudio.DD` | 跨平台磁盘镜像探测、驱动策略与烧录/校验 | [AGENTS.md](UotanStudio.DD/AGENTS.md) |
 | `UotanStudio.Assets` | 内嵌二进制资源的统一存储、清单与准备/抽取门面，叶子下层 | [AGENTS.md](UotanStudio.Assets/AGENTS.md) |

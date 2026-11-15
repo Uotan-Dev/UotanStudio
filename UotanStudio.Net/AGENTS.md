@@ -9,7 +9,7 @@
 - 文件原子发布使用 `IO/AtomicPublish` 的内部实现：调用方在目标同目录写出暂存文件，成功后单次覆盖移动，失败删除暂存；不得引用 Firmware 的 `Core.IO`。
 - Release 元数据默认读源站 `api.github.com`；调用方传入按测速排序的候选源列表时按序逐源尝试（面板预热先测速固定最快镜像，清单随后从镜像读取、源站兜底），`api.github.com` 与 `github.com` 同样参与镜像枚举。元数据响应体上限为 1 MiB。
 - `GitHubRelease.Version` 的归一化规则固定：去首尾空白；`v`/`V` 后紧跟数字时去掉该前缀；其余文本原样保留（预发布后缀随之保留）。
-- JSON 一律走 `GitHubJsonContext` 源生成上下文，禁止反射式序列化或动态类型；所有网络调用贯穿 `CancellationToken`，失败以带状态码的 `HttpRequestException` 或 `InvalidOperationException` 上报。
+- JSON 一律走 `GitHubJsonContext` 源生成上下文，禁止反射式序列化或动态类型；所有网络调用贯穿 `CancellationToken`，失败以带状态码的 `HttpRequestException` 或 `InvalidOperationException` 上报。- AGC 客户端只实现协议与解析：令牌、会话状态与材料文件一律由调用方（宿主 `Services/Harmony`）持有；信封成功判据固定为 `ret.code == 0`，响应体上限 2 MiB，材料下载先过 HTTPS/非私网 SSRF 护栏。
 
 ## 文件布局
 
@@ -21,6 +21,9 @@
 | `GitHub/GitHubRelease.cs` | 公共 Release/Asset 记录与源生成 JSON 上下文 |
 | `Components/Scrcpy/` | scrcpy 服务端的 Release 记录及其资产投影 |
 | `Components/Root/` | Magisk/Alpha/KernelSU/SukiSU/APatch 官方仓库清单、Release 列表读取与补丁包资产投影 |
+| `Agc/AgcClient.cs` | AGC 签名材料 REST 客户端：团队/设备/调试证书/Profile 与签名 URL 交换，容忍解析与 SSRF 护栏 |
+| `Agc/AgcModels.cs` | AGC 调用上下文、信封与实体记录 |
+| `Agc/AgcJsonContext.cs` | AGC 请求负载的源生成 JSON 上下文 |
 | `IO/AtomicPublish.cs` | 内部同目录原子发布 |
 
 ## 验证
