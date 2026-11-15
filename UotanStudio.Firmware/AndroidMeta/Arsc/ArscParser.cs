@@ -196,7 +196,9 @@ public static class ArscParser
         var entry = new ResEntry { KeyIndex = checked((int)U32(data, pos + 4)), Flags = flags };
         if ((flags & 1) == 0)
         {
-            entry.Value = ParseValue(data, pos + size, end);
+            entry.Value = (flags & 4) != 0
+                ? ParseWeakValue(data, pos + size, end)
+                : ParseValue(data, pos + size, end);
             return entry;
         }
         if (size < 16) throw new ArscException("Invalid complex resource entry size.");
@@ -215,8 +217,32 @@ public static class ArscParser
     private static ResValue ParseValue(byte[] data, int pos, int end)
     {
         Require(data, pos, 8, end);
-        if (U16(data, pos) != 8) throw new ArscException("Invalid typed resource value size.");
+        var size = U16(data, pos);
+        if (size != 8)
+        {
+            throw new ArscException("Invalid typed resource value size.");
+        }
+
         return new ResValue { Type = (ResValueType)data[pos + 3], Data = U32(data, pos + 4) };
+    }
+
+    /// <summary>
+    /// Parses the value of a weak resource entry. AOSP writes <c>FLAG_WEAK</c> entries (value <c>0x0004</c>) for
+    /// resources that only carry an entry name, and truncates the trailing <see cref="ResValue"/> to its first
+    /// <c>u32</c> — the value header is absent, so the remaining bytes are the raw data word. Real production APKs
+    /// (for example the CoolApk release in the corpus) contain whole types in this shape.
+    /// <para>解析 weak 资源条目的值。AOSP 对只携带条目名的资源写 <c>FLAG_WEAK</c>（值 <c>0x0004</c>），并把尾部
+    /// <see cref="ResValue"/> 截断为前 4 字节 —— 值头不存在，剩余字节就是原始数据字。真实生产 APK
+    /// （例如语料中的 CoolApk 发行包）整类条目都是这种形态。</para>
+    /// </summary>
+    /// <param name="data">Resource table bytes. <para>资源表字节。</para></param>
+    /// <param name="pos">Offset of the truncated value. <para>截断值的偏移。</para></param>
+    /// <param name="end">End of the enclosing chunk. <para>所属块末尾。</para></param>
+    /// <returns>The value carrying the raw data word. <para>携带原始数据字的值。</para></returns>
+    private static ResValue ParseWeakValue(byte[] data, int pos, int end)
+    {
+        Require(data, pos, 4, end);
+        return new ResValue { Type = ResValueType.Null, Data = U32(data, pos) };
     }
 
     private sealed class ConfigCache

@@ -30,9 +30,12 @@ public static partial class SmaliAssembler
                         throw new FormatException("A member reference must contain its declaring type and '->'.");
                     }
                     var owner = SmaliTypes.Single(text[..arrow], allowVoid: false);
-                    if (owner[0] != 'L')
+                    // Dalvik permits member references on array types: every array is an Object, so invocations such
+                    // as "[I->clone()Ljava/lang/Object;" are legal and appear in real production DEX files. Only a
+                    // primitive or void owner is genuinely invalid.
+                    if (owner[0] != 'L' && owner[0] != '[')
                     {
-                        throw new FormatException("A member's declaring type must be a class.");
+                        throw new FormatException("A member's declaring type must be a class or an array type.");
                     }
                     var member = text[(arrow + 2)..];
                     if (kind == RefKind.Field)

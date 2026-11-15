@@ -241,9 +241,10 @@ public partial class ApkEditorViewModel : Document, ITool
             TargetSystemDisplay = info.TargetSdkVersion > 0 ? info.TargetSdkVersion.ToString() : "-";
             MinimumSystemDisplay = info.MinSdkVersion > 0 ? info.MinSdkVersion.ToString() : "-";
             SdkDisplay = $"min {info.MinSdkVersion} / target {info.TargetSdkVersion} / compile {info.CompileSdkVersion}";
-            SigningStateDisplay = info.SigningSchemes.Count == 0
-                ? LanguageService.Instance.GetString("Apk_SigningUnsigned")
-                : string.Format(LanguageService.Instance.GetString("Apk_SigningSchemes"), string.Join(", ", info.SigningSchemes));
+            var verification = await Task.Run(
+                () => UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSignatureVerifier.Verify(path, default),
+                default).ConfigureAwait(true);
+            SigningStateDisplay = FormatSignatureVerification(info.SigningSchemes, verification);
             HardeningStateDisplay = info.HardeningProvider is { Length: > 0 } provider
                 ? string.Format(LanguageService.Instance.GetString("Apk_HardeningDetected"), provider)
                 : LanguageService.Instance.GetString("Apk_HardeningNotDetected");
@@ -267,6 +268,29 @@ public partial class ApkEditorViewModel : Document, ITool
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Builds the per-scheme verification status line with validity markers from the scheme
+    /// presence list and the verification result.
+    /// <para>由方案存在列表与验签结果构建带有效性标记的逐方案状态行。</para>
+    /// </summary>
+    private string FormatSignatureVerification(
+        IReadOnlyCollection<string> presentSchemes, UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSignatureVerification verification)
+    {
+        string Mark(string scheme, UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSchemeStatus status) => status switch
+        {
+            UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSchemeStatus.Valid => scheme + " ✓",
+            UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSchemeStatus.Invalid => scheme + " ✗",
+            UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSchemeStatus.Unsupported => scheme + " ?",
+            _ => presentSchemes.Contains(scheme) ? scheme + " ?" : scheme + " –"
+        };
+        var text = $"{Mark("v1", verification.V1)}  {Mark("v2", verification.V2)}  {Mark("v3", verification.V3)}";
+        if (verification.Problems.Count > 0)
+        {
+            text += Environment.NewLine + string.Join(Environment.NewLine, verification.Problems.Take(8));
+        }
+        return text;
     }
 
     internal static string FormatFileSize(long bytes)
