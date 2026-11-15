@@ -2257,6 +2257,24 @@
   <data name="Dock_Dex_Sign" xml:space="preserve">
     <value>签名</value>
   </data>
+  <data name="Dock_Dex_Repartition" xml:space="preserve">
+    <value>DEX 重新分配</value>
+  </data>
+  <data name="Dock_Dex_Repartition_Done" xml:space="preserve">
+    <value>重新分配完成，安装前请重新签名：</value>
+  </data>
+  <data name="Dock_Dex_StripDebug" xml:space="preserve">
+    <value>剥离调试信息</value>
+  </data>
+  <data name="Dock_Dex_Repair" xml:space="preserve">
+    <value>一键修复</value>
+  </data>
+  <data name="Dock_Dex_Deobfuscate" xml:space="preserve">
+    <value>混淆对抗</value>
+  </data>
+  <data name="UserError_RepartitionFailed" xml:space="preserve">
+    <value>DEX 重新分配失败</value>
+  </data>
   <data name="Dock_Manifest_Save" xml:space="preserve">
     <value>重建并保存</value>
   </data>

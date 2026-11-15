@@ -1233,6 +1233,12 @@
   <data name="ApkSign_Cancelled" xml:space="preserve">
     <value>签名已取消。</value>
   </data>
+  <data name="Agc_SignConfirmTitle" xml:space="preserve">
+    <value>签名并安装 HAP</value>
+  </data>
+  <data name="Agc_SignConfirmMessage" xml:space="preserve">
+    <value>该包未签名。UotanStudio 将打开华为账号登录，自动注册本机、申请调试证书与 Profile，在本地完成签名后安装。</value>
+  </data>
   <data name="ApkSign_Execute" xml:space="preserve">
     <value>执行签名</value>
   </data>

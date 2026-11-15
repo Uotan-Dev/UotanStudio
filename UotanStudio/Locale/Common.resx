@@ -2257,6 +2257,24 @@ Author: 暮间雾
   <data name="Dock_Dex_Sign" xml:space="preserve">
     <value>Sign</value>
   </data>
+  <data name="Dock_Dex_Repartition" xml:space="preserve">
+    <value>Repartition DEX</value>
+  </data>
+  <data name="Dock_Dex_Repartition_Done" xml:space="preserve">
+    <value>Repartitioned; re-sign before installing:</value>
+  </data>
+  <data name="Dock_Dex_StripDebug" xml:space="preserve">
+    <value>Strip debug info</value>
+  </data>
+  <data name="Dock_Dex_Repair" xml:space="preserve">
+    <value>Repair</value>
+  </data>
+  <data name="Dock_Dex_Deobfuscate" xml:space="preserve">
+    <value>Deobfuscate</value>
+  </data>
+  <data name="UserError_RepartitionFailed" xml:space="preserve">
+    <value>DEX repartition failed</value>
+  </data>
   <data name="Dock_Manifest_Save" xml:space="preserve">
     <value>Rebuild &amp; Save</value>
   </data>

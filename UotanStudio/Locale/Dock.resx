@@ -1233,6 +1233,12 @@
   <data name="ApkSign_Cancelled" xml:space="preserve">
     <value>Signing cancelled.</value>
   </data>
+  <data name="Agc_SignConfirmTitle" xml:space="preserve">
+    <value>Sign and install HAP</value>
+  </data>
+  <data name="Agc_SignConfirmMessage" xml:space="preserve">
+    <value>The package is not signed. UotanStudio will open the Huawei account login, register this device, apply for the debug certificate and profile automatically, sign the package locally and then install it.</value>
+  </data>
   <data name="ApkSign_Execute" xml:space="preserve">
     <value>Execute signing</value>
   </data>
