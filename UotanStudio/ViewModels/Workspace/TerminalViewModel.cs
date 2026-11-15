@@ -3,10 +3,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using Porta.Pty;
+using UotanStudio.Build;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Terminal;
+using UotanStudio.Services.Terminal.Wrapped;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -116,6 +118,30 @@ internal partial class TerminalSessionViewModel(
     public TerminalProfile Profile { get; } = profile;
     public string StartingDirectory { get; } = directory;
     internal IPtyConnection? Connection { get; private set; }
+
+    /// <summary>
+    /// Gets whether this session is the in-process device shell, which never takes command
+    /// interception. <para>获取本会话是否为进程内设备 shell；设备 shell 不参与命令拦截。</para></summary>
+    internal bool IsDeviceShell => deviceShell is not null;
+
+    /// <summary>
+    /// Gets the wrapped command runner for local shells, or <c>null</c> for the device shell. The
+    /// runner routes intercepted adb/fastboot/hdc commands through the host's own device monitor and
+    /// opens the device shell panel for interactive shell requests.
+    /// <para>获取本地 shell 的包装命令执行器；设备 shell 为 <c>null</c>。执行器把被拦截的 adb/fastboot/hdc
+    /// 命令路由到宿主自己的设备监视器，交互式 shell 请求则打开设备 shell 面板。</para></summary>
+    internal WrappedCommandRunner? Runner { get; } = deviceShell is null ? CreateRunner() : null;
+
+    private static WrappedCommandRunner CreateRunner()
+    {
+        var monitor = App.DeviceMonitor;
+        var gateway = new DeviceMonitorCommandGateway(monitor, device => OpenShellPanelAsync(monitor, device));
+        return new WrappedCommandRunner(gateway, BuildInfo.Version);
+    }
+
+    private static async Task OpenShellPanelAsync(DeviceMonitorService monitor, DetectedDevice device) =>
+        await Dispatcher.UIThread.InvokeAsync(() => DeviceShellService.OpenInteractiveShell(monitor, device))
+            .GetTask().ConfigureAwait(false);
     [ObservableProperty] private string _workingDirectory = directory;
     [ObservableProperty] private bool _isStarting;
     [ObservableProperty] private bool _isRunning;
