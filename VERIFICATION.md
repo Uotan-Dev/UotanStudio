@@ -6,13 +6,14 @@
 
 | 平台 | 最近验证 | 结果 |
 | --- | --- | --- |
+| Windows x64，Debug | 2026-11-16 | 全量 9558 用例，9530 通过，0 失败，28 跳过；构建 0 警告 0 错误；format whitespace/style 均零退出码 |
 | Windows x64，Debug | 2026-11-14 | 全量 9440 用例，9422 通过，0 失败，18 跳过；构建 0 警告 0 错误 |
 | Windows x64，Debug | 2026-11-13 | 全量 9428 用例，9403 通过，0 失败，25 跳过；构建 0 警告 0 错误 |
 | Linux ARM64，Debug | 2026-11-12 | 全量 9334 用例，9304 通过，0 失败，30 跳过 |
 | RISC-V（SpacemiT X60），Debug | 2026-11-12 | 全量 9334 用例，9287 通过，11 失败，36 跳过；失败均为平台环境缺口 |
 
-- Windows 的 `dotnet format whitespace` 与 `style --verify-no-changes` 均为零退出码；NativeAOT win-x64 发布成功，无本仓库程序集产生的裁剪/AOT 警告。剩余 IL2026 来自 Avalonia XAML、Dock 等第三方程序集与 SDK 的实验性 GC 提示。
-- 本体目录收敛（2026-11-14）：`AppPaths` 统一按用户数据根（Windows `%APPDATA%`、macOS `~/Library/Application Support`、Linux XDG），`Program.Main` 首跑幂等迁移 `%LOCALAPPDATA%` 的 `apple-lockdown`/`delivery-tools` 与 macOS 旧 XDG 根；新建解决方案默认目录改为 `Documents\UotanStudio`；伴随 MCP 沙箱根改用持久化 `McpExposeRootDirectory`（空白回退不受限并关闭刷写门控），hdc `-cwd` 改为调用方注入本地文件目录。`InstallDirectoryBoundaryTests` 冻结 `AppContext.BaseDirectory` 只读例外与工作目录依赖清单；迁移幂等性由 `AppPathsMigrationTests` 覆盖。AOT 发布 39 条警告与既有基线一致。MSIX 打包、macOS .app 打包与打包态安装冒烟未验证；首跑迁移仅经单元测试，真实升级路径未实测。
+- Windows 的 `dotnet format whitespace` 与 `style --verify-no-changes` 均为零退出码。**NativeAOT win-x64 发布当前在本机失败**（2026-11-16）：`ilc` 在 `Internal.TypeSystem.PortableExecutableMethodExtensions.SafeReadDebugDirectory` 抛 `NullReferenceException`，仅伴随第三方 `Irihi.Ursa 2.3.1` 的 IL2104 警告。已用干净 HEAD worktree（不含任何在途改动）复现同样失败，故属既有工具链/依赖边界而非本轮改动引入；本仓库程序集未产生新的裁剪/AOT 警告。此前 2026-11-14 的发布成功记录保持，待 Ursa 或 SDK 更新后重验。
+- 本体目录收敛（2026-11-14）：`AppPaths` 统一按用户数据根（Windows `%APPDATA%`、macOS `~/Library/Application Support`、Linux XDG），`Program.Main` 首跑幂等迁移 `%LOCALAPPDATA%` 的 `apple-lockdown`/`delivery-tools` 与 macOS 旧 XDG 根；新建解决方案默认目录改为 `Documents\UotanStudio`；伴随 MCP 沙箱根改用持久化 `McpExposeRootDirectory`（空白回退不受限并关闭刷写门控），hdc `-cwd` 改为调用方注入本地文件目录。`InstallDirectoryBoundaryTests` 冻结 `AppContext.BaseDirectory` 只读例外与工作目录依赖清单；迁移幂等性由 `AppPathsMigrationTests` 覆盖。AOT 发布 39 条警告与既有基线一致。MSIX 打包、macOS .app 打包与打包态安装冒烟未验证；首跑迁移仅经单元测试，真实升级路径未实测。 HAP 签名（2026-11-14）：`HarmonyMeta/Hap` 实现签名块 V2/V3、1 MiB 分块内容摘要与 attached CMS，常量与摘要算法经本机 DevEco `hap-sign-tool.jar` 产物字节级标定并独立复算命中；AGC 签名材料客户端与编排（登录/团队/设备/证书/Profile）已实现但未经真实账号流量验证。差分互验与 AGC 解析单测随后全绿（HapSigningTests 9/9 含官方差分、AgcClientTests 7/7），Firmware 架构护栏 3 项失败已修（HarmonyMeta→AndroidMeta 边冻结、EOCD 写入方保留清单、宿主摘要走 Hash 门面），最终门禁待并行会话收口后统一执行。fs-verity code-sign（property 块）已实现并经官方 jar 差分验证（2026-11-15，`HapCodeSignerTests` 5/5：4 个离线结构/往返 + 1 个官方工具逐字段互验；差分中据官方字节纠正了 ECDSA DER 编码、证书集 root→sub→leaf 顺序、fs-verity 段字段偏移、signInfo 扩展计数四处偏差）。真机装机链路未验证——按 `HAP_SIGNING_HANDOFF.md` 执行。
 - Linux ARM64 构建 0 警告 0 错误，失败清零后完成上述全量测试；SIMD 内核在 AdvSIMD、SVE、SVE2 硬件上执行，`Vector<T>` 宽度为 128 位。
 - RISC-V 当前 SDK 的 Roslyn 编译存在多核/R2R 冻结缺陷。测试环境使用 `DOTNET_ReadyToRun=0`、`DOTNET_PROCESSOR_COUNT=4`、`DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`，并关闭构建期裁剪分析器与 Roslyn 分析器。11 个失败中 10 个来自 SkiaSharp 缺少 `linux-riscv64` 原生资产，1 个为单类复跑可通过的时序断言。
 - Windows 真机已覆盖 EDL 设备识别、WinUSB 接管与取消接管往返、ADB 与初始 USB 快照；取消接管后设备恢复 `qcwdfserial`，Problem 0。Windows 串口 `COMn` 回退未验证。
@@ -46,7 +47,11 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 
 ## 已知不稳定项
 
-- 环境变量未设置时按门控跳过：`UOTAN_MAGISKBOOT_ORACLE`、`UOTAN_SELINUX_POLICY_SAMPLE`、`UOTAN_SAMSUNG_*`、`UOTAN_EROFS_CORPUS`、`UOTAN_HDC_MIRROR_DIRECT`、`UOTAN_DEVICE_SHELL_TARGET`、`UOTAN_QCN_SAMPLE`；RKDL 真机与未随包的 scrcpy jar 同样跳过。
+- 环境变量未设置时按门控跳过：`UOTAN_MAGISKBOOT_ORACLE`、`UOTAN_SELINUX_POLICY_SAMPLE`、`UOTAN_SAMSUNG_*`、`UOTAN_EROFS_CORPUS`、`UOTAN_HDC_MIRROR_DIRECT`、`UOTAN_DEVICE_SHELL_TARGET`、`UOTAN_QCN_SAMPLE`、`UOTAN_APK_CORPUS`、`UOTAN_HAP_SIGN_TOOL_JAR`；RKDL 真机与未随包的 scrcpy jar 同样跳过。
+- 终端包装命令拦截（2026-11-16，Computer Use 真机复核）：在运行中的宿主里打开「窗口 → 终端」，会话日志确认 `runner=set isDeviceShell=False`，即包装会话已正确安装；键入时 `WrappedPtyConnection` 的 `WriteAsync` 确实被调用。但该轮自动化只能把焦点/转义序列（`ESC[I`/`ESC[O`）送进流，可打印字符始终没进 PTY，因此 `DispatchAsync` 未收到 `adb version\r`。**A/B 对照证明这与包装层无关**：以 `UOTAN_DISABLE_WRAPPER=1` 绕过包装、直接用原始 `IPtyConnection` 时，模拟输入同样无法键入字符。结论：该终端控件（`Iciclecreek.Avalonia.Terminal` 4.1.4 + Dock）在本机的自动化输入路径下不接收合成键盘事件，属未验证边界而非已判定的产品缺陷；拦截逻辑本身由 67 项单测覆盖（`WrappedCommandLineTests` 33、`WrappedCommandRunnerTests` 25、`WrappedCommandSessionTests` 9，全绿）。真实人工键盘输入的端到端复核仍待执行，临时诊断代码已全部移除并复核干净。
+- 真实 APK 语料验收（2026-11-16）：设 `UOTAN_APK_CORPUS=E:\UotanStudio\reference\apks` 后 `ApkCorpusTests` 3/3 通过，覆盖 10 个真实 APK（含 MT管理器 2.26.11、100 MB 的 CoolApk、多个 RNA-ROM）。该轮实践修出两个此前未暴露的真实缺陷：ARSC 解析器不支持 AOSP `FLAG_WEAK`（0x0004）条目（CoolApk 整类条目如此，原实现抛 `Invalid typed resource value size`），以及 smali 汇编器拒绝数组类型作为成员所有者（`[I->clone()` 等合法字节码，10 个语料中 9 个触发）。另将 `Repair` 的断言从"字节长度不变"改为"结构等价"——真实 DEX 存在 map 之后的未映射尾部载荷，重建必然丢弃。
+- HAP 差分用例（2026-11-16）需同时设置 `UOTAN_HAP_JAVA` 为**真实存在**的 java：本机 DevEco 未随附 JBR，可用 `D:\CodeEnv\Jdks\Zulu21.48+17-CA\bin\java.exe`；缺失时按 `Assert.Skip` 跳过而非失败。
+- HAP 官方差分（2026-11-16 复验）：原 DevEco 路径的 `toolchains` 目录已不存在，改用本机其余 `hap-sign-tool.jar` 副本验证，**四份不同来源的 jar 均 5/5 通过**（`D:\CodeEnv\SDKs\23`、`C:\Program Files\UotanToolboxNT\Bin`、`C:\Program Files\UotanToolbox\Bin`、`D:\Source Code Backup\developtools_hapsigner\dist`）。过程中发现并修掉两处测试对单一工具版本的硬假定：这些构建**都没有 `-permSign` 参数**（以 `Param is not trusted` 拒绝），现在测试先用 `-h` 探测 `permSign` 能力，仅在支持时才追加该参数与权限子块断言；另将签名属性比较从"逐字节"改为"规范化属性列表"，因为 ECDSA 的 DER 签名长度每次差 1–2 字节会带动外层 DER 长度变化，逐字节比较必然偶发失败。
 - `FileMagicDifferentialTests` 依赖 GNU `file`。`PATH` 指向 WinuxCmd 等替代实现时，XZ/Zstandard/bzip2/cpio 夹具会被报成 `data`/`ASCII text`，导致 4 例失败。
 - `ErofsRebuildOptimizerTests`、`ErofsCaptureFidelityTests` 与 `PackingOptionPropagationTests` 共用进程级 `ErofsBuildDefaults.RebuildOptimization`，必须在 `[Collection("Workspace state")]` 中串行。`NodeTypeRegistry`/`PluginRegistry.Shared` 的写入方必须在 `[Collection("Node type registry")]` 中串行。
 - `HdcServerTransferTests` 在并行负载下出现并发计时抖动，单类复跑通过；全量失败不能直接归为协议缺陷。
