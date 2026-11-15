@@ -8,9 +8,12 @@ namespace UotanStudio.Services.Terminal.Wrapped;
 /// when an Enter finalizes a line that names a wrapped tool with no native binary on the PATH, the
 /// session executes the command inside the toolbox instead, prints official-style output into the
 /// terminal, then sends Ctrl+C to the shell so it discards the pending line and re-issues its prompt.
+/// Escape sequences the terminal generates itself (focus, cursor-position and device replies) stay
+/// forwarded to the shell but never enter the mirrored line, so they cannot block interception.
 /// <para>本地 shell 终端会话的输入行拦截状态机。字符照常流向真实 shell，原生行编辑、历史与 Tab 补全不受
 /// 影响；当回车敲定一行以包装工具名开头且 PATH 上没有原生二进制时，本会话改为在工具箱内执行该命令，把
-/// 官方风格输出写进终端，然后向 shell 发送 Ctrl+C 使其丢弃挂起行并重新给出提示符。</para>
+/// 官方风格输出写进终端，然后向 shell 发送 Ctrl+C 使其丢弃挂起行并重新给出提示符。终端自身产生的转义
+/// 序列（焦点、光标位置与设备应答）仍转发给 shell，但不进入镜像行，因此不会阻断拦截。</para>
 /// </summary>
 /// <param name="runner">The in-toolbox command runner.<para>工具箱内命令执行器。</para></param>
 /// <param name="write">Terminal output callback; the caller supplies a thread-safe write into the
@@ -30,9 +33,25 @@ internal sealed class WrappedCommandSession(WrappedCommandRunner runner, Action<
     /// intercepted Enter. <para>包含被拦截回车的粘贴余文的重放队列上限。</para></summary>
     private const int MaxReplayLength = 8 * 1024;
 
+    /// <summary>Bounds a mirrored escape sequence so a runaway terminal reply cannot grow memory
+    /// unboundedly. <para>限制镜像中的转义序列长度，避免失控的终端应答无界增长内存。</para></summary>
+    private const int MaxEscapeLength = 64;
+
+    private enum EscapeState
+    {
+        None,
+        Escape,
+        Csi,
+        Osc,
+        OscEscape,
+        String,
+    }
+
     private readonly StringBuilder _pending = new();
+    private readonly StringBuilder _escape = new();
     private readonly Queue<string> _replay = new();
     private readonly Lock _replayLock = new();
+    private EscapeState _escapeState;
     // Every byte this session sends to the PTY passes through one gate, so replayed text, the
     // closing Ctrl+C and live keystrokes cannot interleave at the stream level.
     // 本会话发往 PTY 的每个字节都经过同一个门，重放文本、收尾 Ctrl+C 与实时按键不会在流层面交错。
@@ -127,6 +146,21 @@ internal sealed class WrappedCommandSession(WrappedCommandRunner runner, Action<
 
     private bool ProcessChar(char c, StringBuilder forward)
     {
+        // Protocol traffic is forwarded verbatim: the shell still needs focus reports, cursor
+        // position replies and device attributes, while the command mirror must ignore them.
+        // 协议流量原样转发：shell 仍需要焦点报告、光标位置应答与设备属性，命令镜像则必须忽略它们。
+        forward.Append(c);
+        if (_escapeState != EscapeState.None && c is '\r' or '\n' or '\x03') FinishEscape(userEditing: true);
+        if (_escapeState != EscapeState.None)
+        {
+            ConsumeEscape(c);
+            return true;
+        }
+        if (c == '\x1b')
+        {
+            RestartEscape();
+            return true;
+        }
         if (c is '\r' or '\n')
         {
             var line = _pending.ToString();
@@ -138,40 +172,115 @@ internal sealed class WrappedCommandSession(WrappedCommandRunner runner, Action<
                 StartRun(line);
                 return false;
             }
-            forward.Append(c);
             return true;
         }
         if (c is '\b' or '\x7f')
         {
             if (_pending.Length > 0) _pending.Length--;
-            forward.Append(c);
             return true;
         }
         if (c == '\x15')
         {
             _pending.Clear();
-            forward.Append(c);
             return true;
         }
         if (c == '\x03')
         {
             _pending.Clear();
             _desynced = false;
-            forward.Append(c);
             return true;
         }
-        if (c == '\t' || c == '\x1b' || (c < ' ' && c != '\r' && c != '\n'))
+        if (c == '\t' || (c < ' ' && c != '\r' && c != '\n'))
         {
-            // Escape sequences, tab completion and any other control byte desynchronize the mirror;
-            // the line is left entirely to the shell.
-            // 转义序列、Tab 补全与其它控制字节会使镜像失步；整行交还给 shell。
-            _desynced = true;
-            forward.Append(c);
+            // Tab completion and other control bytes desynchronize the mirror; the line is left
+            // entirely to the shell. Tab 补全与其它控制字节会使镜像失步；整行交还给 shell。
+            Desync();
             return true;
         }
+        if (_desynced) return true;
         if (_pending.Length < MaxPendingLength) _pending.Append(c);
-        forward.Append(c);
         return true;
+    }
+
+    /// <summary>Consumes one byte of a terminal escape sequence and decides whether the completed
+    /// sequence came from a line-editing key. <para>消费转义序列的一个字节，并判定完整序列是否来自行编辑按键。</para></summary>
+    /// <param name="c">The byte just forwarded to the PTY.<para>刚转发到 PTY 的字节。</para></param>
+    private void ConsumeEscape(char c)
+    {
+        if (_escape.Length < MaxEscapeLength) _escape.Append(c);
+        switch (_escapeState)
+        {
+            case EscapeState.Escape:
+                if (c == '[') _escapeState = EscapeState.Csi;
+                else if (c == ']') _escapeState = EscapeState.Osc;
+                else if (c == '\x1b') RestartEscape();
+                else if (c is 'P' or 'X' or '^' or '_') _escapeState = EscapeState.String;
+                else FinishEscape(IsEditingEscape(c));
+                break;
+            case EscapeState.Csi:
+                if (c is >= '@' and <= '~') FinishEscape(IsEditingCsi(_escape.ToString()));
+                else if (c == '\x1b') RestartEscape();
+                break;
+            case EscapeState.Osc:
+                if (c == '\x07') FinishEscape(userEditing: false);
+                else if (c == '\x1b') _escapeState = EscapeState.OscEscape;
+                break;
+            case EscapeState.OscEscape:
+                if (c == '\\') FinishEscape(userEditing: false);
+                else if (c == '\x1b') RestartEscape();
+                else _escapeState = EscapeState.Osc;
+                break;
+            case EscapeState.String:
+                if (c is '\x07' or '\x1b') FinishEscape(userEditing: false);
+                break;
+            default:
+                FinishEscape(userEditing: true);
+                break;
+        }
+        if (_escapeState != EscapeState.None && _escape.Length >= MaxEscapeLength) FinishEscape(userEditing: true);
+    }
+
+    /// <summary>Ends a mirrored escape sequence, desynchronizing only for line-editing keys.
+    /// <para>结束镜像中的转义序列，仅对行编辑按键标记失步。</para></summary>
+    /// <param name="userEditing">Whether the sequence came from a line-editing key.
+    /// <para>序列是否来自行编辑按键。</para></param>
+    private void FinishEscape(bool userEditing)
+    {
+        _escapeState = EscapeState.None;
+        _escape.Clear();
+        if (userEditing) Desync();
+    }
+
+    private void RestartEscape()
+    {
+        _escapeState = EscapeState.Escape;
+        _escape.Clear();
+        _escape.Append('\x1b');
+    }
+
+    private void Desync()
+    {
+        _desynced = true;
+        _pending.Clear();
+    }
+
+    /// <summary>Reports whether a bare <c>ESC x</c> sequence is a line-editing key rather than a
+    /// focus report. <para>报告 <c>ESC x</c> 序列是否为行编辑按键而非焦点报告。</para></summary>
+    private static bool IsEditingEscape(char final) => final is not ('I' or 'O' or 'c' or 'n' or '\\');
+
+    /// <summary>Reports whether a CSI sequence is a line-editing key; terminal replies, focus
+    /// reports, mouse reports and mode reports are protocol noise for the command mirror.
+    /// <para>报告 CSI 序列是否为行编辑按键；终端应答、焦点报告、鼠标报告与模式报告对命令镜像都是协议噪声。</para></summary>
+    private static bool IsEditingCsi(string sequence)
+    {
+        if (sequence.Length < 3) return true;
+        var parameters = sequence[2..^1];
+        return sequence[^1] switch
+        {
+            'A' or 'B' or 'C' or 'D' or 'H' or 'F' or 'Z' => true,
+            '~' => parameters is "1" or "2" or "3" or "4" or "5" or "6" or "200" or "201",
+            _ => false,
+        };
     }
 
     private bool TryTakeOver(string line)

@@ -38,13 +38,24 @@ public sealed class WrappedCommandSessionTests
         }
     }
 
-    private static async Task WaitForAsync(Func<bool> condition)
+    private static string Snapshot(WrappedCommandSession session, List<string> written, List<string> sent) =>
+        $"busy={session.IsBusy} written=[{Escape(Joined(written))}] sent=[{Escape(Joined(sent))}]";
+
+    private static string Escape(string text) => text
+        .Replace("\x1b", "<ESC>", StringComparison.Ordinal)
+        .Replace("\r", "\\r", StringComparison.Ordinal)
+        .Replace("\n", "\\n", StringComparison.Ordinal)
+        .Replace("\x03", "<ETX>", StringComparison.Ordinal);
+
+    private static async Task WaitForAsync(Func<bool> condition, Func<string>? diagnostics = null)
     {
         for (var attempt = 0; attempt < 500 && !condition(); attempt++)
         {
             await Task.Delay(10, TestContext.Current.CancellationToken).ConfigureAwait(false);
         }
-        Assert.True(condition(), "Timed out waiting for the wrapped command session to settle.");
+        Assert.True(condition(), diagnostics is null
+            ? "Timed out waiting for the wrapped command session to settle."
+            : $"Timed out waiting for the wrapped command session to settle. {diagnostics()}");
     }
 
     [Fact]
@@ -165,5 +176,59 @@ public sealed class WrappedCommandSessionTests
         var state = $"busy={session.IsBusy} written=[{Joined(written).Replace("\r", "\\r").Replace("\n", "\\n")}] " +
             $"sent=[{Joined(sent).Replace("\r", "\\r").Replace("\x03", "<ETX>")}]";
         Assert.True(Joined(sent) == "\x03\x03", state);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_FocusEventBeforeCommand_TakesOverAndPrintsVersion()
+    {
+        var (session, written, sent, gateway) = CreateSession();
+        await session.DispatchAsync("\x1b[I");
+        await session.DispatchAsync("adb version");
+        await session.DispatchAsync("\r");
+        await WaitForAsync(() => Joined(written).Contains("Version UotanStudio Wrapped CommandLine Tool",
+            StringComparison.Ordinal) && Joined(sent).EndsWith("\x03", StringComparison.Ordinal),
+            () => Snapshot(session, written, sent));
+        Assert.Contains("Version UotanStudio Wrapped CommandLine Tool", Joined(written));
+        Assert.Contains("\x1b[I", Joined(sent));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TerminalReplyWithinLine_TakesOverAndPrintsDevices()
+    {
+        var (session, written, sent, gateway) = CreateSession();
+        gateway.Devices.Add(WrappedCommandTestGateway.MakeDevice(DeviceProtocolKind.Adb, "R58M1234"));
+        await session.DispatchAsync("adb dev");
+        await session.DispatchAsync("\x1b[24;1R");
+        await session.DispatchAsync("ices");
+        await session.DispatchAsync("\r");
+        await WaitForAsync(() => Joined(written).Contains("R58M1234\tdevice", StringComparison.Ordinal)
+            && Joined(sent).EndsWith("\x03", StringComparison.Ordinal), () => Snapshot(session, written, sent));
+        Assert.StartsWith("\r\nList of devices attached\r\n", Joined(written));
+        Assert.Contains("adb dev\x1b[24;1Rices", Joined(sent));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ArrowKeyWithinLine_ForwardedToShell()
+    {
+        var (session, written, sent, gateway) = CreateSession();
+        await session.DispatchAsync("adb dev");
+        await session.DispatchAsync("\x1b[D");
+        await session.DispatchAsync("\r");
+        Assert.Equal("adb dev\x1b[D\r", Joined(sent));
+        Assert.Empty(Joined(written));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_OscReplyWithinLine_TakesOverAndPrintsVersion()
+    {
+        var (session, written, sent, gateway) = CreateSession();
+        await session.DispatchAsync("adb ver");
+        await session.DispatchAsync("\x1b]0;PowerShell\x07");
+        await session.DispatchAsync("sion");
+        await session.DispatchAsync("\r");
+        await WaitForAsync(() => Joined(written).Contains("Version UotanStudio Wrapped CommandLine Tool",
+            StringComparison.Ordinal) && Joined(sent).EndsWith("\x03", StringComparison.Ordinal),
+            () => Snapshot(session, written, sent));
+        Assert.Contains("adb ver\x1b]0;PowerShell\x07sion", Joined(sent));
     }
 }
