@@ -1,6 +1,5 @@
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Transports.Abstractions;
-using UotanStudio.Comm.Transports.Usb;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using Xunit;
 

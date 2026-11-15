@@ -1,4 +1,3 @@
-using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Flash;

@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using UotanStudio.Tests.Firmware.Architecture;
 using Xunit;
 
 namespace UotanStudio.Tests.Architecture;

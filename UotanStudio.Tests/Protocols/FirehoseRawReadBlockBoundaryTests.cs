@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Transports.Abstractions;

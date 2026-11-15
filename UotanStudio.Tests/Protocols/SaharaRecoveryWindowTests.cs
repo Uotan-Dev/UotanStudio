@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Transports.Abstractions;
-using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Protocols;

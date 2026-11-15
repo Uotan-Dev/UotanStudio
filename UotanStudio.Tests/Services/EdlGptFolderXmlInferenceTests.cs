@@ -1,5 +1,3 @@
-using System.Globalization;
-using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;

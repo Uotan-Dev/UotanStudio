@@ -1,6 +1,5 @@
 using System.Globalization;
 using Avalonia;
-using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Services;
 using UotanStudio.Workflow.Execution;
