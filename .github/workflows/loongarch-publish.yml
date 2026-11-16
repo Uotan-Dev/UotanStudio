@@ -79,22 +79,38 @@ jobs:
             exit 1
           fi
           IFS=$'\t' read -r tag ver <<< "$resolved"
+          if [ -z "$tag" ] || [ -z "$ver" ]; then
+            echo "::error::Resolved release is missing a tag or version ('$resolved')." >&2
+            exit 1
+          fi
           sdk_url=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
-              | select(.name == "dotnet-sdk-" + $ver + "-linux-loongarch64.tar.gz")][0].browser_download_url' releases.json)
+              | select(.name == "dotnet-sdk-" + $ver + "-linux-loongarch64.tar.gz")][0].browser_download_url // ""' releases.json)
           sdk_digest=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.name == "dotnet-sdk-" + $ver + "-linux-loongarch64.tar.gz")][0].digest // ""' releases.json)
-          artifacts_url=$(jq -r --arg tag "$tag" --arg ver "$ver" '
+          # The artifacts asset carries the source-build version, not the SDK version:
+          # Private.SourceBuilt.Artifacts.11.0.100-rtm.26529.118.linux-loongarch64.tar.gz.
+          # Matching "Artifacts.<sdk-version>." therefore yields null and curl then tries to
+          # resolve the literal host "null", so select on the prefix and RID suffix only.
+          artifacts_url=$(jq -r --arg tag "$tag" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
-              | select(.name | startswith("Private.SourceBuilt.Artifacts." + $ver + "."))
+              | select(.state == "uploaded")
+              | select(.name | startswith("Private.SourceBuilt.Artifacts."))
               | select(.name | endswith(".linux-loongarch64.tar.gz"))
-              | select((.name | contains("musl")) | not)][0].browser_download_url' releases.json)
-          if [ -z "$sdk_url" ] || [ -z "$artifacts_url" ]; then
-            echo "::error::Release $tag is missing the SDK or Private.SourceBuilt.Artifacts asset." >&2
-            exit 1
-          fi
+              | select((.name | contains("musl")) | not)
+              | .browser_download_url][0] // ""' releases.json)
+          for pair in "sdk_url=$sdk_url" "artifacts_url=$artifacts_url"; do
+            value="${pair#*=}"
+            if [ -z "$value" ] || [ "$value" = "null" ]; then
+              echo "::error::Release $tag resolved a null asset URL for ${pair%%=*}." >&2
+              exit 1
+            fi
+          done
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # ver feeds the official x64 SDK lookup in the download step; omitting it makes
+          # that step request .../Sdk//dotnet-sdk--linux-x64.tar.gz.
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "sdk_url=$sdk_url" >> "$GITHUB_OUTPUT"
           echo "sdk_digest=$sdk_digest" >> "$GITHUB_OUTPUT"
           echo "artifacts_url=$artifacts_url" >> "$GITHUB_OUTPUT"
@@ -169,16 +185,24 @@ jobs:
           (cd "$work/ilc-nupkg" && zip -qr "$work/nuget-local/$ilcm" .)
 
           # Community ilc is a loongarch64 ELF; run it via qemu-user through the guest
-          # ld.so with jitinterface on LD_LIBRARY_PATH (same workarounds as riscv64).
+          # ld.so with jitinterface on LD_LIBRARY_PATH (same workarounds as riscv64). The
+          # cross image is built with --skipemulation and ships no qemu, so the emulator is
+          # installed in the container; Azure Linux uses a -static binary suffix.
           unzip -q -o "$work/nuget-local/$ilc" -d "$work/ilc-pkg"
           mv "$work/ilc-pkg/tools/ilc" "$work/ilc-pkg/tools/real-ilc"
           cat > "$work/ilc-pkg/tools/ilc" <<'WRAPPER'
-          #!/bin/sh
+          #!/bin/bash
+          set -euo pipefail
           export LD_LIBRARY_PATH="/work/ilc-pkg/tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          qemu=$(command -v qemu-loongarch64-static || command -v qemu-loongarch64 || true)
+          if [ -z "$qemu" ]; then
+            echo "qemu-loongarch64-static is missing; the cross image needs tdnf install qemu-user-static-loongarch64." >&2
+            exit 127
+          fi
+          # glibc ships ld.so at /lib64 on loongarch64 (matches the apphost PT_INTERP).
           interp=/crossrootfs/loongarch64/lib64/ld-linux-loongarch64-lp64d.so.1
           [ -e "$interp" ] || interp=/crossrootfs/loongarch64/lib/ld-linux-loongarch64-lp64d.so.1
-          exec /usr/bin/qemu-loongarch64 -L /crossrootfs/loongarch64 \
-            "$interp" /work/ilc-pkg/tools/real-ilc "$@"
+          exec "$qemu" -L /crossrootfs/loongarch64 "$interp" /work/ilc-pkg/tools/real-ilc "$@"
           WRAPPER
           chmod +x "$work/ilc-pkg/tools/ilc"
 
@@ -198,6 +222,12 @@ jobs:
           export DOTNET_ReadyToRun=0
           export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
           export DOTNET_CLI_HOME=/work/home HOME=/work/home
+
+          # The cross image sets no WORKDIR (it runs as /), so anchor every relative path.
+          cd /work/src
+
+          # ilc runs under qemu-user and the emulator is not part of the cross rootfs image.
+          tdnf install -y qemu-user-static-loongarch64 >/dev/null
 
           # Mixed SDK: official x64 host/runtime with the community managed sdk tree
           # (its Microsoft.NET.Build.Tasks knows the linux-loongarch64 packs).
@@ -244,7 +274,7 @@ jobs:
             -o /work/out
           CONTAINER
 
-          # Official x64 SDK comes from /work/share/sdk-x64.tar.gz (downloaded above).
+          # The official x64 SDK arrives as /work/sdk-x64.tar.gz (downloaded in an earlier step).
           docker run --rm --platform linux/amd64 \
             -v "$work:/work" \
             -v "$GITHUB_WORKSPACE:/work/src" \

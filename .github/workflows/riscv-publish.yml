@@ -80,21 +80,38 @@ jobs:
             exit 1
           fi
           IFS=$'\t' read -r tag ver <<< "$resolved"
+          if [ -z "$tag" ] || [ -z "$ver" ]; then
+            echo "::error::Resolved release is missing a tag or version ('$resolved')." >&2
+            exit 1
+          fi
           sdk_url=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
-              | select(.name == "dotnet-sdk-" + $ver + "-linux-riscv64.tar.gz")][0].browser_download_url' releases.json)
+              | select(.name == "dotnet-sdk-" + $ver + "-linux-riscv64.tar.gz")][0].browser_download_url // ""' releases.json)
           sdk_digest=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.name == "dotnet-sdk-" + $ver + "-linux-riscv64.tar.gz")][0].digest // ""' releases.json)
-          artifacts_url=$(jq -r --arg tag "$tag" --arg ver "$ver" '
+          # The artifacts asset carries the source-build version, not the SDK version:
+          # Private.SourceBuilt.Artifacts.11.0.100-rtm.26561.199.linux-riscv64.tar.gz.
+          # Matching "Artifacts.<sdk-version>." therefore yields null and curl then tries to
+          # resolve the literal host "null", so select on the prefix and RID suffix only.
+          artifacts_url=$(jq -r --arg tag "$tag" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
-              | select(.name | startswith("Private.SourceBuilt.Artifacts." + $ver + "."))
+              | select(.state == "uploaded")
+              | select(.name | startswith("Private.SourceBuilt.Artifacts."))
               | select(.name | endswith(".linux-riscv64.tar.gz"))
-              | select((.name | contains("musl")) | not)][0].browser_download_url' releases.json)
+              | select((.name | contains("musl")) | not)
+              | .browser_download_url][0] // ""' releases.json)
           if [ -z "$sdk_url" ] || [ -z "$artifacts_url" ]; then
             echo "::error::Release $tag is missing the SDK or Private.SourceBuilt.Artifacts asset." >&2
             exit 1
           fi
+          for pair in "sdk_url=$sdk_url" "artifacts_url=$artifacts_url"; do
+            value="${pair#*=}"
+            if [ -z "$value" ] || [ "$value" = "null" ]; then
+              echo "::error::Release $tag resolved a null asset URL for ${pair%%=*}." >&2
+              exit 1
+            fi
+          done
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "sdk_url=$sdk_url" >> "$GITHUB_OUTPUT"
@@ -120,10 +137,17 @@ jobs:
             echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
           fi
           curl -fL --retry 3 -o "$work/artifacts-riscv64.tar.gz" "$ARTIFACTS_URL"
-          # GA tags map 1:1 to official SDK versions (e.g. 11.0.100); a preview tag
-          # needs its official counterpart published under the same branding.
+          # Official x64 SDK: derive the branded version from the community tag instead of
+          # assuming the tag equals it. Release tags are bare (11.0.100), but preview tags
+          # carry branded suffixes (11.0.100-rc.3.26522.148), and only the first three
+          # segments exist on builds.dotnet.microsoft.com.
+          official=$(printf '%s' "$TAG" | grep -oE '^v?[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "$official" ]; then
+            echo "::error::Cannot derive an official SDK version from tag '$TAG'." >&2
+            exit 1
+          fi
           curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
-            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$TAG/dotnet-sdk-$TAG-linux-x64.tar.gz"
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz"
 
       - name: Prepare local feed and ilc wrapper
         shell: bash
@@ -172,15 +196,24 @@ jobs:
 
           # The community ilc is a riscv64 ELF; run it through qemu-user via the guest
           # ld.so (qemu rejects loading this PIE directly) and keep jitinterface on
-          # LD_LIBRARY_PATH ($ORIGIN does not resolve under qemu-user).
+          # LD_LIBRARY_PATH ($ORIGIN does not resolve under qemu-user). The cross image is
+          # built with --skipemulation and ships no qemu, so the emulator is installed here;
+          # Azure Linux packages the user-mode emulators with a -static suffix.
           unzip -q -o "$work/nuget-local/$ilc" -d "$work/ilc-pkg"
           mv "$work/ilc-pkg/tools/ilc" "$work/ilc-pkg/tools/real-ilc"
           cat > "$work/ilc-pkg/tools/ilc" <<'WRAPPER'
-          #!/bin/sh
+          #!/bin/bash
+          set -euo pipefail
           export LD_LIBRARY_PATH="/work/ilc-pkg/tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          exec /usr/bin/qemu-riscv64 -L /crossrootfs/riscv64 \
-            /crossrootfs/riscv64/lib/ld-linux-riscv64-lp64d.so.1 \
-            /work/ilc-pkg/tools/real-ilc "$@"
+          qemu=$(command -v qemu-riscv64-static || command -v qemu-riscv64 || true)
+          if [ -z "$qemu" ]; then
+            echo "qemu-riscv64-static is missing; the cross image needs tdnf install qemu-user-static-riscv." >&2
+            exit 127
+          fi
+          # glibc ships ld.so at /lib on riscv64 (matches the apphost PT_INTERP).
+          interp=/crossrootfs/riscv64/lib/ld-linux-riscv64-lp64d.so.1
+          [ -e "$interp" ] || interp=/crossrootfs/riscv64/lib64/ld-linux-riscv64-lp64d.so.1
+          exec "$qemu" -L /crossrootfs/riscv64 "$interp" /work/ilc-pkg/tools/real-ilc "$@"
           WRAPPER
           chmod +x "$work/ilc-pkg/tools/ilc"
 
@@ -201,6 +234,12 @@ jobs:
           export DOTNET_ReadyToRun=0
           export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
           export DOTNET_CLI_HOME=/work/home HOME=/work/home
+
+          # The cross image sets no WORKDIR (it runs as /), so anchor every relative path.
+          cd /work/src
+
+          # ilc runs under qemu-user and the emulator is not part of the cross rootfs image.
+          tdnf install -y qemu-user-static-riscv >/dev/null
 
           # Mixed SDK: official x64 host/runtime with the community managed sdk tree
           # (its Microsoft.NET.Build.Tasks knows the linux-riscv64 packs). The six
