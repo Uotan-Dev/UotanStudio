@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
+using UotanStudio.Services.Flash;
 
 namespace UotanStudio.ViewModels.Flash;
 
@@ -41,6 +42,19 @@ public sealed partial class FlashViewModel
     partial void OnIsSunxiSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsImageSectionExpandedChanged(bool value) => PersistSectionExpansion();
+
+    /// <summary>
+    /// Reads and normalizes the persisted protocol display preferences for the flash page.
+    /// <para>读取并规范化烧录页面持久化的协议显示偏好。</para>
+    /// </summary>
+    /// <returns>The protocol keys in their configured order together with their visibility.
+    /// <para>按配置顺序排列的协议键及其可见性。</para></returns>
+    internal IReadOnlyList<(string Key, bool Visible)> GetProtocolDisplayPreferences()
+    {
+        var preferences = FlashProtocolCatalog.Normalize(
+            SettingsPersistenceService.Instance.LoadSettings().FlashProtocolDisplay);
+        return preferences.Select(preference => (preference.Key, preference.Visible)).ToArray();
+    }
 
     private void LoadSectionExpansion()
     {

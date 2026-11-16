@@ -5,8 +5,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Services;
-using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Flash;
 using UotanStudio.ViewModels.Shell;
 
@@ -132,8 +130,7 @@ public partial class FlashView : UserControl
     /// </summary>
     private void ApplyProtocolDisplaySettings()
     {
-        var preferences = FlashProtocolCatalog.Normalize(
-            SettingsPersistenceService.Instance.LoadSettings().FlashProtocolDisplay);
+        var preferences = _model.GetProtocolDisplayPreferences();
         foreach (var expander in ProtocolPanelsHost.Children.OfType<Expander>().ToArray())
         {
             ProtocolPanelsHost.Children.Remove(expander);
@@ -143,10 +140,10 @@ public partial class FlashView : UserControl
         {
             var expander = preference.Key switch
             {
-                FlashProtocolCatalog.Edl => EdlExpander,
-                FlashProtocolCatalog.Mtk => MtkExpander,
-                FlashProtocolCatalog.Rockchip => RkExpander,
-                FlashProtocolCatalog.Sunxi => SunxiExpander,
+                "edl" => EdlExpander,
+                "mtk" => MtkExpander,
+                "rockchip" => RkExpander,
+                "sunxi" => SunxiExpander,
                 _ => null
             };
             if (expander is null)
