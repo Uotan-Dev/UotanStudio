@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -9,7 +8,6 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
 using UotanStudio.Services;
-using UotanStudio.Services.Terminal.Wrapped;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 
@@ -153,22 +151,7 @@ public partial class TerminalView : UserControl
             var rows = terminal.CharHeight > 0 ? (int)(terminal.Bounds.Height / terminal.CharHeight) : 24;
             await session.StartAsync(columns, rows);
             if (_terminal != terminal || _session != session || session.Connection is not { } connection) return;
-            if (session.Runner is { } runner)
-            {
-                // Local shell: the wrapped-command session filters everything typed into the PTY and
-                // prints intercepted output straight into the emulator.
-                // 本地 shell：包装命令会话过滤所有键入 PTY 的内容，被拦截的输出直接写进模拟器。
-                var emulator = terminal.Terminal;
-                var wrapped = new WrappedCommandSession(runner,
-                    text => emulator.Write(text),
-                    async data => await connection.WriterStream
-                        .WriteAsync(Encoding.UTF8.GetBytes(data)).ConfigureAwait(false));
-                terminal.AttachConnection(new WrappedPtyConnection(connection, wrapped));
-            }
-            else
-            {
-                terminal.AttachConnection(connection);
-            }
+            terminal.AttachConnection(connection);
 
             connection.Resize(terminal.Terminal.Cols, terminal.Terminal.Rows);
             terminal.Refresh();
