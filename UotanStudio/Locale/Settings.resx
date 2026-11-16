@@ -61,7 +61,7 @@
     <value>General</value>
   </data>
   <data name="Settings_Firmware" xml:space="preserve">
-    <value>Firmware Tools</value>
+    <value>Workspace Settings</value>
   </data>
   <data name="Settings_FirmwareParallelism" xml:space="preserve">
     <value>Parallel workers</value>
@@ -76,7 +76,31 @@
     <value>While packing EROFS, rebuilds up to three times to keep the smallest result. Re-extract the image before enabling.</value>
   </data>
   <data name="Settings_Flash" xml:space="preserve">
-    <value>Flash</value>
+    <value>Flash Settings</value>
+  </data>
+  <data name="Settings_FlashDescription" xml:space="preserve">
+    <value>Configure readback skips and protocol section visibility.</value>
+  </data>
+  <data name="Settings_ReadbackSkipPartitions" xml:space="preserve">
+    <value>Skip partitions during readback</value>
+  </data>
+  <data name="Settings_ReadbackSkipPartitionsHint" xml:space="preserve">
+    <value>Partitions skipped by default during readback (comma-separated).</value>
+  </data>
+  <data name="Settings_FlashProtocols" xml:space="preserve">
+    <value>Protocol display</value>
+  </data>
+  <data name="Settings_FlashProtocolsHint" xml:space="preserve">
+    <value>Reorder protocol sections and choose whether each one is shown on the flash page.</value>
+  </data>
+  <data name="Settings_ProtocolVisible" xml:space="preserve">
+    <value>Show protocol</value>
+  </data>
+  <data name="Settings_MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Settings_MoveDown" xml:space="preserve">
+    <value>Move down</value>
   </data>
   <data name="Settings_NodeEditor" xml:space="preserve">
     <value>Node Editor</value>
@@ -148,7 +172,7 @@
     <value>Manage appearance, project behavior, rendering, and device access in one place.</value>
   </data>
   <data name="Settings_FirmwareDescription" xml:space="preserve">
-    <value>Configure firmware performance and rebuild behavior.</value>
+    <value>Manage auto save, packing, and firmware build behavior.</value>
   </data>
   <data name="Settings_DevelopersDescription" xml:space="preserve">
     <value>The people who build and maintain UotanStudio.</value>
@@ -158,6 +182,9 @@
   </data>
   <data name="Settings_AutoSaveHint" xml:space="preserve">
     <value>Saves edits to workspace files.</value>
+  </data>
+  <data name="Settings_PackingParameters" xml:space="preserve">
+    <value>Packing Parameters</value>
   </data>
   <data name="Settings_DebugModeHint" xml:space="preserve">
     <value>Writes more detailed logs to make troubleshooting easier.</value>

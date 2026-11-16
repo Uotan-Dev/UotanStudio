@@ -7,6 +7,7 @@ using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
+using UotanStudio.Services.Flash;
 
 namespace UotanStudio.Services;
 
@@ -30,6 +31,8 @@ public class AppSettings : IJsonOnDeserialized
         ExpandedNodeCategories ??= [];
         PairedNetworkTargets ??= [];
         PairedHdcNetworkTargets ??= [];
+        FlashReadbackSkipPartitions ??= FlashProtocolCatalog.DefaultReadbackSkipPartitions;
+        FlashProtocolDisplay = FlashProtocolCatalog.Normalize(FlashProtocolDisplay);
         ExpandedFlashSections ??= [];
         RemoteConnectionHistory ??= [];
     }
@@ -65,6 +68,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.PairedHdcNetworkTargets = [.. PairedHdcNetworkTargets];
+        copy.FlashProtocolDisplay = [.. FlashProtocolDisplay.Select(x => x.Clone())];
         copy.ExpandedFlashSections = [.. ExpandedFlashSections];
         copy.RemoteConnectionHistory = [.. RemoteConnectionHistory.Select(x => x.Clone())];
         copy.McpServers = [.. McpServers];
@@ -455,6 +459,25 @@ public class AppSettings : IJsonOnDeserialized
     public RenderingCompositionMode RenderingCompositionMode { get; set; }
 
     /// <summary>
+    /// Gets or sets the comma-separated partitions skipped by default during readback.
+    /// <para>获取或设置回读时默认跳过的逗号分隔分区列表。</para>
+    /// </summary>
+    /// <value>The user-defined partition list; the default contains common user-data and disposable partitions.
+    /// <para>用户定义的分区列表；默认包含常见用户数据与可丢弃分区。</para></value>
+    [JsonPropertyName("flashReadbackSkipPartitions")]
+    public string FlashReadbackSkipPartitions { get; set; } =
+        FlashProtocolCatalog.DefaultReadbackSkipPartitions;
+
+    /// <summary>
+    /// Gets or sets the ordered visibility preferences for flash protocol sections, excluding image operations.
+    /// <para>获取或设置烧录协议分类的有序显示偏好；镜像操作不包含在内。</para>
+    /// </summary>
+    /// <value>The normalized ordered protocol preferences.<para>规范化后的有序协议偏好。</para></value>
+    [JsonPropertyName("flashProtocolDisplay")]
+    public List<FlashProtocolDisplayPreference> FlashProtocolDisplay { get; set; } =
+        FlashProtocolCatalog.CreateDefaultDisplay();
+
+    /// <summary>
     /// Gets or sets the flash-page side sections that are expanded, identified by <c>edl</c>, <c>mtk</c>,
     /// <c>rockchip</c> and <c>image</c>; unlisted sections stay collapsed and unknown identifiers are ignored.
     /// <para>获取或设置烧录页面已展开的侧边分类标识（<c>edl</c>、<c>mtk</c>、<c>rockchip</c>、<c>image</c>）；
@@ -668,6 +691,7 @@ public sealed class RemoteConnectionProfile
 [JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(List<FlashProtocolDisplayPreference>))]
 [JsonSerializable(typeof(List<RemoteConnectionProfile>))]
 [JsonSerializable(typeof(RemoteConnectionProfile))]
 [JsonSerializable(typeof(RemoteProtocol))]
