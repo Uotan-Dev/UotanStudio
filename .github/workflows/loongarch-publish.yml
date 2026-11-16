@@ -209,10 +209,24 @@ jobs:
             echo "qemu-loongarch64-static is missing; the cross image needs tdnf install qemu-user-static-loongarch64." >&2
             exit 127
           fi
-          # glibc ships ld.so at /lib64 on loongarch64 (matches the apphost PT_INTERP).
-          interp=/crossrootfs/loongarch64/lib64/ld-linux-loongarch64-lp64d.so.1
-          [ -e "$interp" ] || interp=/crossrootfs/loongarch64/lib/ld-linux-loongarch64-lp64d.so.1
-          exec "$qemu" -L /crossrootfs/loongarch64 "$interp" /work/ilc-pkg/tools/real-ilc "$@"
+          # The loader triple is loongarch-lp64d (not loongarch64-lp64d), matching the
+          # apphost PT_INTERP, and the cross rootfs keeps it under usr/lib with top-level
+          # lib/lib64 as symlinks into usr/. Probe the real locations instead of assuming
+          # the distro layout: an unresolvable path makes qemu exit 1 with no output.
+          root=/crossrootfs/loongarch64
+          interp=
+          for candidate in \
+            "$root/usr/lib/loongarch64-linux-gnu/ld-linux-loongarch-lp64d.so.1" \
+            "$root/usr/lib64/ld-linux-loongarch-lp64d.so.1" \
+            "$root/lib64/ld-linux-loongarch-lp64d.so.1" \
+            "$root/lib/ld-linux-loongarch-lp64d.so.1"; do
+            if [ -e "$candidate" ]; then interp="$candidate"; break; fi
+          done
+          if [ -z "$interp" ]; then
+            echo "No loongarch64 loader found under $root; cannot run ilc under qemu." >&2
+            exit 127
+          fi
+          exec "$qemu" -L "$root" "$interp" /work/ilc-pkg/tools/real-ilc "$@"
           WRAPPER
           chmod +x "$work/ilc-pkg/tools/ilc"
 

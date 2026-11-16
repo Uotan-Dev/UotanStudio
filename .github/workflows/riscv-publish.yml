@@ -219,10 +219,23 @@ jobs:
             echo "qemu-riscv64-static is missing; the cross image needs tdnf install qemu-user-static-riscv." >&2
             exit 127
           fi
-          # glibc ships ld.so at /lib on riscv64 (matches the apphost PT_INTERP).
-          interp=/crossrootfs/riscv64/lib/ld-linux-riscv64-lp64d.so.1
-          [ -e "$interp" ] || interp=/crossrootfs/riscv64/lib64/ld-linux-riscv64-lp64d.so.1
-          exec "$qemu" -L /crossrootfs/riscv64 "$interp" /work/ilc-pkg/tools/real-ilc "$@"
+          # The loader triple is riscv64-lp64d (matching the apphost PT_INTERP); the cross
+          # rootfs keeps it under usr/lib with top-level lib/lib64 as symlinks into usr/.
+          # Probe the real locations: an unresolvable path makes qemu exit 1 with no output.
+          root=/crossrootfs/riscv64
+          interp=
+          for candidate in \
+            "$root/usr/lib/riscv64-linux-gnu/ld-linux-riscv64-lp64d.so.1" \
+            "$root/usr/lib64/ld-linux-riscv64-lp64d.so.1" \
+            "$root/lib/ld-linux-riscv64-lp64d.so.1" \
+            "$root/lib64/ld-linux-riscv64-lp64d.so.1"; do
+            if [ -e "$candidate" ]; then interp="$candidate"; break; fi
+          done
+          if [ -z "$interp" ]; then
+            echo "No riscv64 loader found under $root; cannot run ilc under qemu." >&2
+            exit 127
+          fi
+          exec "$qemu" -L "$root" "$interp" /work/ilc-pkg/tools/real-ilc "$@"
           WRAPPER
           chmod +x "$work/ilc-pkg/tools/ilc"
 
