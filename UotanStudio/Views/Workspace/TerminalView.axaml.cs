@@ -133,6 +133,14 @@ public partial class TerminalView : UserControl
         menu.Items.Add(copy);
         menu.Items.Add(paste);
         terminal.ContextMenu = menu;
+        // The control's own right-click gesture copies the selection and then clears it, so the menu
+        // that opens a moment later has nothing highlighted and Copy acts on an empty selection. The
+        // gesture is claimed here first: the selection is copied through the same public path so the
+        // clipboard matches what is highlighted, the highlight survives, and the menu is opened by us.
+        // 控件内置的右键手势会先复制选区再清空它，菜单随后打开时已无高亮、复制也无内容可复制。这里先接管该手势：
+        // 用同一公开路径复制以保持剪贴板与高亮一致，保留高亮，并由我们打开菜单。
+        terminal.AddHandler(InputElement.PointerPressedEvent, (_, e) => OnTerminalPointerPressed(terminal, menu, e),
+            RoutingStrategies.Tunnel);
         terminal.Loaded += StartOnLoaded;
         SessionHost.Children.Add(root);
         UpdateButtons();
@@ -141,6 +149,32 @@ public partial class TerminalView : UserControl
             terminal.Loaded -= StartOnLoaded;
             await StartSessionAsync(session, terminal);
         }
+    }
+
+    /// <summary>Claims the right-button press so the built-in gesture cannot clear the selection before
+    /// the context menu appears. <para>接管右键按下，使内置手势无法在上下文菜单出现前清空选区。</para></summary>
+    /// <param name="terminal">The terminal that was pressed.<para>被按下的终端。</para></param>
+    /// <param name="menu">The menu to open.<para>要打开的菜单。</para></param>
+    /// <param name="e">The pointer press being routed.<para>正在路由的指针按下事件。</para></param>
+    private static void OnTerminalPointerPressed(DockTerminal terminal, ContextMenu menu, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(terminal).Properties.IsRightButtonPressed) return;
+        // Without a selection the built-in gesture only pastes, which is left untouched.
+        // 没有选区时内置手势只做粘贴，保持原样。
+        if (!terminal.Terminal.Selection.HasSelection) return;
+        e.Handled = true;
+        _ = OpenTerminalMenuAsync(terminal, menu);
+    }
+
+    /// <summary>Copies the highlighted text and opens the context menu while the highlight stays visible,
+    /// so the menu acts on what the user can still see. <para>复制高亮文本并打开上下文菜单，同时保留高亮，
+    /// 使菜单作用的正是用户仍能看到的选区。</para></summary>
+    /// <param name="terminal">The terminal whose selection is copied.<para>选区被复制的终端。</para></param>
+    /// <param name="menu">The menu to open.<para>要打开的菜单。</para></param>
+    private static async Task OpenTerminalMenuAsync(DockTerminal terminal, ContextMenu menu)
+    {
+        await terminal.CopyAsync();
+        menu.Open(terminal);
     }
 
     private async Task StartSessionAsync(TerminalSessionViewModel session, DockTerminal terminal)
