@@ -45,11 +45,21 @@ jobs:
           set -euo pipefail
           prefix=$(sed -n 's:.*<VersionPrefix>\([^<]*\)</VersionPrefix>.*:\1:p' Version.props | head -1)
           channel=$(sed -n 's:.*<VersionChannel>\([^<]*\)</VersionChannel>.*:\1:p' Version.props | head -1)
-          version="${prefix:-1.0.0}-${channel:-beta}.${GITHUB_RUN_NUMBER}"
+          channel="${channel:-beta}"
+          version="${prefix:-1.0.0}-${channel}.${GITHUB_RUN_NUMBER}"
           input="${{ github.event.inputs.version }}"
           if [ -n "$input" ]; then version="${input#v}"; fi
+          # The version input replaces the whole version, so a manual dispatch can drop the
+          # channel. The publish step forwards both values to MSBuild, and the host project
+          # rejects anything other than release or beta, so resolve the channel here and
+          # always publish it.
+          if [ -z "$version" ] || [ -z "$channel" ]; then
+            echo "::error::Resolved version or channel is empty (version='$version', channel='$channel')." >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: $version"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $version ($channel)"
 
       - name: Resolve community SDK
         id: sdk
