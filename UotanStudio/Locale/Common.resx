@@ -5286,6 +5286,12 @@ Continue?</value>
   <data name="Flash_SpacemiTVerify" xml:space="preserve">
     <value>Verify after flash</value>
   </data>
+  <data name="Flash_GenerateFlashPlan" xml:space="preserve">
+    <value>Generate flash plan</value>
+  </data>
+  <data name="Flash_GenerateFlashPlanTip" xml:space="preserve">
+    <value>Generate XML and corresponding configuration files</value>
+  </data>
   <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
     <value>Backed up partition {0} to {1}</value>
   </data>

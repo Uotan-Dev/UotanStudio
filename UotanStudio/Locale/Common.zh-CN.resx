@@ -5284,7 +5284,13 @@
     <value>正在写入分区表</value>
   </data>
   <data name="Flash_SpacemiTVerify" xml:space="preserve">
-    <value>烧写后回读校验</value>
+    <value>烧录后回读校验</value>
+  </data>
+  <data name="Flash_GenerateFlashPlan" xml:space="preserve">
+    <value>生成烧录方案</value>
+  </data>
+  <data name="Flash_GenerateFlashPlanTip" xml:space="preserve">
+    <value>生成XML等对应配置文件</value>
   </data>
   <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
     <value>已备份分区 {0} 到 {1}</value>

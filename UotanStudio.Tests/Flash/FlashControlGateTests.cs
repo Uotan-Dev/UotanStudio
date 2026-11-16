@@ -22,7 +22,7 @@ public sealed class FlashControlGateTests
     private static readonly string[] OptionCheckBoxNames =
     [
         "DisableVbmetaBox", "AddRootBox", "EraseDataBox", "RebootAfterBox",
-        "ShowAllPartitionsBox", "DeleteCowBox", "SpacemiTVerifyBox"
+        "ShowAllPartitionsBox", "DeleteCowBox", "SpacemiTVerifyBox", "GenerateFlashPlanBox"
     ];
 
     private static FlashGateContext Context(FlashDeviceMode mode,

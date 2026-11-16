@@ -440,11 +440,16 @@
                                           Content="{DynamicResource Flash_DeleteCow}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
-                                <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Name="SpacemiTVerifyBox"
+                                <CheckBox Grid.Row="3" Grid.Column="0" Name="SpacemiTVerifyBox"
                                           IsChecked="{Binding VerifyAfterFlash, Mode=TwoWay}"
                                           Content="{DynamicResource Flash_SpacemiTVerify}"
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_SpacemiTVerify}" />
+                                <CheckBox Grid.Row="3" Grid.Column="1" Name="GenerateFlashPlanBox"
+                                          Content="{DynamicResource Flash_GenerateFlashPlan}"
+                                          ToolTip.Tip="{DynamicResource Flash_GenerateFlashPlanTip}"
+                                          HorizontalAlignment="Left"
+                                          AutomationProperties.Name="{DynamicResource Flash_GenerateFlashPlan}" />
                             </Grid>
                             <!-- AVB 二级选项组跟随“禁用 AVB”复选框显隐：勾选后才展开命令选择框，取消勾选立刻收起。 -->
                             <!-- The AVB option group follows its check box: the command selector appears once AVB

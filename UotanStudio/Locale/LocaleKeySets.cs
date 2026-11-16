@@ -1739,6 +1739,8 @@ internal static class LocaleKeySets
         "Flash_SpacemiTStorageRunning",
         "Flash_SpacemiTWritingTable",
         "Flash_SpacemiTVerify",
+        "Flash_GenerateFlashPlan",
+        "Flash_GenerateFlashPlanTip",
         "Flash_SpacemiTReadbackDone",
         "Flash_WiredPackageOutputPath",
     ];

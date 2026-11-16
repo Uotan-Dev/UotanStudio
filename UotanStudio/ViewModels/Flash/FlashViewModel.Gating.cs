@@ -203,6 +203,7 @@ public sealed partial class FlashViewModel
         RegisterGate("ShowAllPartitionsBox", FlashControlGate.BusyOnly("ShowAllPartitionsBox"));
         RegisterGate("DeleteCowBox", FlashControlGate.BusyOnly("DeleteCowBox"));
         RegisterGate("SpacemiTVerifyBox", FlashControlGate.BusyOnly("SpacemiTVerifyBox"));
+        RegisterGate("GenerateFlashPlanBox", FlashControlGate.BusyOnly("GenerateFlashPlanBox"));
         // The two option groups are shown by their own check box and restricted by nothing else: only a running page
         // operation closes them, which keeps their inner selectors following the busy state as before.
         // 两个选项组由各自的复选框决定显隐，除此之外不受任何限制：只有页面操作运行期间关闭它们，组内选择框因此仍随忙碌态变化。
