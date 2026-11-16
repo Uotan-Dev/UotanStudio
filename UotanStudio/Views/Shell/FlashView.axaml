@@ -530,6 +530,7 @@
                             </StackPanel>
                         </StackPanel>
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                        <StackPanel Name="ProtocolPanelsHost" Spacing="10">
                         <!-- 高通 EDL 9008 协议分类 -->
                         <Expander Name="EdlExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Edl}" IsExpanded="{Binding IsEdlSectionExpanded, Mode=TwoWay}">
@@ -1247,6 +1248,7 @@
                                         AutomationProperties.Name="{DynamicResource Flash_SunxiExecute}" />
                             </StackPanel>
                         </Expander>
+                        </StackPanel>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">

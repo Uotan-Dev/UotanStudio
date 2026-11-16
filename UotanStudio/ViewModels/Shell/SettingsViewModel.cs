@@ -1,20 +1,23 @@
 using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.Services.Flash;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// Settings view model, managing general settings, firmware tool settings, flash settings, and node editor settings.
-/// <para>设置视图模型，管理应用程序的通用设置、固件工具设置、烧录设置和节点编辑器设置。</para>
+/// Settings view model, managing general settings, workspace settings, flash settings, and node editor settings.
+/// <para>设置视图模型，管理应用程序的通用设置、工作区设置、烧录设置和节点编辑器设置。</para>
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase, IDisposable
 {
@@ -533,6 +536,20 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Gets or sets the comma-separated partitions skipped by default during readback.
+    /// <para>获取或设置回读时默认跳过的逗号分隔分区列表。</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _readbackSkipPartitions = FlashProtocolCatalog.DefaultReadbackSkipPartitions;
+
+    partial void OnReadbackSkipPartitionsChanged(string value)
+    {
+        if (!_loading)
+        {
+            DebouncedSaveSettings();
+        }
+    }
+
     /// <summary>Maximum concurrent firmware workers, applied to newly started operations.
     /// <para>固件并发工作线程上限，仅作用于新启动的操作。</para>
     /// </summary>
@@ -566,6 +583,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public List<ThemeMode> Themes { get; } =
         [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
+
+    /// <summary>
+    /// Gets the ordered flash protocol display preferences shown in the flash settings section.
+    /// <para>获取烧录设置区域显示的有序烧录协议偏好。</para>
+    /// </summary>
+    public ObservableCollection<FlashProtocolDisplayItem> FlashProtocolDisplayItems { get; } = [];
 
     /// <summary>
     /// Gets the MCP server connection list (data source for the MCP settings section).
@@ -840,6 +863,16 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             SelectedThemeMode = settings.ThemeMode;
             AutoSave = settings.AutoSave;
             DebugMode = settings.DebugMode;
+            ReadbackSkipPartitions = settings.FlashReadbackSkipPartitions;
+
+            FlashProtocolDisplayItems.Clear();
+            foreach (var preference in FlashProtocolCatalog.Normalize(settings.FlashProtocolDisplay))
+            {
+                FlashProtocolDisplayItems.Add(new FlashProtocolDisplayItem(
+                    preference.Key,
+                    preference.Visible,
+                    DebouncedSaveSettings));
+            }
 
             var renderingPlatform = _renderingPlatform;
             _renderingBackendIndex = Math.Max(0, Array.IndexOf(
@@ -953,6 +986,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.AutoSave = AutoSave;
         _appSettings.DebugMode = DebugMode;
         _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
+        _appSettings.FlashReadbackSkipPartitions = ReadbackSkipPartitions;
+        _appSettings.FlashProtocolDisplay = [.. FlashProtocolDisplayItems.Select(item => item.ToPreference())];
         if (IsRenderingBackendConfigurable)
         {
             _appSettings.RenderingBackend = _renderingBackends[_renderingBackendIndex];
@@ -1004,10 +1039,55 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
+        foreach (var item in FlashProtocolDisplayItems)
+        {
+            item.RefreshLocalizedText();
+        }
         foreach (var member in DevelopmentMembers.All)
         {
             member.RefreshLocalizedText();
         }
+    }
+
+    /// <summary>Moves a flash protocol one position earlier.<para>把烧录协议向前移动一位。</para></summary>
+    /// <param name="item">The protocol item to move.<para>要移动的协议项。</para></param>
+    [RelayCommand]
+    private void MoveFlashProtocolUp(FlashProtocolDisplayItem? item) => MoveFlashProtocol(item, -1);
+
+    /// <summary>Moves a flash protocol one position later.<para>把烧录协议向后移动一位。</para></summary>
+    /// <param name="item">The protocol item to move.<para>要移动的协议项。</para></param>
+    [RelayCommand]
+    private void MoveFlashProtocolDown(FlashProtocolDisplayItem? item) => MoveFlashProtocol(item, 1);
+
+    private void MoveFlashProtocol(FlashProtocolDisplayItem? item, int offset)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var current = FlashProtocolDisplayItems.IndexOf(item);
+        var target = current + offset;
+        if (current < 0 || target < 0 || target >= FlashProtocolDisplayItems.Count)
+        {
+            return;
+        }
+
+        FlashProtocolDisplayItems.Move(current, target);
+        DebouncedSaveSettings();
+    }
+
+    /// <summary>
+    /// Switches to the workspace and opens the packing settings panel in the left tool dock.
+    /// <para>切换到工作区，并在左侧工具停靠区打开打包设置面板。</para>
+    /// </summary>
+    [RelayCommand]
+    private void OpenPackingSettings()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => WorkspacePanelService.Instance.Show(WorkspacePanelService.ProjectSetting),
+            Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>

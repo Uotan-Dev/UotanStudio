@@ -61,22 +61,46 @@
     <value>通用设置</value>
   </data>
   <data name="Settings_Firmware" xml:space="preserve">
-    <value>固件工具</value>
+    <value>工作区设置</value>
   </data>
   <data name="Settings_FirmwareParallelism" xml:space="preserve">
     <value>并行数量</value>
   </data>
   <data name="Settings_FirmwareParallelismHint" xml:space="preserve">
-    <value>支持并行处理的固件任务线程数，范围为 1–64；数值越高占用内存越多。</value>
+    <value>支持并行处理的固件任务线程数，范围为 1–64。数值越高占用内存越多。</value>
   </data>
   <data name="Settings_ErofsRebuildOptimization" xml:space="preserve">
     <value>EROFS 重建搜索</value>
   </data>
   <data name="Settings_ErofsRebuildOptimizationHint" xml:space="preserve">
-    <value>打包 EROFS 时最多重建三次并保留最小结果；开启后需重新解包镜像才能采集候选。</value>
+    <value>打包 EROFS 时最多重建三次并保留最小结果。开启后需重新解包镜像才能采集候选。</value>
   </data>
   <data name="Settings_Flash" xml:space="preserve">
     <value>烧录设置</value>
+  </data>
+  <data name="Settings_FlashDescription" xml:space="preserve">
+    <value>配置回读跳过与协议显示方式。</value>
+  </data>
+  <data name="Settings_ReadbackSkipPartitions" xml:space="preserve">
+    <value>回读跳过分区</value>
+  </data>
+  <data name="Settings_ReadbackSkipPartitionsHint" xml:space="preserve">
+    <value>回读时默认跳过的分区（以英文逗号分隔）。</value>
+  </data>
+  <data name="Settings_FlashProtocols" xml:space="preserve">
+    <value>显示协议</value>
+  </data>
+  <data name="Settings_FlashProtocolsHint" xml:space="preserve">
+    <value>调整烧录页协议分类的显示顺序与可见性。</value>
+  </data>
+  <data name="Settings_ProtocolVisible" xml:space="preserve">
+    <value>显示此协议</value>
+  </data>
+  <data name="Settings_MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="Settings_MoveDown" xml:space="preserve">
+    <value>下移</value>
   </data>
   <data name="Settings_NodeEditor" xml:space="preserve">
     <value>节点编辑器</value>
@@ -148,7 +172,7 @@
     <value>集中管理界面、项目行为、渲染与设备连接。</value>
   </data>
   <data name="Settings_FirmwareDescription" xml:space="preserve">
-    <value>设置固件处理的性能与重建策略。</value>
+    <value>管理自动保存、打包与固件构建行为。</value>
   </data>
   <data name="Settings_DevelopersDescription" xml:space="preserve">
     <value>UotanStudio 的开发与维护成员。</value>
@@ -157,7 +181,10 @@
     <value>选择固定的浅色或深色模式，或跟随系统设置。</value>
   </data>
   <data name="Settings_AutoSaveHint" xml:space="preserve">
-    <value>自动保存工作区文件的编辑内容</value>
+    <value>自动保存工作区文件的编辑内容。</value>
+  </data>
+  <data name="Settings_PackingParameters" xml:space="preserve">
+    <value>打包参数设置</value>
   </data>
   <data name="Settings_DebugModeHint" xml:space="preserve">
     <value>输出更详细的日志，方便查找问题。</value>
@@ -292,7 +319,7 @@
     <value>选择 MCP 沙箱根目录</value>
   </data>
   <data name="Settings_McpExposeRootHint" xml:space="preserve">
-    <value>MCP 传入的所有路径都必须位于此目录内；留空表示不限制访问范围。</value>
+    <value>MCP 传入的所有路径都必须位于此目录内。留空表示不限制访问范围。</value>
   </data>
   <data name="Settings_McpExposeFlash" xml:space="preserve">
     <value>允许刷写工具</value>

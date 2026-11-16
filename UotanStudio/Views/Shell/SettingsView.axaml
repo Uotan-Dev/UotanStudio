@@ -88,6 +88,14 @@
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style Selector="Button.settings-order">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </UserControl.Styles>
 
     <Grid Background="{DynamicResource PageBackground}">
@@ -184,18 +192,6 @@
                                       ItemsSource="{Binding Languages}"
                                       SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
                                       DisplayMemberBinding="{Binding DisplayName}" />
-                        </Grid>
-
-                        <Border Classes="settings-divider" Margin="0,16,0,0" />
-
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,16,0,0">
-                            <StackPanel>
-                                <TextBlock Text="{DynamicResource Settings_AutoSave}" Classes="settings-label" />
-                                <TextBlock Text="{DynamicResource Settings_AutoSaveHint}"
-                                           Classes="settings-description" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
-                                          IsChecked="{Binding AutoSave, Mode=TwoWay}" />
                         </Grid>
 
                         <Border Classes="settings-divider" Margin="0,16,0,0" />
@@ -357,10 +353,10 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Firmware -->
+                <!-- Workspace settings -->
                 <Border Classes="settings-card">
                     <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                             <Border Classes="settings-icon">
                                 <icons:Tools Width="20" Height="20"
                                             Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
@@ -370,9 +366,33 @@
                                 <TextBlock Text="{DynamicResource Settings_FirmwareDescription}"
                                            Classes="settings-section-description" />
                             </StackPanel>
+                            <Button Grid.Column="2" Content="{DynamicResource Settings_PackingParameters}"
+                                    Command="{Binding OpenPackingSettingsCommand}"
+                                    Classes="settings-action" VerticalAlignment="Center">
+                                <Button.ContentTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:Tools Width="14" Height="14" />
+                                            <TextBlock Text="{Binding}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
                         </Grid>
 
                         <Border Classes="settings-divider" Margin="0,20,0,0" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,18,0,0">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_AutoSave}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_AutoSaveHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding AutoSave, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,18,0,0" />
 
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,18,0,0">
                             <StackPanel>
@@ -399,6 +419,76 @@
                             <ToggleSwitch Grid.Column="1" Classes="settings-switch"
                                           IsChecked="{Binding ErofsRebuildOptimization, Mode=TwoWay}" />
                         </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Flash settings -->
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                            <Border Classes="settings-icon">
+                                <icons:Thunder Width="20" Height="20"
+                                               Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_Flash}" Classes="settings-section-title" />
+                                <TextBlock Text="{DynamicResource Settings_FlashDescription}"
+                                           Classes="settings-section-description" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,20,0,0" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,18,0,0">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_ReadbackSkipPartitions}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ReadbackSkipPartitionsHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Width="420" MinHeight="32"
+                                     VerticalAlignment="Center"
+                                     Text="{Binding ReadbackSkipPartitions, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,18,0,0" />
+
+                        <StackPanel Margin="0,18,0,0" Spacing="4">
+                            <TextBlock Text="{DynamicResource Settings_FlashProtocols}"
+                                       Classes="settings-label" />
+                            <TextBlock Text="{DynamicResource Settings_FlashProtocolsHint}"
+                                       Classes="settings-description" />
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding FlashProtocolDisplayItems}" Margin="0,10,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FlashProtocolDisplayItem">
+                                    <Border Classes="settings-inner" Margin="0,0,0,8" Padding="12">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding DisplayName}" Classes="settings-label" />
+                                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                                          IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                                          ToolTip.Tip="{DynamicResource Settings_ProtocolVisible}"
+                                                          AutomationProperties.Name="{DynamicResource Settings_ProtocolVisible}" />
+                                            <Button Grid.Column="2" Classes="settings-order"
+                                                    Command="{Binding $parent[UserControl].DataContext.MoveFlashProtocolUpCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="{DynamicResource Settings_MoveUp}"
+                                                    AutomationProperties.Name="{DynamicResource Settings_MoveUp}">
+                                                <icons:ChevronUp Width="14" Height="14" />
+                                            </Button>
+                                            <Button Grid.Column="3" Classes="settings-order"
+                                                    Command="{Binding $parent[UserControl].DataContext.MoveFlashProtocolDownCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="{DynamicResource Settings_MoveDown}"
+                                                    AutomationProperties.Name="{DynamicResource Settings_MoveDown}">
+                                                <icons:ChevronDown Width="14" Height="14" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 

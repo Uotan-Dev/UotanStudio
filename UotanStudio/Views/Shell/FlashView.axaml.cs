@@ -3,6 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
+using UotanStudio.Services;
+using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Flash;
 using UotanStudio.ViewModels.Shell;
 
@@ -89,6 +93,70 @@ public partial class FlashView : UserControl
         PartitionGrid.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true);
         PartitionPane.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true);
         PageScroll.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
+    }
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        WeakReferenceMessenger.Default.Register<FlashView, ActiveTabChangedMessage>(this,
+            static (view, message) =>
+            {
+                if (message.Tab == ActiveTab.Flash)
+                {
+                    Dispatcher.UIThread.Post(view.ApplyProtocolDisplaySettings, DispatcherPriority.Loaded);
+                }
+            });
+        WeakReferenceMessenger.Default.Register<FlashView, SettingsSaveCompletedMessage>(this,
+            static (view, message) =>
+            {
+                if (message.Succeeded)
+                {
+                    Dispatcher.UIThread.Post(view.ApplyProtocolDisplaySettings);
+                }
+            });
+        ApplyProtocolDisplaySettings();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        WeakReferenceMessenger.Default.Unregister<ActiveTabChangedMessage>(this);
+        WeakReferenceMessenger.Default.Unregister<SettingsSaveCompletedMessage>(this);
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>
+    /// Reorders and hides the protocol expanders according to the persisted display preferences.
+    /// <para>根据持久化的显示偏好重排并隐藏协议分类面板。</para>
+    /// </summary>
+    private void ApplyProtocolDisplaySettings()
+    {
+        var preferences = FlashProtocolCatalog.Normalize(
+            SettingsPersistenceService.Instance.LoadSettings().FlashProtocolDisplay);
+        foreach (var expander in ProtocolPanelsHost.Children.OfType<Expander>().ToArray())
+        {
+            ProtocolPanelsHost.Children.Remove(expander);
+        }
+
+        foreach (var preference in preferences)
+        {
+            var expander = preference.Key switch
+            {
+                FlashProtocolCatalog.Edl => EdlExpander,
+                FlashProtocolCatalog.Mtk => MtkExpander,
+                FlashProtocolCatalog.Rockchip => RkExpander,
+                FlashProtocolCatalog.Sunxi => SunxiExpander,
+                _ => null
+            };
+            if (expander is null)
+            {
+                continue;
+            }
+
+            expander.IsVisible = preference.Visible;
+            ProtocolPanelsHost.Children.Add(expander);
+        }
     }
 
     private void UpdateResponsiveLayout()
