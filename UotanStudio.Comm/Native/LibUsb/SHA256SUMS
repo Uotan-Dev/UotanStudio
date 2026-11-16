@@ -1,7 +1,7 @@
 35af666de298c6ca1682f70f94e98604d64f02b0f44f826dafd745c8ebaa05f1  linux-arm64/libusb-1.0.so
 35af666de298c6ca1682f70f94e98604d64f02b0f44f826dafd745c8ebaa05f1  linux-arm64/libusb-1.0.so.0
-8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897  linux-loong64/libusb-1.0.so
-8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897  linux-loong64/libusb-1.0.so.0
+8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897  linux-loongarch64/libusb-1.0.so
+8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897  linux-loongarch64/libusb-1.0.so.0
 aa2edaa881324bb9c1fdd09ea3e7df5010c2443a91805cefafe8c401c7be15c9  linux-riscv64/libusb-1.0.so
 aa2edaa881324bb9c1fdd09ea3e7df5010c2443a91805cefafe8c401c7be15c9  linux-riscv64/libusb-1.0.so.0
 387f0a81419995f2fb5fa704685e10d62dd328d7041f53faaa19d423f155fcfc  linux-x64/libusb-1.0.so

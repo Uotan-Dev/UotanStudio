@@ -127,7 +127,8 @@ public static class NativeBinCatalog
             new("linux-riscv64", "libusb-1.0.so",
                 "aa2edaa881324bb9c1fdd09ea3e7df5010c2443a91805cefafe8c401c7be15c9",
                 BuildUrls($"https://github.com/libusb/libusb/releases/latest/download/libusb-{LibUsbVersion}-bin-linux-riscv64.tar.gz", "libusb-1.0.so")),
-            new("linux-loong64", "libusb-1.0.so",
+            // The catalog key is the .NET RID; the upstream archive still uses "loong64".
+            new("linux-loongarch64", "libusb-1.0.so",
                 "8743ac1e3ec85e8d4285e8f34c94c5668a9afed20051f7aea54968febb2cb897",
                 BuildUrls($"https://github.com/libusb/libusb/releases/latest/download/libusb-{LibUsbVersion}-bin-linux-loong64.tar.gz", "libusb-1.0.so")),
         ];

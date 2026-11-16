@@ -1,8 +1,9 @@
 # libusb 原生运行库
 
 每个文件均与来源执行 SHA-256
-比对；本目录的 `SHA256SUMS` 记录引入时的精确文件身份。macOS 目录使用 .NET RID 的
-`osx-*` 命名（来源目录名为 `macos-*`），二进制内容一致。
+比对；本目录的 `SHA256SUMS` 记录引入时的精确文件身份。目录名一律使用 .NET RID，
+而不是上游发布的归档命名：macOS 目录是 `osx-*`（上游为 `macos-*`），Linux
+LoongArch 目录是 `linux-loongarch64`（上游为 `linux-loong64`），二进制内容一致。
 
 包含 Windows x64/ARM64、macOS x64/ARM64、Linux x64/ARM64/RISC-V64/LoongArch64
 八组依赖。Linux 保留 `libusb-1.0.so` 和 `libusb-1.0.so.0` 两个文件。
