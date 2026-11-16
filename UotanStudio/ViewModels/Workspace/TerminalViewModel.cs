@@ -53,13 +53,42 @@ internal partial class TerminalViewModel : Tool, IDisposable
             return;
         }
         ErrorMessage = null;
+        Session = CreateSession(profile);
+    }
+
+    private TerminalSessionViewModel CreateSession(TerminalProfile profile)
+    {
         var projectDirectory = ProjectContextService.Instance.RootDirectory;
         var directory = Directory.Exists(projectDirectory) ? projectDirectory!
             : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (!Directory.Exists(directory)) directory = Environment.CurrentDirectory;
-        Session = _deviceShell is { } device
+        return _deviceShell is { } device
             ? new TerminalSessionViewModel(profile, directory, device)
             : new TerminalSessionViewModel(profile, directory);
+    }
+
+    /// <summary>
+    /// Replaces the running shell when the toolbar selection changes, so picking another profile takes
+    /// effect immediately instead of leaving the panel bound to the previous session.
+    /// <para>工具栏选择变化时替换正在运行的 Shell，使挑选其它配置立即生效，而不是让面板继续绑定上一个会话。</para>
+    /// </summary>
+    /// <param name="value">The newly selected profile.<para>新选中的配置。</para></param>
+    partial void OnSelectedProfileChanged(TerminalProfile? value)
+    {
+        if (!_initialized || _disposed || value is null) return;
+        // A device shell terminal keeps its in-process connection; only the local shell honours the
+        // selection. 设备 shell 终端保持其进程内连接，只有本地 shell 遵循该选择。
+        if (_deviceShell is not null)
+        {
+            var current = Session;
+            if (current is null) Session = CreateSession(SelectedProfile!);
+            return;
+        }
+        var previous = Session;
+        Session = null;
+        previous?.Dispose();
+        ErrorMessage = null;
+        Session = CreateSession(value);
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
