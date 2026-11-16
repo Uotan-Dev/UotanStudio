@@ -30,6 +30,18 @@ jobs:
     outputs:
       packages: ${{ steps.src.outputs.packages }}
       ver: ${{ steps.src.outputs.ver }}
+      # A job-level if runs before the matrix expands, so it cannot read matrix.* there.
+      # The per-platform matrices and their readiness flags are resolved here instead.
+      windows_matrix: ${{ steps.src.outputs.windows_matrix }}
+      windows_ready: ${{ steps.src.outputs.windows_ready }}
+      macos_matrix: ${{ steps.src.outputs.macos_matrix }}
+      macos_ready: ${{ steps.src.outputs.macos_ready }}
+      linux_matrix: ${{ steps.src.outputs.linux_matrix }}
+      linux_ready: ${{ steps.src.outputs.linux_ready }}
+      alpine_matrix: ${{ steps.src.outputs.alpine_matrix }}
+      alpine_ready: ${{ steps.src.outputs.alpine_ready }}
+      arch_matrix: ${{ steps.src.outputs.arch_matrix }}
+      arch_ready: ${{ steps.src.outputs.arch_ready }}
     steps:
       - name: Resolve sources
         id: src
@@ -81,15 +93,59 @@ jobs:
           echo "ver=$base" >> "$GITHUB_OUTPUT"
           echo "::notice::Packageable rids: $(jq -r 'keys | join(", ")' <<< "$json")"
 
+          # Build one matrix per packaging job from the rids that actually have an
+          # artifact. A job conditions on its ready flag, which prepare computes from
+          # the same JSON, because a job-level if cannot read matrix.* (it is evaluated
+          # before the matrix expands).
+          emit_matrix() {
+            local key="$1" flag="$2" entries="$3"
+            echo "${key}_matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
+            if [ -n "$entries" ]; then
+              echo "${key}_ready=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${key}_ready=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          has() { jq -e --arg rid "$1" 'has($rid)' <<< "$json" >/dev/null; }
+
+          win=()
+          for rid in win-x64 win-arm64; do
+            has "$rid" && win+=("{\"rid\":\"$rid\"}")
+          done
+          emit_matrix windows windows "$(IFS=,; printf '%s' "${win[*]:-}")"
+
+          mac=()
+          has osx-arm64 && mac+=('{"rid":"osx-arm64","runner":"macos-15"}')
+          has osx-x64 && mac+=('{"rid":"osx-x64","runner":"macos-15-intel"}')
+          emit_matrix macos macos "$(IFS=,; printf '%s' "${mac[*]:-}")"
+
+          lin=()
+          has linux-x64 && lin+=('{"rid":"linux-x64","arch_deb":"amd64","arch_rpm":"x86_64"}')
+          has linux-arm64 && lin+=('{"rid":"linux-arm64","arch_deb":"arm64","arch_rpm":"aarch64"}')
+          has linux-riscv64 && lin+=('{"rid":"linux-riscv64","arch_deb":"riscv64","arch_rpm":"riscv64"}')
+          has linux-loongarch64 && lin+=('{"rid":"linux-loongarch64","arch_deb":"loong64","arch_rpm":"loongarch64"}')
+          emit_matrix linux linux "$(IFS=,; printf '%s' "${lin[*]:-}")"
+
+          alp=()
+          has linux-musl-x64 && alp+=('{"rid":"linux-musl-x64","apk_arch":"x86_64","runner":"ubuntu-24.04"}')
+          has linux-musl-arm64 && alp+=('{"rid":"linux-musl-arm64","apk_arch":"aarch64","runner":"ubuntu-24.04-arm"}')
+          emit_matrix alpine alpine "$(IFS=,; printf '%s' "${alp[*]:-}")"
+
+          arc=()
+          has linux-x64 && arc+=('{"rid":"linux-x64","pkg_arch":"x86_64","runner":"ubuntu-24.04"}')
+          has linux-arm64 && arc+=('{"rid":"linux-arm64","pkg_arch":"aarch64","runner":"ubuntu-24.04-arm"}')
+          has linux-riscv64 && arc+=('{"rid":"linux-riscv64","pkg_arch":"riscv64","runner":"ubuntu-24.04"}')
+          has linux-loongarch64 && arc+=('{"rid":"linux-loongarch64","pkg_arch":"loongarch64","runner":"ubuntu-24.04"}')
+          emit_matrix arch arch "$(IFS=,; printf '%s' "${arc[*]:-}")"
+
   windows:
     name: MSIX ${{ matrix.rid }}
     needs: prepare
-    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    if: needs.prepare.outputs.windows_ready == 'true'
     runs-on: windows-2025
     strategy:
       fail-fast: false
-      matrix:
-        rid: [win-x64, win-arm64]
+      matrix: ${{ fromJSON(needs.prepare.outputs.windows_matrix) }}
     steps:
       - name: Fetch build artifact
         shell: pwsh
@@ -196,14 +252,11 @@ jobs:
   macos:
     name: DMG ${{ matrix.rid }}
     needs: prepare
-    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    if: needs.prepare.outputs.macos_ready == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { rid: osx-arm64, runner: macos-15 }
-          - { rid: osx-x64, runner: macos-15-intel }
+      matrix: ${{ fromJSON(needs.prepare.outputs.macos_matrix) }}
     steps:
       - name: Fetch build artifact
         shell: bash
@@ -287,16 +340,11 @@ jobs:
   linux:
     name: DEB/RPM ${{ matrix.rid }}
     needs: prepare
-    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    if: needs.prepare.outputs.linux_ready == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { rid: linux-x64, arch_deb: amd64, arch_rpm: x86_64 }
-          - { rid: linux-arm64, arch_deb: arm64, arch_rpm: aarch64 }
-          - { rid: linux-riscv64, arch_deb: riscv64, arch_rpm: riscv64 }
-          - { rid: linux-loongarch64, arch_deb: loong64, arch_rpm: loongarch64 }
+      matrix: ${{ fromJSON(needs.prepare.outputs.linux_matrix) }}
     steps:
       - name: Fetch build artifact
         shell: bash
@@ -438,14 +486,11 @@ jobs:
   alpine:
     name: APK ${{ matrix.rid }}
     needs: prepare
-    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    if: needs.prepare.outputs.alpine_ready == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { rid: linux-musl-x64, apk_arch: x86_64, runner: ubuntu-24.04 }
-          - { rid: linux-musl-arm64, apk_arch: aarch64, runner: ubuntu-24.04-arm }
+      matrix: ${{ fromJSON(needs.prepare.outputs.alpine_matrix) }}
     steps:
       - name: Fetch build artifact
         shell: bash
@@ -539,16 +584,11 @@ jobs:
   arch:
     name: PACMAN ${{ matrix.rid }}
     needs: prepare
-    if: fromJSON(needs.prepare.outputs.packages)[matrix.rid] != null
+    if: needs.prepare.outputs.arch_ready == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { rid: linux-x64, pkg_arch: x86_64, runner: ubuntu-24.04 }
-          - { rid: linux-arm64, pkg_arch: aarch64, runner: ubuntu-24.04-arm }
-          - { rid: linux-riscv64, pkg_arch: riscv64, runner: ubuntu-24.04 }
-          - { rid: linux-loongarch64, pkg_arch: loongarch64, runner: ubuntu-24.04 }
+      matrix: ${{ fromJSON(needs.prepare.outputs.arch_matrix) }}
     steps:
       - name: Fetch build artifact
         shell: bash
