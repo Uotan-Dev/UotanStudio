@@ -106,6 +106,7 @@ public sealed partial class FlashViewModel
         }
 
         _lastObservedDevice = SelectedDevice;
+        BeginFlashProtocolDisplayUpdates();
         CollapseAllSections();
         UpdateObservedDeviceInfo();
         UpdateEdlButton();
@@ -124,6 +125,7 @@ public sealed partial class FlashViewModel
         }
 
         _deviceViewModel = null;
+        EndFlashProtocolDisplayUpdates();
         CancelRootOperations();
         UpdateObservedDeviceInfo();
         FlushPendingLog();

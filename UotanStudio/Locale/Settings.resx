@@ -123,6 +123,18 @@
   <data name="Settings_AutoSave" xml:space="preserve">
     <value>Auto Save</value>
   </data>
+  <data name="Settings_BottomBar" xml:space="preserve">
+    <value>Bottom bar content</value>
+  </data>
+  <data name="Settings_BottomBarHint" xml:space="preserve">
+    <value>Reorder bottom navigation items and choose whether each one is shown. The bar is hidden when only one item is shown.</value>
+  </data>
+  <data name="Settings_BottomBarVisible" xml:space="preserve">
+    <value>Show item</value>
+  </data>
+  <data name="Settings_Other" xml:space="preserve">
+    <value>Other settings</value>
+  </data>
   <data name="Settings_DebugMode" xml:space="preserve">
     <value>Debug Mode</value>
   </data>

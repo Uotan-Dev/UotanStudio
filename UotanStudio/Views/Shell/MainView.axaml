@@ -5,6 +5,7 @@
 			 xmlns:avalonia="https://irihi.tech/iconica/tdesign"
 			 xmlns:vm="using:UotanStudio.ViewModels.Shell"
 			 xmlns:workspaceviews="using:UotanStudio.Views.Workspace"
+			 xmlns:behaviors="using:UotanStudio.Views.Behaviors"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="UotanStudio.Views.Shell.MainView"
 			 x:DataType="vm:MainViewModel">
@@ -13,16 +14,14 @@
 		to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
 		<vm:MainViewModel />
 	</Design.DataContext>
+
+
 	<DockPanel>
 		<TabbedPage Name="MainTabs"
-					TabPlacement="Bottom">
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
-			<ContentPage>
+					TabPlacement="Bottom"
+					behaviors:BottomBarDisplayBehavior.Display="{Binding SettingsVM.BottomBarDisplayItems}">
+
+			<ContentPage Name="WorkspaceTab">
 				<ContentPage.Icon>
 					<avalonia:Dashboard1 Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
@@ -63,12 +62,7 @@
 					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
-			<ContentPage TabbedPage.IsTabEnabled="False">
-			</ContentPage>
+
 		</TabbedPage>
 	</DockPanel>
 </UserControl>

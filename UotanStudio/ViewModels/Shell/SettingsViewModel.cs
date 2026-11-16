@@ -7,7 +7,6 @@ using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
-using UotanStudio.Services.Flash;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;
@@ -49,6 +48,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private int _compositionModeIndex;
     private bool _usbBackendConfirmationPending;
     private bool _suppressUsbBackendWriteback;
+    private bool _normalizingBottomBarDisplay;
 
     /// <summary>
     /// Gets the USB backend choices shown by the device-communication combo box. The entries
@@ -588,7 +588,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// Gets the ordered flash protocol display preferences shown in the flash settings section.
     /// <para>获取烧录设置区域显示的有序烧录协议偏好。</para>
     /// </summary>
-    public ObservableCollection<FlashProtocolDisplayItem> FlashProtocolDisplayItems { get; } = [];
+    public ObservableCollection<DisplayPreferenceItem> FlashProtocolDisplayItems { get; } = [];
+
+    /// <summary>
+    /// Gets the ordered bottom navigation display preferences.
+    /// <para>获取有序的底栏导航显示偏好。</para>
+    /// </summary>
+    public ObservableCollection<DisplayPreferenceItem> BottomBarDisplayItems { get; } = [];
 
     /// <summary>
     /// Gets the MCP server connection list (data source for the MCP settings section).
@@ -868,11 +874,28 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             FlashProtocolDisplayItems.Clear();
             foreach (var preference in FlashProtocolCatalog.Normalize(settings.FlashProtocolDisplay))
             {
-                FlashProtocolDisplayItems.Add(new FlashProtocolDisplayItem(
+                FlashProtocolDisplayItems.Add(new DisplayPreferenceItem(
                     preference.Key,
+                    FlashProtocolCatalog.GetTitleKey(preference.Key),
+                    "Settings_ProtocolVisible",
                     preference.Visible,
-                    DebouncedSaveSettings));
+                    _ => DebouncedSaveSettings(),
+                    MoveFlashProtocol));
             }
+
+            BottomBarDisplayItems.Clear();
+            foreach (var preference in BottomBarCatalog.Normalize(settings.BottomBarDisplay))
+            {
+                BottomBarDisplayItems.Add(new DisplayPreferenceItem(
+                    preference.Key,
+                    BottomBarCatalog.GetTitleKey(preference.Key),
+                    "Settings_BottomBarVisible",
+                    preference.Visible,
+                    OnBottomBarVisibilityChanged,
+                    MoveBottomBar));
+            }
+
+            RefreshBottomBarVisibilityLocks();
 
             var renderingPlatform = _renderingPlatform;
             _renderingBackendIndex = Math.Max(0, Array.IndexOf(
@@ -988,6 +1011,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
         _appSettings.FlashReadbackSkipPartitions = ReadbackSkipPartitions;
         _appSettings.FlashProtocolDisplay = [.. FlashProtocolDisplayItems.Select(item => item.ToPreference())];
+        _appSettings.BottomBarDisplay = [.. BottomBarDisplayItems.Select(item => item.ToPreference())];
         if (IsRenderingBackendConfigurable)
         {
             _appSettings.RenderingBackend = _renderingBackends[_renderingBackendIndex];
@@ -1039,7 +1063,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
-        foreach (var item in FlashProtocolDisplayItems)
+        foreach (var item in FlashProtocolDisplayItems.Concat(BottomBarDisplayItems))
         {
             item.RefreshLocalizedText();
         }
@@ -1049,31 +1073,69 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Moves a flash protocol one position earlier.<para>把烧录协议向前移动一位。</para></summary>
-    /// <param name="item">The protocol item to move.<para>要移动的协议项。</para></param>
-    [RelayCommand]
-    private void MoveFlashProtocolUp(FlashProtocolDisplayItem? item) => MoveFlashProtocol(item, -1);
+    /// <summary>
+    /// Keeps at least one bottom-bar item visible and persists the updated preference list.
+    /// <para>确保至少保留一个可见底栏项，并持久化更新后的偏好。</para>
+    /// </summary>
+    /// <param name="changed">The item whose visibility changed.<para>可见性发生变化的项。</para></param>
+    private void OnBottomBarVisibilityChanged(DisplayPreferenceItem changed)
+    {
+        if (_loading || _normalizingBottomBarDisplay)
+        {
+            return;
+        }
 
-    /// <summary>Moves a flash protocol one position later.<para>把烧录协议向后移动一位。</para></summary>
-    /// <param name="item">The protocol item to move.<para>要移动的协议项。</para></param>
-    [RelayCommand]
-    private void MoveFlashProtocolDown(FlashProtocolDisplayItem? item) => MoveFlashProtocol(item, 1);
+        if (!changed.IsVisible && !BottomBarDisplayItems.Any(item => item.IsVisible))
+        {
+            _normalizingBottomBarDisplay = true;
+            try
+            {
+                changed.IsVisible = true;
+            }
+            finally
+            {
+                _normalizingBottomBarDisplay = false;
+            }
+        }
 
-    private void MoveFlashProtocol(FlashProtocolDisplayItem? item, int offset)
+        RefreshBottomBarVisibilityLocks();
+        DebouncedSaveSettings();
+    }
+
+    private void RefreshBottomBarVisibilityLocks()
+    {
+        var visibleItems = BottomBarDisplayItems.Where(item => item.IsVisible).ToArray();
+        var lastVisible = visibleItems.Length == 1 ? visibleItems[0] : null;
+        foreach (var item in BottomBarDisplayItems)
+        {
+            item.CanChangeVisibility = !ReferenceEquals(item, lastVisible);
+        }
+    }
+
+    private void MoveBottomBar(DisplayPreferenceItem item, int offset) =>
+        MoveDisplayPreference(BottomBarDisplayItems, item, offset);
+
+    private void MoveFlashProtocol(DisplayPreferenceItem item, int offset) =>
+        MoveDisplayPreference(FlashProtocolDisplayItems, item, offset);
+
+    private void MoveDisplayPreference(
+        ObservableCollection<DisplayPreferenceItem> items,
+        DisplayPreferenceItem? item,
+        int offset)
     {
         if (item is null)
         {
             return;
         }
 
-        var current = FlashProtocolDisplayItems.IndexOf(item);
+        var current = items.IndexOf(item);
         var target = current + offset;
-        if (current < 0 || target < 0 || target >= FlashProtocolDisplayItems.Count)
+        if (current < 0 || target < 0 || target >= items.Count)
         {
             return;
         }
 
-        FlashProtocolDisplayItems.Move(current, target);
+        items.Move(current, target);
         DebouncedSaveSettings();
     }
 

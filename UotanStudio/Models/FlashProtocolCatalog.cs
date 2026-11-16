@@ -1,29 +1,4 @@
-using System.Text.Json.Serialization;
-
-namespace UotanStudio.Services.Flash;
-
-/// <summary>
-/// Persisted display preference for one protocol section on the flash page.
-/// <para>烧录页面单个协议分类的持久化显示偏好。</para>
-/// </summary>
-public sealed class FlashProtocolDisplayPreference
-{
-    /// <summary>Gets or sets the stable protocol key. <para>获取或设置稳定的协议键。</para></summary>
-    /// <value><c>edl</c>, <c>mtk</c>, <c>rockchip</c> or <c>sunxi</c>.<para><c>edl</c>、<c>mtk</c>、<c>rockchip</c> 或 <c>sunxi</c>。</para></value>
-    [JsonPropertyName("key")]
-    public string Key { get; set; } = string.Empty;
-
-    /// <summary>Gets or sets whether the protocol section is shown. <para>获取或设置是否显示该协议分类。</para></summary>
-    /// <value><see langword="true"/> to display the section.<para>显示分类时为 <see langword="true"/>。</para></value>
-    [JsonPropertyName("visible")]
-    public bool Visible { get; set; } = true;
-
-    internal FlashProtocolDisplayPreference Clone() => new()
-    {
-        Key = Key,
-        Visible = Visible
-    };
-}
+namespace UotanStudio.Models;
 
 /// <summary>
 /// Stable identifiers, defaults and normalization rules for flash protocol display preferences.
@@ -52,8 +27,8 @@ public static class FlashProtocolCatalog
 
     /// <summary>Creates the default all-visible display preferences.<para>创建默认全部可见的显示偏好。</para></summary>
     /// <returns>A new mutable preference list.<para>新的可变偏好列表。</para></returns>
-    public static List<FlashProtocolDisplayPreference> CreateDefaultDisplay() =>
-        [.. DefaultOrder.Select(key => new FlashProtocolDisplayPreference { Key = key, Visible = true })];
+    public static List<DisplayPreference> CreateDefaultDisplay() =>
+        DisplayPreferenceCatalog.CreateDefault(DefaultOrder);
 
     /// <summary>
     /// Normalizes persisted preferences to one entry per known protocol, preserving the supplied order and visibility.
@@ -61,32 +36,8 @@ public static class FlashProtocolCatalog
     /// </summary>
     /// <param name="preferences">Persisted preferences; may contain duplicates or unknown keys.<para>持久化偏好；可能含重复或未知键。</para></param>
     /// <returns>A complete normalized preference list.<para>补全后的规范偏好列表。</para></returns>
-    public static List<FlashProtocolDisplayPreference> Normalize(
-        IEnumerable<FlashProtocolDisplayPreference>? preferences)
-    {
-        var normalized = new List<FlashProtocolDisplayPreference>(DefaultOrder.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var preference in preferences ?? [])
-        {
-            var key = NormalizeKey(preference.Key);
-            if (key is null || !seen.Add(key))
-            {
-                continue;
-            }
-
-            normalized.Add(new FlashProtocolDisplayPreference { Key = key, Visible = preference.Visible });
-        }
-
-        foreach (var key in DefaultOrder)
-        {
-            if (seen.Add(key))
-            {
-                normalized.Add(new FlashProtocolDisplayPreference { Key = key, Visible = true });
-            }
-        }
-
-        return normalized;
-    }
+    public static List<DisplayPreference> Normalize(IEnumerable<DisplayPreference>? preferences) =>
+        DisplayPreferenceCatalog.Normalize(preferences, DefaultOrder, NormalizeKey);
 
     /// <summary>Normalizes a protocol key to its canonical lowercase identifier.<para>把协议键规范为稳定的全小写标识。</para></summary>
     /// <param name="key">The key to normalize.<para>要规范化的键。</para></param>

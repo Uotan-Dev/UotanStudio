@@ -12,6 +12,32 @@
              mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="2500"
              x:Class="UotanStudio.Views.Shell.SettingsView"
              x:DataType="vm:SettingsViewModel">
+    <UserControl.Resources>
+        <DataTemplate x:Key="DisplayPreferenceItemTemplate" x:DataType="vm:DisplayPreferenceItem">
+            <Border Classes="settings-inner" Margin="0,0,0,8" Padding="12">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding DisplayName}" Classes="settings-label" />
+                    <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                  IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanChangeVisibility}"
+                                  ToolTip.Tip="{Binding VisibilityHint}"
+                                  AutomationProperties.Name="{Binding VisibilityHint}" />
+                    <Button Grid.Column="2" Classes="settings-order"
+                            Command="{Binding MoveUpCommand}"
+                            ToolTip.Tip="{DynamicResource Settings_MoveUp}"
+                            AutomationProperties.Name="{DynamicResource Settings_MoveUp}">
+                        <icons:ChevronUp Width="14" Height="14" />
+                    </Button>
+                    <Button Grid.Column="3" Classes="settings-order"
+                            Command="{Binding MoveDownCommand}"
+                            ToolTip.Tip="{DynamicResource Settings_MoveDown}"
+                            AutomationProperties.Name="{DynamicResource Settings_MoveDown}">
+                        <icons:ChevronDown Width="14" Height="14" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Border.settings-card">
             <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
@@ -196,15 +222,14 @@
 
                         <Border Classes="settings-divider" Margin="0,16,0,0" />
 
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,16,0,0">
-                            <StackPanel>
-                                <TextBlock Text="{DynamicResource Settings_DebugMode}" Classes="settings-label" />
-                                <TextBlock Text="{DynamicResource Settings_DebugModeHint}"
-                                           Classes="settings-description" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
-                                          IsChecked="{Binding DebugMode, Mode=TwoWay}" />
-                        </Grid>
+                        <StackPanel Margin="0,18,0,0" Spacing="4">
+                            <TextBlock Text="{DynamicResource Settings_BottomBar}" Classes="settings-label" />
+                            <TextBlock Text="{DynamicResource Settings_BottomBarHint}"
+                                       Classes="settings-description" />
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding BottomBarDisplayItems}" Margin="0,10,0,0"
+                                      ItemTemplate="{StaticResource DisplayPreferenceItemTemplate}" />
 
                         <Border Classes="settings-divider" Margin="0,16,0,0" />
 
@@ -350,6 +375,21 @@
                         <TextBlock Text="{Binding ServerActionStatus}" Classes="settings-value"
                                    IsVisible="{Binding ServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}"
                                    HorizontalAlignment="Right" TextAlignment="Right" Margin="0,12,0,0" />
+
+                        <Border Classes="settings-divider" Margin="0,18,0,0" />
+
+                        <TextBlock Text="{DynamicResource Settings_Other}" Classes="settings-group-title"
+                                   Margin="0,18,0,0" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_DebugMode}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_DebugModeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding DebugMode, Mode=TwoWay}" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
@@ -460,35 +500,8 @@
                                        Classes="settings-description" />
                         </StackPanel>
 
-                        <ItemsControl ItemsSource="{Binding FlashProtocolDisplayItems}" Margin="0,10,0,0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FlashProtocolDisplayItem">
-                                    <Border Classes="settings-inner" Margin="0,0,0,8" Padding="12">
-                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                                            <TextBlock Text="{Binding DisplayName}" Classes="settings-label" />
-                                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
-                                                          IsChecked="{Binding IsVisible, Mode=TwoWay}"
-                                                          ToolTip.Tip="{DynamicResource Settings_ProtocolVisible}"
-                                                          AutomationProperties.Name="{DynamicResource Settings_ProtocolVisible}" />
-                                            <Button Grid.Column="2" Classes="settings-order"
-                                                    Command="{Binding $parent[UserControl].DataContext.MoveFlashProtocolUpCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip.Tip="{DynamicResource Settings_MoveUp}"
-                                                    AutomationProperties.Name="{DynamicResource Settings_MoveUp}">
-                                                <icons:ChevronUp Width="14" Height="14" />
-                                            </Button>
-                                            <Button Grid.Column="3" Classes="settings-order"
-                                                    Command="{Binding $parent[UserControl].DataContext.MoveFlashProtocolDownCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip.Tip="{DynamicResource Settings_MoveDown}"
-                                                    AutomationProperties.Name="{DynamicResource Settings_MoveDown}">
-                                                <icons:ChevronDown Width="14" Height="14" />
-                                            </Button>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding FlashProtocolDisplayItems}" Margin="0,10,0,0"
+                                      ItemTemplate="{StaticResource DisplayPreferenceItemTemplate}" />
                     </StackPanel>
                 </Border>
 

@@ -9,23 +9,11 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainView : UserControl
 {
-
-    private const int WorkspaceTabIndex = 3;
-    private const int FlashTabIndex = 4;
-    private const int NodeEditorTabIndex = 5;
-    private const int DeliveryTabIndex = 6;
-    private const int SettingsTabIndex = 7;
-
-    private readonly Func<int, Control> _createPage;
-
-    public MainView() : this(CreatePage) { }
-
-    internal MainView(Func<int, Control> createPage)
+    public MainView()
     {
-        _createPage = createPage;
         InitializeComponent();
 
-        MainTabs.SelectedIndex = WorkspaceTabIndex;
+        SelectPage(WorkspaceTab);
         MainTabs.PropertyChanged += (_, change) =>
         {
             if (change.Property == SelectingMultiPage.SelectedIndexProperty)
@@ -35,31 +23,40 @@ public partial class MainView : UserControl
         };
         MainTabs.SelectionChanged += OnSelectionChanged;
 
-        SendActiveTabChanged(MainTabs.SelectedIndex);
+        SendActiveTabChanged(MainTabs.SelectedPage);
+        Dispatcher.UIThread.Post(EnsureSelectedPage, DispatcherPriority.Background);
     }
 
-    private static Control CreatePage(int index) => index switch
+    private Control CreatePage(ContentPage page)
     {
-        FlashTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Flash),
-        DeliveryTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Delivery),
-        NodeEditorTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.NodeEditor),
-        SettingsTabIndex => ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Settings),
-        _ => throw new ArgumentOutOfRangeException(nameof(index))
-    };
+        if (ReferenceEquals(page, FlashTab))
+        {
+            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Flash);
+        }
+
+        if (ReferenceEquals(page, DeliveryTab))
+        {
+            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Delivery);
+        }
+
+        if (ReferenceEquals(page, NodeEditorTab))
+        {
+            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.NodeEditor);
+        }
+
+        if (ReferenceEquals(page, SettingsTab))
+        {
+            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Settings);
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(page));
+    }
 
     private void EnsureSelectedPage()
     {
-        var page = MainTabs.SelectedIndex switch
+        if (MainTabs.SelectedPage is ContentPage { Content: null } page && IsBottomPage(page))
         {
-            FlashTabIndex => FlashTab,
-            DeliveryTabIndex => DeliveryTab,
-            NodeEditorTabIndex => NodeEditorTab,
-            SettingsTabIndex => SettingsTab,
-            _ => null
-        };
-        if (page is not null && page.Content is null)
-        {
-            page.Content = _createPage(MainTabs.SelectedIndex);
+            page.Content = CreatePage(page);
         }
     }
 
@@ -82,55 +79,73 @@ public partial class MainView : UserControl
     {
         Dispatcher.Post(() =>
         {
-            var index = message.Target switch
+            var page = message.Target switch
             {
-                NavigationTarget.Workspace => WorkspaceTabIndex,
-                NavigationTarget.Flash => FlashTabIndex,
-                NavigationTarget.Delivery => DeliveryTabIndex,
-                NavigationTarget.NodeEditor => NodeEditorTabIndex,
-                NavigationTarget.Settings => SettingsTabIndex,
-                _ => MainTabs.SelectedIndex
+                NavigationTarget.Workspace => WorkspaceTab,
+                NavigationTarget.Flash => FlashTab,
+                NavigationTarget.Delivery => DeliveryTab,
+                NavigationTarget.NodeEditor => NodeEditorTab,
+                NavigationTarget.Settings => SettingsTab,
+                _ => MainTabs.SelectedPage
             };
-            if (MainTabs.SelectedIndex == index && message.Target == NavigationTarget.Delivery)
+            if (ReferenceEquals(MainTabs.SelectedPage, page) && message.Target == NavigationTarget.Delivery)
+            {
                 RefreshDelivery();
-            else MainTabs.SelectedIndex = index;
+            }
+            else if (page is not null)
+            {
+                SelectPage(page);
+            }
         });
     }
 
     /// <summary>
-    /// TabbedPage switch event: maps the newly active SelectedIndex to <see cref="ActiveTab"/> and broadcasts it so menu commands can re-evaluate availability.
-    /// <para>TabbedPage 切换事件：将新激活的 SelectedIndex 映射为 <see cref="ActiveTab"/> 并广播，使菜单命令据此刻画可用性。</para>
+    /// TabbedPage switch event: maps the newly active page to <see cref="ActiveTab"/> and broadcasts it so menu commands can re-evaluate availability.
+    /// <para>TabbedPage 切换事件：将新激活页面映射为 <see cref="ActiveTab"/> 并广播，使菜单命令据此刻画可用性。</para>
     /// </summary>
     /// <param name="sender">Event source. <para>事件源。</para></param>
     /// <param name="e">The selection changed args. <para>切换事件参数。</para></param>
     private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
     {
         EnsureSelectedPage();
-        SendActiveTabChanged(MainTabs.SelectedIndex);
-        if (MainTabs.SelectedIndex == DeliveryTabIndex)
+        SendActiveTabChanged(MainTabs.SelectedPage);
+        if (ReferenceEquals(MainTabs.SelectedPage, DeliveryTab))
         {
             RefreshDelivery();
         }
     }
 
-    /// <summary>
-    /// Maps the TabbedPage's SelectedIndex to <see cref="ActiveTab"/> and sends an <see cref="ActiveTabChangedMessage"/>.
-    /// <para>将 TabbedPage 的 SelectedIndex 映射为 <see cref="ActiveTab"/> 并发送 <see cref="ActiveTabChangedMessage"/>。</para>
-    /// </summary>
-    /// <param name="selectedIndex">The currently active bottom tab index. <para>当前激活的底栏 Tab 索引。</para></param>
-    private static void SendActiveTabChanged(int selectedIndex)
+    private void SendActiveTabChanged(Page? selectedPage)
     {
-        var tab = selectedIndex switch
+        var tab = selectedPage switch
         {
-            FlashTabIndex => ActiveTab.Flash,
-            WorkspaceTabIndex => ActiveTab.Workspace,
-            DeliveryTabIndex => ActiveTab.Delivery,
-            NodeEditorTabIndex => ActiveTab.NodeEditor,
-            SettingsTabIndex => ActiveTab.Settings,
+            _ when ReferenceEquals(selectedPage, FlashTab) => ActiveTab.Flash,
+            _ when ReferenceEquals(selectedPage, DeliveryTab) => ActiveTab.Delivery,
+            _ when ReferenceEquals(selectedPage, NodeEditorTab) => ActiveTab.NodeEditor,
+            _ when ReferenceEquals(selectedPage, SettingsTab) => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));
     }
+
+    private void SelectPage(Page page)
+    {
+        if (MainTabs.Pages is IList<Page> pages)
+        {
+            var index = pages.IndexOf(page);
+            if (index >= 0)
+            {
+                MainTabs.SelectedIndex = index;
+            }
+        }
+    }
+
+    private bool IsBottomPage(Page page) =>
+        ReferenceEquals(page, WorkspaceTab) ||
+        ReferenceEquals(page, FlashTab) ||
+        ReferenceEquals(page, NodeEditorTab) ||
+        ReferenceEquals(page, DeliveryTab) ||
+        ReferenceEquals(page, SettingsTab);
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -138,7 +153,7 @@ public partial class MainView : UserControl
         WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
         WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
         {
-            view.MainTabs.SelectedIndex = WorkspaceTabIndex;
+            view.SelectPage(view.WorkspaceTab);
 
             Dispatcher.UIThread.Post(() => view.WorkspaceDocuments.ShowDocumentSearch(message.ShowReplace), DispatcherPriority.Loaded);
         });

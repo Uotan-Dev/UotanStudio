@@ -7,6 +7,7 @@
              xmlns:vms="using:UotanStudio.ViewModels"
              xmlns:ursa="using:Ursa.Controls"
              xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:behaviors="using:UotanStudio.Views.Behaviors"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
              x:Class="UotanStudio.Views.Shell.FlashView"
              x:DataType="vm:FlashViewModel"
@@ -530,7 +531,8 @@
                             </StackPanel>
                         </StackPanel>
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
-                        <StackPanel Name="ProtocolPanelsHost" Spacing="10">
+                        <StackPanel Name="ProtocolPanelsHost" Spacing="10"
+                                  behaviors:FlashProtocolDisplayBehavior.Display="{Binding FlashProtocolDisplay}">
                         <!-- 高通 EDL 9008 协议分类 -->
                         <Expander Name="EdlExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Edl}" IsExpanded="{Binding IsEdlSectionExpanded, Mode=TwoWay}">

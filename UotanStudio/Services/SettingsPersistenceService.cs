@@ -7,7 +7,6 @@ using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
-using UotanStudio.Services.Flash;
 
 namespace UotanStudio.Services;
 
@@ -33,6 +32,7 @@ public class AppSettings : IJsonOnDeserialized
         PairedHdcNetworkTargets ??= [];
         FlashReadbackSkipPartitions ??= FlashProtocolCatalog.DefaultReadbackSkipPartitions;
         FlashProtocolDisplay = FlashProtocolCatalog.Normalize(FlashProtocolDisplay);
+        BottomBarDisplay = BottomBarCatalog.Normalize(BottomBarDisplay);
         ExpandedFlashSections ??= [];
         RemoteConnectionHistory ??= [];
     }
@@ -69,6 +69,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.PairedHdcNetworkTargets = [.. PairedHdcNetworkTargets];
         copy.FlashProtocolDisplay = [.. FlashProtocolDisplay.Select(x => x.Clone())];
+        copy.BottomBarDisplay = [.. BottomBarDisplay.Select(x => x.Clone())];
         copy.ExpandedFlashSections = [.. ExpandedFlashSections];
         copy.RemoteConnectionHistory = [.. RemoteConnectionHistory.Select(x => x.Clone())];
         copy.McpServers = [.. McpServers];
@@ -474,8 +475,17 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     /// <value>The normalized ordered protocol preferences.<para>规范化后的有序协议偏好。</para></value>
     [JsonPropertyName("flashProtocolDisplay")]
-    public List<FlashProtocolDisplayPreference> FlashProtocolDisplay { get; set; } =
+    public List<DisplayPreference> FlashProtocolDisplay { get; set; } =
         FlashProtocolCatalog.CreateDefaultDisplay();
+
+    /// <summary>
+    /// Gets or sets the ordered visibility preferences for bottom navigation items.
+    /// <para>获取或设置底栏导航项的有序显示偏好。</para>
+    /// </summary>
+    /// <value>The normalized ordered bottom-bar preferences.<para>规范化后的有序底栏偏好。</para></value>
+    [JsonPropertyName("bottomBarDisplay")]
+    public List<DisplayPreference> BottomBarDisplay { get; set; } =
+        BottomBarCatalog.CreateDefaultDisplay();
 
     /// <summary>
     /// Gets or sets the flash-page side sections that are expanded, identified by <c>edl</c>, <c>mtk</c>,
@@ -691,7 +701,7 @@ public sealed class RemoteConnectionProfile
 [JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSerializable(typeof(List<string>))]
-[JsonSerializable(typeof(List<FlashProtocolDisplayPreference>))]
+[JsonSerializable(typeof(List<DisplayPreference>))]
 [JsonSerializable(typeof(List<RemoteConnectionProfile>))]
 [JsonSerializable(typeof(RemoteConnectionProfile))]
 [JsonSerializable(typeof(RemoteProtocol))]

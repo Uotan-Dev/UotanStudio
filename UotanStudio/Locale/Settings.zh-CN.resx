@@ -123,6 +123,18 @@
   <data name="Settings_AutoSave" xml:space="preserve">
     <value>自动保存</value>
   </data>
+  <data name="Settings_BottomBar" xml:space="preserve">
+    <value>底栏内容</value>
+  </data>
+  <data name="Settings_BottomBarHint" xml:space="preserve">
+    <value>调整底栏项的显示顺序与可见性，仅显示一项时隐藏底栏。</value>
+  </data>
+  <data name="Settings_BottomBarVisible" xml:space="preserve">
+    <value>显示此项</value>
+  </data>
+  <data name="Settings_Other" xml:space="preserve">
+    <value>其他设置</value>
+  </data>
   <data name="Settings_DebugMode" xml:space="preserve">
     <value>调试模式</value>
   </data>
