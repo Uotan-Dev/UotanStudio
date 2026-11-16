@@ -8,6 +8,7 @@
              xmlns:ursa="using:Ursa.Controls"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:behaviors="using:UotanStudio.Views.Behaviors"
+             xmlns:edit="using:AvaloniaEdit"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
              x:Class="UotanStudio.Views.Shell.FlashView"
              x:DataType="vm:FlashViewModel"
@@ -30,13 +31,6 @@
         </Style>
         <Style Selector="TextBox">
             <Setter Property="FontSize" Value="13" />
-        </Style>
-        <!-- 日志框是多行只读控件，需要覆盖主题给出的单行高度并让文本顶端对齐。 -->
-        <!-- The log box is a multi-line read-only control, so it overrides the themed single-line height. -->
-        <Style Selector="TextBox#LogBox">
-            <Setter Property="VerticalContentAlignment" Value="Top" />
-            <Setter Property="VerticalAlignment" Value="Stretch" />
-            <Setter Property="Height" Value="NaN" />
         </Style>
         <Style Selector="Button.pane-action, DropDownButton.pane-action">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -146,13 +140,28 @@
                                 Click="OnClearLogClick" Content="{DynamicResource Flash_ClearLog}"
                                 AutomationProperties.Name="{DynamicResource Flash_ClearLog}" />
                     </Grid>
-                    <TextBox Grid.Row="1" Name="LogBox" Margin="12,0,12,8" Padding="8"
-                             IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                             Text="{Binding LogText, Mode=OneWay}"
-                             PlaceholderText="{DynamicResource Flash_LogPlaceholder}"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             AutomationProperties.Name="{DynamicResource Flash_Log}" />
+                    <Border Grid.Row="1" Name="LogBoxContainer" Margin="12,0,12,8"
+                            CornerRadius="4" BorderThickness="1" ClipToBounds="True"
+                            Background="{DynamicResource TextBoxDefaultBackground}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BoxShadow="inset 0 1 2 0 #14000000">
+                        <edit:TextEditor Name="LogBox"
+                                     IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
+                                     FontFamily="Consolas,monospace" FontSize="13"
+                                     Padding="8,4" Background="Transparent"
+                                     Foreground="{DynamicResource TextForeground}"
+                                     HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                     AutomationProperties.Name="{DynamicResource Flash_Log}">
+                        <edit:TextEditor.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Name="CopySelectionMenuItem" Header="{DynamicResource Menu_Copy}"
+                                          InputGesture="Ctrl+C" IsEnabled="False" Click="OnCopySelectionClick" />
+                                <MenuItem Header="{DynamicResource Menu_SelectAll}"
+                                          InputGesture="Ctrl+A" Click="OnSelectAllClick" />
+                            </ContextMenu>
+                        </edit:TextEditor.ContextMenu>
+                    </edit:TextEditor>
+                    </Border>
                     <ProgressBar Grid.Row="2" Name="LogOverallProgress" Margin="12,0,12,12"
                                  Minimum="0" Maximum="100" Height="20" CornerRadius="4"
                                  ShowProgressText="True" FontSize="12"

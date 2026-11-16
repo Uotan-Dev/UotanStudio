@@ -1,10 +1,17 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Rendering;
 using UotanStudio.ViewModels.Flash;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Shell;
 
@@ -77,6 +84,16 @@ public partial class FlashView : UserControl
     public FlashView()
     {
         InitializeComponent();
+        LogBox.Options.EnableHyperlinks = false;
+        LogBox.Options.EnableEmailHyperlinks = false;
+        LogBox.Options.AllowScrollBelowDocument = false;
+        LogBox.Document.UndoStack.SizeLimit = 0;
+        LogBox.Loaded += OnLogBoxLoaded;
+        LogBox.ActualThemeVariantChanged += (_, _) => LogBox.TextArea.TextView.Redraw();
+        LogBox.TextArea.TextView.LineTransformers.Add(new LogLineColorizer(this));
+        LogBox.TextArea.SelectionChanged += OnLogBoxSelectionChanged;
+        LogBox.Document.Text = _model.LogText;
+        _model.PropertyChanged += OnModelPropertyChanged;
         AvbDisableCommandBox.ItemsSource = AvbToolViewModel.AvailableDisableCommands[..3];
         AvbDisableCommandBox.SelectedIndex = 0;
         DataContext = _model;
@@ -135,7 +152,7 @@ public partial class FlashView : UserControl
             Place(ActionPane, row: 0, column: 4, rowSpan: 3);
             LogOverallProgress.IsVisible = true;
             PartitionOverallProgress.IsVisible = false;
-            LogBox.Margin = new Thickness(12, 0, 12, 8);
+            LogBoxContainer.Margin = new Thickness(12, 0, 12, 8);
         }
         else
         {
@@ -172,7 +189,7 @@ public partial class FlashView : UserControl
             Place(LogPane, row: 4, column: 0, columnSpan: 3);
             LogOverallProgress.IsVisible = false;
             PartitionOverallProgress.IsVisible = true;
-            LogBox.Margin = new Thickness(12, 0, 12, 12);
+            LogBoxContainer.Margin = new Thickness(12, 0, 12, 12);
 
             PartitionPane.Height = StackedListHeight;
             PartitionPane.MaxHeight = StackedListHeight;
@@ -283,7 +300,72 @@ public partial class FlashView : UserControl
     private void OnChooseFileClick(object? sender, RoutedEventArgs e) => _model.OnChooseFileClick(sender, e);
     private void OnChooseFolderClick(object? sender, RoutedEventArgs e) => _model.OnChooseFolderClick(sender, e);
     private void OnGetPackageClick(object? sender, RoutedEventArgs e) => _model.OnGetPackageClick(sender, e);
-    private void OnClearLogClick(object? sender, RoutedEventArgs e) => _model.OnClearLogClick(sender, e);
+    private void OnClearLogClick(object? sender, RoutedEventArgs e)
+    {
+        _model.OnClearLogClick(sender, e);
+        LogBox.Document.Text = _model.LogText;
+    }
+
+    private void OnLogBoxLoaded(object? sender, RoutedEventArgs e)
+    {
+        LogEditorMetrics.ApplyLineHeight(LogBox);
+        var scroller = LogBox.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        scroller?.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);
+    }
+
+    private void OnLogBoxSelectionChanged(object? sender, EventArgs e)
+        => CopySelectionMenuItem.IsEnabled = LogBox.SelectionLength > 0;
+
+    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FlashViewModel.LogText))
+        {
+            LogBox.Document.Text = _model.LogText;
+        }
+    }
+
+    private void OnCopySelectionClick(object? sender, RoutedEventArgs e) => LogBox.Copy();
+    private void OnSelectAllClick(object? sender, RoutedEventArgs e) => LogBox.SelectAll();
+
+    private sealed class LogLineColorizer(Control host) : DocumentColorizingTransformer
+    {
+        protected override void ColorizeLine(DocumentLine line)
+        {
+            if (line.Length == 0)
+            {
+                return;
+            }
+
+            var text = CurrentContext.Document.GetText(line);
+            var key = ResolveBrushKey(text);
+            if (key is null)
+            {
+                ChangeLinePart(line.Offset, line.EndOffset, static element =>
+                    element.TextRunProperties.SetBaselineAlignment(BaselineAlignment.Center));
+                return;
+            }
+
+            if (host.TryFindResource(key, host.ActualThemeVariant, out var resource) && resource is IBrush brush)
+            {
+                ChangeLinePart(line.Offset, line.EndOffset, element =>
+                {
+                    element.TextRunProperties.SetForegroundBrush(brush);
+                    element.TextRunProperties.SetBaselineAlignment(BaselineAlignment.Center);
+                });
+            }
+        }
+
+        private static string? ResolveBrushKey(string text)
+        {
+            if (text.Contains("[Fatal]", StringComparison.OrdinalIgnoreCase)) return "LogFatalBrush";
+            if (text.Contains("[Error]", StringComparison.OrdinalIgnoreCase)) return "LogErrorBrush";
+            if (text.Contains("[Warn]", StringComparison.OrdinalIgnoreCase)) return "LogWarnBrush";
+            if (text.Contains("[Info]", StringComparison.OrdinalIgnoreCase)) return "LogInfoBrush";
+            if (text.Contains("[Debug]", StringComparison.OrdinalIgnoreCase)) return "LogDebugBrush";
+            if (text.Contains("[Trace]", StringComparison.OrdinalIgnoreCase)) return "LogTraceBrush";
+            return null;
+        }
+    }
     private void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e) => _model.OnChoosePartitionImageClick(sender, e);
     private void OnAddPartitionClick(object? sender, RoutedEventArgs e) => _model.OnAddPartitionClick(sender, e);
     private void OnDeletePartitionsClick(object? sender, RoutedEventArgs e) => _model.OnDeletePartitionsClick(sender, e);
