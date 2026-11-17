@@ -2,7 +2,7 @@
 
 <div id="header" align="center">
  <h3>UotanStudio</h3>
- <h4><i>集固件解打包、开发板烧录与可视化编程于一体的一站式工具箱</i></h4>
+ <h4><i>集固件解打包、开发板烧录与自动化节点于一体的开发平台</i></h4>
  <div id="badges">
   <a href="https://www.uotan.cn/">
    <img src="https://img.shields.io/badge/Uotan%20Project-ff4e45?style=for-the-badge" alt="Uotan Project"/>

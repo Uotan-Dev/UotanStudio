@@ -418,10 +418,7 @@ Continue creating the project?</value>
     <value>About UotanStudio</value>
   </data>
   <data name="About_Description" xml:space="preserve">
-    <value>An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</value>
-  </data>
-  <data name="About_FontNotice" xml:space="preserve">
-    <value>The interface uses MiSans fonts. Copyright Xiaomi Inc.; distributed under the MiSans Font License.</value>
+    <value>A development platform for firmware unpack/pack, board flashing and automation nodes.</value>
   </data>
   <data name="About_Close" xml:space="preserve">
     <value>Close</value>
@@ -433,7 +430,7 @@ Continue creating the project?</value>
     <value>Repository</value>
   </data>
   <data name="About_OpenSourceNotice" xml:space="preserve">
-    <value>UotanStudio is distributed under GNU GPL-3.0. It uses or references the open-source projects listed below, each governed by its own license. MIT, BSD and Apache-2.0 components are compatible with GPL-3.0 and their notices are retained. The Semi.Avalonia.AvaloniaEdit and Semi.Avalonia.Dock themes are proprietary, closed-source packages under the IRIHI EULA and are not GPL-3.0-compatible. LibUsbDotNet (LGPL-3.0-or-later) is statically linked; the MiSans fonts are used unmodified under their own license.</value>
+    <value>UotanStudio is distributed under GNU GPL-3.0. It uses or references the open-source projects listed below, each governed by its own license.&#10;MIT, BSD and Apache-2.0 components are compatible with GPL-3.0 and their notices are retained.&#10;The Semi.Avalonia.AvaloniaEdit and Semi.Avalonia.Dock themes are proprietary, closed-source packages under the IRIHI EULA and are not GPL-3.0-compatible.&#10;LibUsbDotNet (LGPL-3.0-or-later) is statically linked.&#10;The MiSans fonts used in the interface are copyright Xiaomi Inc. and are used unmodified under the MiSans Font License.</value>
   </data>
   <data name="About_Gc" xml:space="preserve">
     <value>Current GC</value>

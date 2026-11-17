@@ -2,7 +2,7 @@
 
 <div id="header" align="center">
  <h3>UotanStudio</h3>
- <h4><i>An integrated toolbox for firmware unpack/pack, board flashing and visual programming</i></h4>
+ <h4><i>A development platform for firmware unpack/pack, board flashing and automation nodes</i></h4>
  <div id="badges">
   <a href="https://www.uotan.cn/">
    <img src="https://img.shields.io/badge/Uotan%20Project-ff4e45?style=for-the-badge" alt="Uotan Project"/>

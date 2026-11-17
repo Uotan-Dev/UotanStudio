@@ -1866,7 +1866,6 @@ internal static class LocaleKeySets
         "About_OpenCommit",
         "About_Title",
         "About_Description",
-        "About_FontNotice",
         "About_Close",
         "About_OpenSource",
         "About_OpenRepository",
