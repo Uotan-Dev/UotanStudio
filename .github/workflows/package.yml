@@ -1,9 +1,5 @@
 name: Package installers
 
-# Repackages build artifacts into Windows MSIX (self-signed), macOS DMG and Linux
-# deb/rpm. Sources: the newest successful runs of release.yml, riscv-publish.yml and
-# loongarch-publish.yml (run_id picks a specific release.yml run), or an already
-# published release tag via `tag` (stable rids only).
 on:
   workflow_dispatch:
     inputs:
@@ -30,8 +26,6 @@ jobs:
     outputs:
       packages: ${{ steps.src.outputs.packages }}
       ver: ${{ steps.src.outputs.ver }}
-      # A job-level if runs before the matrix expands, so it cannot read matrix.* there.
-      # The per-platform matrices and their readiness flags are resolved here instead.
       windows_matrix: ${{ steps.src.outputs.windows_matrix }}
       windows_ready: ${{ steps.src.outputs.windows_ready }}
       macos_matrix: ${{ steps.src.outputs.macos_matrix }}
@@ -48,16 +42,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          # This job has no checkout, so gh cannot infer the repository from a
-          # working tree; GH_REPO plus the explicit --repo below pin it.
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.inputs.run_id }}
           TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
-          # Prints a run id or nothing, and never fails: an empty result means
-          # "no successful run" while a gh error is reported as a warning so it is
-          # not mistaken for a missing workflow.
           fetch() {
             if [ -n "$RUN_ID" ] && [ "$1" = release.yml ]; then printf '%s' "$RUN_ID"; return 0; fi
             local out
@@ -117,10 +106,6 @@ jobs:
           echo "ver=$base" >> "$GITHUB_OUTPUT"
           echo "::notice::Packageable rids: $(jq -r 'keys | join(", ")' <<< "$json")"
 
-          # Build one matrix per packaging job from the rids that actually have an
-          # artifact. A job conditions on its ready flag, which prepare computes from
-          # the same JSON, because a job-level if cannot read matrix.* (it is evaluated
-          # before the matrix expands).
           emit_matrix() {
             local key="$1" flag="$2" entries="$3"
             echo "${key}_matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
@@ -195,7 +180,6 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP 'msix'
           Copy-Item publish -Destination $stage -Recurse -Force
 
-          # Icons from the published Assets folder.
           Add-Type -AssemblyName System.Drawing
           $ico = Join-Path $stage 'Assets\uotan.ico'
           $icon = [System.Drawing.Icon]::new($ico, 256, 256)
@@ -255,8 +239,6 @@ jobs:
           & $makeappx pack /d $stage /p "$env:RUNNER_TEMP\uotanstudio-$env:VER-${{ matrix.rid }}.msix" /nv | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'makeappx failed' }
 
-          # MSIX requires a signature; use a throwaway self-signed cert and ship the
-          # .cer so users can trust it before installing.
           $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=UotanStudio' `
             -KeyUsage DigitalSignature -FriendlyName 'UotanStudio MSIX packaging' `
             -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
@@ -348,7 +330,6 @@ jobs:
           PLIST
           sed -i '' "s/VER_PLACEHOLDER/$VER/g" "$app/Contents/Info.plist"
 
-          # Ad-hoc signature (no developer ID; unsigned apps are blocked by Gatekeeper).
           codesign --force --deep -s - "$app"
 
           mkdir -p "$RUNNER_TEMP/dmgstage"
@@ -699,8 +680,6 @@ jobs:
             echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
             cd /work/build
             chown -R builder:builder .
-            # riscv64/loongarch64 packages are built on the x64 host with an overridden
-            # CARCH: packaging only copies files, no target binaries are executed.
             su builder -c "cd /work/build && CARCH=$PKG_ARCH makepkg -f --ignorearch"
             find /work/build -name "*.pkg.tar.zst" -exec cp {} /work/out/ \;
           '
