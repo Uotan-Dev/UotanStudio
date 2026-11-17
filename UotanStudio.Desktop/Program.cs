@@ -33,6 +33,11 @@ sealed class Program
             return Services.Devices.UsbDriverElevatedCommand.Run(args);
         }
 
+        if (Services.FileAssociationElevatedCommand.IsRequested(args))
+        {
+            return Services.FileAssociationElevatedCommand.Run(args);
+        }
+
         if (global::UotanStudio.DD.Writing.FlashJobChild.IsRequested(args))
         {
             return global::UotanStudio.DD.Writing.FlashJobChild.Run(args);

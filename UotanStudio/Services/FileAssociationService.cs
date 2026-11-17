@@ -80,61 +80,60 @@ public static partial class FileAssociationService
     private static partial int RegCloseKey(nint hKey);
 
     /// <summary>
-    /// Reads the persisted selection and applies the full association set on the current platform.
-    /// <para>读取持久化的勾选集合，并在当前平台应用完整的文件关联。</para>
-    /// </summary>
-    public static void ApplyFromSettings()
-    {
-        IReadOnlyList<string> selected;
-        try
-        {
-            selected = SettingsPersistenceService.Instance.LoadSettings().AssociatedFileExtensions;
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
-                $"Loading the association selection failed: {ex.Message}; using defaults.");
-            selected = DefaultAssociatedExtensions;
-        }
-
-        Register(selected);
-    }
-
-    /// <summary>
-    /// Registers the built-in project formats together with <paramref name="selectedExtensions"/> idempotently.
-    /// <para>幂等注册内置工程格式以及 <paramref name="selectedExtensions"/> 指定的扩展名。</para>
+    /// Registers the built-in project formats together with <paramref name="selectedExtensions"/> and reports
+    /// a structured outcome, classifying permission failures so the caller can offer elevation.
+    /// <para>幂等注册内置工程格式以及 <paramref name="selectedExtensions"/> 指定的扩展名，并返回结构化结果；
+    /// 权限不足会被单独分类，便于调用方提供提权选项。</para>
     /// </summary>
     /// <param name="selectedExtensions">Optional user selection; null registers only the built-in formats.
     /// <para>用户勾选的扩展名；为 null 时只注册内置格式。</para></param>
-    /// <returns>True when the current platform completed registration.<para>当前平台完成注册时为真。</para></returns>
-    public static bool Register(IReadOnlyList<string>? selectedExtensions = null)
+    /// <returns>The detailed registration outcome.<para>详细的注册结果。</para></returns>
+    public static FileAssociationResult RegisterDetailed(IReadOnlyList<string>? selectedExtensions = null)
     {
         var specs = BuildSpecs(selectedExtensions);
         try
         {
             if (OperatingSystem.IsWindows())
             {
-                return RegisterWindows(specs);
+                return RegisterWindows(specs)
+                    ? FileAssociationResult.Succeeded(specs.Count)
+                    : FileAssociationResult.Failed("Windows registration did not complete.");
             }
 
             if (OperatingSystem.IsMacOS())
             {
-                return RegisterMacOS(specs);
+                return RegisterMacOS(specs)
+                    ? FileAssociationResult.Succeeded(specs.Count)
+                    : FileAssociationResult.Failed("macOS registration did not complete.");
             }
 
             if (OperatingSystem.IsLinux())
             {
-                return RegisterLinux(specs);
+                return RegisterLinux(specs)
+                    ? FileAssociationResult.Succeeded(specs.Count)
+                    : FileAssociationResult.Failed("Linux registration did not complete.");
             }
 
-            return false;
+            return FileAssociationResult.Unsupported();
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "FileAssociation", $"Register failed: {ex.Message}");
-            return false;
+            var message = $"{ex.GetType().Name}: {ex.Message}";
+            LogService.Instance.Write(LogLevel.Error, "FileAssociation", $"Register failed: {message}");
+            return IsPermissionFailure(ex)
+                ? FileAssociationResult.ElevationRequired(message)
+                : FileAssociationResult.Failed(message);
         }
     }
+
+    /// <summary>
+    /// Registers the built-in formats with the persisted selection and returns only whether it succeeded.
+    /// <para>使用持久化选择注册内置格式，仅返回是否成功。</para>
+    /// </summary>
+    /// <param name="selectedExtensions">Optional user selection.<para>用户勾选的扩展名。</para></param>
+    /// <returns>True on success.<para>成功时为真。</para></returns>
+    public static bool Register(IReadOnlyList<string>? selectedExtensions = null) =>
+        RegisterDetailed(selectedExtensions).Status == FileAssociationStatus.Succeeded;
 
     /// <summary>
     /// Removes the built-in project formats and every extension in <paramref name="selectedExtensions"/>.
@@ -170,6 +169,23 @@ public static partial class FileAssociationService
             LogService.Instance.Write(LogLevel.Error, "FileAssociation", $"Unregister failed: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Reports whether an exception is an OS permission failure that elevation could resolve.
+    /// <para>报告异常是否属于提权可能解决的系统权限失败。</para>
+    /// </summary>
+    /// <param name="ex">The exception to classify.<para>待分类的异常。</para></param>
+    /// <returns>True when the failure is an access-denied error.<para>属于拒绝访问错误时为真。</para></returns>
+    internal static bool IsPermissionFailure(Exception ex)
+    {
+        if (ex is UnauthorizedAccessException)
+        {
+            return true;
+        }
+
+        return ex is System.ComponentModel.Win32Exception win32 &&
+            win32.NativeErrorCode is 5 or 740;
     }
 
     /// <summary>
@@ -502,9 +518,11 @@ public static partial class FileAssociationService
 
     private static void SetStringValue(string subKey, string? valueName, string value)
     {
-        if (RegCreateKeyExW(Hkcu, subKey, 0, null, RegOptionNonVolatile, KeyWrite, nint.Zero, out var key, out _) != 0)
+        var createResult = RegCreateKeyExW(Hkcu, subKey, 0, null, RegOptionNonVolatile, KeyWrite, nint.Zero, out var key, out _);
+        if (createResult != 0)
         {
-            throw new InvalidOperationException($"Failed to open/create registry key '{subKey}'.");
+            throw new System.ComponentModel.Win32Exception(createResult,
+                $"Failed to open/create registry key '{subKey}'.");
         }
 
         try
@@ -626,4 +644,158 @@ public static partial class FileAssociationService
     /// <param name="Extension">Normalized extension.<para>规范化后的扩展名。</para></param>
     /// <param name="BundleIdentifier">Target application bundle identifier.<para>目标应用包标识符。</para></param>
     internal sealed record MacDocumentType(string Extension, string BundleIdentifier);
+}
+
+/// <summary>Outcome status of a file-association registration attempt.<para>文件关联注册尝试的结果状态。</para></summary>
+public enum FileAssociationStatus
+{
+    /// <summary>Registration completed successfully.<para>注册成功完成。</para></summary>
+    Succeeded,
+
+    /// <summary>Registration failed because the process lacks permission; elevation can resolve it.
+    /// <para>因进程权限不足导致注册失败；提权可解决。</para></summary>
+    ElevationRequired,
+
+    /// <summary>Registration failed for a reason other than permission.<para>因权限以外的原因导致注册失败。</para></summary>
+    Failed,
+
+    /// <summary>The current operating system is not supported.<para>当前操作系统不受支持。</para></summary>
+    Unsupported,
+}
+
+/// <summary>Detailed outcome of a file-association registration attempt.<para>文件关联注册尝试的详细结果。</para></summary>
+/// <param name="Status">The outcome status.<para>结果状态。</para></param>
+/// <param name="Message">A human-readable detail, especially the failure reason.<para>可读的详情，尤其是失败原因。</para></param>
+/// <param name="AssociationCount">Number of formats registered on success.<para>成功时注册的关联数量。</para></param>
+public sealed record FileAssociationResult(FileAssociationStatus Status, string Message, int AssociationCount)
+{
+    /// <summary>Creates a success result.<para>创建成功结果。</para></summary>
+    /// <param name="count">Number of registered formats.<para>注册的关联数量。</para></param>
+    /// <returns>The success result.<para>成功结果。</para></returns>
+    public static FileAssociationResult Succeeded(int count) =>
+        new(FileAssociationStatus.Succeeded, string.Empty, count);
+
+    /// <summary>Creates an elevation-required failure result.<para>创建需要提权的失败结果。</para></summary>
+    /// <param name="reason">The underlying permission failure.<para>底层的权限失败原因。</para></param>
+    /// <returns>The result.<para>结果。</para></returns>
+    public static FileAssociationResult ElevationRequired(string reason) =>
+        new(FileAssociationStatus.ElevationRequired, reason, 0);
+
+    /// <summary>Creates a general failure result.<para>创建一般失败结果。</para></summary>
+    /// <param name="reason">The failure reason.<para>失败原因。</para></param>
+    /// <returns>The result.<para>结果。</para></returns>
+    public static FileAssociationResult Failed(string reason) =>
+        new(FileAssociationStatus.Failed, reason, 0);
+
+    /// <summary>Creates an unsupported-platform result.<para>创建平台不支持结果。</para></summary>
+    /// <returns>The result.<para>结果。</para></returns>
+    public static FileAssociationResult Unsupported() =>
+        new(FileAssociationStatus.Unsupported, "File associations are not supported on this operating system.", 0);
+}
+
+/// <summary>Command-line contract of the elevated file-association helper.<para>文件关联提权助手的命令行契约。</para></summary>
+public static class FileAssociationElevatedCommand
+{
+    /// <summary>Switch selecting the elevated registration helper.<para>选择提权注册助手的开关。</para></summary>
+    public const string RegisterSwitch = "--file-associations-register";
+
+    /// <summary>Switch carrying the file the helper writes its result to.<para>携带助手写入结果文件路径的开关。</para></summary>
+    public const string ResultSwitch = "--file-associations-result";
+
+    /// <summary>Gets whether the arguments select the elevated file-association helper.
+    /// <para>获取参数是否选择文件关联提权助手。</para></summary>
+    /// <param name="args">Process arguments.<para>进程参数。</para></param>
+    /// <returns>True when the helper is requested.<para>请求助手时为真。</para></returns>
+    public static bool IsRequested(string[] args) => args is [RegisterSwitch, ..];
+
+    /// <summary>Finds the value following a named switch.<para>查找命名开关之后的值。</para></summary>
+    /// <param name="args">Process arguments.<para>进程参数。</para></param>
+    /// <param name="name">The switch name.<para>开关名称。</para></param>
+    /// <returns>The value, or null when absent.<para>值；缺失时为 null。</para></returns>
+    public static string? FindValue(string[] args, string name)
+    {
+        var index = Array.IndexOf(args, name);
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    /// <summary>Gets the extensions carried by the helper arguments after the result file pair.
+    /// <para>获取助手参数中结果文件对之后携带的扩展名。</para></summary>
+    /// <param name="args">Process arguments.<para>进程参数。</para></param>
+    /// <returns>The selected extensions.<para>选定的扩展名集合。</para></returns>
+    public static IReadOnlyList<string> ReadExtensions(string[] args)
+    {
+        var values = new List<string>();
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] == ResultSwitch)
+            {
+                i++;
+                continue;
+            }
+
+            values.Add(args[i]);
+        }
+
+        return values;
+    }
+
+    /// <summary>Runs registration in this helper process and writes the outcome to the result file.
+    /// <para>在本助手进程中执行注册，并把结果写入结果文件。</para></summary>
+    /// <param name="args">Process arguments.<para>进程参数。</para></param>
+    /// <returns>0 on success, 1 otherwise.<para>成功时为 0，否则为 1。</para></returns>
+    public static int Run(string[] args)
+    {
+        FileAssociationResult result;
+        try
+        {
+            result = FileAssociationService.RegisterDetailed(ReadExtensions(args));
+        }
+        catch (Exception ex)
+        {
+            result = FileAssociationResult.Failed($"{ex.GetType().Name}: {ex.Message}");
+        }
+
+        var resultPath = FindValue(args, ResultSwitch);
+        if (!string.IsNullOrWhiteSpace(resultPath))
+        {
+            try
+            {
+                File.WriteAllText(resultPath,
+                    string.Join('\n', result.Status.ToString(), result.AssociationCount.ToString(), result.Message));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return result.Status == FileAssociationStatus.Succeeded ? 0 : 1;
+    }
+
+    /// <summary>Reads a helper result file written by <see cref="Run"/>.
+    /// <para>读取由 <see cref="Run"/> 写入的助手结果文件。</para></summary>
+    /// <param name="resultPath">The result file path.<para>结果文件路径。</para></param>
+    /// <returns>The parsed result, or null when the file is missing or malformed.<para>解析出的结果；文件缺失或格式错误时为 null。</para></returns>
+    public static FileAssociationResult? ReadResult(string resultPath)
+    {
+        try
+        {
+            if (!File.Exists(resultPath))
+            {
+                return null;
+            }
+
+            var lines = File.ReadAllLines(resultPath);
+            if (lines.Length < 2 || !Enum.TryParse<FileAssociationStatus>(lines[0], out var status) ||
+                !int.TryParse(lines[1], out var count))
+            {
+                return null;
+            }
+
+            return new FileAssociationResult(status, lines.Length > 2 ? lines[2] : string.Empty, count);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 }

@@ -97,7 +97,6 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
-        _ = Task.Run(FileAssociationService.ApplyFromSettings);
         _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
         _ = RunAutomaticUpdateCheckAsync();
 

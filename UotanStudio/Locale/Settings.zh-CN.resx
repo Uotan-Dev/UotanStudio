@@ -142,7 +142,19 @@
     <value>关联文件格式</value>
   </data>
   <data name="Settings_FileAssociationsSave" xml:space="preserve">
-    <value>保存关联设置</value>
+    <value>应用文件关联</value>
+  </data>
+  <data name="Settings_FileAssociationApplySucceeded" xml:space="preserve">
+    <value>文件关联已应用</value>
+  </data>
+  <data name="Settings_FileAssociationApplySucceededDetail" xml:space="preserve">
+    <value>已成功注册 {0} 个文件类型。</value>
+  </data>
+  <data name="Settings_FileAssociationApplyFailed" xml:space="preserve">
+    <value>应用文件关联失败</value>
+  </data>
+  <data name="Settings_FileAssociationApplyElevation" xml:space="preserve">
+    <value>需要管理员权限</value>
   </data>
   <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
     <value>排序：按类别</value>

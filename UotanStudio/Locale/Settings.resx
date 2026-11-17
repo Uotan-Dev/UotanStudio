@@ -142,7 +142,19 @@
     <value>Associated file formats</value>
   </data>
   <data name="Settings_FileAssociationsSave" xml:space="preserve">
-    <value>Save Association Settings</value>
+    <value>Apply File Associations</value>
+  </data>
+  <data name="Settings_FileAssociationApplySucceeded" xml:space="preserve">
+    <value>File associations applied</value>
+  </data>
+  <data name="Settings_FileAssociationApplySucceededDetail" xml:space="preserve">
+    <value>Registered {0} file format(s) successfully.</value>
+  </data>
+  <data name="Settings_FileAssociationApplyFailed" xml:space="preserve">
+    <value>Failed to apply file associations</value>
+  </data>
+  <data name="Settings_FileAssociationApplyElevation" xml:space="preserve">
+    <value>Administrator rights required</value>
   </data>
   <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
     <value>Sort: Category</value>

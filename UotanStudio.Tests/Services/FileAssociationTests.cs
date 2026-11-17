@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using UotanStudio.Services;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -122,5 +123,66 @@ public sealed class FileAssociationTests
         var types = FileAssociationService.BuildMacDocumentTypes(specs);
 
         Assert.Equal(specs.Select(s => s.Extension), types.Select(t => t.Extension));
+    }
+
+    [Fact]
+    public void IsPermissionFailure_UnauthorizedAccess_IsTrue() =>
+        Assert.True(FileAssociationService.IsPermissionFailure(new UnauthorizedAccessException("denied")));
+
+    [Fact]
+    public void IsPermissionFailure_OtherFailure_IsFalse() =>
+        Assert.False(FileAssociationService.IsPermissionFailure(new InvalidOperationException("other")));
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(740)]
+    public void IsPermissionFailure_AccessDeniedWin32Code_IsTrue(int nativeCode) =>
+        Assert.True(FileAssociationService.IsPermissionFailure(
+            new System.ComponentModel.Win32Exception(nativeCode, "denied")));
+
+    [Fact]
+    public void IsPermissionFailure_UnrelatedWin32Code_IsFalse() =>
+        Assert.False(FileAssociationService.IsPermissionFailure(
+            new System.ComponentModel.Win32Exception(2, "not found")));
+
+    [Fact]
+    public void FileAssociationResult_Factories_CarryStatusAndReason()
+    {
+        Assert.Equal(FileAssociationStatus.Succeeded, FileAssociationResult.Succeeded(4).Status);
+        Assert.Equal(4, FileAssociationResult.Succeeded(4).AssociationCount);
+        Assert.Equal(FileAssociationStatus.ElevationRequired, FileAssociationResult.ElevationRequired("uac").Status);
+        Assert.Equal("uac", FileAssociationResult.ElevationRequired("uac").Message);
+        Assert.Equal(FileAssociationStatus.Failed, FileAssociationResult.Failed("boom").Status);
+        Assert.Equal("boom", FileAssociationResult.Failed("boom").Message);
+        Assert.Equal(FileAssociationStatus.Unsupported, FileAssociationResult.Unsupported().Status);
+    }
+
+    [Fact]
+    public void ElevatedCommand_RoundTripsResultFile()
+    {
+        using var directory = new TempDirectory();
+        var path = Path.Combine(directory.Path, "result.txt");
+        var expected = new FileAssociationResult(FileAssociationStatus.Failed, "registry access denied", 0);
+        File.WriteAllText(path, $"{expected.Status}\n{expected.AssociationCount}\n{expected.Message}");
+
+        var actual = FileAssociationElevatedCommand.ReadResult(path);
+
+        Assert.NotNull(actual);
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ElevatedCommand_ParsesExtensionsAfterResultPair()
+    {
+        var args = new[]
+        {
+            FileAssociationElevatedCommand.RegisterSwitch,
+            FileAssociationElevatedCommand.ResultSwitch, "C:\\temp\\r.txt",
+            ".img", ".dtb",
+        };
+
+        Assert.True(FileAssociationElevatedCommand.IsRequested(args));
+        Assert.Equal("C:\\temp\\r.txt", FileAssociationElevatedCommand.FindValue(args, FileAssociationElevatedCommand.ResultSwitch));
+        Assert.Equal([".img", ".dtb"], FileAssociationElevatedCommand.ReadExtensions(args));
     }
 }

@@ -50,11 +50,55 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         SortFileAssociationsAlphabetically = !SortFileAssociationsAlphabetically;
 
     /// <summary>
-    /// Saves the file association settings immediately and notifies completion.
-    /// <para>立即保存关联文件格式设置并通知完成。</para>
+    /// Applies the selected file associations, offering elevation when required, and reports the outcome in a dialog.
+    /// <para>应用选中的文件关联，在需要时提供提权，并通过弹窗报告结果。</para>
     /// </summary>
     [RelayCommand]
-    private void SaveFileAssociationSettings() => SaveSettings();
+    private async Task SaveFileAssociationSettingsAsync()
+    {
+        SaveSettings();
+
+        var selected = FileAssociationItems.Where(item => item.IsSelected).Select(item => item.Extension).ToArray();
+
+        // Registration touches the registry and may spawn platform helpers that block for seconds per
+        // extension, so it never runs on the UI thread.
+        // <para>注册会写注册表，并可能为每个扩展名启动阻塞数秒的平台辅助工具，因此绝不在 UI 线程执行。</para>
+        var result = await Task.Run(() => FileAssociationService.RegisterDetailed(selected));
+        if (result.Status == FileAssociationStatus.ElevationRequired)
+        {
+            result = await Task.Run(() => FileAssociationElevationRunner.Run(selected));
+        }
+
+        ShowFileAssociationResult(result);
+    }
+
+    /// <summary>
+    /// Shows the outcome of applying file associations, including the concrete failure reason.
+    /// <para>显示应用文件关联的结果，包含具体失败原因。</para>
+    /// </summary>
+    /// <param name="result">The registration outcome.<para>注册结果。</para></param>
+    private void ShowFileAssociationResult(FileAssociationResult result)
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        var (titleKey, icon) = result.Status switch
+        {
+            FileAssociationStatus.Succeeded =>
+                ("Settings_FileAssociationApplySucceeded", Ursa.Controls.MessageBoxIcon.Information),
+            FileAssociationStatus.ElevationRequired =>
+                ("Settings_FileAssociationApplyElevation", Ursa.Controls.MessageBoxIcon.Warning),
+            _ => ("Settings_FileAssociationApplyFailed", Ursa.Controls.MessageBoxIcon.Error),
+        };
+        var detail = result.Status == FileAssociationStatus.Succeeded
+            ? string.Format(language.GetString("Settings_FileAssociationApplySucceededDetail"), result.AssociationCount)
+            : result.Message;
+        _ = DialogService.ShowAsync(owner, language.GetString(titleKey), detail, icon);
+    }
 
     private void RefreshFileAssociationOrder()
     {
@@ -1128,7 +1172,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
             McpClientConnectionService.Instance.Apply(McpServers);
-            _ = Task.Run(FileAssociationService.ApplyFromSettings);
         }
     }
 
