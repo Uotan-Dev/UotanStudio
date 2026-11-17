@@ -15,7 +15,7 @@
 | `Crc16Arc` | 反射 0xA001，带 seed，无末异或 | PAC 头部与数据校验 |
 | `Crc16CcittReversed` | 反射 0x8408，init 0xFFFF，末异或 0xFFFF | HDLC 帧 DIAG 报文、展讯 UPDATE.APP 条目与头校验 |
 | `Crc16CcittFalse` | 高位优先 0x1021，init 0xFFFF，无末异或 | RKDL loader 下载帧 |
-| `Crc16Xmodem` | 高位优先 0x1021，init 0x0000，无末异或 | RKDL loader 升级写入的旧式 RK28 ID block 扇区校验 |
+| `Crc16Xmodem` | 高位优先 0x1021，init 0x0000，无末异或 | RKDL loader 升级写入的旧式 RK28 ID block 扇区校验、UNISOC BootROM 握手帧 |
 | `CpbCrc16` | 高位优先 0x1021，32 位不截断累加器，带续算，无末异或 | 酷派 CPB 容器头与镜像负载校验和 |
 | `RockchipCrc32` | 高位优先 0x04C11DB7，带 seed | RKAF 资源镜像 |
 | `XzCrc64` | 反射 0xC96C5795D7870F42，全 1 初值，出值取反 | XZ 容器的 CRC-64 校验字段 |
@@ -24,6 +24,7 @@
 | `F2fsDentryHash`、`HalfMd4Hash` | 半 MD4 家族 | F2FS 目录项哈希与 ext4 HTree 目录哈希 |
 | `Sums.ByteSum8` / `ByteSum16` / `ByteSum32` | 逐字节累加，mod 2^8 / 2^16 / 2^32 | HDC 负载、MTK legacy 与 XFlash 帧、ADB 消息、CPIO `070702` 负载、TAR 头块 |
 | `Sums.WordSum32LittleEndian` | 小端双字求和后补尾部字节 | MTK preloader 命令校验 |
+| `Sums.SprdChecksum16` | 小端 16 位字求和折叠取反；发送方向偶长交换/奇长原样，接收方向恒交换 | UNISOC FDL 帧校验 |
 | `Digests.Md5` / `Sha1` / `Sha256` / `Sha384` / `Sha512` | 转发 `System.Security.Cryptography` | 一次性、目标缓冲区、小写十六进制、同步与异步整流、`CreateAccumulator()` 续算 |
 
 `Crc16CcittReversed` 不声称对应任何目录学名称：不同资料里 “X.25”“CCITT-Reversed” 之类叫法的初值与末异或并不一致，因此类型文档只固定参数串与实测校验值——ASCII `123456789` 得 `0x906E`，空输入得 `0x0000`。`Crc16CcittFalse` 同理：`123456789` 得 `0x29B1`，空输入得 `0xFFFF`，字节 `01..10` 得 `0x0FEF`。`Crc16Xmodem` 与 `Crc16CcittFalse` 只差初值：`123456789` 得 `0x31C3`，空输入得 `0x0000`。
@@ -60,4 +61,4 @@ ARM SVE intrinsic 在 BCL 中仍标记为实验性（SYSLIB5003），抑制只�
 
 ## 校验向量
 
-每个类型的已知答案向量放在消费者所在域：`UotanStudio.Tests/Firmware/RockchipCrc32Tests.cs`、`Crc16CcittReversedTests.cs`、`Crc16CcittFalseTests.cs`、`Crc16XmodemTests.cs`、`Adler32ContinuationTests.cs`、`Crc32SemanticsEquivalenceTests.cs`。CRC-16 与 Adler 的向量测试同时用类内逐位参考循环交叉验证查表实现，避免只钉一个常量而让表构建失去检验。
+每个类型的已知答案向量放在消费者所在域：`UotanStudio.Tests/Firmware/RockchipCrc32Tests.cs`、`Crc16CcittReversedTests.cs`、`Crc16CcittFalseTests.cs`、`Crc16XmodemTests.cs`、`SprdChecksum16Tests.cs`、`Adler32ContinuationTests.cs`、`Crc32SemanticsEquivalenceTests.cs`。CRC-16 与 Adler 的向量测试同时用类内逐位参考循环交叉验证查表实现，避免只钉一个常量而让表构建失去检验。
