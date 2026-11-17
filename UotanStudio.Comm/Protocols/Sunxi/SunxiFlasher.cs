@@ -73,14 +73,15 @@ public sealed class SunxiFlasher
                 $"No package file for partition '{missing}'; skipped."));
         }
 
-        if (_options.Mode != SunxiFlashMode.Partition)
-        {
-            progress?.Report(new SunxiFlashProgress("erase", null, null, null,
-                $"Erasing storage with flag 0x{(uint)_options.EraseFlag:X}."));
-            await session.EraseAsync(_options.EraseFlag, cancellationToken, SunxiFesSession.EraseTimeoutMilliseconds)
-                .ConfigureAwait(false);
-            await VerifyEraseAsync(session, progress, cancellationToken).ConfigureAwait(false);
-        }
+        // Every mode sends an erase flag, including the plain partition mode: the vendor flow maps it to 0x1 and a
+        // NAND medium refuses to write a page that has not been erased, answering 0xFF instead.
+        // 每种模式都会发送擦除标志，包括普通分区模式：厂商流程把它映射为 0x1，而 NAND 介质拒绝写入未擦除的页，
+        // 只会以 0xFF 回应。
+        progress?.Report(new SunxiFlashProgress("erase", null, null, null,
+            $"Erasing storage with flag 0x{(uint)_options.EraseFlag:X}."));
+        await session.EraseAsync(_options.EraseFlag, cancellationToken, SunxiFesSession.EraseTimeoutMilliseconds)
+            .ConfigureAwait(false);
+        await VerifyEraseAsync(session, progress, cancellationToken).ConfigureAwait(false);
 
         var flashOn = false;
         try
@@ -90,12 +91,12 @@ public sealed class SunxiFlasher
                 cancellationToken.ThrowIfCancellationRequested();
                 if (step.Kind == SunxiFlashStepKind.Partition && !flashOn)
                 {
-                    await session.SetFlashAsync(0, on: true, cancellationToken).ConfigureAwait(false);
+                    await session.SetFlashAsync(storageWord, on: true, cancellationToken).ConfigureAwait(false);
                     flashOn = true;
                 }
                 else if (step.Kind != SunxiFlashStepKind.Partition && flashOn)
                 {
-                    await TurnOffFlashAsync(session, progress, cancellationToken).ConfigureAwait(false);
+                    await TurnOffFlashAsync(session, storageWord, progress, cancellationToken).ConfigureAwait(false);
                     flashOn = false;
                 }
 
@@ -114,7 +115,7 @@ public sealed class SunxiFlasher
         {
             if (flashOn)
             {
-                await TurnOffFlashAsync(session, progress, cancellationToken).ConfigureAwait(false);
+                await TurnOffFlashAsync(session, storageWord, progress, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -136,6 +137,11 @@ public sealed class SunxiFlasher
             if (step.Kind == SunxiFlashStepKind.Mbr)
             {
                 steps.Add(step);
+                continue;
+            }
+
+            if (_plan.IsCardImage && step.Kind != SunxiFlashStepKind.Partition)
+            {
                 continue;
             }
 
@@ -163,6 +169,11 @@ public sealed class SunxiFlasher
             steps.Add(step);
             hasBoot0 |= IsBoot0Role(role);
             hasBoot1 |= IsBoot1Role(role);
+        }
+
+        if (_plan.IsCardImage)
+        {
+            return steps;
         }
 
         if (!hasBoot0)
@@ -206,12 +217,17 @@ public sealed class SunxiFlasher
         SunxiBootImageRole.Boot1Normal or SunxiBootImageRole.Boot1Toc
         or SunxiBootImageRole.Boot1Package or SunxiBootImageRole.Boot1PackageNor;
 
-    private async Task TurnOffFlashAsync(SunxiFesSession session, IProgress<SunxiFlashProgress>? progress,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Turns flash access off with the storage word the service reported, which the on-switch already used; a
+    /// mismatched word would address a controller the run never opened.
+    /// <para>以服务上报的存储字关闭闪存访问，与打开时使用的字一致；字不匹配会指向本次运行从未打开过的控制器。</para>
+    /// </summary>
+    private async Task TurnOffFlashAsync(SunxiFesSession session, uint storageWord,
+        IProgress<SunxiFlashProgress>? progress, CancellationToken cancellationToken)
     {
         try
         {
-            await session.SetFlashAsync(0, on: false, cancellationToken).ConfigureAwait(false);
+            await session.SetFlashAsync(storageWord, on: false, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -235,7 +251,15 @@ public sealed class SunxiFlasher
             cancellationToken.ThrowIfCancellationRequested();
             var length = (int)Math.Min(buffer.Length, step.ByteCount - offset);
             var last = offset + length == step.ByteCount;
-            var flags = (uint)step.Tag | (last ? SunxiEfexConstants.TransferFinishTag : 0u);
+
+            // Every 64 KiB frame is a complete download of its own in the vendor flow: the reference tool calls the
+            // transfer once per 64 KiB block, and its finish tag appears whenever the bytes left in that call reach
+            // zero — which is every block. Marking only the partition's final block leaves the service waiting on
+            // the earlier frames, and a NAND medium answers 0xFF to a write it considers incomplete.
+            // 在厂商流程中，每个 64 KiB 帧本身就是一次完整下载：参考工具每 64 KiB 调用一次传输，其完成标记在该次调用
+            // 剩余字节归零时出现——也就是每一块。只在分区最后一块标记会让服务等待前面的帧，NAND 介质会以 0xFF
+            // 回应它认为不完整的写入。
+            var flags = (uint)step.Tag | SunxiEfexConstants.TransferFinishTag;
             var written = await _plan.ExtractSegmentAsync(step, offset, buffer, cancellationToken)
                 .ConfigureAwait(false);
             await session.DownloadChunkAsync(current, (uint)written, flags, buffer.AsMemory(0, written),

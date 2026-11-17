@@ -23,8 +23,8 @@ public sealed class SunxiCardImageTests
     private static readonly (string Name, int FirstLba, int Sectors)[] Layout =
     [
         ("boot-resource", 34816, 48),
-        ("env", 34864, 8),
-        ("env-redund", 34872, 8),
+        ("env", 34864, 8 + 504),
+        ("env-redund", 34872 + 504, 8 + 504),
         ("boot", 34880, 64),
         ("rootfs", 34944, 96),
         ("dsp0", 35040, 16),
@@ -102,7 +102,7 @@ public sealed class SunxiCardImageTests
         Assert.True(rootfs.Length < 96 * BlockSize, $"expected the trailing fill to be trimmed, got {rootfs.Length}");
         Assert.True(rootfs.AsSpan().StartsWith("hsqs"u8));
         var env = await File.ReadAllBytesAsync(Path.Combine(output, "env.fex"), TestContext.Current.CancellationToken);
-        Assert.Equal(Math.Min(8 * BlockSize, SunxiEnvironmentBlock.StorageLength), env.Length);
+        Assert.Equal(SunxiEnvironmentBlock.StorageLength, env.Length);
     }
 
     [Fact]
@@ -187,148 +187,62 @@ public sealed class SunxiCardImageTests
             $"Set {CorpusVariable} to a directory containing an Allwinner SD-card image to run this acceptance.");
         return matches[0];
     }
-
     private static byte[] BuildImage(bool withEgon = true)
     {
-        const int gptBlock = 2048;
-        const int usableStart = FirstUsableLba;
-        var totalBlocks = usableStart + Layout.Sum(entry => entry.Sectors) + 64;
-        var image = new byte[totalBlocks * BlockSize];
-
-        image[510] = 0x55;
-        image[511] = 0xAA;
-        image[446 + 4] = 0xEE;
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(446 + 8), 1);
-
-        if (withEgon)
+        var partitions = Layout.Select(entry => new SunxiCardImageBuilder.Partition(
+            entry.Name, entry.Sectors, BuildPartitionContent(entry.Name))).ToArray();
+        var image = SunxiCardImageBuilder.Build(partitions);
+        if (!withEgon)
         {
-            WriteEgon(image.AsSpan(EgonOffset, EgonLength));
-            WriteBootPackage(image.AsSpan(BootPackageBlock * BlockSize));
-        }
-
-        WriteGpt(image, totalBlocks, gptBlock, usableStart);
-        foreach (var (name, first, sectors) in Layout)
-        {
-            WritePartition(image.AsSpan(first * BlockSize, sectors * BlockSize), name);
+            image.AsSpan(SunxiCardImageBuilder.EgonOffset, 12).Clear();
         }
 
         return image;
     }
 
-    private static void WriteEgon(Span<byte> slot)
+    private static byte[] BuildPartitionContent(string name)
     {
-        BinaryPrimitives.WriteUInt32LittleEndian(slot, 0x3C80006F);
-        "eGON.BT0"u8.CopyTo(slot[4..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[12..], 0x191DABB2);
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[16..], 0x10000);
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[20..], 0x00000030);
-        BinaryPrimitives.WriteUInt32LittleEndian(slot[32..], 0x20000);
-        Encoding.ASCII.GetBytes("4.0\0").CopyTo(slot[48..]);
-    }
-
-    private static void WriteBootPackage(Span<byte> package)
-    {
-        "sunxi-package"u8.CopyTo(package);
-        BinaryPrimitives.WriteUInt32LittleEndian(package[16..], 0x89119800);
-        BinaryPrimitives.WriteUInt32LittleEndian(package[20..], 0xA78ACD0B);
-        BinaryPrimitives.WriteUInt32LittleEndian(package[32..], 3);
-        BinaryPrimitives.WriteUInt32LittleEndian(package[36..], 0xFC000);
-
-        WritePackageItem(package, 0, "opensbi", 0x800, 0x400, 0x0, "OpenSBI v0.9"u8);
-        WritePackageItem(package, 1, "u-boot", 0xC00, 0x800, 0x42000000, "U-Boot 2018.05"u8);
-        WritePackageItem(package, 2, "dtb", 0x1400, 0x100, 0x0, (ReadOnlySpan<byte>)[0xD0, 0x0D, 0xFE, 0xED]);
-    }
-
-    private static void WritePackageItem(Span<byte> package, int index, string name, uint offset, uint length,
-        uint runningAddress, ReadOnlySpan<byte> payload)
-    {
-        var record = package.Slice(0x3C + (index * 0x170), 0x170);
-        "MIE;"u8.CopyTo(record);
-        Encoding.ASCII.GetBytes(name).CopyTo(record[4..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(record[0x44..], offset);
-        BinaryPrimitives.WriteUInt32LittleEndian(record[0x48..], length);
-        BinaryPrimitives.WriteUInt32LittleEndian(record[0x50..], 3);
-        BinaryPrimitives.WriteUInt32LittleEndian(record[0x54..], runningAddress);
-        payload.CopyTo(package[(int)offset..]);
-    }
-
-    private static void WriteGpt(Span<byte> image, int totalBlocks, int gptBlock, int usableStart)
-    {
-        var entries = image.Slice(gptBlock * BlockSize, PartitionCount * PartitionEntrySize);
-        for (var index = 0; index < Layout.Length; index++)
-        {
-            var (name, first, sectors) = Layout[index];
-            var entry = entries.Slice(index * PartitionEntrySize, PartitionEntrySize);
-            new Guid("0fc63daf-8483-4772-8e79-3d69d8477de4").TryWriteBytes(entry, bigEndian: false, out _);
-            new Guid(0x1000 + index, 0x2000, 0x3000, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0)
-                .TryWriteBytes(entry[16..], bigEndian: false, out _);
-            BinaryPrimitives.WriteUInt64LittleEndian(entry[32..], (ulong)first);
-            BinaryPrimitives.WriteUInt64LittleEndian(entry[40..], (ulong)(first + sectors - 1));
-            Encoding.Unicode.GetBytes(name).CopyTo(entry[56..]);
-        }
-
-        ulong lastUsable = (ulong)totalBlocks - 34;
-        var entriesCrc = Crc32Ieee.Compute(entries);
-        WriteHeader(image.Slice(BlockSize, BlockSize), 1, (ulong)totalBlocks - 1, (ulong)usableStart, lastUsable,
-            (ulong)gptBlock, entriesCrc);
-        WriteHeader(image.Slice((totalBlocks - 1) * BlockSize, BlockSize), (ulong)totalBlocks - 1, 1,
-            (ulong)usableStart, lastUsable, (ulong)totalBlocks - 33, entriesCrc);
-        entries.CopyTo(image.Slice((totalBlocks - 33) * BlockSize, PartitionCount * PartitionEntrySize));
-    }
-
-    private static void WriteHeader(Span<byte> header, ulong myLba, ulong alternateLba, ulong firstUsable,
-        ulong lastUsable, ulong entriesLba, uint entriesCrc)
-    {
-        "EFI PART"u8.CopyTo(header);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[8..], 0x00010000);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[12..], 92);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[24..], myLba);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[32..], alternateLba);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[40..], firstUsable);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[48..], lastUsable);
-        new Guid("15536006-38b1-315b-87dd-ba2df3034625").TryWriteBytes(header[56..], bigEndian: false, out _);
-        BinaryPrimitives.WriteUInt64LittleEndian(header[72..], entriesLba);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[80..], PartitionCount);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[84..], PartitionEntrySize);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[88..], entriesCrc);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[16..], Crc32Ieee.Compute(header[..92]));
-    }
-
-    private static void WritePartition(Span<byte> slot, string name)
-    {
+        var content = new byte[0];
         switch (name)
         {
             case "boot-resource":
-                WriteFatVolume(slot);
+                content = new byte[1024 + (16 * 32) + 512];
+                WriteFatVolume(content);
                 break;
             case "env":
             case "env-redund":
-                WriteEnvironment(slot);
+                content = new byte[SunxiEnvironmentBlock.StorageLength];
+                WriteEnvironment(content);
                 break;
             case "rootfs":
-                "hsqs"u8.CopyTo(slot);
+                content = new byte[512];
+                "hsqs"u8.CopyTo(content);
                 break;
             case "boot":
-                "ANDROID!"u8.CopyTo(slot);
-                BinaryPrimitives.WriteUInt32LittleEndian(slot[8..], 0x400);
-                BinaryPrimitives.WriteUInt32LittleEndian(slot[12..], 0x40200000);
-                BinaryPrimitives.WriteUInt32LittleEndian(slot[44..], 2048);
-                Encoding.ASCII.GetBytes("d1-nezha").CopyTo(slot[48..]);
-                "RISCV"u8.CopyTo(slot[(2048 + 56)..]);
+                content = new byte[4096];
+                "ANDROID!"u8.CopyTo(content);
+                BinaryPrimitives.WriteUInt32LittleEndian(content.AsSpan(8), 0x400);
+                BinaryPrimitives.WriteUInt32LittleEndian(content.AsSpan(12), 0x40200000);
+                BinaryPrimitives.WriteUInt32LittleEndian(content.AsSpan(44), 2048);
+                Encoding.ASCII.GetBytes("d1-nezha").CopyTo(content.AsSpan(48));
+                "RISCV"u8.CopyTo(content.AsSpan(2048 + 56));
                 break;
             case "dsp0":
-                slot[0] = 0x7F;
-                slot[1] = (byte)'E';
-                slot[2] = (byte)'L';
-                slot[3] = (byte)'F';
-                slot[4] = 1;
-                slot[5] = 1;
-                BinaryPrimitives.WriteUInt16LittleEndian(slot[18..], 0xF3);
+                content = new byte[512];
+                content[0] = 0x7F;
+                content[1] = (byte)'E';
+                content[2] = (byte)'L';
+                content[3] = (byte)'F';
+                content[4] = 1;
+                content[5] = 1;
+                BinaryPrimitives.WriteUInt16LittleEndian(content.AsSpan(18), 0xF3);
                 break;
             default:
-                Encoding.ASCII.GetBytes("blank.fex\n").CopyTo(slot);
+                content = "blank.fex\n"u8.ToArray();
                 break;
         }
+
+        return content;
     }
 
     private static void WriteEnvironment(Span<byte> slot)

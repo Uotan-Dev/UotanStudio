@@ -142,13 +142,42 @@ public sealed partial class DeviceMonitorService
 
             try
             {
-                sectors = await fes.ProbeFlashSizeAsync(token).ConfigureAwait(false);
+                // NAND answers zero while the controller is open, so the vendor order closes it first.
+                // NAND 在控制器打开时应答 0，因此按厂商顺序先关闭控制器。
+                sectors = await fes.ProbeFlashSizeWithControllerOffAsync(storage, token).ConfigureAwait(false);
             }
             catch (SunxiEfexException)
             {
             }
 
             return new SunxiDeviceStatus(session.Identity, storage, sectors, secure);
+        }, cancellationToken);
+
+
+    /// <summary>
+    /// Probes the flash capacity with the controller explicitly closed or opened, which is the only way to tell a
+    /// medium the service cannot size from one it sizes only while its controller is off.
+    /// <para>在显式关闭或打开控制器的状态下探测闪存容量，这是区分"服务无法测容的介质"与"仅在控制器关闭时才能测容
+    /// 的介质"的唯一办法。</para>
+    /// </summary>
+    /// <param name="device">The selected Sunxi endpoint; it must answer as FES.
+    /// <para>所选全志端点；必须以 FES 应答。</para></param>
+    /// <param name="storageType">Storage type word the device reported.
+    /// <para>设备上报的存储类型字。</para></param>
+    /// <param name="controllerOn">Whether to leave the controller open while probing.
+    /// <para>探测时是否让控制器保持打开。</para></param>
+    /// <param name="cancellationToken">Cancels the switch and the probe.
+    /// <para>取消控制器切换与容量探测。</para></param>
+    /// <returns>The capacity in 512-byte sectors. <para>扇区容量。</para></returns>
+    /// <exception cref="InvalidOperationException">The device is not running FES.
+    /// <para>设备未运行 FES。</para></exception>
+    internal Task<uint> ProbeSunxiCapacityAsync(DetectedDevice device, uint storageType, bool controllerOn,
+        CancellationToken cancellationToken = default) =>
+        RunSunxiAsync(device, async (session, _, token) =>
+        {
+            RequireFes(session);
+            await session.Fes.SetFlashAsync(storageType, controllerOn, token).ConfigureAwait(false);
+            return await session.Fes.ProbeFlashSizeAsync(token).ConfigureAwait(false);
         }, cancellationToken);
 
     /// <summary>
@@ -310,6 +339,34 @@ public sealed partial class DeviceMonitorService
         }, cancellationToken);
 
     /// <summary>
+    /// Leaves the FES service by asking it to reboot, which is the only way back to the boot ROM from the host: a
+    /// device that answered as FES has already replaced its ROM code in DRAM, so no command returns it to FEL
+    /// without a power cycle.
+    /// <para>通过请求 FES 服务重启来离开 FES，这是从主机侧回到引导 ROM 的唯一途径：已以 FES 应答的设备已经把其
+    /// ROM 代码换到 DRAM 中运行，因此除断电外没有命令能让它回到 FEL。</para>
+    /// </summary>
+    /// <param name="device">The selected Sunxi endpoint answering as FES.
+    /// <para>以 FES 应答的所选全志端点。</para></param>
+    /// <param name="cancellationToken">Cancels the request. <para>取消本次请求。</para></param>
+    /// <returns>A task that completes once the service accepted the reboot request.
+    /// <para>服务接受重启请求后完成的任务。</para></returns>
+    /// <exception cref="InvalidOperationException">The endpoint is not running FES.
+    /// <para>端点未运行 FES。</para></exception>
+    internal Task RebootSunxiServiceAsync(DetectedDevice device, CancellationToken cancellationToken = default) =>
+        RunSunxiAsync(device, async (session, _, token) =>
+        {
+            if (!session.IsFes)
+            {
+                throw new InvalidOperationException(
+                    $"The device reports mode {session.Mode} but rebooting requires FES mode.");
+            }
+
+            await session.Fes.SetToolModeAsync(SunxiToolMode.Normal, SunxiToolMode.Reboot, token)
+                .ConfigureAwait(false);
+            return true;
+        }, cancellationToken);
+
+    /// <summary>
     /// Uploads the first-stage DRAM loader and the service payload, waits for the re-enumerated device and returns
     /// the status the FES service reports. The FEL lease is released before the reconnection wait; a device that
     /// comes back in any other mode than FES fails the switch.
@@ -347,6 +404,7 @@ public sealed partial class DeviceMonitorService
             cancellationToken: cancellationToken);
         DeviceLease? switched = null;
         SunxiFesSession? fesSession = null;
+        SunxiDeviceIdentity? fesIdentity = null;
         try
         {
             if (!lease.TryGetSession<SunxiDeviceSession>(out var session) || !session.IsFel)
@@ -361,6 +419,7 @@ public sealed partial class DeviceMonitorService
                 var fresh = await ReopenSunxiFesAsync(previous, chain, token).ConfigureAwait(false);
                 switched = fresh.Lease;
                 fesSession = fresh.Session;
+                fesIdentity = fresh.Identity;
                 return fresh.Session;
             });
             progress?.Report("fes1");
@@ -378,7 +437,10 @@ public sealed partial class DeviceMonitorService
             uint? sectors = null;
             try
             {
-                sectors = await fesSession.ProbeFlashSizeAsync(cancellationToken).ConfigureAwait(false);
+                // NAND answers zero while the controller is open, so the vendor order closes it first.
+                // NAND 在控制器打开时应答 0，因此按厂商顺序先关闭控制器。
+                sectors = await fesSession.ProbeFlashSizeWithControllerOffAsync(storage, cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (SunxiEfexException)
             {
@@ -393,7 +455,11 @@ public sealed partial class DeviceMonitorService
             {
             }
 
-            return new SunxiDeviceStatus(session.Identity, storage, sectors, secure);
+            // The switch produced a different session than the FEL one that started the run, so the status must
+            // report the identity of the session that actually answered; the FEL identity would still say Fel.
+            // 切换产生的会话与启动本次运行的 FEL 会话不同，因此状态必须报告真正应答的那个会话的身份；沿用 FEL
+            // 身份会继续显示 Fel。
+            return new SunxiDeviceStatus(fesIdentity ?? session.Identity, storage, sectors, secure);
         }
         finally
         {
@@ -406,13 +472,16 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// Runs one IMAGEWTY package against a FES endpoint: loads the download plan, applies the selected erase and
+    /// Runs one Allwinner image against a FES endpoint: loads the download plan, applies the selected erase and
     /// partition scope, switches flash access around the partition writes and requests the completion tool mode.
-    /// <para>在 FES 端点上运行一个 IMAGEWTY 包：加载下载计划、应用所选的擦除与分区范围、在分区写入前后切换闪存
-    /// 访问，并请求完成用的工具模式。</para>
+    /// Both image shapes go through this one path — a vendor <c>IMAGEWTY</c> package and an SD-card image whose GPT
+    /// partitions are written at their own sectors.
+    /// <para>在 FES 端点上运行一个全志镜像：加载下载计划、应用所选的擦除与分区范围、在分区写入前后切换闪存
+    /// 访问，并请求完成用的工具模式。两种镜像形态共用这一条路径——厂商 <c>IMAGEWTY</c> 包，以及按自身扇区写入
+    /// GPT 分区的 SD 卡镜像。</para>
     /// </summary>
     /// <param name="device">The selected Sunxi endpoint; it must answer as FES. <para>所选全志端点；必须以 FES 应答。</para></param>
-    /// <param name="imagePath">IMAGEWTY package to write. <para>待写入的 IMAGEWTY 包。</para></param>
+    /// <param name="imagePath">Vendor package or card image to write. <para>待写入的厂商包或卡镜像。</para></param>
     /// <param name="options">Flash scope, confirmation and completion mode.
     /// <para>烧录范围、确认短语与完成模式。</para></param>
     /// <param name="progress">Optional progress sink. <para>可选的进度接收器。</para></param>
@@ -452,8 +521,8 @@ public sealed partial class DeviceMonitorService
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(DeviceLease Lease, SunxiFesSession Session)> ReopenSunxiFesAsync(DetectedDevice previous,
-        string? physicalPortPath, CancellationToken cancellationToken)
+    private async Task<(DeviceLease Lease, SunxiFesSession Session, SunxiDeviceIdentity Identity)> ReopenSunxiFesAsync(
+        DetectedDevice previous, string? physicalPortPath, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(SunxiServiceReconnectTimeoutMs);
@@ -468,6 +537,7 @@ public sealed partial class DeviceMonitorService
                 if (candidate is not null)
                 {
                     DeviceLease? lease = null;
+                    var keepLease = false;
                     try
                     {
                         lease = await Task.Run(() => OpenLeaseByKey(candidate.Key, DeviceSessionKind.Sunxi), token)
@@ -476,7 +546,12 @@ public sealed partial class DeviceMonitorService
                         {
                             if (session.IsFes)
                             {
-                                return (lease, session.Fes);
+                                // The caller owns the projected session and closes the lease it comes with, so the
+                                // attempt must hand the open lease over instead of releasing it here.
+                                // 调用方拥有投影出的会话并负责关闭随附的租约，因此本次尝试必须把已打开的租约交出，
+                                // 而不是在此处释放它。
+                                keepLease = true;
+                                return (lease, session.Fes, session.Identity);
                             }
 
                             lastFailure = new InvalidOperationException(
@@ -489,7 +564,7 @@ public sealed partial class DeviceMonitorService
                     }
                     finally
                     {
-                        if (lease is not null)
+                        if (lease is not null && !keepLease)
                         {
                             CloseLease(lease);
                         }

@@ -117,13 +117,12 @@ public enum SunxiEfexCommand : ushort
     /// <summary>FES: queries the secure-boot / boot-media mode word. <para>FES：查询安全启动与启动介质模式字。</para></summary>
     QuerySecure = 0x0230,
 
-    /// <summary>FES: queries the bitmask of the storage types the service exposes.
-    /// <para>FES：查询服务所暴露存储类型的位图。</para></summary>
-    QueryStorageList = 0x0232,
+    /// <summary>FES: queries the bitmask of the storage types the service exposes, carried by the information
+    /// query word the vendor header defines. <para>FES：查询服务所暴露存储类型的位图，使用厂商头文件定义的信息查询字。</para></summary>
+    QueryStorageList = 0x0231,
 
-    /// <summary>FES: switches the active storage the following transfers target.
-    /// <para>FES：切换后续传输所针对的活动存储。</para></summary>
-    FlashSwitch = 0x0233,
+    /// <summary>FES: reads the chip id string. <para>FES：读取芯片 id 字符串。</para></summary>
+    GetChipId = 0x0232,
 
     /// <summary>FES: reads raw NAND directly, byte-addressed. <para>FES：直读 raw NAND，按字节寻址。</para></summary>
     FesNand = 0x0301,
@@ -248,8 +247,15 @@ public enum SunxiEraseFlag : uint
     /// <summary>Erase nothing. <para>不擦除。</para></summary>
     None = 0x0,
 
-    /// <summary>Erase the selected partitions only. <para>只擦除所选分区。</para></summary>
+    /// <summary>Erase the partitions a run writes, leaving the rest of the storage alone.
+    /// <para>擦除本次运行写入的分区，不动存储的其余部分。</para></summary>
     Partition = 0x1,
+
+    /// <summary>Erase nothing but keep the user data partitions. <para>不擦除任何内容，但保留用户数据分区。</para></summary>
+    KeepData = 0x2,
+
+    /// <summary>Erase the selected partitions plus their metadata. <para>擦除所选分区及其元数据。</para></summary>
+    PartitionErase = 0x11,
 
     /// <summary>Erase the whole storage. <para>擦除整片存储。</para></summary>
     Full = 0x12

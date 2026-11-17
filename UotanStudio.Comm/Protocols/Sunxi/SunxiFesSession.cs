@@ -75,18 +75,23 @@ public sealed class SunxiFesSession : SunxiEfexSession
         ReceiveValueAsync(SunxiEfexCommand.FlashSizeProbe, cancellationToken);
 
     /// <summary>
-    /// Queries the bitmask of the storage types the service exposes: bit0 raw NAND, bit1 eMMC, bit2 SPI NOR,
-    /// bit3 UFS. The service answers with a single byte.
-    /// <para>查询服务所暴露存储类型的位图：bit0 raw NAND、bit1 eMMC、bit2 SPI NOR、bit3 UFS。服务以单字节应答。</para>
+    /// Reads the capacity after closing the flash controller, which is the order the vendor flow uses: with the
+    /// controller open a NAND medium answers zero, because the identification commands that report the geometry
+    /// only run while it is off. The controller is left off, so a following partition write switches it on exactly
+    /// as a flash run expects.
+    /// <para>关闭闪存控制器后读取容量，这是厂商流程的顺序：控制器打开时 NAND 介质会应答 0，因为报告几何参数的
+    /// 识别命令只在关闭状态下运行。方法返回时控制器保持关闭，随后的分区写入会像烧录运行期望的那样再打开它。</para>
     /// </summary>
-    /// <param name="cancellationToken">Cancels the query. <para>取消本次查询。</para></param>
-    /// <returns>The storage bitmask. <para>存储类型位图。</para></returns>
-    public async Task<uint> QueryStorageListAsync(CancellationToken cancellationToken = default)
+    /// <param name="storageType">Storage type reported by <see cref="QueryStorageAsync"/>.
+    /// <para><see cref="QueryStorageAsync"/> 上报的存储类型。</para></param>
+    /// <param name="cancellationToken">Cancels the switch and the probe.
+    /// <para>取消控制器切换与容量探测。</para></param>
+    /// <returns>The capacity in 512-byte sectors. <para>扇区容量。</para></returns>
+    public async Task<uint> ProbeFlashSizeWithControllerOffAsync(uint storageType,
+        CancellationToken cancellationToken = default)
     {
-        var mask = new byte[1];
-        await TransferAsync(SunxiEfexCommand.QueryStorageList, ReadOnlyMemory<byte>.Empty, null, mask,
-            cancellationToken).ConfigureAwait(false);
-        return mask[0];
+        await SetFlashAsync(storageType, on: false, cancellationToken).ConfigureAwait(false);
+        return await ReceiveValueAsync(SunxiEfexCommand.FlashSizeProbe, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -110,29 +115,6 @@ public sealed class SunxiFesSession : SunxiEfexSession
         BinaryPrimitives.WriteUInt32LittleEndian(payload, storageType);
         return TransferAsync(on ? SunxiEfexCommand.FlashSetOn : SunxiEfexCommand.FlashSetOff, payload, null, null,
             cancellationToken);
-    }
-
-    /// <summary>
-    /// Switches the active storage the following transfers target, which is how a device that reports several
-    /// storage types selects the one a run operates on.
-    /// <para>切换后续传输所针对的活动存储；上报多种存储的设备借此选定一次运行所用的介质。</para>
-    /// </summary>
-    /// <param name="flashType">Storage type to switch to, as reported by <see cref="QueryStorageAsync"/> or
-    /// <see cref="QueryStorageListAsync"/>. <para>要切换到的存储类型；取
-    /// <see cref="QueryStorageAsync"/> 或 <see cref="QueryStorageListAsync"/> 上报的值。</para></param>
-    /// <param name="cancellationToken">Cancels the command. <para>取消本次命令。</para></param>
-    /// <returns>A task that completes when the device switched the storage.
-    /// <para>设备切换存储后完成的任务。</para></returns>
-    /// <remarks>
-    /// Like <see cref="SetFlashAsync"/>, the type word rides in the inline window; a larger wire structure is
-    /// dropped by that window.
-    /// <para>与 <see cref="SetFlashAsync"/> 相同，类型字放在内联窗口内；更大的线格式结构会被该窗口丢弃。</para>
-    /// </remarks>
-    public Task FlashSwitchAsync(uint flashType, CancellationToken cancellationToken = default)
-    {
-        var payload = new byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, flashType);
-        return TransferAsync(SunxiEfexCommand.FlashSwitch, payload, null, null, cancellationToken);
     }
 
     /// <summary>

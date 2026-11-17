@@ -14,7 +14,7 @@ namespace UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 /// 引导程序，以及首个可用块之前的 <c>sunxi-package</c> 启动包。每个分区槽位都附带其负载实际起始处的角色，
 /// 厂商 <c>env</c> 与 <c>boot-resource</c> 分区会被解码而不是当作不透明数据。</para>
 /// </summary>
-internal static class SunxiCardImageFormat
+public static class SunxiCardImageFormat
 {
     /// <summary>Logical block size of every Allwinner card image. <para>全志卡镜像的逻辑块大小。</para></summary>
     public const int BlockSize = 512;

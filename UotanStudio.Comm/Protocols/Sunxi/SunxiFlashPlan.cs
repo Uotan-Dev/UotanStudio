@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 
 namespace UotanStudio.Comm.Protocols.Sunxi;
@@ -14,8 +15,9 @@ public enum SunxiFlashStepKind
     /// <para>Sunxi MBR 分区表，以 MBR 标签下载到扇区 0。</para></summary>
     Mbr,
 
-    /// <summary>One partition payload resolved from the MBR and the vendor partition list, downloaded under the
-    /// flash tag and sector addressing. <para>由 MBR 与厂商分区清单解析出的分区负载，以闪存标签与扇区寻址下载。</para></summary>
+    /// <summary>One partition payload resolved from the MBR and the vendor partition list of a package, or from the
+    /// GPT of a card image, downloaded under the flash tag and sector addressing.
+    /// <para>由固件包的 MBR 与厂商分区清单，或由卡镜像的 GPT 解析出的分区负载，以闪存标签与扇区寻址下载。</para></summary>
     Partition,
 
     /// <summary>The optional preboot image, downloaded under the preboot tag at sector zero.
@@ -50,13 +52,17 @@ public sealed record SunxiFlashStep(SunxiFlashStepKind Kind, string Name, SunxiF
     long ByteCount, int EntryIndex, SunxiBootImageRole? BootRole = null);
 
 /// <summary>
-/// Download plan of one Allwinner IMAGEWTY package for a FES flash run: the partition table, every partition
-/// payload the table names, and every boot image variant the package carries, ordered like the reference flow
-/// (table, partitions, preboot, boot package, boot0). The flasher picks the boot variants that match the
-/// service's security and storage answers. The plan keeps the container open and must be disposed after the run.
-/// <para>一次 FES 烧录的全志 IMAGEWTY 包下载计划：分区表、表内点名的每个分区负载，以及包内携带的每种引导
-/// 镜像变体，顺序与参考流程一致（表、分区、预启动、启动包、boot0）。烧录器按服务的安全与存储应答选择引导
-/// 变体。计划保持容器打开，运行后必须释放。</para>
+/// Download plan of one Allwinner image for a FES flash run, in one of two shapes. A vendor package
+/// (<c>IMAGEWTY</c>) yields the partition table, every partition payload the table names, and every boot image
+/// variant it carries, ordered like the reference flow (table, partitions, preboot, boot package, boot0); the
+/// flasher picks the boot variants that match the service's security and storage answers. A card image yields one
+/// sector-addressed partition step per GPT entry instead: it carries its boot chain and tables inside the image
+/// itself, so nothing is downloaded under the MBR, boot0 or boot1 tags. The plan keeps the container open and must
+/// be disposed after the run.
+/// <para>一次 FES 烧录的全志镜像下载计划，有两种形态。厂商包（<c>IMAGEWTY</c>）产出分区表、表内点名的每个分区
+/// 负载以及包内携带的每种引导镜像变体，顺序与参考流程一致（表、分区、预启动、启动包、boot0）；烧录器按服务的
+/// 安全与存储应答选择引导变体。卡镜像则按 GPT 条目产出一个按扇区寻址的分区步骤：它的引导链与分区表就在镜像
+/// 内部，因此不会以 MBR、boot0 或 boot1 标签下载任何内容。计划保持容器打开，运行后必须释放。</para>
 /// </summary>
 public sealed class SunxiFlashPlan : IDisposable
 {
@@ -75,18 +81,19 @@ public sealed class SunxiFlashPlan : IDisposable
     private const int MaximumSparseChunks = 1024 * 1024;
 
     private readonly FileStream _container;
-    private readonly ImageWtyHeader _header;
+    private readonly ImageWtyHeader? _header;
     private readonly Dictionary<int, SunxiPartitionSource> _sources;
     private bool _disposed;
 
-    private SunxiFlashPlan(FileStream container, ImageWtyHeader header, IReadOnlyList<SunxiFlashStep> steps,
-        IReadOnlyList<string> missingPartitions, Dictionary<int, SunxiPartitionSource> sources)
+    private SunxiFlashPlan(FileStream container, ImageWtyHeader? header, IReadOnlyList<SunxiFlashStep> steps,
+        IReadOnlyList<string> missingPartitions, Dictionary<int, SunxiPartitionSource> sources, bool isCardImage)
     {
         _container = container;
         _header = header;
         Steps = steps;
         MissingPartitions = missingPartitions;
         _sources = sources;
+        IsCardImage = isCardImage;
     }
 
     /// <summary>Path of the package container the plan reads from. <para>计划读取的包容器路径。</para></summary>
@@ -97,23 +104,35 @@ public sealed class SunxiFlashPlan : IDisposable
     public IReadOnlyList<SunxiFlashStep> Steps { get; }
 
     /// <summary>Partition names the table references but the package does not carry; the flasher reports them
-    /// as skipped instead of writing anything. <para>分区表点名但包内不存在的分区名；烧录器将其上报为跳过而不
-    /// 写入任何字节。</para></summary>
+    /// as skipped instead of writing anything. A card image never has any: its GPT is authoritative.
+    /// <para>分区表点名但包内不存在的分区名；烧录器将其上报为跳过而不写入任何字节。卡镜像不会有这类分区：
+    /// 它的 GPT 即是权威。</para></summary>
     public IReadOnlyList<string> MissingPartitions { get; }
 
+    /// <summary>Whether the plan describes an Allwinner SD-card image instead of a vendor <c>IMAGEWTY</c> package.
+    /// A card-image plan writes only GPT partitions: the image already holds its own partition table and boot chain,
+    /// so no step is downloaded under the MBR, boot0 or boot1 tags.
+    /// <para>计划描述的是全志 SD 卡镜像还是厂商 <c>IMAGEWTY</c> 包。卡镜像计划只写 GPT 分区：镜像自身已含分区表
+    /// 与引导链，因此没有步骤以 MBR、boot0 或 boot1 标签下载。</para></summary>
+    public bool IsCardImage { get; }
+
     /// <summary>
-    /// Loads a package and builds its download plan, rejecting containers without a Sunxi MBR, tables whose
-    /// payload exceeds its partition capacity, duplicate boot variants and payloads that cannot be decoded.
-    /// <para>加载包并构建下载计划；拒绝缺少 Sunxi MBR 的容器、负载超出分区容量的表、重复的引导变体以及无法
-    /// 解码的负载。</para>
+    /// Loads an Allwinner image and builds its download plan. A vendor <c>IMAGEWTY</c> package is rejected when it
+    /// carries no Sunxi MBR, a payload above its partition capacity, duplicate boot variants or an undecodable
+    /// payload; a card image is rejected when its GPT pair does not validate. Both shapes are distinguished by the
+    /// bytes themselves, never by the file name.
+    /// <para>加载全志镜像并构建下载计划。厂商 <c>IMAGEWTY</c> 包在缺少 Sunxi MBR、负载超出分区容量、带有重复
+    /// 引导变体或负载无法解码时被拒绝；卡镜像在其 GPT 主备对未通过校验时被拒绝。两种形态由字节自身区分，
+    /// 绝不依据文件名。</para>
     /// </summary>
-    /// <param name="imagePath">IMAGEWTY container file. <para>IMAGEWTY 容器文件。</para></param>
+    /// <param name="imagePath">Vendor package or card image file. <para>厂商包或卡镜像文件。</para></param>
     /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
     /// <returns>The built plan holding the open container. <para>持有已打开容器的计划。</para></returns>
     /// <exception cref="FileNotFoundException">The image file does not exist. <para>镜像文件不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The container is not a valid IMAGEWTY image, carries no Sunxi MBR,
-    /// carries duplicate boot variants, or names a payload the container cannot satisfy.
-    /// <para>容器不是有效 IMAGEWTY 镜像、没有 Sunxi MBR、带有重复引导变体，或点名的负载在容器中无法满足。</para></exception>
+    /// <exception cref="InvalidDataException">The container is neither a valid IMAGEWTY image nor an Allwinner card
+    /// image, carries no Sunxi MBR, carries duplicate boot variants, names a payload the container cannot satisfy,
+    /// or holds a GPT that does not validate. <para>容器既不是有效 IMAGEWTY 镜像也不是全志卡镜像、没有 Sunxi MBR、
+    /// 带有重复引导变体、点名的负载在容器中无法满足，或持有的 GPT 未通过校验。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     public static SunxiFlashPlan Load(string imagePath, CancellationToken cancellationToken = default)
     {
@@ -126,9 +145,14 @@ public sealed class SunxiFlashPlan : IDisposable
         var sources = new Dictionary<int, SunxiPartitionSource>();
         try
         {
+            if (TryBuildCardImageSteps(container, sources, cancellationToken) is { } card)
+            {
+                return new SunxiFlashPlan(container, null, card, [], sources, isCardImage: true);
+            }
+
             var header = AllwinnerImageWtyReader.Read(container, cancellationToken);
             var (steps, missing) = BuildSteps(container, header, sources, cancellationToken);
-            return new SunxiFlashPlan(container, header, steps, missing, sources);
+            return new SunxiFlashPlan(container, header, steps, missing, sources, isCardImage: false);
         }
         catch
         {
@@ -140,6 +164,67 @@ public sealed class SunxiFlashPlan : IDisposable
             container.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Builds the partition steps of an Allwinner SD-card image, or reports that the file is not one. Every GPT
+    /// partition becomes one sector-addressed <see cref="SunxiFesDataTag.Flash"/> step written at its own first
+    /// sector, bounded by the significant payload the card image holds; the boot chain, the GPT pair and the boot
+    /// package stay inside the image and are never downloaded under a tagged transfer.
+    /// <para>构建全志 SD 卡镜像的分区步骤，或报告该文件不是卡镜像。每个 GPT 分区成为一个按扇区寻址的
+    /// <see cref="SunxiFesDataTag.Flash"/> 步骤，写在其自身的首个扇区，并以卡镜像持有的有效负载为界；引导链、
+    /// GPT 主备对与启动包保留在镜像内部，绝不以带标签传输下载。</para>
+    /// </summary>
+    /// <param name="container">Open image stream. <para>已打开的镜像流。</para></param>
+    /// <param name="sources">Payload views the caller owns; filled only when the file is a card image.
+    /// <para>由调用方持有的负载视图；仅当文件是卡镜像时填充。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <returns>The partition steps, or <see langword="null"/> when the file is not a card image.
+    /// <para>分区步骤；文件不是卡镜像时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The file looks like a card image but one partition starts past the
+    /// 32-bit FES address field. <para>文件看似卡镜像，但有分区起始位置越过 32 位 FES 地址字段。</para></exception>
+    private static List<SunxiFlashStep>? TryBuildCardImageSteps(FileStream container,
+        Dictionary<int, SunxiPartitionSource> sources, CancellationToken cancellationToken)
+    {
+        Span<byte> probe = stackalloc byte[16];
+        if (container.Length < SunxiCardImageFormat.EgonOffset + 16)
+        {
+            return null;
+        }
+
+        container.Position = SunxiCardImageFormat.EgonOffset;
+        container.ReadExactly(probe);
+        if (!probe[4..12].SequenceEqual(SunxiEgonHeader.Magic))
+        {
+            return null;
+        }
+
+        container.Position = 0;
+        var image = SunxiCardImageFormat.Read(container, cancellationToken);
+        List<SunxiFlashStep> steps = [];
+        for (var index = 0; index < image.Partitions.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var partition = image.Partitions[index];
+            if (partition.ContentLength <= 0)
+            {
+                continue;
+            }
+
+            if (partition.FirstLba > uint.MaxValue)
+            {
+                throw new InvalidDataException(
+                    $"Partition '{partition.Name}' starts at sector {partition.FirstLba}, beyond the 32-bit FES "
+                    + "address field.");
+            }
+
+            sources[index] = SunxiPartitionSource.CreateRaw(container, partition.ByteOffset, partition.ContentLength,
+                partition.Name);
+            steps.Add(new SunxiFlashStep(SunxiFlashStepKind.Partition, partition.Name, SunxiFesDataTag.Flash,
+                (uint)partition.FirstLba, partition.ContentLength, index));
+        }
+
+        return steps;
     }
 
     /// <summary>Closes the package container and every entry view the plan holds.
@@ -168,6 +253,12 @@ public sealed class SunxiFlashPlan : IDisposable
     /// </summary>
     internal byte[] ReadTaggedEntry(SunxiFlashStep step, CancellationToken cancellationToken)
     {
+        if (_header is null)
+        {
+            throw new InvalidOperationException(
+                $"The step '{step.Name}' is not a tagged transfer of a vendor package.");
+        }
+
         var entry = _header.Entries[step.EntryIndex];
         var length = AllwinnerImageWtyReader.EffectiveLength(entry);
         if (length > MaximumTaggedEntryBytes)
@@ -416,6 +507,32 @@ internal sealed class SunxiPartitionSource : IDisposable
         _entry = entry;
         _logical = logical;
         Length = length;
+    }
+
+    /// <summary>
+    /// Opens one byte range of the image as a partition payload, which is how a card image hands its GPT partitions
+    /// to the flasher without copying them.
+    /// <para>把镜像中的一个字节区间作为分区负载打开；卡镜像正是以此把其 GPT 分区交给烧录器而不复制。
+    /// </para>
+    /// </summary>
+    /// <param name="container">Container stream the view reads through. <para>视图读取所用的容器流。</para></param>
+    /// <param name="offset">Absolute byte offset of the payload. <para>负载的绝对字节偏移。</para></param>
+    /// <param name="length">Payload length in bytes. <para>负载字节长度。</para></param>
+    /// <param name="name">Partition name used in failure messages. <para>失败信息中使用的分区名。</para></param>
+    /// <returns>The opened range view. <para>已打开的区间视图。</para></returns>
+    /// <exception cref="InvalidDataException">The range leaves the container.
+    /// <para>区间越出容器。</para></exception>
+    public static SunxiPartitionSource CreateRaw(Stream container, long offset, long length, string name)
+    {
+        if (offset < 0 || length <= 0 || offset > container.Length - length)
+        {
+            throw new InvalidDataException(
+                $"The payload of partition '{name}' escapes the card image.");
+        }
+
+        var range = new UotanStudio.Firmware.Core.Streams.BoundedReadStream(container, offset, length,
+            leaveOpen: true);
+        return new SunxiPartitionSource(range, range, length);
     }
 
     /// <summary>Logical payload length in bytes, after sparse expansion.

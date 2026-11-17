@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Protocols;
@@ -116,9 +117,9 @@ public sealed class SunxiFlashTests : IDisposable
 
     [Theory]
     [InlineData(SunxiFlashMode.FullErase, 0x12u)]
-    [InlineData(SunxiFlashMode.PartitionErase, 0x1u)]
-    [InlineData(SunxiFlashMode.KeepData, 0x0u)]
-    [InlineData(SunxiFlashMode.Partition, 0x0u)]
+    [InlineData(SunxiFlashMode.PartitionErase, 0x11u)]
+    [InlineData(SunxiFlashMode.KeepData, 0x2u)]
+    [InlineData(SunxiFlashMode.Partition, 0x1u)]
     public void Options_EraseFlag_MapsTheSelectedMode(SunxiFlashMode mode, uint expected)
     {
         Assert.Equal(expected, (uint)new SunxiFlashOptions { Mode = mode }.EraseFlag);
@@ -159,10 +160,12 @@ public sealed class SunxiFlashTests : IDisposable
     }
 
     [Fact]
-    public async Task Flasher_Execute_PartitionModeSkipsEraseAndFiltersPartitions()
+    public async Task Flasher_Execute_PartitionModeErasesTheSelectedScopeAndFiltersPartitions()
     {
         var transport = new FakeTransport();
         QueueQueries(transport);
+        QueueDownload(transport);
+        QueueVerifyStatus(transport);
         QueueDownload(transport);
         QueueVerifyStatus(transport);
         QueueDownload(transport);
@@ -183,10 +186,11 @@ public sealed class SunxiFlashTests : IDisposable
             Partitions = ["rootfs"]
         };
 
+
         await new SunxiFlasher(plan, options).ExecuteAsync(new SunxiFesSession(transport),
             progress, TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(transport.Writes, frame => frame.Length == 16 && Read32(frame, 0) == 0x12u);
+        Assert.Contains(transport.Writes, frame => frame.Length == 16 && Read32(frame, 0) == 0x1u);
         Assert.Contains(progress.Reports, report => report.Phase == "skip" && report.Target == "bootloader");
         Assert.Contains(progress.Reports, report => report.Phase == "download" && report.Target == "rootfs");
         Assert.Equal(1, transport.Writes.Count(frame => frame.Length == 20 && Read16(frame) == 0x020C));
@@ -224,7 +228,7 @@ public sealed class SunxiFlashTests : IDisposable
         await new SunxiFlasher(plan, options).ExecuteAsync(new SunxiFesSession(transport),
             progress, TestContext.Current.CancellationToken);
 
-        Assert.Contains(transport.Writes, frame => frame.Length == 16 && Read32(frame, 0) == 0u);
+        Assert.Contains(transport.Writes, frame => frame.Length == 16 && Read32(frame, 0) == 0x2u);
         Assert.Contains(progress.Reports, report => report.Phase == "skip" && report.Target == "private");
         Assert.DoesNotContain(progress.Reports, report => report.Phase == "download" && report.Target == "private");
     }
@@ -390,12 +394,103 @@ public sealed class SunxiFlashTests : IDisposable
         QueueDownload(transport);
     }
 
+    /// <summary>
+    /// Queues the frames one card-image run consumes in <see cref="SunxiFlashMode.Partition"/> mode: the two
+    /// service queries, the erase download and its verification, the flash-access switch on, a download and a
+    /// verification for each of the two partitions, the flash-access switch off and the completion tool mode.
+    /// <para>排队一次 <see cref="SunxiFlashMode.Partition"/> 模式的卡镜像运行所消费的帧：两次服务查询、打开闪存
+    /// 访问、两个分区各自的一次下载与一次校验、关闭闪存访问，以及完成用的工具模式。</para>
+    /// </summary>
+    private static void QueueCardImageRun(FakeTransport transport, int partitions = 2)
+    {
+        QueueQueries(transport);
+        QueueDownload(transport);
+        QueueVerifyStatus(transport);
+        transport.QueueResponse();
+        for (var index = 0; index < partitions; index++)
+        {
+            QueueDownload(transport);
+            QueueVerifyStatus(transport);
+        }
+
+        transport.QueueResponse();
+        transport.QueueResponse();
+    }
+
     private static void QueueQueries(FakeTransport transport, uint secure = 0, uint storage = 3)
     {
         transport.QueueValue(secure);
         transport.QueueResponse();
         transport.QueueValue(storage);
         transport.QueueResponse();
+    }
+
+    [Fact]
+    public void Plan_Load_CardImage_BuildsOneSectorAddressedStepPerGptPartition()
+    {
+        using var plan = SunxiFlashPlan.Load(CardImagePath(), TestContext.Current.CancellationToken);
+
+        Assert.True(plan.IsCardImage);
+        Assert.Empty(plan.MissingPartitions);
+        Assert.Equal(["boot-resource", "rootfs"], plan.Steps.Select(step => step.Name).ToArray());
+        Assert.All(plan.Steps, step => Assert.Equal(SunxiFlashStepKind.Partition, step.Kind));
+        Assert.All(plan.Steps, step => Assert.Equal(SunxiFesDataTag.Flash, step.Tag));
+        Assert.All(plan.Steps, step => Assert.Null(step.BootRole));
+        Assert.Equal((uint)SunxiCardImageBuilder.FirstUsableLba, plan.Steps[0].FirstSector);
+        var expectedSecond = (uint)(SunxiCardImageBuilder.FirstUsableLba + 8);
+        Assert.Equal(expectedSecond, plan.Steps[1].FirstSector);
+        Assert.DoesNotContain(plan.Steps, step => step.Kind == SunxiFlashStepKind.Mbr);
+    }
+
+    [Fact]
+    public async Task Plan_Load_CardImage_ExtractsThePartitionBytesFromTheImageWithoutCopying()
+    {
+        using var plan = SunxiFlashPlan.Load(CardImagePath(), TestContext.Current.CancellationToken);
+
+        var rootfs = plan.Steps.Single(step => step.Name == "rootfs");
+        var buffer = new byte[rootfs.ByteCount];
+        var written = await plan.ExtractSegmentAsync(rootfs, 0, buffer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(buffer.Length, written);
+        Assert.True(buffer.AsSpan().StartsWith("hsqs"u8), "the carved range must start at the SquashFS magic");
+    }
+
+    [Fact]
+    public async Task Flasher_Execute_CardImage_WritesOnlySectorAddressedPartitionsAndNoBootTags()
+    {
+        var transport = new FakeTransport();
+        QueueCardImageRun(transport);
+        using var plan = SunxiFlashPlan.Load(CardImagePath(), TestContext.Current.CancellationToken);
+        var progress = new ProgressLog();
+        var options = new SunxiFlashOptions { FlashConfirmation = "FLASH", Mode = SunxiFlashMode.Partition };
+
+        await new SunxiFlasher(plan, options).ExecuteAsync(new SunxiFesSession(transport),
+            progress, TestContext.Current.CancellationToken);
+
+        Assert.Contains(transport.Writes, frame => frame.Length == 20 && Read16(frame) == 0x0206
+            && Read32(frame, 12) == ((uint)SunxiFesDataTag.Flash | SunxiEfexConstants.TransferFinishTag));
+        Assert.DoesNotContain(transport.Writes, frame => frame.Length == 20 && Read16(frame) == 0x0206
+            && (Read32(frame, 12) & SunxiEfexConstants.DataTagMask) == (uint)SunxiFesDataTag.Mbr);
+        Assert.DoesNotContain(transport.Writes, frame => frame.Length == 20 && Read16(frame) == 0x0206
+            && (Read32(frame, 12) & SunxiEfexConstants.DataTagMask) == (uint)SunxiFesDataTag.Boot0);
+        Assert.DoesNotContain(transport.Writes, frame => frame.Length == 20 && Read16(frame) == 0x0206
+            && (Read32(frame, 12) & SunxiEfexConstants.DataTagMask) == (uint)SunxiFesDataTag.Boot1);
+        Assert.Contains(progress.Reports, report => report.Phase == "download" && report.Target == "rootfs");
+        Assert.Equal(0x020F, Read16(transport.Writes[^1]));
+    }
+
+    [Fact]
+    public async Task Flasher_Execute_CardImage_RequiresNoBootVariantForTheReportedStorage()
+    {
+        var transport = new FakeTransport();
+        QueueCardImageRun(transport);
+        using var plan = SunxiFlashPlan.Load(CardImagePath(), TestContext.Current.CancellationToken);
+        var options = new SunxiFlashOptions { FlashConfirmation = "FLASH", Mode = SunxiFlashMode.Partition };
+
+        await new SunxiFlasher(plan, options).ExecuteAsync(new SunxiFesSession(transport), null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(transport.Writes, frame => frame.Length == 16 && Read32(frame, 0) == 0x1u);
     }
 
     private static void QueueDownload(FakeTransport transport, int frames = 1)
@@ -414,6 +509,32 @@ public sealed class SunxiFlashTests : IDisposable
     {
         transport.QueueVerify(flag, fesCrc, mediaCrc);
         transport.QueueResponse();
+    }
+
+    /// <summary>
+    /// Writes a two-partition Allwinner card image: a FAT <c>boot-resource</c> slot and a SquashFS <c>rootfs</c> slot.
+    /// <para>写入一个两分区的全志卡镜像：一个 FAT 的 <c>boot-resource</c> 槽位与一个 SquashFS 的 <c>rootfs</c> 槽位。</para>
+    /// </summary>
+    private string CardImagePath()
+    {
+        var fat = new byte[512];
+        BinaryPrimitives.WriteUInt16LittleEndian(fat.AsSpan(11), 512);
+        fat[13] = 1;
+        BinaryPrimitives.WriteUInt16LittleEndian(fat.AsSpan(14), 1);
+        fat[16] = 1;
+        BinaryPrimitives.WriteUInt16LittleEndian(fat.AsSpan(17), 16);
+        BinaryPrimitives.WriteUInt16LittleEndian(fat.AsSpan(22), 1);
+        "FAT16   "u8.CopyTo(fat.AsSpan(54));
+
+        var rootfs = new byte[512];
+        "hsqs"u8.CopyTo(rootfs);
+
+        var image = SunxiCardImageBuilder.Build(
+            new("boot-resource", 8, fat),
+            new("rootfs", 8, rootfs));
+        var path = Path.Combine(_root, $"card-{Guid.NewGuid():N}.img");
+        File.WriteAllBytes(path, image);
+        return path;
     }
 
     private string StandardPackagePath() => WriteImage(

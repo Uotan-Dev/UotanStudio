@@ -61,8 +61,9 @@ public sealed class SunxiFlashOptions
     internal SunxiEraseFlag EraseFlag => Mode switch
     {
         SunxiFlashMode.FullErase => SunxiEraseFlag.Full,
-        SunxiFlashMode.PartitionErase => SunxiEraseFlag.Partition,
-        _ => SunxiEraseFlag.None
+        SunxiFlashMode.PartitionErase => SunxiEraseFlag.PartitionErase,
+        SunxiFlashMode.KeepData => SunxiEraseFlag.KeepData,
+        _ => SunxiEraseFlag.Partition
     };
 
     /// <summary>

@@ -64,8 +64,14 @@ public static class SunxiBootImageHeader
     /// <summary>Magic of the first-stage loader that initialises DRAM. <para>初始化 DRAM 的一级加载器魔数。</para></summary>
     public static ReadOnlySpan<byte> EgonMagic => "eGON.BT0"u8;
 
-    /// <summary>Magic of the payload that starts the FES service. <para>启动 FES 服务的负载魔数。</para></summary>
-    public static ReadOnlySpan<byte> UbootMagic => "u-boot\0\0"u8;
+    /// <summary>Magic the vendor <c>u-boot.fex</c> payloads carry: <c>uboot</c> followed by two NUL bytes, without
+    /// the hyphen the reference tool sources spell it with. <para>厂商 <c>u-boot.fex</c> 负载携带的魔数：
+    /// <c>uboot</c> 后接两个 NUL 字节，参考工具源码里拼写的中划线并不存在。</para></summary>
+    public static ReadOnlySpan<byte> UbootMagic => "uboot\0\0"u8;
+
+    /// <summary>Byte offset of the u-boot magic, which sits at the same four-byte offset eGON uses.
+    /// <para>u-boot 魔数的字节偏移，与 eGON 使用的四字节偏移相同。</para></summary>
+    public const int UbootMagicOffset = 4;
 
     /// <summary>Shortest header the parser accepts. <para>解析器接受的最短头部。</para></summary>
     public const int HeaderSize = 48;
@@ -122,21 +128,23 @@ public static class SunxiBootImageHeader
     /// <para>镜像过短或未携带魔数。</para></exception>
     public static SunxiUbootImage ReadUboot(ReadOnlySpan<byte> image)
     {
-        RequireMagic(image, UbootMagic, "u-boot");
+        RequireMagic(image, UbootMagic, "u-boot", UbootMagicOffset);
+
         return new SunxiUbootImage(
             BinaryPrimitives.ReadUInt32LittleEndian(image[44..]),
             BinaryPrimitives.ReadUInt32LittleEndian(image[20..]),
             ReadText(image[36..44]));
     }
 
-    private static void RequireMagic(ReadOnlySpan<byte> image, ReadOnlySpan<byte> magic, string name)
+    private static void RequireMagic(ReadOnlySpan<byte> image, ReadOnlySpan<byte> magic, string name,
+        int offset = 4)
     {
         if (image.Length < HeaderSize)
         {
             throw new InvalidDataException($"A {name} header is at least {HeaderSize} bytes.");
         }
 
-        if (!image[4..12].SequenceEqual(magic))
+        if (!image.Slice(offset, magic.Length).SequenceEqual(magic))
         {
             throw new InvalidDataException($"The image does not start with the {name} magic.");
         }

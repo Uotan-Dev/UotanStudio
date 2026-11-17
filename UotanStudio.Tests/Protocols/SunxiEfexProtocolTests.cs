@@ -337,20 +337,6 @@ public sealed class SunxiEfexProtocolTests
     }
 
     [Fact]
-    public async Task FesSession_QueryStorageList_ReturnsTheOneByteMask()
-    {
-        var transport = new FakeTransport();
-        transport.QueuePayload([0x0B]);
-        transport.QueueResponse();
-        var session = new SunxiFesSession(transport);
-
-        var mask = await session.QueryStorageListAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(0x0Bu, mask);
-        Assert.Equal(0x0232, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
-    }
-
-    [Fact]
     public async Task FesSession_VerifyValue_ReportsFlagAndCrcs()
     {
         var transport = new FakeTransport();
@@ -430,18 +416,6 @@ public sealed class SunxiEfexProtocolTests
         Assert.Equal(0x020B, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[1]));
     }
 
-    [Fact]
-    public async Task FesSession_FlashSwitch_SendsTheStorageType()
-    {
-        var transport = new FakeTransport();
-        transport.QueueResponse();
-        var session = new SunxiFesSession(transport);
-
-        await session.FlashSwitchAsync(2, TestContext.Current.CancellationToken);
-
-        Assert.Equal(0x0233, BinaryPrimitives.ReadUInt16LittleEndian(transport.Writes[0]));
-        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(transport.Writes[0].AsSpan(4)));
-    }
 
     [Fact]
     public async Task FesSession_SetToolMode_CarriesBothModes()
@@ -806,7 +780,10 @@ public sealed class SunxiEfexProtocolTests
     private static byte[] BuildUbootImage(uint runAddress, uint length, string platform)
     {
         var image = new byte[512];
-        "u-boot\0\0"u8.CopyTo(image.AsSpan(4));
+
+        // Vendor u-boot payloads spell the tag "uboot" without a hyphen; the parser reads that at offset four.
+        // 厂商 u-boot 负载把标记拼作不带中划线的 "uboot"；解析器在偏移 4 处读取它。
+        "uboot\0\0"u8.CopyTo(image.AsSpan(4));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(20), length);
         Encoding.ASCII.GetBytes(platform).CopyTo(image.AsSpan(36));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(44), runAddress);

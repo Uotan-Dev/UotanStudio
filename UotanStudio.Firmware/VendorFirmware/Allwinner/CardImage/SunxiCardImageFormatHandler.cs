@@ -14,7 +14,7 @@ namespace UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 /// 并带有一个供厂商引导 ROM 使用的分区前引导区。解包按厂商 <c>.fex</c> 名称切出每个分区，使结果与厂商桌面工具
 /// 一致；引导区与 <c>boot-resource</c> 内容则以结构而非文件形式上报。</para>
 /// </summary>
-internal sealed class SunxiCardImageFormatHandler : IReadonlyFormatHandler, IFormatProbeHints
+public sealed class SunxiCardImageFormatHandler : IReadonlyFormatHandler, IFormatProbeHints
 {
     /// <summary>Byte window the structural probe needs: the eGON loader magic at LBA 16 is the furthest marker.
     /// <para>结构探测所需的字节窗口：LBA 16 处的 eGON 引导魔数是最远的标记。</para></summary>

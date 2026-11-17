@@ -320,16 +320,37 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reports whether the file starts with the plaintext IMAGEWTY magic, so the shared package loader hands
-    /// Allwinner images to the Sunxi plan instead of the single-image fallback.
-    /// <para>判断文件是否以明文 IMAGEWTY 魔数开头，使通用包加载器把全志镜像交给全志计划而不是单镜像回退。</para>
+    /// Reports whether the file is an Allwinner image the Sunxi plan can drive, so the shared package loader hands
+    /// it to that plan instead of the single-image fallback. Both shapes count: a plaintext <c>IMAGEWTY</c> vendor
+    /// package and an SD-card image, which the format registry recognizes from its MBR, GPT and <c>eGON.BT0</c>
+    /// markers. The decision comes from the registered handlers rather than from a bare-magic test, so a new
+    /// Allwinner container shape only has to be registered once.
+    /// <para>判断文件是否为全志计划可驱动的全志镜像，使通用包加载器把它交给该计划而不是单镜像回退。两种形态都算：
+    /// 明文 <c>IMAGEWTY</c> 厂商包与 SD 卡镜像，后者由格式注册表依据 MBR、GPT 与 <c>eGON.BT0</c> 标记识别。
+    /// 判定来自已注册处理器而非裸魔数判断，因此新增一种全志容器形态只需注册一次。</para>
     /// </summary>
+    /// <param name="path">Candidate image. <para>候选镜像。</para></param>
+    /// <param name="cancellationToken">Cancels the header read. <para>取消头部读取。</para></param>
+    /// <returns><see langword="true"/> when the registry routes the file to either Allwinner handler.
+    /// <para>注册表把该文件路由到任一全志处理器时为 <see langword="true"/>。</para></returns>
     private static async Task<bool> IsSunxiImageFileAsync(string path, CancellationToken cancellationToken)
     {
         var header = new byte[8];
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var read = await stream.ReadAsync(header, cancellationToken).ConfigureAwait(false);
-        return read == header.Length && AllwinnerImageWtyReader.HasPlainMagic(header);
+        await using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var read = await stream.ReadAsync(header, cancellationToken).ConfigureAwait(false);
+            if (read == header.Length && AllwinnerImageWtyReader.HasPlainMagic(header))
+            {
+                return true;
+            }
+        }
+
+        return await Task.Run(() =>
+        {
+            Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+            return Firmware.Core.FormatDetector.Detect(path) is
+                Firmware.VendorFirmware.Allwinner.CardImage.SunxiCardImageFormatHandler;
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
