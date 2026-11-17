@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
@@ -17,6 +18,18 @@ public partial class DeviceViewModel
     /// <para>瑞芯微只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
     /// </summary>
     private const int RkdlIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the Allwinner read-only identity query, so one scan is never held up by a device.
+    /// <para>全志只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int SunxiIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the UNISOC read-only stage handshake, so one scan is never held up by a device.
+    /// <para>紫光展锐只读阶段握手的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int UnisocIdentityTimeoutMs = 5000;
 
     /// <summary>
     /// Cooperative bound for the whole ADB detail query, so a slow device cannot hold the exclusive direct-USB
@@ -47,6 +60,8 @@ public partial class DeviceViewModel
         DeviceProtocolKind.Mtk => EnrichMtkInfoAsync(device),
         DeviceProtocolKind.Ios => EnrichIosInfoAsync(device),
         DeviceProtocolKind.Rkdl => EnrichRkdlInfoAsync(device),
+        DeviceProtocolKind.Sunxi => EnrichSunxiInfoAsync(device),
+        DeviceProtocolKind.Unisoc => EnrichUnisocInfoAsync(device),
         _ => Task.CompletedTask,
     };
 
@@ -56,6 +71,84 @@ public partial class DeviceViewModel
     /// </summary>
     /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
     /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    /// <summary>
+    /// <para>仅对尚未识别过模式的全志端点做一次只读身份握手，把 FEL/FES 写进设备徽章；两种模式以相同的
+    /// VID/PID 枚举，发现阶段无法区分。握手只发送身份查询命令，不写内存、不切换模式；失败或超时仅留下
+    /// 调试日志，徽章保持普通 "Sunxi"，下次扫描重试。</para>
+    /// Performs one read-only identity handshake against Allwinner endpoints whose mode has not been
+    /// recognized yet, recording FEL or FES into the device badge; both modes enumerate with the same
+    /// VID/PID pair, so discovery cannot tell them apart. The handshake sends the identity query only and
+    /// neither writes memory nor switches modes; a failure or timeout leaves a debug log and keeps the badge
+    /// as plain "Sunxi" until the next scan retries.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichSunxiInfoAsync(DeviceInfo device)
+    {
+        if (device.HasSunxiMode)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(SunxiIdentityTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QuerySunxiStatusAsync(endpoint,
+                timeout.Token).GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.SunxiMode = status.IsFes ? "FES" : "FEL";
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"Sunxi identity query for {endpoint.Key} failed: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Performs one read-only loader-stage handshake against UNISOC endpoints whose stage has not been recognized
+    /// yet, recording BootRom/FDL1/FDL2 into the device badge. The handshake opens a session only and neither
+    /// uploads loaders nor writes storage; a failure or timeout leaves a debug log and keeps the badge as plain
+    /// "Unisoc" until the next scan retries.
+    /// <para>仅对尚未识别过阶段的紫光展锐端点做一次只读加载阶段握手，把 BootRom/FDL1/FDL2 写进设备徽章；握手
+    /// 只打开会话，不上传加载器、不写存储；失败或超时仅留下调试日志，徽章保持普通 "Unisoc"，下次扫描重试。</para>
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichUnisocInfoAsync(DeviceInfo device)
+    {
+        if (device.HasUnisocStage)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(UnisocIdentityTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QueryUnisocStatusAsync(endpoint,
+                timeout.Token).GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.UnisocStage = status.Stage switch
+                {
+                    UnisocBootStage.BootRom => "BootRom",
+                    UnisocBootStage.Fdl1 => "FDL1",
+                    UnisocBootStage.Fdl2 => "FDL2",
+                    _ => status.Stage.ToString(),
+                };
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"Unisoc stage query for {endpoint.Key} failed: {exception.Message}");
+        }
+    }
+
     private async Task EnrichIosInfoAsync(DeviceInfo device)
     {
         if (device.HasIosInfo)

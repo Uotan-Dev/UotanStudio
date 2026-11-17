@@ -47,6 +47,8 @@ public enum DeviceProtocolKind
     Diagnostic,
     /// <summary>Allwinner FEL boot ROM or FES service; both share one VID/PID pair and are told apart by the identity handshake.<para>全志 FEL boot ROM 或 FES 服务；两者共用一组 VID/PID，由身份握手区分。</para></summary>
     Sunxi,
+    /// <summary>UNISOC BSL download link (Boot ROM, FDL1 or FDL2), told apart by the handshake.<para>紫光展锐 BSL 下载链路（Boot ROM、FDL1 或 FDL2），由握手区分。</para></summary>
+    Unisoc,
 }
 
 /// <summary>
@@ -154,6 +156,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Ios => "iOS",
         DeviceProtocolKind.Diagnostic => "DIAG",
         DeviceProtocolKind.Sunxi => "Sunxi",
+        DeviceProtocolKind.Unisoc => "Unisoc",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }

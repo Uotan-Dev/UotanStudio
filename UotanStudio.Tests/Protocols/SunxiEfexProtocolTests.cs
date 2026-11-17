@@ -181,6 +181,43 @@ public sealed class SunxiEfexProtocolTests
     }
 
     [Fact]
+    public async Task FesSession_UploadStream_WritesWholeChunksAndMarksOnlyTheLast()
+    {
+        var transport = new FakeTransport();
+        transport.QueueUploadChunk(MaximumTransfer);
+        transport.QueueUploadChunk(1024);
+        var session = new SunxiFesSession(transport);
+        await using var output = new MemoryStream();
+
+        await session.UploadStreamAsync(8, output, MaximumTransfer + 1024, null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MaximumTransfer + 1024, output.Length);
+        Assert.Equal(2, transport.Writes.Count);
+        var firstFrame = transport.Writes[0];
+        Assert.Equal(0x0207, BinaryPrimitives.ReadUInt16LittleEndian(firstFrame));
+        Assert.Equal(8u, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(4)));
+        Assert.Equal((uint)MaximumTransfer, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(8)));
+        Assert.Equal((uint)SunxiFesDataTag.Flash, BinaryPrimitives.ReadUInt32LittleEndian(firstFrame.AsSpan(12)));
+        var lastFrame = transport.Writes[1];
+        Assert.Equal(8u + MaximumTransfer / 512u, BinaryPrimitives.ReadUInt32LittleEndian(lastFrame.AsSpan(4)));
+        Assert.Equal((uint)SunxiFesDataTag.Flash | SunxiEfexConstants.TransferFinishTag,
+            BinaryPrimitives.ReadUInt32LittleEndian(lastFrame.AsSpan(12)));
+    }
+
+    [Fact]
+    public async Task FesSession_UploadStream_RejectsPartialSectorCounts()
+    {
+        var session = new SunxiFesSession(new FakeTransport());
+        await using var output = new MemoryStream();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => session.UploadStreamAsync(0, output, 1000,
+            null, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => session.UploadStreamAsync(0, output, 0,
+            null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task FesSession_Upload_AdvancesByteAddressForEmmcBootTags()
     {
         var transport = new FakeTransport();
@@ -466,8 +503,12 @@ public sealed class SunxiEfexProtocolTests
     [Theory]
     [InlineData(0x00168000u, "H2/H3")]
     [InlineData(0x00189000u, "A523/A527/MR527/T527")]
-    [InlineData(0x00185900u, "D1/F133")]
+    [InlineData(0x00185900u, "D1/D1S/F133/R528/T113")]
     [InlineData(0x00188600u, "V851/V853")]
+    [InlineData(0x00188200u, "V821")]
+    [InlineData(0x00190300u, "A733/T736")]
+    [InlineData(0x00191800u, "V881/V861/V838")]
+    [InlineData(0x00161000u, "Allwinner FES Devices")]
     public void ChipTable_ResolvesKnownSoCIds(uint id, string expected)
     {
         Assert.Equal(expected, SunxiChipTable.Resolve(id));
@@ -477,7 +518,7 @@ public sealed class SunxiEfexProtocolTests
     public void ChipTable_UnknownIdResolvesToNull()
     {
         Assert.Null(SunxiChipTable.Resolve(0x00123456));
-        Assert.True(SunxiChipTable.Count >= 26);
+        Assert.True(SunxiChipTable.Count >= 30);
     }
 
     [Fact]

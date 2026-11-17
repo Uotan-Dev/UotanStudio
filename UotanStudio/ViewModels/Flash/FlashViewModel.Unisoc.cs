@@ -1,0 +1,716 @@
+﻿using System.Globalization;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Comm.Protocols.Unisoc;
+using UotanStudio.Services;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Ui;
+using UotanStudio.UiAbstractions;
+
+namespace UotanStudio.ViewModels.Flash;
+
+/// <summary>
+/// UNISOC page actions: loader-stage status readout, the PAC-package-driven flash and partition read-back the
+/// shared action buttons run, and the partition-table read that fills the main grid from the device's GPT or
+/// native table.
+/// <para>紫光展锐页面动作：加载阶段状态读取、通用动作按钮对 PAC 包执行的烧录与分区回读，以及从设备 GPT 或原生表
+/// 填充主网格的分区表读取。</para>
+/// </summary>
+public sealed partial class FlashViewModel
+{
+    /// <summary>Cooperative bound for one UNISOC status query, matching the monitor's own bound.
+    /// <para>单次紫光展锐状态查询的协作式时限，与监视服务自身的时限一致。</para></summary>
+    private const int UnisocStatusTimeoutMs = 5000;
+
+    /// <summary>Byte offset of the PAC magic word inside the package header.
+    /// <para>包头内 PAC 魔数字的偏移。</para></summary>
+    private const int UnisocPacMagicOffset = 2116;
+
+    /// <summary>Header bytes a PAC probe must read to reach the magic word.
+    /// <para>PAC 探测必须读取以到达魔数字的头部长度。</para></summary>
+    private const int UnisocPacProbeLength = 2124;
+
+    /// <summary>Status line of the Unisoc section; the stage readout and every operation write it.
+    /// <para>紫光展锐分类的状态行；阶段读取与每个操作都会写入。</para></summary>
+    [ObservableProperty]
+    private string _unisocStatusText = string.Empty;
+
+    /// <summary>Stage-aware hint under the status line; it says what the current loader stage offers and what still
+    /// blocks the storage actions. <para>状态行下方随阶段变化的提示行；说明当前加载阶段能做什么，以及存储动作还差什么。</para></summary>
+    [ObservableProperty]
+    private string _unisocModeHint = string.Empty;
+
+    /// <summary>Manually chosen first-stage loader for endpoints whose package is unavailable; empty while the plan
+    /// supplies it. <para>包不可用时手动选择的一级加载器；计划可提供时为空。</para></summary>
+    [ObservableProperty]
+    private string _unisocFdl1Path = string.Empty;
+
+    /// <summary>Manually chosen second-stage loader; empty while the plan supplies it.
+    /// <para>计划可提供时为空的手动二级加载器。</para></summary>
+    [ObservableProperty]
+    private string _unisocFdl2Path = string.Empty;
+
+    /// <summary>Selected erase mode index: keep data, partition erase or full erase.
+    /// <para>所选擦除模式索引：保留数据、分区擦除或整片擦除。</para></summary>
+    [ObservableProperty]
+    private int _unisocFlashModeIndex = 1;
+
+    /// <summary>Selected post-flash action index: reboot or power off.
+    /// <para>所选烧录后动作索引：重启或关机。</para></summary>
+    [ObservableProperty]
+    private int _unisocPostActionIndex;
+
+    /// <summary>Whether the loaded package is a UNISOC PAC whose plan owns the grid rows.
+    /// <para>已加载的包是否为其计划拥有网格行的紫光展锐 PAC。</para></summary>
+    private bool _unisocPackage;
+
+    /// <summary>Whether the selected endpoint answers as FDL2, which the storage actions require.
+    /// <para>所选端点是否以 FDL2 应答；存储动作都要求该阶段。</para></summary>
+    private bool _unisocIsFdl2;
+
+    /// <summary>Status the selected endpoint answered most recently, kept per device key so re-selecting the same
+    /// endpoint republishes it without another handshake; the refresh button clears it.
+    /// <para>所选端点最近一次应答的状态，按设备键保存，使重新选中同一端点时直接重发而无需再次握手；刷新按钮会将其清除。</para></summary>
+    private (string Key, UnisocDeviceStatus Status)? _unisocStatusCache;
+
+    /// <summary>
+    /// UNISOC section: the pane and every button answer only on a UNISOC endpoint, so each carries that condition
+    /// instead of a page-wide lookup; the header stays present for every endpoint.
+    /// <para>紫光展锐分类：面板与每个按钮只在紫光展锐端点上应答，因此各自持有该条件，而不是依赖页面级查表；表头对任何端点都保持呈现。</para>
+    /// </summary>
+    private void RegisterUnisocControlGates()
+    {
+        RegisterGate("UnisocExpander", FlashControlGate.SectionHeader("UnisocExpander"));
+        RegisterGate("UnisocPane", FlashControlGate.Unisoc("UnisocPane", busyDisabled: true));
+        RegisterGate("UnisocRefreshButton", FlashControlGate.Unisoc("UnisocRefreshButton"));
+        RegisterGate("UnisocChooseFdl1Button", FlashControlGate.Unisoc("UnisocChooseFdl1Button"));
+        RegisterGate("UnisocChooseFdl2Button", FlashControlGate.Unisoc("UnisocChooseFdl2Button"));
+    }
+
+    /// <summary>
+    /// Queries the selected endpoint once and publishes the stage, stage hint and status table. The stage also
+    /// updates the device badge, because discovery cannot tell the loader stages apart. A cached answer for the
+    /// same device key republishes without another handshake; the refresh button forces a fresh query.
+    /// <para>查询一次所选端点并发布阶段、阶段提示与状态表。阶段同时更新设备徽章，因为发现阶段无法区分加载阶段。
+    /// 同一设备键的缓存应答直接重发而无需再次握手；刷新按钮强制重新查询。</para>
+    /// </summary>
+    internal async void RefreshUnisocDeviceStatus()
+    {
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Unisoc } device)
+        {
+            UnisocStatusText = string.Empty;
+            UnisocModeHint = string.Empty;
+            _unisocIsFdl2 = false;
+            _unisocStatusCache = null;
+            RefreshDeviceUiGate();
+            return;
+        }
+
+        if (_unisocStatusCache is { } cached && string.Equals(cached.Key, device.Key, StringComparison.Ordinal))
+        {
+            ApplyUnisocStatus(cached.Status);
+            return;
+        }
+
+        var language = _localizer;
+        var epoch = BeginDeviceStatusRefresh();
+        try
+        {
+            using var timeout = new CancellationTokenSource(UnisocStatusTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QueryUnisocStatusAsync(device, timeout.Token)
+                .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (SelectedDevice?.Key != device.Key || epoch != _rkStatusRefreshEpoch)
+            {
+                return;
+            }
+
+            _unisocStatusCache = (device.Key, status);
+            ApplyUnisocStatus(status);
+        }
+        catch (OperationCanceledException)
+        {
+            UnisocStatusText = language.GetString("Flash_UnisocStatusTimeout");
+            UnisocModeHint = language.GetString("Flash_UnisocHintUnknown");
+            _unisocIsFdl2 = false;
+            _unisocStatusCache = null;
+            RefreshDeviceUiGate();
+        }
+        catch (Exception exception)
+        {
+            UnisocStatusText = language.GetString("Flash_UnisocStatusFailed") + " " + exception.Message;
+            UnisocModeHint = language.GetString("Flash_UnisocHintUnknown");
+            _unisocIsFdl2 = false;
+            _unisocStatusCache = null;
+            RefreshDeviceUiGate();
+        }
+    }
+
+    /// <summary>Re-reads the selected endpoint and refreshes its device badge; the click always forces a fresh
+    /// handshake instead of replaying the cached one.
+    /// <para>重新读取所选端点并刷新其设备徽章；点击总是强制重新握手而不是重放缓存。</para>
+    /// </summary>
+    /// <param name="sender">Event source. <para>事件来源。</para></param>
+    /// <param name="e">Event arguments. <para>事件参数。</para></param>
+    internal void OnUnisocRefreshClick(object? sender, RoutedEventArgs e)
+    {
+        _unisocStatusCache = null;
+        RefreshUnisocDeviceStatus();
+    }
+
+    /// <summary>Chooses the manual first-stage loader for endpoints without a PAC package.
+    /// <para>为没有 PAC 包的端点选择手动一级加载器。</para>
+    /// </summary>
+    /// <param name="sender">Event source. <para>事件来源。</para></param>
+    /// <param name="e">Event arguments. <para>事件参数。</para></param>
+    internal async void OnUnisocChooseFdl1Click(object? sender, RoutedEventArgs e)
+    {
+        UnisocFdl1Path = await PickUnisocImageAsync("Flash_UnisocChooseFdl1").ConfigureAwait(true);
+    }
+
+    /// <summary>Chooses the manual second-stage loader for endpoints without a PAC package.
+    /// <para>为没有 PAC 包的端点选择手动二级加载器。</para>
+    /// </summary>
+    /// <param name="sender">Event source. <para>事件来源。</para></param>
+    /// <param name="e">Event arguments. <para>事件参数。</para></param>
+    internal async void OnUnisocChooseFdl2Click(object? sender, RoutedEventArgs e)
+    {
+        UnisocFdl2Path = await PickUnisocImageAsync("Flash_UnisocChooseFdl2").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Reports whether the file is a UNISOC PAC package: the <c>.pac</c> extension is accepted without opening the
+    /// file, any other name must carry the package magic word at the fixed header offset.
+    /// <para>判断文件是否为紫光展锐 PAC 包：<c>.pac</code> 扩展名不经打开文件即接受，其他名称必须在固定头部偏移处
+    /// 携带包魔数字。</para>
+    /// </summary>
+    private static async Task<bool> IsUnisocPackageFileAsync(string path, CancellationToken cancellationToken)
+    {
+        if (Path.GetExtension(path).Equals(".pac", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var header = new byte[UnisocPacProbeLength];
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var read = 0;
+        while (read < header.Length)
+        {
+            var chunk = await stream.ReadAsync(header.AsMemory(read), cancellationToken).ConfigureAwait(false);
+            if (chunk == 0)
+            {
+                return false;
+            }
+
+            read += chunk;
+        }
+
+        return header[UnisocPacMagicOffset] == 0xFA && header[UnisocPacMagicOffset + 1] == 0xFF &&
+            header[UnisocPacMagicOffset + 2] == 0xFA && header[UnisocPacMagicOffset + 3] == 0xFF;
+    }
+
+    /// <summary>
+    /// Loads a PAC package into the main grid: the plan's flashable partition images become tickable rows and the
+    /// shared flash action later reads the package from the page-wide package path.
+    /// <para>把 PAC 包装进主网格：计划中可刷写的分区镜像成为可勾选行，通用烧录动作随后从页面级包路径读取该包。</para>
+    /// </summary>
+    private async Task ApplyUnisocPackageAsync(string path, CancellationToken cancellation)
+    {
+        using var plan = await Task.Run(() => UnisocFlashPlan.Load(path, cancellation), cancellation)
+            .ConfigureAwait(true);
+        if (path != _loadedPath)
+        {
+            return;
+        }
+
+        _unisocPackage = true;
+        Partitions.Apply(0, BuildUnisocPlanRows(plan));
+        AppendLog($"{plan.Images.Count} " + _localizer.GetString("Flash_ImagesLoaded"));
+    }
+
+    /// <summary>
+    /// Builds one tickable grid row per plan image, each carrying its payload size.
+    /// <para>按计划镜像逐条构建可勾选网格行，每行携带负载大小。</para>
+    /// </summary>
+    private static List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan)
+    {
+        List<FlashPartitionEntry> rows = [];
+        foreach (var image in plan.Images)
+        {
+            rows.Add(new FlashPartitionEntry
+            {
+                IsScriptStep = false,
+                Name = image.Name,
+                Offset = string.Empty,
+                Size = FormatByteSize(image.Length),
+                AcceptsFile = false
+            });
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Runs one PAC package against the endpoint after the typed confirmation: the plan's loaders bring the link to
+    /// FDL2, the selected erase mode is applied and the partitions ticked in the main grid (every matching partition
+    /// when no row is ticked) are written, then the completion action runs. A full erase additionally requires the
+    /// typed wipe confirmation.
+    /// <para>在输入确认短语后对端点运行一个 PAC 包：计划的加载器把链路提升到 FDL2，应用所选擦除模式并写入主网格
+    /// 勾选的分区（未勾选时写全部匹配分区），最后执行收尾动作。整片擦除还要求输入擦除确认短语。</para>
+    /// </summary>
+    internal async Task RunUnisocFlashAsync()
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Unisoc } device)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        if (!_unisocPackage || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
+        {
+            AppendLog(_localizer.GetString("Flash_PackageChanged"));
+            return;
+        }
+
+        var language = _localizer;
+        var mode = UnisocFlashModeIndex switch
+        {
+            0 => UnisocFlashMode.KeepData,
+            2 => UnisocFlashMode.FullErase,
+            _ => UnisocFlashMode.PartitionErase,
+        };
+        if (mode == UnisocFlashMode.FullErase)
+        {
+            bool wipeConfirmed;
+            _confirming = true;
+            try
+            {
+                wipeConfirmed = await DialogService.ConfirmDangerousAsync(owner, new DangerousConfirmRequest
+                {
+                    TabTitle = language.GetString("Flash_Unisoc"),
+                    Title = language.GetString("Flash_UnisocFlash"),
+                    Detail = language.GetString("Flash_UnisocWipeConfirmDetail"),
+                    ConfirmWord = UnisocFlashOptions.WipeConfirmationPhrase,
+                    DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+                }).ConfigureAwait(true);
+            }
+            finally
+            {
+                _confirming = false;
+            }
+
+            if (!wipeConfirmed) return;
+        }
+
+        var options = new UnisocFlashOptions
+        {
+            Mode = mode,
+            FlashConfirmation = UnisocFlashOptions.ConfirmationPhrase,
+            WipeConfirmation = mode == UnisocFlashMode.FullErase ? UnisocFlashOptions.WipeConfirmationPhrase : null,
+            Completion = UnisocPostActionIndex == 1 ? UnisocCompletionMode.PowerOff : UnisocCompletionMode.Reboot,
+        };
+        bool confirmed;
+        _confirming = true;
+        try
+        {
+            confirmed = await DialogService.ConfirmDangerousAsync(owner, new DangerousConfirmRequest
+            {
+                TabTitle = language.GetString("Flash_Unisoc"),
+                Title = language.GetString("Flash_UnisocFlash"),
+                Detail = language.GetString("Flash_UnisocFlashConfirmDetail"),
+                ConfirmWord = UnisocFlashOptions.ConfirmationPhrase,
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+            }).ConfigureAwait(true);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (!confirmed) return;
+
+        var selected = Partitions
+            .Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep)
+            .Select(row => row.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        _deviceViewModel?.BeginSelectionHold();
+        try
+        {
+            var progress = new Progress<UnisocFlashProgress>(report =>
+            {
+                UnisocStatusText = FormatUnisocFlashProgress(report, language);
+                if (report.Total > 0)
+                {
+                    ReportBusyTransfer(report.BytesCompleted, report.Total);
+                }
+            });
+            await App.DeviceMonitor.FlashUnisocAsync(device, PackagePath, options, selected, progress,
+                cancellation.Token).ConfigureAwait(true);
+            UnisocStatusText = language.GetString("Flash_UnisocFlashDone");
+            AppendLog(language.GetString("Flash_UnisocFlashDone"));
+            await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+        }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            _unisocStatusCache = null;
+            RefreshUnisocDeviceStatus();
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Reads the selected endpoint's loader-stage identity for the shared read-info action: the answers fill the
+    /// device status table, the Unisoc status line and the stage hint, and the stage refreshes the device badge.
+    /// <para>为通用读取信息动作读取所选端点的加载阶段身份：应答填入设备状态表、紫光展锐状态行与阶段提示，阶段同时
+    /// 刷新设备管理器徽章。</para>
+    /// </summary>
+    internal async Task RefreshUnisocDeviceTableAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        var epoch = BeginDeviceStatusRefresh();
+        try
+        {
+            using var timeout = new CancellationTokenSource(UnisocStatusTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QueryUnisocStatusAsync(device, timeout.Token)
+                .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (SelectedDevice?.Key != device.Key || epoch != _rkStatusRefreshEpoch)
+            {
+                return;
+            }
+
+            _unisocStatusCache = (device.Key, status);
+            ReplaceDeviceStatus(device.Key, BuildUnisocStatusRows(status, language));
+        }
+        catch (OperationCanceledException)
+        {
+            ReplaceDeviceStatus(device.Key, []);
+        }
+        catch (Exception exception)
+        {
+            _log.Write(LogLevel.Debug, "FlashViewModel", $"Unisoc info read failed: {exception.Message}");
+            ReplaceDeviceStatus(device.Key, []);
+        }
+    }
+
+    /// <summary>
+    /// Reads the selected endpoint's partition table into the main grid: the validated GPT carries byte extents,
+    /// the native table only carries the device's own size values, so its rows stay display-only until a unit is
+    /// confirmed.
+    /// <para>把所选端点的分区表读入主网格：校验通过的 GPT 携带字节范围；原生表只携带设备自带的大小值，在单位确认前
+    /// 其行保持仅展示。</para>
+    /// </summary>
+    internal async Task RunUnisocPartitionTableAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var targets = await App.DeviceMonitor.ResolveUnisocPartitionsAsync(device, cancellation.Token)
+                .ConfigureAwait(true);
+            if (SelectedDevice?.Key != device.Key)
+            {
+                return;
+            }
+
+            var rows = targets.Select(target => new FlashPartitionEntry
+            {
+                IsScriptStep = false,
+                Name = target.Name,
+                Offset = target.Offset is { } offset ? FormatByteSize(offset) : string.Empty,
+                Size = target.Length is { } length ? FormatByteSize(length)
+                    : target.NativeSizeValue is { } raw ? $"{raw}" : string.Empty,
+                AcceptsFile = false
+            }).ToList();
+            Partitions.Apply(0, rows);
+            AppendLog($"{rows.Count} {language.GetString("Flash_PartitionsLoaded")}");
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+        }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Reads the partitions ticked in the main grid back to a chosen folder: GPT-backed rows carry the byte range
+    /// to pull, native-table rows without confirmed extents are skipped, and every request streams into a temporary
+    /// sibling that is moved into place only when complete.
+    /// <para>把主网格勾选的分区回读到所选目录：GPT 行携带要拉取的字节范围；没有确认范围的原生表行被跳过；每个请求
+    /// 流式写入同目录临时文件，完成后再移动到位。</para>
+    /// </summary>
+    internal async Task RunUnisocReadbackAsync()
+    {
+        if (_busy || _confirming ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Unisoc } device ||
+            TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        var selected = Partitions.Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep).ToArray();
+        if (selected.Length == 0)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = language.GetString("Flash_ReadbackSelected"),
+            AllowMultiple = false
+        }).ConfigureAwait(true);
+        if (_busy || _confirming || folders.Count != 1 ||
+            folders[0].TryGetLocalPath() is not { } destination)
+        {
+            return;
+        }
+
+        Dictionary<string, (long Offset, long Bytes)> mapping;
+        try
+        {
+            mapping = await ResolveUnisocPartitionMapAsync(device).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+            return;
+        }
+
+        List<UnisocPartitionReadRequest> requests = [];
+        List<FlashPartitionEntry> mapped = [];
+        foreach (var row in selected)
+        {
+            if (!mapping.TryGetValue(row.Name, out var range))
+            {
+                row.State = FlashRowState.Skipped;
+                continue;
+            }
+
+            mapped.Add(row);
+            requests.Add(new UnisocPartitionReadRequest(row.Name, range.Offset, range.Bytes,
+                Path.Combine(destination, $"{row.Name}.img")));
+        }
+
+        if (requests.Count == 0)
+        {
+            AppendLog(language.GetString("Flash_UnisocReadbackNoMapping"));
+            return;
+        }
+
+        SetRowsQueued(mapped);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var progress = new Progress<UnisocFlashProgress>(report =>
+            {
+                var row = mapped.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, report.Target, StringComparison.OrdinalIgnoreCase));
+                if (row is null || report.Total <= 0)
+                {
+                    return;
+                }
+
+                row.TransferBytes = report.BytesCompleted;
+                var percent = (int)Math.Clamp(report.BytesCompleted * 100d / report.Total, 0d, 100d);
+                if (percent != row.Percent)
+                {
+                    row.Percent = percent;
+                }
+            });
+            await App.DeviceMonitor.ReadUnisocPartitionsAsync(device, requests, progress,
+                cancellation.Token).ConfigureAwait(true);
+            foreach (var request in requests)
+            {
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    language.GetString("Flash_UnisocReadbackDone"), request.Name, request.DestinationPath));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            MarkUnfinishedSkipped();
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+            foreach (var row in mapped.Where(row => row.State == FlashRowState.Running))
+            {
+                SetRowFinished(row, success: false);
+            }
+        }
+        finally
+        {
+            MarkUnfinishedSkipped();
+            UpdateOverall();
+            SetBusy(false);
+            _flashCancellation = null;
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Resolves the partition-to-byte-range mapping the read-back uses: the validated GPT when the device carries
+    /// one, otherwise nothing — native tables report no offsets, so they cannot back a range read.
+    /// <para>解析回读使用的分区到字节范围映射：设备携带校验通过的 GPT 时用它，否则没有映射——原生表不报告偏移，
+    /// 无法支撑范围读取。</para>
+    /// </summary>
+    private async Task<Dictionary<string, (long Offset, long Bytes)>> ResolveUnisocPartitionMapAsync(
+        DetectedDevice device)
+    {
+        var targets = await App.DeviceMonitor.ResolveUnisocPartitionsAsync(device).ConfigureAwait(true);
+        return targets
+            .Where(target => target.Offset is { } && target.Length is { } length && length > 0)
+            .GroupBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key,
+                group => (group.First().Offset!.Value, group.First().Length!.Value),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void ApplyUnisocStatus(UnisocDeviceStatus status)
+    {
+        var language = _localizer;
+        UnisocStatusText = BuildUnisocStatusLine(status, language);
+        UnisocModeHint = language.GetString(_unisocIsFdl2 ? "Flash_UnisocHintFdl2" : "Flash_UnisocHint");
+        _unisocIsFdl2 = status.Stage == UnisocBootStage.Fdl2;
+        ReplaceDeviceStatus(SelectedDevice?.Key, BuildUnisocStatusRows(status, language));
+        if (_deviceViewModel?.SelectedDevice is { } info)
+        {
+            info.UnisocStage = status.Stage switch
+            {
+                UnisocBootStage.BootRom => "BootRom",
+                UnisocBootStage.Fdl1 => "FDL1",
+                UnisocBootStage.Fdl2 => "FDL2",
+                _ => status.Stage.ToString(),
+            };
+        }
+
+        RefreshDeviceUiGate();
+    }
+
+    private static string BuildUnisocStatusLine(UnisocDeviceStatus status, ILocalizer language)
+    {
+        var stage = status.Stage switch
+        {
+            UnisocBootStage.BootRom => language.GetString("Flash_UnisocStageBootRom"),
+            UnisocBootStage.Fdl1 => language.GetString("Flash_UnisocStageFdl1"),
+            UnisocBootStage.Fdl2 => language.GetString("Flash_UnisocStageFdl2"),
+            _ => status.Stage.ToString(),
+        };
+        List<string> parts = [stage];
+        if (status.Version is { } version && version.Length > 0)
+        {
+            parts.Add(status.VersionText);
+        }
+
+        if (status.SecureBoot && status.Stage == UnisocBootStage.BootRom)
+        {
+            parts.Add(language.GetString("Flash_UnisocSecure"));
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private static List<FlashDeviceStatusEntry> BuildUnisocStatusRows(UnisocDeviceStatus status, ILocalizer language)
+    {
+        List<FlashDeviceStatusEntry> rows =
+        [
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.UnisocInfo,
+                Name = language.GetString("Flash_UnisocInfo_Stage"),
+                Value = status.Stage.ToString()
+            },
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.UnisocInfo,
+                Name = language.GetString("Flash_UnisocInfo_Version"),
+                Value = status.VersionText
+            },
+        ];
+        if (status.Stage == UnisocBootStage.BootRom)
+        {
+            rows.Add(new FlashDeviceStatusEntry
+            {
+                Key = FlashDeviceStatusRowKeys.UnisocInfo,
+                Name = language.GetString("Flash_UnisocInfo_SecureBoot"),
+                Value = language.GetString(status.SecureBoot ? "Flash_UnisocSecure" : "Flash_UnisocOpen")
+            });
+        }
+
+        return rows;
+    }
+
+    private static string FormatUnisocFlashProgress(UnisocFlashProgress report, ILocalizer language)
+    {
+        var phase = report.Phase switch
+        {
+            UnisocFlashPhase.Connect => language.GetString("Flash_UnisocPhaseConnect"),
+            UnisocFlashPhase.Erase => language.GetString("Flash_UnisocPhaseErase"),
+            UnisocFlashPhase.Flash => language.GetString("Flash_UnisocPhaseFlash"),
+            UnisocFlashPhase.Skip => language.GetString("Flash_UnisocPhaseSkip"),
+            UnisocFlashPhase.Done => language.GetString("Flash_UnisocPhaseDone"),
+            _ => language.GetString("Flash_UnisocPhaseFlash")
+        };
+        var target = report.Target ?? string.Empty;
+        if (report.Total > 0)
+        {
+            return string.Format(language.GetString("Flash_UnisocFlashProgress"), phase, target,
+                report.BytesCompleted * 100 / report.Total);
+        }
+
+        return string.Format(language.GetString("Flash_UnisocFlashProgressNoPercent"), phase, target);
+    }
+
+    private async Task<string> PickUnisocImageAsync(string titleKey)
+    {
+        if (TopLevel.GetTopLevel(Surface) is not { } topLevel)
+        {
+            return string.Empty;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = _localizer.GetString(titleKey),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        return files.Count == 1 && files[0].TryGetLocalPath() is { } path && File.Exists(path)
+            ? path
+            : string.Empty;
+    }
+}

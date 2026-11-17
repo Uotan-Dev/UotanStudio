@@ -55,5 +55,11 @@ public enum DeviceSessionKind
     /// <para>运行在直连 USB 传输上的全志 FEL 或 FES 会话；两种模式共用一个厂商与产品 id，因此会话通过身份握手
     /// 确定模式。</para>
     /// </summary>
-    Sunxi
+    Sunxi,
+    /// <summary>
+    /// UNISOC BSL session on the vendor download serial port or an equivalent transport; the loader stage (Boot ROM,
+    /// FDL1, FDL2) is resolved from the handshake.
+    /// <para>运行在厂商下载串口或等价传输上的紫光展锐 BSL 会话；加载阶段（Boot ROM、FDL1、FDL2）由握手确定。</para>
+    /// </summary>
+    Unisoc
 }

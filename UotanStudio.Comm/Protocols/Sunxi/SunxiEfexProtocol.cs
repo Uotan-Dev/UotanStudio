@@ -20,7 +20,10 @@ internal static class SunxiEfexConstants
     public static ReadOnlySpan<byte> ResponseMagic => "AWUS"u8;
 
     /// <summary>Eight-byte magic the boot ROM returns at the start of the identity payload; the SoC id follows it.
-    /// <para>boot ROM 在身份负载起始处返回的 8 字节魔数；随后是 SoC id。</para></summary>
+    /// The reference FEL clients never validate these bytes, so the exact value is only cross-checked against real
+    /// hardware output, not against <c>xfel</c> or <c>libefex</c> source.
+    /// <para>boot ROM 在身份负载起始处返回的 8 字节魔数；随后是 SoC id。参考 FEL 客户端从不校验这几个字节，
+    /// 因此该取值只与真机输出交叉核对过，无法从 <c>xfel</c> 或 <c>libefex</c> 源码验证。</para></summary>
     public static ReadOnlySpan<byte> IdentityMagic => "AWUSBFEX"u8;
 
     /// <summary>Size of the bulk request header. <para>批量请求头的大小。</para></summary>
@@ -147,10 +150,12 @@ public enum SunxiDeviceMode : ushort
     /// <summary>Running the FES service inside U-Boot. <para>在 U-Boot 中运行 FES 服务。</para></summary>
     Fes = 2,
 
-    /// <summary>Cold update mode. <para>冷更新模式。</para></summary>
+    /// <summary>Cold update mode; the vendor sources name it an update-pending state and no reference tool
+    /// dispatches a flow for it. <para>冷更新模式；厂商源码将其列为更新挂起状态，参考工具都没有为它派发流程。</para></summary>
     UpdateCold = 3,
 
-    /// <summary>Hot update mode. <para>热更新模式。</para></summary>
+    /// <summary>Hot update mode; like <see cref="UpdateCold"/> the vendor sources only name the state.
+    /// <para>热更新模式；与 <see cref="UpdateCold"/> 一样，厂商源码只给出状态名。</para></summary>
     UpdateHot = 4
 }
 
@@ -319,10 +324,14 @@ public sealed class SunxiEfexException : Exception
 
 /// <summary>
 /// Chip table of the SoC ids the USB boot ROM reports, taken from the per-family router table of the
-/// reference FEL client. Two ids are reported by more than one family; the first family wins because
-/// the reference router stops at the first match.
-/// <para>USB boot ROM 上报的 SoC id 芯片表，取自参考 FEL 客户端的按家族路由表。有两个 id 被多个家族上报；
-/// 由于参考路由在首个匹配处停止，先登记的家族胜出。</para>
+/// reference FEL client and the OpenixSuit id map. Two ids are reported by more than one family; the
+/// first family wins because the reference router stops at the first match. The D1 id covers both the
+/// C906 RISC-V (D1/D1s/F133) and the dual-core Cortex-A7 (R528/T113) dies — the reference client tells
+/// them apart by the first word at address zero, which the identity handshake alone cannot see.
+/// <para>USB boot ROM 上报的 SoC id 芯片表，取自参考 FEL 客户端的按家族路由表与 OpenixSuit 的 id 映射。
+/// 有两个 id 被多个家族上报；由于参考路由在首个匹配处停止，先登记的家族胜出。D1 的 id 同时覆盖 C906
+/// RISC-V（D1/D1s/F133）与双核 Cortex-A7（R528/T113）两颗 Die——参考客户端靠地址 0 处的首字区分，
+/// 仅凭身份握手无法看到。</para>
 /// </summary>
 internal static class SunxiChipTable
 {
@@ -340,7 +349,7 @@ internal static class SunxiChipTable
         [0x00168900] = "A64",
         [0x00163900] = "A80",
         [0x00167300] = "A83T",
-        [0x00185900] = "D1/F133",
+        [0x00185900] = "D1/D1S/F133/R528/T113",
         [0x00166300] = "F1C100S/F1C200S/F1C500S",
         [0x00168000] = "H2/H3",
         [0x00171800] = "H5",
@@ -353,7 +362,14 @@ internal static class SunxiChipTable
         [0x00168100] = "V3S/S3",
         [0x00181600] = "V536",
         [0x00181700] = "V831",
-        [0x00188600] = "V851/V853"
+        [0x00188600] = "V851/V853",
+        // The four ids below come from the OpenixSuit chip-name map only; the xfel router table has no
+        // entries for them yet.
+        // 下面四个 id 目前只出自 OpenixSuit 的芯片名映射；xfel 路由表尚未收录。
+        [0x00188200] = "V821",
+        [0x00190300] = "A733/T736",
+        [0x00191800] = "V881/V861/V838",
+        [0x00161000] = "Allwinner FES Devices"
     };
 
     /// <summary>Number of registered SoC ids. <para>已登记的 SoC id 数量。</para></summary>

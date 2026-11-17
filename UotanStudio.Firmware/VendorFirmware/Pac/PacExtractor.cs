@@ -30,7 +30,7 @@ public enum ExtractionMode
 internal static class PacExtractor
 {
     private const int ChunkSize = 1024 * 1024;
-    private const uint ExpectedMagic = 0xFFFAFFFA;
+    internal const uint ExpectedMagic = 0xFFFAFFFA;
 
     /// <summary>Lists all entry information within a PAC file.<para>列出 PAC 文件中的所有条目信息。</para></summary>
     /// <param name="imagePath">Path to the PAC image; must be a non-empty, existing file readable from the start.

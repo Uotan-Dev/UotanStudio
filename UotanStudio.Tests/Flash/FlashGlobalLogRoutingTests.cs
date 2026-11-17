@@ -5,6 +5,7 @@ using UotanStudio.Hash.RockchipCrc32;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Flash;
+using UotanStudio.ViewModels.Shell;
 using Xunit;
 
 namespace UotanStudio.Tests.Flash;
@@ -135,7 +136,7 @@ public sealed class FlashGlobalLogRoutingTests
         Assert.Collection(log.Entries,
             entry =>
             {
-                Assert.Equal(LogLevel.Trace, entry.Level);
+                Assert.Equal(LogLevel.Info, entry.Level);
                 Assert.Equal("Flash", entry.Source);
                 Assert.Equal("loading package", entry.Message);
             },
@@ -147,20 +148,31 @@ public sealed class FlashGlobalLogRoutingTests
             });
     }
 
+    /// <remarks>
+    /// The page writes at the info level the unified log records by default, so without the debug switch every
+    /// page line still auto-registers into the global log window while the page keeps its own copy.
+    /// <para>页面以统一日志默认记录的 info 级别写入，因此不开调试开关时每一行页面日志仍会自动注册进全局日志
+    /// 窗口，同时页面保留自己的副本。</para>
+    /// </remarks>
     [Fact]
-    public void AppendLog_WhileTheGlobalStoreFiltersBelowInfo_StillPublishesTheLineToThePage()
+    public void AppendLog_AutoRegistersIntoTheGlobalLogAndStillPublishesToThePage()
     {
         var service = LogService.Instance;
         try
         {
             service.ApplyDebugMode(debug: false);
+            var global = new LogViewModel(service);
             var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, service);
-            var marker = "page-only-" + Guid.NewGuid().ToString("N");
+            var marker = "flash-page-" + Guid.NewGuid().ToString("N");
 
             model.AppendLog(marker);
             model.FlushPendingLog();
+            global.FlushPending();
 
             Assert.Contains(marker, model.LogText, StringComparison.Ordinal);
+            Assert.Contains(global.AllEntries, entry =>
+                entry.Source == "Flash" && entry.Level == LogLevel.Info
+                && entry.Message.Contains(marker, StringComparison.Ordinal));
         }
         finally
         {

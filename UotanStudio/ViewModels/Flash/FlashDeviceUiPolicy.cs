@@ -36,7 +36,10 @@ internal enum FlashDeviceMode
     Fastboot,
 
     /// <summary>Allwinner FEL or FES. <para>全志 FEL 或 FES。</para></summary>
-    Sunxi
+    Sunxi,
+
+    /// <summary>UNISOC Boot ROM, FDL1 or FDL2. <para>紫光展锐 Boot ROM、FDL1 或 FDL2。</para></summary>
+    Unisoc
 }
 
 /// <summary>
@@ -72,7 +75,12 @@ internal enum FlashDeviceKind
     /// <summary>An Allwinner endpoint; only the Sunxi section is offered because its package flash path is
     /// protocol-specific. <para>全志端点；其整包烧录路径由该协议专用，因此只提供全志分类。</para>
     /// </summary>
-    Sunxi
+    Sunxi,
+
+    /// <summary>A UNISOC endpoint; only the Unisoc section is offered because its package flash path is
+    /// protocol-specific. <para>紫光展锐端点；其整包烧录路径由该协议专用，因此只提供紫光展锐分类。</para>
+    /// </summary>
+    Unisoc
 }
 
 /// <summary>
@@ -136,6 +144,7 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Rkdl => FlashDeviceMode.Rkdl,
         DeviceProtocolKind.Fastboot => FlashDeviceMode.Fastboot,
         DeviceProtocolKind.Sunxi => FlashDeviceMode.Sunxi,
+        DeviceProtocolKind.Unisoc => FlashDeviceMode.Unisoc,
         _ => FlashDeviceMode.Shared
     };
 
@@ -155,6 +164,7 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Fastboot => FlashDeviceKind.Fastboot,
         DeviceProtocolKind.Hdc => FlashDeviceKind.Hdc,
         DeviceProtocolKind.Sunxi => FlashDeviceKind.Sunxi,
+        DeviceProtocolKind.Unisoc => FlashDeviceKind.Unisoc,
         _ => FlashDeviceKind.Unknown,
     };
 

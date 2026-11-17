@@ -67,6 +67,18 @@ public static class FlashDeviceStatusRowKeys
     /// <para>一次 EDL 设备信息读取上报的字段，合并为同一分组。</para>
     /// </summary>
     public const string EdlInfo = "edl-info";
+
+    /// <summary>
+    /// The fields one Allwinner identity read reported, folded into one group.
+    /// <para>一次全志身份读取上报的字段，合并为同一分组。</para>
+    /// </summary>
+    public const string SunxiInfo = "sunxi-info";
+
+    /// <summary>
+    /// The fields one UNISOC stage read reported, folded into one group.
+    /// <para>一次紫光展锐阶段读取上报的字段，合并为同一分组。</para>
+    /// </summary>
+    public const string UnisocInfo = "unisoc-info";
 }
 
 public sealed partial class FlashViewModel

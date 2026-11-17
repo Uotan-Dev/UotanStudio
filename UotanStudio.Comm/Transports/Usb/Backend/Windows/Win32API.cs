@@ -39,6 +39,13 @@ internal static partial class Win32API
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DeviceIoControl(IntPtr device, uint code,
+                                          IntPtr inBuffer, uint inBufferSize,
+                                          IntPtr outBuffer, uint outBufferSize,
+                                          out uint bytesReturned, IntPtr overlapped);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(IntPtr handle);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]

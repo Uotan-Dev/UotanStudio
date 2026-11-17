@@ -76,8 +76,8 @@ internal sealed class CommDeviceTransportOpener(
     /// </summary>
     private const int NativeOpenRetryDelayMs = 250;
 
-    /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint whose device was bound as a COM port falls back to that serial port.
-    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 端点回退到该串口。</para></summary>
+    /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> or <c>unisoc</c> endpoint whose device was bound as a COM port falls back to that serial port.
+    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 或 <c>unisoc</c> 端点回退到该串口。</para></summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
     /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
     /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own bounded socket timeouts.
@@ -110,7 +110,8 @@ internal sealed class CommDeviceTransportOpener(
             var session = OpenNativeSessionWithRetry(endpoint, usb, cancellationToken);
             if (session is null)
             {
-                if (string.Equals(endpoint.Protocol, "edl", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(endpoint.Protocol, "edl", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(endpoint.Protocol, "unisoc", StringComparison.OrdinalIgnoreCase))
                 {
                     var serial = EdlSerialPortFallback.TryOpenConnected(usb.Path);
                     if (serial is not null)
@@ -123,10 +124,35 @@ internal sealed class CommDeviceTransportOpener(
                         return new OwnedDeviceTransport<SerialTransport>(serial);
                     }
                 }
+                else if (string.Equals(endpoint.Protocol, "sunxi", StringComparison.OrdinalIgnoreCase))
+                {
+                    // A device bound to Allwinner's legacy AWUSB driver (USBDrv / usbUDisc) exposes no WinUSB
+                    // interface; the vendor interface the binding publishes serves the same bulk pipes through
+                    // device-control codes, so the Sunxi lease runs over it unchanged.
+                    // 绑定到全志旧式 AWUSB 驱动（USBDrv / usbUDisc）的设备不暴露 WinUSB 接口；绑定公布的厂商
+                    // 接口经设备控制码提供同一对批量管道，因此全志租约原样跑在其上。
+                    var awUsb = AwUsbDevice.TryOpen(usb);
+                    if (awUsb is not null)
+                    {
+                        var awSession = new UsbDeviceSession("awusb", usb.Backend, awUsb);
+                        if (!UsbDeviceIdentity.MatchesOpenedKey(endpoint.Address, awSession.DeviceInfo.DeviceKey))
+                        {
+                            awSession.Dispose();
+                            throw new IOException("USB opener returned a different endpoint.");
+                        }
+
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            awSession.Dispose();
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                        return new OwnedDeviceTransport<IUsbDeviceSession>(awSession);
+                    }
+                }
                 else
                 {
                     UsbTrace.LogFormatted(
-                        $"EDL serial fallback skipped for the '{endpoint.Protocol}' endpoint at '{usb.Path}'; only 'edl' endpoints may fall back to the QDLoader serial port.");
+                        $"Serial fallback skipped for the '{endpoint.Protocol}' endpoint at '{usb.Path}'; only 'edl' and 'unisoc' endpoints may fall back to a serial port.");
                 }
                 throw new IOException(DescribeUnopenableEndpoint(endpoint, usb));
             }

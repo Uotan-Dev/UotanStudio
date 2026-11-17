@@ -212,6 +212,7 @@ public sealed partial class DeviceMonitorService
                     DeviceProtocolKind.Hdc => "device",
                     DeviceProtocolKind.Diagnostic => "diag",
                     DeviceProtocolKind.Sunxi => "sunxi",
+                    DeviceProtocolKind.Unisoc => "unisoc",
                     _ => string.Empty,
                 },
                 VendorId = info.VendorId,
@@ -389,6 +390,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Rkdl => "rkdl",
         DeviceProtocolKind.Mtk => "mtk",
         DeviceProtocolKind.Sunxi => "sunxi",
+        DeviceProtocolKind.Unisoc => "unisoc",
         _ => string.Empty
     };
 
@@ -590,6 +592,7 @@ public sealed partial class DeviceMonitorService
             "apple" => DeviceProtocolKind.Ios,
             "diag" => DeviceProtocolKind.Diagnostic,
             "sunxi" => DeviceProtocolKind.Sunxi,
+            "unisoc" => DeviceProtocolKind.Unisoc,
             _ => null
         };
 

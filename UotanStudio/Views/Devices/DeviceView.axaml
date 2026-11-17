@@ -316,6 +316,10 @@
                                                         IsVisible="{Binding IsRkdl}">
                                                     <TextBlock Text="{Binding RkdlBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
+                                                <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                        IsVisible="{Binding IsSunxi}">
+                                                    <TextBlock Text="{Binding SunxiBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                </Border>
                                                 <Border Classes="ModeChip" Background="#37474F"
                                                         IsVisible="{Binding IsIos}">
                                                     <TextBlock Text="iOS" FontSize="10" Foreground="White" />
@@ -396,6 +400,10 @@
                                         <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                 IsVisible="{Binding IsRkdl}">
                                             <TextBlock Text="{Binding RkdlBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                        </Border>
+                                        <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                IsVisible="{Binding IsSunxi}">
+                                            <TextBlock Text="{Binding SunxiBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
                                         </Border>
                                         <Border Classes="ModeChip"
                                                 Background="{DynamicResource SemiColorPrimaryLight}"

@@ -13,7 +13,11 @@ internal readonly record struct FlashGateContext(
     bool IsSpacemiTFastboot,
     bool HasAdbSu,
     bool HasSelectedPartitions = false,
-    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown);
+    SpacemiTBootStage FastbootStage = SpacemiTBootStage.Unknown,
+    bool IsSunxiFes = false,
+    bool HasSunxiPackage = false,
+    bool IsUnisocFdl2 = false,
+    bool HasUnisocPackage = false);
 
 /// <summary>
 /// One control's own availability condition: the control holds this object, and the page asks that control whether
@@ -49,15 +53,17 @@ internal sealed class FlashControlGate
     internal bool BusyDisabled { get; }
 
     /// <summary>
-    /// The shared flash action: every selected device offers it except HDC and Allwinner endpoints, which have no image
-    /// plan; ADB additionally waits for a confirmed noninteractive root shell, and a Rockchip endpoint proven to be in
-    /// mask ROM cannot receive a write.
-    /// <para>通用烧录动作：除没有镜像计划的 HDC 与全志端点外，任何已选设备都提供；ADB 还要等待已确认的非交互 root shell，
-    /// 被证实处于 mask ROM 的瑞芯微端点不能接收写入。</para>
+    /// The shared flash action: every selected device offers it except HDC; ADB additionally waits for a confirmed
+    /// noninteractive root shell, a Rockchip endpoint proven to be in mask ROM cannot receive a write, and an
+    /// Allwinner endpoint offers it only once an IMAGEWTY package is loaded and the endpoint answers as FES.
+    /// <para>通用烧录动作：除 HDC 外任何已选设备都提供；ADB 还要等待已确认的非交互 root shell，被证实处于
+    /// mask ROM 的瑞芯微端点不能接收写入，全志端点只在已加载 IMAGEWTY 包且端点以 FES 应答时提供。</para>
     /// </summary>
     internal static FlashControlGate SharedFlash(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode != FlashDeviceMode.None &&
-            context.Kind is not (FlashDeviceKind.Hdc or FlashDeviceKind.Sunxi) &&
+            (context.Kind is not (FlashDeviceKind.Hdc or FlashDeviceKind.Sunxi or FlashDeviceKind.Unisoc) ||
+                (context.Mode == FlashDeviceMode.Sunxi && context.IsSunxiFes && context.HasSunxiPackage) ||
+                (context.Mode == FlashDeviceMode.Unisoc && context.IsUnisocFdl2 && context.HasUnisocPackage)) &&
             !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom) &&
             !(context.Kind == FlashDeviceKind.Fastboot && context.IsSpacemiTFastboot &&
                 context.FastbootStage == SpacemiTBootStage.BromFdl) &&
@@ -107,43 +113,50 @@ internal sealed class FlashControlGate
         busyDisabled);
 
     /// <summary>
-    /// The read-back action, extended for the SpacemiT gadget: every protocol without its own restricted kind still
-    /// offers it, and a SpacemiT fastboot endpoint offers it too once at least one partition row is selected, because
-    /// the read-back run then has a partition to pull with the device's <c>oem read</c>. Other devices keep the exact
-    /// shared-storage behaviour.
-    /// <para>回读动作，并为进迭时空 gadget 扩展：没有受限种类的协议照旧提供；进迭时空 fastboot 端点在至少勾选一行分区时
-    /// 也提供，因为此时回读运行才有可用 <c>oem read</c> 拉取的分区。其它设备保持与通用存储完全一致的行为。</para>
+    /// The read-back action, extended for the SpacemiT gadget and the Allwinner FES service: every protocol without
+    /// its own restricted kind still offers it, a SpacemiT fastboot endpoint offers it too once at least one
+    /// partition row is selected, because the read-back run then has a partition to pull with the device's
+    /// <c>oem read</c>, and an Allwinner endpoint offers it while it answers as FES, whose service pulls the
+    /// partitions back. Other devices keep the exact shared-storage behaviour.
+    /// <para>回读动作，并为进迭时空 gadget 与全志 FES 服务扩展：没有受限种类的协议照旧提供；进迭时空 fastboot
+    /// 端点在至少勾选一行分区时也提供，因为此时回读运行才有可用 <c>oem read</c> 拉取的分区；全志端点在以 FES
+    /// 应答期间提供，其服务负责拉回分区。其它设备保持与通用存储完全一致的行为。</para>
     /// </summary>
     internal static FlashControlGate Readback(string name, bool busyDisabled = false) => new(name,
         static context => IsSharedStorageOffered(context) ||
-            (IsSpacemiTReadCapable(context) && context.HasSelectedPartitions),
+            (IsSpacemiTReadCapable(context) && context.HasSelectedPartitions) ||
+            (context.Mode == FlashDeviceMode.Sunxi && context.IsSunxiFes) ||
+            (context.Mode == FlashDeviceMode.Unisoc && context.IsUnisocFdl2),
         busyDisabled);
 
     /// <summary>
     /// The device-info read: offered to every protocol whose information the page can actually read, which includes
     /// fastboot — that endpoint answers over <c>getvar</c> rather than the storage commands the shared read uses, and its
-    /// read is split by boot stage. HDC has no information branch at all, and a Rockchip endpoint proven to be in mask
-    /// ROM cannot answer the storage probes.
+    /// read is split by boot stage — and Allwinner, whose identity handshake answers the status table. HDC has no
+    /// information branch at all, and a Rockchip endpoint proven to be in mask ROM cannot answer the storage probes.
     /// <para>设备信息读取：提供给页面确实能读取其信息的每个协议，其中包含 fastboot——该端点用 <c>getvar</c> 而不是通用读取所用的
-    /// 存储命令应答，其读取还按启动阶段拆分。HDC 完全没有信息分支，被证实处于 mask ROM 的瑞芯微端点无法应答存储探测。</para>
+    /// 存储命令应答，其读取还按启动阶段拆分——以及全志，其身份握手的应答填状态表。HDC 完全没有信息分支，被证实处于
+    /// mask ROM 的瑞芯微端点无法应答存储探测。</para>
     /// </summary>
     internal static FlashControlGate InfoRead(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode != FlashDeviceMode.None &&
-            context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Fastboot &&
+            (context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Fastboot ||
+                context.Mode is FlashDeviceMode.Sunxi or FlashDeviceMode.Unisoc) &&
             !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom),
         busyDisabled);
 
     /// <summary>
     /// The partition-table read: offered on a fastboot endpoint, whose table is enumerated by the same variable dump
-    /// this page already reads, and on an EDL endpoint, whose table is read from the GPT of the region the LUN box
-    /// names. The SpacemiT BootROM download mode and the other protocols stay closed, because that stage carries no
-    /// table at all and the remaining protocols read theirs through the action their own section owns.
+    /// this page already reads, on an EDL endpoint, whose table is read from the GPT of the region the LUN box
+    /// names, and on an Allwinner endpoint, whose table comes from the loaded IMAGEWTY plan or the vendor MBR its
+    /// FES service reads back. The SpacemiT BootROM download mode and the other protocols stay closed, because that
+    /// stage carries no table at all and the remaining protocols read theirs through the action their own section owns.
     /// <para>分区表读取：在 fastboot 端点上提供，其分区表由本页已读取的同一份变量转储枚举；EDL 端点也提供，其分区表从
-    /// LUN 框所指区域的 GPT 读出。进迭时空 BootROM 下载模式与其它协议保持关闭，因为该阶段根本没有分区表，而其余协议都经
-    /// 各自分类拥有的动作读取。</para>
+    /// LUN 框所指区域的 GPT 读出；全志端点同样提供，其分区表来自已加载的 IMAGEWTY 计划或其 FES 服务回读的厂商 MBR。
+    /// 进迭时空 BootROM 下载模式与其它协议保持关闭，因为该阶段根本没有分区表，而其余协议都经各自分类拥有的动作读取。</para>
     /// </summary>
     internal static FlashControlGate PartitionTableRead(string name, bool busyDisabled = false) => new(name,
-        static context => context.Mode == FlashDeviceMode.Edl ||
+        static context => context.Mode is FlashDeviceMode.Edl or FlashDeviceMode.Sunxi or FlashDeviceMode.Unisoc ||
             (context.Kind == FlashDeviceKind.Fastboot &&
                 !(context.IsSpacemiTFastboot && context.FastbootStage == SpacemiTBootStage.BromFdl)),
         busyDisabled);
@@ -191,7 +204,8 @@ internal sealed class FlashControlGate
     internal static FlashControlGate Section(string name, FlashDeviceMode owner, bool busyDisabled = false) =>
         new(name, context => context.Mode == owner &&
             (context.Kind == FlashDeviceKind.Unknown ||
-                (owner == FlashDeviceMode.Sunxi && context.Kind == FlashDeviceKind.Sunxi)) &&
+                (owner == FlashDeviceMode.Sunxi && context.Kind == FlashDeviceKind.Sunxi) ||
+                (owner == FlashDeviceMode.Unisoc && context.Kind == FlashDeviceKind.Unisoc)) &&
             (owner != FlashDeviceMode.Rkdl || context.Stage != RockchipStage.Maskrom),
             busyDisabled);
 
@@ -203,6 +217,16 @@ internal sealed class FlashControlGate
     internal static FlashControlGate Sunxi(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode == FlashDeviceMode.Sunxi &&
             context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Sunxi,
+        busyDisabled);
+
+    /// <summary>
+    /// The UNISOC section and its controls: offered only to a UNISOC endpoint, which owns the action set that
+    /// endpoint currently has.
+    /// <para>紫光展锐分类及其控件：只提供给紫光展锐端点，该端点当前拥有的动作集合仅此一处。</para>
+    /// </summary>
+    internal static FlashControlGate Unisoc(string name, bool busyDisabled = false) => new(name,
+        static context => context.Mode == FlashDeviceMode.Unisoc &&
+            context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Unisoc,
         busyDisabled);
 
     /// <summary>

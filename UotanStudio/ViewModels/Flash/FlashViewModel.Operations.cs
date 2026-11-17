@@ -340,6 +340,7 @@ public sealed partial class FlashViewModel
         _edlProgrammerOverride = null;
         _flatBinPackage = false;
         _edlBundleReady = false;
+        _sunxiPackage = false;
         _mtkResolution = null;
         _mtkRows.Clear();
         _mtkPartitions.Clear();
@@ -386,9 +387,23 @@ public sealed partial class FlashViewModel
                 return;
             }
 
+            if (File.Exists(path) && path.EndsWith(".pac", StringComparison.OrdinalIgnoreCase) &&
+                await IsUnisocPackageFileAsync(path, cancellation.Token).ConfigureAwait(true))
+            {
+                await ApplyUnisocPackageAsync(path, cancellation.Token).ConfigureAwait(true);
+                return;
+            }
+
             if (File.Exists(path) && (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase) ||
                                       path.EndsWith(".img.zst", StringComparison.OrdinalIgnoreCase)))
             {
+                if (path.EndsWith(".img", StringComparison.OrdinalIgnoreCase) &&
+                    await IsSunxiImageFileAsync(path, cancellation.Token).ConfigureAwait(true))
+                {
+                    await ApplySunxiPackageAsync(path, cancellation.Token).ConfigureAwait(true);
+                    return;
+                }
+
                 if (Path.GetFileName(path).Equals("super_empty.img", StringComparison.OrdinalIgnoreCase) ||
                     Path.GetFileName(path).Equals("super_empty.img.zst", StringComparison.OrdinalIgnoreCase))
                 {
@@ -503,6 +518,18 @@ public sealed partial class FlashViewModel
                 SetControlEnabled("ExtractSelectedButton", partitions.Count > 0);
                 SetControlEnabled("BuildWiredPackageButton", partitions.Count > 0);
                 AppendLog($"{partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                if (GenerateFlashPlan)
+                {
+                    var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+                    if (parent is { Length: > 0 })
+                    {
+                        var plan = await FlashPayloadService.BuildPackageAsync(path,
+                            [.. partitions.Select(entry => entry.Name)], parent, cancellation.Token);
+                        AppendLog(string.Format(CultureInfo.InvariantCulture,
+                            _localizer.GetString("Flash_FlashPlanGenerated"), plan));
+                    }
+                }
+
                 return;
             }
 
@@ -562,6 +589,7 @@ public sealed partial class FlashViewModel
             _loadedPath = string.Empty;
             _flatBinPackage = false;
             _edlBundleReady = false;
+            _sunxiPackage = false;
             _edlEntries.Clear();
             ResetEdlProgrammer();
             _edlProgrammerOverride = null;
@@ -577,6 +605,7 @@ public sealed partial class FlashViewModel
             _loadedPath = string.Empty;
             _flatBinPackage = false;
             _edlBundleReady = false;
+            _sunxiPackage = false;
             _edlEntries.Clear();
             ResetEdlProgrammer();
             _edlProgrammerOverride = null;
@@ -1477,6 +1506,14 @@ public sealed partial class FlashViewModel
         {
             _ = RunSpacemiTReadbackAsync();
         }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Sunxi)
+        {
+            _ = RunSunxiReadbackAsync();
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Unisoc)
+        {
+            _ = RunUnisocReadbackAsync();
+        }
         else
         {
             AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
@@ -2004,6 +2041,7 @@ public sealed partial class FlashViewModel
         Field<Expander>("MtkExpander").IsExpanded = false;
         Field<Expander>("RkExpander").IsExpanded = false;
         Field<Expander>("SunxiExpander").IsExpanded = false;
+        Field<Expander>("UnisocExpander").IsExpanded = false;
         Field<Expander>("ImageExpander").IsExpanded = false;
     }
 
@@ -2035,6 +2073,10 @@ public sealed partial class FlashViewModel
         {
             Field<Expander>("SunxiExpander").IsExpanded = true;
         }
+        else if (protocol is DeviceProtocolKind.Unisoc)
+        {
+            Field<Expander>("UnisocExpander").IsExpanded = true;
+        }
     }
 
     private void OnGlobalDeviceChanged(object? sender, PropertyChangedEventArgs e)
@@ -2049,14 +2091,8 @@ public sealed partial class FlashViewModel
                 ExpandDeviceProtocolSection(currentDevice?.Protocol);
                 ResetRkStorageOptions();
                 RestoreDeviceStatus(currentDevice?.Key);
-                if (currentDevice?.Protocol == DeviceProtocolKind.Sunxi)
-                {
-                    RefreshSunxiDeviceStatus();
-                }
-                else
-                {
-                    SunxiStatusText = string.Empty;
-                }
+                RefreshSunxiDeviceStatus();
+                RefreshUnisocDeviceStatus();
             }
 
             UpdateObservedDeviceInfo();
@@ -2795,6 +2831,18 @@ public sealed partial class FlashViewModel
 
     internal async void OnReadInfoClick(object? sender, RoutedEventArgs e)
     {
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Sunxi } sunxi && !_busy && !_confirming)
+        {
+            await RefreshSunxiDeviceTableAsync(sunxi);
+            return;
+        }
+
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Unisoc } unisoc && !_busy && !_confirming)
+        {
+            await RefreshUnisocDeviceTableAsync(unisoc);
+            return;
+        }
+
         if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb })
         {
             await RunMtkDeviceInfoAsync();
@@ -2880,6 +2928,18 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming)
         {
+            return;
+        }
+
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Sunxi } sunxi)
+        {
+            await RunSunxiPartitionTableAsync(sunxi);
+            return;
+        }
+
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Unisoc } unisoc)
+        {
+            await RunUnisocPartitionTableAsync(unisoc);
             return;
         }
 
@@ -3234,6 +3294,7 @@ public sealed partial class FlashViewModel
         _edlEntries.Clear();
         _flatBinPackage = false;
         _edlBundleReady = false;
+        _sunxiPackage = false;
         UpdateModeVisibility();
         SetControlEnabled("ExtractSelectedButton", false);
         SetControlEnabled("BuildWiredPackageButton", false);
@@ -3345,6 +3406,14 @@ public sealed partial class FlashViewModel
                  SelectedDevice is null && (_flatBinPackage || _edlEntries.Count > 0))
         {
             OnFlashEdlBundleClick(sender, e);
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Sunxi)
+        {
+            await RunSunxiFlashAsync();
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Unisoc)
+        {
+            await RunUnisocFlashAsync();
         }
         else
         {
@@ -3960,7 +4029,7 @@ public sealed partial class FlashViewModel
     /// <para>勾选任何选项都无法改变本次操作时为 <see langword="true"/>。</para></returns>
     private static bool IsOptionlessRun(DeviceProtocolKind protocol, bool erase) =>
         erase || protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Edl or DeviceProtocolKind.Mtk or
-            DeviceProtocolKind.Rkdl or DeviceProtocolKind.Sunxi;
+            DeviceProtocolKind.Rkdl or DeviceProtocolKind.Sunxi or DeviceProtocolKind.Unisoc;
 
     /// <remarks>
     /// A Rockchip flash needs an addressing source, never a loader: rows resolve through the parameter table,

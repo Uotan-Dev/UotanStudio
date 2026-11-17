@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:schema id="root">
     <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -4446,6 +4446,15 @@ Continue?</value>
   <data name="Flash_SunxiHint" xml:space="preserve">
     <value>FEL is the USB boot ROM mode; FES is the U-Boot service mode. Flash an IMAGEWTY package once the device runs FES.</value>
   </data>
+  <data name="Flash_SunxiHintFel" xml:space="preserve">
+    <value>The device is in FEL mode: the FEL memory tools and the FES service switch are available; package flashing and partition read-back need the FES service first.</value>
+  </data>
+  <data name="Flash_SunxiHintFes" xml:space="preserve">
+    <value>The device runs the FES service: the package flash and the partition read-back in the shared actions are ready.</value>
+  </data>
+  <data name="Flash_SunxiHintUnknown" xml:space="preserve">
+    <value>The device mode is not known yet: run the identity read or the refresh action.</value>
+  </data>
   <data name="Flash_SunxiRefresh" xml:space="preserve">
     <value>Read device info</value>
   </data>
@@ -4485,11 +4494,8 @@ Continue?</value>
   <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
     <value>Uploads the FES1 loader and the service payload to the selected Allwinner device and executes them, so the device re-enumerates as FES. Uploaded code can leave the device in any state and this cannot be undone.</value>
   </data>
-  <data name="Flash_SunxiImage" xml:space="preserve">
-    <value>Firmware image</value>
-  </data>
-  <data name="Flash_SunxiChooseImage" xml:space="preserve">
-    <value>Choose image...</value>
+  <data name="Flash_SunxiFlashSourceHint" xml:space="preserve">
+    <value>The IMAGEWTY package is loaded through the file picker above and parsed into the partition list; tick rows for a partial flash, leave every row unticked to write all partitions.</value>
   </data>
   <data name="Flash_SunxiFlash" xml:space="preserve">
     <value>Flash package</value>
@@ -4524,11 +4530,20 @@ Continue?</value>
   <data name="Flash_SunxiPostPowerOff" xml:space="preserve">
     <value>Power off</value>
   </data>
-  <data name="Flash_SunxiPartitions" xml:space="preserve">
-    <value>Partitions</value>
+  <data name="Flash_SunxiFlashNeedsFes" xml:space="preserve">
+    <value>The flash action needs the FES service: start it from the Allwinner section first.</value>
   </data>
-  <data name="Flash_SunxiPartitionsHint" xml:space="preserve">
-    <value>Comma-separated names; empty writes all</value>
+  <data name="Flash_SunxiReadbackNeedsFes" xml:space="preserve">
+    <value>The read-back needs the FES service: start it from the Allwinner section first.</value>
+  </data>
+  <data name="Flash_SunxiReadbackDone" xml:space="preserve">
+    <value>Read back {0} → {1}</value>
+  </data>
+  <data name="Flash_SunxiReadbackNoMapping" xml:space="preserve">
+    <value>None of the ticked partitions maps to a storage range; nothing was read.</value>
+  </data>
+  <data name="Flash_SunxiTableNeedsSource" xml:space="preserve">
+    <value>Load an IMAGEWTY package or start the FES service to read a partition table.</value>
   </data>
   <data name="Flash_SunxiFlashProgress" xml:space="preserve">
     <value>Flashing: {0} {1} ({2}%)</value>
@@ -4616,6 +4631,144 @@ Continue?</value>
   </data>
   <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
     <value>The file exceeds the {0} memory-tool limit.</value>
+  </data>
+  <data name="Flash_SunxiInfo_Chip" xml:space="preserve">
+    <value>Chip</value>
+  </data>
+  <data name="Flash_SunxiInfo_Mode" xml:space="preserve">
+    <value>Mode</value>
+  </data>
+  <data name="Flash_SunxiInfo_SoCId" xml:space="preserve">
+    <value>SoC id</value>
+  </data>
+  <data name="Flash_SunxiInfo_Firmware" xml:space="preserve">
+    <value>Firmware</value>
+  </data>
+  <data name="Flash_SunxiInfo_StorageType" xml:space="preserve">
+    <value>Storage type</value>
+  </data>
+  <data name="Flash_SunxiInfo_Capacity" xml:space="preserve">
+    <value>Capacity</value>
+  </data>
+  <data name="Flash_SunxiInfo_SecureWord" xml:space="preserve">
+    <value>Secure word</value>
+  </data>
+  <data name="Flash_Unisoc" xml:space="preserve">
+    <value>UNISOC (Spreadtrum)</value>
+  </data>
+  <data name="Flash_UnisocHint" xml:space="preserve">
+    <value>Deep flash over the vendor download serial port. The loader stage is identified by the handshake; storage actions require FDL2, which the loaders inside a PAC package bring up.</value>
+  </data>
+  <data name="Flash_UnisocHintUnknown" xml:space="preserve">
+    <value>Loader stage unknown; refresh to run the handshake again.</value>
+  </data>
+  <data name="Flash_UnisocHintFdl2" xml:space="preserve">
+    <value>FDL2 is answering: partition read, table read and package flash are available.</value>
+  </data>
+  <data name="Flash_UnisocRefresh" xml:space="preserve">
+    <value>Refresh stage</value>
+  </data>
+  <data name="Flash_UnisocFlashSourceHint" xml:space="preserve">
+    <value>Load a .pac package with the package bar; its loaders bring the link up to FDL2 and its partition images fill the main grid.</value>
+  </data>
+  <data name="Flash_UnisocFlashMode" xml:space="preserve">
+    <value>Erase mode</value>
+  </data>
+  <data name="Flash_UnisocModeKeepData" xml:space="preserve">
+    <value>Write without erase</value>
+  </data>
+  <data name="Flash_UnisocModePartitionErase" xml:space="preserve">
+    <value>Erase each partition</value>
+  </data>
+  <data name="Flash_UnisocModeFullErase" xml:space="preserve">
+    <value>Erase every partition</value>
+  </data>
+  <data name="Flash_UnisocPostAction" xml:space="preserve">
+    <value>After flash</value>
+  </data>
+  <data name="Flash_UnisocPostReboot" xml:space="preserve">
+    <value>Reboot</value>
+  </data>
+  <data name="Flash_UnisocPostPowerOff" xml:space="preserve">
+    <value>Power off</value>
+  </data>
+  <data name="Flash_UnisocManualLoaders" xml:space="preserve">
+    <value>Manual loaders (only for devices whose package is unavailable; addresses must match the device)</value>
+  </data>
+  <data name="Flash_UnisocChooseFdl1" xml:space="preserve">
+    <value>Choose FDL1</value>
+  </data>
+  <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
+    <value>Choose FDL2</value>
+  </data>
+  <data name="Flash_UnisocFlash" xml:space="preserve">
+    <value>Flash package</value>
+  </data>
+  <data name="Flash_UnisocFlashConfirmDetail" xml:space="preserve">
+    <value>Uploads the plan loaders, applies the selected erase mode and writes the ticked partitions.</value>
+  </data>
+  <data name="Flash_UnisocWipeConfirmDetail" xml:space="preserve">
+    <value>Full erase wipes every partition the device reports, including data you did not select.</value>
+  </data>
+  <data name="Flash_UnisocFlashDone" xml:space="preserve">
+    <value>Package flash completed.</value>
+  </data>
+  <data name="Flash_UnisocReadbackNoMapping" xml:space="preserve">
+    <value>No selected partition carries a confirmed byte range; the native table reports no offsets.</value>
+  </data>
+  <data name="Flash_UnisocReadbackDone" xml:space="preserve">
+    <value>Read {0} to {1}.</value>
+  </data>
+  <data name="Flash_UnisocPhaseConnect" xml:space="preserve">
+    <value>Connecting loaders</value>
+  </data>
+  <data name="Flash_UnisocPhaseErase" xml:space="preserve">
+    <value>Erasing</value>
+  </data>
+  <data name="Flash_UnisocPhaseFlash" xml:space="preserve">
+    <value>Flashing</value>
+  </data>
+  <data name="Flash_UnisocPhaseSkip" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="Flash_UnisocPhaseDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Flash_UnisocFlashProgress" xml:space="preserve">
+    <value>{0} {1} ({2}%)</value>
+  </data>
+  <data name="Flash_UnisocFlashProgressNoPercent" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Flash_UnisocStatusTimeout" xml:space="preserve">
+    <value>Stage handshake timed out.</value>
+  </data>
+  <data name="Flash_UnisocStatusFailed" xml:space="preserve">
+    <value>Stage handshake failed:</value>
+  </data>
+  <data name="Flash_UnisocSecure" xml:space="preserve">
+    <value>Secure boot</value>
+  </data>
+  <data name="Flash_UnisocOpen" xml:space="preserve">
+    <value>Unlocked boot ROM</value>
+  </data>
+  <data name="Flash_UnisocStageBootRom" xml:space="preserve">
+    <value>Boot ROM</value>
+  </data>
+  <data name="Flash_UnisocStageFdl1" xml:space="preserve">
+    <value>FDL1</value>
+  </data>
+  <data name="Flash_UnisocStageFdl2" xml:space="preserve">
+    <value>FDL2</value>
+  </data>
+  <data name="Flash_UnisocInfo_Stage" xml:space="preserve">
+    <value>Loader stage</value>
+  </data>
+  <data name="Flash_UnisocInfo_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Flash_UnisocInfo_SecureBoot" xml:space="preserve">
+    <value>Boot ROM state</value>
   </data>
   <data name="DiskFlash_Title" xml:space="preserve">
     <value>Disk Image Flasher</value>
@@ -5291,6 +5444,9 @@ Continue?</value>
   </data>
   <data name="Flash_GenerateFlashPlanTip" xml:space="preserve">
     <value>Generate XML and corresponding configuration files</value>
+  </data>
+  <data name="Flash_FlashPlanGenerated" xml:space="preserve">
+    <value>Flash plan generated: {0}</value>
   </data>
   <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
     <value>Backed up partition {0} to {1}</value>

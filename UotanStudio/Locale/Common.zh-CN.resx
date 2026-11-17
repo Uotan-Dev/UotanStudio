@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:schema id="root">
     <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -4446,6 +4446,15 @@
   <data name="Flash_SunxiHint" xml:space="preserve">
     <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。设备进入 FES 后可烧录 IMAGEWTY 整包。</value>
   </data>
+  <data name="Flash_SunxiHintFel" xml:space="preserve">
+    <value>设备处于 FEL 模式：可使用 FEL 内存工具与启动 FES 服务；整包烧录与分区回读需要先启动 FES 服务。</value>
+  </data>
+  <data name="Flash_SunxiHintFes" xml:space="preserve">
+    <value>设备运行 FES 服务：通用动作中的整包烧录与分区回读已就绪。</value>
+  </data>
+  <data name="Flash_SunxiHintUnknown" xml:space="preserve">
+    <value>尚未识别设备模式：请执行读取信息或刷新动作。</value>
+  </data>
   <data name="Flash_SunxiRefresh" xml:space="preserve">
     <value>读取设备信息</value>
   </data>
@@ -4485,11 +4494,8 @@
   <data name="Flash_SunxiBootConfirmDetail" xml:space="preserve">
     <value>将向所选全志设备上传 FES1 与服务负载并执行，设备会重新枚举为 FES。上传的代码可让设备进入任意状态，此操作不可撤销。</value>
   </data>
-  <data name="Flash_SunxiImage" xml:space="preserve">
-    <value>固件镜像</value>
-  </data>
-  <data name="Flash_SunxiChooseImage" xml:space="preserve">
-    <value>选择镜像...</value>
+  <data name="Flash_SunxiFlashSourceHint" xml:space="preserve">
+    <value>IMAGEWTY 包经上方选择文件载入并解析到分区列表；勾选行可部分刷入，全部不勾选时写入所有分区。</value>
   </data>
   <data name="Flash_SunxiFlash" xml:space="preserve">
     <value>烧录整包</value>
@@ -4524,11 +4530,20 @@
   <data name="Flash_SunxiPostPowerOff" xml:space="preserve">
     <value>关机</value>
   </data>
-  <data name="Flash_SunxiPartitions" xml:space="preserve">
-    <value>分区</value>
+  <data name="Flash_SunxiFlashNeedsFes" xml:space="preserve">
+    <value>烧录动作需要 FES 服务：请先在全志分类中启动 FES。</value>
   </data>
-  <data name="Flash_SunxiPartitionsHint" xml:space="preserve">
-    <value>逗号分隔；留空写入全部</value>
+  <data name="Flash_SunxiReadbackNeedsFes" xml:space="preserve">
+    <value>回读需要 FES 服务：请先在全志分类中启动 FES。</value>
+  </data>
+  <data name="Flash_SunxiReadbackDone" xml:space="preserve">
+    <value>已回读 {0} → {1}</value>
+  </data>
+  <data name="Flash_SunxiReadbackNoMapping" xml:space="preserve">
+    <value>勾选的分区都无法映射到存储区间；未读取任何内容。</value>
+  </data>
+  <data name="Flash_SunxiTableNeedsSource" xml:space="preserve">
+    <value>读取分区表需要先加载 IMAGEWTY 包或启动 FES 服务。</value>
   </data>
   <data name="Flash_SunxiFlashProgress" xml:space="preserve">
     <value>正在烧录：{0} {1}（{2}%）</value>
@@ -4616,6 +4631,144 @@
   </data>
   <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
     <value>文件超过内存工具上限 {0}。</value>
+  </data>
+  <data name="Flash_SunxiInfo_Chip" xml:space="preserve">
+    <value>芯片</value>
+  </data>
+  <data name="Flash_SunxiInfo_Mode" xml:space="preserve">
+    <value>模式</value>
+  </data>
+  <data name="Flash_SunxiInfo_SoCId" xml:space="preserve">
+    <value>SoC id</value>
+  </data>
+  <data name="Flash_SunxiInfo_Firmware" xml:space="preserve">
+    <value>固件版本</value>
+  </data>
+  <data name="Flash_SunxiInfo_StorageType" xml:space="preserve">
+    <value>存储类型</value>
+  </data>
+  <data name="Flash_SunxiInfo_Capacity" xml:space="preserve">
+    <value>容量</value>
+  </data>
+  <data name="Flash_SunxiInfo_SecureWord" xml:space="preserve">
+    <value>安全字</value>
+  </data>
+  <data name="Flash_Unisoc" xml:space="preserve">
+    <value>紫光展锐（UNISOC）</value>
+  </data>
+  <data name="Flash_UnisocHint" xml:space="preserve">
+    <value>经厂商下载串口深刷。加载阶段由握手识别；存储动作需要 FDL2，PAC 包内的加载器会先把链路提升到该阶段。</value>
+  </data>
+  <data name="Flash_UnisocHintUnknown" xml:space="preserve">
+    <value>加载阶段未知；刷新以重新握手。</value>
+  </data>
+  <data name="Flash_UnisocHintFdl2" xml:space="preserve">
+    <value>FDL2 已应答：分区读取、分区表读取与整包烧录可用。</value>
+  </data>
+  <data name="Flash_UnisocRefresh" xml:space="preserve">
+    <value>刷新阶段</value>
+  </data>
+  <data name="Flash_UnisocFlashSourceHint" xml:space="preserve">
+    <value>用刷机包栏加载 .pac 包；包内加载器会把链路提升到 FDL2，分区镜像会填入主网格。</value>
+  </data>
+  <data name="Flash_UnisocFlashMode" xml:space="preserve">
+    <value>擦除模式</value>
+  </data>
+  <data name="Flash_UnisocModeKeepData" xml:space="preserve">
+    <value>不擦除直接写</value>
+  </data>
+  <data name="Flash_UnisocModePartitionErase" xml:space="preserve">
+    <value>逐分区擦除</value>
+  </data>
+  <data name="Flash_UnisocModeFullErase" xml:space="preserve">
+    <value>擦除全部分区</value>
+  </data>
+  <data name="Flash_UnisocPostAction" xml:space="preserve">
+    <value>烧录后动作</value>
+  </data>
+  <data name="Flash_UnisocPostReboot" xml:space="preserve">
+    <value>重启</value>
+  </data>
+  <data name="Flash_UnisocPostPowerOff" xml:space="preserve">
+    <value>关机</value>
+  </data>
+  <data name="Flash_UnisocManualLoaders" xml:space="preserve">
+    <value>手动加载器（仅用于拿不到包的设备；地址必须与设备匹配）</value>
+  </data>
+  <data name="Flash_UnisocChooseFdl1" xml:space="preserve">
+    <value>选择 FDL1</value>
+  </data>
+  <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
+    <value>选择 FDL2</value>
+  </data>
+  <data name="Flash_UnisocFlash" xml:space="preserve">
+    <value>烧录固件包</value>
+  </data>
+  <data name="Flash_UnisocFlashConfirmDetail" xml:space="preserve">
+    <value>上传计划加载器、应用所选擦除模式并写入勾选的分区。</value>
+  </data>
+  <data name="Flash_UnisocWipeConfirmDetail" xml:space="preserve">
+    <value>整片擦除会擦掉设备报告的每个分区，包括你没有勾选的数据。</value>
+  </data>
+  <data name="Flash_UnisocFlashDone" xml:space="preserve">
+    <value>固件包烧录完成。</value>
+  </data>
+  <data name="Flash_UnisocReadbackNoMapping" xml:space="preserve">
+    <value>勾选的分区没有已确认的字节范围；原生表不报告偏移。</value>
+  </data>
+  <data name="Flash_UnisocReadbackDone" xml:space="preserve">
+    <value>已读取 {0} 到 {1}。</value>
+  </data>
+  <data name="Flash_UnisocPhaseConnect" xml:space="preserve">
+    <value>连接加载器</value>
+  </data>
+  <data name="Flash_UnisocPhaseErase" xml:space="preserve">
+    <value>擦除中</value>
+  </data>
+  <data name="Flash_UnisocPhaseFlash" xml:space="preserve">
+    <value>写入中</value>
+  </data>
+  <data name="Flash_UnisocPhaseSkip" xml:space="preserve">
+    <value>已跳过</value>
+  </data>
+  <data name="Flash_UnisocPhaseDone" xml:space="preserve">
+    <value>完成</value>
+  </data>
+  <data name="Flash_UnisocFlashProgress" xml:space="preserve">
+    <value>{0} {1}（{2}%）</value>
+  </data>
+  <data name="Flash_UnisocFlashProgressNoPercent" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Flash_UnisocStatusTimeout" xml:space="preserve">
+    <value>阶段握手超时。</value>
+  </data>
+  <data name="Flash_UnisocStatusFailed" xml:space="preserve">
+    <value>阶段握手失败：</value>
+  </data>
+  <data name="Flash_UnisocSecure" xml:space="preserve">
+    <value>安全启动</value>
+  </data>
+  <data name="Flash_UnisocOpen" xml:space="preserve">
+    <value>未锁 Boot ROM</value>
+  </data>
+  <data name="Flash_UnisocStageBootRom" xml:space="preserve">
+    <value>Boot ROM</value>
+  </data>
+  <data name="Flash_UnisocStageFdl1" xml:space="preserve">
+    <value>FDL1</value>
+  </data>
+  <data name="Flash_UnisocStageFdl2" xml:space="preserve">
+    <value>FDL2</value>
+  </data>
+  <data name="Flash_UnisocInfo_Stage" xml:space="preserve">
+    <value>加载阶段</value>
+  </data>
+  <data name="Flash_UnisocInfo_Version" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="Flash_UnisocInfo_SecureBoot" xml:space="preserve">
+    <value>Boot ROM 状态</value>
   </data>
   <data name="DiskFlash_Title" xml:space="preserve">
     <value>磁盘镜像烧录</value>
@@ -5291,6 +5444,9 @@
   </data>
   <data name="Flash_GenerateFlashPlanTip" xml:space="preserve">
     <value>生成XML等对应配置文件</value>
+  </data>
+  <data name="Flash_FlashPlanGenerated" xml:space="preserve">
+    <value>已生成烧录方案：{0}</value>
   </data>
   <data name="Flash_SpacemiTReadbackDone" xml:space="preserve">
     <value>已备份分区 {0} 到 {1}</value>

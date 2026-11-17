@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Ui;
 using UotanStudio.UiAbstractions;
@@ -12,8 +13,10 @@ namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
 /// Allwinner page actions: status readout, the FEL memory tools, the FEL-to-FES service switch driven by a
-/// first-stage loader and a service payload, and FES package flashing.
-/// <para>全志页面动作：状态读取、FEL 内存工具、由一级加载器与服务负载驱动的 FEL 到 FES 切换，以及 FES 整包烧录。</para>
+/// first-stage loader and a service payload, and the package-driven FES flash and partition read-back the
+/// shared action buttons run against an IMAGEWTY package loaded into the main grid.
+/// <para>全志页面动作：状态读取、FEL 内存工具、由一级加载器与服务负载驱动的 FEL 到 FES 切换，以及通用动作按钮
+/// 对已载入主网格的 IMAGEWTY 包执行的 FES 烧录与分区回读。</para>
 /// </summary>
 public sealed partial class FlashViewModel
 {
@@ -24,6 +27,10 @@ public sealed partial class FlashViewModel
     /// <summary>Largest payload the page hands to one FEL memory operation; larger files stay out of the page.
     /// <para>页面交给单次 FEL 内存操作的最大负载；更大的文件不允许进入页面。</para></summary>
     private const long SunxiMemoryLimitBytes = 64 * 1024 * 1024;
+
+    /// <summary>Byte size of one Sunxi MBR sector; the plan's first sectors count in these units.
+    /// <para>Sunxi MBR 单扇区的字节大小；计划中的首扇区以该单位计数。</para></summary>
+    private const long SunxiSectorSize = 512;
 
     /// <summary>First-stage loader image chosen for the service switch; empty while none is chosen.
     /// <para>为服务切换所选的一级加载器镜像；未选择时为空。</para></summary>
@@ -39,6 +46,12 @@ public sealed partial class FlashViewModel
     /// <para>全志分类的状态行；身份读取与每个操作都会写入。</para></summary>
     [ObservableProperty]
     private string _sunxiStatusText = string.Empty;
+
+    /// <summary>Mode-aware hint under the status line; it says what the current FEL or FES mode offers and what
+    /// still blocks the storage actions. <para>状态行下方随模式变化的提示行；说明当前 FEL 或 FES 模式能做什么，
+    /// 以及存储动作还差什么。</para></summary>
+    [ObservableProperty]
+    private string _sunxiModeHint = string.Empty;
 
     /// <summary>Memory address used by the read and write actions. <para>读取与写入动作使用的内存地址。</para></summary>
     [ObservableProperty]
@@ -67,15 +80,15 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private string _sunxiBoardConfigPath = string.Empty;
 
-    /// <summary>IMAGEWTY package chosen for a FES flash run; empty while none is chosen.
-    /// <para>为 FES 烧录选择的 IMAGEWTY 包；未选择时为空。</para></summary>
-    [ObservableProperty]
-    private string _sunxiImagePath = string.Empty;
+    /// <summary>Whether the loaded package is an Allwinner IMAGEWTY image whose plan owns the grid rows; the
+    /// shared flash action reads the package from the page-wide package path.
+    /// <para>已加载的包是否为其计划拥有网格行的 IMAGEWTY 全志镜像；通用烧录动作从页面级包路径读取该包。</para></summary>
+    private bool _sunxiPackage;
 
-    /// <summary>Comma-separated partition names a no-erase run writes; empty writes every partition.
-    /// <para>不擦除运行写入的逗号分隔分区名；留空写入全部分区。</para></summary>
-    [ObservableProperty]
-    private string _sunxiPartitions = string.Empty;
+    /// <summary>Status the selected endpoint answered most recently, kept per device key so re-selecting the same
+    /// endpoint republishes it without another handshake; the refresh button clears it.
+    /// <para>所选端点最近一次应答的状态，按设备键保存，使重新选中同一端点时直接重发而无需再次握手；刷新按钮会将其清除。</para></summary>
+    private (string Key, SunxiDeviceStatus Status)? _sunxiStatusCache;
 
     /// <summary>Selected erase mode index: full erase, partition erase, no erase or keep user data.
     /// <para>所选擦除模式索引：整片擦除、分区擦除、不擦除或保留用户数据。</para></summary>
@@ -93,27 +106,14 @@ public sealed partial class FlashViewModel
 
     partial void OnSunxiUbootPathChanged(string value) => UpdateSunxiBootButton();
 
-    partial void OnSunxiImagePathChanged(string value) => UpdateSunxiFlashButton();
-
     /// <summary>Whether both service images are chosen. <para>两个服务镜像是否都已选择。</para></summary>
     internal bool HasSunxiServiceImages => SunxiFes1Path.Length > 0 && SunxiUbootPath.Length > 0;
-
-    /// <summary>Whether a package is chosen for a FES flash run. <para>是否已为 FES 烧录选择包。</para></summary>
-    internal bool HasSunxiFlashImage => SunxiImagePath.Length > 0;
 
     private void UpdateSunxiBootButton()
     {
         if (_surface is not null)
         {
             SetControlEnabled("SunxiBootFesButton", HasSunxiServiceImages);
-        }
-    }
-
-    private void UpdateSunxiFlashButton()
-    {
-        if (_surface is not null)
-        {
-            SetControlEnabled("SunxiFlashButton", HasSunxiFlashImage && _sunxiIsFes);
         }
     }
 
@@ -133,57 +133,81 @@ public sealed partial class FlashViewModel
         RegisterGate("SunxiReadMemoryButton", FlashControlGate.Sunxi("SunxiReadMemoryButton"));
         RegisterGate("SunxiWriteMemoryButton", FlashControlGate.Sunxi("SunxiWriteMemoryButton"));
         RegisterGate("SunxiExecuteButton", FlashControlGate.Sunxi("SunxiExecuteButton"));
-        RegisterGate("SunxiChooseImageButton", FlashControlGate.Sunxi("SunxiChooseImageButton"));
-        RegisterGate("SunxiFlashButton", FlashControlGate.Sunxi("SunxiFlashButton"));
         RegisterGate("SunxiChooseDtbButton", FlashControlGate.Sunxi("SunxiChooseDtbButton"));
         RegisterGate("SunxiChooseSysConfigButton", FlashControlGate.Sunxi("SunxiChooseSysConfigButton"));
         RegisterGate("SunxiChooseBoardConfigButton", FlashControlGate.Sunxi("SunxiChooseBoardConfigButton"));
     }
 
     /// <summary>
-    /// Queries the selected endpoint once and publishes the identity, mode and — in FES mode — the storage answers.
-    /// The mode also updates the device badge, because discovery cannot tell FEL from FES.
-    /// <para>查询一次所选端点并发布身份、模式，以及 FES 模式下的存储应答。模式同时更新设备徽章，因为发现阶段无法区分
-    /// FEL 与 FES。</para>
+    /// Queries the selected endpoint once and publishes the identity, mode, mode hint and — in FES mode — the
+    /// storage answers. The mode also updates the device badge and the device status table, because discovery
+    /// cannot tell FEL from FES. A cached answer for the same device key republishes without another handshake;
+    /// the refresh button forces a fresh query.
+    /// <para>查询一次所选端点并发布身份、模式、模式提示，以及 FES 模式下的存储应答。模式同时更新设备徽章与设备状态表，
+    /// 因为发现阶段无法区分 FEL 与 FES。同一设备键的缓存应答直接重发而无需再次握手；刷新按钮强制重新查询。</para>
     /// </summary>
     internal async void RefreshSunxiDeviceStatus()
     {
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device)
         {
             SunxiStatusText = string.Empty;
+            SunxiModeHint = string.Empty;
             _sunxiIsFes = false;
-            UpdateSunxiFlashButton();
+            _sunxiStatusCache = null;
+            RefreshDeviceUiGate();
+            return;
+        }
+
+        if (_sunxiStatusCache is { } cached && string.Equals(cached.Key, device.Key, StringComparison.Ordinal))
+        {
+            ApplySunxiStatus(cached.Status);
             return;
         }
 
         var language = _localizer;
+        var epoch = BeginDeviceStatusRefresh();
         try
         {
             using var timeout = new CancellationTokenSource(SunxiStatusTimeoutMs);
             var status = await Task.Run(() => App.DeviceMonitor.QuerySunxiStatusAsync(device, timeout.Token)
                 .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
-            PublishSunxiStatus(status, language);
+            if (SelectedDevice?.Key != device.Key || epoch != _rkStatusRefreshEpoch)
+            {
+                return;
+            }
+
+            _sunxiStatusCache = (device.Key, status);
+            ApplySunxiStatus(status);
         }
         catch (OperationCanceledException)
         {
             SunxiStatusText = language.GetString("Flash_SunxiStatusTimeout");
+            SunxiModeHint = language.GetString("Flash_SunxiHintUnknown");
             _sunxiIsFes = false;
-            UpdateSunxiFlashButton();
+            _sunxiStatusCache = null;
+            RefreshDeviceUiGate();
         }
         catch (Exception exception)
         {
             SunxiStatusText = language.GetString("Flash_SunxiStatusFailed") + " " + exception.Message;
+            SunxiModeHint = language.GetString("Flash_SunxiHintUnknown");
             _sunxiIsFes = false;
-            UpdateSunxiFlashButton();
+            _sunxiStatusCache = null;
+            RefreshDeviceUiGate();
         }
     }
 
-    /// <summary>Re-reads the selected endpoint and refreshes its device badge.
-    /// <para>重新读取所选端点并刷新其设备徽章。</para>
+    /// <summary>Re-reads the selected endpoint and refreshes its device badge; the click always forces a fresh
+    /// handshake instead of replaying the cached one.
+    /// <para>重新读取所选端点并刷新其设备徽章；点击总是强制重新握手而不是重放缓存。</para>
     /// </summary>
     /// <param name="sender">Event source. <para>事件来源。</para></param>
     /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal void OnSunxiRefreshClick(object? sender, RoutedEventArgs e) => RefreshSunxiDeviceStatus();
+    internal void OnSunxiRefreshClick(object? sender, RoutedEventArgs e)
+    {
+        _sunxiStatusCache = null;
+        RefreshSunxiDeviceStatus();
+    }
 
     /// <summary>
     /// Chooses the first-stage loader image and enables the switch only once both images are present.
@@ -274,7 +298,8 @@ public sealed partial class FlashViewModel
             });
             var status = await App.DeviceMonitor.RunSunxiBootServiceAsync(device, fes1, images, progress,
                 cancellation.Token).ConfigureAwait(true);
-            PublishSunxiStatus(status, language);
+            _sunxiStatusCache = (device.Key, status);
+            ApplySunxiStatus(status);
             AppendLog(language.GetString("Flash_SunxiBootDone"));
             await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
         }
@@ -295,32 +320,105 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Chooses the IMAGEWTY package a FES flash run writes.
-    /// <para>选择 FES 烧录写入的 IMAGEWTY 包。</para>
+    /// Reports whether the file starts with the plaintext IMAGEWTY magic, so the shared package loader hands
+    /// Allwinner images to the Sunxi plan instead of the single-image fallback.
+    /// <para>判断文件是否以明文 IMAGEWTY 魔数开头，使通用包加载器把全志镜像交给全志计划而不是单镜像回退。</para>
     /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnSunxiChooseImageClick(object? sender, RoutedEventArgs e)
+    private static async Task<bool> IsSunxiImageFileAsync(string path, CancellationToken cancellationToken)
     {
-        SunxiImagePath = await PickSunxiImageAsync("Flash_SunxiChooseImage").ConfigureAwait(true);
+        var header = new byte[8];
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var read = await stream.ReadAsync(header, cancellationToken).ConfigureAwait(false);
+        return read == header.Length && AllwinnerImageWtyReader.HasPlainMagic(header);
     }
 
     /// <summary>
-    /// Runs one IMAGEWTY package against a FES endpoint after the typed confirmation: erase by the selected
-    /// mode, write the table, partitions and boot images, and request the completion action.
-    /// <para>在输入确认短语后，用所选模式擦除、写入分区表/分区/引导镜像并请求完成动作，把一个 IMAGEWTY 包
-    /// 烧录到 FES 端点。</para>
+    /// Loads an IMAGEWTY package into the main grid: the plan's table, partition payloads and boot variants become
+    /// rows — partitions stay tickable for a partial flash, the table and boot variants stay display-only script
+    /// rows — and the shared flash action later reads the package from the shared package path.
+    /// <para>把 IMAGEWTY 包装进主网格：计划的表、分区负载与引导变体成为行——分区保持可勾选以支持部分刷入，表与
+    /// 引导变体保持仅展示的脚本行——通用烧录动作随后从页面级包路径读取该包。</para>
     /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnSunxiFlashClick(object? sender, RoutedEventArgs e)
+    private async Task ApplySunxiPackageAsync(string path, CancellationToken cancellation)
     {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device) return;
-        if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        if (!HasSunxiFlashImage || !_sunxiIsFes) return;
+        using var plan = await Task.Run(() => SunxiFlashPlan.Load(path, cancellation), cancellation)
+            .ConfigureAwait(true);
+        if (path != _loadedPath)
+        {
+            return;
+        }
+
+        _sunxiPackage = true;
+        Partitions.Apply(0, BuildSunxiPlanRows(plan));
+        AppendLog($"{plan.Steps.Count(step => step.Kind == SunxiFlashStepKind.Partition)} " +
+            _localizer.GetString("Flash_ImagesLoaded"));
+    }
+
+    /// <summary>
+    /// Builds one grid row per plan step: partition steps stay tickable for a partial flash, the table and boot
+    /// variants become display-only script rows, and every row carries its offset and payload size.
+    /// <para>按计划步骤逐条构建网格行：分区步骤保持可勾选以支持部分刷入，表与引导变体成为仅展示的脚本行，
+    /// 每行都携带偏移与负载大小。</para>
+    /// </summary>
+    private static List<FlashPartitionEntry> BuildSunxiPlanRows(SunxiFlashPlan plan)
+    {
+        List<FlashPartitionEntry> rows = [];
+        foreach (var step in plan.Steps)
+        {
+            rows.Add(new FlashPartitionEntry
+            {
+                IsScriptStep = step.Kind != SunxiFlashStepKind.Partition,
+                Name = step.Name,
+                Offset = FormatByteSize(step.FirstSector * SunxiSectorSize),
+                Size = FormatByteSize(step.ByteCount),
+                AcceptsFile = false
+            });
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Runs one IMAGEWTY package against a FES endpoint after the typed confirmation: erase by the selected mode,
+    /// write the table, the partitions ticked in the main grid (every partition when no row is ticked) and the
+    /// boot images, and request the completion action. The package comes from the shared package path the grid
+    /// rows were loaded from.
+    /// <para>在输入确认短语后，用所选模式擦除，写入分区表、主网格勾选的分区（未勾选时写全部分区）与引导镜像，
+    /// 并请求完成动作。包来自网格行加载时使用的页面级包路径。</para>
+    /// </summary>
+    internal async Task RunSunxiFlashAsync()
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device)
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        if (!_sunxiPackage || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
+        {
+            AppendLog(_localizer.GetString("Flash_PackageChanged"));
+            return;
+        }
+
+        if (!_sunxiIsFes)
+        {
+            AppendLog(_localizer.GetString("Flash_SunxiFlashNeedsFes"));
+            return;
+        }
 
         var language = _localizer;
+        var partitions = Partitions.Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep)
+            .Select(row => row.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var options = BuildSunxiFlashOptions(partitions);
         bool confirmed;
         _confirming = true;
         try
@@ -341,7 +439,6 @@ public sealed partial class FlashViewModel
 
         if (!confirmed) return;
 
-        var options = BuildSunxiFlashOptions();
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         SetBusy(true);
@@ -356,12 +453,300 @@ public sealed partial class FlashViewModel
                     ReportBusyTransfer(done, total);
                 }
             });
-            await App.DeviceMonitor.FlashSunxiAsync(device, SunxiImagePath, options, progress,
+            await App.DeviceMonitor.FlashSunxiAsync(device, PackagePath, options, progress,
                 cancellation.Token).ConfigureAwait(true);
             SunxiStatusText = language.GetString("Flash_SunxiFlashDone");
             AppendLog(language.GetString("Flash_SunxiFlashDone"));
             await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+        }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            _sunxiStatusCache = null;
             RefreshSunxiDeviceStatus();
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Reads the selected endpoint's identity for the shared read-info action: the answers fill the device status
+    /// table, the Sunxi status line and the mode hint, and the mode refreshes the device manager badge.
+    /// <para>为通用读取信息动作读取所选端点的身份：应答填入设备状态表、全志状态行与模式提示，模式同时刷新设备
+    /// 管理器徽章。</para>
+    /// </summary>
+    internal async Task RefreshSunxiDeviceTableAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        var epoch = BeginDeviceStatusRefresh();
+        try
+        {
+            using var timeout = new CancellationTokenSource(SunxiStatusTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QuerySunxiStatusAsync(device, timeout.Token)
+                .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (SelectedDevice?.Key != device.Key || epoch != _rkStatusRefreshEpoch)
+            {
+                return;
+            }
+
+            _sunxiStatusCache = (device.Key, status);
+            ApplySunxiStatus(status);
+        }
+        catch (OperationCanceledException)
+        {
+            PublishSunxiTableFailure(device.Key, language.GetString("Flash_SunxiStatusTimeout"));
+        }
+        catch (Exception exception)
+        {
+            PublishSunxiTableFailure(device.Key,
+                language.GetString("Flash_SunxiStatusFailed") + " " + exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reads the ticked partition rows back into a chosen directory: the sector mapping comes from the loaded
+    /// IMAGEWTY package's plan when one is loaded, otherwise from the vendor MBR the FES endpoint reports; rows
+    /// the mapping does not name are skipped with a log line.
+    /// <para>把勾选的分区行回读到所选目录：已加载 IMAGEWTY 包时扇区映射来自包计划，否则来自 FES 端点上报的
+    /// 厂商 MBR；映射没有点名的行经日志跳过。</para>
+    /// </summary>
+    private async Task RunSunxiReadbackAsync()
+    {
+        if (_busy || _confirming ||
+            SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device ||
+            TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        if (!_sunxiIsFes)
+        {
+            AppendLog(_localizer.GetString("Flash_SunxiReadbackNeedsFes"));
+            return;
+        }
+
+        var selected = Partitions.Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep).ToArray();
+        if (selected.Length == 0)
+        {
+            return;
+        }
+
+        var language = _localizer;
+        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = language.GetString("Flash_ReadbackSelected"),
+            AllowMultiple = false
+        }).ConfigureAwait(true);
+        if (_busy || _confirming || folders.Count != 1 ||
+            folders[0].TryGetLocalPath() is not { } destination)
+        {
+            return;
+        }
+
+        Dictionary<string, (uint Sector, long Bytes)> mapping;
+        try
+        {
+            mapping = await ResolveSunxiPartitionMapAsync(device).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+            return;
+        }
+
+        List<SunxiPartitionReadRequest> requests = [];
+        List<FlashPartitionEntry> mapped = [];
+        foreach (var row in selected)
+        {
+            if (!mapping.TryGetValue(row.Name, out var range))
+            {
+                row.State = FlashRowState.Skipped;
+                continue;
+            }
+
+            mapped.Add(row);
+            requests.Add(new SunxiPartitionReadRequest(row.Name, range.Sector, range.Bytes,
+                Path.Combine(destination, $"{row.Name}.img")));
+        }
+
+        if (requests.Count == 0)
+        {
+            AppendLog(language.GetString("Flash_SunxiReadbackNoMapping"));
+            return;
+        }
+
+        SetRowsQueued(mapped);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var progress = new Progress<SunxiFlashProgress>(report =>
+            {
+                var row = mapped.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, report.Target, StringComparison.OrdinalIgnoreCase));
+                if (row is null || report is not { BytesCompleted: { } done, BytesTotal: { } total } || total <= 0)
+                {
+                    return;
+                }
+
+                row.TransferBytes = done;
+                var percent = (int)Math.Clamp(done * 100d / total, 0d, 100d);
+                if (percent != row.Percent)
+                {
+                    row.Percent = percent;
+                }
+            });
+            await App.DeviceMonitor.ReadSunxiPartitionsAsync(device, requests, progress,
+                cancellation.Token).ConfigureAwait(true);
+            foreach (var request in requests)
+            {
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    language.GetString("Flash_SunxiReadbackDone"), request.Name, request.DestinationPath));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            MarkUnfinishedSkipped();
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+            foreach (var row in mapped.Where(row => row.State == FlashRowState.Running))
+            {
+                SetRowFinished(row, success: false);
+            }
+        }
+        finally
+        {
+            MarkUnfinishedSkipped();
+            UpdateOverall();
+            SetBusy(false);
+            _flashCancellation = null;
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Resolves the partition-to-sector mapping the read-back and the table read use: the loaded package's plan
+    /// when the grid rows came from it, otherwise the vendor MBR the FES endpoint reports.
+    /// <para>解析回读与分区表读取使用的分区到扇区映射：网格行来自已加载包时用包计划，否则用 FES 端点上报的
+    /// 厂商 MBR。</para>
+    /// </summary>
+    private async Task<Dictionary<string, (uint Sector, long Bytes)>> ResolveSunxiPartitionMapAsync(
+        DetectedDevice device)
+    {
+        if (_sunxiPackage && string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
+        {
+            using var plan = await Task.Run(() => SunxiFlashPlan.Load(PackagePath)).ConfigureAwait(true);
+            return plan.Steps
+                .Where(step => step.Kind == SunxiFlashStepKind.Partition)
+                .GroupBy(step => step.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => (group.First().FirstSector, group.First().ByteCount),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        var table = await App.DeviceMonitor.ReadSunxiMbrAsync(device).ConfigureAwait(true);
+        var parsed = SunxiMbrTable.Parse(table);
+        return parsed.Partitions
+            .Where(partition => partition.SectorCount > 0)
+            .GroupBy(partition => partition.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key,
+                group => ((uint)group.First().FirstSector,
+                    (long)(group.First().SectorCount * (ulong)SunxiSectorSize)),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reads the selected endpoint's partition table into the main grid: the loaded IMAGEWTY package's plan
+    /// describes what a partial flash writes, and a FES endpoint without a package contributes the vendor MBR
+    /// read off its own storage.
+    /// <para>把所选端点的分区表读入主网格：已加载的 IMAGEWTY 包计划描述部分刷入会写入的内容；没有包的 FES
+    /// 端点贡献从其自身存储读出的厂商 MBR。</para>
+    /// </summary>
+    private async Task RunSunxiPartitionTableAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        if (_sunxiPackage && string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
+        {
+            using var cancellation = new CancellationTokenSource();
+            _flashCancellation = cancellation;
+            SetBusy(true);
+            try
+            {
+                using var plan = await Task.Run(() => SunxiFlashPlan.Load(PackagePath, cancellation.Token),
+                    cancellation.Token).ConfigureAwait(true);
+                if (SelectedDevice?.Key != device.Key)
+                {
+                    return;
+                }
+
+                var planRows = BuildSunxiPlanRows(plan)
+                    .Where(row => !row.IsScriptStep)
+                    .ToList();
+                Partitions.Apply(0, planRows);
+                AppendLog($"{planRows.Count} {language.GetString("Flash_PartitionsLoaded")}");
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog(language.GetString("Flash_Canceled"));
+            }
+            catch (Exception exception)
+            {
+                AppendError(exception);
+            }
+            finally
+            {
+                SetBusy(false);
+                _flashCancellation = null;
+                UpdateEdlButton();
+            }
+
+            return;
+        }
+
+        if (!_sunxiIsFes)
+        {
+            AppendLog(language.GetString("Flash_SunxiTableNeedsSource"));
+            return;
+        }
+
+        using var readCancellation = new CancellationTokenSource();
+        _flashCancellation = readCancellation;
+        SetBusy(true);
+        try
+        {
+            var table = await App.DeviceMonitor.ReadSunxiMbrAsync(device, readCancellation.Token)
+                .ConfigureAwait(true);
+            var parsed = SunxiMbrTable.Parse(table);
+            var rows = parsed.Partitions
+                .Where(partition => partition.SectorCount > 0)
+                .Select(partition => new FlashPartitionEntry
+                {
+                    Name = partition.Name,
+                    Offset = FormatByteSize(partition.FirstSector * SunxiSectorSize),
+                    Size = FormatByteSize((long)partition.SectorCount * SunxiSectorSize),
+                    AcceptsFile = false
+                })
+                .ToList();
+            if (rows.Count == 0)
+            {
+                AppendLog(language.GetString("Flash_PartitionTableUnavailable"));
+                return;
+            }
+
+            ResetLoadedPackageState();
+            Partitions.Apply(0, rows);
+            AppendLog($"{rows.Count} {language.GetString("Flash_PartitionsLoaded")}");
         }
         catch (OperationCanceledException)
         {
@@ -376,7 +761,6 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             _flashCancellation = null;
             UpdateEdlButton();
-            UpdateSunxiFlashButton();
         }
     }
 
@@ -416,7 +800,7 @@ public sealed partial class FlashViewModel
     private static async Task<byte[]> ReadOptionalSunxiFileAsync(string path) =>
         path.Length > 0 ? await File.ReadAllBytesAsync(path).ConfigureAwait(false) : [];
 
-    private SunxiFlashOptions BuildSunxiFlashOptions()
+    private SunxiFlashOptions BuildSunxiFlashOptions(IReadOnlyList<string> partitions)
     {
         var mode = SunxiFlashModeIndex switch
         {
@@ -425,8 +809,6 @@ public sealed partial class FlashViewModel
             3 => SunxiFlashMode.KeepData,
             _ => SunxiFlashMode.FullErase
         };
-        var partitions = SunxiPartitions.Split(',', StringSplitOptions.RemoveEmptyEntries
-            | StringSplitOptions.TrimEntries);
         return new SunxiFlashOptions
         {
             FlashConfirmation = SunxiFlashOptions.RequiredConfirmation,
@@ -644,7 +1026,42 @@ public sealed partial class FlashViewModel
         }
     }
 
-    private void PublishSunxiStatus(SunxiDeviceStatus status, ILocalizer language)
+    /// <summary>
+    /// Publishes one status read: the status line and mode hint in the Sunxi section, the device status table,
+    /// the mode into the device manager badge and the refreshed gates, because the FES answer opens the shared
+    /// flash and read-back actions.
+    /// <para>发布一次状态读取：全志区的状态行与模式提示、设备状态表、设备管理器徽章中的模式以及刷新后的门控，
+    /// 因为 FES 应答会打开通用烧录与回读动作。</para>
+    /// </summary>
+    private void ApplySunxiStatus(SunxiDeviceStatus status)
+    {
+        var language = _localizer;
+        SunxiStatusText = BuildSunxiStatusLine(status, language);
+        SunxiModeHint = language.GetString(status.IsFes ? "Flash_SunxiHintFes" : "Flash_SunxiHintFel");
+        _sunxiIsFes = status.IsFes;
+        ReplaceDeviceStatus(SelectedDevice?.Key, BuildSunxiStatusRows(status, language));
+        if (_deviceViewModel?.SelectedDevice is { } info)
+        {
+            info.SunxiMode = status.IsFes ? "FES" : "FEL";
+        }
+
+        RefreshDeviceUiGate();
+    }
+
+    /// <summary>Publishes a failed table read: the failure lands in the status line, the hint reports the mode
+    /// is unknown and the rows stay empty. <para>发布一次失败的表格读取：失败写入状态行，提示行报告模式未知，
+    /// 状态行保持为空。</para></summary>
+    private void PublishSunxiTableFailure(string? deviceKey, string message)
+    {
+        _sunxiStatusCache = null;
+        SunxiStatusText = message;
+        SunxiModeHint = _localizer.GetString("Flash_SunxiHintUnknown");
+        _sunxiIsFes = false;
+        ReplaceDeviceStatus(deviceKey, []);
+        RefreshDeviceUiGate();
+    }
+
+    private static string BuildSunxiStatusLine(SunxiDeviceStatus status, ILocalizer language)
     {
         var mode = status.IsFes
             ? language.GetString("Flash_SunxiModeFes")
@@ -668,13 +1085,68 @@ public sealed partial class FlashViewModel
             }
         }
 
-        SunxiStatusText = string.Join(" · ", parts);
-        _sunxiIsFes = status.IsFes;
-        UpdateSunxiFlashButton();
-        if (_deviceViewModel?.SelectedDevice is { } info)
+        return string.Join(" · ", parts);
+    }
+
+    private static List<FlashDeviceStatusEntry> BuildSunxiStatusRows(SunxiDeviceStatus status, ILocalizer language)
+    {
+        List<FlashDeviceStatusEntry> rows =
+        [
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                Name = language.GetString("Flash_SunxiInfo_Chip"),
+                Value = status.ChipName
+            },
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                Name = language.GetString("Flash_SunxiInfo_Mode"),
+                Value = language.GetString(status.IsFes ? "Flash_SunxiModeFes" : "Flash_SunxiModeFel")
+            },
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                Name = language.GetString("Flash_SunxiInfo_SoCId"),
+                Value = $"0x{status.Identity.Id:X8}"
+            },
+            new()
+            {
+                Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                Name = language.GetString("Flash_SunxiInfo_Firmware"),
+                Value = $"0x{status.Identity.Firmware:X}"
+            },
+        ];
+        if (status.IsFes)
         {
-            info.SunxiMode = status.IsFes ? "FES" : "FEL";
+            rows.Add(new FlashDeviceStatusEntry
+            {
+                Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                Name = language.GetString("Flash_SunxiInfo_StorageType"),
+                Value = $"0x{status.StorageType ?? 0:X}"
+            });
+            if (status.CapacityBytes is { } capacity)
+            {
+                rows.Add(new FlashDeviceStatusEntry
+                {
+                    Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                    Name = language.GetString("Flash_SunxiInfo_Capacity"),
+                    Value = FormatByteSize(capacity)
+                });
+            }
+
+            if (status.SecureWord is { } secure)
+            {
+                rows.Add(new FlashDeviceStatusEntry
+                {
+                    Key = FlashDeviceStatusRowKeys.SunxiInfo,
+                    Name = language.GetString("Flash_SunxiInfo_SecureWord"),
+                    Value = $"0x{secure:X}"
+                });
+            }
         }
+
+        return rows;
     }
 
     private async Task<string> PickSunxiImageAsync(string titleKey)

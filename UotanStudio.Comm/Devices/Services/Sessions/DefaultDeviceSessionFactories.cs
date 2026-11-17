@@ -10,6 +10,7 @@ using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -29,7 +30,8 @@ internal static class DefaultDeviceSessionFactories
         new MtkDeviceSessionFactory(),
         new AppleDeviceSessionFactory(),
         new DiagnosticDeviceSessionFactory(),
-        new SunxiDeviceSessionFactory()
+        new SunxiDeviceSessionFactory(),
+        new UnisocDeviceSessionFactory()
     ];
 }
 
@@ -222,6 +224,31 @@ internal sealed class SunxiDeviceSessionFactory : IDeviceSessionFactory
         LeasedTransport.RequireProtocol(endpoint, "sunxi");
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         return await SunxiDeviceSession.OpenAsync(new SunxiEfexUsbTransport(usb), cancellationToken)
+            .ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// Completes the UNISOC loader-stage handshake over the leased download transport and returns the session.
+/// <para>在已租用的下载传输之上完成紫光展锐加载阶段握手，并返回会话。</para>
+/// </summary>
+internal sealed class UnisocDeviceSessionFactory : IDeviceSessionFactory
+{
+    public DeviceSessionKind Kind => DeviceSessionKind.Unisoc;
+
+    public async Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LeasedTransport.RequireProtocol(endpoint, "unisoc");
+        if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
+        {
+            return await UnisocDeviceSession.OpenAsync(new UnisocSerialTransport(serial), null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
+        return await UnisocDeviceSession.OpenAsync(new UnisocUsbTransport(usb), null, cancellationToken)
             .ConfigureAwait(false);
     }
 }

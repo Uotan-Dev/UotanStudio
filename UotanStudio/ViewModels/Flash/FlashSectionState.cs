@@ -19,6 +19,9 @@ internal static class FlashSectionState
     /// <summary>Identifier of the Sunxi section. <para>全志分类的标识。</para></summary>
     internal const string Sunxi = "sunxi";
 
+    /// <summary>Identifier of the UNISOC section. <para>紫光展锐分类的标识。</para></summary>
+    internal const string Unisoc = "unisoc";
+
     /// <summary>Identifier of the image operations section. <para>镜像操作分类的标识。</para></summary>
     internal const string Image = "image";
 
@@ -30,16 +33,19 @@ internal static class FlashSectionState
     /// <param name="mtk">Whether the MediaTek section is expanded. <para>联发科分类是否展开。</para></param>
     /// <param name="rockchip">Whether the Rockchip section is expanded. <para>瑞芯微分类是否展开。</para></param>
     /// <param name="sunxi">Whether the Sunxi section is expanded. <para>全志分类是否展开。</para></param>
+    /// <param name="unisoc">Whether the UNISOC section is expanded. <para>紫光展锐分类是否展开。</para></param>
     /// <param name="image">Whether the image operations section is expanded. <para>镜像操作分类是否展开。</para></param>
     /// <returns>The expanded identifiers; empty when every section is collapsed.
     /// <para>已展开的标识；全部折叠时为空列表。</para></returns>
-    internal static List<string> Capture(bool edl, bool mtk, bool rockchip, bool image, bool sunxi = false)
+    internal static List<string> Capture(bool edl, bool mtk, bool rockchip, bool image, bool sunxi = false,
+        bool unisoc = false)
     {
         List<string> expanded = [];
         if (edl) expanded.Add(Edl);
         if (mtk) expanded.Add(Mtk);
         if (rockchip) expanded.Add(Rockchip);
         if (sunxi) expanded.Add(Sunxi);
+        if (unisoc) expanded.Add(Unisoc);
         if (image) expanded.Add(Image);
         return expanded;
     }
