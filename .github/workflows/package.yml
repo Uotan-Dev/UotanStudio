@@ -450,15 +450,6 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y -qq rpm >/dev/null
-          platformdir=$(rpm --eval "%{_rpmconfigdir}")/platform
-          hostdir=$(ls -d "$platformdir"/*-linux 2>/dev/null | head -1)
-          [ -n "$hostdir" ] || { echo "::error::no rpm platform directory under $platformdir" >&2; exit 1; }
-          if [ ! -d "$platformdir/$ARCH-linux" ]; then
-            sudo cp -r "$hostdir" "$platformdir/$ARCH-linux"
-            sudo sed -i -E "s/^(%_arch[[:space:]]+).*/\\1$ARCH/" "$platformdir/$ARCH-linux/macros"
-            sudo sed -i -E "s/^(%_build_arch[[:space:]]+).*/\\1$ARCH/" "$platformdir/$ARCH-linux/macros"
-          fi
-          rpm --eval "%{_arch} %{_target_cpu}"
           rpmver="${VER%%-*}"
           mkdir -p "$RUNNER_TEMP/rpmbuild"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           tar -czf "$RUNNER_TEMP/rpmbuild/SOURCES/uotanstudio-$rpmver.tar.gz" -C publish .
@@ -470,7 +461,6 @@ jobs:
           License:        GPL-3.0-only
           URL:            https://github.com/UotanStudio/UotanStudio
           Source0:        uotanstudio-$rpmver.tar.gz
-          BuildArch:      $ARCH
           Requires:       glibc >= 2.23, libstdc++, fontconfig, openssl-libs,
           Requires:       libX11, libXext, libXfixes, libXcursor, libXrandr, libICE,
           Requires:       glib2, libwayland-cursor, libwayland-egl, libxkbcommon,
