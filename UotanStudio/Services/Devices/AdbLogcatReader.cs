@@ -5,6 +5,7 @@ namespace UotanStudio.Services.Devices;
 internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationToken, Task> executeShell)
 {
     internal const string LogcatCommand = "logcat -b all -v threadtime -v year '*:V'";
+    internal const string LegacyLogcatCommand = "logcat -b all -v threadtime '*:V'";
     private const long ProcessNameRefreshIntervalMilliseconds = 10_000;
 
     private IReadOnlyDictionary<int, string> _processNames = new Dictionary<int, string>();
@@ -20,13 +21,60 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
         Interlocked.Exchange(ref _lastProcessRefreshMilliseconds, Environment.TickCount64);
         try
         {
-            await executeShell(LogcatCommand, line => HandleLine(line, onEntry, token), token).ConfigureAwait(false);
+            var rejectedFormat = false;
+            var skippingUsage = false;
+            await executeShell(LogcatCommand, line =>
+            {
+                if (LooksLikeFormatRejection(line))
+                {
+                    rejectedFormat = true;
+                    skippingUsage = true;
+                    return;
+                }
+
+                if (skippingUsage)
+                {
+                    if (LooksLikeUsageLine(line))
+                    {
+                        return;
+                    }
+
+                    skippingUsage = false;
+                }
+
+                HandleLine(line, onEntry, token);
+            }, token).ConfigureAwait(false);
+
+            token.ThrowIfCancellationRequested();
+            if (!rejectedFormat)
+            {
+                return;
+            }
+
+            LogService.Instance.Write(LogLevel.Info, "AdbLog",
+                "The device rejected the logcat -v year format; retrying with the legacy threadtime format.");
+            await executeShell(LegacyLogcatCommand, line => HandleLine(line, onEntry, token), token)
+                .ConfigureAwait(false);
         }
         finally
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
             await AwaitProcessRefreshAsync().ConfigureAwait(false);
         }
+    }
+
+    internal static bool LooksLikeFormatRejection(string line) =>
+        line.Contains("Invalid parameter to -v", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("unrecognized option", StringComparison.OrdinalIgnoreCase)
+            && line.Contains("-v", StringComparison.Ordinal);
+
+    private static bool LooksLikeUsageLine(string line)
+    {
+        var text = line.AsSpan().Trim();
+        return text.IsEmpty
+            || text.StartsWith("Usage:", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("options include:", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith('-');
     }
 
     private void HandleLine(string line, Action<AdbLogcatEntry> onEntry, CancellationToken cancellationToken)
