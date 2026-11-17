@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:schema id="root">
     <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -5474,6 +5474,33 @@ Continue?</value>
   </data>
   <data name="CheckUpdate_Downloading" xml:space="preserve">
     <value>Downloading update…</value>
+  </data>
+  <data name="CheckUpdate_Checking" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="CheckUpdate_UpToDate" xml:space="preserve">
+    <value>UotanStudio {0} is the newest version.</value>
+  </data>
+  <data name="CheckUpdate_NoPackage" xml:space="preserve">
+    <value>This release publishes no package for your platform.</value>
+  </data>
+  <data name="CheckUpdate_CheckFailed" xml:space="preserve">
+    <value>The update check failed: {0}</value>
+  </data>
+  <data name="CheckUpdate_DownloadProgress" xml:space="preserve">
+    <value>Downloading {0} of {1}</value>
+  </data>
+  <data name="CheckUpdate_DownloadCancelled" xml:space="preserve">
+    <value>The download was cancelled.</value>
+  </data>
+  <data name="CheckUpdate_DownloadFailed" xml:space="preserve">
+    <value>The download failed: {0}</value>
+  </data>
+  <data name="CheckUpdate_ReadyToInstall" xml:space="preserve">
+    <value>The package is ready; the installer was started.</value>
+  </data>
+  <data name="CheckUpdate_SizeUnknown" xml:space="preserve">
+    <value>size unknown</value>
   </data>
   <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
     <value>{0} left</value>

@@ -82,6 +82,11 @@ internal static class ServiceRegistration
         services.AddSingleton<IWindowService>(_ => windowService);
         services.AddSingleton<HttpClient>(_ => SharedHttpClient.Shared);
         services.AddSingleton<ScrcpyServerService>(_ => ScrcpyServerService.Shared);
+        services.AddSingleton<Services.Update.AppUpdateService>(sp =>
+            new Services.Update.AppUpdateService(sp.GetRequiredService<HttpClient>()));
+        services.AddTransient<CheckUpdateViewModel>(sp => new CheckUpdateViewModel(
+            sp.GetRequiredService<Services.Update.AppUpdateService>(),
+            sp.GetRequiredService<ILocalizer>()));
         services.AddSingleton<RootPatchPackageService>(_ => RootPatchPackageService.Shared);
         services.AddSingleton<McpToolCallLog>(_ => McpToolCallLog.Instance);
         services.AddSingleton<McpExposureService>(_ => McpExposureService.Instance);

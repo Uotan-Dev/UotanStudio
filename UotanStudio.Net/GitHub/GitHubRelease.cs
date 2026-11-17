@@ -28,7 +28,17 @@ public sealed record GitHubRelease(
     string Repository,
     string Tag,
     string Version,
-    IReadOnlyList<GitHubAsset> Assets);
+    IReadOnlyList<GitHubAsset> Assets)
+{
+    /// <summary>
+    /// The release notes body exactly as published, or <see langword="null"/> when the release carries none.
+    /// <para>与发布内容一致的更新日志正文；Release 未携带时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>The Markdown body published with the release. <para>随 Release 公布的 Markdown 正文。</para></value>
+    /// <remarks>Assigned after projection so existing positional constructions keep their signature.
+    /// <para>在投影后赋值，使既有的位置构造保持原签名。</para></remarks>
+    public string? ReleaseNotes { get; init; }
+}
 
 /// <summary>Subset of the GitHub release document that is read from the API.
 /// <para>从 API 读取的 GitHub Release 文档子集。</para></summary>
@@ -38,6 +48,12 @@ public sealed record GitHubRelease(
 /// <para>按 API 顺序排列的已发布资产；文档未列出资产时为 <see langword="null"/>。</para></param>
 internal sealed record GitHubReleaseDocument(string? TagName, List<GitHubAssetDocument>? Assets)
 {
+    /// <summary>Release notes body published with the release, or <see langword="null"/> when the API carries none.
+    /// <para>随 Release 公布的更新日志正文；API 未提供时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>The Markdown body exactly as published. <para>与发布内容一致的 Markdown 正文。</para></value>
+    public string? Body { get; init; }
+
     /// <summary>Whether the release is an unpublished draft.
     /// <para>该 Release 是否为未发布的草稿。</para></summary>
     /// <value><see langword="false"/> when the API omits the field. <para>API 未提供该字段时为 <see langword="false"/>。</para></value>

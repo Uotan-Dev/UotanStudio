@@ -325,6 +325,24 @@ jobs:
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>LSMinimumSystemVersion</key><string>11.0</string>
             <key>NSHighResolutionCapable</key><true/>
+            <key>CFBundleDocumentTypes</key>
+            <array>
+              <dict>
+                <key>CFBundleTypeName</key><string>UotanStudio Solution</string>
+                <key>CFBundleTypeRole</key><string>Editor</string>
+                <key>CFBundleTypeExtensions</key><array><string>uotan</string></array>
+              </dict>
+              <dict>
+                <key>CFBundleTypeName</key><string>UotanStudio Firmware Project</string>
+                <key>CFBundleTypeRole</key><string>Editor</string>
+                <key>CFBundleTypeExtensions</key><array><string>uotanfw</string></array>
+              </dict>
+              <dict>
+                <key>CFBundleTypeName</key><string>UotanStudio Node Project</string>
+                <key>CFBundleTypeRole</key><string>Editor</string>
+                <key>CFBundleTypeExtensions</key><array><string>uotannode</string></array>
+              </dict>
+            </array>
           </dict>
           </plist>
           PLIST
@@ -402,6 +420,7 @@ jobs:
           Icon=uotanstudio
           Categories=Development;Utility;
           Terminal=false
+          MimeType=application/x-uotanstudio-uotan;application/x-uotanstudio-uotanfw;application/x-uotanstudio-uotannode;
           DESKTOP
 
           cat > "$pkg/DEBIAN/control" <<CONTROL
@@ -469,6 +488,7 @@ jobs:
           Icon=uotanstudio
           Categories=Development;Utility;
           Terminal=false
+          MimeType=application/x-uotanstudio-uotan;application/x-uotanstudio-uotanfw;application/x-uotanstudio-uotannode;
           DESKTOP
 
           %files
@@ -541,6 +561,7 @@ jobs:
           Icon=uotanstudio
           Categories=Development;Utility;
           Terminal=false
+          MimeType=application/x-uotanstudio-uotan;application/x-uotanstudio-uotanfw;application/x-uotanstudio-uotannode;
           DESKTOP
           cat > "$work/build/APKBUILD" <<APKBUILD
           pkgname=uotanstudio
@@ -639,6 +660,7 @@ jobs:
           Icon=uotanstudio
           Categories=Development;Utility;
           Terminal=false
+          MimeType=application/x-uotanstudio-uotan;application/x-uotanstudio-uotanfw;application/x-uotanstudio-uotannode;
           DESKTOP
           cat > "$work/build/PKGBUILD" <<PKGBUILD
           pkgname=uotanstudio

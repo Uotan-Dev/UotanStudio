@@ -20,6 +20,9 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Plugins;
+using UotanStudio.Build;
+using UotanStudio.Services.Update;
+using UotanStudio.UiAbstractions;
 using UotanStudio.Themes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
@@ -94,8 +97,9 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
-        _ = Task.Run(FileAssociationService.Register);
+        _ = Task.Run(FileAssociationService.ApplyFromSettings);
         _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
+        _ = RunAutomaticUpdateCheckAsync();
 
         Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
@@ -222,6 +226,53 @@ public partial class App : Application
         if (splashWindow.PreparedMainWindow is not null)
         {
             await splashWindow.PresentCompletionAsync();
+        }
+    }
+
+    /// <summary>
+    /// Runs the startup update check when the setting enables it and opens the check window only when a newer
+    /// release exists; every failure stays in the log so startup is never blocked.
+    /// <para>设置启用时执行启动更新检查，只有存在更新的版本才打开检查窗口；所有失败只进日志，绝不阻断启动。</para>
+    /// </summary>
+    /// <returns>A task that completes when the automatic check finished. <para>自动检查结束时完成的任务。</para></returns>
+    private static async Task RunAutomaticUpdateCheckAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            if (ServiceHub.TryGet<AppUpdateService>() is not { } service)
+            {
+                return;
+            }
+
+            var settings = SettingsPersistenceService.Instance.LoadSettings();
+            if (!settings.AutoCheckUpdates)
+            {
+                LogService.Instance.Write(LogLevel.Info, "Update", "The startup update check is disabled by settings.");
+                return;
+            }
+
+            var result = await service.CheckAsync(settings.SkippedUpdateVersion).ConfigureAwait(false);
+            if (!result.IsNewer || result.Package is null)
+            {
+                LogService.Instance.Write(LogLevel.Info, "Update",
+                    $"The startup update check found no applicable update: newest {result.Release.Version}, " +
+                    $"running {BuildInfo.Version}.");
+                return;
+            }
+
+            LogService.Instance.Write(LogLevel.Info, "Update",
+                $"The startup update check found {result.Release.Version} for {result.Package.Name}.");
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ServiceHub.TryGet<CheckUpdateViewModel>()?.ApplyResult(result);
+                Views.UiWindowService.Shared.ShowHostWindow(HostWindowKind.CheckUpdate);
+            });
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Update",
+                $"The startup update check failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

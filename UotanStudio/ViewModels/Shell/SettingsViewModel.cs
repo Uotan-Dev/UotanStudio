@@ -1128,6 +1128,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
             McpClientConnectionService.Instance.Apply(McpServers);
+            _ = Task.Run(FileAssociationService.ApplyFromSettings);
         }
     }
 

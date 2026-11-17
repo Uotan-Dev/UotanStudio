@@ -1,88 +1,102 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using UotanStudio.Composition;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Application update check window displaying release notes, version metadata, and download progress.
-/// <para>检查更新窗口，用于显示更新日志、版本信息与下载进度。</para></summary>
+/// <summary>Application update check window: release notes, version summary and download progress.
+/// <para>检查更新窗口：显示更新日志、版本摘要与下载进度。</para></summary>
+/// <remarks>The window only forwards the footer actions to <see cref="CheckUpdateViewModel"/> and starts the
+/// check once it is shown; every network and installer decision stays in the view model.
+/// <para>窗口只把底部动作转交给 <see cref="CheckUpdateViewModel"/>，并在显示后启动检查；所有网络与安装决策
+/// 都留在视图模型里。</para></remarks>
 public partial class CheckUpdateWindow : Window
 {
+    private bool _started;
+
     /// <summary>Initializes a new instance of the <see cref="CheckUpdateWindow"/> class.
     /// <para>初始化 <see cref="CheckUpdateWindow"/> 类的新实例。</para></summary>
     public CheckUpdateWindow()
     {
         InitializeComponent();
-        VersionInfoText.Text = LanguageService.Instance.GetString("CheckUpdate_VersionAndSize", "v0.0.0", "0 MB");
+        DataContext = ServiceHub.TryGet<CheckUpdateViewModel>() ?? CreateStandaloneViewModel();
+        Opened += OnOpened;
+        Closed += OnClosed;
     }
 
-    /// <summary>Populates the release notes and version summary shown before updating.
-    /// <para>填充更新前展示的更新日志与版本摘要。</para></summary>
-    /// <param name="version">Target version string. <para>目标版本号文本。</para></param>
-    /// <param name="sizeText">Formatted package size text. <para>格式化后的安装包大小文本。</para></param>
-    /// <param name="releaseNotes">Multi-line release notes text. <para>多行更新日志文本。</para></param>
-    public void SetUpdateInfo(string version, string sizeText, string releaseNotes)
-    {
-        VersionInfoText.Text = LanguageService.Instance.GetString("CheckUpdate_VersionAndSize", version, sizeText);
-        ReleaseNotesBox.Text = releaseNotes;
-    }
+    private CheckUpdateViewModel ViewModel => (CheckUpdateViewModel)DataContext!;
 
-    /// <summary>Switches the footer status area to progress mode and updates progress, speed, and remaining time.
-    /// <para>将底部状态区域切换为进度条模式，并更新进度、速度与剩余时间。</para></summary>
-    /// <param name="progressFraction">Normalized progress in [0, 1]. <para>归一化进度值（0 到 1）。</para></param>
-    /// <param name="bytesPerSecond">Current transfer speed in bytes per second. <para>当前下载速度（字节/秒）。</para></param>
-    /// <param name="remainingBytes">Remaining bytes to download. <para>剩余待下载字节数。</para></param>
-    public void SetDownloadProgress(double progressFraction, double bytesPerSecond, double remainingBytes)
-    {
-        VersionInfoText.IsVisible = false;
-        ProgressPanel.IsVisible = true;
-        DownloadProgressBar.Value = Math.Clamp(progressFraction * 100d, 0d, 100d);
+    /// <summary>
+    /// Creates a view model when the container is unavailable, so the window still works in tests that do
+    /// not start the composition root.
+    /// <para>容器不可用时创建视图模型，使未启动组合根的测试中窗口仍可用。</para>
+    /// </summary>
+    /// <returns>The standalone view model. <para>独立构建的视图模型。</para></returns>
+    private static CheckUpdateViewModel CreateStandaloneViewModel()
+        => new(new Services.Update.AppUpdateService(Services.Network.SharedHttpClient.Shared),
+            LanguageService.Instance);
 
-        var status = LanguageService.Instance.GetString("CheckUpdate_Downloading");
-        if (bytesPerSecond > 0)
+    private async void OnOpened(object? sender, EventArgs e)
+    {
+        if (_started)
         {
-            var stats = FormatDownloadStats(remainingBytes, bytesPerSecond);
-            ProgressText.Text = $"{status} · {stats}";
+            return;
         }
-        else
+
+        _started = true;
+        if (!ViewModel.HasResult)
         {
-            ProgressText.Text = status;
+            await ViewModel.CheckAsync();
         }
     }
 
-    private void OnUpdateAndRestartClick(object? sender, RoutedEventArgs e)
+    private void OnClosed(object? sender, EventArgs e)
     {
-        VersionInfoText.IsVisible = false;
-        ProgressPanel.IsVisible = true;
-        ProgressText.Text = LanguageService.Instance.GetString("CheckUpdate_Downloading");
-        DownloadProgressBar.Value = 0;
-        UpdateAndRestartButton.IsEnabled = false;
-        SkipVersionButton.IsEnabled = false;
+        ViewModel.Cancel();
+        Opened -= OnOpened;
+        Closed -= OnClosed;
     }
 
-    private void OnSkipVersionClick(object? sender, RoutedEventArgs e) => Close();
+    private async void OnUpdateAndRestartClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ViewModel.UpdateAsync(ExitApplicationAsync);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Update", $"Applying the update failed: {ex.Message}");
+        }
+    }
+
+    private void OnSkipVersionClick(object? sender, RoutedEventArgs e)
+    {
+        ViewModel.SkipVersion();
+        Close();
+    }
 
     private void OnRemindLaterClick(object? sender, RoutedEventArgs e) => Close();
 
-    private static string FormatDownloadStats(double remainingBytes, double rate)
+    /// <summary>
+    /// Shuts the application down so the platform installer can replace the running bundle; used when the
+    /// platform reports that the application must exit first.
+    /// <para>关闭应用以便平台安装器替换正在运行的应用包；平台上报需要先退出时使用。</para>
+    /// </summary>
+    /// <returns>A completed task once shutdown was requested. <para>请求关闭后完成的任务。</para></returns>
+    private Task ExitApplicationAsync()
     {
-        var stats = $"{FormatBytes(rate)}/s";
-        if (remainingBytes <= 0)
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
         {
-            return stats;
+            desktop.Shutdown();
+        }
+        else
+        {
+            Close();
         }
 
-        var eta = TimeSpan.FromSeconds(Math.Ceiling(remainingBytes / rate));
-        var remaining = LanguageService.Instance.GetString("CheckUpdate_TimeRemaining",
-            eta.TotalHours >= 1 ? eta.ToString(@"h\:mm") : eta.ToString(@"mm\:ss"));
-        return $"{stats} · {remaining}";
+        return Task.CompletedTask;
     }
-
-    private static string FormatBytes(double bytes) => bytes switch
-    {
-        >= 1L << 30 => $"{bytes / (1L << 30):F2} GB",
-        >= 1L << 20 => $"{bytes / (1L << 20):F1} MB",
-        >= 1L << 10 => $"{bytes / (1L << 10):F1} KB",
-        _ => $"{bytes:F0} B",
-    };
 }

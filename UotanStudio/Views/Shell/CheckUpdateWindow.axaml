@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell"
         x:Class="UotanStudio.Views.Shell.CheckUpdateWindow"
+        x:DataType="vm:CheckUpdateViewModel"
         Title="{DynamicResource CheckUpdate_Title}"
         Width="680" Height="460" MinWidth="620" MinHeight="380"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
@@ -31,6 +33,8 @@
                  FontSize="13"
                  IsReadOnly="True"
                  AcceptsReturn="True"
+                 Text="{Binding ReleaseNotes}"
+                 IsVisible="{Binding ShowsReleaseNotes}"
                  TextWrapping="Wrap"
                  VerticalAlignment="Stretch"
                  HorizontalAlignment="Stretch"
@@ -40,15 +44,19 @@
                  PlaceholderText="{DynamicResource CheckUpdate_ReleaseNotesPlaceholder}" />
         <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Height="40">
-                <TextBlock Name="VersionInfoText"
+                <TextBlock Name="StatusText"
                            VerticalAlignment="Center"
+                           Text="{Binding StatusText}"
+                           IsVisible="{Binding !ShowsProgress}"
                            TextWrapping="NoWrap"
                            TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding #VersionInfoText.Text}" />
-                <StackPanel Name="ProgressPanel" IsVisible="False" Spacing="4" VerticalAlignment="Center">
+                           ToolTip.Tip="{Binding StatusText}" />
+                <StackPanel Name="ProgressPanel" IsVisible="{Binding ShowsProgress}" Spacing="4" VerticalAlignment="Center">
                     <TextBlock Name="ProgressText" FontSize="11" Height="16" TextWrapping="NoWrap"
-                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding #ProgressText.Text}" />
-                    <ProgressBar Name="DownloadProgressBar" Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
+                               Text="{Binding StatusText}"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StatusText}" />
+                    <ProgressBar Name="DownloadProgressBar" Minimum="0" Maximum="1" Height="20" CornerRadius="4"
+                                 Value="{Binding Progress}" />
                 </StackPanel>
                 <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
                     <Button Name="RemindLaterButton" Content="{DynamicResource CheckUpdate_RemindLater}"
@@ -56,9 +64,11 @@
                             VerticalAlignment="Stretch" IsCancel="True" Click="OnRemindLaterClick" />
                     <Button Grid.Column="1" Name="SkipVersionButton" Content="{DynamicResource CheckUpdate_SkipVersion}"
                             MinWidth="96" MinHeight="20" Padding="12,0"
+                            IsEnabled="{Binding CanSkip}"
                             VerticalAlignment="Stretch" Click="OnSkipVersionClick" />
                     <Button Grid.Column="2" Name="UpdateAndRestartButton" Content="{DynamicResource CheckUpdate_UpdateAndRestart}"
                             Theme="{StaticResource SolidButton}" MinWidth="96" MinHeight="20" Padding="12,0"
+                            IsEnabled="{Binding CanUpdate}"
                             VerticalAlignment="Stretch" IsDefault="True" Click="OnUpdateAndRestartClick" />
                 </Grid>
             </Grid>

@@ -1465,7 +1465,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <para>显示检查更新窗口。</para>
     /// </summary>
     [RelayCommand]
-    private void CheckUpdate() => _windows.ShowHostWindow(HostWindowKind.CheckUpdate);
+    private void CheckUpdate()
+    {
+        Composition.ServiceHub.TryGet<CheckUpdateViewModel>()?.ResetForManualCheck();
+        _windows.ShowHostWindow(HostWindowKind.CheckUpdate);
+    }
 
     /// <summary>
     /// Shows the About dialog with version and description info.

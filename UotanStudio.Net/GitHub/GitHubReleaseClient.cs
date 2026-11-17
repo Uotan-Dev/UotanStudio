@@ -370,7 +370,10 @@ public static class GitHubReleaseClient
                 ParseDigest(assetDocument.Digest)));
         }
 
-        return new GitHubRelease(owner, repository, tag, NormalizeVersion(tag), assets);
+        return new GitHubRelease(owner, repository, tag, NormalizeVersion(tag), assets)
+        {
+            ReleaseNotes = string.IsNullOrWhiteSpace(document.Body) ? null : document.Body,
+        };
     }
 
     private static async Task<byte[]> ReadBoundedAsync(HttpContent content, CancellationToken cancellationToken)

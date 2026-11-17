@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:schema id="root">
     <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -5474,6 +5474,33 @@
   </data>
   <data name="CheckUpdate_Downloading" xml:space="preserve">
     <value>正在下载更新…</value>
+  </data>
+  <data name="CheckUpdate_Checking" xml:space="preserve">
+    <value>正在检查更新…</value>
+  </data>
+  <data name="CheckUpdate_UpToDate" xml:space="preserve">
+    <value>UotanStudio {0} 已是最新版本。</value>
+  </data>
+  <data name="CheckUpdate_NoPackage" xml:space="preserve">
+    <value>该版本没有为你所在平台发布安装包。</value>
+  </data>
+  <data name="CheckUpdate_CheckFailed" xml:space="preserve">
+    <value>检查更新失败：{0}</value>
+  </data>
+  <data name="CheckUpdate_DownloadProgress" xml:space="preserve">
+    <value>正在下载 {0} / {1}</value>
+  </data>
+  <data name="CheckUpdate_DownloadCancelled" xml:space="preserve">
+    <value>下载已取消。</value>
+  </data>
+  <data name="CheckUpdate_DownloadFailed" xml:space="preserve">
+    <value>下载失败：{0}</value>
+  </data>
+  <data name="CheckUpdate_ReadyToInstall" xml:space="preserve">
+    <value>安装包已就绪，已启动安装程序。</value>
+  </data>
+  <data name="CheckUpdate_SizeUnknown" xml:space="preserve">
+    <value>大小未知</value>
   </data>
   <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
     <value>剩余 {0}</value>

@@ -320,6 +320,14 @@ public class AppSettings : IJsonOnDeserialized
     public bool AutoCheckUpdates { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the release version the user asked to skip, or an empty string when nothing is skipped.
+    /// <para>获取或设置用户要求跳过的 Release 版本；没有跳过时为空字符串。</para>
+    /// </summary>
+    /// <value>The skipped version text, compared case-insensitively. <para>被跳过的版本文本，比较时不区分大小写。</para></value>
+    [JsonPropertyName("skippedUpdateVersion")]
+    public string SkippedUpdateVersion { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the screen mirroring video bit rate in bits per second.
     /// <para>获取或设置投屏视频码率（比特每秒）。</para>
     /// </summary>
