@@ -28,6 +28,10 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private bool _isSunxiSectionExpanded;
 
+    /// <summary>Whether the UNISOC section is expanded. <para>紫光展锐分类是否展开。</para></summary>
+    [ObservableProperty]
+    private bool _isUnisocSectionExpanded;
+
     /// <summary>Whether the image operations section is expanded. <para>镜像操作分类是否展开。</para></summary>
     [ObservableProperty]
     private bool _isImageSectionExpanded;
@@ -39,6 +43,8 @@ public sealed partial class FlashViewModel
     partial void OnIsRockchipSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsSunxiSectionExpandedChanged(bool value) => PersistSectionExpansion();
+
+    partial void OnIsUnisocSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsImageSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
@@ -53,6 +59,7 @@ public sealed partial class FlashViewModel
             IsMtkSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Mtk);
             IsRockchipSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Rockchip);
             IsSunxiSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Sunxi);
+            IsUnisocSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Unisoc);
             IsImageSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Image);
         }
         finally
@@ -73,6 +80,7 @@ public sealed partial class FlashViewModel
             IsMtkSectionExpanded,
             IsRockchipSectionExpanded,
             IsImageSectionExpanded,
-            IsSunxiSectionExpanded));
+            IsSunxiSectionExpanded,
+            IsUnisocSectionExpanded));
     }
 }

@@ -446,6 +446,7 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_SpacemiTVerify}" />
                                 <CheckBox Grid.Row="3" Grid.Column="1" Name="GenerateFlashPlanBox"
+                                          IsChecked="{Binding GenerateFlashPlan}"
                                           Content="{DynamicResource Flash_GenerateFlashPlan}"
                                           ToolTip.Tip="{DynamicResource Flash_GenerateFlashPlanTip}"
                                           HorizontalAlignment="Left"
@@ -1110,6 +1111,8 @@
                                            TextWrapping="Wrap" />
                                 <TextBlock Name="SunxiStatusText" Text="{Binding SunxiStatusText}" FontSize="12"
                                            Opacity="0.8" TextWrapping="Wrap" />
+                                <TextBlock Name="SunxiModeHint" Text="{Binding SunxiModeHint}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
                                 <Button Name="SunxiRefreshButton" Classes="pane-action"
                                         Click="OnSunxiRefreshClick"
                                         Content="{DynamicResource Flash_SunxiRefresh}"
@@ -1182,14 +1185,8 @@
                                 </controls:JustifiedWrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <TextBlock Text="{DynamicResource Flash_SunxiImage}" FontSize="12" Opacity="0.8" />
-                                <TextBox Name="SunxiImageBox" Height="32" VerticalContentAlignment="Center"
-                                         IsReadOnly="True" Text="{Binding SunxiImagePath}"
-                                         AutomationProperties.Name="{DynamicResource Flash_SunxiChooseImage}" />
-                                <Button Name="SunxiChooseImageButton" Classes="pane-action"
-                                        Click="OnSunxiChooseImageClick"
-                                        Content="{DynamicResource Flash_SunxiChooseImage}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiChooseImage}" />
+                                <TextBlock Text="{DynamicResource Flash_SunxiFlashSourceHint}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <StackPanel Grid.Column="0" Spacing="4">
                                         <TextBlock Text="{DynamicResource Flash_SunxiFlashMode}" FontSize="12"
@@ -1212,14 +1209,6 @@
                                         </ComboBox>
                                     </StackPanel>
                                 </Grid>
-                                <TextBox Name="SunxiPartitionsBox" Height="32" VerticalContentAlignment="Center"
-                                         Text="{Binding SunxiPartitions}"
-                                         PlaceholderText="{DynamicResource Flash_SunxiPartitionsHint}"
-                                         AutomationProperties.Name="{DynamicResource Flash_SunxiPartitions}" />
-                                <Button Name="SunxiFlashButton" Classes="pane-action" IsEnabled="False"
-                                        Click="OnSunxiFlashClick"
-                                        Content="{DynamicResource Flash_SunxiFlash}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiFlash}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_SunxiFelTools}" FontSize="12" FontWeight="SemiBold"
@@ -1262,6 +1251,71 @@
                                         Click="OnSunxiExecuteClick"
                                         Content="{DynamicResource Flash_SunxiExecute}"
                                         AutomationProperties.Name="{DynamicResource Flash_SunxiExecute}" />
+                            </StackPanel>
+                        </Expander>
+                        <!-- 紫光展锐 Unisoc 分类 -->
+                        <Expander Name="UnisocExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_Unisoc}" IsExpanded="{Binding IsUnisocSectionExpanded, Mode=TwoWay}">
+                            <StackPanel Name="UnisocPane" Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_UnisocHint}" FontSize="12" Opacity="0.8"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Name="UnisocStatusText" Text="{Binding UnisocStatusText}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <TextBlock Name="UnisocModeHint" Text="{Binding UnisocModeHint}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Button Name="UnisocRefreshButton" Classes="pane-action"
+                                        Click="OnUnisocRefreshClick"
+                                        Content="{DynamicResource Flash_UnisocRefresh}"
+                                        AutomationProperties.Name="{DynamicResource Flash_UnisocRefresh}" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_UnisocFlashSourceHint}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="{DynamicResource Flash_UnisocFlashMode}" FontSize="12"
+                                                   Opacity="0.8" />
+                                        <ComboBox Name="UnisocFlashModeBox" HorizontalAlignment="Stretch"
+                                                  SelectedIndex="{Binding UnisocFlashModeIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="{DynamicResource Flash_UnisocModeKeepData}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_UnisocModePartitionErase}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_UnisocModeFullErase}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="{DynamicResource Flash_UnisocPostAction}" FontSize="12"
+                                                   Opacity="0.8" />
+                                        <ComboBox Name="UnisocPostActionBox" HorizontalAlignment="Stretch"
+                                                  SelectedIndex="{Binding UnisocPostActionIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="{DynamicResource Flash_UnisocPostReboot}" />
+                                            <ComboBoxItem Content="{DynamicResource Flash_UnisocPostPowerOff}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_UnisocManualLoaders}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="UnisocFdl1Box" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             Text="{Binding UnisocFdl1Path}"
+                                             AutomationProperties.Name="{DynamicResource Flash_UnisocChooseFdl1}" />
+                                    <Button Grid.Column="1" Name="UnisocChooseFdl1Button" Classes="pane-action"
+                                            Click="OnUnisocChooseFdl1Click"
+                                            Content="{DynamicResource Flash_UnisocChooseFdl1}"
+                                            AutomationProperties.Name="{DynamicResource Flash_UnisocChooseFdl1}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="UnisocFdl2Box" Height="32"
+                                             VerticalContentAlignment="Center" IsReadOnly="True"
+                                             Text="{Binding UnisocFdl2Path}"
+                                             AutomationProperties.Name="{DynamicResource Flash_UnisocChooseFdl2}" />
+                                    <Button Grid.Column="1" Name="UnisocChooseFdl2Button" Classes="pane-action"
+                                            Click="OnUnisocChooseFdl2Click"
+                                            Content="{DynamicResource Flash_UnisocChooseFdl2}"
+                                            AutomationProperties.Name="{DynamicResource Flash_UnisocChooseFdl2}" />
+                                </Grid>
                             </StackPanel>
                         </Expander>
                         </StackPanel>

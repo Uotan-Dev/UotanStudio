@@ -395,6 +395,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Ios => "apple",
         DeviceProtocolKind.Diagnostic => "diag",
         DeviceProtocolKind.Sunxi => "sunxi",
+        DeviceProtocolKind.Unisoc => "unisoc",
         _ => throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "Unexpected protocol kind.")
     };
 

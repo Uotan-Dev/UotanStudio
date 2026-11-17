@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Services.Devices;
@@ -12,7 +12,7 @@ public sealed class FlashControlGateTests
     private static readonly FlashDeviceMode[] SelectedModes =
     [
         FlashDeviceMode.Shared, FlashDeviceMode.Edl, FlashDeviceMode.Mtk, FlashDeviceMode.Rkdl,
-        FlashDeviceMode.Fastboot, FlashDeviceMode.Sunxi
+        FlashDeviceMode.Fastboot, FlashDeviceMode.Sunxi, FlashDeviceMode.Unisoc
     ];
 
     /// <summary>
@@ -28,8 +28,10 @@ public sealed class FlashControlGateTests
     private static FlashGateContext Context(FlashDeviceMode mode,
         FlashDeviceKind kind = FlashDeviceKind.Unknown, RockchipStage stage = RockchipStage.Unknown,
         bool spacemiTFastboot = false, bool adbSu = false, bool hasSelectedPartitions = false,
-        SpacemiTBootStage fastbootStage = SpacemiTBootStage.Unknown) =>
-        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions, fastbootStage);
+        SpacemiTBootStage fastbootStage = SpacemiTBootStage.Unknown, bool sunxiFes = false,
+        bool sunxiPackage = false, bool unisocFdl2 = false, bool unisocPackage = false) =>
+        new(mode, kind, stage, spacemiTFastboot, adbSu, hasSelectedPartitions, fastbootStage, sunxiFes,
+            sunxiPackage, unisocFdl2, unisocPackage);
 
     [Fact]
     public void ModeOf_SelectedProtocol_ReturnsModeThatOffersItsSection()
@@ -43,6 +45,7 @@ public sealed class FlashControlGateTests
         Assert.Equal(FlashDeviceMode.Mtk, FlashDeviceUiPolicy.ModeOf(DeviceProtocolKind.Mtk));
         Assert.Equal(FlashDeviceMode.Rkdl, FlashDeviceUiPolicy.ModeOf(DeviceProtocolKind.Rkdl));
         Assert.Equal(FlashDeviceMode.Sunxi, FlashDeviceUiPolicy.ModeOf(DeviceProtocolKind.Sunxi));
+        Assert.Equal(FlashDeviceMode.Unisoc, FlashDeviceUiPolicy.ModeOf(DeviceProtocolKind.Unisoc));
     }
 
     [Fact]
@@ -56,21 +59,37 @@ public sealed class FlashControlGateTests
         Assert.Equal(FlashDeviceKind.Unknown, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Rkdl));
         Assert.Equal(FlashDeviceKind.Hdc, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Hdc));
         Assert.Equal(FlashDeviceKind.Sunxi, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Sunxi));
+        Assert.Equal(FlashDeviceKind.Unisoc, FlashDeviceUiPolicy.KindOf(DeviceProtocolKind.Unisoc));
     }
 
     [Fact]
-    public void SharedFlash_RefusesNoDeviceHdcAndAllwinner()
+    public void SharedFlash_RefusesNoDeviceAndHdcAndKeepsAllwinnerBehindFesAndPackage()
     {
         var gate = FlashControlGate.SharedFlash("FlashSelectedButton");
 
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
-        foreach (var mode in SelectedModes.Where(mode => mode is not (FlashDeviceMode.Sunxi or FlashDeviceMode.None)))
+        foreach (var mode in SelectedModes.Where(mode =>
+            mode is not (FlashDeviceMode.Sunxi or FlashDeviceMode.Unisoc or FlashDeviceMode.None)))
         {
             Assert.True(gate.IsOffered(Context(mode)), mode.ToString());
         }
 
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
+        // An Allwinner endpoint opens the shared flash only once an IMAGEWTY package is loaded and the identity
+        // handshake answered FES; either fact missing keeps the action closed.
+        // 全志端点只在已加载 IMAGEWTY 包且身份握手应答 FES 后才打开通用烧录；缺任一事实都保持关闭。
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi, sunxiFes: true)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi, sunxiPackage: true)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi, sunxiFes: true,
+            sunxiPackage: true)));
+        // A UNISOC endpoint opens the shared flash only once a PAC package is loaded and the handshake answered
+        // FDL2; either fact missing keeps the action closed.
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc, unisocFdl2: true)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc, unisocPackage: true)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc, unisocFdl2: true,
+            unisocPackage: true)));
     }
 
     [Fact]
@@ -118,7 +137,8 @@ public sealed class FlashControlGateTests
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb, adbSu: true)),
             "the page has no information branch for ADB");
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)),
+            "the Allwinner identity handshake answers the device status table");
     }
 
     [Fact]
@@ -221,7 +241,8 @@ public sealed class FlashControlGateTests
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Mtk)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Rkdl, stage: RockchipStage.Loader)));
-        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)),
+            "the Allwinner table comes from the loaded IMAGEWTY plan or the FES MBR read");
         Assert.True(gate.BusyDisabled);
     }
 
@@ -354,7 +375,10 @@ public sealed class FlashControlGateTests
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Adb, adbSu: true)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Fastboot, FlashDeviceKind.Fastboot)));
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared, FlashDeviceKind.Hdc)));
+        // An Allwinner endpoint offers the read-back only while it answers as FES; an unknown mode keeps it closed.
+        // 全志端点只在以 FES 应答期间提供回读；模式未知时保持关闭。
         Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Sunxi, FlashDeviceKind.Sunxi, sunxiFes: true)));
         Assert.True(gate.BusyDisabled);
     }
 
@@ -694,5 +718,30 @@ public sealed class FlashControlGateTests
 
         Assert.False(entry.HasFileName);
         Assert.Contains(nameof(FlashPartitionEntry.HasFileName), changedProperties);
+    }
+
+    [Fact]
+    public void UnisocGate_OwnsUnisocEndpointsOnly()
+    {
+        var gate = FlashControlGate.Unisoc("UnisocPane");
+
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Unisoc)));
+        Assert.True(gate.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Shared)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.Sunxi)));
+        Assert.False(gate.IsOffered(Context(FlashDeviceMode.None)));
+    }
+
+    [Fact]
+    public void StorageGates_OfferUnisocStageFacts()
+    {
+        var readback = FlashControlGate.Readback("ReadbackSelectedButton");
+        var info = FlashControlGate.InfoRead("ReadInfoButton");
+        var table = FlashControlGate.PartitionTableRead("ReadPartitionTableButton");
+
+        Assert.False(readback.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc)));
+        Assert.True(readback.IsOffered(Context(FlashDeviceMode.Unisoc, FlashDeviceKind.Unisoc, unisocFdl2: true)));
+        Assert.True(info.IsOffered(Context(FlashDeviceMode.Unisoc)));
+        Assert.True(table.IsOffered(Context(FlashDeviceMode.Unisoc)));
     }
 }

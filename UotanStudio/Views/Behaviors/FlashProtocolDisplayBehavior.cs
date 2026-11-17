@@ -69,6 +69,7 @@ public static class FlashProtocolDisplayBehavior
         "MtkExpander" => FlashProtocolCatalog.Mtk,
         "RkExpander" => FlashProtocolCatalog.Rockchip,
         "SunxiExpander" => FlashProtocolCatalog.Sunxi,
+        "UnisocExpander" => FlashProtocolCatalog.Unisoc,
         _ => null
     };
 }

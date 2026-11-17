@@ -22,8 +22,11 @@ public static class FlashProtocolCatalog
     /// <summary>Allwinner Sunxi protocol key.<para>全志协议键。</para></summary>
     public const string Sunxi = "sunxi";
 
+    /// <summary>UNISOC protocol key.<para>紫光展锐协议键。</para></summary>
+    public const string Unisoc = "unisoc";
+
     /// <summary>Gets the default protocol order.<para>获取默认协议顺序。</para></summary>
-    public static IReadOnlyList<string> DefaultOrder { get; } = [Edl, Mtk, Rockchip, Sunxi];
+    public static IReadOnlyList<string> DefaultOrder { get; } = [Edl, Mtk, Rockchip, Sunxi, Unisoc];
 
     /// <summary>Creates the default all-visible display preferences.<para>创建默认全部可见的显示偏好。</para></summary>
     /// <returns>A new mutable preference list.<para>新的可变偏好列表。</para></returns>
@@ -48,6 +51,7 @@ public static class FlashProtocolCatalog
         Mtk => Mtk,
         Rockchip => Rockchip,
         Sunxi => Sunxi,
+        Unisoc => Unisoc,
         _ => null
     };
 
@@ -60,6 +64,7 @@ public static class FlashProtocolCatalog
         Mtk => "Flash_Mtk",
         Rockchip => "Flash_Rockchip",
         Sunxi => "Flash_Sunxi",
+        Unisoc => "Flash_Unisoc",
         _ => string.Empty
     };
 }

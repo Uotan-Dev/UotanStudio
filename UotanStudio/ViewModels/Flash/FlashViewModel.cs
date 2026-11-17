@@ -376,6 +376,16 @@ public sealed partial class FlashViewModel : ObservableObject
     [ObservableProperty]
     private bool _verifyAfterFlash;
 
+    /// <summary>
+    /// Whether loading a payload package also generates its flash plan beside it: the rawprogram and patch XML plus
+    /// the manifest files a wired EDL package carries, built from the listed partitions and written next to the
+    /// payload; bound to the option check box.
+    /// <para>加载载荷包时是否在其旁边一并生成烧录方案：由列出的分区构建连线 EDL 包所携带的 rawprogram 与 patch
+    /// XML 及清单文件，写入载荷所在目录；绑定到选项复选框。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _generateFlashPlan;
+
     partial void OnSearchTextChanged(string value) => RefreshVisiblePartitions();
 
     partial void OnIsSelectAllCheckedChanged(bool value)
@@ -407,12 +417,14 @@ public sealed partial class FlashViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Appends one log line to the buffer at trace level, publishing the full string only at the line or character
-    /// threshold and leaving everything else to the flush timer.
-    /// <para>以 trace 级别追加一行日志到缓冲区，达到行数或字符阈值才发布整串，否则交给定时器补发。</para>
+    /// Appends one log line to the buffer at info level — the severity the unified log records by default, so every
+    /// line the page shows is automatically registered into the global log window without the debug switch — and
+    /// publishes the full string only at the line or character threshold, leaving the rest to the flush timer.
+    /// <para>以 info 级别追加一行日志到缓冲区——这是统一日志默认记录的严重级别，使页面显示的每一行无需打开调试
+    /// 开关就能自动注册进全局日志窗口；达到行数或字符阈值才发布整串，其余交给定时器补发。</para>
     /// </summary>
     /// <param name="message">The log line text. <para>日志行内容。</para></param>
-    internal void AppendLog(string message) => AppendLog(message, LogLevel.Trace);
+    internal void AppendLog(string message) => AppendLog(message, LogLevel.Info);
 
     /// <summary>
     /// Appends one log line at error level; used when an exception ends an action.
@@ -441,15 +453,19 @@ public sealed partial class FlashViewModel : ObservableObject
 
     /// <summary>
     /// Appends one log line at the given level and forwards it to the unified log, so every line the page shows is
-    /// also collected by the global log window at the same severity.
-    /// <para>按给定级别追加一行日志并转发到统一日志，使页面显示的每一行都以相同严重级别进入全局日志窗口。</para>
+    /// also collected by the global log window at the same severity. The page buffer prefixes the line with the
+    /// level marker the log viewer's line colorizer keys on (<c>[Trace]</c>, <c>[Error]</c> and friends), so the
+    /// viewer colors each line by its severity.
+    /// <para>按给定级别追加一行日志并转发到统一日志，使页面显示的每一行都以相同严重级别进入全局日志窗口。
+    /// 页面缓冲在行首加上日志查看器逐行着色器所依赖的级别标记（<c>[Trace]</c>、<c>[Error]</c> 等），
+    /// 使查看器按严重级别为每一行着色。</para>
     /// </summary>
     /// <param name="message">The log line text. <para>日志行内容。</para></param>
     /// <param name="level">The severity the line is reported with. <para>该行上报的严重级别。</para></param>
     private void AppendLog(string message, LogLevel level)
     {
         _log.Write(level, "Flash", message);
-        _logBuffer.Append(message).Append(Environment.NewLine);
+        _logBuffer.Append('[').Append(level.ToString()).Append("] ").Append(message).Append(Environment.NewLine);
         _pendingLogLines++;
         _pendingLogCharacters += message.Length + Environment.NewLine.Length;
         if (_pendingLogLines >= LogFlushLineThreshold || _pendingLogCharacters >= LogFlushCharacterThreshold)

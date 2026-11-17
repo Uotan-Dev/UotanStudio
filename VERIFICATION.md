@@ -19,6 +19,7 @@
 - Windows 真机已覆盖 EDL 设备识别、WinUSB 接管与取消接管往返、ADB 与初始 USB 快照；取消接管后设备恢复 `qcwdfserial`，Problem 0。Windows 串口 `COMn` 回退未验证。
 - Linux aarch64 真机已验证 EDL 串口回退：`qcserial` 绑定 9008 后经 `EdlSerialPortFallback` 找到 `/dev/ttyUSB0`，完成 Sahara、programmer 上传与 Firehose 初始化。Firehose `power reset` 在 ACK 后约 1.0 秒断开、约 39 秒重新枚举为 05C6:90db。
 - 全志整机烧录、RKDL 真机维护命令、macOS/HarmonyOS USB 后端与部分 HDC 文件收发没有真机通过记录。
+- 紫光展锐（Unisoc）深刷协议只有线格式与模拟传输证据：BootROM/FDL1/FDL2 阶段识别各线路、两级加载器上传、原生分区表、GPT 读取、分区读写擦、禁转义与 Chip UID 未上真机；`reference/spreadtrum_flash`（Unlicense）与 `reference/GeekFlashCore` docs（ums512 实机）是行为对照源。
 
 ## 性能
 
@@ -72,6 +73,7 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 **设备与协议**
 
 - 没有全志设备：FEL/FES 握手、DRAM 轮询、组件槽位上传与整机烧录未上机；`Flash` tag、4 字节 flash 类型内联负载、稀疏分区写入、`(Normal, action)` 工具模式与 NAND/SPI NAND boot0 查询待真机确认。
+- 没有展锐下载设备：BSL 探测（CHECK_BAUD 单字节/CRC16 修正线/静默重试线）、FDL 上传 528 分块、原生表 0x4C 记录与 64 位长度布局（80/88 字节）、原生表容量单位、USB 直连批量路径与 512 字节端点 ZLP 特例、macOS 串口形态均未实测；`1782:4D00` 之外的产品 id 未纳入发现；`UOTAN_UNISOC_DL_DEVICE` 门控的实机用例缺省跳过。
 - RKDL `WIPE`、子码返回值、坏块位图与 SDRAM 重枚举只有线格式证据；maskrom→usbplug 端到端与无 loader 烧录未复测；`bcdUSB` 阶段证据未在真机观测。
 - SPINOR/SPINAND/SATA/PCIE/UFS/RVD 的存储切换只有 eMMC/SD 可对照官方工具；READ_STORAGE 多位置位语义未观测。
 - Windows 未覆盖 alt setting 切换与 Legacy/Rockusb 分支；Linux、libusb、macOS、HarmonyOS 后端只有编译与静态核对；macOS IOKit 与 HarmonyOS DDK 路径未上机。

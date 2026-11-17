@@ -117,7 +117,7 @@ public sealed partial class FlashViewModel
     /// </summary>
     private FlashGateContext GateContext =>
         new(DeviceMode, DeviceKind, RkStage, IsSpacemiTSelected, HasConfirmedAdbSu, HasSelectedPartitions,
-            SelectedFastbootStage);
+            SelectedFastbootStage, _sunxiIsFes, _sunxiPackage, _unisocIsFdl2, _unisocPackage);
 
     /// <summary>
     /// Registers every control's own gate; called once when the page is attached, before any enable decision reads it.
@@ -131,6 +131,7 @@ public sealed partial class FlashViewModel
         RegisterMtkControlGates();
         RegisterRockchipControlGates();
         RegisterSunxiControlGates();
+        RegisterUnisocControlGates();
         RegisterImageControlGates();
     }
 

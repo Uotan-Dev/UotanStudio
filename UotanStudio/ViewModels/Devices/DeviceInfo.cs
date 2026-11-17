@@ -80,6 +80,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             MtkMeidHex = string.Empty;
             MtkSocidHex = string.Empty;
             SunxiMode = string.Empty;
+            UnisocStage = string.Empty;
             EdlSerialPort = string.Empty;
             EdlSaharaVersion = string.Empty;
             EdlMaxCommandLength = string.Empty;
@@ -102,6 +103,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(IsFastboot), nameof(SupportsFastbootd), nameof(FastbootStage), nameof(FastbootBadge),
                 nameof(IsEdl), nameof(IsRkdl), nameof(RkdlBadge),
                 nameof(IsSunxi), nameof(SunxiMode), nameof(SunxiBadge),
+                nameof(IsUnisoc), nameof(UnisocStage), nameof(UnisocBadge),
                 nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
                 nameof(EdlProtocol), nameof(HasEdlProtocol), nameof(EdlBadge),
                 nameof(EdlSaharaVersion), nameof(EdlMaxCommandLength), nameof(EdlFirehoseVersion),
@@ -790,6 +792,49 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>全志徽章文本：会话连接后追加握手上报的模式。</para>
     /// </summary>
     public string SunxiBadge => IsSunxi && SunxiMode.Length > 0 ? $"Sunxi · {SunxiMode}" : "Sunxi";
+
+    /// <summary>
+    /// Whether the identity handshake has already reported the Allwinner mode; a <see langword="false"/>
+    /// value keeps the identity query retrying on the next scan.
+    /// <para>身份握手是否已上报全志模式；为 <see langword="false"/> 时下次扫描会重试身份查询。</para>
+    /// </summary>
+    public bool HasSunxiMode => SunxiMode.Length > 0;
+
+    /// <summary>
+    /// Whether the device is a UNISOC (Spreadtrum) download target.
+    /// <para>是否为紫光展锐（Spreadtrum）下载设备。</para>
+    /// </summary>
+    public bool IsUnisoc => Device.Protocol == DeviceProtocolKind.Unisoc;
+
+    /// <summary>
+    /// The loader stage reported by the handshake (<c>BootRom</c>, <c>Fdl1</c> or <c>Fdl2</c>); empty until a
+    /// session connected.
+    /// <para>握手上报的加载阶段（<c>BootRom</c>、<c>Fdl1</c> 或 <c>Fdl2</c>）；会话连接之前为空。</para>
+    /// </summary>
+    public string UnisocStage
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(UnisocBadge));
+            }
+        }
+    } = string.Empty;
+
+    /// <summary>
+    /// UNISOC badge text: appends the handshake-reported loader stage once a session connected.
+    /// <para>紫光展锐徽章文本：会话连接后追加握手上报的加载阶段。</para>
+    /// </summary>
+    public string UnisocBadge => IsUnisoc && UnisocStage.Length > 0 ? $"Unisoc · {UnisocStage}" : "Unisoc";
+
+    /// <summary>
+    /// Whether the handshake has already reported the UNISOC loader stage; a <see langword="false"/> value keeps
+    /// the identity query retrying on the next scan.
+    /// <para>握手是否已上报紫光展锐加载阶段；为 <see langword="false"/> 时下次扫描会重试身份查询。</para>
+    /// </summary>
+    public bool HasUnisocStage => UnisocStage.Length > 0;
 
     /// <summary>
     /// Whether the device is an Apple (iOS) target.
