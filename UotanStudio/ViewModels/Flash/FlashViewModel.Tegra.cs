@@ -12,11 +12,11 @@ namespace UotanStudio.ViewModels.Flash;
 /// <remarks>
 /// Tegra owns a section of its own because none of its actions fit a shared button. A Tegra boot ROM answers only
 /// RCM, so the shared storage and erase actions cannot run against it; the reboot targets are a fixed three-value
-/// matrix the kernel implements by programming PMC_SCRATCH0; and there is no software path into RCM at all, which is a
-/// fact the section states instead of offering a button that cannot work.
+/// matrix the kernel implements by programming PMC_SCRATCH0, and one of those three targets is the software entry into
+/// RCM that the shared flash action cannot express.
 /// <para>Tegra 拥有独立分类，因为它的动作没有一个能塞进通用按钮：Tegra boot ROM 只应答 RCM，因此通用存储与擦除动作
-/// 无法作用于它；重启目标是内核通过写 PMC_SCRATCH0 实现的固定三值矩阵；而软件侧根本不存在进入 RCM 的路径，本分类如实
-/// 说明这一点，而不是提供一个不可能生效的按钮。</para>
+/// 无法作用于它；重启目标是内核通过写 PMC_SCRATCH0 实现的固定三值矩阵，而其中"强制恢复"正是通用烧录动作无法表达的
+/// RCM 软件入口。</para>
 /// </remarks>
 public sealed partial class FlashViewModel
 {
@@ -37,15 +37,21 @@ public sealed partial class FlashViewModel
     internal static IReadOnlyList<string> TegraRebootTargets { get; } =
         [TegraBootloaderTarget, TegraRecoveryTarget, TegraForcedRecoveryTarget];
 
+    /// <summary>
+    /// The only reboot target that stops the device in RCM: the boot ROM reads the forced-recovery bit as a request
+    /// not to boot an image, so this is the software entry into the download mode.
+    /// <para>唯一让设备停在 RCM 的重启目标：boot ROM 把强制恢复位读作"不启动镜像"的请求，因此这就是下载模式的软件入口。</para>
+    /// </summary>
+    internal const string TegraRcmEntryTarget = TegraForcedRecoveryTarget;
+
     /// <summary>Status line of the NVIDIA section. <para>NVIDIA 分类的状态行。</para></summary>
     [ObservableProperty]
     private string _tegraStatusText = string.Empty;
 
     /// <summary>
-    /// Explains why the section carries no "enter RCM" action: Tegra reaches recovery mode only through hardware
-    /// strapping, so the page states the fact instead of offering a control that cannot work.
-    /// <para>说明本分类为何没有"进入 RCM"动作：Tegra 只能通过硬件跳线进入恢复模式，因此页面如实陈述该事实，而不是提供
-    /// 一个不可能生效的控件。</para>
+    /// Explains what the reboot targets do and which one reaches RCM, so the page does not present three targets as
+    /// interchangeable when one of them is the download-mode entry.
+    /// <para>说明各重启目标的作用以及哪一个能到达 RCM，使页面不会把三个目标呈现成可以互换 —— 其中一个正是下载模式入口。</para>
     /// </summary>
     [ObservableProperty]
     private string _tegraRcmHint = string.Empty;
@@ -82,11 +88,12 @@ public sealed partial class FlashViewModel
         RegisterGate("NvidiaRebootBootloaderButton", FlashControlGate.Tegra("NvidiaRebootBootloaderButton"));
         RegisterGate("NvidiaRebootRecoveryButton", FlashControlGate.Tegra("NvidiaRebootRecoveryButton"));
         RegisterGate("NvidiaRebootForcedRecoveryButton", FlashControlGate.Tegra("NvidiaRebootForcedRecoveryButton"));
+        RegisterGate("NvidiaEnterRcmButton", FlashControlGate.Tegra("NvidiaEnterRcmButton"));
     }
 
     /// <summary>
     /// Publishes the NVIDIA readout for the selected endpoint: which Tegra stage the endpoint answered as, what that
-    /// stage allows, and the fixed fact that no software path enters RCM.
+    /// stage allows, and how the forced-recovery target turns an Android endpoint into an RCM port.
     /// <para>为所选端点发布 NVIDIA 读数：端点以哪个 Tegra 阶段应答、该阶段允许什么，以及"软件侧没有进入 RCM 的路径"
     /// 这一固定事实。</para>
     /// </summary>
@@ -137,6 +144,14 @@ public sealed partial class FlashViewModel
     /// <para>用 forced-recovery 目标重启所选 Tegra 设备。</para></summary>
     internal void OnNvidiaRebootForcedRecoveryClick(object? sender, RoutedEventArgs e) =>
         RunTegraReboot(TegraForcedRecoveryTarget);
+
+    /// <summary>
+    /// Steers a running Android endpoint into RCM, which is what makes the download chain reachable at all: the
+    /// device leaves adb about six seconds later and enumerates as an NVIDIA APX port.
+    /// <para>把运行中的 Android 端点引导进 RCM，这正是让下载链可达的前提：设备约六秒后离开 adb，并枚举为 NVIDIA APX 端口。</para>
+    /// </summary>
+    internal void OnNvidiaEnterRcmClick(object? sender, RoutedEventArgs e) =>
+        RunTegraReboot(TegraRcmEntryTarget);
 
     /// <summary>
     /// Sends one reboot target and reports the outcome; the device drops the ADB link as soon as the kernel takes the

@@ -6,13 +6,17 @@ namespace UotanStudio.Comm.Protocols.Tegra;
 /// <para>Tegra 端点所处阶段，决定主机可以对它做什么：RCM 下载、fastboot 或带 adb 的 Android。</para>
 /// </summary>
 /// <remarks>
-/// RCM (APX) is a hardware strapping state with no software entry point on Tegra: the kernel's reboot handler
-/// only honours <c>bootloader</c>, <c>recovery</c> and <c>forced-recovery</c> through <c>PMC_SCRATCH0</c>, so a
-/// host can never reboot an Android device into RCM. Treat this value as an observation of the USB identity,
-/// never as a command outcome.
-/// <para>RCM（APX）是硬件 strap 状态，Tegra 上没有软件入口：内核重启处理只通过 <c>PMC_SCRATCH0</c> 响应
-/// <c>bootloader</c>、<c>recovery</c> 与 <c>forced-recovery</c>，因此主机无法把 Android 设备重启进 RCM。本值
-/// 只表示对 USB 身份的观测结果，绝不表示命令执行结果。</para>
+/// The kernel's reboot handler writes one of three <c>PMC_SCRATCH0</c> bits: <c>bootloader</c> selects
+/// <c>BOOTLOADER_MODE</c>, <c>recovery</c> selects <c>RECOVERY_MODE</c> and <c>forced-recovery</c> selects
+/// <c>FORCED_RECOVERY_MODE</c>. The boot ROM, not the kernel, decides what those bits mean after the reset, and it
+/// treats the forced-recovery bit as a request to stop in RCM instead of booting an image. A running Android can
+/// therefore be steered into RCM with a plain <c>reboot forced-recovery</c>; measured on a Xiaomi 3 (pisces,
+/// Tegra 4), the APX endpoint appears about six seconds later as <c>0955:7835</c>.
+/// <para>内核重启处理会写 <c>PMC_SCRATCH0</c> 的三个位之一：<c>bootloader</c> 置 <c>BOOTLOADER_MODE</c>，
+/// <c>recovery</c> 置 <c>RECOVERY_MODE</c>，<c>forced-recovery</c> 置 <c>FORCED_RECOVERY_MODE</c>。这些位在复位后
+/// 由 boot ROM 而不是内核解释，而 boot ROM 把强制恢复位当作"停在 RCM、不启动镜像"的请求。因此运行中的 Android
+/// 可以用一条 <c>reboot forced-recovery</c> 进入 RCM；在小米 3（pisces，Tegra 4）上实测，约六秒后以
+/// <c>0955:7835</c> 出现 APX 端点。</para>
 /// </remarks>
 public enum TegraDeviceMode
 {

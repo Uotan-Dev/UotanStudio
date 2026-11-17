@@ -1333,6 +1333,10 @@
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_TegraRebootTargets}" FontSize="12" Opacity="0.8" />
                                 <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="NvidiaEnterRcmButton" Classes="pane-action"
+                                            Click="OnNvidiaEnterRcmClick"
+                                            Content="{DynamicResource Flash_TegraEnterRcm}"
+                                            AutomationProperties.Name="{DynamicResource Flash_TegraEnterRcm}" />
                                     <Button Name="NvidiaRebootBootloaderButton" Classes="pane-action"
                                             Click="OnNvidiaRebootBootloaderClick"
                                             Content="{DynamicResource Flash_TegraRebootBootloader}"

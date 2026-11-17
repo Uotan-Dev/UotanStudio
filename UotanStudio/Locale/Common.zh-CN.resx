@@ -4657,13 +4657,13 @@
     <value>NVIDIA Tegra</value>
   </data>
   <data name="Flash_TegraHint" xml:space="preserve">
-    <value>Tegra 恢复模式（RCM/APX）只能由硬件跳线进入，任何 Android 或 fastboot 命令都无法到达。下列重启目标是 Tegra 内核实现的三个目标。</value>
+    <value>Tegra 内核实现的三个重启目标。强制恢复就是从软件进入 RCM（APX）的入口：boot ROM 把强制恢复位读作"不启动镜像"的请求。</value>
   </data>
   <data name="Flash_TegraRcmDetected" xml:space="preserve">
     <value>检测到 RCM（APX）端点：{0}。boot ROM 已准备好接收 miniloader。</value>
   </data>
   <data name="Flash_TegraRcmHint" xml:space="preserve">
-    <value>RCM boot ROM 只应答下载协议，没有任何通用存储动作能作用于它。请通过硬件跳线进入 RCM，或在引导介质不可读时由 boot ROM 自行回落进入。</value>
+    <value>RCM boot ROM 只应答下载协议，没有任何通用存储动作能作用于它。在运行中的 Android 上使用"强制恢复"即可进入 RCM。</value>
   </data>
   <data name="Flash_TegraRebootNeedsAdb" xml:space="preserve">
     <value>Tegra 重启目标需要一个活动的 Android 端点；下载端口无法被要求重启。</value>
@@ -4676,6 +4676,12 @@
   </data>
   <data name="Flash_TegraRebootTargets" xml:space="preserve">
     <value>重启目标</value>
+  </data>
+  <data name="Flash_TegraEnterRcm" xml:space="preserve">
+    <value>进入 RCM（APX）</value>
+  </data>
+  <data name="Flash_TegraEnterRcmHint" xml:space="preserve">
+    <value>重启进入 RCM，使下载链可达；设备会在数秒后以 NVIDIA APX 端口重新枚举。</value>
   </data>
   <data name="Flash_TegraRebootBootloader" xml:space="preserve">
     <value>重启到 bootloader</value>

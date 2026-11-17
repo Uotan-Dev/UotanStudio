@@ -4657,13 +4657,13 @@ Continue?</value>
     <value>NVIDIA Tegra</value>
   </data>
   <data name="Flash_TegraHint" xml:space="preserve">
-    <value>Tegra recovery mode (RCM/APX) is entered by hardware strapping only: no Android or fastboot command can reach it. The reboot targets below are the three the Tegra kernel implements.</value>
+    <value>The three reboot targets the Tegra kernel implements. Force recovery is the software entry into RCM (APX): the boot ROM reads the forced-recovery bit as a request not to boot an image.</value>
   </data>
   <data name="Flash_TegraRcmDetected" xml:space="preserve">
     <value>RCM (APX) endpoint detected: {0}. The boot ROM is ready to receive a miniloader.</value>
   </data>
   <data name="Flash_TegraRcmHint" xml:space="preserve">
-    <value>An RCM boot ROM answers only the download protocol; no shared storage action can run against it. Enter RCM by the hardware strap, or let the boot ROM fall back when the boot medium is unreadable.</value>
+    <value>An RCM boot ROM answers only the download protocol; no shared storage action can run against it. Use Force recovery to enter RCM from a running Android.</value>
   </data>
   <data name="Flash_TegraRebootNeedsAdb" xml:space="preserve">
     <value>A Tegra reboot target needs a live Android endpoint; a download port cannot be asked to reboot.</value>
@@ -4676,6 +4676,12 @@ Continue?</value>
   </data>
   <data name="Flash_TegraRebootTargets" xml:space="preserve">
     <value>Reboot targets</value>
+  </data>
+  <data name="Flash_TegraEnterRcm" xml:space="preserve">
+    <value>Enter RCM (APX)</value>
+  </data>
+  <data name="Flash_TegraEnterRcmHint" xml:space="preserve">
+    <value>Reboots into RCM so the download chain becomes reachable; the device reappears as an NVIDIA APX port after a few seconds.</value>
   </data>
   <data name="Flash_TegraRebootBootloader" xml:space="preserve">
     <value>Reboot to bootloader</value>

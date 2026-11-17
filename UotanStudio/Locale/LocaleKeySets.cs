@@ -1537,6 +1537,8 @@ internal static class LocaleKeySets
         "Flash_TegraRebootSent",
         "Flash_TegraRebootFailed",
         "Flash_TegraRebootTargets",
+        "Flash_TegraEnterRcm",
+        "Flash_TegraEnterRcmHint",
         "Flash_TegraRebootBootloader",
         "Flash_TegraRebootRecovery",
         "Flash_TegraRebootForcedRecovery",

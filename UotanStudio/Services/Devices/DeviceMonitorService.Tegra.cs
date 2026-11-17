@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Tegra;
 
 namespace UotanStudio.Services.Devices;
 
@@ -9,10 +10,12 @@ namespace UotanStudio.Services.Devices;
 /// </summary>
 /// <remarks>
 /// A Tegra reboot target is not a storage write, so it needs no confirmation phrase; it does need a live ADB shell,
-/// because the three targets the Tegra kernel implements are reached by programming PMC_SCRATCH0 from a running
-/// Android, not from a download port.
-/// <para>Tegra 重启目标不是存储写入，因此不需要确认短语；但它需要一个活动的 ADB shell，因为 Tegra 内核实现的三个目标是
-/// 由运行中的 Android 写 PMC_SCRATCH0 达成的，而不是从下载端口达成的。</para>
+/// because every target is reached by programming <c>PMC_SCRATCH0</c> from a running Android. The three targets that
+/// exist do genuinely different things: <c>bootloader</c> stops in fastboot, <c>recovery</c> boots the recovery image
+/// and <c>forced-recovery</c> stops in RCM, which the boot ROM honours as a request not to boot an image at all.
+/// <para>Tegra 重启目标不是存储写入，因此不需要确认短语；但它需要一个活动的 ADB shell，因为所有目标都由运行中的
+/// Android 写 <c>PMC_SCRATCH0</c> 达成。三个目标做的事情确实不同：<c>bootloader</c> 停在 fastboot，<c>recovery</c>
+/// 启动 recovery 镜像，而 <c>forced-recovery</c> 停在 RCM —— boot ROM 把它当作"不启动镜像"的请求。</para>
 /// </remarks>
 public sealed partial class DeviceMonitorService
 {
@@ -22,8 +25,8 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     /// <param name="device">The ADB target to reboot; it must be a live Android, not a download port.
     /// <para>要重启的 ADB 目标；它必须是运行中的 Android，而不是下载端口。</para></param>
-    /// <param name="target">The reboot target, for example <c>bootloader</c> or <c>recovery</c>.
-    /// <para>重启目标，例如 <c>bootloader</c> 或 <c>recovery</c>。</para></param>
+    /// <param name="target">The reboot target, for example <c>bootloader</c> or <c>forced-recovery</c>.
+    /// <para>重启目标，例如 <c>bootloader</c> 或 <c>forced-recovery</c>。</para></param>
     /// <param name="cancellationToken">Cancels the request. <para>取消本次请求。</para></param>
     /// <returns>The output the device shell reported; a reboot normally returns before the device drops the link.
     /// <para>设备 shell 上报的输出；设备断开链路之前重启通常就已返回。</para></returns>
@@ -65,6 +68,32 @@ public sealed partial class DeviceMonitorService
     /// <para><c>bootloader</c>、<c>recovery</c> 与 <c>forced-recovery</c> 为 <see langword="true"/>。</para></returns>
     internal static bool IsTegraRebootTarget(string? target) => target is
         "bootloader" or "recovery" or "forced-recovery";
+
+    /// <summary>
+    /// Maps a reboot target to the Tegra stage the device lands in, so the page can name the outcome before the
+    /// reboot happens instead of describing every target the same way.
+    /// <para>把重启目标映射为设备最终所处的 Tegra 阶段，使页面能在重启发生前就说明结果，而不是把所有目标描述成同一回事。</para>
+    /// </summary>
+    /// <param name="target">The reboot target; an unknown target maps to <see cref="TegraDeviceMode.Android"/>.
+    /// <para>重启目标；未知目标映射为 <see cref="TegraDeviceMode.Android"/>。</para></param>
+    /// <returns>The stage the boot ROM selects for that target. <para>boot ROM 为该目标选择的阶段。</para></returns>
+    internal static TegraDeviceMode TegraStageForTarget(string? target) => target switch
+    {
+        "bootloader" => TegraDeviceMode.Fastboot,
+        "forced-recovery" => TegraDeviceMode.ApxRcm,
+        _ => TegraDeviceMode.Android,
+    };
+
+    /// <summary>
+    /// Reports whether a target stops the device in RCM, which is the only target that turns an Android endpoint into
+    /// a download port a host can speak RCM to.
+    /// <para>报告某个目标是否让设备停在 RCM —— 只有该目标能把 Android 端点变成主机可以用 RCM 对话的下载端口。</para>
+    /// </summary>
+    /// <param name="target">The reboot target. <para>重启目标。</para></param>
+    /// <returns><see langword="true"/> for <c>forced-recovery</c> only.
+    /// <para>仅 <c>forced-recovery</c> 为 <see langword="true"/>。</para></returns>
+    internal static bool TargetEntersRcm(string? target) =>
+        string.Equals(target, "forced-recovery", StringComparison.Ordinal);
 
     private const int TegraRebootTimeoutMs = 15_000;
 }
