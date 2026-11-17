@@ -28,7 +28,6 @@
         </Style>
         <Style Selector="TextBox">
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
         </Style>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
             <Setter Property="Background">
@@ -42,7 +41,6 @@
         <Style Selector="Button.plugin-action">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
-            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
         </Style>
         <Style Selector="Border.ModeChip">
             <Setter Property="CornerRadius" Value="4" />
@@ -95,7 +93,7 @@
                          ItemsSource="{Binding Plugins}"
                          SelectedItem="{Binding SelectedPlugin, Mode=TwoWay}"
                          IsVisible="{Binding !!Plugins.Count}"
-                         Background="Transparent" BorderThickness="0" Padding="0,0,12,0"
+                         Background="Transparent" BorderThickness="0" Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>

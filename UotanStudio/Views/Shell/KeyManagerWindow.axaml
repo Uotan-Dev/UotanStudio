@@ -30,7 +30,6 @@
         </Style>
         <Style Selector="TextBox">
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="CornerRadius" Value="{StaticResource KeyFieldCornerRadius}" />
         </Style>
         <Style Selector="TextBox.key-field">
             <Setter Property="Height" Value="32" />
@@ -84,7 +83,7 @@
                     </Button>
                 </Grid>
                 <ListBox Name="KeyList" Grid.Row="2" Classes="key-list" ItemsSource="{Binding Keys}" SelectedItem="{Binding SelectedKey}"
-                         Background="Transparent" BorderThickness="0" Padding="0,0,12,0"
+                         Background="Transparent" BorderThickness="0" Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="keys:ManagedKey">

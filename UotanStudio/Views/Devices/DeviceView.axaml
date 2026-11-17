@@ -260,7 +260,7 @@
                              ItemsSource="{Binding Devices}"
                              SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
                              IsVisible="{Binding HasNoDevices, Converter={x:Static BoolConverters.Not}}"
-                             Background="Transparent" BorderThickness="0" Padding="0,0,12,0"
+                             Background="Transparent" BorderThickness="0" Padding="0"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListBox.ItemTemplate>
