@@ -64,9 +64,12 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 }
 
 /// <summary>
-/// Client for the ADB shell v2 protocol: executes commands on the device and
-/// exposes stdout / stderr / exit code.
-/// <para>ADB shell v2 协议客户端：在设备上执行命令并暴露 stdout / stderr / 退出码。</para>
+/// Client for the ADB shell protocol: executes commands on the device and exposes stdout / stderr /
+/// exit code. Prefers shell v2 when the peer advertises <c>shell_v2</c>, and falls back to the legacy
+/// <c>shell:</c> service for old adbd versions (Android 4.4 and earlier) whose banner has no features.
+/// <para>ADB shell 协议客户端：在设备上执行命令并暴露 stdout / stderr / 退出码。对端宣告
+/// <c>shell_v2</c> 时优先使用 shell v2；对特性横幅为空的旧版 adbd（Android 4.4 及更早）回退到旧版
+/// <c>shell:</c> 服务。</para>
 /// </summary>
 /// <param name="connection">The ADB connection.<para>ADB 连接。</para></param>
 /// <param name="command">The command to execute.<para>要执行的命令。</para></param>
@@ -169,14 +172,42 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     private readonly string _command = command ?? throw new ArgumentNullException(nameof(command));
     private readonly string? _term = term;
     private readonly bool _pty = pty;
+    private readonly bool _useLegacyShell = !PeerSupportsShellV2(connection);
 
     /// <summary>
-    /// Builds the shell v2 service string.
-    /// <para>构建 shell v2 服务字符串。</para>
+    /// Checks whether the peer supports shell v2: server-mediated sessions keep the v2 path, direct
+    /// sessions require the peer's CNXN banner to advertise <c>shell_v2</c>.
+    /// <para>检查对端是否支持 shell v2：经 server 中转的会话保留 v2 路径；直连会话要求对端 CNXN
+    /// 横幅宣告 <c>shell_v2</c>。</para>
     /// </summary>
-    /// <returns>The shell v2 service string.<para>shell v2 服务字符串。</para></returns>
+    /// <param name="connection">The ADB connection.<para>ADB 连接。</para></param>
+    /// <returns><see langword="true"/> when shell v2 is supported.<para>支持 shell v2 时为真。</para></returns>
+    private static bool PeerSupportsShellV2(AdbConnection connection)
+    {
+        if (connection.UsesServer)
+        {
+            return true;
+        }
+
+        var features = connection.PeerFeatures;
+        return features is not null && features.Any(static f =>
+            string.Equals(f, "shell_v2", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Builds the negotiated shell service string: shell v2 when the peer supports it, legacy
+    /// <c>shell:</c> for old adbd versions (Android 4.4 and earlier) whose banner has no features.
+    /// <para>构建协商后的 shell 服务字符串：对端支持时用 shell v2；对特性横幅为空的旧版 adbd
+    /// （Android 4.4 及更早）使用旧版 <c>shell:</c>。</para>
+    /// </summary>
+    /// <returns>The negotiated shell service string.<para>协商后的 shell 服务字符串。</para></returns>
     private string BuildServiceString()
     {
+        if (_useLegacyShell)
+        {
+            return "shell:" + _command;
+        }
+
         var sb = new StringBuilder("shell,v2");
         if (!string.IsNullOrEmpty(_term))
         {
@@ -195,8 +226,8 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     /// <returns>A task resolving to the shell result.<para>结果为 shell 执行结果的任务。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
-    /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
-    /// <para>流在 shell v2 帧未完整时结束。</para></exception>
+    /// <exception cref="InvalidDataException">A shell v2 stream ended with a truncated frame.
+    /// <para>shell v2 流在帧未完整时结束。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public async ValueTask<ShellResult> ExecuteAsync(int timeoutMs = 30000, CancellationToken cancellationToken = default)
@@ -204,7 +235,11 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
-        await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+        if (!_useLegacyShell)
+        {
+            await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+        }
+
         var stdout = new MemoryStream();
         var stderr = new MemoryStream();
         var parser = new FrameParser();
@@ -222,8 +257,18 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
                     throw new TimeoutException($"Shell command did not complete within {timeoutMs} ms.");
                 }
 
-                parser.Complete();
+                if (!_useLegacyShell)
+                {
+                    parser.Complete();
+                }
+
                 break;
+            }
+
+            if (_useLegacyShell)
+            {
+                stdout.Write(chunk, 0, chunk.Length);
+                continue;
             }
 
             foreach (var frame in parser.Feed(chunk))
@@ -245,7 +290,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             }
         }
 
-        if (exitCode is not null)
+        if (!_useLegacyShell && exitCode is not null)
         {
             parser.Complete();
         }
@@ -272,21 +317,29 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
 
     /// <summary>
     /// Executes the command asynchronously, streaming stdout/stderr chunks to callbacks.
-    /// <para>异步流式执行命令，将 stdout / stderr 块传递给回调。</para>
+    /// On the legacy path all output is delivered to <paramref name="onStdout"/>.
+    /// <para>异步流式执行命令，将 stdout / stderr 块传递给回调。旧版路径的所有输出都传给
+    /// <paramref name="onStdout"/>。</para>
     /// </summary>
     /// <param name="onStdout">Callback for stdout chunks.<para>stdout 块回调。</para></param>
     /// <param name="onStderr">Callback for stderr chunks.<para>stderr 块回调。</para></param>
-    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
-    /// <returns>A task resolving to the exit code. <para>结果为退出码的任务。</para></returns>
-    /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.
-    /// <para>流在 shell v2 帧未完整时结束。</para></exception>
+    /// <param name="cancellationToken">Cancels the read that is in progress; the loop stops as soon as the
+    /// wait observes the cancellation. <para>取消进行中的读取；等待一旦观察到取消即停止循环。</para></param>
+    /// <returns>The exit code; <c>0</c> when the stream closed or cancellation took effect before
+    /// an exit frame arrived. <para>退出码；流关闭或退出帧到达前被取消时为 <c>0</c>。</para></returns>
+    /// <exception cref="InvalidDataException">A shell v2 stream ended with a truncated frame.
+    /// <para>shell v2 流在帧未完整时结束。</para></exception>
     public async ValueTask<int> ExecuteStreamingAsync(Action<byte[]>? onStdout, Action<byte[]>? onStderr,
         CancellationToken cancellationToken = default)
     {
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
-        await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+        if (!_useLegacyShell)
+        {
+            await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+        }
+
         var parser = new FrameParser();
         int? exitCode = null;
 
@@ -304,8 +357,18 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
 
             if (chunk is null)
             {
-                parser.Complete();
+                if (!_useLegacyShell)
+                {
+                    parser.Complete();
+                }
+
                 break;
+            }
+
+            if (_useLegacyShell)
+            {
+                onStdout?.Invoke(chunk);
+                continue;
             }
 
             foreach (var frame in parser.Feed(chunk))
@@ -327,7 +390,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             }
         }
 
-        if (exitCode is not null)
+        if (!_useLegacyShell && exitCode is not null)
         {
             parser.Complete();
         }
