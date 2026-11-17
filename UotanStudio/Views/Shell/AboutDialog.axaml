@@ -54,7 +54,17 @@
             <Image Source="/Assets/UotanToolbox.png" Width="64" Height="64"
                    HorizontalAlignment="Center" Margin="0,0,0,8" />
             <TextBlock Text="UotanStudio" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" />
-            <TextBlock x:Name="VersionText" FontSize="12" Opacity="0.7" HorizontalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,2,0,0">
+                <TextBlock x:Name="VersionText" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource About_Commit}" FontSize="11" Opacity="0.7"
+                               VerticalAlignment="Center" />
+                    <HyperlinkButton x:Name="CommitLink" FontSize="11" VerticalAlignment="Center"
+                                     Click="OnCommitClick" />
+                    <TextBlock x:Name="CommitUnavailableText" Text="{DynamicResource About_CommitUnknown}"
+                               FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="False" />
+                </StackPanel>
+            </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
                 <TextBlock Text="{DynamicResource About_Channel}" FontSize="11" Opacity="0.7"
                            VerticalAlignment="Center" Margin="0,0,2,0" />
@@ -68,12 +78,12 @@
                 </Border>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
-                <TextBlock Text="{DynamicResource About_Commit}" FontSize="11" Opacity="0.7"
+                <TextBlock Text="{DynamicResource About_DotNetSdkVersion}" FontSize="11" Opacity="0.7"
                            VerticalAlignment="Center" />
-                <HyperlinkButton x:Name="CommitLink" FontSize="11" VerticalAlignment="Center"
-                                 Click="OnCommitClick" />
-                <TextBlock x:Name="CommitUnavailableText" Text="{DynamicResource About_CommitUnknown}"
-                           FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="False" />
+                <Border x:Name="DotNetSdkBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="DotNetSdkText" FontSize="10" />
+                </Border>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
                 <TextBlock Text="{DynamicResource About_Gc}" FontSize="11" Opacity="0.7"
@@ -89,14 +99,6 @@
                 <Border x:Name="GcLatencyBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
                         VerticalAlignment="Center">
                     <TextBlock x:Name="GcLatencyText" FontSize="10" />
-                </Border>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
-                <TextBlock Text="{DynamicResource About_DotNetSdkVersion}" FontSize="11" Opacity="0.7"
-                           VerticalAlignment="Center" />
-                <Border x:Name="DotNetSdkBadge" Classes="BadgeInactive" CornerRadius="4" Padding="6,1" BorderThickness="1"
-                        VerticalAlignment="Center">
-                    <TextBlock x:Name="DotNetSdkText" FontSize="10" />
                 </Border>
             </StackPanel>
             <TextBlock Text="{DynamicResource About_Description}"
@@ -116,7 +118,8 @@
 
             <!-- 许可与分发说明 -->
             <TextBlock Text="{DynamicResource About_OpenSourceNotice}"
-                       FontSize="11" Opacity="0.75" TextWrapping="Wrap" />
+                       FontSize="11" Opacity="0.75"
+                       TextWrapping="Wrap" TextAlignment="Center" />
 
             <!-- 开源项目列表 -->
             <ScrollViewer MaxHeight="320"
@@ -125,12 +128,12 @@
                 <ItemsControl ItemsSource="{x:Static models:OpenSourceProjects.All}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="models:OpenSourceProject">
-                            <Border Padding="0,6" CornerRadius="6" Margin="0,2"
+                            <Border Padding="12,6" CornerRadius="6" Margin="0,2"
                                     Background="{DynamicResource CardBackgroundBrush}"
                                     BorderBrush="{DynamicResource CardBorderBrush}"
                                     BorderThickness="1">
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                    <!-- 名称 / 协议 / 描述：与上方说明文字左对齐（头像不能放在文本左侧） -->
+                                    <!-- 名称 / 协议 / 描述（头像不能放在文本左侧） -->
                                     <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" />
@@ -155,7 +158,7 @@
                                     </Border>
 
                                     <!-- 链接:仓库 / 作者 -->
-                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
                                         <HyperlinkButton Content="{DynamicResource About_OpenRepository}"
                                                          FontSize="11" HorizontalAlignment="Right"
                                                          Tag="{Binding RepositoryUrl}" Click="OnOpenLinkClick" />

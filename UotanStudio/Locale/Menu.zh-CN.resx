@@ -436,7 +436,7 @@
     <value>本软件以 GNU GPL-3.0 分发，使用或参考下列开源项目，并分别遵循其许可协议。MIT、BSD 与 Apache-2.0 组件与 GPL-3.0 兼容，其声明予以保留。Semi.Avalonia.AvaloniaEdit 与 Semi.Avalonia.Dock 主题为 IRIHI 专有、闭源包，受 IRIHI EULA 约束，与 GPL-3.0 不兼容。LibUsbDotNet（LGPL-3.0-or-later）为静态链接；MiSans 字体按自身许可未修改使用。</value>
   </data>
   <data name="About_Gc" xml:space="preserve">
-    <value>当前垃圾回收</value>
+    <value>垃圾回收器</value>
   </data>
   <data name="About_GcServerShape" xml:space="preserve">
     <value>server GC</value>
