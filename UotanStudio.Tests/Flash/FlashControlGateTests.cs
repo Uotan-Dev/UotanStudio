@@ -398,7 +398,8 @@ public sealed class FlashControlGateTests
             (FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl), FlashDeviceMode.Edl),
             (FlashControlGate.Section("MtkPane", FlashDeviceMode.Mtk), FlashDeviceMode.Mtk),
             (FlashControlGate.Section("RkPane", FlashDeviceMode.Rkdl), FlashDeviceMode.Rkdl),
-            (FlashControlGate.Section("SunxiPane", FlashDeviceMode.Sunxi), FlashDeviceMode.Sunxi)
+            (FlashControlGate.Section("SunxiPane", FlashDeviceMode.Sunxi), FlashDeviceMode.Sunxi),
+            (FlashControlGate.Sunxi("SunxiPane"), FlashDeviceMode.Sunxi)
         };
 
         foreach (var (gate, owner) in gates)
@@ -638,7 +639,8 @@ public sealed class FlashControlGateTests
         Assert.False(FlashControlGate.SharedFlash("FlashSelectedButton").BusyDisabled);
         Assert.True(FlashControlGate.SharedStorage("ReadInfoButton", busyDisabled: true).BusyDisabled);
         Assert.True(FlashControlGate.Section("EdlPane", FlashDeviceMode.Edl, busyDisabled: true).BusyDisabled);
-        Assert.False(FlashControlGate.Sunxi("SunxiPane").BusyDisabled);
+        Assert.True(FlashControlGate.Sunxi("SunxiPane", busyDisabled: true).BusyDisabled);
+        Assert.False(FlashControlGate.Sunxi("SunxiReadMemoryButton").BusyDisabled);
     }
 
     [Fact]
