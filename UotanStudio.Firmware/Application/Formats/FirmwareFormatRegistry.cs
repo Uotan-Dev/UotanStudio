@@ -35,6 +35,7 @@ public static class FirmwareFormatRegistry
             Register(new BlockImage.Lp.LpFormatHandler());
 
             Register(new BlockImage.Sparse.SparseFormatHandler());
+            Register(new VendorFirmware.Allwinner.CardImage.SunxiCardImageFormatHandler());
             Register(new BlockImage.Gpt.GptFormatHandler());
             Core.Bridges.SparsePreservationAccess.Register(FileSystem.Rebuilding.FileSystemSparsePreservation.Instance);
             Register(new FileSystem.Ext4.Ext4FormatHandler());
