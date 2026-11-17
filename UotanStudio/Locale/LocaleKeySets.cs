@@ -3604,6 +3604,7 @@ internal static class LocaleKeySets
         "Settings_PackingParameters",
         "Settings_DebugMode",
         "Settings_FileAssociations",
+        "Settings_FileAssociationsSave",
         "Settings_FileAssociationSortByCategory",
         "Settings_FileAssociationSortByName",
         "Settings_UnpackToolPath",

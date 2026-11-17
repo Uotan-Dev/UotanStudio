@@ -167,7 +167,6 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -176,7 +175,6 @@
             <Setter Property="Height" Value="28" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -228,7 +226,7 @@
                             </StackPanel>
                             <Border Grid.Column="1"
                                     Theme="{StaticResource RadioButtonGroupBorder}"
-                                    Padding="2" CornerRadius="8"
+                                    Padding="2"
                                     HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="2">
                                     <RadioButton GroupName="ThemeGroup"
@@ -465,14 +463,23 @@
                                     <TextBlock Text="{DynamicResource Settings_FileAssociationsHint}"
                                                Classes="settings-description" />
                                 </StackPanel>
-                                <Button Grid.Column="1" Classes="settings-action"
-                                        Command="{Binding ToggleFileAssociationSortCommand}"
-                                        ToolTip.Tip="{DynamicResource Settings_FileAssociationSortHint}">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <icons:Swap Width="14" Height="14" />
-                                        <TextBlock Text="{Binding FileAssociationSortLabel}" />
-                                    </StackPanel>
-                                </Button>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Button Classes="settings-action"
+                                            Command="{Binding ToggleFileAssociationSortCommand}"
+                                            ToolTip.Tip="{DynamicResource Settings_FileAssociationSortHint}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:Swap Width="14" Height="14" />
+                                            <TextBlock Text="{Binding FileAssociationSortLabel}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="settings-action"
+                                            Command="{Binding SaveFileAssociationSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:Save Width="14" Height="14" />
+                                            <TextBlock Text="{DynamicResource Settings_FileAssociationsSave}" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </Grid>
                             <ItemsControl ItemsSource="{Binding FileAssociationItems}">
                                 <ItemsControl.ItemsPanel>
@@ -620,26 +627,30 @@
                         <TextBlock Text="{DynamicResource Settings_McpHint}"
                                    Classes="settings-section-description" />
                     </StackPanel>
-                    <Button Grid.Column="2" Content="{DynamicResource Settings_McpAdd}"
-                            Command="{Binding AddMcpServerCommand}"
-                            Classes="settings-action" VerticalAlignment="Center">
-                        <Button.ContentTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <icons:Add Width="14" Height="14" />
-                                    <TextBlock Text="{Binding}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </Button.ContentTemplate>
-                    </Button>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="settings-action"
+                                Command="{Binding AddMcpServerCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Add Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_McpAdd}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="settings-action"
+                                Command="{Binding SaveMcpSettingsCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Save Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_McpSave}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
                 <Border Classes="settings-card-padded">
-                    <StackPanel Spacing="12">
+                    <StackPanel Spacing="0">
                         <ItemsControl ItemsSource="{Binding McpServers}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="mcp:McpClientServerConfig">
-                                    <Border Classes="settings-inner" Margin="0,0,0,10">
+                                    <Border Classes="settings-inner" Margin="0,0,0,12">
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                                             <StackPanel Spacing="8">
                                                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
@@ -671,7 +682,6 @@
                                                               IsChecked="{Binding Enabled}"
                                                               ToolTip.Tip="{DynamicResource Settings_McpEnabled}" />
                                                 <Button Width="32" Height="32" MinWidth="0" Padding="0"
-                                                        CornerRadius="6"
                                                         HorizontalAlignment="Center"
                                                         VerticalAlignment="Center"
                                                         Command="{Binding $parent[UserControl].DataContext.RemoveMcpServerCommand}"
@@ -686,85 +696,69 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <Border Classes="settings-inner">
-                            <StackPanel Spacing="0">
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{DynamicResource Settings_McpExpose}"
-                                                   Classes="settings-label" />
-                                        <TextBlock Text="{DynamicResource Settings_McpExposeHint}"
-                                                   Classes="settings-description" />
-                                    </StackPanel>
-                                    <ToggleSwitch Grid.Column="1" Classes="settings-switch"
-                                                  IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}"
-                                                  VerticalAlignment="Center" />
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
-                                                VerticalAlignment="Center">
-                                        <TextBlock Text="{DynamicResource Settings_McpExposePort}"
-                                                   Classes="settings-value" VerticalAlignment="Center" />
-                                        <NumericUpDown Classes="settings-number"
-                                                       Value="{Binding McpExposePort, Mode=TwoWay}"
-                                                       Minimum="1" Maximum="65535" />
-                                    </StackPanel>
-                                </Grid>
-
-                                <Border Classes="settings-divider" Margin="0,14" />
-
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{DynamicResource Settings_McpExposeRoot}"
-                                                   Classes="settings-label" />
-                                        <TextBlock Text="{DynamicResource Settings_McpExposeRootHint}"
-                                                   Classes="settings-description" />
-                                    </StackPanel>
-                                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8"
-                                          Width="340" VerticalAlignment="Center">
-                                        <TextBox Classes="settings-input"
-                                                 Text="{Binding McpExposeRootDirectory, Mode=TwoWay}"
-                                                 PlaceholderText="{DynamicResource Settings_McpExposeRootPlaceholder}" />
-                                        <Button Grid.Column="1" Content="{DynamicResource Keys_Browse}"
-                                                Command="{Binding BrowseMcpRootCommand}"
-                                                Classes="settings-action" />
-                                    </Grid>
-                                </Grid>
-
-                                <Border Classes="settings-divider" Margin="0,14" />
-
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{DynamicResource Settings_McpExposeFlash}"
-                                                   Classes="settings-label" />
-                                        <TextBlock Text="{DynamicResource Settings_McpExposeFlashHint}"
-                                                   Classes="settings-description" />
-                                    </StackPanel>
-                                    <ToggleSwitch Grid.Column="1" Classes="settings-switch"
-                                                  IsChecked="{Binding McpExposeAllowFlash, Mode=TwoWay}" />
-                                </Grid>
-
-                                <Border Classes="settings-banner-warning" Margin="0,12,0,0">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                        <icons:ErrorCircle Width="16" Height="16"
-                                                           Stroke1="{DynamicResource LogErrorBrush}"
-                                                           VerticalAlignment="Top" Margin="0,1,0,0" />
-                                        <TextBlock Grid.Column="1" Text="{DynamicResource Settings_McpExposeFlashWarning}"
-                                                   Foreground="{DynamicResource LogErrorBrush}"
-                                                   FontSize="12" TextWrapping="Wrap" />
-                                    </Grid>
-                                </Border>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExpose}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeHint}"
+                                           Classes="settings-description" />
                             </StackPanel>
-                        </Border>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}"
+                                          VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposePort}"
+                                           Classes="settings-value" VerticalAlignment="Center" />
+                                <NumericUpDown Classes="settings-number"
+                                               Value="{Binding McpExposePort, Mode=TwoWay}"
+                                               Minimum="1" Maximum="65535" />
+                            </StackPanel>
+                        </Grid>
 
-                        <Button Content="{DynamicResource Settings_McpSave}" Command="{Binding SaveMcpSettingsCommand}"
-                                HorizontalAlignment="Right" Classes="settings-action" Margin="0,4,0,0">
-                            <Button.ContentTemplate>
-                                <DataTemplate x:DataType="x:String">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <icons:Save Width="14" Height="14" />
-                                        <TextBlock Text="{Binding}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </Button.ContentTemplate>
-                        </Button>
+                        <Border Classes="settings-divider" Margin="0,14" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposeRoot}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeRootHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                                  Width="340" VerticalAlignment="Center">
+                                <TextBox Classes="settings-input"
+                                         Text="{Binding McpExposeRootDirectory, Mode=TwoWay}"
+                                         PlaceholderText="{DynamicResource Settings_McpExposeRootPlaceholder}" />
+                                <Button Grid.Column="1" Content="{DynamicResource Keys_Browse}"
+                                        Command="{Binding BrowseMcpRootCommand}"
+                                        Classes="settings-action" />
+                            </Grid>
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,14" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposeFlash}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeFlashHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding McpExposeAllowFlash, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-banner-warning" Margin="0,12,0,0">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <icons:ErrorCircle Width="16" Height="16"
+                                                   Stroke1="{DynamicResource LogErrorBrush}"
+                                                   VerticalAlignment="Top" Margin="0,1,0,0" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Settings_McpExposeFlashWarning}"
+                                           Foreground="{DynamicResource LogErrorBrush}"
+                                           FontSize="12" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 

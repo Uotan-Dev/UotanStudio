@@ -141,6 +141,9 @@
   <data name="Settings_FileAssociations" xml:space="preserve">
     <value>关联文件格式</value>
   </data>
+  <data name="Settings_FileAssociationsSave" xml:space="preserve">
+    <value>保存关联设置</value>
+  </data>
   <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
     <value>排序：按类别</value>
   </data>

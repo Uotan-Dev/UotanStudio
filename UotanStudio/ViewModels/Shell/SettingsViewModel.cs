@@ -49,6 +49,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void ToggleFileAssociationSort() =>
         SortFileAssociationsAlphabetically = !SortFileAssociationsAlphabetically;
 
+    /// <summary>
+    /// Saves the file association settings immediately and notifies completion.
+    /// <para>立即保存关联文件格式设置并通知完成。</para>
+    /// </summary>
+    [RelayCommand]
+    private void SaveFileAssociationSettings() => SaveSettings();
+
     private void RefreshFileAssociationOrder()
     {
         if (FileAssociationItems.Count == 0)
