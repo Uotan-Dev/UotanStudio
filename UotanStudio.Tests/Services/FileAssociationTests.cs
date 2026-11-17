@@ -172,6 +172,45 @@ public sealed class FileAssociationTests
     }
 
     [Fact]
+    public void FindMatchingArrayEnd_SimpleArray_ReturnsIndexPastClosingTag()
+    {
+        const string text = "<array><dict/></array>TAIL";
+
+        var end = FileAssociationService.FindMatchingArrayEnd(text, 0);
+
+        Assert.Equal(text.IndexOf("TAIL", StringComparison.Ordinal), end);
+        Assert.Equal("TAIL", text[end..]);
+    }
+
+    [Fact]
+    public void FindMatchingArrayEnd_NestedArrays_MatchesOuterTagOnly()
+    {
+        const string text = "<array><array><string>x</string></array></array>END";
+
+        var end = FileAssociationService.FindMatchingArrayEnd(text, 0);
+
+        Assert.Equal("END", text[end..]);
+    }
+
+    [Fact]
+    public void FindMatchingArrayEnd_Unbalanced_ReturnsMinusOne()
+    {
+        const string text = "<array><dict>no closing tag";
+
+        Assert.Equal(-1, FileAssociationService.FindMatchingArrayEnd(text, 0));
+    }
+
+    [Fact]
+    public void FindMatchingArrayEnd_SiblingArrayAfter_StopsAtFirstClose()
+    {
+        const string text = "<array><dict/></array><key>Other</key><array/></array>";
+
+        var end = FileAssociationService.FindMatchingArrayEnd(text, 0);
+
+        Assert.Equal("<key>Other</key><array/></array>", text[end..]);
+    }
+
+    [Fact]
     public void ElevatedCommand_ParsesExtensionsAfterResultPair()
     {
         var args = new[]

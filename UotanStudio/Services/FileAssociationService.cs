@@ -354,10 +354,30 @@ public static partial class FileAssociationService
             return false;
         }
 
-        var directory = Path.Combine(AppPaths.Root, "FileAssociations");
-        Directory.CreateDirectory(directory);
-        var plistPath = Path.Combine(directory, "DocumentTypes.plist");
-        WriteAtomically(plistPath, BuildMacImportPlist(specs));
+        // LaunchServices only honours document types declared by a real application bundle, so the
+        // declarations are written into the bundle the process is running from, never into a stray
+        // plist under Application Support. lsregister then refreshes the database from that bundle.
+        // duti is optional: when present it sets the per-extension default handler explicitly, and the
+        // association still works without it because the bundle itself declares the types.
+        // <para>LaunchServices 只认真实应用包声明的文档类型，因此声明写进进程自身所在的包，
+        // 而不是 Application Support 下的孤立 plist；随后由 lsregister 从该包刷新数据库。
+        // duti 为可选增强：存在时显式设置每个扩展名的默认处理程序，不存在时依赖包内声明亦可生效。</para>
+        var bundlePath = ResolveCurrentAppBundle();
+        if (bundlePath is not null)
+        {
+            var infoPlistPath = Path.Combine(bundlePath, "Contents", "Info.plist");
+            if (File.Exists(infoPlistPath))
+            {
+                RegisterBundleDocumentTypes(infoPlistPath, specs);
+            }
+
+            RunHelper(ResolveLsregister(), $"-f \"{bundlePath}\"", "macOS");
+        }
+        else
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                "File associations require an application bundle; the running executable is not inside a .app.");
+        }
 
         foreach (var type in BuildMacDocumentTypes(specs))
         {
@@ -368,6 +388,137 @@ public static partial class FileAssociationService
         LogService.Instance.Write(LogLevel.Info, "FileAssociation",
             $"Registered {specs.Count} file association(s) on macOS.");
         return true;
+    }
+
+    /// <summary>Resolves the .app bundle containing the running executable.<para>解析包含当前可执行文件的应用包。</para></summary>
+    /// <returns>The bundle path, or null when the process does not run from a bundle.<para>应用包路径；进程不在包内运行时为 null。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static string? ResolveCurrentAppBundle()
+    {
+        var executable = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(executable))
+        {
+            return null;
+        }
+
+        var directory = Path.GetDirectoryName(executable);
+        while (!string.IsNullOrEmpty(directory))
+        {
+            if (directory.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+            {
+                return directory;
+            }
+
+            directory = Path.GetDirectoryName(directory);
+        }
+
+        return null;
+    }
+
+    /// <summary>Resolves the lsregister tool path used to refresh LaunchServices.<para>解析用于刷新 LaunchServices 的 lsregister 路径。</para></summary>
+    /// <returns>The tool path, falling back to the bare name.<para>工具路径；找不到时回退为裸名称。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static string ResolveLsregister()
+    {
+        var candidates = new[]
+        {
+            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+            "/usr/bin/lsregister",
+        };
+        return candidates.FirstOrDefault(File.Exists) ?? "lsregister";
+    }
+
+    /// <summary>
+    /// Merges the document type declarations into the application bundle's Info.plist, preserving every other key.
+    /// <para>把文档类型声明合并进应用包的 Info.plist，保留其它所有键。</para>
+    /// </summary>
+    /// <param name="infoPlistPath">Path to the bundle's Info.plist.<para>应用包 Info.plist 的路径。</para></param>
+    /// <param name="specs">Association specs to declare.<para>待声明的关联规格。</para></param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void RegisterBundleDocumentTypes(string infoPlistPath, IReadOnlyList<AssociationSpec> specs)
+    {
+        try
+        {
+            var original = File.ReadAllText(infoPlistPath);
+            var marker = "<key>CFBundleDocumentTypes</key>";
+            var start = original.IndexOf(marker, StringComparison.Ordinal);
+            if (start >= 0)
+            {
+                var arrayStart = original.IndexOf("<array>", start, StringComparison.Ordinal);
+                if (arrayStart >= 0)
+                {
+                    var arrayEnd = FindMatchingArrayEnd(original, arrayStart);
+                    if (arrayEnd > arrayStart)
+                    {
+                        original = original.Remove(start, arrayEnd - start);
+                    }
+                }
+            }
+
+            var insertionPoint = original.LastIndexOf("</dict>", StringComparison.Ordinal);
+            if (insertionPoint < 0)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                    "The bundle Info.plist has no root dictionary; document types were not declared.");
+                return;
+            }
+
+            var declaration = new StringBuilder();
+            declaration.Append(marker).Append("<array>\n");
+            foreach (var type in BuildMacDocumentTypes(specs))
+            {
+                declaration.Append("  <dict>\n");
+                declaration.Append("    <key>CFBundleTypeExtensions</key><array><string>");
+                declaration.Append(EscapeXml(type.Extension.TrimStart('.')));
+                declaration.Append("</string></array>\n");
+                declaration.Append("    <key>CFBundleTypeName</key><string>");
+                declaration.Append(EscapeXml(type.Extension)).Append(" File</string>\n");
+                declaration.Append("    <key>CFBundleTypeRole</key><string>Viewer</string>\n");
+                declaration.Append("  </dict>\n");
+            }
+
+            declaration.Append("</array>\n");
+            var updated = original.Insert(insertionPoint, declaration.ToString());
+            if (!string.Equals(updated, original, StringComparison.Ordinal))
+            {
+                WriteAtomically(infoPlistPath, updated);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Declaring document types in the bundle failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Finds the end index (inclusive) of the array element starting at the given offset.<para>查找从给定偏移开始的 array 元素的结束索引（含）。</para></summary>
+    /// <param name="text">The XML document text.<para>XML 文档文本。</para></param>
+    /// <param name="arrayStart">Offset of the opening array tag.<para>起始 array 标签的偏移。</para></param>
+    /// <returns>The index just past the matching closing tag, or -1 when unbalanced.<para>匹配结束标签之后的索引；不配对时为 -1。</para></returns>
+    internal static int FindMatchingArrayEnd(string text, int arrayStart)
+    {
+        var depth = 0;
+        for (var index = arrayStart; index < text.Length; index++)
+        {
+            if (string.CompareOrdinal(text, index, "<array>", 0, 7) == 0)
+            {
+                depth++;
+                index += 6;
+                continue;
+            }
+
+            if (string.CompareOrdinal(text, index, "</array>", 0, 8) == 0)
+            {
+                depth--;
+                index += 7;
+                if (depth == 0)
+                {
+                    return index + 1;
+                }
+            }
+        }
+
+        return -1;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -391,25 +542,8 @@ public static partial class FileAssociationService
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void RefreshLaunchServices()
-    {
-        var candidates = new[]
-        {
-            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
-            "/usr/bin/lsregister",
-        };
-        foreach (var candidate in candidates)
-        {
-            if (File.Exists(candidate))
-            {
-                RunHelper(candidate, "-R -f", "macOS");
-                return;
-            }
-        }
-
-        LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
-            "LaunchServices refresh skipped: lsregister was not found.");
-    }
+    private static void RefreshLaunchServices() =>
+        RunHelper(ResolveLsregister(), "-R -f", "macOS");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool UnregisterMacOS(IReadOnlyList<AssociationSpec> specs)
@@ -419,8 +553,23 @@ public static partial class FileAssociationService
             return false;
         }
 
-        var directory = Path.Combine(AppPaths.Root, "FileAssociations");
-        TryDelete(Path.Combine(directory, "DocumentTypes.plist"));
+        // Removing the previous flat plist keeps upgrades from an earlier layout clean, and dropping the
+        // bundle declarations returns the extensions to whatever handler the system chose before.
+        // <para>删除旧版扁平 plist 以保证从早期布局升级时的清理，并移除包内声明，把扩展名交还给系统原有处理程序。</para>
+        TryDelete(Path.Combine(AppPaths.Root, "FileAssociations", "DocumentTypes.plist"));
+
+        var bundlePath = ResolveCurrentAppBundle();
+        if (bundlePath is not null)
+        {
+            var infoPlistPath = Path.Combine(bundlePath, "Contents", "Info.plist");
+            if (File.Exists(infoPlistPath))
+            {
+                RemoveBundleDocumentTypes(infoPlistPath);
+            }
+
+            RunHelper(ResolveLsregister(), $"-f \"{bundlePath}\"", "macOS");
+        }
+
         foreach (var type in BuildMacDocumentTypes(specs))
         {
             RunHelper("duti", $"-d {type.Extension} all", "macOS");
@@ -428,6 +577,45 @@ public static partial class FileAssociationService
 
         RefreshLaunchServices();
         return true;
+    }
+
+    /// <summary>
+    /// Removes the document type declarations this service added to the bundle's Info.plist.
+    /// <para>移除本服务添加到应用包 Info.plist 中的文档类型声明。</para>
+    /// </summary>
+    /// <param name="infoPlistPath">Path to the bundle's Info.plist.<para>应用包 Info.plist 的路径。</para></param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void RemoveBundleDocumentTypes(string infoPlistPath)
+    {
+        try
+        {
+            var text = File.ReadAllText(infoPlistPath);
+            var marker = "<key>CFBundleDocumentTypes</key>";
+            var start = text.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return;
+            }
+
+            var arrayStart = text.IndexOf("<array>", start, StringComparison.Ordinal);
+            if (arrayStart < 0)
+            {
+                return;
+            }
+
+            var arrayEnd = FindMatchingArrayEnd(text, arrayStart);
+            if (arrayEnd <= arrayStart)
+            {
+                return;
+            }
+
+            WriteAtomically(infoPlistPath, text.Remove(start, arrayEnd - start));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Removing document types from the bundle failed: {ex.Message}");
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -454,6 +642,14 @@ public static partial class FileAssociationService
         var desktopPath = Path.Combine(applicationsDirectory, $"{DesktopEntryId}.desktop");
         WriteAtomically(desktopPath, BuildDesktopEntry(specs, executable));
         RefreshLinuxDatabases(dataHome);
+
+        // Declaring the MIME type and shipping a desktop entry only adds the format to the database; the
+        // default handler lives in mimeapps.list and is written solely by xdg-mime default. Without this
+        // call a double-click still opens the old application, so the association is not actually applied.
+        // <para>声明 MIME 类型并提供 desktop 项只是把格式加入数据库；默认处理程序记录在 mimeapps.list，
+        // 只有 xdg-mime default 会写入它。缺少这一步时双击仍由旧程序打开，关联并未真正生效。</para>
+        SetLinuxDefaultApplications(specs);
+
         LogService.Instance.Write(LogLevel.Info, "FileAssociation",
             $"Registered {specs.Count} file association(s) on Linux.");
         return true;
@@ -479,6 +675,22 @@ public static partial class FileAssociationService
     {
         RunHelper("update-mime-database", Path.Combine(dataHome, "mime"), "Linux");
         RunHelper("update-desktop-database", Path.Combine(dataHome, "applications"), "Linux");
+    }
+
+    /// <summary>
+    /// Records this application as the default handler for every associated MIME type in <c>mimeapps.list</c>.
+    /// <para>在 <c>mimeapps.list</c> 中把本应用登记为每个关联 MIME 类型的默认处理程序。</para>
+    /// </summary>
+    /// <param name="specs">Association specs to bind.<para>待绑定的关联规格。</para></param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SetLinuxDefaultApplications(IReadOnlyList<AssociationSpec> specs)
+    {
+        var desktopEntry = $"{DesktopEntryId}.desktop";
+        foreach (var spec in specs)
+        {
+            RunHelper("xdg-mime",
+                $"default {desktopEntry} {MimeTypeFor(spec.Extension)}", "Linux");
+        }
     }
 
     /// <summary>Resolves the XDG data home used by freedesktop file associations.<para>解析 freedesktop 文件关联使用的 XDG 数据目录。</para></summary>
