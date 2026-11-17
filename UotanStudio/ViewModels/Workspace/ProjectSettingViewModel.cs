@@ -46,6 +46,8 @@ internal partial class ProjectSettingViewModel : Tool
     [ObservableProperty]
     private bool f2fsCompressionEnabled;
     [ObservableProperty]
+    private bool f2fsNoCompress = true;
+    [ObservableProperty]
     private string selectedF2fsCompressionAlgorithm = nameof(CompressionAlgorithm.Lz4);
     [ObservableProperty]
     private int f2fsCompressionLevel;
@@ -237,7 +239,9 @@ internal partial class ProjectSettingViewModel : Tool
         EROFSComGrade = dto.ErofsCompLevel;
         ErofsFeatureOverrides = dto.ErofsFeatureOverrides ?? "";
         HasErofsFeatureOverride = !string.IsNullOrWhiteSpace(dto.ErofsFeatureOverrides);
-        F2fsCompressionEnabled = dto.F2fsCompressionEnabled ?? false;
+        var f2fsCompressionEnabled = dto.F2fsCompressionEnabled ?? false;
+        F2fsNoCompress = !f2fsCompressionEnabled;
+        F2fsCompressionEnabled = f2fsCompressionEnabled;
         SelectedF2fsCompressionAlgorithm = NormalizeF2fsCompressionAlgorithm(dto.F2fsCompressionAlgorithm);
         F2fsCompressionLevel = dto.F2fsCompressionLevel ?? 0;
         F2fsAndroidNativeProfile = dto.F2fsAndroidNativeProfile ?? false;
@@ -262,6 +266,8 @@ internal partial class ProjectSettingViewModel : Tool
     partial void OnErofsFeatureOverridesChanged(string value) => MarkErofsFeatureOverride();
 
     partial void OnF2fsCompressionEnabledChanged(bool value) => MarkF2fsCompressionOverride();
+
+    partial void OnF2fsNoCompressChanged(bool value) => MarkF2fsCompressionOverride();
 
     partial void OnSelectedF2fsCompressionAlgorithmChanged(string value) => MarkF2fsCompressionOverride();
 

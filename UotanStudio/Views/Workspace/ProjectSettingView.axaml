@@ -3,205 +3,163 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
-             xmlns:controls="using:UotanStudio.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="850"
              x:Class="UotanStudio.Views.Workspace.ProjectSettingView"
              x:DataType="viewmodels:ProjectSettingViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="RadioButton">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.setting-field">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+    <Style Selector="WrapPanel.radio-group">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="ItemsAlignment" Value="Center" />
+      <Setter Property="ItemSpacing" Value="16" />
+      <Setter Property="LineSpacing" Value="4" />
+    </Style>
+  </UserControl.Styles>
+
   <ScrollViewer VerticalScrollBarVisibility="Auto"
-                HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Orientation="Vertical" Spacing="5">
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_ImageType}" />
-            <StackPanel MinWidth="210" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeEXT4}">
-                    <TextBlock Text="EXT4" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeEROFS}">
-                    <TextBlock Text="EROFS" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton GroupName="ImageType" FontSize="13" IsChecked="{Binding TypeF2FS}">
-                    <TextBlock Text="F2FS" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSCompression}" />
-            <CheckBox FontSize="13" IsChecked="{Binding F2fsCompressionEnabled}"
-                      Content="{DynamicResource Dock_Compress}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSAndroidProfile}" />
-            <CheckBox IsChecked="{Binding F2fsAndroidNativeProfile}"
-                      ToolTip.Tip="{DynamicResource Dock_F2FSAndroidProfileHint}"
-                      Content="{DynamicResource Dock_F2FSAndroidProfileEnabled}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSAndroidCapacity}" />
-            <TextBox MinWidth="155" MaxWidth="240" Text="{Binding F2fsAndroidImageSizeBytes}"
-                     ToolTip.Tip="{DynamicResource Dock_F2FSAndroidCapacityHint}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0" MinLabelWidth="90" MaxLabelWidth="180" ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSWslDistribution}" />
-            <TextBox MinWidth="155" MaxWidth="240" Text="{Binding F2fsNativeWslDistribution}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSAlgorithm}" />
-            <ComboBox MinWidth="155" MaxWidth="240" HorizontalAlignment="Stretch" Padding="5"
-                      ItemsSource="{Binding F2fsCompressionAlgorithmOptions}"
-                      SelectedItem="{Binding SelectedF2fsCompressionAlgorithm}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_F2FSCompLevel}" />
-            <ComboBox MinWidth="155" MaxWidth="240" HorizontalAlignment="Stretch" Padding="5"
-                      ItemsSource="0123456789" SelectedIndex="{Binding F2fsCompressionLevel}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_ImageFormat}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding FormatRAW}">
-                    <TextBlock Text="RAW" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding FormatSPARSE}">
-                    <TextBlock Text="SPARSE" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_EXT4RW}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding EXT4RO}">
-                    <TextBlock Text="RO" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding EXT4RW}">
-                    <TextBlock Text="RW" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_SizeCalc}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding SizeAuto}">
-                    <TextBlock Text="{DynamicResource Dock_Auto}" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding SizeOri}">
-                    <TextBlock Text="{DynamicResource Dock_OriginalSize}" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_EXT4Compress}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding EXT4NoCompress}">
-                    <TextBlock Text="{DynamicResource Dock_NoCompress}" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding EXT4Compress}">
-                    <TextBlock Text="{DynamicResource Dock_Compress}" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_EROFSAlgorithm}" />
-            <ComboBox MinWidth="145" MaxWidth="240" Padding="5"
-                      HorizontalAlignment="Left"
-                      ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}"
-                      ItemsSource="{Binding ErofsAlgorithmOptions}"
-                      SelectedItem="{Binding SelectedErofsAlgorithm}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       ToolTip.Tip="{DynamicResource Dock_EROFSCompLevelHint}"
-                       Text="{DynamicResource Dock_EROFSCompLevel}" />
-            <ComboBox MinWidth="155" MaxWidth="240"
-                      HorizontalAlignment="Stretch" Padding="5"
-                      ToolTip.Tip="{DynamicResource Dock_EROFSCompLevelHint}"
-                      ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
-                       Text="{DynamicResource Dock_EROFSFeatures}" />
-            <TextBox MinWidth="155" MaxWidth="240"
-                     HorizontalAlignment="Stretch" Padding="5"
-                     ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
-                     Text="{Binding ErofsFeatureOverrides}" FontSize="13"
-                     PlaceholderText="!big_pcluster" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,10,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_BRCompLevel}" />
-            <ComboBox MinWidth="155" MaxWidth="240"
-                      HorizontalAlignment="Stretch" Padding="5"
-                      ItemsSource="0123456789" SelectedIndex="{Binding BRComGrade}" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,0,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_UTCTime}" />
-            <TextBox MinWidth="155" MaxWidth="240"
-                     HorizontalAlignment="Stretch" Padding="5"
-                     Text="{Binding UTCTime}" FontSize="13" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,0,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_DATSegments}" />
-            <TextBox MinWidth="155" MaxWidth="240"
-                     HorizontalAlignment="Stretch" Padding="5"
-                     Text="{Binding DATSeg}" FontSize="13" PlaceholderText="0-999" />
-        </controls:ResponsiveFormRow>
+                HorizontalScrollBarVisibility="Disabled"
+                AllowAutoHide="True">
+    <StackPanel Margin="12" Spacing="12">
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_ImageType}" />
+        <WrapPanel Classes="radio-group">
+          <RadioButton GroupName="ImageType" IsChecked="{Binding TypeEXT4}">
+            <TextBlock Text="EXT4" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton GroupName="ImageType" IsChecked="{Binding TypeEROFS}">
+            <TextBlock Text="EROFS" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton GroupName="ImageType" IsChecked="{Binding TypeF2FS}">
+            <TextBlock Text="F2FS" TextWrapping="NoWrap" />
+          </RadioButton>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_ImageFormat}" />
+        <WrapPanel Classes="radio-group">
+          <RadioButton IsChecked="{Binding FormatRAW}">
+            <TextBlock Text="RAW" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton IsChecked="{Binding FormatSPARSE}">
+            <TextBlock Text="SPARSE" TextWrapping="NoWrap" />
+          </RadioButton>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_F2FSAndroidCapacity}" />
+        <TextBox Text="{Binding F2fsAndroidImageSizeBytes}"
+                 PlaceholderText="{DynamicResource Dock_Bytes}"
+                 ToolTip.Tip="{DynamicResource Dock_F2FSAndroidCapacityHint}" />
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_EROFSAlgorithm}" />
+        <ComboBox ToolTip.Tip="{DynamicResource Dock_EROFSAlgorithmHint}"
+                  ItemsSource="{Binding ErofsAlgorithmOptions}"
+                  SelectedItem="{Binding SelectedErofsAlgorithm}" />
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
+                   Text="{DynamicResource Dock_EROFSFeatures}" />
+        <TextBox ToolTip.Tip="{DynamicResource Dock_EROFSFeaturesHint}"
+                 Text="{Binding ErofsFeatureOverrides}"
+                 PlaceholderText="!big_pcluster" />
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_F2FSAlgorithm}" />
+        <ComboBox ItemsSource="{Binding F2fsCompressionAlgorithmOptions}"
+                  SelectedItem="{Binding SelectedF2fsCompressionAlgorithm}" />
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_F2FSCompression}" />
+        <WrapPanel Classes="radio-group">
+          <RadioButton IsChecked="{Binding F2fsNoCompress}">
+            <TextBlock Text="{DynamicResource Dock_NoCompress}" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton IsChecked="{Binding F2fsCompressionEnabled}">
+            <TextBlock Text="{DynamicResource Dock_Compress}" TextWrapping="NoWrap" />
+          </RadioButton>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_EXT4Compress}" />
+        <WrapPanel Classes="radio-group">
+          <RadioButton IsChecked="{Binding EXT4NoCompress}">
+            <TextBlock Text="{DynamicResource Dock_NoCompress}" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton IsChecked="{Binding EXT4Compress}">
+            <TextBlock Text="{DynamicResource Dock_Compress}" TextWrapping="NoWrap" />
+          </RadioButton>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_EXT4RW}" />
+        <WrapPanel Classes="radio-group">
+          <RadioButton IsChecked="{Binding EXT4RO}">
+            <TextBlock Text="RO" TextWrapping="NoWrap" />
+          </RadioButton>
+          <RadioButton IsChecked="{Binding EXT4RW}">
+            <TextBlock Text="RW" TextWrapping="NoWrap" />
+          </RadioButton>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_F2FSCompLevel}" />
+        <ComboBox ItemsSource="0123456789"
+                  SelectedIndex="{Binding F2fsCompressionLevel}" />
+      </StackPanel>
+
+      <StackPanel Classes="setting-field">
+        <TextBlock Classes="field-label"
+                   Text="{DynamicResource Dock_UTCTime}" />
+        <TextBox Text="{Binding UTCTime}" />
+      </StackPanel>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

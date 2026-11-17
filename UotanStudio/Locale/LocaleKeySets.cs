@@ -2162,6 +2162,7 @@ internal static class LocaleKeySets
         "Dock_F2FSAndroidProfileEnabled",
         "Dock_F2FSAndroidProfileHint",
         "Dock_F2FSAndroidCapacity",
+        "Dock_Bytes",
         "Dock_F2FSAndroidCapacityHint",
         "Dock_F2FSWslDistribution",
         "Dock_SUPERSize",

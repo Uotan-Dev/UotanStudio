@@ -193,7 +193,7 @@
     <value>EXT4压缩</value>
   </data>
   <data name="Dock_NoCompress" xml:space="preserve">
-    <value>不压</value>
+    <value>不压缩</value>
   </data>
   <data name="Dock_Compress" xml:space="preserve">
     <value>压缩</value>
@@ -223,7 +223,7 @@
     <value>F2FS 算法</value>
   </data>
   <data name="Dock_F2FSCompLevel" xml:space="preserve">
-    <value>F2FS 压缩等级</value>
+    <value>压缩等级</value>
   </data>
   <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
     <value>Android F2FS</value>
@@ -235,7 +235,10 @@
     <value>通过 mkfs.f2fs 和 sload.f2fs 生成只读、项目配额和扩展属性；需要原生工具或 WSL 发行版。</value>
   </data>
   <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
-    <value>镜像容量（字节）</value>
+    <value>镜像大小</value>
+  </data>
+  <data name="Dock_Bytes" xml:space="preserve">
+    <value>输入字节大小</value>
   </data>
   <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
     <value>至少 64 MiB，且须按 2 MiB 对齐。请明确指定目标分区容量。</value>

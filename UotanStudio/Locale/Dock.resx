@@ -265,7 +265,7 @@
     <value>F2FS Codec</value>
   </data>
   <data name="Dock_F2FSCompLevel" xml:space="preserve">
-    <value>F2FS Level</value>
+    <value>Compression level</value>
   </data>
   <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
     <value>Android F2FS</value>
@@ -277,7 +277,10 @@
     <value>Uses mkfs.f2fs and sload.f2fs for read-only, project quota and extra attributes. Requires native tools or a WSL distribution.</value>
   </data>
   <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
-    <value>Image capacity (bytes)</value>
+    <value>Image size</value>
+  </data>
+  <data name="Dock_Bytes" xml:space="preserve">
+    <value>Enter size in bytes</value>
   </data>
   <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
     <value>At least 64 MiB, aligned to 2 MiB. Choose the target partition capacity explicitly.</value>
