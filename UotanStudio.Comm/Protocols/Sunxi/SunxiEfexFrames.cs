@@ -105,14 +105,14 @@ internal static class SunxiEfexFrames
     /// </summary>
     /// <param name="source">Identity bytes, at least 32. <para>身份字节，至少 32 个。</para></param>
     /// <returns>The parsed identity. <para>解析出的身份信息。</para></returns>
-    /// <exception cref="InvalidDataException">The payload is shorter than 32 bytes or its magic is not <c>AWUSBEFE</c>.
-    /// <para>负载短于 32 字节，或其魔数不是 <c>AWUSBEFE</c>。</para></exception>
+    /// <exception cref="InvalidDataException">The payload is shorter than 32 bytes or its magic is not <c>AWUSBFEX</c>.
+    /// <para>负载短于 32 字节，或其魔数不是 <c>AWUSBFEX</c>。</para></exception>
     public static SunxiDeviceIdentity ReadIdentity(ReadOnlySpan<byte> source)
     {
         if (source.Length < SunxiEfexConstants.IdentitySize
             || !source[..8].SequenceEqual(SunxiEfexConstants.IdentityMagic))
         {
-            throw new InvalidDataException("The Allwinner identity payload does not start with the AWUSBEF magic.");
+            throw new InvalidDataException("The Allwinner identity payload does not start with the AWUSBFEX magic.");
         }
 
         return new SunxiDeviceIdentity(

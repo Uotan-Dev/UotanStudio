@@ -37,10 +37,12 @@ public class SunxiDiscoveryTests
         Assert.True(device.IsSunxi);
         Assert.Equal("Sunxi", device.SunxiBadge);
         Assert.Equal("Sunxi", device.Mode);
+        Assert.False(device.HasSunxiMode);
 
         device.SunxiMode = "FEL";
 
         Assert.Equal("Sunxi · FEL", device.SunxiBadge);
+        Assert.True(device.HasSunxiMode);
     }
 
     [Fact]

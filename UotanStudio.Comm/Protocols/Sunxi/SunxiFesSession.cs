@@ -201,6 +201,67 @@ public sealed class SunxiFesSession : SunxiEfexSession
     }
 
     /// <summary>
+    /// Reads storage under the flash tag straight into a stream in 64 KiB chunks, so a whole partition is read
+    /// back without buffering it in host memory; only the final chunk carries the transfer-finish flag, exactly
+    /// like the chunked <see cref="UploadAsync"/> loop.
+    /// <para>以 64 KiB 分块把闪存按闪存标签直接读入流，整段分区回读无需整块驻留主机内存；仅最后一块携带传输
+    /// 结束标志，与 <see cref="UploadAsync"/> 的分块循环完全一致。</para>
+    /// </summary>
+    /// <param name="startSector">First 512-byte sector of the range. <para>区间的首个 512 字节扇区。</para></param>
+    /// <param name="destination">Stream the read writes into. <para>本次读取写入的流。</para></param>
+    /// <param name="byteCount">Byte count to read; must be positive and a multiple of the 512-byte sector size.
+    /// <para>要读取的字节数；必须为正且是 512 字节扇区大小的倍数。</para></param>
+    /// <param name="progress">Optional byte counter reported after every chunk.
+    /// <para>可选的逐块字节计数上报。</para></param>
+    /// <param name="cancellationToken">Cancels the upload. <para>取消本次上传。</para></param>
+    /// <param name="timeoutMilliseconds">Read timeout per chunk, or <see langword="null"/> for the transport
+    /// default. <para>每个分块的读取超时；<see langword="null"/> 表示使用传输默认值。</para></param>
+    /// <returns>A task that completes when every chunk arrived and was written.
+    /// <para>所有分块到达并写出后完成的任务。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable, or
+    /// <paramref name="byteCount"/> is zero or not a sector multiple.
+    /// <para><paramref name="destination"/> 不可写，或 <paramref name="byteCount"/> 为零或不是扇区的倍数。</para></exception>
+    /// <exception cref="OverflowException">The address range passes the 32-bit address space.
+    /// <para>地址范围越过 32 位地址空间。</para></exception>
+    public async Task UploadStreamAsync(uint startSector, Stream destination, long byteCount,
+        IProgress<long>? progress = null, CancellationToken cancellationToken = default,
+        int? timeoutMilliseconds = null)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (!destination.CanWrite)
+        {
+            throw new ArgumentException("A FES stream upload needs a writable stream.", nameof(destination));
+        }
+
+        if (byteCount <= 0 || byteCount % SunxiEfexConstants.SectorSize != 0)
+        {
+            throw new ArgumentException(
+                $"A FES stream upload reads whole sectors: {byteCount} is not a positive multiple of " +
+                $"{SunxiEfexConstants.SectorSize}.", nameof(byteCount));
+        }
+
+        var remaining = byteCount;
+        var current = startSector;
+        var completed = 0L;
+        var buffer = new byte[SunxiEfexConstants.MaximumTransfer];
+        while (remaining > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var length = (int)Math.Min(buffer.Length, remaining);
+            var last = length == remaining;
+            var flags = (uint)SunxiFesDataTag.Flash | (last ? SunxiEfexConstants.TransferFinishTag : 0u);
+            var payload = SunxiEfexFrames.BuildFesTransferPayload(current, (uint)length, flags);
+            await TransferAsync(SunxiEfexCommand.FesUp, payload, null, buffer.AsMemory(0, length),
+                cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
+            await destination.WriteAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
+            completed += length;
+            progress?.Report(completed);
+            current = checked(current + (uint)(length / SunxiEfexConstants.SectorSize));
+            remaining -= length;
+        }
+    }
+
+    /// <summary>
     /// Reads raw NAND directly into host bytes, which is how the boot partitions and their sizes are read back.
     /// Unlike the tagged transfers this path always advances its address in bytes, whatever the tag implies.
     /// <para>把 raw NAND 直读到主机字节，boot 分区与其大小都经此读回。与带标签传输不同，无论标签隐含什么单位，

@@ -1,8 +1,22 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 
 namespace UotanStudio.Services.Devices;
+
+/// <summary>
+/// One partition a FES read-back pulls: its name, first 512-byte sector, byte count (a sector multiple) and the
+/// destination file the bytes land in.
+/// <para>FES 回读拉取的一个分区：名称、首个 512 字节扇区、字节数（扇区的倍数）与字节落盘的目标文件。</para>
+/// </summary>
+/// <param name="Name">Partition name the progress reports carry. <para>进度上报携带的分区名。</para></param>
+/// <param name="FirstSector">First 512-byte sector of the range. <para>区间的首个 512 字节扇区。</para></param>
+/// <param name="ByteCount">Byte count to read; a multiple of the sector size.
+/// <para>要读取的字节数；为扇区大小的倍数。</para></param>
+/// <param name="DestinationPath">File the read bytes are moved into. <para>读取字节最终移动到的文件。</para></param>
+internal sealed record SunxiPartitionReadRequest(string Name, uint FirstSector, long ByteCount,
+    string DestinationPath);
 
 /// <summary>
 /// One Allwinner endpoint as the identity handshake reported it, plus the service answers that are only available
@@ -136,6 +150,93 @@ public sealed partial class DeviceMonitorService
 
             return new SunxiDeviceStatus(session.Identity, storage, sectors, secure);
         }, cancellationToken);
+
+    /// <summary>
+    /// Reads the vendor MBR partition table (16 KiB at sector zero) straight off the FES storage.
+    /// <para>直接从 FES 存储读取厂商 MBR 分区表（扇区 0 起的 16 KiB）。</para>
+    /// </summary>
+    /// <param name="device">The selected Sunxi endpoint; it must answer as FES.
+    /// <para>所选全志端点；必须以 FES 应答。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <returns>The raw table bytes, ready for <c>SunxiMbrTable.Parse</c>.
+    /// <para>原始表字节，可直接交给 <c>SunxiMbrTable.Parse</c>。</para></returns>
+    /// <exception cref="InvalidOperationException">The device is not running FES.
+    /// <para>设备未运行 FES。</para></exception>
+    internal Task<byte[]> ReadSunxiMbrAsync(DetectedDevice device, CancellationToken cancellationToken = default) =>
+        RunSunxiAsync(device, async (session, _, token) =>
+        {
+            RequireFes(session);
+            var table = new byte[SunxiMbrTable.TableSize];
+            await session.Fes.UploadAsync(0, table, SunxiFesDataTag.Flash, token).ConfigureAwait(false);
+            return table;
+        }, cancellationToken);
+
+    /// <summary>
+    /// Reads the requested partitions off the FES storage in one lease: every request streams its range into a
+    /// temporary sibling of its destination file and moves the file into place only after the whole range
+    /// arrived, so a cancelled or failed run never leaves a partial image behind.
+    /// <para>在同一次租约内从 FES 存储读取请求的分区：每个请求把区间流式写入目标文件的临时同目录文件，整段
+    /// 到达后才移动到位，因此取消或失败的运行不会留下半截镜像。</para>
+    /// </summary>
+    /// <param name="device">The selected Sunxi endpoint; it must answer as FES.
+    /// <para>所选全志端点；必须以 FES 应答。</para></param>
+    /// <param name="requests">Partitions to pull, with their first sector, byte count and destination file.
+    /// <para>待拉取的分区，含首扇区、字节数与目标文件。</para></param>
+    /// <param name="progress">Optional per-partition byte progress. <para>可选的逐分区字节进度。</para></param>
+    /// <param name="cancellationToken">Cancels the reads and the moves. <para>取消读取与移动。</para></param>
+    /// <exception cref="InvalidOperationException">The device is not running FES.
+    /// <para>设备未运行 FES。</para></exception>
+    internal async Task ReadSunxiPartitionsAsync(DetectedDevice device,
+        IReadOnlyList<SunxiPartitionReadRequest> requests, IProgress<SunxiFlashProgress>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        await RunSunxiAsync(device, async (session, _, token) =>
+        {
+            RequireFes(session);
+            foreach (var request in requests)
+            {
+                token.ThrowIfCancellationRequested();
+                var directory = Path.GetDirectoryName(Path.GetFullPath(request.DestinationPath)) ?? string.Empty;
+                var temporary = Path.Combine(directory,
+                    $".{Path.GetFileName(request.DestinationPath)}.{Guid.NewGuid():N}.tmp");
+                try
+                {
+                    await using (var output = File.Create(temporary))
+                    {
+                        var inner = progress is null
+                            ? null
+                            : new Progress<long>(done => progress.Report(
+                                new SunxiFlashProgress("upload", request.Name, done, request.ByteCount,
+                                    $"Reading partition '{request.Name}'.")));
+                        await session.Fes.UploadStreamAsync(request.FirstSector, output, request.ByteCount, inner,
+                            token).ConfigureAwait(false);
+                    }
+
+                    File.Move(temporary, request.DestinationPath, overwrite: true);
+                }
+                catch
+                {
+                    try
+                    {
+                        File.Delete(temporary);
+                    }
+                    catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+                    {
+                    }
+
+                    throw;
+                }
+            }
+
+            return true;
+        }, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Reads device memory through the FEL session and returns the bytes.
@@ -437,6 +538,15 @@ public sealed partial class DeviceMonitorService
         {
             throw new InvalidOperationException(
                 $"The device reports mode {session.Mode} but this operation requires FEL mode.");
+        }
+    }
+
+    private static void RequireFes(SunxiDeviceSession session)
+    {
+        if (!session.IsFes)
+        {
+            throw new InvalidOperationException(
+                $"The device reports mode {session.Mode} but this operation requires FES mode.");
         }
     }
 
