@@ -48,14 +48,26 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job has no checkout, so gh cannot infer the repository from a
+          # working tree; GH_REPO plus the explicit --repo below pin it.
+          GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.inputs.run_id }}
           TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
+          # Prints a run id or nothing, and never fails: an empty result means
+          # "no successful run" while a gh error is reported as a warning so it is
+          # not mistaken for a missing workflow.
           fetch() {
-            if [ -n "$RUN_ID" ] && [ "$1" = release.yml ]; then echo "$RUN_ID"; else
-              gh run list --workflow="$1" --status=success --limit 1 --json databaseId -q '.[0].databaseId' || true
+            if [ -n "$RUN_ID" ] && [ "$1" = release.yml ]; then printf '%s' "$RUN_ID"; return 0; fi
+            local out
+            if out=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow="$1" --status=success \
+                       --limit 1 --json databaseId -q '.[0].databaseId // empty' 2>&1); then
+              printf '%s' "$out"
+            else
+              echo "::warning::gh run list --workflow=$1 failed: $out" >&2
             fi
+            return 0
           }
 
           json='{}'
@@ -66,21 +78,33 @@ jobs:
                 '. + {($rid): {run_id: "", artifact: "", ver: $ver, mode: "release", tag: $tag}}' <<< "$json")
             done
           fi
+          searched=()
           for wf in release.yml riscv-publish.yml loongarch-publish.yml; do
             run_id=$(fetch "$wf")
-            [ -n "$run_id" ] || { echo "::warning::No successful $wf run found; skipping its artifacts."; continue; }
+            if [ -z "$run_id" ]; then
+              echo "::warning::No successful $wf run found; skipping its artifacts." >&2
+              continue
+            fi
+            searched+=("$wf#$run_id")
+            if ! names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" --paginate \
+                           -q '.artifacts[].name' 2>&1); then
+              echo "::warning::Cannot list artifacts of $wf run $run_id: $names" >&2
+              continue
+            fi
             while IFS= read -r name; do
-              [ -n "$name" ] || continue
-              rid=$(printf '%s' "$name" | sed -E 's/.*-((win|linux|osx)-[a-z0-9-]+)$/\1/')
-              ver=$(printf '%s' "$name" | sed -E 's/^uotanstudio-(.*)-((win|linux|osx)-[a-z0-9-]+)$/\1/')
+              name=${name%$'\r'}
+              [[ $name =~ ^uotanstudio-(.+-)?(win|linux|osx)-[a-z0-9]+(-[a-z0-9]+)*$ ]] || continue
+              rid=$(printf '%s' "$name" | sed -E 's/^uotanstudio-(.+-)?((win|linux|osx)-[a-z0-9]+(-[a-z0-9]+)*)$/\2/')
+              ver=$(printf '%s' "$name" | sed -E 's/^uotanstudio-(.+-)?((win|linux|osx)-[a-z0-9]+(-[a-z0-9]+)*)$/\1/')
+              ver=${ver%-}
+              [ -n "$ver" ] && [ -n "$rid" ] || continue
               json=$(jq -c --arg rid "$rid" --arg run "$run_id" --arg art "$name" --arg ver "$ver" \
                 '. + {($rid): {run_id: $run, artifact: $art, ver: $ver, mode: "run", tag: ""}}' <<< "$json")
-            done < <(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" --paginate \
-              -q '.artifacts[].name' | grep '^uotanstudio-' || true)
+            done <<< "$names"
           done
 
           if [ "$(jq 'length' <<< "$json")" -eq 0 ]; then
-            echo "::error::No uotanstudio-* artifacts found in any workflow run." >&2
+            echo "::error::No uotanstudio-* artifacts found in any workflow run (run ids considered: ${searched[*]:-none})." >&2
             exit 1
           fi
           distinct=$(jq -r '[.[].ver] | unique | length' <<< "$json")
