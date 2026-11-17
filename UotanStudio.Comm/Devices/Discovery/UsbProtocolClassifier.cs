@@ -20,6 +20,8 @@ public static class UsbProtocolClassifier
     private const ushort QuectelVid = 0x2C7C;
     private const ushort AllwinnerVid = 0x1F3A;
     private const ushort AllwinnerFesPid = 0xEFE8;
+    private const ushort UnisocVid = 0x1782;
+    private const ushort UnisocDownloadPid = 0x4D00;
 
     /// <summary>
     /// Classifies the device as <c>edl</c>, <c>mtk</c>, <c>rkdl</c> or <c>sunxi</c> from its bootrom VID/PID pair,
@@ -123,6 +125,11 @@ public static class UsbProtocolClassifier
         if (vendorId == AllwinnerVid && product == AllwinnerFesPid)
         {
             return "sunxi";
+        }
+
+        if (vendorId == UnisocVid && product == UnisocDownloadPid)
+        {
+            return "unisoc";
         }
 
         if (vendorId == QualcommVid &&
