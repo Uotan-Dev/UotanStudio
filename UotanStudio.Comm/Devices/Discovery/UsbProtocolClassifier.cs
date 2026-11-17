@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.Tegra;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Discovery;
@@ -24,9 +25,9 @@ public static class UsbProtocolClassifier
     private const ushort UnisocDownloadPid = 0x4D00;
 
     /// <summary>
-    /// Classifies the device as <c>edl</c>, <c>mtk</c>, <c>rkdl</c> or <c>sunxi</c> from its bootrom VID/PID pair,
-    /// otherwise from the first interface matching a known debug-bridge triple.
-    /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c>、<c>rkdl</c> 或 <c>sunxi</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>
+    /// Classifies the device as <c>edl</c>, <c>mtk</c>, <c>rkdl</c>, <c>sunxi</c>, <c>unisoc</c> or <c>tegra</c> from
+    /// its bootrom VID/PID pair, otherwise from the first interface matching a known debug-bridge triple.
+    /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c>、<c>rkdl</c>、<c>sunxi</c>、<c>unisoc</c> 或 <c>tegra</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>
     /// </summary>
     /// <param name="device">
     /// The enumerated USB device. <para>已枚举的 USB 设备。</para>
@@ -86,11 +87,19 @@ public static class UsbProtocolClassifier
         };
 
     /// <summary>
-    /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c>, <c>rkdl</c> or <c>sunxi</c>, covering Qualcomm and
-    /// MediaTek bootrom and download ports, Rockchip loader ports and the Allwinner FEL/FES pair. Pairs in
+    /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c>, <c>rkdl</c>, <c>sunxi</c>, <c>unisoc</c> or
+    /// <c>tegra</c>, covering Qualcomm, MediaTek and NVIDIA bootrom and download ports, Rockchip loader ports,
+    /// the Allwinner FEL/FES pair and the UNISOC download port. Pairs in
     /// <see cref="RkdlConstants.MscExcludedDevices"/> are rejected first, exactly like the vendor tool's scan.
-    /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，覆盖高通与联发科的 bootrom/下载端口以及瑞芯微 loader 端口。
+    /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c>、<c>rkdl</c>、<c>sunxi</c>、<c>unisoc</c> 或 <c>tegra</c>，覆盖高通、联发科与 NVIDIA 的 bootrom/下载端口、瑞芯微 loader 端口、全志 FEL/FES 组合与紫光展锐下载端口。
     /// 属于 <see cref="RkdlConstants.MscExcludedDevices"/> 的组合会先被拒绝，与厂商工具的扫描一致。</para>
+    /// A pair is Tegra only when <see cref="TegraConstants.IsTegraRcmEndpoint"/> accepts both halves: NVIDIA's
+    /// vendor id plus a product id whose low byte is one of the four RCM device ids. Every other NVIDIA product,
+    /// and a fastboot port under any other vendor id — the Xiaomi 3 pair 0x18D1:0xD00D with low byte 0x0D for
+    /// instance — stays outside this class.
+    /// <para>只有 <see cref="TegraConstants.IsTegraRcmEndpoint"/> 同时接受厂商 ID 与产品 ID（低字节为四个 RCM 设备 ID 之一）时，
+    /// 该组合才属于 Tegra；其它 NVIDIA 产品，以及任何其它厂商 ID 下的 fastboot 端口（例如小米 3 的 0x18D1:0xD00D，低字节为 0x0D），
+    /// 都不归入此类。</para>
     /// </summary>
     /// <param name="vendorId">
     /// USB vendor id. <para>USB 厂商 ID。</para>
@@ -130,6 +139,11 @@ public static class UsbProtocolClassifier
         if (vendorId == UnisocVid && product == UnisocDownloadPid)
         {
             return "unisoc";
+        }
+
+        if (TegraConstants.IsTegraRcmEndpoint(vendorId, product))
+        {
+            return "tegra";
         }
 
         if (vendorId == QualcommVid &&

@@ -205,7 +205,8 @@ internal sealed class FlashControlGate
         new(name, context => context.Mode == owner &&
             (context.Kind == FlashDeviceKind.Unknown ||
                 (owner == FlashDeviceMode.Sunxi && context.Kind == FlashDeviceKind.Sunxi) ||
-                (owner == FlashDeviceMode.Unisoc && context.Kind == FlashDeviceKind.Unisoc)) &&
+                (owner == FlashDeviceMode.Unisoc && context.Kind == FlashDeviceKind.Unisoc) ||
+                (owner == FlashDeviceMode.Tegra && context.Kind == FlashDeviceKind.Tegra)) &&
             (owner != FlashDeviceMode.Rkdl || context.Stage != RockchipStage.Maskrom),
             busyDisabled);
 
@@ -227,6 +228,17 @@ internal sealed class FlashControlGate
     internal static FlashControlGate Unisoc(string name, bool busyDisabled = false) => new(name,
         static context => context.Mode == FlashDeviceMode.Unisoc &&
             context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Unisoc,
+        busyDisabled);
+
+    /// <summary>
+    /// The NVIDIA Tegra section and its controls: offered only to a Tegra endpoint, which owns the only action set that
+    /// endpoint currently has. No shared action can run against a Tegra boot ROM because it answers RCM alone.
+    /// <para>NVIDIA Tegra 分类及其控件：只提供给 Tegra 端点，该端点当前拥有的动作集合仅此一处。没有任何通用动作能作用于
+    /// Tegra boot ROM，因为它只应答 RCM。</para>
+    /// </summary>
+    internal static FlashControlGate Tegra(string name, bool busyDisabled = false) => new(name,
+        static context => context.Mode == FlashDeviceMode.Tegra &&
+            context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Tegra,
         busyDisabled);
 
     /// <summary>

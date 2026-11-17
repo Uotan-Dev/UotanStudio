@@ -10,6 +10,7 @@ using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Comm.Protocols.Tegra;
 using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Serial;
@@ -31,7 +32,8 @@ internal static class DefaultDeviceSessionFactories
         new AppleDeviceSessionFactory(),
         new DiagnosticDeviceSessionFactory(),
         new SunxiDeviceSessionFactory(),
-        new UnisocDeviceSessionFactory()
+        new UnisocDeviceSessionFactory(),
+        new TegraDeviceSessionFactory()
     ];
 }
 
@@ -250,6 +252,24 @@ internal sealed class UnisocDeviceSessionFactory : IDeviceSessionFactory
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         return await UnisocDeviceSession.OpenAsync(new UnisocUsbTransport(usb), null, cancellationToken)
             .ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// Builds an NVIDIA Tegra RCM session over the leased USB transport; the session itself reports whether a
+/// miniloader was accepted before it speaks nv3p.
+/// <para>在已租用的 USB 传输之上构建 NVIDIA Tegra RCM 会话；会话自身报告在改用 nv3p 之前 miniloader 是否已被接受。</para>
+/// </summary>
+internal sealed class TegraDeviceSessionFactory : IDeviceSessionFactory
+{
+    public DeviceSessionKind Kind => DeviceSessionKind.Tegra;
+
+    public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LeasedTransport.RequireProtocol(endpoint, "tegra");
+        var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
+        return Task.FromResult<object>(new TegraRcmSession(new UsbDeviceTransport(usb)));
     }
 }
 

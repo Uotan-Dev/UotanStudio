@@ -25,8 +25,11 @@ public static class FlashProtocolCatalog
     /// <summary>UNISOC protocol key.<para>紫光展锐协议键。</para></summary>
     public const string Unisoc = "unisoc";
 
+    /// <summary>NVIDIA Tegra protocol key.<para>NVIDIA Tegra 协议键。</para></summary>
+    public const string Tegra = "tegra";
+
     /// <summary>Gets the default protocol order.<para>获取默认协议顺序。</para></summary>
-    public static IReadOnlyList<string> DefaultOrder { get; } = [Edl, Mtk, Rockchip, Sunxi, Unisoc];
+    public static IReadOnlyList<string> DefaultOrder { get; } = [Edl, Mtk, Rockchip, Sunxi, Unisoc, Tegra];
 
     /// <summary>Creates the default all-visible display preferences.<para>创建默认全部可见的显示偏好。</para></summary>
     /// <returns>A new mutable preference list.<para>新的可变偏好列表。</para></returns>
@@ -52,6 +55,7 @@ public static class FlashProtocolCatalog
         Rockchip => Rockchip,
         Sunxi => Sunxi,
         Unisoc => Unisoc,
+        Tegra => Tegra,
         _ => null
     };
 
@@ -65,6 +69,7 @@ public static class FlashProtocolCatalog
         Rockchip => "Flash_Rockchip",
         Sunxi => "Flash_Sunxi",
         Unisoc => "Flash_Unisoc",
+        Tegra => "Flash_Tegra",
         _ => string.Empty
     };
 }

@@ -61,5 +61,11 @@ public enum DeviceSessionKind
     /// FDL1, FDL2) is resolved from the handshake.
     /// <para>运行在厂商下载串口或等价传输上的紫光展锐 BSL 会话；加载阶段（Boot ROM、FDL1、FDL2）由握手确定。</para>
     /// </summary>
-    Unisoc
+    Unisoc,
+    /// <summary>
+    /// NVIDIA Tegra RCM session on a direct USB transport; the same session carries the nv3p download once the
+    /// boot ROM has accepted a miniloader.
+    /// <para>运行在直连 USB 传输上的 NVIDIA Tegra RCM 会话；boot ROM 接受 miniloader 之后，同一会话承载 nv3p 下载。</para>
+    /// </summary>
+    Tegra
 }

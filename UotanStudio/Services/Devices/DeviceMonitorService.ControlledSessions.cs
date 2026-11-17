@@ -3,6 +3,7 @@ using System.Diagnostics;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Protocols.Tegra;
 
 namespace UotanStudio.Services.Devices;
 
@@ -380,6 +381,12 @@ public sealed partial class DeviceMonitorService
     /// defined protocol must have a mapping, otherwise leasing an endpoint fails before any I/O.
     /// <para>把设备协议映射为发现阶段产生的端点协议字符串；每个已定义的协议都必须有映射，
     /// 否则在发起任何 I/O 之前取得租约即会失败。</para>
+    /// The Tegra mapping is the same <c>tegra</c> text the Comm classifier emits, and that classifier accepts a
+    /// pair only through <see cref="TegraConstants.IsTegraRcmEndpoint"/>, so the discovery layer and this
+    /// endpoint inventory never disagree; a Xiaomi 3 fastboot port (0x18D1:0xD00D) is never a Tegra endpoint.
+    /// <para>Tegra 的映射与 Comm 分类器输出的 <c>tegra</c> 文本一致，而该分类器只经
+    /// <see cref="TegraConstants.IsTegraRcmEndpoint"/> 接受组合，因此发现层与本端点清单的结论永不分歧；
+    /// 小米 3 的 fastboot 端口（0x18D1:0xD00D）永远不会是 Tegra 端点。</para>
     /// </summary>
     /// <param name="protocol">The device protocol to map. <para>待映射的设备协议。</para></param>
     /// <returns>The endpoint protocol string. <para>端点协议字符串。</para></returns>
@@ -396,6 +403,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Diagnostic => "diag",
         DeviceProtocolKind.Sunxi => "sunxi",
         DeviceProtocolKind.Unisoc => "unisoc",
+        DeviceProtocolKind.Tegra => "tegra",
         _ => throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "Unexpected protocol kind.")
     };
 

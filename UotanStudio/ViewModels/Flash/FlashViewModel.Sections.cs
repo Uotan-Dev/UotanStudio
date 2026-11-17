@@ -32,6 +32,10 @@ public sealed partial class FlashViewModel
     [ObservableProperty]
     private bool _isUnisocSectionExpanded;
 
+    /// <summary>Whether the NVIDIA Tegra section is expanded. <para>NVIDIA Tegra 分类是否展开。</para></summary>
+    [ObservableProperty]
+    private bool _isNvidiaSectionExpanded;
+
     /// <summary>Whether the image operations section is expanded. <para>镜像操作分类是否展开。</para></summary>
     [ObservableProperty]
     private bool _isImageSectionExpanded;
@@ -45,6 +49,8 @@ public sealed partial class FlashViewModel
     partial void OnIsSunxiSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsUnisocSectionExpandedChanged(bool value) => PersistSectionExpansion();
+
+    partial void OnIsNvidiaSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
     partial void OnIsImageSectionExpandedChanged(bool value) => PersistSectionExpansion();
 
@@ -60,6 +66,7 @@ public sealed partial class FlashViewModel
             IsRockchipSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Rockchip);
             IsSunxiSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Sunxi);
             IsUnisocSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Unisoc);
+            IsNvidiaSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Nvidia);
             IsImageSectionExpanded = FlashSectionState.IsExpanded(sections, FlashSectionState.Image);
         }
         finally
@@ -81,6 +88,7 @@ public sealed partial class FlashViewModel
             IsRockchipSectionExpanded,
             IsImageSectionExpanded,
             IsSunxiSectionExpanded,
-            IsUnisocSectionExpanded));
+            IsUnisocSectionExpanded,
+            IsNvidiaSectionExpanded));
     }
 }

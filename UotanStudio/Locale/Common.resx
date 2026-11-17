@@ -4653,6 +4653,39 @@ Continue?</value>
   <data name="Flash_SunxiInfo_SecureWord" xml:space="preserve">
     <value>Secure word</value>
   </data>
+  <data name="Flash_Tegra" xml:space="preserve">
+    <value>NVIDIA Tegra</value>
+  </data>
+  <data name="Flash_TegraHint" xml:space="preserve">
+    <value>Tegra recovery mode (RCM/APX) is entered by hardware strapping only: no Android or fastboot command can reach it. The reboot targets below are the three the Tegra kernel implements.</value>
+  </data>
+  <data name="Flash_TegraRcmDetected" xml:space="preserve">
+    <value>RCM (APX) endpoint detected: {0}. The boot ROM is ready to receive a miniloader.</value>
+  </data>
+  <data name="Flash_TegraRcmHint" xml:space="preserve">
+    <value>An RCM boot ROM answers only the download protocol; no shared storage action can run against it. Enter RCM by the hardware strap, or let the boot ROM fall back when the boot medium is unreadable.</value>
+  </data>
+  <data name="Flash_TegraRebootNeedsAdb" xml:space="preserve">
+    <value>A Tegra reboot target needs a live Android endpoint; a download port cannot be asked to reboot.</value>
+  </data>
+  <data name="Flash_TegraRebootSent" xml:space="preserve">
+    <value>Rebooting with target: {0}</value>
+  </data>
+  <data name="Flash_TegraRebootFailed" xml:space="preserve">
+    <value>Reboot target {0} failed: {1}</value>
+  </data>
+  <data name="Flash_TegraRebootTargets" xml:space="preserve">
+    <value>Reboot targets</value>
+  </data>
+  <data name="Flash_TegraRebootBootloader" xml:space="preserve">
+    <value>Reboot to bootloader</value>
+  </data>
+  <data name="Flash_TegraRebootRecovery" xml:space="preserve">
+    <value>Reboot to recovery</value>
+  </data>
+  <data name="Flash_TegraRebootForcedRecovery" xml:space="preserve">
+    <value>Force recovery</value>
+  </data>
   <data name="Flash_Unisoc" xml:space="preserve">
     <value>UNISOC (Spreadtrum)</value>
   </data>

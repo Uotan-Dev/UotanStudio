@@ -4653,6 +4653,39 @@
   <data name="Flash_SunxiInfo_SecureWord" xml:space="preserve">
     <value>安全字</value>
   </data>
+  <data name="Flash_Tegra" xml:space="preserve">
+    <value>NVIDIA Tegra</value>
+  </data>
+  <data name="Flash_TegraHint" xml:space="preserve">
+    <value>Tegra 恢复模式（RCM/APX）只能由硬件跳线进入，任何 Android 或 fastboot 命令都无法到达。下列重启目标是 Tegra 内核实现的三个目标。</value>
+  </data>
+  <data name="Flash_TegraRcmDetected" xml:space="preserve">
+    <value>检测到 RCM（APX）端点：{0}。boot ROM 已准备好接收 miniloader。</value>
+  </data>
+  <data name="Flash_TegraRcmHint" xml:space="preserve">
+    <value>RCM boot ROM 只应答下载协议，没有任何通用存储动作能作用于它。请通过硬件跳线进入 RCM，或在引导介质不可读时由 boot ROM 自行回落进入。</value>
+  </data>
+  <data name="Flash_TegraRebootNeedsAdb" xml:space="preserve">
+    <value>Tegra 重启目标需要一个活动的 Android 端点；下载端口无法被要求重启。</value>
+  </data>
+  <data name="Flash_TegraRebootSent" xml:space="preserve">
+    <value>正在用目标重启：{0}</value>
+  </data>
+  <data name="Flash_TegraRebootFailed" xml:space="preserve">
+    <value>重启目标 {0} 失败：{1}</value>
+  </data>
+  <data name="Flash_TegraRebootTargets" xml:space="preserve">
+    <value>重启目标</value>
+  </data>
+  <data name="Flash_TegraRebootBootloader" xml:space="preserve">
+    <value>重启到 bootloader</value>
+  </data>
+  <data name="Flash_TegraRebootRecovery" xml:space="preserve">
+    <value>重启到 recovery</value>
+  </data>
+  <data name="Flash_TegraRebootForcedRecovery" xml:space="preserve">
+    <value>强制进入 recovery</value>
+  </data>
   <data name="Flash_Unisoc" xml:space="preserve">
     <value>紫光展锐（UNISOC）</value>
   </data>

@@ -435,4 +435,7 @@ public partial class FlashView : UserControl
     private void OnSunxiChooseDtbClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseDtbClick(sender, e);
     private void OnSunxiChooseSysConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseSysConfigClick(sender, e);
     private void OnSunxiChooseBoardConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseBoardConfigClick(sender, e);
+    private void OnNvidiaRebootBootloaderClick(object? sender, RoutedEventArgs e) => _model.OnNvidiaRebootBootloaderClick(sender, e);
+    private void OnNvidiaRebootRecoveryClick(object? sender, RoutedEventArgs e) => _model.OnNvidiaRebootRecoveryClick(sender, e);
+    private void OnNvidiaRebootForcedRecoveryClick(object? sender, RoutedEventArgs e) => _model.OnNvidiaRebootForcedRecoveryClick(sender, e);
 }

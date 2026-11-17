@@ -5,6 +5,7 @@ using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Protocols.SpacemiT;
+using UotanStudio.Comm.Protocols.Tegra;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -577,6 +578,13 @@ public sealed partial class DeviceMonitorService
     /// <summary>
     /// Maps a USB device to a protocol kind by interface class and VID/PID.
     /// <para>按接口类与 VID/PID 把 USB 设备映射为协议类型。</para>
+    /// A <c>tegra</c> classification follows the same <see cref="TegraConstants.IsTegraRcmEndpoint"/> test the
+    /// Comm classifier applies, so the discovery row and the endpoint inventory never disagree; NVIDIA products
+    /// outside the RCM device-id table stay unclassified, which also keeps a Xiaomi 3 fastboot port
+    /// (0x18D1:0xD00D) out of Tegra.
+    /// <para><c>tegra</c> 分类沿用 Comm 分类器所用的同一个 <see cref="TegraConstants.IsTegraRcmEndpoint"/> 判定，
+    /// 因此发现行与端点清单的结论永不分歧；RCM 设备 ID 表之外的 NVIDIA 产品保持未分类，小米 3 的 fastboot 端口
+    /// （0x18D1:0xD00D）也因此不会被归入 Tegra。</para>
     /// </summary>
     /// <param name="info">The USB device information to classify. <para>要分类的 USB 设备信息。</para></param>
     /// <returns>The protocol kind, or <see langword="null"/> when unclassified. <para>协议类型；无法分类时为 <see langword="null"/>。</para></returns>
@@ -593,6 +601,7 @@ public sealed partial class DeviceMonitorService
             "diag" => DeviceProtocolKind.Diagnostic,
             "sunxi" => DeviceProtocolKind.Sunxi,
             "unisoc" => DeviceProtocolKind.Unisoc,
+            "tegra" => DeviceProtocolKind.Tegra,
             _ => null
         };
 

@@ -49,6 +49,8 @@ public enum DeviceProtocolKind
     Sunxi,
     /// <summary>UNISOC BSL download link (Boot ROM, FDL1 or FDL2), told apart by the handshake.<para>紫光展锐 BSL 下载链路（Boot ROM、FDL1 或 FDL2），由握手区分。</para></summary>
     Unisoc,
+    /// <summary>NVIDIA Tegra RCM/APX download mode.<para>NVIDIA Tegra RCM/APX 下载模式。</para></summary>
+    Tegra,
 }
 
 /// <summary>
@@ -157,6 +159,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Diagnostic => "DIAG",
         DeviceProtocolKind.Sunxi => "Sunxi",
         DeviceProtocolKind.Unisoc => "Unisoc",
+        DeviceProtocolKind.Tegra => "Tegra",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }

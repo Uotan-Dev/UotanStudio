@@ -1319,6 +1319,35 @@
                             </StackPanel>
                         </Expander>
                         </StackPanel>
+                        <!-- NVIDIA Tegra 分类：重启目标矩阵与 RCM 下载链，均无法接入通用按钮 -->
+                        <Expander Name="NvidiaExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_Tegra}" IsExpanded="{Binding IsNvidiaSectionExpanded, Mode=TwoWay}">
+                            <StackPanel Name="NvidiaPane" Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_TegraHint}" FontSize="12" Opacity="0.8"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Name="NvidiaStatusText" Text="{Binding TegraStatusText}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <TextBlock Name="NvidiaRcmHint" Text="{Binding TegraRcmHint}" FontSize="12"
+                                           Opacity="0.8" TextWrapping="Wrap" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_TegraRebootTargets}" FontSize="12" Opacity="0.8" />
+                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <Button Name="NvidiaRebootBootloaderButton" Classes="pane-action"
+                                            Click="OnNvidiaRebootBootloaderClick"
+                                            Content="{DynamicResource Flash_TegraRebootBootloader}"
+                                            AutomationProperties.Name="{DynamicResource Flash_TegraRebootBootloader}" />
+                                    <Button Name="NvidiaRebootRecoveryButton" Classes="pane-action"
+                                            Click="OnNvidiaRebootRecoveryClick"
+                                            Content="{DynamicResource Flash_TegraRebootRecovery}"
+                                            AutomationProperties.Name="{DynamicResource Flash_TegraRebootRecovery}" />
+                                    <Button Name="NvidiaRebootForcedRecoveryButton" Classes="pane-action"
+                                            Click="OnNvidiaRebootForcedRecoveryClick"
+                                            Content="{DynamicResource Flash_TegraRebootForcedRecovery}"
+                                            AutomationProperties.Name="{DynamicResource Flash_TegraRebootForcedRecovery}" />
+                                </controls:JustifiedWrapPanel>
+                            </StackPanel>
+                        </Expander>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">

@@ -132,6 +132,7 @@ public sealed partial class FlashViewModel
         RegisterRockchipControlGates();
         RegisterSunxiControlGates();
         RegisterUnisocControlGates();
+        RegisterTegraControlGates();
         RegisterImageControlGates();
     }
 

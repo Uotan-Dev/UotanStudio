@@ -39,7 +39,11 @@ internal enum FlashDeviceMode
     Sunxi,
 
     /// <summary>UNISOC Boot ROM, FDL1 or FDL2. <para>紫光展锐 Boot ROM、FDL1 或 FDL2。</para></summary>
-    Unisoc
+    Unisoc,
+
+    /// <summary>NVIDIA Tegra recovery mode (APX) boot ROM, the only Tegra stage that accepts a download.
+    /// <para>NVIDIA Tegra 恢复模式（APX）boot ROM，唯一接受下载的 Tegra 阶段。</para></summary>
+    Tegra
 }
 
 /// <summary>
@@ -80,7 +84,13 @@ internal enum FlashDeviceKind
     /// <summary>A UNISOC endpoint; only the Unisoc section is offered because its package flash path is
     /// protocol-specific. <para>紫光展锐端点；其整包烧录路径由该协议专用，因此只提供紫光展锐分类。</para>
     /// </summary>
-    Unisoc
+    Unisoc,
+
+    /// <summary>An NVIDIA Tegra endpoint; only the NVIDIA section is offered because its download chain is
+    /// protocol-specific and no shared action can run against a boot ROM.
+    /// <para>NVIDIA Tegra 端点；其下载链由该协议专用，且没有任何通用动作能作用于 boot ROM，因此只提供 NVIDIA 分类。</para>
+    /// </summary>
+    Tegra
 }
 
 /// <summary>
@@ -145,6 +155,7 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Fastboot => FlashDeviceMode.Fastboot,
         DeviceProtocolKind.Sunxi => FlashDeviceMode.Sunxi,
         DeviceProtocolKind.Unisoc => FlashDeviceMode.Unisoc,
+        DeviceProtocolKind.Tegra => FlashDeviceMode.Tegra,
         _ => FlashDeviceMode.Shared
     };
 
@@ -165,6 +176,7 @@ internal static class FlashDeviceUiPolicy
         DeviceProtocolKind.Hdc => FlashDeviceKind.Hdc,
         DeviceProtocolKind.Sunxi => FlashDeviceKind.Sunxi,
         DeviceProtocolKind.Unisoc => FlashDeviceKind.Unisoc,
+        DeviceProtocolKind.Tegra => FlashDeviceKind.Tegra,
         _ => FlashDeviceKind.Unknown,
     };
 
