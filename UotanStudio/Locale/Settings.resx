@@ -141,6 +141,9 @@
   <data name="Settings_FileAssociations" xml:space="preserve">
     <value>Associated file formats</value>
   </data>
+  <data name="Settings_FileAssociationsSave" xml:space="preserve">
+    <value>Save Association Settings</value>
+  </data>
   <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
     <value>Sort: Category</value>
   </data>
