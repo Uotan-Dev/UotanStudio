@@ -11,11 +11,15 @@ internal partial class WinUSBDevice
 {
     /// <summary>Asynchronously reads one bulk IN chunk through overlapped I/O.
     /// <para>通过重叠 I/O 异步读取一个批量 IN 分块。</para></summary>
-    /// <remarks>A disconnection or an aborted overlapped transfer is fatal: neither can be resumed on the same pipe, and the base read loop would otherwise collapse the error into a zero-byte idle read that a protocol loop keeps waiting on. Any other native error still collapses to <c>UsbChunkResult.Error</c>, which the base read loop treats as a short transfer with the error code only reaching the transfer trace; the synchronous <c>ReadChunk</c> raises a fatal error (<c>UsbChunkStatus.FatalError</c>) for it, and that difference stays until per-protocol retry behavior has real-device regression. The native error is logged here so the collapse is never silent at the backend layer.
-    /// <para>断连与重叠传输被中止都是致命错误：两者都无法在同一管道上继续，而基类读取循环会把它折叠成零字节的
-    /// 空闲读取，使协议循环继续等待。其它原生错误仍折叠为 <c>UsbChunkResult.Error</c>，基类读取循环将其视为短
-    /// 传输且错误码只进入传输 trace；同样的错误在同步 <c>ReadChunk</c> 会报致命错误（<c>UsbChunkStatus.FatalError</c>）
-    /// 并抛出，该差异保留到各协议重试策略经过真机回归为止。此处记录原生错误码，使后端层的折叠不再静默。</para></remarks>
+    /// <remarks>A disconnection, an aborted overlapped transfer and every other native failure are all fatal: none of them can
+    /// be resumed on the same pipe, and reporting any of them as a short transfer collapsed the failure into a zero-byte idle
+    /// read that a protocol loop kept waiting on, spinning hundreds of failed bulk transfers per second until the device
+    /// re-enumerated. The synchronous <c>ReadChunk</c> already raises <c>UsbChunkStatus.FatalError</c> for the same errors, so
+    /// both paths now agree and the session is rebuilt instead. The native error is logged before that report.
+    /// <para>断连、重叠传输被中止以及其它所有原生失败都按致命错误上报：它们都无法在同一管道上继续；此前把其中任何一种
+    /// 报成短传输，会让失败折叠成零字节的空闲读取，协议循环因此持续等待，并在每秒内空转数百次失败的批量传输，直到设备
+    /// 重新枚举。同步 <c>ReadChunk</c> 对同样的错误已经上报 <c>UsbChunkStatus.FatalError</c>，两条路径现在一致，改为重建
+    /// 会话。上报前记录原生错误码。</para></remarks>
     protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
         if (_winUsbHandle.IsInvalid)
@@ -50,18 +54,21 @@ internal partial class WinUSBDevice
                 return RecoverAbortedTransfer(ex.NativeErrorCode, _readBulkID);
             }
 
-            UsbTrace.LogError($"WinUSB: async bulk IN chunk failed with native error {ex.NativeErrorCode}; collapsed to a retryable error outcome.");
-            return UsbChunkResult.Error(ex.NativeErrorCode);
+            UsbTrace.LogError(
+                $"WinUSB: async bulk IN chunk failed with native error {ex.NativeErrorCode}; reporting a fatal transfer so the " +
+                "session is rebuilt instead of collapsing it into an empty read that the protocol loop keeps waiting on.");
+            return UsbChunkResult.Fatal(ex.NativeErrorCode);
         }
     }
 
     /// <summary>Asynchronously writes one bulk OUT chunk through overlapped I/O.
     /// <para>通过重叠 I/O 异步写入一个批量 OUT 分块。</para></summary>
-    /// <remarks>A disconnection or an aborted overlapped transfer is fatal because neither can be resumed on the same pipe. Any other native error collapses to <c>UsbChunkResult.Error</c>, which the base write loop treats as a short write indistinguishable from a device-side short completion, while the synchronous <c>WriteChunk</c> raises a fatal failure for it; that difference stays pending per-protocol retry review and real-device regression. The native error is logged here so the collapse is never silent at the backend layer.
-    /// <para>断连与重叠传输被中止都是致命错误，因为两者都无法在同一管道上继续。其它原生错误折叠为
-    /// <c>UsbChunkResult.Error</c>，基类写入循环将其视为与设备侧短完成不可区分的短写，而同样的错误在同步
-    /// <c>WriteChunk</c> 会报致命失败；该差异待逐协议重试策略复核与真机回归后再定。此处记录原生错误码，
-    /// 使后端层的折叠不再静默。</para></remarks>
+    /// <remarks>A disconnection, an aborted overlapped transfer and every other native failure are all fatal, matching the
+    /// synchronous <c>WriteChunk</c>: reporting one as a short write made it indistinguishable from a device-side short
+    /// completion, so the caller could neither retry deliberately nor rebuild the session. The native error is logged before
+    /// that report.
+    /// <para>断连、重叠传输被中止以及其它所有原生失败都按致命失败上报，与同步 <c>WriteChunk</c> 一致：此前报成短写会使其与
+    /// 设备侧短完成无法区分，调用方既无法有意识地重试，也无法重建会话。上报前记录原生错误码。</para></remarks>
     protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
         if (_winUsbHandle.IsInvalid)
@@ -89,8 +96,10 @@ internal partial class WinUSBDevice
                 return RecoverAbortedTransfer(ex.NativeErrorCode, _writeBulkID);
             }
 
-            UsbTrace.LogError($"WinUSB: async bulk OUT chunk failed with native error {ex.NativeErrorCode}; collapsed to a retryable error outcome.");
-            return UsbChunkResult.Error(ex.NativeErrorCode);
+            UsbTrace.LogError(
+                $"WinUSB: async bulk OUT chunk failed with native error {ex.NativeErrorCode}; reporting a fatal transfer so the " +
+                "session is rebuilt instead of collapsing it into a short write the caller cannot distinguish from a device short completion.");
+            return UsbChunkResult.Fatal(ex.NativeErrorCode);
         }
     }
 

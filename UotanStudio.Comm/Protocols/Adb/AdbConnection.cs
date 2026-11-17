@@ -30,6 +30,20 @@ internal sealed class AdbConnection : IDisposable
     /// <para>直接读入结果数组、而不经池化暂存缓冲的最大帧长度。</para></summary>
     private const int DirectFrameReadThreshold = 64 * 1024;
 
+    /// <summary>Empty reads one idle frame header wait absorbs before it reports the link unusable.
+    /// <para>空闲帧头等待在报告链路不可用之前吸收的空读取次数。</para></summary>
+    /// <remarks>A direct USB pipe returns a zero-byte read both for a healthy idle link and for a failed bulk transfer
+    /// that the backend collapsed into <c>UsbChunkResult.Error</c>; the count keeps the first case waiting while
+    /// bounding the second, and the pause below keeps either one from spinning the loop.
+    /// <para>直连 USB 管道在健康空闲链路和后端折叠为 <c>UsbChunkResult.Error</c> 的失败批量传输上都会返回零字节读取；
+    /// 该上限让前者继续等待、同时约束后者，下面的停顿使两种情况都不会空转循环。</para></remarks>
+    private const int MaximumIdleEmptyReads = 64;
+
+    /// <summary>Pause between two empty reads of an idle frame header wait, so a backend that answers instantly cannot
+    /// burn the whole retry budget before the peer produces the header.
+    /// <para>空闲帧头等待两次空读取之间的停顿，使瞬间返回的后端无法在对端产出帧头之前耗光整段重试预算。</para></summary>
+    private const int IdleEmptyReadPauseMs = 20;
+
     /// <summary>Number of inbound frames decoded on this connection, used to keep the first frame's raw header at
     /// debug level and the rest at trace level.
     /// <para>本连接已解码的入站帧数量；用于让首帧的原始头部落在 debug 级别、其余落在 trace 级别。</para>
@@ -1772,6 +1786,7 @@ internal sealed class AdbConnection : IDisposable
         CancellationToken cancellationToken)
     {
         var totalRead = 0;
+        var emptyReads = 0;
         while (totalRead < length)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
@@ -1779,6 +1794,7 @@ internal sealed class AdbConnection : IDisposable
             if (servedFromCarry != totalRead)
             {
                 totalRead = servedFromCarry;
+                emptyReads = 0;
                 continue;
             }
 
@@ -1809,12 +1825,20 @@ internal sealed class AdbConnection : IDisposable
 
                 if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed))
                 {
+                    if (++emptyReads > MaximumIdleEmptyReads)
+                    {
+                        throw new TimeoutException(
+                            $"ADB read reported {emptyReads} empty transfers while waiting for the next frame header.");
+                    }
+
+                    await Task.Delay(IdleEmptyReadPauseMs, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
                 throw new TimeoutException("ADB read timeout");
             }
 
+            emptyReads = 0;
             totalRead += n;
         }
     }
