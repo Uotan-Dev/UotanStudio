@@ -211,9 +211,13 @@ jobs:
           Save-Png 150 'Square150x150Logo.png'
           Save-Png 50 'StoreLogo.png'
 
-          $verParts = ($env:VER -replace '-beta.*','' -replace '-release.*','').Split('.')
-          $rev = if ($env:VER -match '\.(\d+)$' -and $env:VER -match '-') { $Matches[1] } else { '0' }
-          $msixVersion = "$(,$verParts[0..2] -join '.').$rev"
+          $core = ($env:VER -replace '-beta.*','' -replace '-release.*','').Split('.')
+          $rev = if ($env:VER -match '-[A-Za-z]+\.(\d+)$') { $Matches[1] } else { '0' }
+          $verParts = @($core) + @('0','0','0')
+          $msixVersion = ($verParts[0..2] -join '.') + '.' + $rev
+          if ($msixVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Cannot derive a four-part MSIX version from '$env:VER' (got '$msixVersion')"
+          }
 
           @(
             '<?xml version="1.0" encoding="utf-8"?>'
@@ -235,7 +239,7 @@ jobs:
             '      <uap:VisualElements DisplayName="UotanStudio" Description="UotanStudio desktop toolkit"'
             '        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"'
             '        Square44x44Logo="Assets\Square44x44Logo.targetsize-44_altform-unplated.png">'
-            '        <uap:DefaultTile Wide310x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.targetsize-44_altform-unplated.png" />'
+            '        <uap:DefaultTile Wide310x150Logo="Assets\Square150x150Logo.png" />'
             '      </uap:VisualElements>'
             '    </Application>'
             '  </Applications>'
