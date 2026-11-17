@@ -281,9 +281,9 @@ public partial class AdbLogView : UserControl
             var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = LanguageService.Instance.GetString("Log_Export"),
-                DefaultExtension = "log",
+                DefaultExtension = "logcat",
                 SuggestedFileName = $"UotanStudio_ADB_Log_{DateTime.Now:yyyyMMdd_HHmmss}",
-                FileTypeChoices = [new FilePickerFileType("Log files") { Patterns = ["*.log", "*.txt"] }]
+                FileTypeChoices = [new FilePickerFileType("Logcat files") { Patterns = ["*.logcat"] }]
             });
             if (file is null) return;
             await using var stream = await file.OpenWriteAsync();

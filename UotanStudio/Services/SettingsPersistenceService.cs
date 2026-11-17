@@ -35,6 +35,7 @@ public class AppSettings : IJsonOnDeserialized
         BottomBarDisplay = BottomBarCatalog.Normalize(BottomBarDisplay);
         ExpandedFlashSections ??= [];
         RemoteConnectionHistory ??= [];
+        AssociatedFileExtensions ??= [.. FileAssociationService.DefaultAssociatedExtensions];
     }
 
     /// <summary>
@@ -73,9 +74,18 @@ public class AppSettings : IJsonOnDeserialized
         copy.ExpandedFlashSections = [.. ExpandedFlashSections];
         copy.RemoteConnectionHistory = [.. RemoteConnectionHistory.Select(x => x.Clone())];
         copy.McpServers = [.. McpServers];
+        copy.AssociatedFileExtensions = [.. AssociatedFileExtensions];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
     }
+
+    /// <summary>
+    /// Gets or sets the optional file extensions associated with UotanStudio in the OS shell.
+    /// <para>获取或设置在系统外壳中关联到 UotanStudio 的可选文件扩展名列表。</para>
+    /// </summary>
+    /// <value>The list of associated extensions (each starting with a dot). <para>已关联的扩展名列表（均以点号开头）。</para></value>
+    [JsonPropertyName("associatedFileExtensions")]
+    public List<string> AssociatedFileExtensions { get; set; } = [.. FileAssociationService.DefaultAssociatedExtensions];
 
     /// <summary>
     /// Gets or sets whether a preserved EROFS rebuild searches the captured compression estimates for the smallest image.

@@ -138,6 +138,15 @@
   <data name="Settings_DebugMode" xml:space="preserve">
     <value>调试模式</value>
   </data>
+  <data name="Settings_FileAssociations" xml:space="preserve">
+    <value>关联文件格式</value>
+  </data>
+  <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
+    <value>排序：按类别</value>
+  </data>
+  <data name="Settings_FileAssociationSortByName" xml:space="preserve">
+    <value>排序：按首字母</value>
+  </data>
   <data name="Settings_UnpackToolPath" xml:space="preserve">
     <value>解包工具路径</value>
   </data>
@@ -200,6 +209,12 @@
   </data>
   <data name="Settings_DebugModeHint" xml:space="preserve">
     <value>输出更详细的日志，方便查找问题。</value>
+  </data>
+  <data name="Settings_FileAssociationsHint" xml:space="preserve">
+    <value>将项目资源管理器可自动识别的文件扩展名关联到 UotanStudio。</value>
+  </data>
+  <data name="Settings_FileAssociationSortHint" xml:space="preserve">
+    <value>切换按类别排序或按首字母排序。</value>
   </data>
   <data name="Settings_UsbBackendHint" xml:space="preserve">
     <value>选择设备连接使用的 USB 实现。</value>

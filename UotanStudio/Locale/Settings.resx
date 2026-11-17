@@ -138,6 +138,15 @@
   <data name="Settings_DebugMode" xml:space="preserve">
     <value>Debug Mode</value>
   </data>
+  <data name="Settings_FileAssociations" xml:space="preserve">
+    <value>Associated file formats</value>
+  </data>
+  <data name="Settings_FileAssociationSortByCategory" xml:space="preserve">
+    <value>Sort: Category</value>
+  </data>
+  <data name="Settings_FileAssociationSortByName" xml:space="preserve">
+    <value>Sort: Name</value>
+  </data>
   <data name="Settings_UnpackToolPath" xml:space="preserve">
     <value>Unpack Tool Path</value>
   </data>
@@ -200,6 +209,12 @@
   </data>
   <data name="Settings_DebugModeHint" xml:space="preserve">
     <value>Writes more detailed logs to make troubleshooting easier.</value>
+  </data>
+  <data name="Settings_FileAssociationsHint" xml:space="preserve">
+    <value>Associate file extensions recognized by Project Explorer with UotanStudio.</value>
+  </data>
+  <data name="Settings_FileAssociationSortHint" xml:space="preserve">
+    <value>Switch between category order and alphabetical order.</value>
   </data>
   <data name="Settings_UsbBackendHint" xml:space="preserve">
     <value>Select the USB implementation used for device connections.</value>

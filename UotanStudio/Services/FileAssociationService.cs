@@ -21,6 +21,35 @@ public static partial class FileAssociationService
         (".uotannode", "UotanStudio.uotannode", "uotannode.ico", "UotanStudio Node Project")
     ];
 
+    /// <summary>
+    /// Extensions that Project Explorer can automatically recognize when opening files
+    /// (excluding generic code/text and image formats).
+    /// <para>项目资源管理器在打开文件时可自动识别的固件、镜像、Android、归档与日志类扩展名。</para>
+    /// </summary>
+    public static IReadOnlyList<string> RecognizedExtensions { get; } =
+    [
+        // Firmware, partition, filesystem, device-tree & firmware compression
+        ".img", ".bin", ".dat", ".lz4", ".br", ".dtb", ".dtbo", ".dts", ".dtsi",
+        ".ext4", ".erofs", ".f2fs", ".qcn",
+        ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz", ".app", ".sin",
+        ".mpk", ".cpb", ".ntpi",
+        // Android / HarmonyOS app & system metadata/config
+        ".apk", ".hap", ".dex", ".arsc", ".prop", ".rc",
+        // Device logs
+        ".logcat"
+    ];
+
+    /// <summary>
+    /// Extensions checked by default in the file-association settings UI.
+    /// <para>在文件关联设置界面中默认勾选的扩展名列表。</para>
+    /// </summary>
+    public static IReadOnlyList<string> DefaultAssociatedExtensions { get; } =
+    [
+        ".img", ".br", ".dtb", ".dtbo", ".dts", ".dtsi", ".qcn",
+        ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz",
+        ".app", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
+    ];
+
     [LibraryImport("advapi32.dll", EntryPoint = "RegCreateKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
     private static partial int RegCreateKeyExW(nint hKey, string lpSubKey, int reserved, string? lpClass, int dwOptions, int samDesired, nint lpSecurityAttributes, out nint phkResult, out int lpdwDisposition);
 

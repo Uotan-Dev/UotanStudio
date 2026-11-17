@@ -26,6 +26,59 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public AiSettingsViewModel Ai { get; } = new();
 
+    /// <summary>
+    /// Optional file extensions recognized by Project Explorer that can be associated with UotanStudio.
+    /// <para>项目资源管理器可自动识别、并可在设置中勾选关联的文件扩展名集合。</para>
+    /// </summary>
+    public ObservableCollection<FileAssociationItem> FileAssociationItems { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FileAssociationSortLabel))]
+    private bool _sortFileAssociationsAlphabetically;
+
+    /// <summary>
+    /// Gets the localized label for the file-association sort toggle button.
+    /// <para>获取关联文件格式排序切换按钮的本地化文本。</para>
+    /// </summary>
+    public string FileAssociationSortLabel => LanguageService.Instance.GetString(
+        SortFileAssociationsAlphabetically ? "Settings_FileAssociationSortByName" : "Settings_FileAssociationSortByCategory");
+
+    partial void OnSortFileAssociationsAlphabeticallyChanged(bool value) => RefreshFileAssociationOrder();
+
+    [RelayCommand]
+    private void ToggleFileAssociationSort() =>
+        SortFileAssociationsAlphabetically = !SortFileAssociationsAlphabetically;
+
+    private void RefreshFileAssociationOrder()
+    {
+        if (FileAssociationItems.Count == 0)
+        {
+            return;
+        }
+
+        var selected = new HashSet<string>(
+            FileAssociationItems.Where(item => item.IsSelected).Select(item => item.Extension),
+            StringComparer.OrdinalIgnoreCase);
+
+        PopulateFileAssociationItems(selected);
+    }
+
+    private void PopulateFileAssociationItems(HashSet<string> selected)
+    {
+        IEnumerable<string> ordered = SortFileAssociationsAlphabetically
+            ? FileAssociationService.RecognizedExtensions.OrderBy(ext => ext, StringComparer.OrdinalIgnoreCase)
+            : FileAssociationService.RecognizedExtensions;
+
+        FileAssociationItems.Clear();
+        foreach (var extension in ordered)
+        {
+            FileAssociationItems.Add(new FileAssociationItem(
+                extension,
+                selected.Contains(extension),
+                _ => DebouncedSaveSettings()));
+        }
+    }
+
     private AppSettings _appSettings;
 
     private readonly LocalizedOptionSet _usbBackendOptions =
@@ -522,6 +575,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _hdcServerStatusKey = await hdc;
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
+        OnPropertyChanged(nameof(FileAssociationSortLabel));
     }
 
     private static async Task<string> ProbeServerStatusAsync(Func<CancellationToken, Task<bool>> probe, CancellationToken cancellationToken)
@@ -914,6 +968,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
             RefreshBottomBarVisibilityLocks();
 
+            var associatedSet = new HashSet<string>(
+                settings.AssociatedFileExtensions,
+                StringComparer.OrdinalIgnoreCase);
+            PopulateFileAssociationItems(associatedSet);
+
             var renderingPlatform = _renderingPlatform;
             _renderingBackendIndex = Math.Max(0, Array.IndexOf(
                 _renderingBackends,
@@ -1053,6 +1112,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.McpExposePort = McpExposePort;
         _appSettings.McpExposeRootDirectory = McpExposeRootDirectory;
         _appSettings.McpExposeAllowFlash = McpExposeAllowFlash;
+        _appSettings.AssociatedFileExtensions = [.. FileAssociationItems.Where(item => item.IsSelected).Select(item => item.Extension)];
 
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
@@ -1081,6 +1141,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
+        OnPropertyChanged(nameof(FileAssociationSortLabel));
         foreach (var item in FlashProtocolDisplayItems.Concat(BottomBarDisplayItems))
         {
             item.RefreshLocalizedText();
@@ -1220,14 +1281,23 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
         Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
+
+        _loading = true;
+        try
+        {
+            Languages.Clear();
+            foreach (var lang in LanguageService.Instance.AvailableLanguages)
+            {
+                Languages.Add(lang);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+
         InitializeFromAppSettings(_appSettings);
         McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
-
-        Languages.Clear();
-        foreach (var lang in LanguageService.Instance.AvailableLanguages)
-        {
-            Languages.Add(lang);
-        }
 
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(SelectedThemeMode));
@@ -1265,4 +1335,38 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         _disposed = true;
     }
+}
+
+/// <summary>
+/// Represents an optional file extension item that can be associated with UotanStudio in settings.
+/// <para>表示设置页中可勾选关联到 UotanStudio 的文件扩展名条目。</para>
+/// </summary>
+public partial class FileAssociationItem : ObservableObject
+{
+    private readonly Action<FileAssociationItem> _onChanged;
+
+    /// <summary>
+    /// Initializes a new file association item.
+    /// <para>初始化文件关联扩展名条目。</para>
+    /// </summary>
+    /// <param name="extension">The file extension starting with a dot.<para>以点号开头的文件扩展名。</para></param>
+    /// <param name="isSelected">Whether the extension is currently associated.<para>当前是否已勾选关联。</para></param>
+    /// <param name="onChanged">Callback invoked when selection changes.<para>勾选状态变化时的回调。</para></param>
+    public FileAssociationItem(string extension, bool isSelected, Action<FileAssociationItem> onChanged)
+    {
+        Extension = extension;
+        _isSelected = isSelected;
+        _onChanged = onChanged;
+    }
+
+    /// <summary>
+    /// Gets the file extension (e.g., <c>.img</c>).
+    /// <para>获取文件扩展名（例如 <c>.img</c>）。</para>
+    /// </summary>
+    public string Extension { get; }
+
+    [ObservableProperty]
+    private bool _isSelected;
+
+    partial void OnIsSelectedChanged(bool value) => _onChanged(this);
 }
