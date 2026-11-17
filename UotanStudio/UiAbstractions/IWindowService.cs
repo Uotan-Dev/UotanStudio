@@ -34,7 +34,10 @@ public enum HostWindowKind
     RegexGenerator,
 
     /// <summary>The disk-image flashing window. <para>磁盘镜像烧录窗口。</para></summary>
-    DiskFlash
+    DiskFlash,
+
+    /// <summary>The application update check window. <para>检查更新窗口。</para></summary>
+    CheckUpdate
 }
 
 /// <summary>

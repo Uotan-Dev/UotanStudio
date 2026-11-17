@@ -1047,4 +1047,7 @@
   <data name="Menu_DiskFlash" xml:space="preserve">
     <value>磁盘镜像烧录</value>
   </data>
+  <data name="Menu_CheckUpdate" xml:space="preserve">
+    <value>检查更新...</value>
+  </data>
 </root>

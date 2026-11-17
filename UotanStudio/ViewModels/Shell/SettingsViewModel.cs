@@ -820,6 +820,22 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Gets or sets whether UotanStudio checks for updates automatically on startup.
+    /// <para>获取或设置是否在启动时自动检查更新。</para>
+    /// </summary>
+    public bool AutoCheckUpdates
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
     /// Initializes the settings view model, loading settings from the persistence service and initializing all properties.
     /// <para>初始化设置视图模型，从持久化服务加载设置并初始化所有属性。</para>
     /// </summary>
@@ -869,6 +885,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             SelectedThemeMode = settings.ThemeMode;
             AutoSave = settings.AutoSave;
             DebugMode = settings.DebugMode;
+            AutoCheckUpdates = settings.AutoCheckUpdates;
             ReadbackSkipPartitions = settings.FlashReadbackSkipPartitions;
 
             FlashProtocolDisplayItems.Clear();
@@ -1008,6 +1025,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.ThemeMode = SelectedThemeMode;
         _appSettings.AutoSave = AutoSave;
         _appSettings.DebugMode = DebugMode;
+        _appSettings.AutoCheckUpdates = AutoCheckUpdates;
         _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
         _appSettings.FlashReadbackSkipPartitions = ReadbackSkipPartitions;
         _appSettings.FlashProtocolDisplay = [.. FlashProtocolDisplayItems.Select(item => item.ToPreference())];

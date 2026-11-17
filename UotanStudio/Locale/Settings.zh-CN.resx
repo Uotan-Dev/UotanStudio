@@ -531,4 +531,10 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL（D3D9）</value>
   </data>
+  <data name="Settings_AutoCheckUpdates" xml:space="preserve">
+    <value>自动检查更新</value>
+  </data>
+  <data name="Settings_AutoCheckUpdatesHint" xml:space="preserve">
+    <value>启动时自动检查是否有可用更新。</value>
+  </data>
 </root>

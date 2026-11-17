@@ -5298,4 +5298,28 @@
   <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
     <value>线刷包已输出至 {0}</value>
   </data>
+  <data name="CheckUpdate_Title" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="CheckUpdate_ReleaseNotesPlaceholder" xml:space="preserve">
+    <value>更新日志将在此处显示。</value>
+  </data>
+  <data name="CheckUpdate_VersionAndSize" xml:space="preserve">
+    <value>新版本 {0} · {1}</value>
+  </data>
+  <data name="CheckUpdate_UpdateAndRestart" xml:space="preserve">
+    <value>更新并重启</value>
+  </data>
+  <data name="CheckUpdate_SkipVersion" xml:space="preserve">
+    <value>跳过本次更新</value>
+  </data>
+  <data name="CheckUpdate_RemindLater" xml:space="preserve">
+    <value>以后提醒我</value>
+  </data>
+  <data name="CheckUpdate_Downloading" xml:space="preserve">
+    <value>正在下载更新…</value>
+  </data>
+  <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
+    <value>剩余 {0}</value>
+  </data>
 </root>

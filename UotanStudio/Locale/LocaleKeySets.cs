@@ -1743,6 +1743,14 @@ internal static class LocaleKeySets
         "Flash_GenerateFlashPlanTip",
         "Flash_SpacemiTReadbackDone",
         "Flash_WiredPackageOutputPath",
+        "CheckUpdate_Title",
+        "CheckUpdate_ReleaseNotesPlaceholder",
+        "CheckUpdate_VersionAndSize",
+        "CheckUpdate_UpdateAndRestart",
+        "CheckUpdate_SkipVersion",
+        "CheckUpdate_RemindLater",
+        "CheckUpdate_Downloading",
+        "CheckUpdate_TimeRemaining",
     ];
 
     internal static readonly string[] Menu =
@@ -2075,6 +2083,7 @@ internal static class LocaleKeySets
         "Menu_AvbTool",
         "Menu_RegexGenerator",
         "Menu_DiskFlash",
+        "Menu_CheckUpdate",
     ];
 
     internal static readonly string[] Dock =
@@ -3671,6 +3680,8 @@ internal static class LocaleKeySets
         "Settings_RenderingWaylandHint",
         "Settings_RenderingUnsupportedHint",
         "Settings_RenderingBackendAngleEglD3D9",
+        "Settings_AutoCheckUpdates",
+        "Settings_AutoCheckUpdatesHint",
     ];
 
     internal static readonly string[] Device =

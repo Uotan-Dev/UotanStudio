@@ -302,6 +302,14 @@ public class AppSettings : IJsonOnDeserialized
     public bool DebugMode { get; set; }
 
     /// <summary>
+    /// Gets or sets whether UotanStudio checks for updates automatically on startup.
+    /// <para>获取或设置是否在启动时自动检查更新。</para>
+    /// </summary>
+    /// <value>True when automatic update checks are enabled. <para>为真时启用自动检查更新。</para></value>
+    [JsonPropertyName("autoCheckUpdates")]
+    public bool AutoCheckUpdates { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the screen mirroring video bit rate in bits per second.
     /// <para>获取或设置投屏视频码率（比特每秒）。</para>
     /// </summary>

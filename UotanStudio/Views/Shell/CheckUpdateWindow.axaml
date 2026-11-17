@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="UotanStudio.Views.Shell.CheckUpdateWindow"
+        Title="{DynamicResource CheckUpdate_Title}"
+        Width="680" Height="460" MinWidth="620" MinHeight="380"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        CanMinimize="False" CanMaximize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Styles>
+        <Style Selector="TextBlock"><Setter Property="FontSize" Value="13" /></Style>
+        <Style Selector="Button"><Setter Property="FontSize" Value="13" /></Style>
+        <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="MinWidth" Value="0" /><Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+            <Setter Property="IsVisible" Value="False" /><Setter Property="IsEnabled" Value="False" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background"><ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" /></Setter>
+        </Style>
+        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,48,0" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
+        <TextBox Grid.Row="0"
+                 Name="ReleaseNotesBox"
+                 Margin="20"
+                 FontSize="13"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 VerticalAlignment="Stretch"
+                 HorizontalAlignment="Stretch"
+                 VerticalContentAlignment="Top"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 PlaceholderText="{DynamicResource CheckUpdate_ReleaseNotesPlaceholder}" />
+        <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Height="40">
+                <TextBlock Name="VersionInfoText"
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding #VersionInfoText.Text}" />
+                <StackPanel Name="ProgressPanel" IsVisible="False" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Name="ProgressText" FontSize="11" Height="16" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding #ProgressText.Text}" />
+                    <ProgressBar Name="DownloadProgressBar" Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
+                </StackPanel>
+                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
+                    <Button Name="RemindLaterButton" Content="{DynamicResource CheckUpdate_RemindLater}"
+                            MinWidth="96" MinHeight="20" Padding="12,0"
+                            VerticalAlignment="Stretch" IsCancel="True" Click="OnRemindLaterClick" />
+                    <Button Grid.Column="1" Name="SkipVersionButton" Content="{DynamicResource CheckUpdate_SkipVersion}"
+                            MinWidth="96" MinHeight="20" Padding="12,0"
+                            VerticalAlignment="Stretch" Click="OnSkipVersionClick" />
+                    <Button Grid.Column="2" Name="UpdateAndRestartButton" Content="{DynamicResource CheckUpdate_UpdateAndRestart}"
+                            Theme="{StaticResource SolidButton}" MinWidth="96" MinHeight="20" Padding="12,0"
+                            VerticalAlignment="Stretch" IsDefault="True" Click="OnUpdateAndRestartClick" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

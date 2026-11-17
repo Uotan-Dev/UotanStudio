@@ -1047,4 +1047,7 @@ Continue creating the project?</value>
   <data name="Menu_DiskFlash" xml:space="preserve">
     <value>Disk Image Flasher</value>
   </data>
+  <data name="Menu_CheckUpdate" xml:space="preserve">
+    <value>Check for Updates...</value>
+  </data>
 </root>

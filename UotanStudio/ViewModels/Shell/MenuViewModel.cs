@@ -1461,6 +1461,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Shows the Check for Updates window.
+    /// <para>显示检查更新窗口。</para>
+    /// </summary>
+    [RelayCommand]
+    private void CheckUpdate() => _windows.ShowHostWindow(HostWindowKind.CheckUpdate);
+
+    /// <summary>
     /// Shows the About dialog with version and description info.
     /// <para>显示关于对话框，包含版本与简介信息。</para>
     /// </summary>

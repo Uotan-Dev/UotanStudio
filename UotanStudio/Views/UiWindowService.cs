@@ -30,6 +30,7 @@ public sealed class UiWindowService : IWindowService
     private Window? _avbToolWindow;
     private Window? _regexGeneratorWindow;
     private Window? _diskFlashWindow;
+    private Window? _checkUpdateWindow;
     private ChecksumWindow? _checksumWindow;
 
     private UiWindowService()
@@ -91,6 +92,9 @@ public sealed class UiWindowService : IWindowService
                 break;
             case HostWindowKind.DiskFlash:
                 ShowToolWindow(ref _diskFlashWindow, static () => new DiskFlashWindow());
+                break;
+            case HostWindowKind.CheckUpdate:
+                ShowToolWindow(ref _checkUpdateWindow, static () => new CheckUpdateWindow());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown host window kind.");

@@ -5298,4 +5298,28 @@ Continue?</value>
   <data name="Flash_WiredPackageOutputPath" xml:space="preserve">
     <value>Wired-flash package written to {0}</value>
   </data>
+  <data name="CheckUpdate_Title" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="CheckUpdate_ReleaseNotesPlaceholder" xml:space="preserve">
+    <value>Release notes will appear here.</value>
+  </data>
+  <data name="CheckUpdate_VersionAndSize" xml:space="preserve">
+    <value>Version {0} · {1}</value>
+  </data>
+  <data name="CheckUpdate_UpdateAndRestart" xml:space="preserve">
+    <value>Update &amp; Restart</value>
+  </data>
+  <data name="CheckUpdate_SkipVersion" xml:space="preserve">
+    <value>Skip This Version</value>
+  </data>
+  <data name="CheckUpdate_RemindLater" xml:space="preserve">
+    <value>Remind Me Later</value>
+  </data>
+  <data name="CheckUpdate_Downloading" xml:space="preserve">
+    <value>Downloading update…</value>
+  </data>
+  <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
+    <value>{0} left</value>
+  </data>
 </root>
