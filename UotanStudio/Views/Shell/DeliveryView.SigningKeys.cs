@@ -54,6 +54,14 @@ public partial class DeliveryView
                     .Where(p => string.Equals(_payloadKeyLibrary.PrivatePath(p.key), path,
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     .Select(p => p.index + 1).DefaultIfEmpty(-1).First();
+            if (PayloadSigningKeyBox.SelectedIndex < 0)
+            {
+                _payloadSigningIdentityPath = "";
+                _payloadSigningFingerprint = "";
+                _legacyPayloadSignatureFile = "";
+                Composition.Model.Status = LanguageService.Instance.GetString("Delivery_SigningKeyMissing");
+                QueueDeliveryChange();
+            }
         }
         catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
         finally { _selectingPayloadKey = false; }
@@ -96,6 +104,13 @@ public partial class DeliveryView
                     .Where(p => string.Equals(_payloadKeyLibrary.PrivatePath(p.key), path,
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     .Select(p => p.index + 1).DefaultIfEmpty(-1).First();
+            if (ZipSigningKeyBox.SelectedIndex < 0)
+            {
+                _zipSigningIdentityPath = "";
+                _zipSigningCertificatePath = "";
+                Composition.Model.Status = LanguageService.Instance.GetString("Delivery_SigningKeyMissing");
+                QueueDeliveryChange();
+            }
         }
         catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
         finally { _selectingZipSigningKey = false; }
