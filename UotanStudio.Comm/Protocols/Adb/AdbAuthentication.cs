@@ -298,11 +298,18 @@ public sealed class AdbAuthentication : IDisposable
     /// <value>The 32-byte digest. <para>32 字节摘要。</para></value>
     public byte[] PublicKeyFingerprint => Sha256.ComputeHash(_rsa.ExportSubjectPublicKeyInfo());
 
-    /// <summary>Signs the token with RSA-PKCS1 + SHA1, the signature construction the ADB wire protocol requires.
-    /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名，即 ADB 线协议要求的签名构造。</para></summary>
+    /// <summary>Signs the token the ADB wire protocol requires: the 20-byte challenge is used
+    /// verbatim as the SHA-1 "digest" inside the RSASSA-PKCS1-v1_5 DigestInfo — upstream adbd and
+    /// adb both treat the challenge itself as the pre-computed hash, so hashing the token first
+    /// produces a signature adbd rejects and re-challenges forever, which is the repeated
+    /// authorization prompt.</summary>
+    /// <summary>以 ADB 线协议要求的方式签名：20 字节挑战被原样作为 RSASSA-PKCS1-v1_5 DigestInfo 中的
+    /// SHA-1 "摘要"使用——上游 adbd 与 adb 都把挑战本身视为已算好的哈希，若先对令牌再算一次 SHA-1，
+    /// 产生的签名会被 adbd 拒绝并无限重新挑战，这正是反复弹出授权提示的根因。</summary>
     /// <param name="token">The token to sign; must be exactly <see cref="TokenSize"/> bytes.
     /// <para>待签名的令牌；必须恰为 <see cref="TokenSize"/> 字节。</para></param>
-    /// <returns>The RSA-SHA1 signature.<para>RSA-SHA1 签名。</para></returns>
+    /// <returns>The RSA signature carrying the token as the SHA-1 digest.
+    /// <para>携带令牌作为 SHA-1 摘要的 RSA 签名。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="token"/> is null or not <see cref="TokenSize"/> bytes, which means the peer is not issuing adbd AUTH challenges.
     /// <para><paramref name="token"/> 为 <see langword="null"/> 或长度不是 <see cref="TokenSize"/> 字节，说明对端并未下发 adbd 的 AUTH 挑战。</para></exception>
     public byte[] SignToken(byte[] token)
@@ -314,8 +321,7 @@ public sealed class AdbAuthentication : IDisposable
                 $"ADB AUTH tokens are {TokenSize} bytes; the peer sent {token.Length}.", nameof(token));
         }
 
-        var hash = Sha1.ComputeHash(token);
-        return _rsa.SignHash(hash, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+        return _rsa.SignHash(token, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
     }
 
     /// <summary>
