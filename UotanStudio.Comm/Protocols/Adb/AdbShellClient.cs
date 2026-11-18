@@ -237,7 +237,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             .ConfigureAwait(false);
         if (!_useLegacyShell)
         {
-            await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+            await WriteCloseStdinBestEffortAsync(stream, cancellationToken).ConfigureAwait(false);
         }
 
         var stdout = new MemoryStream();
@@ -304,6 +304,25 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         return new ShellResult(stdoutBytes, stderrBytes, exitCode ?? 0);
     }
 
+    /// <summary>Sends the close-stdin frame as a best-effort hint: a fast peer may close the stream before the
+    /// client resumes, and a remotely closed stream already settled the command outcome, so a close that arrived
+    /// first is not an error. User-data writes never take this path.
+    /// <para>尽力发送 close-stdin 帧：高速对端可能在客户端恢复前关闭流，而远端已关闭意味着命令结局已定，
+    /// 因此先到的关闭不是错误。用户数据写入不走此路径。</para></summary>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    private static async ValueTask WriteCloseStdinBestEffortAsync(AdbStream stream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception) when (stream.IsClosed && !cancellationToken.IsCancellationRequested)
+        {
+            CommTrace.State("adb-shell", "Stream closed before close-stdin was sent; treating as benign.");
+        }
+    }
+
     /// <summary>Renders the command line for the debug log, bounded so a long command cannot flood it.
     /// <para>为调试日志渲染命令行，并做长度限制，避免超长命令刷屏。</para>
     /// </summary>
@@ -337,7 +356,7 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             .ConfigureAwait(false);
         if (!_useLegacyShell)
         {
-            await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
+            await WriteCloseStdinBestEffortAsync(stream, cancellationToken).ConfigureAwait(false);
         }
 
         var parser = new FrameParser();
