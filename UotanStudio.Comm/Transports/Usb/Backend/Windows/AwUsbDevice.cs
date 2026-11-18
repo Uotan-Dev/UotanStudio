@@ -2,7 +2,6 @@
 using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Diagnostics;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 

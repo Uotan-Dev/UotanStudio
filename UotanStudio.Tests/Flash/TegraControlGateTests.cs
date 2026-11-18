@@ -1,4 +1,3 @@
-using UotanStudio.Comm.Contracts;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Flash;
 using Xunit;

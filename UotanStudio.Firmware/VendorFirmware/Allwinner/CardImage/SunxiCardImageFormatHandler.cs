@@ -1,6 +1,4 @@
-using System.Buffers.Binary;
 using System.Globalization;
-using System.Text;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;

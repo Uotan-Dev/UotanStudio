@@ -1,6 +1,5 @@
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Comm.Protocols.Tegra;
 using UotanStudio.Services.Devices;
 
 namespace UotanStudio.ViewModels.Flash;

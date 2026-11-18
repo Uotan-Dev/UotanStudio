@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using UotanStudio.Build;
 
 namespace UotanStudio.Services.Update;
 

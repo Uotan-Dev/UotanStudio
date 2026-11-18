@@ -1,5 +1,3 @@
-using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Tegra;
 
 namespace UotanStudio.Services.Devices;

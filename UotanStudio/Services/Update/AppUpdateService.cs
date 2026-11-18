@@ -3,7 +3,6 @@ using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 using UotanStudio.Net.GitHub;
 using UotanStudio.Net.Http;
-using UotanStudio.Services.Network;
 
 namespace UotanStudio.Services.Update;
 
