@@ -18,6 +18,10 @@ public enum LogoPartitionKind
     /// <summary>SPLASH!! frame sequence holding raw or RLE24 BGR pixels. <para>SPLASH!! 帧序列，内含裸 BGR 或 RLE24 像素。</para></summary>
     QualcommSplash,
 
+    /// <summary>OPPO/OnePlus SPLASH!! table container with row-planar RLE8 frames.
+    /// <para>OPPO/OnePlus SPLASH!! 表容器，内含逐行平面 RLE8 帧。</para></summary>
+    OplusSplash,
+
     /// <summary>GuoKe LOGO_TABLE header followed by one JPEG image. <para>果壳 LOGO_TABLE 头，后随单张 JPEG 图片。</para></summary>
     GuoKeLogo
 }
@@ -36,6 +40,11 @@ public enum LogoEntryEncoding
 
     /// <summary>Uncompressed 24-bit BGR pixels without any file header. <para>无文件头的未压缩 24 位 BGR 像素。</para></summary>
     RawBgr,
+
+    /// <summary>Run-length encoded 8-bit RGB triplets stored as (value, count) byte pairs:
+    /// each pixel's red, green and blue components are encoded consecutively.
+    /// <para>行程编码的 8 位 RGB 三元组，以 (值, 计数) 字节对存储：每个像素的红、绿、蓝分量连续编码。</para></summary>
+    PlanarRle8,
 
     /// <summary>A complete JPEG file. <para>完整的 JPEG 文件。</para></summary>
     Jpeg
@@ -117,6 +126,14 @@ public static class LogoPartitionFormat
     private const int LogoTableOffset = 0x4000;
     private const int QualcommPrefixOffset = 1024;
     private const int MioFormatProbeOffset = 4000;
+    private const int OplusFrameHeaderSize = 0x1000;
+    private const int OplusNameOffset = 0x180;
+    private const int OplusPanelOffset = 0x1C0;
+    private const int OplusFrameFieldOffset = 0x20;
+    private const int OplusFrameTableOffset = 0x30;
+    private const int OplusPayloadOffset = 0x200;
+    private const int OplusFrameDataOffset = 0x1000;
+    private const int MaximumOplusFrameTableEntries = 256;
 
     private static readonly int[] LogoMagicOffsets = [0, LogoTableOffset, MioFormatProbeOffset];
     private static readonly int[] SplashMagicOffsets = [QualcommPrefixOffset, 0];
@@ -143,11 +160,84 @@ public static class LogoPartitionFormat
         {
             if (MatchesAt(header, offset, "SPLASH!!"u8))
             {
-                return LogoPartitionKind.QualcommSplash;
+                return IsOplusSplashHeader(header, offset) ? LogoPartitionKind.OplusSplash : LogoPartitionKind.QualcommSplash;
             }
         }
 
         return IsGuoKeHeader(header) ? LogoPartitionKind.GuoKeLogo : LogoPartitionKind.Unknown;
+    }
+
+    /// <summary>
+    /// Distinguishes the OPPO/OnePlus splash table variant from a plain Qualcomm splash frame:
+    /// the variant keeps its geometry at offset 0x20 and a frame offset table at 0x30, while a
+    /// Qualcomm frame header keeps its width/height/type/blocks at offsets 8..24 and zeros elsewhere.
+    /// <para>把 OPPO/OnePlus splash 表变体与普通 Qualcomm splash 帧区分开：变体在 0x20 处保存几何字段、
+    /// 0x30 起为帧偏移表；Qualcomm 帧头把宽/高/类型/块数放在偏移 8..24，其余位置为零。</para>
+    /// </summary>
+    /// <param name="header">Leading bytes of the candidate file. <para>候选文件的头部字节。</para></param>
+    /// <param name="magicOffset">Offset where the SPLASH!! magic was found. <para>SPLASH!! 魔数的偏移。</para></param>
+    /// <returns>True when the header declares the Oplus table layout. <para>头部声明 Oplus 表布局时为 true。</para></returns>
+    private static bool IsOplusSplashHeader(ReadOnlySpan<byte> header, int magicOffset)
+    {
+        // A Qualcomm frame header stores width at +8; the Oplus variant leaves +8..+0x1F zero.
+        for (var offset = magicOffset + 8; offset + sizeof(uint) <= magicOffset + OplusFrameFieldOffset;
+             offset += sizeof(uint))
+        {
+            if (offset < header.Length && ReadUInt32(header, offset) != 0)
+            {
+                return false;
+            }
+        }
+
+        var geometry = magicOffset + OplusFrameFieldOffset;
+        if (geometry + 16 > header.Length)
+        {
+            return false;
+        }
+
+        var width = ReadUInt32(header, geometry);
+        var height = ReadUInt32(header, geometry + 4);
+        var payloadBytes = ReadUInt32(header, geometry + 8);
+        var frameType = ReadUInt32(header, geometry + 12);
+        if (width == 0 || height == 0 || payloadBytes == 0 || frameType > 1)
+        {
+            return false;
+        }
+
+        return HasOplusFrameTable(header, magicOffset + OplusFrameTableOffset);
+    }
+
+    /// <summary>
+    /// Validates that the candidate header carries a plausible Oplus frame offset table between
+    /// 0x30 and the resource-name field at 0x180: nonzero entries must ascend, and a frame at
+    /// offset zero is a legitimate first entry.
+    /// <para>校验候选头部在 0x30 到 0x180 资源名字段之间是否携带合理的 Oplus 帧偏移表：非零条目必须
+    /// 递增，偏移为零的首帧是合法条目。</para>
+    /// </summary>
+    /// <param name="header">Leading bytes of the candidate file. <para>候选文件的头部字节。</para></param>
+    /// <param name="tableOffset">Absolute offset of the frame table. <para>帧表的绝对偏移。</para></param>
+    /// <returns>True when the table entries form a sane ascending table. <para>表项构成合理递增表时为 true。</para></returns>
+    private static bool HasOplusFrameTable(ReadOnlySpan<byte> header, int tableOffset)
+    {
+        uint previous = 0;
+        for (var i = 0; i < MaximumOplusFrameTableEntries; i++)
+        {
+            var entryOffset = tableOffset + (i * sizeof(uint));
+            if (entryOffset + sizeof(uint) > OplusNameOffset || entryOffset + sizeof(uint) > header.Length)
+            {
+                break;
+            }
+
+            var entry = ReadUInt32(header, entryOffset);
+            if (entry < previous)
+            {
+                return entry == 0 && previous > 0;
+            }
+
+            previous = entry;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -196,6 +286,7 @@ public static class LogoPartitionFormat
         {
             LogoPartitionKind.LogoBlockTable => ReadLogoBlockTable(input, header, length, cancellationToken),
             LogoPartitionKind.QualcommSplash => ReadQualcommSplash(input, header, length, cancellationToken),
+            LogoPartitionKind.OplusSplash => ReadOplusSplash(input, header, length, cancellationToken),
             LogoPartitionKind.GuoKeLogo => ReadGuoKeLogo(input, length),
             _ => throw new InvalidDataException("Unsupported logo partition family.")
         };
@@ -230,6 +321,7 @@ public static class LogoPartitionFormat
             {
                 LogoEntryEncoding.BmpFile or LogoEntryEncoding.Jpeg => ReadStoredImage(input, entry, cancellationToken),
                 LogoEntryEncoding.Rle24Bgr or LogoEntryEncoding.RawBgr => DecodeBgrFrame(input, entry, cancellationToken),
+                LogoEntryEncoding.PlanarRle8 => DecodePlanarRle8Frame(input, entry, cancellationToken),
                 _ => throw new InvalidDataException("Unsupported logo entry encoding.")
             };
         }
@@ -377,6 +469,175 @@ public static class LogoPartitionFormat
             prefix, length, entries, metadata);
     }
 
+    /// <summary>
+    /// Parses an OPPO/OnePlus SPLASH!! table container: the leading header lists frame offsets at 0x30,
+    /// every frame keeps a 0x1000-byte header with geometry at 0x20, a resource name at 0x180 and a
+    /// panel name at 0x1C0, and its row-planar RLE8 payload starts at 0x1000.
+    /// <para>解析 OPPO/OnePlus SPLASH!! 表容器：主头部在 0x30 列出帧偏移，每个帧使用 0x1000 字节头，
+    /// 几何字段在 0x20、资源名在 0x180、面板名在 0x1C0，逐行平面 RLE8 负载从 0x1000 开始。</para>
+    /// </summary>
+    /// <param name="input">Readable, seekable container stream. <para>可读、可寻址的容器流。</para></param>
+    /// <param name="header">Leading bytes of the container. <para>容器的头部字节。</para></param>
+    /// <param name="length">Container length in bytes. <para>容器的字节长度。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消读取。</para></param>
+    /// <returns>The validated image metadata. <para>经过校验的镜像元数据。</para></returns>
+    /// <exception cref="InvalidDataException">The frame table or a frame header is malformed.
+    /// <para>帧表或帧头格式错误。</para></exception>
+    private static LogoPartitionImage ReadOplusSplash(Stream input, byte[] header, long length,
+        CancellationToken cancellationToken)
+    {
+        var frames = new List<OplusFrameDescriptor>();
+        var seenOffsets = new HashSet<uint>();
+        Span<byte> probe = stackalloc byte[8];
+        var cursor = OplusFrameTableOffset;
+        var tableIndex = 0;
+        while (cursor + sizeof(uint) <= Math.Min(header.Length, OplusNameOffset)
+               && frames.Count < MaximumOplusFrameTableEntries)
+        {
+            var frameOffset = ReadUInt32(header, cursor);
+            cursor += sizeof(uint);
+            tableIndex++;
+            // Only the first table entry may address the container header itself, which doubles
+            // as frame zero in the on-disk layout; later zero entries are empty padding slots.
+            if (frameOffset == 0 && tableIndex > 1)
+            {
+                continue;
+            }
+
+            if (!seenOffsets.Add(frameOffset))
+            {
+                continue;
+            }
+
+            if (frameOffset + OplusFrameHeaderSize > length)
+            {
+                continue;
+            }
+
+            input.Position = frameOffset;
+            input.ReadExactly(probe);
+            if (!probe.SequenceEqual("SPLASH!!"u8))
+            {
+                continue;
+            }
+
+            frames.Add(ReadOplusFrameHeader(input, frameOffset, length, frames.Count, cancellationToken));
+        }
+
+        if (frames.Count == 0)
+        {
+            throw new InvalidDataException("Oplus splash table lists no frames.");
+        }
+
+        var entries = new List<LogoPartitionEntry>();
+        var metadata = new Dictionary<string, string>
+        {
+            ["Container"] = "OPPO SPLASH!! frame table",
+            ["FrameHeaderSize"] = OplusFrameHeaderSize.ToString(),
+            ["PayloadOffset"] = OplusFrameDataOffset.ToString()
+        };
+
+        for (var i = 0; i < frames.Count; i++)
+        {
+            var frame = frames[i];
+            metadata[$"Frame{i}.Resource"] = frame.ResourceName;
+            if (!string.IsNullOrEmpty(frame.PanelName))
+            {
+                metadata[$"Frame{i}.Panel"] = frame.PanelName;
+            }
+
+            var encoding = frame.FrameType == 1 ? LogoEntryEncoding.PlanarRle8 : LogoEntryEncoding.RawBgr;
+            entries.Add(new LogoPartitionEntry(i, $"splash_{i + 1:00}",
+                $"splash_{i + 1:00}.bmp", encoding, frame.PayloadOffset, frame.PayloadBytes,
+                checked((long)frame.Width * frame.Height * 3), frame.Width, frame.Height, 24));
+        }
+
+        metadata["EntryCount"] = entries.Count.ToString();
+        return new LogoPartitionImage(LogoPartitionKind.OplusSplash, "OPPO SPLASH!! Partition",
+            0, length, entries, metadata);
+    }
+
+    /// <summary>Validated header facts of one Oplus splash frame. <para>单个 Oplus splash 帧经过校验的头部信息。</para></summary>
+    /// <param name="Width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
+    /// <param name="Height">Frame height in pixels. <para>帧高度（像素）。</para></param>
+    /// <param name="FrameType">0 raw BGR, 1 row-planar RLE8. <para>0 为裸 BGR，1 为逐行平面 RLE8。</para></param>
+    /// <param name="PayloadOffset">Absolute payload offset. <para>负载绝对偏移。</para></param>
+    /// <param name="PayloadBytes">Declared payload byte length. <para>声明的负载字节长度。</para></param>
+    /// <param name="ResourceName">Embedded resource name. <para>内嵌资源名。</para></param>
+    /// <param name="PanelName">Embedded panel name. <para>内嵌面板名。</para></param>
+    private sealed record OplusFrameDescriptor(
+        int Width,
+        int Height,
+        uint FrameType,
+        long PayloadOffset,
+        long PayloadBytes,
+        string ResourceName,
+        string PanelName);
+
+    /// <summary>
+    /// Reads and validates one Oplus frame header at the given container offset.
+    /// <para>读取并校验给定容器偏移处的一个 Oplus 帧头。</para>
+    /// </summary>
+    /// <param name="input">Readable, seekable container stream. <para>可读、可寻址的容器流。</para></param>
+    /// <param name="frameOffset">Absolute frame header offset. <para>帧头的绝对偏移。</para></param>
+    /// <param name="length">Container length in bytes. <para>容器的字节长度。</para></param>
+    /// <param name="index">Frame table position, used in error messages. <para>帧表序号，用于错误消息。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消读取。</para></param>
+    /// <returns>The validated frame descriptor. <para>经过校验的帧描述符。</para></returns>
+    /// <exception cref="InvalidDataException">The magic, geometry or payload range is invalid.
+    /// <para>魔数、几何字段或负载范围无效。</para></exception>
+    private static OplusFrameDescriptor ReadOplusFrameHeader(Stream input, uint frameOffset, long length,
+        int index, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (frameOffset > length || frameOffset + OplusFrameHeaderSize > length)
+        {
+            throw new InvalidDataException($"Oplus splash frame {index} header lies outside the container.");
+        }
+
+        var header = new byte[OplusFrameHeaderSize];
+        input.Position = frameOffset;
+        input.ReadExactly(header);
+        if (!header.AsSpan(0, 8).SequenceEqual("SPLASH!!"u8))
+        {
+            throw new InvalidDataException($"Oplus splash frame {index} does not start with the SPLASH!! magic.");
+        }
+
+        var width = ReadUInt32(header, OplusFrameFieldOffset);
+        var height = ReadUInt32(header, OplusFrameFieldOffset + 4);
+        var payloadBytes = ReadUInt32(header, OplusFrameFieldOffset + 8);
+        var frameType = ReadUInt32(header, OplusFrameFieldOffset + 12);
+        if (width == 0 || height == 0 || width > MaximumPixels || height > MaximumPixels ||
+            (long)width * height > MaximumPixels || frameType > 1)
+        {
+            throw new InvalidDataException($"Oplus splash frame {index} declares unsupported dimensions or encoding.");
+        }
+
+        var payloadOffset = frameOffset + OplusFrameDataOffset;
+        FileExtraction.ValidateRange(payloadOffset, payloadBytes, length, $"Oplus splash frame {index} payload");
+
+        return new OplusFrameDescriptor((int)width, (int)height, frameType, payloadOffset, payloadBytes,
+            ReadOplusName(header, OplusNameOffset), ReadOplusName(header, OplusPanelOffset));
+    }
+
+    /// <summary>
+    /// Reads a zero-terminated ASCII name field from the frame header.
+    /// <para>从帧头读取零结尾的 ASCII 名称字段。</para>
+    /// </summary>
+    /// <param name="header">Frame header bytes. <para>帧头字节。</para></param>
+    /// <param name="offset">Field offset inside the header. <para>字段在帧头内的偏移。</para></param>
+    /// <returns>The trimmed ASCII name. <para>修剪后的 ASCII 名称。</para></returns>
+    private static string ReadOplusName(byte[] header, int offset)
+    {
+        var end = offset;
+        while (end < header.Length && header[end] != 0)
+        {
+            end++;
+        }
+
+        return System.Text.Encoding.ASCII.GetString(header, offset, end - offset).Trim();
+    }
+
     private static LogoPartitionImage ReadGuoKeLogo(Stream input, long length)
     {
         if (length <= GuoKeJpegOffset)
@@ -447,6 +708,73 @@ public static class LogoPartitionFormat
         else
         {
             DecodeRle24(payload, bgr, cancellationToken);
+        }
+
+        return BuildBmp(bgr, entry.Width, entry.Height);
+    }
+
+    /// <summary>
+    /// Decodes one RLE8 RGB frame: the payload is a continuous stream of (value, count) byte
+    /// pairs whose expanded bytes are consecutive red, green and blue components. Runs may
+    /// cross pixel boundaries, so the stream is expanded linearly before RGB-to-BGR conversion.
+    /// <para>解码 RLE8 RGB 帧：负载是连续的 (值, 计数) 字节对流，展开后依次为红、绿、蓝分量。
+    /// 行程可以跨像素边界，因此先线性展开流，再执行 RGB 到 BGR 的转换。</para>
+    /// </summary>
+    /// <param name="input">Readable, seekable container stream. <para>可读、可寻址的容器流。</para></param>
+    /// <param name="entry">Entry describing the frame. <para>描述帧的条目。</para></param>
+    /// <param name="cancellationToken">Cancels the decode. <para>取消解码。</para></param>
+    /// <returns>Complete BMP bytes. <para>完整的 BMP 字节。</para></returns>
+    /// <exception cref="InvalidDataException">The payload is truncated or the dimensions are unsupported.
+    /// <para>负载被截断或尺寸不受支持。</para></exception>
+    private static byte[] DecodePlanarRle8Frame(Stream input, LogoPartitionEntry entry,
+        CancellationToken cancellationToken)
+    {
+        if (entry.Width <= 0 || entry.Height <= 0 || entry.Width > MaximumPixels || entry.Height > MaximumPixels ||
+            (long)entry.Width * entry.Height > MaximumPixels)
+        {
+            throw new InvalidDataException("Planar RLE8 frame declares unsupported dimensions.");
+        }
+
+        var payload = ReadStoredImage(input, entry, cancellationToken);
+        var pixels = checked((long)entry.Width * entry.Height);
+        var components = checked(pixels * 3);
+        if (components > MaximumEntryBytes || components > int.MaxValue)
+        {
+            throw new InvalidDataException("Planar RLE8 frame exceeds the output budget.");
+        }
+
+        // The payload is one continuous run-length stream of RGB components: every pixel stores
+        // three consecutive bytes (red, green, blue) and runs cross pixel boundaries. Expand the
+        // stream linearly and swap each RGB triplet into the BGR order BuildBmp expects.
+        var bgr = new byte[(int)components];
+        var source = 0;
+        var runValue = (byte)0;
+        var runRemaining = 0;
+        for (var i = 0; i < bgr.Length; i += 3)
+        {
+            if ((i & 0xFFFF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            for (var component = 0; component < 3; component++)
+            {
+                if (runRemaining == 0)
+                {
+                    if (source + 2 > payload.Length)
+                    {
+                        throw new InvalidDataException("Planar RLE8 payload ended before all pixels were decoded.");
+                    }
+
+                    runValue = payload[source];
+                    runRemaining = payload[source + 1];
+                    source += 2;
+                }
+
+                // On-disk order is R, G, B; BMP needs B, G, R.
+                bgr[i + (2 - component)] = runValue;
+                runRemaining--;
+            }
         }
 
         return BuildBmp(bgr, entry.Width, entry.Height);
