@@ -154,12 +154,6 @@
         <ComboBox ItemsSource="0123456789"
                   SelectedIndex="{Binding F2fsCompressionLevel}" />
       </StackPanel>
-
-      <StackPanel Classes="setting-field">
-        <TextBlock Classes="field-label"
-                   Text="{DynamicResource Dock_UTCTime}" />
-        <TextBox Text="{Binding UTCTime}" />
-      </StackPanel>
     </StackPanel>
   </ScrollViewer>
 </UserControl>
