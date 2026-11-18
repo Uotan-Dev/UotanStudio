@@ -75,8 +75,19 @@ public partial class DeliveryView : UserControl
 
     private void UpdateSidebarLock()
     {
-        SidebarForm.IsEnabled = !Composition.IsCompositionConfirmed && !Composition.Model.IsRunning;
-        ImageSelection.IsEnabled = !Composition.Model.IsRunning;
+        var running = Composition.Model.IsRunning;
+        SidebarForm.IsEnabled = !running;
+        ImageSelection.IsEnabled = !running;
+        // While a container is confirmed, only the fields that drive the container stay locked;
+        // output directory, archive name and ZIP signing remain editable because the next output
+        // run re-captures them without touching the confirmed container.
+        // 容器确认后仅锁定决定容器的字段；输出目录、压缩包名与 ZIP 签名仍可编辑，
+        // 下一次输出会重新捕获它们而不影响已确认的容器。
+        var confirmed = Composition.IsCompositionConfirmed;
+        OutputOptions.IsEnabled = !confirmed;
+        ProjectSettingsSelector.IsEnabled = !confirmed;
+        SuperSettings.IsEnabled = !confirmed;
+        PayloadSettings.IsEnabled = !confirmed;
     }
 
     private void OnOutputOptionChanged(object? sender, RoutedEventArgs e)
@@ -130,9 +141,15 @@ public partial class DeliveryView : UserControl
     {
         SuperAbBox.IsVisible = PackSuperBox.IsChecked != true;
         SuperAOnlyBox.IsVisible = PackPayloadBox.IsChecked != true;
-        if ((!SuperAbBox.IsVisible && SuperAbBox.IsChecked == true)
-            || (!SuperAOnlyBox.IsVisible && SuperAOnlyBox.IsChecked == true))
-            SuperVabBox.IsChecked = true;
+        // Restore the author's last explicit device-type choice when its radio becomes visible again
+        // instead of silently flipping a hidden selection to VAB.
+        // 该设备类型再次可见时恢复作者上一次的显式选择，而不是把被隐藏的勾选静默翻回 VAB。
+        if (SuperVabBox.IsChecked != true && SuperAbBox.IsChecked != true && SuperAOnlyBox.IsChecked != true)
+        {
+            if (_deviceTypeMemory == "AB" && SuperAbBox.IsVisible) SuperAbBox.IsChecked = true;
+            else if (_deviceTypeMemory == "AOnly" && SuperAOnlyBox.IsVisible) SuperAOnlyBox.IsChecked = true;
+            else SuperVabBox.IsChecked = true;
+        }
 
         Composition.IsAOnly = PackSuperBox.IsChecked == true
             && SuperAOnlyBox.IsChecked == true
@@ -284,10 +301,16 @@ public partial class DeliveryView : UserControl
 
     private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)
     {
-        if (sender is RadioButton { IsChecked: true })
+        if (sender is RadioButton { IsChecked: true } radio)
         {
             SuperMetadataSlotsBox.Text = ReferenceEquals(sender, SuperVabBox) ? "3" : "2";
 
+            _deviceTypeMemory = radio.Name switch
+            {
+                nameof(SuperAbBox) => "AB",
+                nameof(SuperAOnlyBox) => "AOnly",
+                _ => "VAB"
+            };
             Composition.IsAOnly = PackSuperBox.IsChecked == true && ReferenceEquals(sender, SuperAOnlyBox);
         }
     }

@@ -350,6 +350,7 @@ public partial class DeliveryView
         {
             UseProjectSuperSettingsBox.IsChecked = false;
             DirectOutputBox.IsChecked = plan.OrganizeDirectory; PackSuperBox.IsChecked = plan.PackSuper; PackPayloadBox.IsChecked = plan.PackPayload;
+            ZipArchiveNameBox.Text = plan.ArchiveName;
             PayloadVersionBox.Text = "2";
             PayloadMinorVersionBox.Text = "0";
             PayloadBuildFingerprintBox.Text = plan.Package.BuildFingerprint;
