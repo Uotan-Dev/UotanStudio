@@ -34,7 +34,8 @@
                                HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
                     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" MinHeight="24">
                         <CheckBox Name="AutoZeroPartitionsBox" IsChecked="True" MinHeight="24" Padding="0"
-                                  HorizontalAlignment="Stretch">
+                                  HorizontalAlignment="Stretch"
+                                  ToolTip.Tip="{DynamicResource Delivery_AutoZeroHint}">
                             <TextBlock Text="{DynamicResource Delivery_AutoZeroPartitions}" TextWrapping="Wrap"
                                        HorizontalAlignment="Left" />
                         </CheckBox>

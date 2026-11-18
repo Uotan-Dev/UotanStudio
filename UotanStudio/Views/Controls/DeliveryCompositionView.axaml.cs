@@ -23,6 +23,9 @@ public partial class DeliveryCompositionView : UserControl
     internal event EventHandler? Changed;
     internal event EventHandler? OutputRequested;
     internal event EventHandler<Exception>? OperationFailed;
+    /// <summary>Asks the host to confirm turning auto-zero off while a composition exists; null treats the change as confirmed.
+    /// <para>在已有编排内容时请求宿主确认关闭自动零分区；为 null 时视为直接确认。</para></summary>
+    internal Func<Task<bool>>? AutoZeroDisableConfirm { get; set; }
     internal bool AutoZero { get => AutoZeroPartitionsBox.IsChecked == true; set => AutoZeroPartitionsBox.IsChecked = value; }
     private bool _isAOnly;
     /// <summary><para>当前为 A-Only 设备类型时隐藏自动零分区选项；进入时移除已物化的自动 B 槽行，离开时按复选框勾选态恢复。</para>
@@ -76,7 +79,20 @@ public partial class DeliveryCompositionView : UserControl
         Model.Changed += (_, _) => { UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
         StartCompositionOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
         ScriptPane.OutputRequested += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
-        AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => { Model.AutoZero = AutoZeroPartitionsBox.IsChecked == true; UpdateMode(); Changed?.Invoke(this, EventArgs.Empty); };
+        AutoZeroPartitionsBox.IsCheckedChanged += async (_, _) =>
+        {
+            if (AutoZeroPartitionsBox.IsChecked != true && Model.Container.Count > 0 && AutoZeroDisableConfirm is { } confirm)
+            {
+                if (!await confirm())
+                {
+                    AutoZeroPartitionsBox.IsChecked = true;
+                    return;
+                }
+            }
+            Model.AutoZero = AutoZeroPartitionsBox.IsChecked == true;
+            UpdateMode();
+            Changed?.Invoke(this, EventArgs.Empty);
+        };
         ZeroPartitionNameBox.TextChanged += (_, _) => UpdateAddPartitionButton();
         SizeChanged += (_, _) => UpdateCompositionLayout();
         InitializeImageDragging();

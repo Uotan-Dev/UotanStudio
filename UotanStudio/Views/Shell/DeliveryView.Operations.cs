@@ -40,6 +40,14 @@ public partial class DeliveryView
         InitializeZipSigningKeys();
         Composition.ReadOptions = ReadDeliverySuperOptions;
         Composition.ReadPlan = CaptureDeliveryPlan;
+        Composition.AutoZeroDisableConfirm = async () =>
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner) return true;
+            var language = LanguageService.Instance;
+            return await DialogService.ConfirmAsync(owner, language.GetString("Tab_Delivery"),
+                language.GetString("Delivery_AutoZeroDisableConfirm"),
+                language.GetString("Delivery_DiskSpaceContinue"), language.GetString("Delivery_DiskSpaceCancel"));
+        };
         Composition.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.GenerateRequested += async (_, _) => await GenerateScriptsAsync();
