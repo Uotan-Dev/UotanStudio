@@ -178,6 +178,8 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
 
             if (TreeViewContent.FirstOrDefault() is { IsDirectory: true } root)
                 root.EnsureChildrenLoaded();
+            LogService.Instance.Write(LogLevel.Info, "Explorer",
+                $"Rebuilt the project tree for '{svc.RootDirectory}': roots={TreeViewContent.Count}, sub-projects={svc.SubProjects.Count}");
         }
         else
         {
@@ -496,9 +498,13 @@ public sealed partial class ExplorerNode : ObservableObject
 
             ApplyChildren(discovered, token);
         }
-        catch (Exception)
+        catch (OperationCanceledException)
         {
-
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Explorer",
+                $"Scanning '{Path}' failed; the folder stays collapsed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -578,10 +584,13 @@ public sealed partial class ExplorerNode : ObservableObject
             }
 
             _childrenLoaded = true;
+            LogService.Instance.Write(LogLevel.Debug, "Explorer",
+                $"Loaded {desired.Count} child(ren) under '{Path}' ({desired.Count(child => child.IsDirectory)} folder(s), {desired.Count(child => !child.IsDirectory)} file(s)).");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-
+            LogService.Instance.Write(LogLevel.Warn, "Explorer",
+                $"Applying the children of '{Path}' failed; the folder stays collapsed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
