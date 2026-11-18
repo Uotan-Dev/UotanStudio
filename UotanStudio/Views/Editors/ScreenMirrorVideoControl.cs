@@ -149,7 +149,18 @@ public sealed class ScreenMirrorVideoControl : Control
         {
             var previous = _boundModel;
             _boundModel = next;
-            previous?.GpuPresenter.DetachCompositionVisual(this);
+            if (next is null)
+            {
+                // The document view is being torn down (a dock/page transition rebuilds it). Pause the old
+                // presenter's surface instead of tearing it down: the recreated view reattaches to the same
+                // view-model on the same window and must reuse the installed surface with its last frame,
+                // or the picture blanks until the device delivers the next decodable frame.
+                previous?.GpuPresenter.ScheduleDetachCompositionVisual(this);
+            }
+            else
+            {
+                previous?.GpuPresenter.DetachCompositionVisual(this);
+            }
         }
         else if (!ReferenceEquals(nextPresenter, _boundPresenter))
         {

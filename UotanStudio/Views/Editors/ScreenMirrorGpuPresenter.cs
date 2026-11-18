@@ -226,10 +226,12 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
     /// <summary>
     /// Probes the compositor's GPU interop and hosts a composition drawing surface inside
-    /// <paramref name="host"/>; UI thread only. Reattaching the same healthy host keeps its surface, and
-    /// a fresh probe replaces a surface left by another host or by a transient failure.
-    /// <para>探测合成器 GPU 互操作并在 <paramref name="host"/> 内托管合成绘图表面；仅限 UI 线程。
-    /// 同一健康宿主重新挂载时保留原表面；其他宿主或瞬态失败留下的表面会被新探测替换。</para>
+    /// <paramref name="host"/>; UI thread only. Attaching a host on the same window keeps the installed
+    /// surface and its last presented frame (a recreated document view only re-childs the surface visual),
+    /// and a fresh probe replaces a surface left by another window or by a transient failure.
+    /// <para>探测合成器 GPU 互操作并在 <paramref name="host"/> 内托管合成绘图表面；仅限 UI 线程。同一窗口上的
+    /// 宿主挂载保留已安装表面与其最后一帧（重建的文档视图只是把表面视觉对象重新挂到新宿主上）；其他窗口或
+    /// 瞬态失败留下的表面会被新探测替换。</para>
     /// </summary>
     /// <param name="host">
     /// The visual whose compositor receives the probing and the hosted surface.
@@ -246,7 +248,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         lock (_gate)
         {
             closed = _closed || _failed;
-            reuse = ReferenceEquals(_hostControl, host) && _surface is not null && !_recovery.Failed
+            // A recreated document view yields a new host control on the same window; re-childing the existing
+            // surface visual keeps the surface, its imports and its last presented frame alive, so the picture
+            // never blanks behind a full surface rebuild. A different TopLevel still needs a full rebuild.
+            reuse = _surface is not null && !_recovery.Failed
                 && ReferenceEquals(_hostTopLevel, hostTopLevel);
         }
         MirrorTrace.Write($"attach start host={host.GetHashCode():x8} reuse={reuse} closed={closed} surface={_surface is not null} gen={_recovery.Generation} failed={_recovery.Failed} terminal={_recovery.IsTerminal} attached={Avalonia.Controls.TopLevel.GetTopLevel(host) is not null}");
@@ -259,6 +264,11 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
         if (reuse)
         {
+            lock (_gate)
+            {
+                _hostControl = host;
+                _hostTopLevel = hostTopLevel;
+            }
             if (_visual is not null)
                 ElementComposition.SetElementChildVisual(host, _visual);
             UpdateCompositionLayout();
