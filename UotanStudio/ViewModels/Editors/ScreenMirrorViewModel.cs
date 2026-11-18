@@ -43,6 +43,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private const int KeyFrameRequestRepeatMilliseconds = 2000;
     private const int SessionThreadJoinMilliseconds = 2000;
     private const int InputInjectionRecheckMilliseconds = 3000;
+    private const int DecodeStallMilliseconds = 3000;
 
     private MirrorSessionFacade? _client;
     private DetectedDevice? _mirrorDevice;
@@ -900,6 +901,10 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 var awaitBoundary = rebuilds > 0;
                 var boundaryKeyFrameRequestTicks = Environment.TickCount64;
                 var stallWatcher = new MirrorExportStallWatcher();
+                var lastDecodedCount = Interlocked.Read(ref _decodedFrames);
+                var lastDecodedAdvanceTicks = Environment.TickCount64;
+                var stallResetDone = false;
+                var lastIdrRepeatTicks = Environment.TickCount64;
                 try
                 {
                     while (!token.IsCancellationRequested)
@@ -948,7 +953,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
                             Interlocked.Increment(ref _receivedFrames);
                             if (_packetLogged++ % 60 == 0)
                                 Views.Editors.MirrorTrace.Write($"decode packet #{_packetLogged} skipped={skipped} failures={failures} decoded={Interlocked.Read(ref _decodedFrames)} extra={configuration?.Length}");
-                            if (stallWatcher.OnPacketArrived(Environment.TickCount64,
+                            var nowTicks = Environment.TickCount64;
+                            if (stallWatcher.OnPacketArrived(nowTicks,
                                     GpuPresenter.CompositedFrames, GpuPresenter.CompositionCoversVideo))
                             {
                                 GpuPresenter.ReportExportStall();
@@ -959,6 +965,40 @@ public partial class ScreenMirrorViewModel : Document, ITool
                                     mediaFoundation.GpuExportEnabled = false;
                                     _pixelFormatDecoder = decoder;
                                 }
+                                RequestKeyFrame();
+                            }
+
+                            var decodedNow = Interlocked.Read(ref _decodedFrames);
+                            if (decodedNow != lastDecodedCount)
+                            {
+                                lastDecodedCount = decodedNow;
+                                lastDecodedAdvanceTicks = nowTicks;
+                                stallResetDone = false;
+                            }
+                            else if (nowTicks - lastDecodedAdvanceTicks >= DecodeStallMilliseconds && !stallResetDone)
+                            {
+                                // The stream broke across a dock/page transition: packets keep arriving but the
+                                // hardware decoder emits nothing (it silently drops the undecodable deltas). Flush
+                                // the transform and keep asking the device for a fresh IDR so the picture resumes.
+                                stallResetDone = true;
+                                Views.Editors.MirrorTrace.Write($"decode stall detected: no decoded frame for {nowTicks - lastDecodedAdvanceTicks} ms while packets keep arriving; resetting the decoder and requesting a key frame");
+                                Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+                                    "Video decoding stalled after a view transition; requesting a fresh key frame.");
+                                try { decoder.Reset(); }
+                                catch (Exception resetError) when (MirrorDecoderRecovery.IsRecoverable(resetError))
+                                {
+                                    Views.Editors.MirrorTrace.Write($"decoder reset failed: {resetError.GetType().Name}: {resetError.Message}");
+                                }
+                                lastIdrRepeatTicks = nowTicks;
+                                RequestKeyFrame();
+                            }
+
+                            if (decodedNow == lastDecodedCount
+                                && nowTicks - lastIdrRepeatTicks >= KeyFrameRequestRepeatMilliseconds)
+                            {
+                                // Re-request the IDR on the existing repeat cadence until decoding resumes; the
+                                // key-frame reservation keeps the channel from flooding.
+                                lastIdrRepeatTicks = nowTicks;
                                 RequestKeyFrame();
                             }
                             try
