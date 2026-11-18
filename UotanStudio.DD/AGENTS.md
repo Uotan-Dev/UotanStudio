@@ -6,7 +6,7 @@
 
 - 只依赖压缩与摘要支持库，不依赖设备通信、资源存储、固件处理或界面层。
 - 压缩解码只经 `CompressionService`，ZIP 只经 `ZipContainer`，摘要只经 `Sha256.CreateAccumulator()`。
-- 本库负责操作系统块设备（Windows `\\.\PhysicalDriveN`、Linux `/dev/*`、macOS `/dev/rdisk*`）；USB、串口、adb 与 HDC 设备协议不在本库内。
+- 本库负责操作系统块设备（Windows `\\.\PhysicalDriveN`、Linux `/dev/*`、macOS `/dev/rdisk*`）与光盘刻录机（Windows IMAPI2、Linux `sr` + `xorriso`、macOS `drutil`）；USB、串口、adb 与 HDC 设备协议不在本库内。
 - 不提供 UI；调用方通过 `FlashProgress` 展示阶段、百分比、速度与剩余时间。
 
 ## 目录
@@ -15,8 +15,8 @@
 | --- | --- |
 | `Images/` | 扩展名解析、raw/gzip/xz/bzip2/ZIP 探测与流式解码 |
 | `Drives/` | `FlashDrive` 模型、驱动兼容性策略、平台扫描器 |
-| `Writing/` | `IDiskTarget` 契约、文件目标与平台裸设备写入器 |
-| 根目录 | `ImageFlasher` 编排、进度/结果/异常与安全开关 |
+| `Writing/` | `IDiskTarget`、`IDiscWriter`/`OpticalDiscSession` 契约、文件目标与平台裸设备/光盘写入器 |
+| 根目录 | `ImageFlasher` 编排、`OpticalDiscBurner` 光盘刻录编排、进度/结果/异常与安全开关 |
 
 ## 安全不变量
 

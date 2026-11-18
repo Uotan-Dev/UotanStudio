@@ -38,6 +38,11 @@ public static class DriveCompatibilityEvaluator
     {
         ArgumentNullException.ThrowIfNull(drive);
 
+        if (drive.MediaKind == FlashMediaKind.OpticalDisc)
+        {
+            return EvaluateOptical(drive, image, writing);
+        }
+
         var issues = new List<DriveCompatibilityIssueInfo>(2);
         if (writing && drive.IsReadOnly)
         {
@@ -113,6 +118,29 @@ public static class DriveCompatibilityEvaluator
 
         var requiredBytes = image.Size ?? image.CompressedSize;
         return drive.Size >= requiredBytes;
+    }
+
+    private static IReadOnlyList<DriveCompatibilityIssueInfo> EvaluateOptical(
+        FlashDrive drive,
+        FlashImage? image,
+        bool writing)
+    {
+        var issues = new List<DriveCompatibilityIssueInfo>(2);
+        if (writing && !drive.IsDiscWritable)
+        {
+            issues.Add(new DriveCompatibilityIssueInfo(
+                DriveCompatibilityIssue.NoWritableDisc,
+                DriveCompatibilitySeverity.Error));
+        }
+
+        if (writing && image is not null && image.Format.RequiresDecoding)
+        {
+            issues.Add(new DriveCompatibilityIssueInfo(
+                DriveCompatibilityIssue.UnsupportedDiscImage,
+                DriveCompatibilitySeverity.Error));
+        }
+
+        return issues;
     }
 
     /// <summary>

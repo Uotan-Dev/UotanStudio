@@ -71,7 +71,10 @@ public static class DiskScanFormat
                 .Append(drive.IsRemovable ? '1' : '0').Append(' ')
                 .Append(drive.IsReadOnly ? '1' : '0').Append(' ')
                 .Append(drive.IsSystem ? '1' : '0').Append(' ')
-                .Append(FlashTextCodec.Escape(drive.Description)).Append('\n');
+                .Append(FlashTextCodec.Escape(drive.Description)).Append(' ')
+                .Append(((int)drive.MediaKind).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(' ')
+                .Append(((int)drive.DiscFormat).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(' ')
+                .Append(drive.IsDiscWritable ? '1' : '0').Append('\n');
             foreach (var mountPoint in drive.MountPoints)
             {
                 builder.Append("mount ").Append(index.ToString(System.Globalization.CultureInfo.InvariantCulture))
@@ -166,11 +169,19 @@ public static class DiskScanFormat
 
     private static DriveBuilder ReadDrive(string rest)
     {
-        var fields = SplitFields(rest, 8);
+        var fields = SplitFields(rest, 11);
         if (fields.Count < 8)
         {
             throw new FormatException("A drive record needs an id, a device path, a name and four flags.");
         }
+
+        var mediaKind = fields.Count > 8 && int.TryParse(fields[8], System.Globalization.CultureInfo.InvariantCulture, out var kind)
+            ? (Drives.FlashMediaKind)kind
+            : Drives.FlashMediaKind.Disk;
+        var discFormat = fields.Count > 9 && int.TryParse(fields[9], System.Globalization.CultureInfo.InvariantCulture, out var format)
+            ? (Drives.OpticalDiscFormat)format
+            : Drives.OpticalDiscFormat.Unknown;
+        var discWritable = fields.Count > 10 && fields[10] == "1";
 
         return new DriveBuilder
         {
@@ -181,6 +192,9 @@ public static class DiskScanFormat
             IsReadOnly = fields[5] == "1",
             IsSystem = fields[6] == "1",
             Description = FlashTextCodec.Unescape(fields[7]),
+            MediaKind = mediaKind,
+            DiscFormat = discFormat,
+            IsDiscWritable = discWritable,
         };
     }
 
@@ -237,6 +251,12 @@ public static class DiskScanFormat
 
         internal string Description { get; init; } = string.Empty;
 
+        internal Drives.FlashMediaKind MediaKind { get; init; } = Drives.FlashMediaKind.Disk;
+
+        internal Drives.OpticalDiscFormat DiscFormat { get; init; } = Drives.OpticalDiscFormat.Unknown;
+
+        internal bool IsDiscWritable { get; init; }
+
         internal List<string> MountPoints { get; } = [];
 
         internal Drives.FlashDrive Build() => new()
@@ -249,6 +269,9 @@ public static class DiskScanFormat
             IsSystem = IsSystem,
             Description = Description,
             MountPoints = [.. MountPoints],
+            MediaKind = MediaKind,
+            DiscFormat = DiscFormat,
+            IsDiscWritable = IsDiscWritable,
         };
     }
 }
