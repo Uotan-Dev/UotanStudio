@@ -139,12 +139,19 @@
                         </TabStrip.ItemTemplate>
                     </TabStrip>
                 </ScrollViewer>
-                <Button Name="SaveDocumentButton" Grid.Column="1" Width="28" Height="28" MinWidth="0" Padding="0"
-                        VerticalAlignment="Top" ToolTip.Tip="{DynamicResource Menu_Save}"
-                        IsEnabled="{Binding !IsReadOnly, ElementName=ScriptEditor}"
-                        AutomationProperties.Name="{DynamicResource Menu_Save}">
-                    <icons:Save Width="16" Height="16" />
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+                    <Button Name="ReopenDocumentButton" Width="28" Height="28" MinWidth="0" Padding="0"
+                            ToolTip.Tip="{DynamicResource Delivery_ReopenScript}"
+                            AutomationProperties.Name="{DynamicResource Delivery_ReopenScript}">
+                        <icons:History Width="16" Height="16" />
+                    </Button>
+                    <Button Name="SaveDocumentButton" Width="28" Height="28" MinWidth="0" Padding="0"
+                            ToolTip.Tip="{DynamicResource Menu_Save}"
+                            IsEnabled="{Binding !IsReadOnly, ElementName=ScriptEditor}"
+                            AutomationProperties.Name="{DynamicResource Menu_Save}">
+                        <icons:Save Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
             </Grid>
             <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                     CornerRadius="6" ClipToBounds="True">
