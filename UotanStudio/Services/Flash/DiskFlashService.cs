@@ -66,6 +66,24 @@ public interface IDiskFlashService
         FlashJobOptions options,
         IProgress<DiskFlashProgress>? onProgress,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records a raw ISO image to an optical drive using the platform recorder.
+    /// <para>使用平台刻录器把 raw ISO 镜像写入光驱。</para>
+    /// </summary>
+    /// <param name="imagePath">Absolute path of a raw ISO image.<para>raw ISO 镜像的绝对路径。</para></param>
+    /// <param name="drive">Selected optical recorder.<para>选中的光驱。</para></param>
+    /// <param name="closeSession">Whether to finalise the disc session.<para>是否结束光盘会话。</para></param>
+    /// <param name="onProgress">Optional progress callback.<para>可选的进度回调。</para></param>
+    /// <param name="cancellationToken">Cancels the recording.<para>取消刻录。</para></param>
+    /// <returns>The localized failure text, or <see langword="null"/> on success.
+    /// <para>失败时的本地化文本；成功时为 <see langword="null"/>。</para></returns>
+    Task<string?> BurnDiscAsync(
+        string imagePath,
+        FlashDrive drive,
+        bool closeSession,
+        IProgress<DiskFlashProgress>? onProgress,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -81,6 +99,7 @@ public sealed class DiskFlashService : IDiskFlashService
     private readonly IDriveScanner _scanner;
     private readonly IDiskWriteProbe _probe;
     private readonly ImageFlasher _flasher;
+    private readonly OpticalDiscBurner _discBurner;
     private readonly IFlashElevationPrompt _prompt;
     private readonly Func<string?> _executablePath;
 
@@ -114,6 +133,7 @@ public sealed class DiskFlashService : IDiskFlashService
         _probe = probe;
         _prompt = prompt;
         _flasher = flasher ?? new ImageFlasher();
+        _discBurner = new OpticalDiscBurner();
         _executablePath = executablePath ?? (() => Environment.ProcessPath);
     }
 
@@ -204,6 +224,36 @@ public sealed class DiskFlashService : IDiskFlashService
                     progress => onProgress?.Report(progress),
                     cancellationToken)
                 .ConfigureAwait(true));
+        }
+        catch (Exception ex) when (ex is FlashException or IOException or UnauthorizedAccessException)
+        {
+            return ex.Message;
+        }
+    }
+
+
+
+    /// <inheritdoc />
+    public async Task<string?> BurnDiscAsync(
+        string imagePath,
+        FlashDrive drive,
+        bool closeSession,
+        IProgress<DiskFlashProgress>? onProgress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+        ArgumentNullException.ThrowIfNull(drive);
+        try
+        {
+            var image = ImageProbe.Probe(imagePath);
+            await _discBurner
+                .BurnAsync(image, drive, new OpticalDiscSession(imagePath, closeSession), onProgress, cancellationToken)
+                .ConfigureAwait(true);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            return LanguageService.Instance.GetString("DiskFlash_Cancelled");
         }
         catch (Exception ex) when (ex is FlashException or IOException or UnauthorizedAccessException)
         {

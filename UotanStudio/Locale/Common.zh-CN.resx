@@ -4854,6 +4854,24 @@
   <data name="DiskFlash_IssueTooSmall" xml:space="preserve">
     <value>容量不足</value>
   </data>
+  <data name="DiskFlash_IssueNoWritableDisc" xml:space="preserve">
+    <value>未放入可写光盘</value>
+  </data>
+  <data name="DiskFlash_IssueUnsupportedDiscImage" xml:space="preserve">
+    <value>镜像必须是 raw ISO</value>
+  </data>
+  <data name="DiskFlash_DiscOptical" xml:space="preserve">
+    <value>光驱</value>
+  </data>
+  <data name="DiskFlash_DiscCD" xml:space="preserve">
+    <value>CD 刻录机</value>
+  </data>
+  <data name="DiskFlash_DiscDVD" xml:space="preserve">
+    <value>DVD 刻录机</value>
+  </data>
+  <data name="DiskFlash_DiscBD" xml:space="preserve">
+    <value>蓝光刻录机</value>
+  </data>
   <data name="DiskFlash_VerifyAfterWrite" xml:space="preserve">
     <value>写入后校验</value>
   </data>
@@ -4874,6 +4892,9 @@
   </data>
   <data name="DiskFlash_StagePreparing" xml:space="preserve">
     <value>正在准备目标…</value>
+  </data>
+  <data name="DiskFlash_StageBurningDisc" xml:space="preserve">
+    <value>正在刻录光盘</value>
   </data>
   <data name="DiskFlash_StageSynthesizing" xml:space="preserve">
     <value>正在合成卡镜像</value>

@@ -23,9 +23,11 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
         SizeText = drive.Size > 0
             ? ProgressMeter.FormatSize(drive.Size)
             : LanguageService.Instance.GetString("DiskFlash_SizeUnknown");
-        KindText = drive.IsRemovable
-            ? LanguageService.Instance.GetString("DiskFlash_DriveRemovable")
-            : LanguageService.Instance.GetString("DiskFlash_DriveInternal");
+        KindText = drive.MediaKind == FlashMediaKind.OpticalDisc
+            ? FormatDiscKind(drive)
+            : drive.IsRemovable
+                ? LanguageService.Instance.GetString("DiskFlash_DriveRemovable")
+                : LanguageService.Instance.GetString("DiskFlash_DriveInternal");
     }
 
     /// <summary>
@@ -129,6 +131,16 @@ public sealed partial class DiskFlashDriveItem : ObservableObject
         DriveCompatibilityIssue.ContainsImage => LanguageService.Instance.GetString("DiskFlash_IssueContainsImage"),
         DriveCompatibilityIssue.LargeDrive => LanguageService.Instance.GetString("DiskFlash_IssueLargeDrive"),
         DriveCompatibilityIssue.TooSmall => LanguageService.Instance.GetString("DiskFlash_IssueTooSmall"),
+        DriveCompatibilityIssue.NoWritableDisc => LanguageService.Instance.GetString("DiskFlash_IssueNoWritableDisc"),
+        DriveCompatibilityIssue.UnsupportedDiscImage => LanguageService.Instance.GetString("DiskFlash_IssueUnsupportedDiscImage"),
         _ => issue.ToString(),
+    };
+
+    private static string FormatDiscKind(FlashDrive drive) => drive.DiscFormat switch
+    {
+        OpticalDiscFormat.Cd => LanguageService.Instance.GetString("DiskFlash_DiscCD"),
+        OpticalDiscFormat.Dvd => LanguageService.Instance.GetString("DiskFlash_DiscDVD"),
+        OpticalDiscFormat.BluRay => LanguageService.Instance.GetString("DiskFlash_DiscBD"),
+        _ => LanguageService.Instance.GetString("DiskFlash_DiscOptical"),
     };
 }

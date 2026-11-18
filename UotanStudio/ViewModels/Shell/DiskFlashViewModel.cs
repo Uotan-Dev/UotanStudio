@@ -516,16 +516,27 @@ public sealed partial class DiskFlashViewModel : ObservableObject
                 flashPath = _image!.Path;
             }
 
-            var failure = await _flashService.FlashAsync(
-                flashPath,
-                [target.Drive],
-                new FlashJobOptions
-                {
-                    VerifyAfterWrite = VerifyAfterWrite,
-                    AllowLargeDrive = AllowLargeDrive,
-                },
-                progress,
-                cts.Token).ConfigureAwait(true);
+            string? failure;
+            if (target.Drive.MediaKind == FlashMediaKind.OpticalDisc)
+            {
+                ProgressStage = Language.GetString("DiskFlash_StageBurningDisc");
+                failure = await _flashService
+                    .BurnDiscAsync(flashPath, target.Drive, closeSession: true, progress, cts.Token)
+                    .ConfigureAwait(true);
+            }
+            else
+            {
+                failure = await _flashService.FlashAsync(
+                    flashPath,
+                    [target.Drive],
+                    new FlashJobOptions
+                    {
+                        VerifyAfterWrite = VerifyAfterWrite,
+                        AllowLargeDrive = AllowLargeDrive,
+                    },
+                    progress,
+                    cts.Token).ConfigureAwait(true);
+            }
 
             IsElevated = _flashService.HasWriteAccess;
             if (failure is not null)

@@ -4854,6 +4854,24 @@ Continue?</value>
   <data name="DiskFlash_IssueTooSmall" xml:space="preserve">
     <value>Not enough space</value>
   </data>
+  <data name="DiskFlash_IssueNoWritableDisc" xml:space="preserve">
+    <value>No writable disc loaded</value>
+  </data>
+  <data name="DiskFlash_IssueUnsupportedDiscImage" xml:space="preserve">
+    <value>Image must be a raw ISO</value>
+  </data>
+  <data name="DiskFlash_DiscOptical" xml:space="preserve">
+    <value>Optical drive</value>
+  </data>
+  <data name="DiskFlash_DiscCD" xml:space="preserve">
+    <value>CD recorder</value>
+  </data>
+  <data name="DiskFlash_DiscDVD" xml:space="preserve">
+    <value>DVD recorder</value>
+  </data>
+  <data name="DiskFlash_DiscBD" xml:space="preserve">
+    <value>Blu-ray recorder</value>
+  </data>
   <data name="DiskFlash_VerifyAfterWrite" xml:space="preserve">
     <value>Verify after writing</value>
   </data>
@@ -4874,6 +4892,9 @@ Continue?</value>
   </data>
   <data name="DiskFlash_StagePreparing" xml:space="preserve">
     <value>Preparing targets...</value>
+  </data>
+  <data name="DiskFlash_StageBurningDisc" xml:space="preserve">
+    <value>Burning disc</value>
   </data>
   <data name="DiskFlash_StageSynthesizing" xml:space="preserve">
     <value>Synthesizing card image</value>
