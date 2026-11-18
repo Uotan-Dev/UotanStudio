@@ -2811,6 +2811,24 @@
   <data name="Delivery_OverwriteMore" xml:space="preserve">
     <value>…及另外 {0} 个文件</value>
   </data>
+  <data name="Delivery_SigningKeyMissing" xml:space="preserve">
+    <value>所选签名密钥已不在密钥库中，本次交付将不签名。</value>
+  </data>
+  <data name="Delivery_SuperFormatRawHint" xml:space="preserve">
+    <value>RAW 格式 Super 镜像。组织式 ZIP 输出固定为 RAW，因为 dd 安装器不识别 sparse 头。</value>
+  </data>
+  <data name="Delivery_SuperFormatSparseHint" xml:space="preserve">
+    <value>SPARSE 稀疏格式 Super 镜像。组织式 ZIP 输出下不可用，压缩包内固定为 RAW。</value>
+  </data>
+  <data name="Delivery_AutoZeroHint" xml:space="preserve">
+    <value>为每个 _a 分区自动补充只读的零大小 _b 分区行。关闭会清空当前编排。</value>
+  </data>
+  <data name="Delivery_ReopenScript" xml:space="preserve">
+    <value>重新打开已关闭脚本（Ctrl+Shift+T）</value>
+  </data>
+  <data name="Delivery_AutoZeroDisableConfirm" xml:space="preserve">
+    <value>关闭自动零分区会清空当前编排，是否继续？</value>
+  </data>
   <data name="FirmwareField_General" xml:space="preserve">
     <value>基本信息</value>
   </data>

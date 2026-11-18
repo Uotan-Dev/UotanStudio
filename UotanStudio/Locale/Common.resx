@@ -2811,6 +2811,24 @@ Continue?</value>
   <data name="Delivery_OverwriteMore" xml:space="preserve">
     <value>...and {0} more</value>
   </data>
+  <data name="Delivery_SigningKeyMissing" xml:space="preserve">
+    <value>The selected signing key no longer exists in the key library; the delivery is now unsigned.</value>
+  </data>
+  <data name="Delivery_SuperFormatRawHint" xml:space="preserve">
+    <value>Raw super image. Organized ZIP output always produces RAW because the Recovery dd installer reads no sparse header.</value>
+  </data>
+  <data name="Delivery_SuperFormatSparseHint" xml:space="preserve">
+    <value>Sparse super image. Unavailable for organized ZIP output; the archive always carries RAW.</value>
+  </data>
+  <data name="Delivery_AutoZeroHint" xml:space="preserve">
+    <value>Add read-only zero-size _b companion rows for every _a partition. Turning this off clears the current composition.</value>
+  </data>
+  <data name="Delivery_ReopenScript" xml:space="preserve">
+    <value>Reopen closed script (Ctrl+Shift+T)</value>
+  </data>
+  <data name="Delivery_AutoZeroDisableConfirm" xml:space="preserve">
+    <value>Turning off automatic zero-size partitions clears the current composition. Continue?</value>
+  </data>
   <data name="FirmwareField_General" xml:space="preserve">
     <value>General</value>
   </data>
