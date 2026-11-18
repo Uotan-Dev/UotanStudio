@@ -58,9 +58,12 @@ public static class DeliveryValidation
     /// With Super_Empty only, Empty excludes Zstd and the sole generated entry is super_empty.img; a portable
     /// Zstd is an optional override whose provided paths must exist, otherwise the tool service downloads the
     /// pinned release.
+    /// A Sparse Super cannot be combined with an organized Recovery package: the dd installer writes the image bytes
+    /// verbatim and reads no sparse header, so the combination is rejected instead of silently rewritten.
     /// <para>校验交付计划的输出方式、镜像归属、容器、脚本与生成条目的一致性。
     /// 仅生成 Super_Empty 时 Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img；便携 Zstd 只作可选覆盖，
-    /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。</para>
+    /// 提供时路径必须存在，缺失时由工具服务自动下载钉住版本兜底。
+    /// 卡刷包与 Sparse Super 互斥：dd 安装器原样写入镜像字节、不识别 sparse 头，该组合按校验失败处理而非静默改写。</para>
     /// </summary>
     /// <param name="plan">The delivery plan to validate. <para>要校验的交付计划。</para></param>
     /// <param name="sources">Whether to check source files for existence and size. <para>是否校验源文件的存在与大小。</para></param>
@@ -104,6 +107,8 @@ public static class DeliveryValidation
         if (plan.PackSuper) DeliverySuperCapacity.ValidateDeviceSize(plan.Super);
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
             throw new InvalidDataException("仅生成Super_Empty 与压缩为ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
+        if (plan.PackSuper && plan.Super.Sparse && plan.OrganizeDirectory && plan.Recovery)
+            throw new InvalidDataException("卡刷包内的 Sparse Super 无法由 dd 安装器写入，请改用 RAW / A Sparse Super cannot be written by the Recovery dd installer; rebuild the delivery as RAW.");
         if (plan.Super.ZstdLevel is < 0 or > 22)
             throw new InvalidDataException("Super Zstd 压缩等级无效 / Invalid Super Zstd level.");
         var generated = plan.Files.Where(f => f.Generated).ToArray();

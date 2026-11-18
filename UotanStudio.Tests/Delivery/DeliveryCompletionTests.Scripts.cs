@@ -257,7 +257,7 @@ public sealed partial class DeliveryCompletionTests
     }
 
     [Fact]
-    public async Task OrganizedSuperExpandsSparseCompanionsForRecovery()
+    public async Task OrganizedRecoverySuper_RejectsSparsePlanInsteadOfSilentRewrite()
     {
         var boot = Image("boot");
         var sparse = Path.Combine(_root, "sparse-boot.img");
@@ -273,6 +273,28 @@ public sealed partial class DeliveryCompletionTests
             Files = [new() { Generated = true, Partition = "super", FileName = "super.zip" },
                 boot with { SourcePath = sparse, SourceLength = new FileInfo(sparse).Length }],
             OutputDirectory = Path.Combine(_root, "super-output")
+        };
+        await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token));
+        Assert.False(Directory.Exists(plan.OutputDirectory));
+    }
+
+    [Fact]
+    public async Task OrganizedFastbootSuper_KeepsSparseRewriteContract()
+    {
+        var boot = Image("boot");
+        var sparse = Path.Combine(_root, "sparse-boot.img");
+        UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ConvertRawToSparse(boot.SourcePath, sparse);
+        var plan = new DeliveryPlan
+        {
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Recovery = false,
+            Txt = false,
+            Container = [Image("system")],
+            Super = new() { DeviceSize = 8 * 1024 * 1024, Sparse = true },
+            Files = [new() { Generated = true, Partition = "super", FileName = "super.zip" },
+                boot with { SourcePath = sparse, SourceLength = new FileInfo(sparse).Length }],
+            OutputDirectory = Path.Combine(_root, "super-output-fastboot")
         };
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
         using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "super.zip"));

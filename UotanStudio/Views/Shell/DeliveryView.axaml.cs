@@ -36,6 +36,8 @@ public partial class DeliveryView : UserControl
     private ColumnDefinitions? _rightImagesColumns;
     private double _bottomImagesHeightRatio = 0.6;
     private double _rightImagesHeightRatio = 0.6;
+    private string _deviceTypeMemory = "VAB";
+    private bool _sparseBeforeZip;
 
     /// <summary>Initializes delivery options and shared SUPER settings. <para>初始化交付配置与共用 SUPER 设置。</para></summary>
     public DeliveryView() : this(new Services.Keys.KeyLibraryService()) { }
@@ -144,9 +146,17 @@ public partial class DeliveryView : UserControl
         var zipOutput = DirectOutputBox.IsChecked == true;
         if (zipOutput)
         {
-
+            // Remember the author's SPARSE choice; organized ZIP output always carries a RAW super
+            // because the Recovery dd installer reads no sparse header.
+            // 记住作者的 SPARSE 选择；组织式 ZIP 输出的 Super 固定为 RAW，因为 dd 安装器不识别 sparse 头。
+            if (SuperSparseBox.IsChecked == true) _sparseBeforeZip = true;
             SuperRawBox.IsChecked = true;
             SuperSparseBox.IsChecked = false;
+        }
+        else if (_sparseBeforeZip && SuperRawBox.IsChecked == true && SuperSparseBox.IsEnabled)
+        {
+            _sparseBeforeZip = false;
+            SuperSparseBox.IsChecked = true;
         }
         SuperSparseBox.IsEnabled = !zipOutput;
         Composition.OutputView.SetTxtScriptBlockedByZstd(PackSuperBox.IsChecked == true && SuperZstdBox.IsChecked == true);
@@ -236,6 +246,8 @@ public partial class DeliveryView : UserControl
         UpdateSuperProjectChoices(context, _solutionPath != context.CurrentSolutionPath);
         if (_solutionPath == context.CurrentSolutionPath) return;
         _solutionPath = context.CurrentSolutionPath;
+        _deviceTypeMemory = "VAB";
+        _sparseBeforeZip = false;
         Composition.Reset();
 
         OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault() is { } sp
