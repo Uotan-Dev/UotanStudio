@@ -385,10 +385,11 @@ public partial class DeliveryView
             SuperMetadataSizeBox.Text = plan.Super.MetadataSize.ToString(CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = (plan.PackPayload ? plan.Payload.BlockSize : plan.Super.BlockSize).ToString(CultureInfo.InvariantCulture);
             var deviceType = plan.Super.DeviceType.Length > 0 ? plan.Super.DeviceType : plan.Super.VirtualAb ? "VAB" : plan.Super.AutoZero ? "AB" : "AOnly";
+            _deviceTypeMemory = deviceType;
             SuperVabBox.IsChecked = deviceType == "VAB"; SuperAbBox.IsChecked = deviceType == "AB";
             SuperAOnlyBox.IsChecked = deviceType == "AOnly";
             SuperMetadataSlotsBox.Text = plan.Super.Slots.ToString(CultureInfo.InvariantCulture);
-            SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
+            _sparseBeforeZip = false; SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
             GenerateSuperEmptyBox.IsChecked = plan.Super.Empty;
             Composition.SuperEmptyOnly = plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;
