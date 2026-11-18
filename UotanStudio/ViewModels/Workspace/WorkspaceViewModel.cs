@@ -787,7 +787,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     internal async Task RestoreDocumentsAsync(IEnumerable<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents, string rootDir)
     {
         var snapshot = documents.ToList();
-        foreach (var document in snapshot) await RestoreOpenDocumentAsync(document, rootDir);
+        foreach (var document in snapshot)
+        {
+            await RestoreOpenDocumentAsync(document, rootDir);
+            // Yield to the dispatcher between documents so input and rendering stay responsive
+            // while a solution with many restored editors is opening.
+            // 在文档之间让步给调度器，保证恢复大量编辑器时输入与渲染仍然可响应。
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+                () => { }, Avalonia.Threading.DispatcherPriority.Background);
+        }
         if (snapshot.LastOrDefault(d => d.IsActive) is { } active)
             await RestoreOpenDocumentAsync(active, rootDir);
     }

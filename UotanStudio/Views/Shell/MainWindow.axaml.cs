@@ -70,6 +70,15 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Pre-builds all bottom tab pages on the current (UI) thread and installs them before the window is shown, so
+    /// the first switch to flash, delivery, node editor or settings does not pay XAML parsing and construction cost.
+    /// <para>在当前（UI）线程预构建全部底栏页签并在窗口显示前装入，使首次切换到烧录、交付、节点编辑或设置时
+    /// 不再承担 XAML 解析与构造开销。</para>
+    /// </summary>
+    internal void InstallPrebuiltTopLevelPages()
+        => MainContentView.InstallPrebuiltPages(ViewModelViewRegistry.CreateAllTopLevelPages());
+
     private void CloseChildWindows()
     {
         if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)

@@ -138,4 +138,22 @@ internal static class ViewModelViewRegistry
     {
         return _topLevelPages[page]();
     }
+
+    /// <summary>
+    /// Creates every top-level tab page in one pass so the whole shell can be built while the splash is still
+    /// visible; callers must run this on the Avalonia UI thread and hand the result to <c>MainView</c>.
+    /// <para>一次性创建全部顶层页签，使整个外壳可以在启动窗仍可见时构建完成；调用方必须在 Avalonia UI 线程上执行，
+    /// 并把结果交给 <c>MainView</c>。</para>
+    /// </summary>
+    /// <returns>A snapshot containing one freshly created control per top-level page.
+    /// <para>包含每个顶层页签各自新建控件的快照。</para></returns>
+    public static IReadOnlyDictionary<TopLevelPage, Control> CreateAllTopLevelPages()
+    {
+        var pages = new Dictionary<TopLevelPage, Control>(_topLevelPages.Count);
+        foreach (var (page, factory) in _topLevelPages)
+        {
+            pages[page] = factory();
+        }
+        return pages;
+    }
 }

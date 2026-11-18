@@ -487,6 +487,6 @@
 		</Grid>
 
 		<!-- 主内容页面区域 -->
-		<views:MainView />
+		<views:MainView x:Name="MainContentView" />
 	</DockPanel>
 </Window>

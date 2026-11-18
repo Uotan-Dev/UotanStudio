@@ -198,7 +198,9 @@ public partial class App : Application
             preparedModel = new MainViewModel(await ShellComposition.CreateAsync(
                 phase => ReportAsync(phase), settings.CultureName));
             await ReportAsync(SplashPhase.Window);
-            splashWindow.PreparedMainWindow = new MainWindow(preparedModel);
+            var mainWindow = new MainWindow(preparedModel);
+            mainWindow.InstallPrebuiltTopLevelPages();
+            splashWindow.PreparedMainWindow = mainWindow;
         }
         catch (Exception ex)
         {

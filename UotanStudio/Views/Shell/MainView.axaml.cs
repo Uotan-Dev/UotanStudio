@@ -9,6 +9,9 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainView : UserControl
 {
+    private IReadOnlyDictionary<ViewModelViewRegistry.TopLevelPage, Control>? _prebuiltPages;
+    private bool _pagesPrebuilt;
+
     public MainView()
     {
         InitializeComponent();
@@ -27,26 +30,57 @@ public partial class MainView : UserControl
         Dispatcher.UIThread.Post(EnsureSelectedPage, DispatcherPriority.Background);
     }
 
+    /// <summary>
+    /// Installs pages created earlier on the UI thread (during the splash sequence) so the first switch to any
+    /// bottom tab only has to realize an existing control instead of parsing XAML and constructing it. Safe to
+    /// call more than once; later calls are ignored.
+    /// <para>装上此前在 UI 线程（启动窗阶段）预先创建的页面，使首次切换到任意底栏页签只需呈现已有控件，
+    /// 不再解析 XAML 与构造控件。可重复调用，后续调用会被忽略。</para>
+    /// </summary>
+    /// <param name="pages">The pre-created controls keyed by tab. <para>按页签索引的预创建控件。</para></param>
+    internal void InstallPrebuiltPages(IReadOnlyDictionary<ViewModelViewRegistry.TopLevelPage, Control> pages)
+    {
+        if (_pagesPrebuilt)
+        {
+            return;
+        }
+        _pagesPrebuilt = true;
+        _prebuiltPages = pages;
+        FlashTab.Content = TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Flash);
+        DeliveryTab.Content = TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Delivery);
+        NodeEditorTab.Content = TakePrebuilt(ViewModelViewRegistry.TopLevelPage.NodeEditor);
+        SettingsTab.Content = TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Settings);
+    }
+
+    private Control TakePrebuilt(ViewModelViewRegistry.TopLevelPage page)
+    {
+        if (_prebuiltPages is not null && _prebuiltPages.TryGetValue(page, out var control))
+        {
+            return control;
+        }
+        return ViewModelViewRegistry.CreateTopLevelPage(page);
+    }
+
     private Control CreatePage(ContentPage page)
     {
         if (ReferenceEquals(page, FlashTab))
         {
-            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Flash);
+            return TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Flash);
         }
 
         if (ReferenceEquals(page, DeliveryTab))
         {
-            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Delivery);
+            return TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Delivery);
         }
 
         if (ReferenceEquals(page, NodeEditorTab))
         {
-            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.NodeEditor);
+            return TakePrebuilt(ViewModelViewRegistry.TopLevelPage.NodeEditor);
         }
 
         if (ReferenceEquals(page, SettingsTab))
         {
-            return ViewModelViewRegistry.CreateTopLevelPage(ViewModelViewRegistry.TopLevelPage.Settings);
+            return TakePrebuilt(ViewModelViewRegistry.TopLevelPage.Settings);
         }
 
         throw new ArgumentOutOfRangeException(nameof(page));
