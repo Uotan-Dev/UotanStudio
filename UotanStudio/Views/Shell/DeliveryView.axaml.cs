@@ -372,7 +372,11 @@ public partial class DeliveryView : UserControl
         try { return SourceContainerMetadataService.Read(root, PackPayloadBox.IsChecked == true ? "payload" : "super"); }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Delivery", ex.Message);
+            // Probe failures are the expected way to learn a sub-project has no delivery metadata;
+            // only report them when the author actually engages the project-settings option.
+            // 探测失败是「子项目没有交付元数据」的正常路径，仅在作者真正启用工程设置时记录。
+            if (UseProjectSuperSettingsBox.IsChecked == true)
+                LogService.Instance.Write(LogLevel.Warn, "Delivery", ex.Message);
             return null;
         }
     }

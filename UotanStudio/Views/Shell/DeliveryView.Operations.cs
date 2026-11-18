@@ -438,6 +438,11 @@ public partial class DeliveryView
                     var language = LanguageService.Instance;
                     const int maxListed = 10;
                     var listed = existing.Take(maxListed).Select(path => Path.GetRelativePath(plan.OutputDirectory, path)).ToArray();
+                    // The dialog lists at most 10 entries; the unified log records the complete list so the
+                    // overwritten set stays auditable after the fact.
+                    // 对话框最多列 10 项；完整清单写入统一日志，便于事后审计被覆盖的文件集合。
+                    LogService.Instance.Write(LogLevel.Info, "Delivery", $"Overwrite candidates: {existing.Length}\n" +
+                        string.Join("\n", existing.Select(path => Path.GetRelativePath(plan.OutputDirectory, path))));
                     var message = language.GetString("Delivery_OverwritePrompt") + "\n" + string.Join("\n", listed);
                     if (existing.Length > maxListed)
                         message += "\n" + string.Format(language.GetString("Delivery_OverwriteMore"), existing.Length - maxListed);
