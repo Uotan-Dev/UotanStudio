@@ -156,6 +156,19 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
     internal bool CompositionCoversVideo => Volatile.Read(ref _compositionCovering) != 0;
 
+    /// <summary>
+    /// Reports a GPU-export stall detected by the decode loop: revokes the composition frame claim immediately so
+    /// the video control draws the bitmap fallback again, and records a recoverable failure so a late compositor
+    /// update completion cannot reassert coverage over the recovered bitmap path.
+    /// <para>报告解码循环检测到的 GPU 导出停滞：立即撤销合成帧覆盖声明，使视频控件重新绘制位图回退；同时记录一次
+    /// 可恢复失败，防止迟到的合成器更新完成重新把覆盖声明压回已恢复的位图路径。</para>
+    /// </summary>
+    internal void ReportExportStall()
+    {
+        RevokeCompositionCoverage();
+        FailComposition("GPU export stalled: the compositor stopped completing frame updates while packets kept arriving", terminal: false);
+    }
+
     private bool EvaluateCompositionCoverage()
     {
         bool installed, presented, detached, visualVisible, failed;

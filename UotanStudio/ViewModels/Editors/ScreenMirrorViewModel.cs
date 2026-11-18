@@ -899,6 +899,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 var skipped = 0;
                 var awaitBoundary = rebuilds > 0;
                 var boundaryKeyFrameRequestTicks = Environment.TickCount64;
+                var stallWatcher = new MirrorExportStallWatcher();
                 try
                 {
                     while (!token.IsCancellationRequested)
@@ -947,6 +948,19 @@ public partial class ScreenMirrorViewModel : Document, ITool
                             Interlocked.Increment(ref _receivedFrames);
                             if (_packetLogged++ % 60 == 0)
                                 Views.Editors.MirrorTrace.Write($"decode packet #{_packetLogged} skipped={skipped} failures={failures} decoded={Interlocked.Read(ref _decodedFrames)} extra={configuration?.Length}");
+                            if (stallWatcher.OnPacketArrived(Environment.TickCount64,
+                                    GpuPresenter.CompositedFrames, GpuPresenter.CompositionCoversVideo))
+                            {
+                                GpuPresenter.ReportExportStall();
+                                if (OperatingSystem.IsWindows()
+                                    && VideoDecoderFactory.GetActiveDecoder(decoder) is MediaFoundationGpuVideoDecoder mediaFoundation)
+                                {
+                                    Views.Editors.MirrorTrace.Write($"export stall detected: packets keep arriving while the composition counter is frozen; falling back to NV12 readback (dropped={mediaFoundation.ExportDroppedFrames})");
+                                    mediaFoundation.GpuExportEnabled = false;
+                                    _pixelFormatDecoder = decoder;
+                                }
+                                RequestKeyFrame();
+                            }
                             try
                             {
                                 var decodeStarted = Environment.TickCount64;
