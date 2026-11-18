@@ -182,13 +182,61 @@ public partial class ArscEditorViewModel : Document, ITool, ISearchableDocument,
             TypeCount = table.Packages.Sum(p => p.Types.Count);
             EntryCount = table.Packages.Sum(p => p.Types.Sum(t => t.Entries.Count(e => e is not null)));
 
-            Nodes.Clear();
-            foreach (var pkg in table.Packages)
+            // The per-entry node tree and the search text are proportional to the entry count (tens of
+            // thousands of rows on real resources.arsc files); build them off the UI thread and apply
+            // the results to the bound collections in one pass.
+            // 每条目的节点树与搜索文本规模与条目数成正比（真实 resources.arsc 可达数万行）；
+            // 放到 UI 线程之外构建，结果一次性应用到绑定集合。
+            var roots = await Task.Run(() =>
             {
-                Nodes.Add(BuildPackageNode(pkg, table));
-            }
+                List<ArscTreeNodeViewModel> nodes = [];
+                foreach (var pkg in table.Packages)
+                {
+                    nodes.Add(BuildPackageNode(pkg, table));
+                }
 
-            BuildSearchText(table);
+                var packageNodes = new Dictionary<ResPackage, ArscTreeNodeViewModel>();
+                var typeNodes = new Dictionary<ResType, ArscTreeNodeViewModel>();
+                var entryNodes = new Dictionary<ResEntry, ArscTreeNodeViewModel>();
+                var anchors = new List<(int Offset, ResSearchAnchor Anchor)>();
+                var searchText = ResourceTableSearchText.Serialize(table,
+                    (offset, anchor) => anchors.Add((offset, anchor)));
+                foreach (var node in Flatten(nodes))
+                {
+                    switch (node.Payload)
+                    {
+                        case { Value: ResPackage package }:
+                            packageNodes[package] = node;
+                            break;
+                        case { Value: ResType type }:
+                            typeNodes[type] = node;
+                            break;
+                        case { Value: ResEntryEntry entry }:
+                            entryNodes[entry.Entry] = node;
+                            break;
+                    }
+                }
+
+                return (Nodes: nodes, PackageNodes: packageNodes, TypeNodes: typeNodes,
+                    EntryNodes: entryNodes, Anchors: anchors, SearchText: searchText);
+            }).ConfigureAwait(true);
+
+            _packageNodes.Clear();
+            foreach (var pair in roots.PackageNodes) _packageNodes[pair.Key] = pair.Value;
+            _typeNodes.Clear();
+            foreach (var pair in roots.TypeNodes) _typeNodes[pair.Key] = pair.Value;
+            _entryNodes.Clear();
+            foreach (var pair in roots.EntryNodes) _entryNodes[pair.Key] = pair.Value;
+            _searchAnchors.Clear();
+            _searchAnchors.AddRange(roots.Anchors);
+            _searchText = roots.SearchText;
+            OnPropertyChanged(nameof(ISearchableDocument.SearchText));
+
+            Nodes.Clear();
+            foreach (var node in roots.Nodes)
+            {
+                Nodes.Add(node);
+            }
 
             CompileError = string.Empty;
         }

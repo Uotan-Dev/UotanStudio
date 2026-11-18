@@ -298,14 +298,19 @@ public partial class FileManagerEditorViewModel : Document, ITool
                 {
                     var tree = FileManagerTreeBuilder.Build(session.Entries);
                     ct.ThrowIfCancellationRequested();
-                    return (Session: session, Tree: tree);
+                    // Parent-link fill and entry counting walk the whole tree (tens of thousands of
+                    // entries on partition images); keep them off the UI thread with the parse.
+                    // 父链回填与条目计数要遍历整棵树（分区镜像上可达数万条目）；与解析一起留在 UI 线程之外。
+                    var (files, directories) = CountEntries(tree);
+                    SetParentLinks(tree);
+                    return (Session: session, Tree: tree, Files: files, Directories: directories);
                 }
                 catch { session.Dispose(); throw; }
             }, ct).ConfigureAwait(true);
             try
             {
                 ct.ThrowIfCancellationRequested();
-                ApplyLoadResult(result.Session, result.Tree);
+                ApplyLoadResult(result.Session, result.Tree, result.Files, result.Directories);
             }
             catch { result.Session.Dispose(); throw; }
         }
@@ -457,10 +462,13 @@ public partial class FileManagerEditorViewModel : Document, ITool
     }
 
     /// <summary>
-    /// Applies the background load result to the UI-visible properties.
-    /// <para>应用后台加载结果到 UI 线程可见属性。</para>
+    /// Applies the background load result to the UI-visible properties; parent links and counts are
+    /// precomputed on the worker thread so this method only mutates the bound collections.
+    /// <para>应用后台加载结果到 UI 可见属性；父链与计数已在工作线程预计算，
+    /// 本方法只改动绑定集合。</para>
     /// </summary>
-    private void ApplyLoadResult(ImageBrowserSession session, IReadOnlyList<FileManagerEntryViewModel> tree)
+    private void ApplyLoadResult(ImageBrowserSession session, IReadOnlyList<FileManagerEntryViewModel> tree,
+        int files, int directories)
     {
         _session?.Dispose();
         FormatName = session.FormatName;
@@ -475,11 +483,38 @@ public partial class FileManagerEditorViewModel : Document, ITool
         var root = new FileManagerEntryViewModel("/", string.Empty, 0, FileEntryKind.Directory) { IsExpanded = true };
         foreach (var node in tree)
         {
+            node.Parent = root;
             root.Children.Add(node);
         }
 
+        DirectoryRoots.Add(root);
+        CurrentDirectory = root;
+
+        FileCount = files;
+        DirectoryCount = directories;
+        _session = session;
+        HasError = false;
+        ErrorMessage = string.Empty;
+    }
+
+    /// <summary>
+    /// Walks the tree to fill every non-root entry's <c>Parent</c> link; called on the worker thread
+    /// before the tree becomes visible to bindings. Top-level entries are linked to the image root on
+    /// the UI thread when the visible root wrapper is created.
+    /// <para>遍历树填充每个非根条目的 <c>Parent</c> 链接；在树对绑定可见之前于工作线程调用。
+    /// 顶层条目在 UI 线程创建可见根包装时再链接到镜像根。</para>
+    /// </summary>
+    private static void SetParentLinks(IReadOnlyList<FileManagerEntryViewModel> roots)
+    {
         var directories = new Stack<FileManagerEntryViewModel>();
-        directories.Push(root);
+        foreach (var node in roots)
+        {
+            if (node.IsDirectory)
+            {
+                directories.Push(node);
+            }
+        }
+
         while (directories.TryPop(out var directory))
         {
             foreach (var child in directory.Children)
@@ -491,14 +526,6 @@ public partial class FileManagerEditorViewModel : Document, ITool
                 }
             }
         }
-
-        DirectoryRoots.Add(root);
-        CurrentDirectory = root;
-
-        (FileCount, DirectoryCount) = CountEntries(tree);
-        _session = session;
-        HasError = false;
-        ErrorMessage = string.Empty;
     }
 
     /// <summary>

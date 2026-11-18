@@ -215,15 +215,27 @@ public partial class ManifestEditorViewModel : Document, ITool, ICommandSaveable
             ElementCount = 0;
             AttributeCount = 0;
 
+            // Node-VM construction and XML serialization walk the whole element tree; keep them off the
+            // UI thread and apply the results in one pass.
+            // 节点 VM 构建与 XML 序列化要遍历整个元素树；放到 UI 线程之外执行，结果一次性应用。
+            var (rootNode, elementCount, attributeCount, xml) = await Task.Run(() =>
+            {
+                ElementCount = 0;
+                AttributeCount = 0;
+                var root = BuildNode(doc.Root);
+                return (root, ElementCount, AttributeCount, doc.ToXml());
+            }).ConfigureAwait(true);
+
             Nodes.Clear();
-            var rootNode = BuildNode(doc.Root);
             rootNode.IsExpanded = true;
             Nodes.Add(rootNode);
+            ElementCount = elementCount;
+            AttributeCount = attributeCount;
 
             _suppressSourceEdit = true;
             try
             {
-                Source = doc.ToXml();
+                Source = xml;
             }
             finally
             {

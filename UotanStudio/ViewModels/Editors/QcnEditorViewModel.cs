@@ -222,9 +222,16 @@ public partial class QcnEditorViewModel : Document, ITool, ICommandSaveableDocum
 
             _document = document;
             _allItems.Clear();
-            foreach (var item in document.Items)
+            // Build one view model per NV item on the worker thread; large QCN files carry thousands
+            // of items and the constructor cost adds up on the UI thread.
+            // 在工作线程上为每个 NV 条目构建视图模型；大型 QCN 文件携带数千条目，
+            // 构造成本在 UI 线程上会累积。
+            var items = await Task.Run(() =>
+                document.Items.Select(item => new QcnNvItemViewModel(item, MarkDirty)).ToList(),
+                cancellationToken).ConfigureAwait(true);
+            foreach (var item in items)
             {
-                _allItems.Add(new QcnNvItemViewModel(item, MarkDirty));
+                _allItems.Add(item);
             }
 
             ApplyFilter();

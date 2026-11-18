@@ -176,44 +176,105 @@ public partial class DtbEditorViewModel : Document, ITool, IEditable, ICommandSa
         var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
         RawBytes = bytes;
 
-        DeviceTree? tree;
-        try
+        // Parse, DTS generation, node-tree construction and statistics are CPU-bound and can reach
+        // megabytes of text on DTBO images; run them off the UI thread and apply the results in one pass.
+        // 解析、DTS 生成、节点树构建与统计都是 CPU 密集操作，DTBO 镜像上可达数 MB 文本；
+        // 放到 UI 线程之外执行，结果一次性应用。
+        var load = await Task.Run(() =>
         {
-            if (bytes.Length >= 4 && BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(0, 4)) == FdtConstants.DtboMagic)
+            bool isDtbo;
+            DeviceTree tree;
+            try
             {
-                var (_, _, dtbs) = DtboFormat.Read(bytes);
-                if (dtbs.Count == 0)
+                if (bytes.Length >= 4 && BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(0, 4)) == FdtConstants.DtboMagic)
                 {
-                    throw new InvalidDataException("DTBO image contains no overlay entries.");
-                }
+                    var (_, _, dtbs) = DtboFormat.Read(bytes);
+                    if (dtbs.Count == 0)
+                    {
+                        throw new InvalidDataException("DTBO image contains no overlay entries.");
+                    }
 
-                IsDtboContainer = true;
-                tree = DtbFormat.Read(dtbs[0]);
+                    isDtbo = true;
+                    tree = DtbFormat.Read(dtbs[0]);
+                }
+                else
+                {
+                    isDtbo = false;
+                    tree = DtbFormat.Read(bytes);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                IsDtboContainer = false;
-                tree = DtbFormat.Read(bytes);
+                return new DtbLoadResult(Error: Services.UserError.Describe(ex, "UserError_ParseFailed", "DTB"));
             }
-        }
-        catch (Exception ex)
+
+            var total = 0;
+            CountNodes(tree.Root, ref total);
+            return new DtbLoadResult(
+                Error: null,
+                IsDtboContainer: isDtbo,
+                Root: new DtbNodeViewModel(tree.Root),
+                LineMap: DtsFormat.GetNodeLineMap(tree),
+                Source: DtsFormat.Write(tree),
+                NodeCount: total,
+                RootCompatible: GetPropertyAsString(tree.Root, "compatible"),
+                RootAddressCells: GetPropertyCellAsString(tree.Root, "#address-cells"),
+                RootSizeCells: GetPropertyCellAsString(tree.Root, "#size-cells"),
+                MemoryReservationCount: tree.MemoryReservations.Count);
+        }).ConfigureAwait(true);
+
+        if (load.Error is { } error)
         {
-            CompileError = Services.UserError.Describe(ex, "UserError_ParseFailed", "DTB");
+            CompileError = error;
             return;
         }
 
         Nodes.Clear();
-        Nodes.Add(new DtbNodeViewModel(tree.Root));
+        Nodes.Add(load.Root!);
 
-        _lineMap = DtsFormat.GetNodeLineMap(tree);
-        Source = DtsFormat.Write(tree);
+        _lineMap = load.LineMap!;
+        Source = load.Source!;
         CompileError = string.Empty;
         IsDirty = false;
 
         RawBytes = null;
 
-        UpdateTreeStatistics(tree);
+        IsDtboContainer = load.IsDtboContainer;
+        NodeCount = load.NodeCount;
+        RootCompatible = load.RootCompatible!;
+        RootAddressCells = load.RootAddressCells!;
+        RootSizeCells = load.RootSizeCells!;
+        MemoryReservationCount = load.MemoryReservationCount;
+        OnPropertyChanged(nameof(SelectedNodePath));
+        OnPropertyChanged(nameof(SelectedNodePropertyCount));
+        OnPropertyChanged(nameof(SelectedNodeChildCount));
     }
+
+    /// <summary>Background load result applied to the UI thread in one pass.
+    /// <para>后台加载结果，在 UI 线程一次性应用。</para></summary>
+    /// <param name="Error">Parse error text; non-null means the load failed.
+    /// <para>解析错误文本；非空表示加载失败。</para></param>
+    /// <param name="IsDtboContainer">Whether the source is a DTBO container.
+    /// <para>源是否为 DTBO 容器。</para></param>
+    /// <param name="Root">Built root node view model. <para>构建完成的根节点视图模型。</para></param>
+    /// <param name="LineMap">DTS node line map. <para>DTS 节点行映射。</para></param>
+    /// <param name="Source">Generated DTS text. <para>生成的 DTS 文本。</para></param>
+    /// <param name="NodeCount">Total node count. <para>节点总数。</para></param>
+    /// <param name="RootCompatible">Root compatible property. <para>根节点 compatible 属性。</para></param>
+    /// <param name="RootAddressCells">Root #address-cells property. <para>根节点 #address-cells 属性。</para></param>
+    /// <param name="RootSizeCells">Root #size-cells property. <para>根节点 #size-cells 属性。</para></param>
+    /// <param name="MemoryReservationCount">Memory reservation entry count. <para>内存保留条目数。</para></param>
+    private sealed record DtbLoadResult(
+        string? Error,
+        bool IsDtboContainer = false,
+        DtbNodeViewModel? Root = null,
+        Dictionary<string, int>? LineMap = null,
+        string? Source = null,
+        int NodeCount = 0,
+        string? RootCompatible = null,
+        string? RootAddressCells = null,
+        string? RootSizeCells = null,
+        int MemoryReservationCount = 0);
 
     /// <summary>
     /// Active source editor for workspace actions.
