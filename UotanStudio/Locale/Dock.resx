@@ -294,17 +294,8 @@
   <data name="Dock_SUPERName" xml:space="preserve">
     <value>SUPER Cluster</value>
   </data>
-  <data name="Dock_SUPERFormat" xml:space="preserve">
-    <value>SUPER Format</value>
-  </data>
   <data name="Dock_BRCompLevel" xml:space="preserve">
     <value>BR Level</value>
-  </data>
-  <data name="Dock_UTCTime" xml:space="preserve">
-    <value>UTC Time</value>
-  </data>
-  <data name="Dock_DATSegments" xml:space="preserve">
-    <value>DAT Segments</value>
   </data>
   <data name="Dock_NoDocumentOpen" xml:space="preserve">
     <value>No documents open</value>

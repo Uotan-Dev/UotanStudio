@@ -91,16 +91,6 @@ public sealed class ProjectSettingsDto
     public bool Ext4ReadWrite { get; set; } = true;
 
     /// <summary>
-    /// Whether size calculation is automatic (otherwise the original size is used).
-    /// <para>大小计算是否自动（否则使用原大小）。</para>
-    /// </summary>
-    /// <value>
-    /// <see langword="true"/> lets the builder compute the size; defaults to <see langword="true"/>.
-    /// <para><see langword="true"/> 表示由构建器计算大小；默认为 <see langword="true"/>。</para>
-    /// </value>
-    public bool SizeAuto { get; set; } = true;
-
-    /// <summary>
     /// Whether EXT4 is compressed.
     /// <para>EXT4 是否压缩。</para>
     /// </summary>
@@ -279,34 +269,10 @@ public sealed class ProjectSettingsDto
     public string SuperName { get; set; } = "qti_dynamic_partitions";
 
     /// <summary>
-    /// SUPER format ("RAW" or "SPARSE").
-    /// <para>SUPER 格式（"RAW" 或 "SPARSE"）。</para>
-    /// </summary>
-    /// <value>The container format of the produced super image; defaults to "RAW".
-    /// <para>所生成 super 镜像的容器格式；默认为 "RAW"。</para></value>
-    public string SuperFormat { get; set; } = "RAW";
-
-    /// <summary>
     /// BR compression level.
     /// <para>BR 压缩等级。</para>
     /// </summary>
     /// <value>The Brotli level applied when producing <c>.new.dat.br</c> files; defaults to <c>3</c>.
     /// <para>生成 <c>.new.dat.br</c> 文件时使用的 Brotli 等级；默认为 <c>3</c>。</para></value>
     public int BrCompLevel { get; set; } = 3;
-
-    /// <summary>
-    /// UTC timestamp (string).
-    /// <para>UTC 时间戳（字符串）。</para>
-    /// </summary>
-    /// <value>Unix-seconds string fixed into generated image metadata; defaults to <c>"1230768000"</c>.
-    /// <para>固化到生成镜像元数据中的 Unix 秒字符串；默认为 <c>"1230768000"</c>。</para></value>
-    public string UtcTime { get; set; } = "1230768000";
-
-    /// <summary>
-    /// DAT segment count (string).
-    /// <para>DAT 分段数量（字符串）。</para>
-    /// </summary>
-    /// <value>Segment count applied when splitting DAT output; defaults to <c>"15"</c>.
-    /// <para>拆分 DAT 输出时使用的分段数量；默认为 <c>"15"</c>。</para></value>
-    public string DatSegments { get; set; } = "15";
 }

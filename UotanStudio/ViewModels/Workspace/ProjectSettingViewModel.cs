@@ -34,9 +34,9 @@ internal partial class ProjectSettingViewModel : Tool
     internal static ProjectSettingViewModel EnsureInstance() => Instance ??= new();
 
     [ObservableProperty]
-    private bool typeEXT4 = false, typeF2FS = false, formatSPARSE = false, eXT4RO = false, sizeOri = false,
-        eXT4Compress = false, sUPERSPARSE = false, typeEROFS = true, formatRAW = true, eXT4RW = true,
-        sizeAuto = true, eXT4NoCompress = true, sUPERRAW = true;
+    private bool typeEXT4 = false, typeF2FS = false, formatSPARSE = false, eXT4RO = false,
+        eXT4Compress = false, typeEROFS = true, formatRAW = true, eXT4RW = true,
+        eXT4NoCompress = true;
     [ObservableProperty]
     private string selectedErofsAlgorithm = ErofsAlgorithmSelectors.Lz4HighCompression;
     [ObservableProperty]
@@ -64,7 +64,7 @@ internal partial class ProjectSettingViewModel : Tool
     [ObservableProperty]
     private Ext4BlockSharingMode ext4BlockSharingMode;
     [ObservableProperty]
-    private string projectName = "", sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions", uTCTime = "1230768000", dATSeg = "15";
+    private string sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions";
 
     /// <summary>
     /// Picker choices for the EROFS codec combo, in display order.
@@ -140,7 +140,6 @@ internal partial class ProjectSettingViewModel : Tool
         ImageType = TypeEXT4 ? "EXT4" : TypeF2FS ? "F2FS" : "EROFS",
         ImageFormat = FormatSPARSE ? "SPARSE" : "RAW",
         Ext4ReadWrite = EXT4RW,
-        SizeAuto = SizeAuto,
         Ext4Compress = HasExt4PolicyOverride
             ? Ext4CapacityPolicy == global::UotanStudio.Pipeline.Projects.Ext4CapacityPolicy.Minimize
             : null,
@@ -162,10 +161,7 @@ internal partial class ProjectSettingViewModel : Tool
         F2fsNativeWslDistribution = HasF2fsAndroidProfileOverride ? F2fsNativeWslDistribution : null,
         BrCompLevel = BRComGrade,
         SuperSize = SUPERSize,
-        SuperName = SUPERName,
-        SuperFormat = SUPERSPARSE ? "SPARSE" : "RAW",
-        UtcTime = UTCTime,
-        DatSegments = DATSeg
+        SuperName = SUPERName
     };
 
     /// <summary>
@@ -202,7 +198,6 @@ internal partial class ProjectSettingViewModel : Tool
         var isF2fs = string.Equals(dto.ImageType, "F2FS", StringComparison.OrdinalIgnoreCase);
         var isSparse = dto.SparseOutput
             ?? string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
-        var isSuperSparse = string.Equals(dto.SuperFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
 
         TypeEXT4 = isExt4;
         TypeEROFS = !isExt4 && !isF2fs;
@@ -213,8 +208,6 @@ internal partial class ProjectSettingViewModel : Tool
             || string.Equals(dto.ImageFormat, "SPARSE", StringComparison.OrdinalIgnoreCase);
         EXT4RO = !dto.Ext4ReadWrite;
         EXT4RW = dto.Ext4ReadWrite;
-        SizeAuto = dto.SizeAuto;
-        SizeOri = !dto.SizeAuto;
         EXT4NoCompress = dto.Ext4Compress != true;
         EXT4Compress = dto.Ext4Compress == true;
         Ext4CapacityPolicy = dto.Ext4CapacityPolicy ?? (dto.Ext4Compress == true
@@ -256,10 +249,6 @@ internal partial class ProjectSettingViewModel : Tool
         BRComGrade = dto.BrCompLevel;
         SUPERSize = dto.SuperSize;
         SUPERName = dto.SuperName;
-        SUPERRAW = !isSuperSparse;
-        SUPERSPARSE = isSuperSparse;
-        UTCTime = dto.UtcTime;
-        DATSeg = dto.DatSegments;
         _applyingDto = false;
     }
 

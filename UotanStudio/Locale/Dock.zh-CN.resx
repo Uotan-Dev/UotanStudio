@@ -252,17 +252,8 @@
   <data name="Dock_SUPERName" xml:space="preserve">
     <value>SUPER簇名</value>
   </data>
-  <data name="Dock_SUPERFormat" xml:space="preserve">
-    <value>SUPER格式</value>
-  </data>
   <data name="Dock_BRCompLevel" xml:space="preserve">
     <value>BR压缩等级</value>
-  </data>
-  <data name="Dock_UTCTime" xml:space="preserve">
-    <value>UTC时间戳</value>
-  </data>
-  <data name="Dock_DATSegments" xml:space="preserve">
-    <value>DAT分段数量</value>
   </data>
   <data name="Dock_NoDocumentOpen" xml:space="preserve">
     <value>未打开任何文档</value>
