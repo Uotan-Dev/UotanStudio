@@ -19,7 +19,8 @@ public sealed class DisplaySettingsTests
             item => AssertPreference(item, FlashProtocolCatalog.Mtk, visible: true),
             item => AssertPreference(item, FlashProtocolCatalog.Rockchip, visible: true),
             item => AssertPreference(item, FlashProtocolCatalog.Sunxi, visible: true),
-            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true));
+            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true),
+            item => AssertPreference(item, FlashProtocolCatalog.Tegra, visible: true));
     }
 
     [Fact]
@@ -47,7 +48,8 @@ public sealed class DisplaySettingsTests
             item => AssertPreference(item, FlashProtocolCatalog.Edl, visible: true),
             item => AssertPreference(item, FlashProtocolCatalog.Rockchip, visible: false),
             item => AssertPreference(item, FlashProtocolCatalog.Mtk, visible: true),
-            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true));
+            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true),
+            item => AssertPreference(item, FlashProtocolCatalog.Tegra, visible: true));
     }
 
     [Fact]
@@ -72,7 +74,8 @@ public sealed class DisplaySettingsTests
             item => AssertPreference(item, FlashProtocolCatalog.Edl, visible: true),
             item => AssertPreference(item, FlashProtocolCatalog.Rockchip, visible: true),
             item => AssertPreference(item, FlashProtocolCatalog.Sunxi, visible: true),
-            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true));
+            item => AssertPreference(item, FlashProtocolCatalog.Unisoc, visible: true),
+            item => AssertPreference(item, FlashProtocolCatalog.Tegra, visible: true));
     }
 
     [Fact]
