@@ -6,7 +6,9 @@ namespace UotanStudio.ViewModels.Editors;
 /// <summary>A localized group of firmware configuration fields.<para>本地化的固件配置字段分组。</para></summary>
 /// <param name="Name">Localized group name.<para>本地化的分组名称。</para></param>
 /// <param name="Rows">Property rows belonging to the group.<para>属于该分组的属性行。</para></param>
-public sealed record FirmwareMetadataGroup(string Name, IReadOnlyList<PropertyRow> Rows);
+/// <param name="ShowTitle">Whether the group heading is rendered; a lone group would only repeat the section title.
+/// <para>是否渲染分组标题；唯一的分组只会重复分区标题。</para></param>
+public sealed record FirmwareMetadataGroup(string Name, IReadOnlyList<PropertyRow> Rows, bool ShowTitle);
 
 public partial class FirmwareInfoViewModel
 {
@@ -71,7 +73,7 @@ public partial class FirmwareInfoViewModel
             var name = key.StartsWith("Descriptor[", StringComparison.Ordinal)
                 ? FieldLabel("Descriptor") + " " + key[11..^1]
                 : FieldLabel(key);
-            MetadataGroups.Add(new FirmwareMetadataGroup(name, rows));
+            MetadataGroups.Add(new FirmwareMetadataGroup(name, rows, groups.Count > 1));
         }
 
         HasMetadata = Metadata.Count > 0;

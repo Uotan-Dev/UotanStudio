@@ -8,6 +8,83 @@
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.FirmwareInfoView"
              x:DataType="viewmodels:FirmwareInfoViewModel">
+  <UserControl.Styles>
+    <!-- 信息卡片：格式名、元数据、组件、条目共用同一张卡片表面与内边距。 -->
+    <!-- Info card: the format, metadata, component and entry sections share one surface and padding. -->
+    <Style Selector="Border.info-card">
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+    </Style>
+
+    <!-- 分区标题：四张卡片统一 13px 半粗。 -->
+    <!-- Section title: 13px semibold in every card. -->
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- 分组标题：比分区标题低一级，用次要色区分层级。 -->
+    <!-- Group title: one level below the section title, drawn in the secondary colour. -->
+    <Style Selector="TextBlock.group-title">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+
+    <!-- 键值行：键列固定 170px，保证四张卡片的键列与值列逐行对齐。 -->
+    <!-- Key/value row: a fixed 170px key column keeps every card's key and value columns aligned. -->
+    <Style Selector="controls|ResponsiveFormRow.info-row">
+      <Setter Property="MinLabelWidth" Value="170" />
+      <Setter Property="MaxLabelWidth" Value="170" />
+      <Setter Property="MinEditorWidth" Value="180" />
+      <Setter Property="ColumnSpacing" Value="16" />
+      <Setter Property="RowSpacing" Value="4" />
+      <Setter Property="Margin" Value="0,3" />
+    </Style>
+
+    <!-- 键列文本：本地化字段名用正文半粗，标识符（组件名）用等宽体。 -->
+    <!-- Key text: localized field names are semibold prose, identifiers (component names) are monospace. -->
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.field-label.mono">
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+
+    <!-- 值列文本：统一 12px，等宽体用于标识符、哈希与尺寸。 -->
+    <!-- Value text: 12px everywhere; monospace carries identifiers, hashes and sizes. -->
+    <Style Selector="SelectableTextBlock.field-value">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="SelectableTextBlock.field-value.mono">
+      <Setter Property="FontFamily" Value="Consolas" />
+    </Style>
+    <Style Selector="SelectableTextBlock.field-value.muted">
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+    <Style Selector="SelectableTextBlock.field-value.strong">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- 条目行：无键名，等宽体整行铺满，与键列同一起始边。 -->
+    <!-- Entry line: no key, monospace full width, sharing the key column's left edge. -->
+    <Style Selector="SelectableTextBlock.entry-line">
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,3" />
+    </Style>
+  </UserControl.Styles>
+
   <DockPanel>
     <!-- 加载中提示条 -->
     <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}"
@@ -30,36 +107,33 @@
         <TextBlock Text="{DynamicResource FirmwareInfo_Title}"
                    FontSize="20" FontWeight="SemiBold" />
 
-        <!-- 格式名 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
-                IsVisible="{Binding IsRecognized}">
-          <StackPanel Spacing="8">
-            <TextBlock Text="{DynamicResource FirmwareInfo_FormatName}"
-                       FontWeight="SemiBold" FontSize="13" />
-            <TextBlock Text="{Binding FormatName}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
-          </StackPanel>
+        <!-- 格式名：与元数据行同一套键值对齐，标签列即本卡片的标题位。 -->
+        <!-- Format name: the same key/value alignment as the metadata rows, its label doubling as the card title. -->
+        <Border Classes="info-card" IsVisible="{Binding IsRecognized}">
+          <controls:ResponsiveFormRow Classes="info-row">
+            <TextBlock Classes="field-label" Text="{DynamicResource FirmwareInfo_FormatName}" />
+            <SelectableTextBlock Classes="field-value strong" Text="{Binding FormatName}" />
+          </controls:ResponsiveFormRow>
         </Border>
 
         <!-- 元数据键值对 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
-                IsVisible="{Binding HasMetadata}">
+        <Border Classes="info-card" IsVisible="{Binding HasMetadata}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{DynamicResource FirmwareInfo_Metadata}"
-                       FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Classes="section-title" Text="{DynamicResource FirmwareInfo_Metadata}" />
             <ItemsControl ItemsSource="{Binding MetadataGroups}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="viewmodels:FirmwareMetadataGroup">
-                  <StackPanel Spacing="6" Margin="0,8">
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
+                  <StackPanel>
+                    <!-- 只有一个分组时隐藏分组标题，避免与分区标题重复。 -->
+                    <!-- With a single group the group title would repeat the section title, so it is hidden. -->
+                    <TextBlock Classes="group-title" Text="{Binding Name}"
+                               IsVisible="{Binding ShowTitle}" />
                     <ItemsControl ItemsSource="{Binding Rows}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="viewmodels:PropertyRow">
-                          <controls:ResponsiveFormRow MinLabelWidth="170" MaxLabelWidth="210"
-                                                      MinEditorWidth="180" ColumnSpacing="16" RowSpacing="4" Margin="0,3">
-                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
-                                       FontSize="12" TextWrapping="Wrap" />
-                            <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas"
-                                                 FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                          <controls:ResponsiveFormRow Classes="info-row">
+                            <TextBlock Classes="field-label" Text="{Binding Name}" />
+                            <SelectableTextBlock Classes="field-value mono" Text="{Binding Value}" />
                           </controls:ResponsiveFormRow>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
@@ -71,21 +145,18 @@
           </StackPanel>
         </Border>
 
-        <!-- 组件列表（名称 + 大小） -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
-                IsVisible="{Binding HasComponents}">
+        <!-- 组件列表（名称 + 大小）：与元数据同一套键值对齐，大小落在值列。 -->
+        <!-- Component list (name + size): the metadata key/value alignment, the size landing in the value column. -->
+        <Border Classes="info-card" IsVisible="{Binding HasComponents}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{DynamicResource FirmwareInfo_Components}"
-                       FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Classes="section-title" Text="{DynamicResource FirmwareInfo_Components}" />
             <ItemsControl ItemsSource="{Binding Components}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="viewmodels:PropertyRow">
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,2">
-                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontFamily="Consolas" FontSize="12"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                  </Grid>
+                  <controls:ResponsiveFormRow Classes="info-row">
+                    <TextBlock Classes="field-label mono" Text="{Binding Name}" />
+                    <SelectableTextBlock Classes="field-value mono muted" Text="{Binding Value}" />
+                  </controls:ResponsiveFormRow>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -93,16 +164,13 @@
         </Border>
 
         <!-- 条目列表 -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
-                IsVisible="{Binding HasEntries}">
+        <Border Classes="info-card" IsVisible="{Binding HasEntries}">
           <StackPanel Spacing="8">
-            <TextBlock Text="{DynamicResource FirmwareInfo_Entries}"
-                       FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Classes="section-title" Text="{DynamicResource FirmwareInfo_Entries}" />
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="sys:String">
-                  <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="12"
-                             TextWrapping="Wrap" Margin="0,2" />
+                  <SelectableTextBlock Classes="entry-line" Text="{Binding}" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
