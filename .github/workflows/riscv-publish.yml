@@ -1,14 +1,16 @@
 name: Publish linux-riscv64 (cross)
 
+# Experimental cross-compilation publish, verified against dotnet-riscv SDK 11.0.100:
+# the community SDK ships no x64-hosted ilc, so ilc alone runs under qemu-user while
+# MSBuild/Roslyn/clang run natively on the x64 host. glibc target only; musl is not wired.
+# Known gap: SkiaSharp ships no linux-riscv64 native assets, so the GUI binary will not
+# run until libSkiaSharp is built for riscv64 separately.
+
 on:
   workflow_dispatch:
     inputs:
       sdk_release:
         description: "dotnet-riscv tag (empty = newest 11.0)"
-        required: false
-        default: ""
-      runtime_tag:
-        description: "dotnet/runtime ABI tag for the cross JIT + ILCompiler host pack (empty = derive from SDK band)"
         required: false
         default: ""
       version:
@@ -49,6 +51,10 @@ jobs:
           version="${prefix:-1.0.0}-${channel}.${GITHUB_RUN_NUMBER}"
           input="${{ github.event.inputs.version }}"
           if [ -n "$input" ]; then version="${input#v}"; fi
+          # The version input replaces the whole version, so a manual dispatch can drop the
+          # channel. The publish step forwards both values to MSBuild, and the host project
+          # rejects anything other than release or beta, so resolve the channel here and
+          # always publish it.
           if [ -z "$version" ] || [ -z "$channel" ]; then
             echo "::error::Resolved version or channel is empty (version='$version', channel='$channel')." >&2
             exit 1
@@ -63,7 +69,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WANT: ${{ github.event.inputs.sdk_release }}
-          WANT_RUNTIME_TAG: ${{ github.event.inputs.runtime_tag }}
         run: |
           set -euo pipefail
           tfm=$(sed -n 's/.*<TargetFramework[^>]*>net\([0-9][0-9.]*\).*<\/TargetFramework>.*/\1/p' Directory.Build.props | head -1)
@@ -96,6 +101,10 @@ jobs:
           sdk_digest=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.name == "dotnet-sdk-" + $ver + "-linux-riscv64.tar.gz")][0].digest // ""' releases.json)
+          # The artifacts asset carries the source-build version, not the SDK version:
+          # Private.SourceBuilt.Artifacts.11.0.100-rtm.26561.199.linux-riscv64.tar.gz.
+          # Matching "Artifacts.<sdk-version>." therefore yields null and curl then tries to
+          # resolve the literal host "null", so select on the prefix and RID suffix only.
           artifacts_url=$(jq -r --arg tag "$tag" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.state == "uploaded")
@@ -114,22 +123,12 @@ jobs:
               exit 1
             fi
           done
-          runtime_tag="$WANT_RUNTIME_TAG"
-          if [ -z "$runtime_tag" ]; then
-            sdk3=$(printf '%s' "$ver" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
-            if [ -z "$sdk3" ]; then
-              echo "::error::Cannot derive a runtime ABI version from SDK version '$ver'." >&2
-              exit 1
-            fi
-            runtime_tag=$(printf '%s' "$sdk3" | awk -F. '{ p = int($3 / 100) - 1; if (p < 0) p = 0; printf "%s.%s.%d", $1, $2, p }')
-          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "sdk_url=$sdk_url" >> "$GITHUB_OUTPUT"
           echo "sdk_digest=$sdk_digest" >> "$GITHUB_OUTPUT"
           echo "artifacts_url=$artifacts_url" >> "$GITHUB_OUTPUT"
-          echo "runtime_ver=$runtime_tag" >> "$GITHUB_OUTPUT"
-          echo "::notice::dotnet-riscv SDK $tag ($ver), runtime ABI $runtime_tag"
+          echo "::notice::dotnet-riscv SDK $tag ($ver)"
 
       - name: Download SDKs and artifacts
         shell: bash
@@ -149,6 +148,10 @@ jobs:
             echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
           fi
           curl -fL --retry 3 -o "$work/artifacts-riscv64.tar.gz" "$ARTIFACTS_URL"
+          # Official x64 SDK: derive the branded version from the community tag instead of
+          # assuming the tag equals it. Release tags are bare (11.0.100), but preview tags
+          # carry branded suffixes (11.0.100-rc.3.26522.148), and only the first three
+          # segments exist on builds.dotnet.microsoft.com.
           official=$(printf '%s' "$TAG" | grep -oE '^v?[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "$official" ]; then
             echo "::error::Cannot derive an official SDK version from tag '$TAG'." >&2
@@ -157,92 +160,15 @@ jobs:
           curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
             "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz"
 
-      - name: Restore riscv64 cross JIT cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/riscv/crossjit
-          key: riscv64-crossjit-${{ runner.os }}-v${{ steps.sdk.outputs.runtime_ver }}
-
-      # The cache above is saved by its post-step, which does NOT run when the job is
-      # cancelled by a timeout. So a run cut off mid-JIT leaves no cache and the next
-      # attempt starts over. Pull a previously uploaded JIT artifact as a fallback, so
-      # the expensive build only has to succeed once.
-      - name: Restore cross JIT artifact
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: riscv64-crossjit
-          path: ${{ runner.temp }}/riscv/crossjit
-
-      - name: Build riscv64 cross JIT (first run only)
+      - name: Prepare local feed and ilc wrapper
         shell: bash
-        env:
-          RUNTIME_VER: ${{ steps.sdk.outputs.runtime_ver }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/riscv"
-          mkdir -p "$work/crossjit"
-          jit="$work/crossjit/libclrjit_unix_riscv64_x64.so"
-          if [ -f "$jit" ]; then
-            echo "Cross JIT restored from cache."
-            file "$jit"
-            exit 0
-          fi
-          need_install=""
-          command -v cmake >/dev/null 2>&1 || need_install="$need_install cmake"
-          command -v ninja >/dev/null 2>&1 || need_install="$need_install ninja-build"
-          command -v clang >/dev/null 2>&1 || need_install="$need_install clang"
-          command -v nm >/dev/null 2>&1 || need_install="$need_install binutils"
-          command -v file >/dev/null 2>&1 || need_install="$need_install file"
-          if [ -n "$need_install" ]; then
-            sudo apt-get update
-            sudo apt-get install -y$need_install
-          fi
-          src="$RUNNER_TEMP/runtime-src"
-          git clone --depth 1 --branch "v$RUNTIME_VER" https://github.com/dotnet/runtime "$src"
-          cd "$src"
-          ./build.sh clr.crossarchtools -os linux -arch riscv64 -c release
-          built=$(find "$src/artifacts/bin" -name 'libclrjit*.so' -print -quit)
-          if [ -z "$built" ]; then
-            echo "::error::Cross-component build produced no libclrjit*.so." >&2
-            exit 1
-          fi
-          file "$built"
-          nm -D "$built" | grep -qE ' getJit$' || {
-            echo "::error::Built JIT does not export getJit." >&2
-            exit 1
-          fi
-          file "$built" | grep -q "x86-64" || {
-            echo "::error::Built JIT is not an x86-64 ELF (cross-component mode did not engage)." >&2
-            exit 1
-          fi
-          cp "$built" "$jit"
-          # The checkout plus build tree is several GB; free it before the publish job continues.
-          cd /
-          rm -rf "$src"
-          echo "Staged cross JIT as $jit"
+          mkdir -p "$work/nuget-local" "$work/ilc-pkg"
 
-      # Published so the fallback above can pick it up on a later run. Note this does
-      # not rescue a run that is already timing out: a timeout kills the job outright
-      # and no later step runs. It makes the *next* run cheap.
-      - name: Upload cross JIT
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: riscv64-crossjit
-          path: ${{ runner.temp }}/riscv/crossjit/libclrjit_unix_riscv64_x64.so
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Prepare local feed and ilc host
-        shell: bash
-        env:
-          RUNTIME_VER: ${{ steps.sdk.outputs.runtime_ver }}
-        run: |
-          set -euo pipefail
-          work="$RUNNER_TEMP/riscv"
-          mkdir -p "$work/nuget-local" "$work/ilc-host-x64"
-
+          # Runtime pack versions do not map 1:1 from the SDK tag (e.g. 11.0.101 -> 11.0.1,
+          # preview tags carry branding suffixes); read the exact names from the archive.
           artlist=$(tar tzf "$work/artifacts-riscv64.tar.gz")
           pick() { printf '%s\n' "$artlist" | grep -E "^$1\$" | head -1; }
           naot=$(pick "Microsoft\.NETCore\.App\.Runtime\.NativeAOT\.linux-riscv64\.[0-9][^/]*\.nupkg")
@@ -253,44 +179,78 @@ jobs:
           ilcm=$(pick "Microsoft\.DotNet\.ILCompiler\.[0-9][^/]*\.nupkg")
           aspnet=$(pick "Microsoft\.AspNetCore\.App\.Runtime\.linux-riscv64\.[0-9][^/]*\.nupkg")
           aspnetref=$(pick "Microsoft\.AspNetCore\.App\.Ref\.[0-9][^/]*\.nupkg")
-          paths=()
           for p in "$naot" "$ref" "$host" "$runtime" "$ilc" "$ilcm" "$aspnet" "$aspnetref"; do
             [ -n "$p" ] || { echo "::error::Required package missing from Private.SourceBuilt.Artifacts." >&2; exit 1; }
-            paths+=("$p")
+            tar xzf "$work/artifacts-riscv64.tar.gz" -O "$p" > "$work/nuget-local/$p"
           done
-          # One list pass plus one extract pass; per-package `-O` pipes would rescan the
-          # ~780 MB archive once per package.
-          tar xzf "$work/artifacts-riscv64.tar.gz" -C "$work/nuget-local" "${paths[@]}"
 
-          curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
-            "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg"
-          unzip -q "$work/ilc-host-x64.nupkg" -d "$work/ilc-host-x64"
-          cp "$work/crossjit/libclrjit_unix_riscv64_x64.so" "$work/ilc-host-x64/tools/"
-          for f in tools/ilc tools/libjitinterface_x64.so tools/libclrjit_unix_riscv64_x64.so native/src/libs/build-local.sh; do
-            [ -f "$work/ilc-host-x64/$f" ] || { echo "::error::ILCompiler host pack is missing $f." >&2; exit 1; }
+          # The official RID graph has no linux-riscv64, so SetupOSSpecificProps leaves
+          # CrossCompileArch/TargetTriple empty and the link misses --target. Patch the
+          # fallback into the ILCompiler targets before restoring them into the cache.
+          unzip -q -o "$work/nuget-local/$ilcm" -d "$work/ilc-nupkg"
+          python3 - "$work/ilc-nupkg/build/Microsoft.NETCore.Native.Unix.targets" <<'PY'
+          import sys
+          path = sys.argv[1]
+          with open(path, encoding="utf-8") as handle:
+              text = handle.read()
+          anchor = """<CrossCompileArch Condition="'$(_hostArchitecture)' != '$(_targetArchitecture)'">$(_targetArchitecture)</CrossCompileArch>"""
+          patch = anchor + """
+              <CrossCompileArch Condition="'$(_targetArchitecture)' == '' and '$(RuntimeIdentifier)' == 'linux-riscv64'">riscv64</CrossCompileArch>"""
+          if "linux-riscv64'\">riscv64" not in text:
+              if anchor not in text:
+                  raise SystemExit("CrossCompileArch anchor not found")
+              text = text.replace(anchor, patch)
+          with open(path, "w", encoding="utf-8") as handle:
+              handle.write(text)
+          PY
+          (cd "$work/ilc-nupkg" && zip -qr "$work/nuget-local/$ilcm" .)
+
+          # The community ilc is a riscv64 ELF; run it through qemu-user via the guest
+          # ld.so (qemu rejects loading this PIE directly) and keep jitinterface on
+          # LD_LIBRARY_PATH ($ORIGIN does not resolve under qemu-user). The cross image is
+          # built with --skipemulation and ships no qemu, so the emulator is installed here;
+          # Azure Linux packages the user-mode emulators with a -static suffix.
+          unzip -q -o "$work/nuget-local/$ilc" -d "$work/ilc-pkg"
+          mv "$work/ilc-pkg/tools/ilc" "$work/ilc-pkg/tools/real-ilc"
+          cat > "$work/ilc-pkg/tools/ilc" <<'WRAPPER'
+          #!/bin/bash
+          set -euo pipefail
+          export LD_LIBRARY_PATH="/work/ilc-pkg/tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          qemu=$(command -v qemu-riscv64-static || command -v qemu-riscv64 || true)
+          if [ -z "$qemu" ]; then
+            echo "qemu-riscv64-static is missing; the cross image needs tdnf install qemu-user-static-riscv." >&2
+            exit 127
+          fi
+          # The loader triple is riscv64-lp64d (matching the apphost PT_INTERP); the cross
+          # rootfs keeps it under usr/lib with top-level lib/lib64 as symlinks into usr/.
+          # Probe the real locations: an unresolvable path makes qemu exit 1 with no output.
+          root=/crossrootfs/riscv64
+          interp=
+          for candidate in \
+            "$root/usr/lib/riscv64-linux-gnu/ld-linux-riscv64-lp64d.so.1" \
+            "$root/usr/lib64/ld-linux-riscv64-lp64d.so.1" \
+            "$root/lib/ld-linux-riscv64-lp64d.so.1" \
+            "$root/lib64/ld-linux-riscv64-lp64d.so.1"; do
+            if [ -e "$candidate" ]; then interp="$candidate"; break; fi
           done
-          file "$work/ilc-host-x64/tools/ilc" | grep -q "x86-64" || {
-            echo "::error::tools/ilc is not an x86-64 binary." >&2
-            exit 1
-          }
-
-      - name: Restore NuGet cache for the publish container
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/riscv/nuget-cache
-          key: riscv64-nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
-          restore-keys: |
-            riscv64-nuget-${{ runner.os }}-
+          if [ -z "$interp" ]; then
+            echo "No riscv64 loader found under $root; cannot run ilc under qemu." >&2
+            exit 127
+          fi
+          exec "$qemu" -L "$root" "$interp" /work/ilc-pkg/tools/real-ilc "$@"
+          WRAPPER
+          chmod +x "$work/ilc-pkg/tools/ilc"
 
       - name: Publish NativeAOT (cross container)
         shell: bash
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           CHANNEL: ${{ steps.ver.outputs.channel }}
+          TAG: ${{ steps.sdk.outputs.tag }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/riscv"
-          mkdir -p "$work/out" "$work/home" "$work/nuget-http"
+          mkdir -p "$work/out" "$work/home"
           cat > "$work/container.sh" <<'CONTAINER'
           set -euo pipefail
           export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -298,11 +258,17 @@ jobs:
           export DOTNET_ReadyToRun=0
           export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
           export DOTNET_CLI_HOME=/work/home HOME=/work/home
-          # Restore into bind-mounted caches so repeat runs skip re-downloading every package.
-          export NUGET_PACKAGES=/work/nuget-cache NUGET_HTTP_CACHE_PATH=/work/nuget-http
-          mkdir -p "$NUGET_PACKAGES" "$NUGET_HTTP_CACHE_PATH"
 
+          # The cross image sets no WORKDIR (it runs as /), so anchor every relative path.
           cd /work/src
+
+          # ilc runs under qemu-user and the emulator is not part of the cross rootfs image.
+          tdnf install -y qemu-user-static-riscv >/dev/null
+
+          # Mixed SDK: official x64 host/runtime with the community managed sdk tree
+          # (its Microsoft.NET.Build.Tasks knows the linux-riscv64 packs). The six
+          # riscv64-native files inside the tree are overlaid back with official x64
+          # binaries so MSBuild/Roslyn run natively on the host.
           mkdir -p /work/dotnet-x64 /work/community
           tar xzf /work/sdk-x64.tar.gz -C /work/dotnet-x64
           tar xzf /work/sdk-riscv64.tar.gz -C /work/community ./sdk
@@ -339,7 +305,7 @@ jobs:
             -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
             -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
             -p:IlcHostRuntimeIdentifier=linux-riscv64 \
-            -p:IlcHostPackagePath=/work/ilc-host-x64 \
+            -p:IlcHostPackagePath=/work/ilc-pkg \
             -p:SysRoot=/crossrootfs/riscv64 \
             -p:LinkerFlavor=lld \
             -nr:false \
