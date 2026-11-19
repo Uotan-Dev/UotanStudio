@@ -93,18 +93,34 @@ public sealed partial class CompareColumnViewModel
     /// <param name="remoteDestination">Remote directory or file path; a trailing slash uploads inside it.<para>远程目录或文件路径；以斜杠结尾时上传入该目录内。</para></param>
     /// <returns>The upload task.<para>上传任务。</para></returns>
     public Task UploadToRemoteAsync(string localPath, string remoteDestination)
-        => RemoteSession.UploadAsync(localPath, remoteDestination, CancellationToken.None);
+        => UploadToRemoteAsync(localPath, remoteDestination, CancellationToken.None);
+
+    /// <summary>Copies one local path up to this column's remote directory.<para>把一个本地路径上传到本列的远程目录。</para></summary>
+    /// <param name="localPath">Local file or directory to upload.<para>待上传的本地文件或目录。</para></param>
+    /// <param name="remoteDestination">Remote directory or file path; a trailing slash uploads inside it.<para>远程目录或文件路径；以斜杠结尾时上传入该目录内。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The upload task.<para>上传任务。</para></returns>
+    public Task UploadToRemoteAsync(string localPath, string remoteDestination, CancellationToken cancellationToken)
+        => RemoteSession.UploadAsync(localPath, remoteDestination, cancellationToken);
 
     /// <summary>Copies one remote entry of this column down to a local directory.<para>把本列的一个远程条目下载到本地目录。</para></summary>
     /// <param name="remotePath">Remote file or directory to download.<para>待下载的远程文件或目录。</para></param>
     /// <param name="localDestination">Local directory or file path; an existing directory receives the entry name.<para>本地目录或文件路径；已存在的目录按条目名接收。</para></param>
     /// <returns>The download task.<para>下载任务。</para></returns>
     public Task DownloadFromRemoteAsync(string remotePath, string localDestination)
+        => DownloadFromRemoteAsync(remotePath, localDestination, CancellationToken.None);
+
+    /// <summary>Copies one remote entry of this column down to a local directory.<para>把本列的一个远程条目下载到本地目录。</para></summary>
+    /// <param name="remotePath">Remote file or directory to download.<para>待下载的远程文件或目录。</para></param>
+    /// <param name="localDestination">Local directory or file path; an existing directory receives the entry name.<para>本地目录或文件路径；已存在的目录按条目名接收。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The download task.<para>下载任务。</para></returns>
+    public Task DownloadFromRemoteAsync(string remotePath, string localDestination, CancellationToken cancellationToken)
     {
         var target = Directory.Exists(localDestination)
             ? System.IO.Path.Combine(localDestination, RemoteFileSystemService.GetEntryName(remotePath))
             : localDestination;
-        return RemoteSession.DownloadAsync(remotePath, target, CancellationToken.None);
+        return RemoteSession.DownloadAsync(remotePath, target, cancellationToken);
     }
 
     /// <summary>Copies one remote file of this column into a local temporary file and returns its path.<para>把本列的一个远程文件复制到本地临时文件并返回其路径。</para></summary>

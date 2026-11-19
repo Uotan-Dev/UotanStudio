@@ -667,6 +667,95 @@ public sealed class CompareDocumentColumnsTests : IDisposable
         Assert.True(_document.Columns[0].IsBrowsing);
     }
 
+    [Fact]
+    public async Task ReloadContent_PreservesExpandedFoldersAndRevealsCopiedFile()
+    {
+        var folder = Path.Combine(_root, "reload-target");
+        var sub = Path.Combine(folder, "sub");
+        Directory.CreateDirectory(sub);
+        await File.WriteAllTextAsync(Path.Combine(sub, "existing.txt"), "hello", TestContext.Current.CancellationToken);
+
+        await _document.AddComparisonPathAsync(folder);
+        var column = _document.Columns[0];
+        var subNode = Assert.Single(column.Rows!).TreeNode!;
+        await column.ToggleTreeExpansionAsync(subNode);
+        Assert.Equal(2, column.Rows!.Count);
+
+        await File.WriteAllTextAsync(Path.Combine(sub, "copied.txt"), "world", TestContext.Current.CancellationToken);
+        await column.ReloadContentAsync(sub);
+
+        Assert.Equal(3, column.Rows!.Count);
+        Assert.Contains(column.Rows, row => string.Equals(row.TreeNode?.Name, "copied.txt", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CompareEdits_UpdateTabModifiedStateAndSaveCommandClearsDirtyState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        Assert.IsAssignableFrom<UotanStudio.ViewModels.ICommandSaveableDocument>(_document);
+
+        var textLeft = WriteFile("save-left.txt", "alpha");
+        var textRight = WriteFile("save-right.txt", "beta");
+        await _document.OpenCompareFilesAsync(textLeft, textRight);
+        Assert.False(_document.IsDirty);
+        Assert.False(_document.IsModified);
+
+        _document.ApplyEditorLines(leftSide: true, startSlot: 0, removedSlots: 1, ["alpha-edited"]);
+        Assert.True(_document.IsDirty);
+        Assert.True(_document.IsModified);
+
+        await _document.SaveCommand.ExecuteAsync(null);
+        Assert.False(_document.IsDirty);
+        Assert.False(_document.IsModified);
+        Assert.Equal("alpha-edited", await File.ReadAllTextAsync(textLeft, ct));
+
+        var hexLeft = Path.Combine(_root, "save-left.bin");
+        var hexRight = Path.Combine(_root, "save-right.bin");
+        await File.WriteAllBytesAsync(hexLeft, [1, 2, 3, 4], ct);
+        await File.WriteAllBytesAsync(hexRight, [1, 9, 3, 4], ct);
+        await _document.OpenCompareFilesAsync(hexLeft, hexRight);
+        Assert.False(_document.IsDirty);
+        Assert.False(_document.IsModified);
+
+        _document.Columns[0].HexBytes![0] = 0xAA;
+        _document.Columns[0].HexBytesEdited(0, 1);
+        Assert.True(_document.IsDirty);
+        Assert.True(_document.IsModified);
+
+        await _document.SaveCommand.ExecuteAsync(null);
+        Assert.False(_document.IsDirty);
+        Assert.False(_document.IsModified);
+        Assert.Equal(0xAA, (await File.ReadAllBytesAsync(hexLeft, ct))[0]);
+    }
+
+    [Fact]
+    public void ErrorBanner_NormalizesMultilineTextAndDismisses_AndTransferProgressDefaultsHidden()
+    {
+        Assert.False(_document.IsTransferring);
+
+        _document.ReportError("Line one.\r\nDetails:\nSomething failed.");
+        Assert.True(_document.HasError);
+        Assert.Equal("Line one. Details: Something failed.", _document.ErrorDisplayMessage);
+
+        _document.DismissErrorCommand.Execute(null);
+        Assert.False(_document.HasError);
+        Assert.Equal(string.Empty, _document.ErrorDisplayMessage);
+
+        var transferToken = _document.BeginTransfer();
+        Assert.True(_document.IsTransferring);
+        Assert.False(transferToken.IsCancellationRequested);
+        _document.ReportTransferProgress(512 * 1024, 1024 * 1024, 2.5 * 1024 * 1024);
+        Assert.Equal(50.0, _document.TransferProgressPercent, 1);
+        Assert.Equal("50%", _document.TransferPercentText);
+        Assert.Equal("2.5 MB/s", _document.TransferSpeedText);
+
+        _document.CancelTransferCommand.Execute(null);
+        Assert.True(transferToken.IsCancellationRequested);
+
+        _document.EndTransfer();
+        Assert.False(_document.IsTransferring);
+    }
+
     public void Dispose()
     {
         _document.Cleanup();

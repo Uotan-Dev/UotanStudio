@@ -1,4 +1,22 @@
-using System.Collections.Specialized;using System.ComponentModel;using System.Globalization;using Avalonia;using Avalonia.Controls;using Avalonia.Data.Converters;using Avalonia.Input;using Avalonia.Interactivity;using Avalonia.Markup.Xaml.Templates;using Avalonia.Platform.Storage;using Avalonia.Threading;using Avalonia.VisualTree;using AvaloniaEdit;using CommunityToolkit.Mvvm.Messaging;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Ui;using UotanStudio.ViewModels.Compare;using UotanStudio.ViewModels.Devices;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Globalization;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Data.Converters;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml.Templates;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using AvaloniaEdit;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
+using UotanStudio.Services;
+using UotanStudio.Services.Ui;
+using UotanStudio.ViewModels.Compare;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Views.Compare;
 
@@ -38,7 +56,7 @@ public partial class CompareView : UserControl
     /// Minimum pointer movement (in pixels) before a drag starts; anything smaller counts as a click.
     /// <para>开始拖拽所需的最小移动距离（像素）：小于它视为点击，避免误触开始拖拽。</para>
     /// </summary>
-    private const double DragThreshold = 4.0;
+    private const double DragThreshold = 8.0;
 
     private readonly List<ColumnVisuals> _columnVisuals = [];
     private readonly List<GridSplitter> _columnDividers = [];
@@ -482,6 +500,8 @@ public partial class CompareView : UserControl
             return;
         }
 
+        SyncCompareHorizontalScrollBars(left, right);
+
         var target = sourceIsLeft ? right.Scroll : left.Scroll;
         var targetList = sourceIsLeft ? right.List : left.List;
 
@@ -505,25 +525,22 @@ public partial class CompareView : UserControl
             return;
         }
 
-        var sourceList = sourceIsLeft ? left.List : right.List;
-        if (sourceList is null)
+        var sourceMaxVertical = Math.Max(0, source.Extent.Height - source.Viewport.Height);
+        var targetMaxVertical = Math.Max(0, target.Extent.Height - target.Viewport.Height);
+        var desiredY = sourceMaxVertical > 0 && source.Offset.Y >= sourceMaxVertical - 0.5
+            ? targetMaxVertical
+            : Math.Clamp(source.Offset.Y, 0, targetMaxVertical);
+
+        if (Math.Abs(desiredY - target.Offset.Y) < 0.5)
         {
             return;
         }
-
-        var rowHeight = GetRowHeight(sourceList);
-        if (rowHeight <= 0)
-        {
-            return;
-        }
-
-        var index = (int)Math.Floor(source.Offset.Y / rowHeight);
 
         _syncing = true;
         try
         {
             var before = target.Offset.Y;
-            ScrollListToIndex(targetList, target, index);
+            target.Offset = new Vector(target.Offset.X, desiredY);
             var after = target.Offset.Y;
             if (Math.Abs(after - before) >= 0.5)
             {
@@ -540,6 +557,37 @@ public partial class CompareView : UserControl
         finally
         {
             _syncing = false;
+        }
+    }
+
+    /// <summary>
+    /// Keeps horizontal scrollbar visibility symmetric between the two compare row lists so that
+    /// when only one side overflows horizontally, both sides reserve the same bottom scrollbar height
+    /// and stay aligned all the way to the bottom row.
+    /// <para>保持两列对比行列表的水平滚动条显隐一致：当仅一侧内容横向超出时，两侧预留相同的底部滚动条高度，
+    /// 保证滚到底部时依然严格对齐。</para>
+    /// </summary>
+    private static void SyncCompareHorizontalScrollBars(ColumnVisuals left, ColumnVisuals right)
+    {
+        if (left.List is null || right.List is null || left.Scroll is null || right.Scroll is null)
+        {
+            return;
+        }
+
+        var eitherOverflows = left.Scroll.Extent.Width > left.Scroll.Viewport.Width + 0.5
+            || right.Scroll.Extent.Width > right.Scroll.Viewport.Width + 0.5;
+        var desired = eitherOverflows
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Visible
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+
+        if (ScrollViewer.GetHorizontalScrollBarVisibility(left.List) != desired)
+        {
+            ScrollViewer.SetHorizontalScrollBarVisibility(left.List, desired);
+        }
+
+        if (ScrollViewer.GetHorizontalScrollBarVisibility(right.List) != desired)
+        {
+            ScrollViewer.SetHorizontalScrollBarVisibility(right.List, desired);
         }
     }
 
@@ -862,15 +910,19 @@ public partial class CompareView : UserControl
     /// </summary>
     private void OnAddButtonPointerEntered(object? sender, PointerEventArgs e)
     {
-        if (sender is Button { Flyout: { } flyout } button && !flyout.IsOpen)
+        if (sender is Button button
+            && Avalonia.Controls.Primitives.FlyoutBase.GetAttachedFlyout(button) is { IsOpen: false } flyout)
         {
             flyout.ShowAt(button);
         }
     }
 
     /// <summary>
-    /// Opens device file system browser by picking from connected ADB/HDC devices.
-    /// <para>通过选择已连接的 ADB/HDC 设备打开设备文件系统浏览。</para>
+    /// Opens a new device file-system column: uses the currently selected ADB/HDC device when available
+    /// (allowing multiple columns for the same or different devices), falls back to the sole connected
+    /// ADB/HDC device, or opens a device picker anchored on <c>AddColumnButton</c>.
+    /// <para>打开新的设备文件系统列：优先使用当前选中的 ADB/HDC 设备（允许在同一多列视图中重复打开多个设备列）；
+    /// 未选中时若仅有一台 ADB/HDC 设备则直接打开，否则在 <c>AddColumnButton</c> 下弹出设备选择菜单。</para>
     /// </summary>
     private async void OnDeviceFilesClick(object? sender, RoutedEventArgs e)
     {
@@ -879,7 +931,14 @@ public partial class CompareView : UserControl
             return;
         }
 
-        var deviceList = (DeviceViewModel.Instance?.Devices ?? DeviceViewModel.EnsureInstance().Devices)
+        var deviceVm = DeviceViewModel.Instance ?? DeviceViewModel.EnsureInstance();
+        if (deviceVm.SelectedDevice is { } selected && (selected.IsAdb || selected.IsHdc))
+        {
+            await vm.AddDevicePathAsync(selected.Device);
+            return;
+        }
+
+        var deviceList = deviceVm.Devices
             .Where(d => d.IsAdb || d.IsHdc)
             .ToList();
 
@@ -895,22 +954,25 @@ public partial class CompareView : UserControl
             return;
         }
 
-        if (sender is Control control)
+        var anchor = AddColumnButton ?? (sender as Control);
+        if (anchor is null)
         {
-            var menu = new ContextMenu();
-            foreach (var info in deviceList)
-            {
-                var targetDevice = info.Device;
-                var item = new MenuItem { Header = info.DisplayName };
-                item.Click += async (_, _) =>
-                {
-                    await vm.AddDevicePathAsync(targetDevice);
-                };
-                menu.Items.Add(item);
-            }
-
-            menu.Open(control);
+            return;
         }
+
+        var menu = new ContextMenu();
+        foreach (var info in deviceList)
+        {
+            var targetDevice = info.Device;
+            var item = new MenuItem { Header = info.DisplayName };
+            item.Click += async (_, _) =>
+            {
+                await vm.AddDevicePathAsync(targetDevice);
+            };
+            menu.Items.Add(item);
+        }
+
+        Dispatcher.UIThread.Post(() => menu.Open(anchor));
     }
 
     /// <summary>
@@ -960,6 +1022,11 @@ public partial class CompareView : UserControl
     /// </summary>
     private async void OnAddFoldersClick(object? sender, RoutedEventArgs e)
     {
+        if (sender is Button addButton)
+        {
+            Avalonia.Controls.Primitives.FlyoutBase.GetAttachedFlyout(addButton)?.Hide();
+        }
+
         if (DataContext is not CompareViewModel vm)
         {
             return;
@@ -1111,7 +1178,7 @@ public partial class CompareView : UserControl
     /// <para>按可视元素反查它所在的文件列：直接取最近的行列表的 DataContext（列模板的 DataContext 就是列视图模型）。
     /// 直接按行列表反查所属列，任意列数（第 3、4…列）都能正确定位，保证双击/拖拽不失效。</para>
     /// </summary>
-    private CompareColumnViewModel? FindColumnFor(Control source)
+    private CompareColumnViewModel? FindColumnFor(Visual source)
     {
         if (FindListFor(source)?.DataContext is CompareColumnViewModel direct)
         {
@@ -1300,7 +1367,7 @@ public partial class CompareView : UserControl
     /// <para>按可视元素反查它所在的行列表（行编辑框定位所在列用）：沿可视祖先直接找最近的 <see cref="ListBox"/>，
     /// 不依赖缓存，因此列数变化后依然可靠。</para>
     /// </summary>
-    private ListBox? FindListFor(Control source)
+    private ListBox? FindListFor(Visual source)
         => source.GetSelfAndVisualAncestors().OfType<ListBox>().FirstOrDefault();
 
     /// <summary>该行列表是否属于右侧模板（对比右列渲染右侧单元格）。</summary>

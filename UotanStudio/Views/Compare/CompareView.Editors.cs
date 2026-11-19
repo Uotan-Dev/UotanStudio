@@ -49,10 +49,37 @@ public partial class CompareView
             return;
         }
 
-        var target = editors.FirstOrDefault(pair => pair.LeftSide != sourceEditor.LeftSide).Editor is { } targetEditor
+        var targetPair = editors.FirstOrDefault(pair => pair.LeftSide != sourceEditor.LeftSide);
+        var target = targetPair.Editor is { } targetEditor
             ? ResolveEditorScrollViewer(targetEditor)
             : null;
-        if (target is null || Math.Abs(target.Offset.Y - source.Offset.Y) < 0.5)
+        if (target is null)
+        {
+            return;
+        }
+
+        var eitherOverflows = source.Extent.Width > source.Viewport.Width + 0.5
+            || target.Extent.Width > target.Viewport.Width + 0.5;
+        var desiredHBar = eitherOverflows
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Visible
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        if (sourceEditor.Editor.HorizontalScrollBarVisibility != desiredHBar)
+        {
+            sourceEditor.Editor.HorizontalScrollBarVisibility = desiredHBar;
+        }
+
+        if (targetPair.Editor!.HorizontalScrollBarVisibility != desiredHBar)
+        {
+            targetPair.Editor.HorizontalScrollBarVisibility = desiredHBar;
+        }
+
+        var sourceMaxVertical = Math.Max(0, source.Extent.Height - source.Viewport.Height);
+        var targetMaxVertical = Math.Max(0, target.Extent.Height - target.Viewport.Height);
+        var desiredY = sourceMaxVertical > 0 && source.Offset.Y >= sourceMaxVertical - 0.5
+            ? targetMaxVertical
+            : Math.Clamp(source.Offset.Y, 0, targetMaxVertical);
+
+        if (Math.Abs(target.Offset.Y - desiredY) < 0.5)
         {
             return;
         }
@@ -60,7 +87,7 @@ public partial class CompareView
         _syncingEditorScroll = true;
         try
         {
-            target.Offset = new Vector(target.Offset.X, source.Offset.Y);
+            target.Offset = new Vector(target.Offset.X, desiredY);
         }
         finally
         {

@@ -525,7 +525,7 @@ internal sealed partial class AdbSyncClient
     private static async Task EncodeSourceAsync(Stream source, Channel<byte[]> channel, AdbSyncCompression codec,
         int maxBlock, CancellationToken cancellationToken)
     {
-        var collector = new SyncBlockCollector(channel, maxBlock);
+        var collector = new SyncBlockCollector(channel, maxBlock, cancellationToken);
         try
         {
             await using (var encoder = CreateSyncEncodeStream(collector, codec))
@@ -533,7 +533,7 @@ internal sealed partial class AdbSyncClient
                 await source.CopyToAsync(encoder, maxBlock, cancellationToken).ConfigureAwait(false);
             }
 
-            collector.PushRemainder();
+            await collector.PushRemainderAsync(cancellationToken).ConfigureAwait(false);
             collector.Complete();
         }
         catch (Exception ex)
@@ -575,21 +575,21 @@ internal sealed partial class AdbSyncClient
     /// Collects compressed output into DATA-block-sized buffers pushed to the wire channel.
     /// <para>把压缩输出收集为 DATA 块大小的缓冲并推入线上通道。</para>
     /// </summary>
-    private sealed class SyncBlockCollector(Channel<byte[]> channel, int maxBlock) : Stream
+    private sealed class SyncBlockCollector(Channel<byte[]> channel, int maxBlock, CancellationToken cancellationToken) : Stream
     {
         private readonly byte[] _block = new byte[maxBlock];
         private int _filled;
         private bool _completed;
 
         /// <summary>Flushes any buffered partial block to the channel. <para>把缓冲中的不完整块冲刷到通道。</para></summary>
-        public void PushRemainder()
+        public async ValueTask PushRemainderAsync(CancellationToken ct)
         {
             if (_filled > 0)
             {
                 var remainder = new byte[_filled];
                 _block.AsSpan(0, _filled).CopyTo(remainder);
-                Publish(remainder);
                 _filled = 0;
+                await PublishAsync(remainder, ct).ConfigureAwait(false);
             }
         }
 
@@ -626,23 +626,53 @@ internal sealed partial class AdbSyncClient
                 {
                     var full = new byte[_block.Length];
                     _block.CopyTo(full, 0);
-                    Publish(full);
                     _filled = 0;
+                    Publish(full);
                 }
             }
         }
 
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+            => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
         {
-            Write(buffer, offset, count);
-            return Task.CompletedTask;
+            var effectiveCt = ct.CanBeCanceled ? ct : cancellationToken;
+            while (!buffer.IsEmpty)
+            {
+                var take = Math.Min(buffer.Length, _block.Length - _filled);
+                buffer[..take].Span.CopyTo(_block.AsSpan(_filled));
+                _filled += take;
+                buffer = buffer[take..];
+                if (_filled == _block.Length)
+                {
+                    var full = new byte[_block.Length];
+                    _block.CopyTo(full, 0);
+                    _filled = 0;
+                    await PublishAsync(full, effectiveCt).ConfigureAwait(false);
+                }
+            }
         }
 
         private void Publish(byte[] block)
         {
-            if (!channel.Writer.TryWrite(block))
+            while (!channel.Writer.TryWrite(block))
             {
-                throw new IOException("Sync encoder channel rejected a block.");
+                if (!channel.Writer.WaitToWriteAsync(cancellationToken).AsTask().GetAwaiter().GetResult())
+                {
+                    throw new IOException("Sync encoder channel closed before accepting a block.");
+                }
+            }
+        }
+
+        private async ValueTask PublishAsync(byte[] block, CancellationToken ct)
+        {
+            while (!channel.Writer.TryWrite(block))
+            {
+                if (!await channel.Writer.WaitToWriteAsync(ct).ConfigureAwait(false))
+                {
+                    throw new IOException("Sync encoder channel closed before accepting a block.");
+                }
             }
         }
 

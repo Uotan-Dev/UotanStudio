@@ -15,7 +15,7 @@ namespace UotanStudio.ViewModels.Compare;
 /// 单侧条目在另一侧自动留空、差异行整行变色、两侧共用一套展开状态（一侧展开即两侧同步展开），两栏并排
 /// 滚动；双击文件不占用当前视图，而是在新标签打开文件对比。</para>
 /// </summary>
-public sealed partial class CompareViewModel : Document, ITool
+public sealed partial class CompareViewModel : Document, ITool, ICommandSaveableDocument
 {
     /// <summary>
     /// Columns created when the document opens: two columns is both the common browsing layout and the number
@@ -48,6 +48,7 @@ public sealed partial class CompareViewModel : Document, ITool
 
     private readonly SemaphoreSlim _treeExpansionLock = new(1, 1);
     private CancellationTokenSource _loadCts = new();
+    private CancellationTokenSource? _transferCts;
     private CompareTreeNodeViewModel? _compareTreeRoot;
     private CompareHexRowCollection? _currentHexRows;
     private string _folderSummaryText = string.Empty;
@@ -148,7 +149,40 @@ public sealed partial class CompareViewModel : Document, ITool
     /// The last operation error text; empty means no error.
     /// <para>最后一次操作错误文本；为空表示无错误。</para>
     /// </summary>
-    [ObservableProperty] private string _errorMessage = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ErrorDisplayMessage))]
+    private string _errorMessage = string.Empty;
+
+    /// <summary>
+    /// Single-line normalized error text for the top error banner so short messages stay on one line and only wrap when overflowing.
+    /// <para>用于顶部错误栏的单行规范化错误文本：尽量保持在同一行，仅在宽度不足时自动换行。</para>
+    /// </summary>
+    /// <value>Normalized error text without embedded line breaks. <para>去除内嵌换行符后的错误文本。</para></value>
+    public string ErrorDisplayMessage => NormalizeInlineError(ErrorMessage);
+
+    /// <summary>
+    /// Whether a file transfer (copy/push/pull) is currently in progress (controls toolbar progress bar visibility).
+    /// <para>是否正在执行文件传输（复制/推送/拉取），用于控制顶栏进度条显隐，默认隐藏。</para>
+    /// </summary>
+    [ObservableProperty] private bool _isTransferring;
+
+    /// <summary>
+    /// Current file transfer completion percentage (0 to 100).
+    /// <para>当前文件传输完成百分比（0 到 100）。</para>
+    /// </summary>
+    [ObservableProperty] private double _transferProgressPercent;
+
+    /// <summary>
+    /// Formatted percentage text rendered inside the transfer progress bar (e.g. <c>42%</c>).
+    /// <para>显示在传输进度条内部的百分比文本（例如 <c>42%</c>）。</para>
+    /// </summary>
+    [ObservableProperty] private string _transferPercentText = "0%";
+
+    /// <summary>
+    /// Formatted transfer speed text rendered beside the transfer progress bar (e.g. <c>24.5 MB/s</c>).
+    /// <para>显示在传输进度条外侧的速度文本（例如 <c>24.5 MB/s</c>）。</para>
+    /// </summary>
+    [ObservableProperty] private string _transferSpeedText = string.Empty;
 
     /// <summary>
     /// Count of equal items (folder comparison).
@@ -734,6 +768,10 @@ public sealed partial class CompareViewModel : Document, ITool
         _loadCts.Cancel();
         _loadCts.Dispose();
         _loadCts = new CancellationTokenSource();
+        _transferCts?.Cancel();
+        _transferCts?.Dispose();
+        _transferCts = null;
+        IsTransferring = false;
         _currentHexRows?.Dispose();
         _currentHexRows = null;
 
@@ -752,6 +790,7 @@ public sealed partial class CompareViewModel : Document, ITool
         HasError = false;
         ErrorMessage = string.Empty;
         NotifyColumnsChanged();
+        SyncDirtyState();
     }
 
     partial void OnIsComparingChanged(bool value) => UpdateTitle();
@@ -965,6 +1004,96 @@ public sealed partial class CompareViewModel : Document, ITool
         ErrorMessage = string.Empty;
     }
 
+    /// <summary>
+    /// Dismisses the top error banner.
+    /// <para>关闭顶部错误提示栏。</para>
+    /// </summary>
+    [RelayCommand]
+    private void DismissError() => ClearError();
+
+    /// <summary>
+    /// Marks the start of a file transfer, shows the toolbar transfer progress bar, and returns a cancellation token
+    /// controlled by <see cref="CancelTransferCommand"/>.
+    /// <para>标记文件传输开始、显示顶栏传输进度条，并返回由 <see cref="CancelTransferCommand"/> 控制的取消令牌。</para>
+    /// </summary>
+    /// <returns>The cancellation token for the active transfer. <para>当前传输的取消令牌。</para></returns>
+    internal CancellationToken BeginTransfer()
+    {
+        _transferCts?.Cancel();
+        _transferCts?.Dispose();
+        _transferCts = new CancellationTokenSource();
+        IsTransferring = true;
+        TransferProgressPercent = 0;
+        TransferPercentText = "0%";
+        TransferSpeedText = "0 B/s";
+        return _transferCts.Token;
+    }
+
+    /// <summary>
+    /// Cancels the currently running file transfer.
+    /// <para>取消正在进行的文件传输。</para>
+    /// </summary>
+    [RelayCommand]
+    private void CancelTransfer() => _transferCts?.Cancel();
+
+    /// <summary>
+    /// Updates the toolbar transfer progress percentage and speed text.
+    /// <para>更新顶栏文件传输进度百分比与速度文本。</para>
+    /// </summary>
+    internal void ReportTransferProgress(long transferredBytes, long totalBytes, double bytesPerSecond)
+    {
+        var percent = totalBytes > 0
+            ? Math.Clamp(transferredBytes * 100.0 / totalBytes, 0.0, 100.0)
+            : 0.0;
+        TransferProgressPercent = percent;
+        TransferPercentText = $"{percent:0}%";
+        TransferSpeedText = FormatTransferSpeed(bytesPerSecond);
+    }
+
+    /// <summary>
+    /// Marks the end of a file transfer and hides the toolbar progress bar.
+    /// <para>标记文件传输结束并隐藏顶栏进度条。</para>
+    /// </summary>
+    internal void EndTransfer()
+    {
+        _transferCts?.Dispose();
+        _transferCts = null;
+        IsTransferring = false;
+        TransferProgressPercent = 0;
+        TransferPercentText = "0%";
+        TransferSpeedText = string.Empty;
+    }
+
+    private static string NormalizeInlineError(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return string.Empty;
+        }
+
+        var parts = message.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Join(' ', parts);
+    }
+
+    private static string FormatTransferSpeed(double bytesPerSecond)
+    {
+        if (bytesPerSecond <= 0 || double.IsNaN(bytesPerSecond) || double.IsInfinity(bytesPerSecond))
+        {
+            return "0 B/s";
+        }
+
+        const double kb = 1024.0;
+        const double mb = kb * 1024.0;
+        const double gb = mb * 1024.0;
+        return bytesPerSecond switch
+        {
+            >= gb => $"{bytesPerSecond / gb:0.##} GB/s",
+            >= mb => $"{bytesPerSecond / mb:0.#} MB/s",
+            >= kb => $"{bytesPerSecond / kb:0.#} KB/s",
+            _ => $"{bytesPerSecond:0} B/s"
+        };
+    }
+
     /// <summary>列状态变化后刷新文档级派生属性（空文档提示）。</summary>
     internal void NotifyColumnsChanged() => OnPropertyChanged(nameof(IsEmptyDocument));
 
@@ -1009,13 +1138,57 @@ public sealed partial class CompareViewModel : Document, ITool
         NotifyColumnsDirtyState();
     }
 
-    /// <summary>把「已修改」状态变化通知到各列（决定保存按钮是否显示）。</summary>
+    /// <summary>
+    /// Whether this document has any unsaved text or hex edits in either compare side or any browsing column.
+    /// <para>本文档是否存在尚未保存的文本或十六进制修改（包含对比两侧及任意浏览列）。</para>
+    /// </summary>
+    /// <value><c>true</c> when at least one side or column has unsaved edits; otherwise <c>false</c>.
+    /// <para>至少一侧或一列有未保存修改时为 <c>true</c>；否则为 <c>false</c>。</para></value>
+    public bool IsDirty => _dirtyLeft || _dirtyRight || Columns.Any(static column => column.IsDirty);
+
+    string ISaveableDocument.CompileError => HasError ? ErrorMessage : string.Empty;
+
+    /// <summary>
+    /// Saves every modified column or compare side in this document (used by Ctrl+S and close confirmation).
+    /// <para>保存本文档中所有已修改的列或对比侧（供 Ctrl+S 与关闭确认弹窗调用）。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        foreach (var column in Columns.Where(static column => column.IsDirty).ToArray())
+        {
+            await column.SaveCommand.ExecuteAsync(null);
+        }
+
+        SyncDirtyState();
+    }
+
+    /// <summary>
+    /// Synchronises the dock tab's <see cref="Document.IsModified"/> flag and raises <see cref="IsDirty"/>
+    /// notifications so the tab header shows the unsaved indicator and close prompts trigger automatically.
+    /// <para>同步停靠标签的 <see cref="Document.IsModified"/> 标记并通知 <see cref="IsDirty"/>，
+    /// 使标签栏显示未保存提示并在关闭时自动弹出确认框。</para>
+    /// </summary>
+    internal void SyncDirtyState()
+    {
+        var dirty = IsDirty;
+        if (IsModified != dirty)
+        {
+            IsModified = dirty;
+        }
+
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
+    /// <summary>把「已修改」状态变化通知到各列（决定保存按钮是否显示）并同步标签未保存标记。</summary>
     private void NotifyColumnsDirtyState()
     {
         foreach (var column in Columns)
         {
             column.NotifyDirtyChanged();
         }
+
+        SyncDirtyState();
     }
 
     /// <summary>
@@ -1655,6 +1828,7 @@ public sealed partial class CompareViewModel : Document, ITool
         DifferentCount = 0;
         LeftOnlyCount = 0;
         RightOnlyCount = 0;
+        NotifyColumnsDirtyState();
     }
 
     /// <summary>

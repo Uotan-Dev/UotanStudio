@@ -5,6 +5,8 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui;
@@ -61,115 +63,83 @@ public partial class CompareView
     /// <summary>记录拖拽候选：只有文件/文件夹行（非文本编辑行）可以拖出。</summary>
 
     private void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
-
     {
-
         ClearDragCandidate();
-
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-
-            || e.Source is not Control { DataContext: CompareRowViewModel row } source
-
-            || FindListFor(source) is not { } list)
-
+            || FindRowControl(e.Source as Visual) is not { } hit
+            || FindListFor(hit.Control) is not { } list)
         {
-
             return;
-
         }
 
-
-
+        var (source, row) = hit;
         var index = IndexOfRow(list, row);
-
         if (index < 0)
-
         {
-
             return;
-
         }
-
-
 
         if (list.Selection is { } selection)
-
         {
-
             selection.Clear();
-
             selection.Select(index);
-
         }
-
-
 
         var column = FindColumnFor(source);
-
         if (column is not null)
-
         {
-
             column.SelectedIndex = index;
-
         }
-
-
 
         if (DataContext is CompareViewModel vm && column is { IsCompareSide: true })
-
         {
-
             vm.SelectedIndex = index;
-
         }
 
-
-
-        if (e.ClickCount == 2)
-
+        if (e.ClickCount >= 2 && (e.ClickCount & 1) == 0)
         {
-
             e.Handled = true;
-
             ActivateRow(row, list);
-
             return;
-
         }
 
-
-
-        if (source is TextBox)
-
+        if (e.ClickCount > 1 || source is TextBox || row.TreeNode is null)
         {
-
             return;
-
         }
-
-
-
-        if (row.TreeNode is null)
-
-        {
-
-            return;
-
-        }
-
-
 
         _dragTrigger = e;
-
         _dragRow = row;
-
         _dragList = list;
-
         _dragOrigin = e.GetPosition(this);
+        _dragSourceColumn = column;
+    }
 
-        _dragSourceColumn = FindColumnFor(source);
+    /// <summary>
+    /// Walks up from a hit visual to find the enclosing row control and its <see cref="CompareRowViewModel"/>.
+    /// <para>从命中的可视元素向上查找承载 <see cref="CompareRowViewModel"/> 的行控件。</para>
+    /// </summary>
+    private static (Control Control, CompareRowViewModel Row)? FindRowControl(Visual? visual)
+    {
+        if (visual is null)
+        {
+            return null;
+        }
 
+        foreach (var ancestor in visual.GetSelfAndVisualAncestors())
+        {
+            if (ancestor is Control { DataContext: CompareRowViewModel row } control)
+            {
+                return (control, row);
+            }
+
+            if (ancestor is ListBox)
+            {
+                break;
+            }
+        }
+
+        return null;
     }
 
 
@@ -1047,225 +1017,237 @@ public partial class CompareView
     /// <summary>浏览状态中把条目复制/移动到相邻列的目录。</summary>
 
     private async Task TransferToNeighbourAsync(object? sender, bool move)
-
     {
-
         var (path, _, column) = ResolveEntry(sender);
-
         if (DataContext is not CompareViewModel vm || path is null || column is null)
-
         {
-
             return;
-
         }
-
-
 
         var index = vm.Columns.IndexOf(column);
-
         var neighbourIndex = index + (ContextIsRightSide(sender) ? 1 : -1);
-
-        var neighbour = neighbourIndex >= 0 && neighbourIndex < vm.Columns.Count
-
+        var targetColumn = neighbourIndex >= 0 && neighbourIndex < vm.Columns.Count
             ? vm.Columns[neighbourIndex]
-
             : null;
+        var target = targetColumn?.Path ?? string.Empty;
 
-        var target = neighbour?.Path ?? string.Empty;
-
-
-
-        if (neighbour is { IsRemoteColumn: true } remoteNeighbour)
-
+        if (targetColumn is { IsDeviceColumn: true } or { IsRemoteColumn: true })
         {
-
             if (move)
-
             {
-
                 vm.ReportError(LanguageService.Instance.GetString("Compare_NoNeighbourFolder"));
-
                 return;
-
             }
 
-
-
-            try
-
-            {
-
-                await remoteNeighbour.UploadToRemoteAsync(path, target.Length == 0 ? "/" : target);
-
-            }
-
-            catch (Exception ex)
-
-            {
-
-                ReportOperationFailure(ex);
-
-            }
-
-
-
+            await TransferToNonLocalColumnAsync(vm, column, targetColumn, [path], droppedDirectoryRow: null);
             return;
-
         }
 
+        if (column is { IsDeviceColumn: true, DeviceTarget: { } srcDev } && Directory.Exists(target))
+        {
+            if (move)
+            {
+                vm.ReportError(LanguageService.Instance.GetString("Compare_NoNeighbourFolder"));
+                return;
+            }
 
+            try
+            {
+                var pulled = false;
+                await RunTrackedTransferAsync(vm, 1, async (reportUnits, ct) =>
+                {
+                    await column.PullFromDeviceAsync(srcDev, path, target, ct);
+                    reportUnits(1);
+                    pulled = true;
+                });
+                if (pulled)
+                {
+                    await ReloadAfterEntryChangeAsync(targetColumn);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                ReportOperationFailure(ex);
+            }
+
+            return;
+        }
 
         if (column is { IsRemoteColumn: true } remoteSource && Directory.Exists(target))
-
         {
+            if (move)
+            {
+                vm.ReportError(LanguageService.Instance.GetString("Compare_NoNeighbourFolder"));
+                return;
+            }
 
             try
-
             {
-
-                await remoteSource.DownloadFromRemoteAsync(path, target);
-
-                await ReloadAfterEntryChangeAsync(neighbour);
-
+                var downloaded = false;
+                await RunTrackedTransferAsync(vm, 1, async (reportUnits, ct) =>
+                {
+                    await remoteSource.DownloadFromRemoteAsync(path, target, ct);
+                    reportUnits(1);
+                    downloaded = true;
+                });
+                if (downloaded)
+                {
+                    await ReloadAfterEntryChangeAsync(targetColumn);
+                }
             }
-
+            catch (OperationCanceledException)
+            {
+            }
             catch (Exception ex)
-
             {
-
                 ReportOperationFailure(ex);
-
             }
 
-
-
             return;
-
         }
-
         if (target.Length == 0 || !Directory.Exists(target))
-
         {
-
             vm.ReportError(LanguageService.Instance.GetString("Compare_NoNeighbourFolder"));
-
             return;
-
         }
 
-
-
-        await TransferAsync(vm, column, path, target, move);
-
+        await TransferAsync(vm, targetColumn, path, target, move, secondaryColumn: move ? column : null);
     }
 
-
+    /// <summary>
+    /// Runs one non-overwriting copy/move (reusing the explorer's transfer implementation) and refreshes the affected
+    /// views afterwards.
+    /// <para>执行一次不覆盖的复制/移动（复用资源管理器的传输实现），成功后刷新相关视图。</para>
+    /// </summary>
+    private async Task TransferAsync(
+        CompareViewModel vm,
+        CompareColumnViewModel? column,
+        string source,
+        string targetDirectory,
+        bool move,
+        CompareColumnViewModel? secondaryColumn = null)
+    {
+        try
+        {
+            var totalBytes = await Task.Run(() => ExplorerFileOperations.MeasureBytes([source]));
+            var completed = false;
+            await RunTrackedTransferAsync(vm, totalBytes, async (reportBytes, ct) =>
+            {
+                await ExplorerFileOperations.TransferAsync(source, targetDirectory, move, reportBytes, ct);
+                completed = true;
+            });
+            if (completed)
+            {
+                await ReloadAfterEntryChangeAsync(column);
+                if (!vm.IsComparing && secondaryColumn is not null && !ReferenceEquals(secondaryColumn, column))
+                {
+                    await secondaryColumn.ReloadContentAsync();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ReportOperationFailure(ex);
+        }
+    }
 
     /// <summary>
-
-    /// Runs one non-overwriting copy/move (reusing the explorer's transfer implementation) and refreshes the affected
-
-    /// views afterwards.
-
-    /// <para>执行一次不覆盖的复制/移动（复用资源管理器的传输实现），成功后刷新相关视图。</para>
-
+    /// Runs a file transfer while displaying live percentage, throughput and a cancel button in the toolbar progress bar.
+    /// <para>执行文件传输并在顶栏进度条中实时展示完成百分比、传输速度与取消按钮。</para>
     /// </summary>
-
-    private async Task TransferAsync(
-
+    private static async Task RunTrackedTransferAsync(
         CompareViewModel vm,
-
-        CompareColumnViewModel? column,
-
-        string source,
-
-        string targetDirectory,
-
-        bool move)
-
+        long totalBytes,
+        Func<Action<long>, CancellationToken, Task> transferBody)
     {
+        var ct = vm.BeginTransfer();
+        var stopwatch = Stopwatch.StartNew();
+        long transferred = 0;
+        long lastUiTickMs = -100;
+        var syncLock = new object();
+
+        void ReportBytes(long delta)
+        {
+            if (delta <= 0)
+            {
+                return;
+            }
+
+            long current;
+            var elapsedMs = stopwatch.ElapsedMilliseconds;
+            var shouldPost = false;
+            lock (syncLock)
+            {
+                transferred += delta;
+                current = transferred;
+                if (elapsedMs - lastUiTickMs >= 50 || (totalBytes > 0 && current >= totalBytes))
+                {
+                    lastUiTickMs = elapsedMs;
+                    shouldPost = true;
+                }
+            }
+
+            if (shouldPost)
+            {
+                var speed = elapsedMs > 0 ? current / (elapsedMs / 1000.0) : 0.0;
+                Dispatcher.UIThread.Post(() => vm.ReportTransferProgress(current, totalBytes, speed));
+            }
+        }
 
         try
-
         {
-
-            ExplorerFileOperations.Transfer(source, targetDirectory, move);
-
-            await ReloadAfterEntryChangeAsync(column);
-
+            await transferBody(ReportBytes, ct);
+            if (!ct.IsCancellationRequested)
+            {
+                var elapsedSeconds = Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
+                var finalBytes = Math.Max(transferred, totalBytes);
+                vm.ReportTransferProgress(finalBytes, Math.Max(totalBytes, finalBytes), finalBytes / elapsedSeconds);
+            }
         }
-
-        catch (Exception ex)
-
+        catch (OperationCanceledException)
         {
-
-            ReportOperationFailure(ex);
-
         }
-
+        finally
+        {
+            vm.EndTransfer();
+        }
     }
 
-
-
     /// <summary>
-
     /// Refreshes the view after an entry changed (copy/move/delete/rename/new folder): comparing re-runs the
-
     /// comparison and browsing reloads that column.
-
     /// <para>条目变化（复制/移动/删除/重命名/新建文件夹）后刷新视图：对比中重新比对两侧，
-
     /// 浏览中重新加载该列。</para>
-
     /// </summary>
-
-    private async Task ReloadAfterEntryChangeAsync(CompareColumnViewModel? column)
-
+    private async Task ReloadAfterEntryChangeAsync(CompareColumnViewModel? column, string? expandDirectoryPath = null)
     {
-
         if (DataContext is not CompareViewModel vm)
-
         {
-
             return;
-
         }
-
-
 
         if (vm.IsComparing)
-
         {
-
             await vm.RefreshCompareAsync();
-
             return;
-
         }
-
-
 
         if (column is not null)
-
         {
-
-            await column.ReloadContentAsync();
-
+            await column.ReloadContentAsync(expandDirectoryPath);
             return;
-
         }
-
-
 
         foreach (var visuals in _columnVisuals.ToList())
-
         {
-
-            await visuals.Column.ReloadContentAsync();
-
+            await visuals.Column.ReloadContentAsync(expandDirectoryPath);
         }
-
     }
 
 
@@ -1511,479 +1493,469 @@ public partial class CompareView
     /// </summary>
 
     private async void OnDrop(object? sender, DragEventArgs e)
-
     {
-
         e.Handled = true;
 
-
-
         if (DataContext is not CompareViewModel vm)
-
         {
-
             return;
-
         }
-
-
 
         var paths = ExtractDropPaths(e.DataTransfer);
-
         var inViewDrag = _draggingPath is not null;
-
+        var dragSourceColumn = _dragSourceColumn;
         _draggingPath = null;
-
+        _dragSourceColumn = null;
         if (paths.Count == 0)
-
         {
-
             return;
-
         }
 
+        var pointerInColumns = e.GetPosition(ColumnGrid);
+        var targetCol = (e.Source as Visual) is { } hitVisual
+            ? FindColumnFor(hitVisual) ?? ResolveColumnAt(pointerInColumns)
+            : ResolveColumnAt(pointerInColumns);
+        var droppedDirectoryRow = ResolveDroppedDirectoryRow(e.Source, targetCol);
 
-
-        var targetCol = (e.Source as Control) is { } hitCtrl ? FindColumnFor(hitCtrl) : ResolveColumnAt(e.GetPosition(this));
-
-        if (targetCol is { IsDeviceColumn: true, DeviceTarget: { } dev })
-
+        // 1. Target is an ADB / HDC device column or a remote file column (SFTP/SCP/FTP/WebDAV).
+        //    Local sources push/upload directly; non-local sources (ADB/HDC/Remote) relay via %TEMP% and clean up afterwards.
+        if (targetCol is { IsDeviceColumn: true } or { IsRemoteColumn: true })
         {
+            await TransferToNonLocalColumnAsync(vm, inViewDrag ? dragSourceColumn : null, targetCol, paths, droppedDirectoryRow);
+            return;
+        }
 
-            var dropTargetDevice = ResolveDropTarget(e.Source, inViewDrag) ?? targetCol.Path;
+        // 3. Resolve local target directory (dropped directory row, or the column under the pointer, or in-view fallback).
+        var localColumn = targetCol is { IsDeviceColumn: false, IsRemoteColumn: false } ? targetCol : null;
+        var dropTarget = droppedDirectoryRow
+            ?? ResolveLocalColumnDirectory(localColumn, vm)
+            ?? (inViewDrag ? ResolveInViewDropFolder(pointerInColumns, dragSourceColumn, out localColumn) : null);
 
-            try
-
+        // 4. Dragging from an ADB / HDC device column to a local folder column: pull from device.
+        if (inViewDrag && dragSourceColumn is { IsDeviceColumn: true, DeviceTarget: { } srcDev }
+            && dropTarget is not null && Directory.Exists(dropTarget))
+        {
+            var pulled = false;
+            await RunTrackedTransferAsync(vm, paths.Count, async (reportUnits, ct) =>
             {
-
                 foreach (var path in paths)
-
                 {
-
-                    await targetCol.PushToDeviceAsync(dev, path, dropTargetDevice);
-
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        await dragSourceColumn.PullFromDeviceAsync(srcDev, path, dropTarget, ct);
+                        reportUnits(1);
+                        pulled = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportOperationFailure(ex);
+                    }
                 }
+            });
 
-
-
-                await ReloadAfterEntryChangeAsync(targetCol);
-
-            }
-
-            catch (Exception ex)
-
+            if (pulled)
             {
-
-                ReportOperationFailure(ex);
-
+                var reloadColumn = localColumn ?? FindColumnOwningDirectory(dropTarget);
+                await ReloadAfterEntryChangeAsync(reloadColumn, droppedDirectoryRow);
             }
-
-
 
             return;
-
         }
 
-
-
-        if (targetCol is { IsRemoteColumn: true } remoteTarget)
-
+        // 4b. Dragging from a remote server column to a local folder column: download from remote server.
+        if (inViewDrag && dragSourceColumn is { IsRemoteColumn: true } remoteSource
+            && dropTarget is not null && Directory.Exists(dropTarget))
         {
-
-            var dropTargetRemote = ResolveDropTarget(e.Source, inViewDrag) ?? remoteTarget.Path;
-
-            try
-
-            {
-
-                foreach (var path in paths)
-
-                {
-
-                    await remoteTarget.UploadToRemoteAsync(path, dropTargetRemote);
-
-                }
-
-
-
-                await ReloadAfterEntryChangeAsync(remoteTarget);
-
-            }
-
-            catch (Exception ex)
-
-            {
-
-                ReportOperationFailure(ex);
-
-            }
-
-
-
-            return;
-
-        }
-
-
-
-        var dropTarget = ResolveDropTarget(e.Source, inViewDrag)
-
-            ?? (inViewDrag ? ResolveInViewDropFolder(e.GetPosition(this)) : null);
-
-        if (_dragSourceColumn is { IsDeviceColumn: true, DeviceTarget: { } srcDev } && dropTarget is not null && Directory.Exists(dropTarget))
-
-        {
-
-            var copied = false;
-
-            foreach (var path in paths)
-
-            {
-
-                try
-
-                {
-
-                    await _dragSourceColumn.PullFromDeviceAsync(srcDev, path, dropTarget);
-
-                    copied = true;
-
-                }
-
-                catch (Exception ex)
-
-                {
-
-                    ReportOperationFailure(ex);
-
-                }
-
-            }
-
-
-
-            if (copied)
-
-            {
-
-                var column = ResolveEntry(e.Source) is var (_, _, resolved) ? resolved : null;
-
-                column ??= _columnVisuals
-
-                    .Select(visuals => visuals.Column)
-
-                    .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
-
-                await ReloadAfterEntryChangeAsync(column);
-
-            }
-
-
-
-            return;
-
-        }
-
-
-
-        if (_dragSourceColumn is { IsRemoteColumn: true } remoteSource && dropTarget is not null && Directory.Exists(dropTarget))
-
-        {
-
             var downloaded = false;
-
-            foreach (var path in paths)
-
+            await RunTrackedTransferAsync(vm, paths.Count, async (reportUnits, ct) =>
             {
-
-                try
-
+                foreach (var path in paths)
                 {
-
-                    await remoteSource.DownloadFromRemoteAsync(path, dropTarget);
-
-                    downloaded = true;
-
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        await remoteSource.DownloadFromRemoteAsync(path, dropTarget, ct);
+                        reportUnits(1);
+                        downloaded = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportOperationFailure(ex);
+                    }
                 }
-
-                catch (Exception ex)
-
-                {
-
-                    ReportOperationFailure(ex);
-
-                }
-
-            }
-
-
+            });
 
             if (downloaded)
-
             {
-
-                var targetColumn = _columnVisuals
-
-                    .Select(visuals => visuals.Column)
-
-                    .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
-
-                await ReloadAfterEntryChangeAsync(targetColumn);
-
+                var reloadColumn = localColumn ?? FindColumnOwningDirectory(dropTarget);
+                await ReloadAfterEntryChangeAsync(reloadColumn, droppedDirectoryRow);
             }
-
-
 
             return;
-
         }
 
-
-
-        if (dropTarget is not null)
-
+        // 5. Copy local files/folders (both in-view drags and external OS Explorer/Desktop drops) into the target column.
+        if (dropTarget is not null && Directory.Exists(dropTarget))
         {
-
             var copied = false;
-
-            foreach (var path in paths)
-
+            var totalBytes = await Task.Run(() => ExplorerFileOperations.MeasureBytes(paths));
+            await RunTrackedTransferAsync(vm, totalBytes, async (reportBytes, ct) =>
             {
-
-                try
-
+                foreach (var path in paths)
                 {
-
-                    ExplorerFileOperations.Transfer(path, dropTarget, move: false);
-
-                    copied = true;
-
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        await ExplorerFileOperations.TransferAsync(path, dropTarget, move: false, reportBytes, ct);
+                        copied = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportOperationFailure(ex);
+                    }
                 }
-
-                catch (Exception ex)
-
-                {
-
-                    ReportOperationFailure(ex);
-
-                }
-
-            }
-
-
+            });
 
             if (copied)
-
             {
-
-                var column = ResolveEntry(e.Source) is var (_, _, resolved) ? resolved : null;
-
-                column ??= _columnVisuals
-
-                    .Select(visuals => visuals.Column)
-
-                    .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
-
-                await ReloadAfterEntryChangeAsync(column);
-
+                var reloadColumn = localColumn ?? FindColumnOwningDirectory(dropTarget);
+                await ReloadAfterEntryChangeAsync(reloadColumn, droppedDirectoryRow);
             }
-
-
 
             return;
-
         }
 
-
-
-        if (paths.Count > 0)
-
+        // 6. Dropped onto an empty or non-directory column from outside: load paths into columns as before.
+        if (!inViewDrag && paths.Count > 0)
         {
-
             await vm.TryAddPathsAsync(paths);
-
         }
-
     }
 
-
-
     /// <summary>
-
-    /// Resolves a drop target: a directory tree row yields that directory's absolute path, anything else returns
-
-    /// <c>null</c> (handled as "load into columns").
-
-    /// <para>解析拖拽落点：落在目录树行（目录）上时返回该目录的绝对路径，否则返回 <c>null</c>（按「加载为新列」处理）。</para>
-
+    /// Copies files/folders into an ADB/HDC device column or a remote server column.
+    /// Local sources are pushed/uploaded directly; non-local sources (ADB, HDC, SFTP/SCP/FTP/WebDAV)
+    /// are staged through a temporary directory under <c>%TEMP%\UotanStudio\CompareRelay</c> and deleted afterwards.
+    /// <para>向 ADB/HDC 设备列或远程服务器列复制文件/文件夹：本地来源直接推送/上传；
+    /// 非本地来源（ADB/HDC/远程文件）自动经 <c>%TEMP%\UotanStudio\CompareRelay</c> 临时目录中转并在结束后清理。</para>
     /// </summary>
-
-    /// <param name="source">The element hit by the drop. <para>拖放命中的元素。</para></param>
-
-    /// <param name="inViewDrag">Whether the drag started inside the view (its target may fall back to the column's own folder). <para>是否来自视图内的行拖拽（可放宽落点：同一列里的任何位置都算落到该列目录）。</para></param>
-
-    /// <summary>
-
-    /// Position-based fallback for an in-view drag: first the folder of the column under the pointer, then the first folder column that
-
-    /// is not the drag source.
-
-    /// <para>视图内拖拽按指针位置兜底定位目标目录：先用指针所在列的目录，再退一步取「不是拖拽来源列」的第一个目录列。</para>
-
-    /// </summary>
-
-    /// <param name="position">The pointer position inside the view. <para>指针在视图内的坐标。</para></param>
-
-    private string? ResolveInViewDropFolder(Point position)
-
+    private async Task TransferToNonLocalColumnAsync(
+        CompareViewModel vm,
+        CompareColumnViewModel? sourceColumn,
+        CompareColumnViewModel targetColumn,
+        IReadOnlyList<string> paths,
+        string? droppedDirectoryRow)
     {
-
-        var column = ResolveColumnAt(position);
-
-        if (column is not null && Directory.Exists(column.Path))
-
+        var rawDest = droppedDirectoryRow ?? targetColumn.Path;
+        if (targetColumn.IsDeviceColumn && string.IsNullOrWhiteSpace(rawDest))
         {
-
-            return column.Path;
-
+            return;
         }
 
+        var normalizedDest = string.IsNullOrWhiteSpace(rawDest)
+            ? "/"
+            : (rawDest.EndsWith('/') ? rawDest : rawDest + "/");
 
+        var sourceIsNonLocal = sourceColumn is { IsDeviceColumn: true } or { IsRemoteColumn: true };
+        var transferred = false;
 
-        foreach (var visuals in _columnVisuals)
-
+        if (!sourceIsNonLocal)
         {
-
-            if (!ReferenceEquals(visuals.Column, _dragSourceColumn) && Directory.Exists(visuals.Column.Path))
-
+            var totalBytes = await Task.Run(() => ExplorerFileOperations.MeasureBytes(paths));
+            await RunTrackedTransferAsync(vm, totalBytes, async (reportBytes, ct) =>
             {
+                foreach (var path in paths)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var itemBytes = await Task.Run(() => ExplorerFileOperations.MeasureBytes([path]), ct);
+                        await DeliverLocalToNonLocalColumnAsync(targetColumn, path, normalizedDest, ct);
+                        reportBytes(itemBytes);
+                        transferred = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportOperationFailure(ex);
+                    }
+                }
+            });
+        }
+        else
+        {
+            // Two steps per item: 1 unit for staging pull/download + 1 unit for target push/upload.
+            await RunTrackedTransferAsync(vm, paths.Count * 2L, async (reportUnits, ct) =>
+            {
+                foreach (var path in paths)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var stagingDir = Path.Combine(
+                        Path.GetTempPath(),
+                        "UotanStudio",
+                        "CompareRelay",
+                        Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(stagingDir);
+                    try
+                    {
+                        var stagedPath = await StageNonLocalEntryAsync(sourceColumn!, path, stagingDir, ct);
+                        reportUnits(1);
 
-                return visuals.Column.Path;
+                        await DeliverLocalToNonLocalColumnAsync(targetColumn, stagedPath, normalizedDest, ct);
+                        reportUnits(1);
+                        transferred = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportOperationFailure(ex);
+                    }
+                    finally
+                    {
+                        TryDeleteTempDirectory(stagingDir);
+                    }
+                }
+            });
+        }
 
+        if (transferred)
+        {
+            await ReloadAfterEntryChangeAsync(targetColumn, droppedDirectoryRow);
+        }
+    }
+
+    private static async Task<string> StageNonLocalEntryAsync(
+        CompareColumnViewModel sourceColumn,
+        string sourcePath,
+        string stagingDirectory,
+        CancellationToken cancellationToken)
+    {
+        if (sourceColumn is { IsDeviceColumn: true, DeviceTarget: { } srcDev })
+        {
+            await sourceColumn.PullFromDeviceAsync(srcDev, sourcePath, stagingDirectory, cancellationToken);
+        }
+        else if (sourceColumn.IsRemoteColumn)
+        {
+            await sourceColumn.DownloadFromRemoteAsync(sourcePath, stagingDirectory, cancellationToken);
+        }
+        else
+        {
+            throw new InvalidOperationException("Unsupported relay source column.");
+        }
+
+        var trimmed = sourcePath.TrimEnd('/');
+        var lastSlash = trimmed.LastIndexOf('/');
+        var entryName = lastSlash >= 0 ? trimmed[(lastSlash + 1)..] : trimmed;
+        var expected = Path.Combine(stagingDirectory, entryName);
+        if (File.Exists(expected) || Directory.Exists(expected))
+        {
+            return expected;
+        }
+
+        return Directory.EnumerateFileSystemEntries(stagingDirectory).FirstOrDefault()
+            ?? throw new FileNotFoundException("Staged transfer entry not found.", expected);
+    }
+
+    private static Task DeliverLocalToNonLocalColumnAsync(
+        CompareColumnViewModel targetColumn,
+        string localPath,
+        string normalizedDestination,
+        CancellationToken cancellationToken)
+    {
+        if (targetColumn is { IsDeviceColumn: true, DeviceTarget: { } targetDev })
+        {
+            return targetColumn.PushToDeviceAsync(targetDev, localPath, normalizedDestination, cancellationToken);
+        }
+
+        if (targetColumn.IsRemoteColumn)
+        {
+            return targetColumn.UploadToRemoteAsync(localPath, normalizedDestination, cancellationToken);
+        }
+
+        throw new InvalidOperationException("Unsupported relay target column.");
+    }
+
+    private static void TryDeleteTempDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Returns the local directory path for a column if it currently shows an existing local directory.
+    /// <para>如果列当前显示已存在的本地目录，则返回该目录路径。</para>
+    /// </summary>
+    private static string? ResolveLocalColumnDirectory(CompareColumnViewModel? column, CompareViewModel vm)
+    {
+        if (column is null || column.IsDeviceColumn || column.IsRemoteColumn)
+        {
+            return null;
+        }
+
+        var path = column.Side == CompareColumnSide.Right && vm.IsComparing
+            ? vm.RightPath
+            : column.Path;
+        return !string.IsNullOrWhiteSpace(path) && Directory.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Finds the column whose root path matches or contains the given local directory.
+    /// <para>查找根路径匹配或包含指定本地目录的列。</para>
+    /// </summary>
+    private CompareColumnViewModel? FindColumnOwningDirectory(string directory)
+    {
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        foreach (var visuals in _columnVisuals)
+        {
+            var colPath = visuals.Column.Path;
+            if (string.IsNullOrWhiteSpace(colPath) || visuals.Column.IsDeviceColumn || visuals.Column.IsRemoteColumn)
+            {
+                continue;
             }
 
+            var normalizedCol = Path.TrimEndingDirectorySeparator(Path.GetFullPath(colPath));
+            if (string.Equals(normalizedCol, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return visuals.Column;
+            }
         }
 
+        foreach (var visuals in _columnVisuals)
+        {
+            var colPath = visuals.Column.Path;
+            if (string.IsNullOrWhiteSpace(colPath) || visuals.Column.IsDeviceColumn || visuals.Column.IsRemoteColumn)
+            {
+                continue;
+            }
 
+            var normalizedCol = Path.TrimEndingDirectorySeparator(Path.GetFullPath(colPath));
+            if (normalized.StartsWith(normalizedCol + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return visuals.Column;
+            }
+        }
 
         return null;
-
     }
 
-
-
-    /// <summary>取指针所在（或最接近）的列。 Returns the column under the pointer, or the closest one.</summary>
-
-    private CompareColumnViewModel? ResolveColumnAt(Point position)
-
+    /// <summary>
+    /// Position-based fallback for an in-view drag: first the folder of the column under the pointer, then the first folder column that
+    /// is not the drag source.
+    /// <para>视图内拖拽按指针位置兜底定位目标目录：先用指针所在列的目录，再退一步取「不是拖拽来源列」的第一个目录列。</para>
+    /// </summary>
+    private string? ResolveInViewDropFolder(
+        Point positionInColumnGrid,
+        CompareColumnViewModel? dragSourceColumn,
+        out CompareColumnViewModel? resolvedColumn)
     {
-
-        CompareColumnViewModel? nearest = null;
-
-        var nearestDistance = double.MaxValue;
+        var column = ResolveColumnAt(positionInColumnGrid);
+        if (column is { IsDeviceColumn: false, IsRemoteColumn: false } && Directory.Exists(column.Path))
+        {
+            resolvedColumn = column;
+            return column.Path;
+        }
 
         foreach (var visuals in _columnVisuals)
-
         {
-
-            var bounds = visuals.Container.Bounds;
-
-            if (bounds.Contains(position))
-
+            if (!ReferenceEquals(visuals.Column, dragSourceColumn)
+                && !visuals.Column.IsDeviceColumn
+                && !visuals.Column.IsRemoteColumn
+                && Directory.Exists(visuals.Column.Path))
             {
-
-                return visuals.Column;
-
+                resolvedColumn = visuals.Column;
+                return visuals.Column.Path;
             }
-
-
-
-            var distance = Math.Min(Math.Abs(position.X - bounds.Left), Math.Abs(position.X - bounds.Right));
-
-            if (distance < nearestDistance)
-
-            {
-
-                nearestDistance = distance;
-
-                nearest = visuals.Column;
-
-            }
-
         }
 
-
-
-        return nearest;
-
+        resolvedColumn = null;
+        return null;
     }
 
-
-
-    private string? ResolveDropTarget(object? source, bool inViewDrag)
-
+    /// <summary>取指针所在（或最接近）的列（坐标相对于 ColumnGrid）。 Returns the column under the pointer in ColumnGrid coordinates, or the closest one.</summary>
+    private CompareColumnViewModel? ResolveColumnAt(Point positionInColumnGrid)
     {
-
-        if (source is not Control { DataContext: CompareRowViewModel row } control
-
-            || row.TreeNode is not { IsDirectory: true } node)
-
+        CompareColumnViewModel? nearest = null;
+        var nearestDistance = double.MaxValue;
+        foreach (var visuals in _columnVisuals)
         {
-
-            if (inViewDrag && source is Control controlOnRow
-
-                && FindColumnFor(controlOnRow) is { } fallbackColumn
-
-                && Directory.Exists(fallbackColumn.Path))
-
+            var bounds = visuals.Container.Bounds;
+            if (bounds.Contains(positionInColumnGrid))
             {
-
-                return fallbackColumn.Path;
-
+                return visuals.Column;
             }
 
-
-
-            return null;
-
+            var distance = Math.Min(
+                Math.Abs(positionInColumnGrid.X - bounds.Left),
+                Math.Abs(positionInColumnGrid.X - bounds.Right));
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = visuals.Column;
+            }
         }
 
+        return nearest;
+    }
 
+    /// <summary>
+    /// Resolves the directory path when the drop landed directly on a directory tree row; returns <c>null</c>
+    /// when the drop landed on a file row or empty space.
+    /// <para>当拖放直接落在目录树行（目录）上时返回该目录路径；落在文件行或空白区域时返回 <c>null</c>。</para>
+    /// </summary>
+    private string? ResolveDroppedDirectoryRow(object? source, CompareColumnViewModel? targetColumn)
+    {
+        if (FindRowControl(source as Visual) is not { Row.TreeNode: { IsDirectory: true } node } hit)
+        {
+            return null;
+        }
 
         if (node.FullPath.Length > 0)
-
         {
-
             return node.FullPath;
-
         }
 
-
-
-        var column = FindColumnFor(control);
-
+        var column = targetColumn ?? FindColumnFor(hit.Control);
         if (column is null)
-
         {
-
             return null;
-
         }
-
-
 
         var root = column.Side == CompareColumnSide.Right && DataContext is CompareViewModel comparing && comparing.IsComparing
-
             ? comparing.RightPath
-
             : column.Path;
-
         return root.Length == 0
-
             ? null
-
             : Path.Combine(root, node.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-
     }
 
 
@@ -2046,12 +2018,12 @@ public partial class CompareView
 
 
 
-        if (_draggingPath is { } recorded && (File.Exists(recorded) || Directory.Exists(recorded)))
-
+        if (_draggingPath is { Length: > 0 } recorded
+            && (_dragSourceColumn is { IsDeviceColumn: true } or { IsRemoteColumn: true }
+                || File.Exists(recorded)
+                || Directory.Exists(recorded)))
         {
-
             return [recorded];
-
         }
 
 

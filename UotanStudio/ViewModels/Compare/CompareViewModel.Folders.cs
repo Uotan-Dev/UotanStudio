@@ -233,24 +233,40 @@ public sealed partial class CompareViewModel
             return;
         }
 
+        var ct = BeginTransfer();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            var sourcePath = Path.Combine(
+                fromLeftToRight ? _leftPath : _rightPath,
+                node.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var totalBytes = File.Exists(sourcePath) ? new FileInfo(sourcePath).Length : 0;
+
             if (fromLeftToRight)
             {
-                await _comparison.CopyAsync(_leftPath, _rightPath, node.RelativePath, CancellationToken.None);
+                await _comparison.CopyAsync(_leftPath, _rightPath, node.RelativePath, ct);
             }
             else
             {
-                await _comparison.CopyAsync(_rightPath, _leftPath, node.RelativePath, CancellationToken.None);
+                await _comparison.CopyAsync(_rightPath, _leftPath, node.RelativePath, ct);
             }
 
+            var elapsed = Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
+            ReportTransferProgress(totalBytes, Math.Max(totalBytes, 1), totalBytes / elapsed);
             await CompareFoldersAsync();
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {
             HasError = true;
             ErrorMessage = UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
+        }
+        finally
+        {
+            EndTransfer();
         }
     }
 }

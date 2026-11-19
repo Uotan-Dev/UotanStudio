@@ -327,32 +327,38 @@ public sealed partial class DeviceMonitorService
         }
     }
 
-    internal async Task<TResult> RunAdbAsync<TResult>(DetectedDevice device,
+    internal Task<TResult> RunAdbAsync<TResult>(DetectedDevice device,
         Func<IAdbDeviceSession, Task<TResult>> operation, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
-        if (UsesSharedAdbSession(device))
-        {
-            return await RunSharedAdbSessionAsync(device, operation, cancellationToken).ConfigureAwait(false);
-        }
 
-        var (lease, session) = LeaseAdb(device, cancellationToken);
-        try
+        // Offload synchronous lease / shared-session acquisition so callers on the UI thread never freeze.
+        return Task.Run(async () =>
         {
-            using (session)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (UsesSharedAdbSession(device))
             {
-                await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-                if (!session.IsConnected)
-                    throw new InvalidOperationException("ADB session is not connected.");
-                cancellationToken.ThrowIfCancellationRequested();
-                return await operation(session).ConfigureAwait(false);
+                return await RunSharedAdbSessionAsync(device, operation, cancellationToken).ConfigureAwait(false);
             }
-        }
-        finally
-        {
-            CloseLease(lease);
-        }
+
+            var (lease, session) = LeaseAdb(device, cancellationToken);
+            try
+            {
+                using (session)
+                {
+                    await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                    if (!session.IsConnected)
+                        throw new InvalidOperationException("ADB session is not connected.");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return await operation(session).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                CloseLease(lease);
+            }
+        }, cancellationToken);
     }
 
     /// <summary>

@@ -2485,6 +2485,12 @@ Author: 暮间雾
   <data name="Compare_AddFolder" xml:space="preserve">
     <value>Add Folder</value>
   </data>
+  <data name="Compare_OpenFolder" xml:space="preserve">
+    <value>Open Folder</value>
+  </data>
+  <data name="Compare_CancelTransfer" xml:space="preserve">
+    <value>Cancel transfer</value>
+  </data>
   <data name="Compare_DeviceFiles" xml:space="preserve">
     <value>Device Files</value>
   </data>

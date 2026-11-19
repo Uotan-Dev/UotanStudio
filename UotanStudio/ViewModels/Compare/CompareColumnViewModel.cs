@@ -688,10 +688,13 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
 
         await _treeExpansionLock.WaitAsync();
+        var markedBusy = false;
         try
         {
             if (!node.IsExpanded)
             {
+                IsBusy = true;
+                markedBusy = true;
                 await node.EnsureChildrenLoadedAsync();
             }
 
@@ -712,6 +715,11 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         }
         finally
         {
+            if (markedBusy)
+            {
+                IsBusy = false;
+            }
+
             _treeExpansionLock.Release();
         }
     }
@@ -794,6 +802,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         Path = string.IsNullOrWhiteSpace(remotePath) ? DeviceFileSystemService.GetDefaultPath(device) : remotePath.Trim();
 
         var ct = BeginLoad();
+        IsBusy = true;
         try
         {
             var rootName = Path.TrimEnd('/');
@@ -957,10 +966,15 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
-    /// Reloads this column's content from its current path after a file was copied, moved, deleted or renamed.
-    /// <para>文件被复制、移动、删除或重命名后，按当前路径重新加载本列内容。</para>
+    /// Reloads this column's content from its current path after a file was copied, moved, deleted or renamed,
+    /// preserving any currently expanded subdirectories in the browsing tree.
+    /// <para>文件被复制、移动、删除或重命名后，按当前路径重新加载本列内容，并保留浏览树中已展开的子目录状态。</para>
     /// </summary>
-    internal async Task ReloadContentAsync()
+    /// <param name="expandDirectoryPath">
+    /// Optional subdirectory path to ensure is expanded after reloading (e.g. a subfolder that just received a dropped file).
+    /// <para>重新加载后确保处于展开状态的可选子目录路径（例如刚接收拖放文件的子目录）。</para>
+    /// </param>
+    internal async Task ReloadContentAsync(string? expandDirectoryPath = null)
     {
         var path = (Path ?? string.Empty).Trim();
         if (path.Length == 0)
@@ -968,19 +982,83 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        var isPosix = IsDeviceColumn || IsRemoteColumn;
+        var comparer = isPosix || !OperatingSystem.IsWindows()
+            ? StringComparer.Ordinal
+            : StringComparer.OrdinalIgnoreCase;
+        var expandedPaths = new HashSet<string>(comparer);
+        if (TreeRoot is not null)
+        {
+            CollectExpandedPaths(TreeRoot, expandedPaths);
+        }
+
+        if (!string.IsNullOrWhiteSpace(expandDirectoryPath))
+        {
+            var normalizedExpand = isPosix
+                ? expandDirectoryPath.TrimEnd('/')
+                : System.IO.Path.TrimEndingDirectorySeparator(expandDirectoryPath);
+            if (normalizedExpand.Length > 0)
+            {
+                expandedPaths.Add(normalizedExpand);
+            }
+        }
+
         if (IsDeviceColumn && DeviceTarget is { } device)
         {
             await LoadDevicePathAsync(device, path);
-            return;
         }
-
-        if (IsRemoteColumn)
+        else if (IsRemoteColumn)
         {
             await ReloadRemoteContentAsync();
-            return;
+        }
+        else
+        {
+            await LoadPathAsync(path, Directory.Exists(path));
         }
 
-        await LoadPathAsync(path, Directory.Exists(path));
+        if (expandedPaths.Count > 0 && TreeRoot is not null)
+        {
+            await RestoreExpandedPathsAsync(TreeRoot, expandedPaths);
+            Rows = BuildBrowseRows();
+        }
+    }
+
+    private static void CollectExpandedPaths(CompareTreeNodeViewModel node, HashSet<string> expandedPaths)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.IsDirectory && child.IsExpanded)
+            {
+                var normalized = child.FullPath.TrimEnd('/', '\\');
+                if (normalized.Length > 0)
+                {
+                    expandedPaths.Add(normalized);
+                }
+
+                CollectExpandedPaths(child, expandedPaths);
+            }
+        }
+    }
+
+    private static async Task RestoreExpandedPathsAsync(CompareTreeNodeViewModel node, HashSet<string> expandedPaths)
+    {
+        foreach (var child in node.Children)
+        {
+            if (!child.IsDirectory)
+            {
+                continue;
+            }
+
+            var normalized = child.FullPath.TrimEnd('/', '\\');
+            if (!expandedPaths.Contains(normalized))
+            {
+                continue;
+            }
+
+            await child.EnsureChildrenLoadedAsync();
+            child.IsExpanded = true;
+            await RestoreExpandedPathsAsync(child, expandedPaths);
+        }
     }
 
     /// <summary>
@@ -1065,7 +1143,11 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     /// Notifies the dirty state that decides whether the save button is shown.
     /// <para>通知「已修改」状态（决定保存按钮是否显示）。</para>
     /// </summary>
-    internal void NotifyDirtyChanged() => OnPropertyChanged(nameof(IsDirty));
+    internal void NotifyDirtyChanged()
+    {
+        OnPropertyChanged(nameof(IsDirty));
+        _owner.SyncDirtyState();
+    }
 
     /// <summary>
     /// Raises change notifications for the visibility properties derived from the comparison mode.

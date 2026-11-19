@@ -807,6 +807,8 @@ internal static class LocaleKeySets
         "Compare_GoUp",
         "Compare_NoParentFolder",
         "Compare_AddFolder",
+        "Compare_OpenFolder",
+        "Compare_CancelTransfer",
         "Compare_DeviceFiles",
         "Compare_RemoteFiles",
         "Remote_ConnectionTitle",

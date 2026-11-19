@@ -238,6 +238,29 @@ public sealed class AdbSyncV2Tests
         Assert.Equal(0x8000_0000u, flags & 0x8000_0000u);
     }
 
+    [Fact(Timeout = 15000)]
+    public async Task PushStreamAsync_LargeIncompressiblePayloadWithZstd_AppliesBackpressureWithoutRejectingBlocks()
+    {
+        var raw = new byte[1024 * 1024];
+        new Random(12345).NextBytes(raw);
+        var transport = new ScriptedAdbTransport(FullV2Features);
+        using var authentication = AdbAuthentication.CreateNew();
+        using var session = new AdbSession(transport, authentication);
+        session.Connect();
+        await using var sync = session.CreateSyncClient();
+        using var source = new MemoryStream(raw);
+
+        await sync.PushStreamAsync(source, "/sdcard/large.bin", mtime: 1_700_000_001,
+            cancellationToken: TestContext.Current.CancellationToken, compression: AdbSyncCompression.Zstd);
+
+        var payloads = ClientSyncPayloads(transport);
+        var compressed = payloads
+            .Where(p => p.AsSpan(0, 4).SequenceEqual("DATA"u8))
+            .SelectMany(p => p[8..])
+            .ToArray();
+        Assert.Equal(raw, Decompress(AdbSyncCompression.Zstd, compressed));
+    }
+
     private const uint SyncFlagsZstd = 4;
 
     /// <summary>Width of one sync packet: a four-character id and a little-endian value.

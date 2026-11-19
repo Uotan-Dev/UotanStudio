@@ -244,7 +244,7 @@ public sealed class RemoteColumnBrowsingTests
         var fake = new FakeRemoteFileSystem(new Dictionary<string, IReadOnlyList<RemoteFileEntry>> { ["/"] = [] });
         var column = await LoadColumnAsync(fake, "/");
 
-        await column.UploadToRemoteAsync("boot.img", "/uploads/");
+        await column.UploadToRemoteAsync("boot.img", "/uploads/", TestContext.Current.CancellationToken);
 
         Assert.Contains("upload:boot.img->/uploads/", fake.Calls);
     }
@@ -257,7 +257,7 @@ public sealed class RemoteColumnBrowsingTests
         var localDirectory = Directory.CreateTempSubdirectory("uotan-remote-test-").FullName;
         try
         {
-            await column.DownloadFromRemoteAsync("/etc/hosts", localDirectory);
+            await column.DownloadFromRemoteAsync("/etc/hosts", localDirectory, TestContext.Current.CancellationToken);
 
             var expected = Path.Combine(localDirectory, "hosts");
             Assert.Contains($"download:/etc/hosts->{expected}", fake.Calls);

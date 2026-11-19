@@ -260,7 +260,6 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
             return;
         }
 
-        _childrenLoaded = true;
         var path = FullPath;
         var token = _cancellationToken;
         try
@@ -283,6 +282,8 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
                 {
                     Children.Add(child);
                 }
+
+                _childrenLoaded = true;
             });
         }
         catch (OperationCanceledException)

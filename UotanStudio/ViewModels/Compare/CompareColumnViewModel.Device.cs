@@ -44,8 +44,9 @@ public sealed partial class CompareColumnViewModel
     /// <param name="localPath">Local file or directory to push. <para>待推送的本地文件或目录。</para></param>
     /// <param name="remoteDestination">Remote directory or file path; a trailing slash pushes inside it.
     /// <para>远程目录或文件路径；以斜杠结尾时推入该目录内。</para></param>
-    public Task PushToDeviceAsync(DetectedDevice device, string localPath, string remoteDestination) =>
-        DeviceFileSystemService.Instance.PushAsync(device, localPath, remoteDestination);
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    public Task PushToDeviceAsync(DetectedDevice device, string localPath, string remoteDestination, CancellationToken cancellationToken = default) =>
+        DeviceFileSystemService.Instance.PushAsync(device, localPath, remoteDestination, cancellationToken);
 
     /// <summary>
     /// Copies one remote entry of this column into a local directory.
@@ -55,8 +56,9 @@ public sealed partial class CompareColumnViewModel
     /// <param name="remotePath">Remote file or directory to pull. <para>待拉取的远程文件或目录。</para></param>
     /// <param name="localDestination">Local directory or file path; an existing directory receives the entry name.
     /// <para>本地目录或文件路径；已存在的目录按条目名接收。</para></param>
-    public Task PullFromDeviceAsync(DetectedDevice device, string remotePath, string localDestination) =>
-        DeviceFileSystemService.Instance.PullAsync(device, remotePath, localDestination);
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    public Task PullFromDeviceAsync(DetectedDevice device, string remotePath, string localDestination, CancellationToken cancellationToken = default) =>
+        DeviceFileSystemService.Instance.PullAsync(device, remotePath, localDestination, cancellationToken);
 
     /// <summary>
     /// Copies one remote file of this column into a local temporary file and returns its path.

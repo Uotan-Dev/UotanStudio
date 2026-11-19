@@ -745,8 +745,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     {
         if (dto.Kind == "Compare")
         {
-
-            var compare = _compareDocument is null ? OpenCompareDocument() : OpenNewCompareDocument();
+            var hasLiveCompare = _compareDocument?.Owner is IDock owner
+                && owner.VisibleDockables?.Contains(_compareDocument) == true;
+            var compare = !hasLiveCompare || _compareDocument!.IsEmptyDocument
+                ? OpenCompareDocument()
+                : OpenNewCompareDocument();
             if (compare is not null)
                 foreach (var path in new[] { dto.CompareLeftPath, dto.CompareRightPath })
                     if (!string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path)))

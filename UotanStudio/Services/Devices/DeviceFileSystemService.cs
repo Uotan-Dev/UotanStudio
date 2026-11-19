@@ -161,8 +161,24 @@ public sealed class DeviceFileSystemService
     {
         ArgumentNullException.ThrowIfNull(device);
         var path = string.IsNullOrWhiteSpace(remotePath) ? "/" : remotePath.Trim();
-
         var listPath = path.EndsWith('/') ? path : path + "/";
+
+        if (device.Protocol != DeviceProtocolKind.Hdc)
+        {
+            try
+            {
+                return await EnumerateAdbDirectoryViaSyncAsync(device, path, listPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // Fall back to shell `ls -la` when sync LIST is rejected or unavailable.
+            }
+        }
+
         var output = await RunShellAsync(device, $"ls -la {EscapeShellArgument(listPath)}", cancellationToken).ConfigureAwait(false);
 
         if (output.Contains("No such file", StringComparison.OrdinalIgnoreCase) ||
@@ -173,6 +189,55 @@ public sealed class DeviceFileSystemService
         }
 
         return ParseLsOutput(output, path);
+    }
+
+    private static async Task<IReadOnlyList<DeviceFileSystemEntry>> EnumerateAdbDirectoryViaSyncAsync(
+        DetectedDevice device,
+        string baseDirectory,
+        string listPath,
+        CancellationToken cancellationToken)
+    {
+        const uint PosixFileTypeMask = 0xF000;
+        const uint PosixDirectory = 0x4000;
+        const uint PosixSymlink = 0xA000;
+
+        var rawEntries = await App.DeviceMonitor.RunAdbAsync(device, async session =>
+        {
+            await using var sync = session.CreateSyncClient();
+            return await sync.List64Async(listPath, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+
+        var entries = new List<DeviceFileSystemEntry>(rawEntries.Count);
+        foreach (var item in rawEntries)
+        {
+            if (string.IsNullOrWhiteSpace(item.Name) || item.Name is "." or "..")
+            {
+                continue;
+            }
+
+            var fileType = item.Mode & PosixFileTypeMask;
+            var isDir = fileType == PosixDirectory;
+            var isSymlink = fileType == PosixSymlink;
+            var size = isDir ? -1L : (item.Size > long.MaxValue ? long.MaxValue : (long)item.Size);
+            var modTime = item.Mtime > 0
+                ? DateTimeOffset.FromUnixTimeSeconds(item.Mtime).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                : string.Empty;
+
+            entries.Add(new DeviceFileSystemEntry
+            {
+                Name = item.Name,
+                FullPath = CombineRemotePath(baseDirectory, item.Name),
+                IsDirectory = isDir,
+                IsSymlink = isSymlink,
+                Size = size,
+                ModificationTime = modTime
+            });
+        }
+
+        return entries
+            .OrderByDescending(e => e.IsDirectory)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>
@@ -299,10 +364,43 @@ public sealed class DeviceFileSystemService
         ArgumentException.ThrowIfNullOrEmpty(localPath);
         ArgumentException.ThrowIfNullOrEmpty(remoteDestination);
 
+        var trimmedLocal = Path.TrimEndingDirectorySeparator(Path.GetFullPath(localPath));
         var targetRemote = remoteDestination.EndsWith('/')
-            ? CombineRemotePath(remoteDestination, Path.GetFileName(localPath))
+            ? CombineRemotePath(remoteDestination, Path.GetFileName(trimmedLocal))
             : remoteDestination;
-        await PushFileAsync(device, localPath, targetRemote, cancellationToken).ConfigureAwait(false);
+
+        if (Directory.Exists(trimmedLocal) && device.Protocol != DeviceProtocolKind.Hdc)
+        {
+            await PushDirectoryToAdbAsync(device, trimmedLocal, targetRemote, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await PushFileAsync(device, trimmedLocal, targetRemote, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PushDirectoryToAdbAsync(
+        DetectedDevice device,
+        string localDirectory,
+        string remoteDirectory,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await CreateDirectoryAsync(device, remoteDirectory, cancellationToken).ConfigureAwait(false);
+
+        foreach (var entry in Directory.EnumerateFileSystemEntries(localDirectory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var childName = Path.GetFileName(entry);
+            var childRemote = CombineRemotePath(remoteDirectory, childName);
+            if (Directory.Exists(entry))
+            {
+                await PushDirectoryToAdbAsync(device, entry, childRemote, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await PushFileAsync(device, entry, childRemote, cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>
