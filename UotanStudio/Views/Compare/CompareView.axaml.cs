@@ -919,6 +919,11 @@ public partial class CompareView : UserControl
     /// </summary>
     private async void OnRemoteFilesClick(object? sender, RoutedEventArgs e)
     {
+        if (DataContext is not CompareViewModel vm)
+        {
+            return;
+        }
+
         var owner = TopLevel.GetTopLevel(this) as Window ?? DialogService.GetOwnerWindow();
         var window = new RemoteConnectionWindow();
         if (owner is not null)
@@ -928,6 +933,21 @@ public partial class CompareView : UserControl
         else
         {
             window.Show();
+        }
+
+        if (window.ViewModel.ConnectedProfile is not { } profile)
+        {
+            return;
+        }
+
+        try
+        {
+            await vm.AddRemotePathAsync(profile, profile.InitialPath);
+        }
+        catch (Exception ex)
+        {
+            vm.ReportError(UserError.Describe(ex));
+            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
         }
     }
 

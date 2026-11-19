@@ -518,6 +518,36 @@ public partial class CompareView
 
 
 
+        if (column is { IsRemoteColumn: true })
+
+        {
+
+            try
+
+            {
+
+                await column.DeleteRemoteEntryAsync(path, isDirectory);
+
+                await ReloadAfterEntryChangeAsync(column);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
         try
 
         {
@@ -611,6 +641,36 @@ public partial class CompareView
             {
 
                 await column.RenameDeviceEntryAsync(device, path, newName);
+
+                await ReloadAfterEntryChangeAsync(column);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
+        if (column is { IsRemoteColumn: true })
+
+        {
+
+            try
+
+            {
+
+                await column.RenameRemoteEntryAsync(path, newName);
 
                 await ReloadAfterEntryChangeAsync(column);
 
@@ -735,6 +795,48 @@ public partial class CompareView
             {
 
                 await column.CreateDeviceDirectoryAsync(device, path, isDirectory, folderName);
+
+                await ReloadAfterEntryChangeAsync(column);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
+        if (column is { IsRemoteColumn: true })
+
+        {
+
+            var folderName = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Explorer_NewFolder"), string.Empty);
+
+            if (string.IsNullOrWhiteSpace(folderName))
+
+            {
+
+                return;
+
+            }
+
+
+
+            try
+
+            {
+
+                await column.CreateRemoteDirectoryAsync(path, isDirectory, folderName);
 
                 await ReloadAfterEntryChangeAsync(column);
 
@@ -964,11 +1066,83 @@ public partial class CompareView
 
         var neighbourIndex = index + (ContextIsRightSide(sender) ? 1 : -1);
 
-        var target = neighbourIndex >= 0 && neighbourIndex < vm.Columns.Count
+        var neighbour = neighbourIndex >= 0 && neighbourIndex < vm.Columns.Count
 
-            ? vm.Columns[neighbourIndex].Path
+            ? vm.Columns[neighbourIndex]
 
-            : string.Empty;
+            : null;
+
+        var target = neighbour?.Path ?? string.Empty;
+
+
+
+        if (neighbour is { IsRemoteColumn: true } remoteNeighbour)
+
+        {
+
+            if (move)
+
+            {
+
+                vm.ReportError(LanguageService.Instance.GetString("Compare_NoNeighbourFolder"));
+
+                return;
+
+            }
+
+
+
+            try
+
+            {
+
+                await remoteNeighbour.UploadToRemoteAsync(path, target.Length == 0 ? "/" : target);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
+        if (column is { IsRemoteColumn: true } remoteSource && Directory.Exists(target))
+
+        {
+
+            try
+
+            {
+
+                await remoteSource.DownloadFromRemoteAsync(path, target);
+
+                await ReloadAfterEntryChangeAsync(neighbour);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
 
         if (target.Length == 0 || !Directory.Exists(target))
 
@@ -1412,6 +1586,46 @@ public partial class CompareView
 
 
 
+        if (targetCol is { IsRemoteColumn: true } remoteTarget)
+
+        {
+
+            var dropTargetRemote = ResolveDropTarget(e.Source, inViewDrag) ?? remoteTarget.Path;
+
+            try
+
+            {
+
+                foreach (var path in paths)
+
+                {
+
+                    await remoteTarget.UploadToRemoteAsync(path, dropTargetRemote);
+
+                }
+
+
+
+                await ReloadAfterEntryChangeAsync(remoteTarget);
+
+            }
+
+            catch (Exception ex)
+
+            {
+
+                ReportOperationFailure(ex);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
         var dropTarget = ResolveDropTarget(e.Source, inViewDrag)
 
             ?? (inViewDrag ? ResolveInViewDropFolder(e.GetPosition(this)) : null);
@@ -1461,6 +1675,60 @@ public partial class CompareView
                     .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
 
                 await ReloadAfterEntryChangeAsync(column);
+
+            }
+
+
+
+            return;
+
+        }
+
+
+
+        if (_dragSourceColumn is { IsRemoteColumn: true } remoteSource && dropTarget is not null && Directory.Exists(dropTarget))
+
+        {
+
+            var downloaded = false;
+
+            foreach (var path in paths)
+
+            {
+
+                try
+
+                {
+
+                    await remoteSource.DownloadFromRemoteAsync(path, dropTarget);
+
+                    downloaded = true;
+
+                }
+
+                catch (Exception ex)
+
+                {
+
+                    ReportOperationFailure(ex);
+
+                }
+
+            }
+
+
+
+            if (downloaded)
+
+            {
+
+                var targetColumn = _columnVisuals
+
+                    .Select(visuals => visuals.Column)
+
+                    .FirstOrDefault(candidate => string.Equals(candidate.Path, dropTarget, StringComparison.OrdinalIgnoreCase));
+
+                await ReloadAfterEntryChangeAsync(targetColumn);
 
             }
 

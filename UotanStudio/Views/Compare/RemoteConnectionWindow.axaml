@@ -101,7 +101,14 @@
         </StackPanel>
       </Grid>
 
-      <!-- 第 4 行：匿名登录复选框 与 提交/保存按钮 -->
+      <!-- 第 4 行：远程起始路径（连接后多列浏览器打开的目录） -->
+      <StackPanel Spacing="4">
+        <TextBlock Text="{DynamicResource Remote_InitialPath}" />
+        <TextBox Text="{Binding InitialPath, Mode=TwoWay}"
+                 PlaceholderText="{DynamicResource Remote_InitialPathPlaceholder}" />
+      </StackPanel>
+
+      <!-- 第 5 行：匿名登录复选框 与 提交/保存按钮 -->
       <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
         <CheckBox Grid.Column="0" IsChecked="{Binding IsAnonymous, Mode=TwoWay}"
                   Content="{DynamicResource Remote_Anonymous}" VerticalAlignment="Center" />

@@ -811,6 +811,8 @@ internal static class LocaleKeySets
         "Compare_RemoteFiles",
         "Remote_ConnectionTitle",
         "Remote_FileProtocol",
+        "Remote_InitialPath",
+        "Remote_InitialPathPlaceholder",
         "Remote_Encryption",
         "Remote_Host",
         "Remote_HostPlaceholder",

@@ -2497,6 +2497,12 @@
   <data name="Remote_FileProtocol" xml:space="preserve">
     <value>文件协议(F):</value>
   </data>
+  <data name="Remote_InitialPath" xml:space="preserve">
+    <value>起始路径：</value>
+  </data>
+  <data name="Remote_InitialPathPlaceholder" xml:space="preserve">
+    <value>连接后打开的远程目录（留空为服务器根目录）</value>
+  </data>
   <data name="Remote_Encryption" xml:space="preserve">
     <value>加密(E):</value>
   </data>

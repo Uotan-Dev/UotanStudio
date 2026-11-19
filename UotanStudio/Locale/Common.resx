@@ -2497,6 +2497,12 @@ Author: 暮间雾
   <data name="Remote_FileProtocol" xml:space="preserve">
     <value>File Protocol (F):</value>
   </data>
+  <data name="Remote_InitialPath" xml:space="preserve">
+    <value>Initial Path:</value>
+  </data>
+  <data name="Remote_InitialPathPlaceholder" xml:space="preserve">
+    <value>Remote directory opened after connecting (empty = server root)</value>
+  </data>
   <data name="Remote_Encryption" xml:space="preserve">
     <value>Encryption (E):</value>
   </data>

@@ -124,6 +124,12 @@ public sealed partial class RemoteConnectionViewModel : ObservableObject
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
     [ObservableProperty] private bool _isAnonymous;
+
+    /// <summary>
+    /// The remote directory the multi-column browser opens after connecting; empty means the server root.
+    /// <para>连接后多列文件浏览器打开的远程目录；为空表示服务器根目录。</para>
+    /// </summary>
+    [ObservableProperty] private string _initialPath = string.Empty;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private bool _hasError;
     [ObservableProperty] private RemoteConnectionProfileItemViewModel? _selectedHistoryItem;
@@ -282,6 +288,7 @@ public sealed partial class RemoteConnectionViewModel : ObservableObject
         Username = profile.Username;
         Password = profile.Password;
         IsAnonymous = profile.IsAnonymous;
+        InitialPath = profile.InitialPath;
     }
 
     private RemoteConnectionProfile SaveOrUpdateCurrentProfile(bool updateLastConnected)
@@ -300,6 +307,7 @@ public sealed partial class RemoteConnectionViewModel : ObservableObject
         profile.Username = Username.Trim();
         profile.Password = Password;
         profile.IsAnonymous = IsAnonymous;
+        profile.InitialPath = InitialPath.Trim();
         if (updateLastConnected)
         {
             profile.LastConnected = DateTimeOffset.Now;
