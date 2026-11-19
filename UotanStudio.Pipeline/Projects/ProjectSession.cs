@@ -375,6 +375,8 @@ public sealed partial class ProjectSession
         _workspace.ClearImages();
         _workspace.ApplySettings(new ProjectSettingsDto());
 
+        await _workspace.InitializeExplorerAsync(Context.RootDirectory);
+
         if (firmware is not null)
         {
             _workspace.RestoreImages(firmware.Images.Where(dto =>

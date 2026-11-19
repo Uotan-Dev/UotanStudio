@@ -73,6 +73,25 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
         }
     }
 
+    /// <summary>
+    /// Scans the tree roots that are already visible and completes once their children have been applied, so a
+    /// caller can guarantee the explorer shows a populated top level before doing further work.
+    /// <para>扫描已可见的树根，并在其子节点应用完成后结束，使调用方能确保资源管理器在继续其它工作之前
+    /// 已展示完整的第一层内容。</para>
+    /// </summary>
+    /// <returns>A task that completes after every root has finished its pending scan.
+    /// <para>每个根节点完成其待处理的扫描后完成的任务。</para></returns>
+    internal async Task EnsureRootLoadedAsync()
+    {
+        foreach (var root in TreeViewContent.ToArray())
+        {
+            if (root is { IsDirectory: true })
+            {
+                await root.EnsureChildrenLoadedAsync().ConfigureAwait(true);
+            }
+        }
+    }
+
     internal void OpenFolder(string directory)
     {
         directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
@@ -431,7 +450,7 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public void EnsureChildrenLoaded()
     {
-        if (_childrenLoaded || !IsDirectory)
+        if (_childrenLoaded || !IsDirectory || IsPlaceholder)
         {
             return;
         }
@@ -445,14 +464,23 @@ public sealed partial class ExplorerNode : ObservableObject
     /// <para>按需加载目录子节点，并返回发现的子节点应用完成后完成的任务；已加载目录、文件或占位节点会立即完成。</para>
     /// </summary>
     /// <returns>The in-flight load, or a completed task. <para>进行中的加载任务，或已完成的任务。</para></returns>
-    internal Task EnsureChildrenLoadedAsync()
+    internal async Task EnsureChildrenLoadedAsync()
     {
         if (_childrenLoaded || !IsDirectory || IsPlaceholder)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return RefreshChildrenAsync(marshalToUi: Avalonia.Application.Current is not null);
+        await RefreshChildrenAsync(marshalToUi: Avalonia.Application.Current is not null).ConfigureAwait(true);
+
+        // A newer scan for the same directory may have cancelled this one; retry once so a caller that awaits
+        // this method always observes applied children instead of a placeholder-only row.
+        // 同一目录的新扫描可能取消了本次扫描；此处重试一次，使等待本方法的调用方总能观察到已应用的子节点，
+        // 而不是只剩占位子节点的行。
+        if (!_childrenLoaded && !IsPlaceholder && IsDirectory)
+        {
+            await RefreshChildrenAsync(marshalToUi: Avalonia.Application.Current is not null).ConfigureAwait(true);
+        }
     }
 
     internal void RefreshChildren()
@@ -505,6 +533,13 @@ public sealed partial class ExplorerNode : ObservableObject
         {
             LogService.Instance.Write(LogLevel.Warn, "Explorer",
                 $"Scanning '{Path}' failed; the folder stays collapsed: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_childrenRefresh, cancellation))
+            {
+                _childrenRefresh = null;
+            }
         }
     }
 

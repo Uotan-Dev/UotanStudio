@@ -84,6 +84,22 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         }
     }
 
+    /// <summary>
+    /// Primes the project explorer for the solution that was just opened, before documents are restored, and
+    /// waits for its top-level scan so a later expand restore cannot cancel it.
+    /// <para>在文档还原之前为刚打开的解决方案预热项目资源管理器，并等待其顶层扫描完成，
+    /// 使随后的展开状态恢复不会再取消它。</para>
+    /// </summary>
+    /// <param name="rootDirectory">Absolute solution data root; ignored when no explorer is bound.
+    /// <para>解决方案数据根的绝对路径；未绑定资源管理器时忽略。</para></param>
+    /// <returns>A task that completes once the explorer tree has been primed.</returns>
+    public async Task InitializeExplorerAsync(string? rootDirectory)
+    {
+        if (Workspace?.ProjectExplorer is not { } explorer || rootDirectory is null) return;
+        explorer.Refresh();
+        await explorer.EnsureRootLoadedAsync().ConfigureAwait(true);
+    }
+
     public Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory)
         => Workspace?.RestoreDocumentsAsync(documents, rootDirectory) ?? Task.CompletedTask;
 

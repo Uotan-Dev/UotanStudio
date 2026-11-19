@@ -84,6 +84,18 @@ public interface IProjectDataHost
     /// </param>
     void RestoreImages(IEnumerable<ImageEntryDto> images);
     /// <summary>
+    /// Initializes the project explorer surface for the solution that was just opened, before documents are
+    /// restored; hosts that render a directory tree prime it here so the later document restore cannot
+    /// invalidate its pending scans.
+    /// <para>为刚打开的解决方案初始化项目资源管理器界面，且早于文档还原；呈现目录树的宿主在此预热，
+    /// 使后续的文档还原不会作废它尚未完成的扫描。</para>
+    /// </summary>
+    /// <param name="rootDirectory">Absolute solution data root, or <see langword="null"/> when none applies.
+    /// <para>解决方案数据根的绝对路径；不适用时为 <see langword="null"/>。</para></param>
+    /// <returns>A task that completes once the explorer has been primed.
+    /// <para>资源管理器预热完成后返回的任务。</para></returns>
+    Task InitializeExplorerAsync(string? rootDirectory) => Task.CompletedTask;
+    /// <summary>
     /// Restores document descriptors relative to the specified solution data root.
     /// <para>按指定的解决方案数据根目录还原文档描述符。</para>
     /// </summary>

@@ -55,4 +55,26 @@ public sealed class ExplorerDirectoryRefreshTests
         var lazy = Assert.Single(root.Children, c => c.IsDirectory);
         Assert.True(Assert.Single(lazy.Children).IsPlaceholder);
     }
+
+    [Fact]
+    public async Task EnsureChildrenLoadedAsync_CancelledScan_RetriesAndAppliesFileChildren()
+    {
+        using var temp = new TempDirectory();
+        var images = Directory.CreateDirectory(Path.Combine(temp.Path, "images"));
+        for (var index = 0; index < 8; index++)
+        {
+            File.WriteAllText(Path.Combine(images.FullName, $"partition{index}.img"), "data");
+        }
+
+        var node = new ExplorerNode(images.FullName, true);
+
+        await Task.WhenAll(
+            node.EnsureChildrenLoadedAsync(),
+            node.EnsureChildrenLoadedAsync(),
+            node.EnsureChildrenLoadedAsync());
+
+        Assert.DoesNotContain(node.Children, child => child.IsPlaceholder);
+        Assert.Equal(8, node.Children.Count(child => !child.IsDirectory));
+        Assert.All(node.Children, child => Assert.False(string.IsNullOrEmpty(child.Name)));
+    }
 }
