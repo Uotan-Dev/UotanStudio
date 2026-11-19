@@ -263,7 +263,13 @@ public static partial class MtkBootstrap
         var revisionsMatch = policy == MtkDaIdentityMatch.Exact
             ? entry.HardwareVersion == device.HardwareVersion && entry.SoftwareVersion == device.SoftwareVersion
             : entry.HardwareVersion <= device.HardwareVersion && entry.SoftwareVersion <= device.SoftwareVersion;
-        if (entry.HardwareCode != device.HardwareCode || entry.HardwareSubCode != device.HardwareSubCode || !revisionsMatch)
+        // A container entry that declares subcode 0x0000 leaves the subcode open, which is how vendor DA
+        // containers ship one entry per chip family while the device still reports a concrete subcode. This
+        // mirrors the reference selector exactly; a nonzero declared subcode must still match.
+        // 声明子码 0x0000 的容器条目不约束子码——厂商 DA 容器正是这样为每个芯片家族只提供一条条目，而设备仍会
+        // 上报具体子码。这与参考选择器的判定完全一致；非零的声明子码仍必须相等。
+        var subCodeMatches = entry.HardwareSubCode == 0 || entry.HardwareSubCode == device.HardwareSubCode;
+        if (entry.HardwareCode != device.HardwareCode || !subCodeMatches || !revisionsMatch)
         {
             throw new InvalidOperationException("The selected loader entry does not match the queried hardware identity and revision policy.");
         }

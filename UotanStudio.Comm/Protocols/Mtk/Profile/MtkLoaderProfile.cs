@@ -142,7 +142,14 @@ public sealed class MtkLoaderProfile
                 continue;
             }
 
-            if (entry.HardwareCode != device.HardwareCode || entry.HardwareSubCode != device.HardwareSubCode)
+            // A container entry that declares subcode 0x0000 does not constrain the subcode: real vendor DA
+            // containers ship a single entry per chip family and leave the subcode open, while the device still
+            // reports its concrete subcode. Only that explicit zero is a wildcard — a nonzero declared subcode
+            // must still match exactly, so a genuinely different variant is never silently accepted.
+            // 声明子码 0x0000 的容器条目不约束子码：厂商 DA 容器通常为每个芯片家族只提供一条条目并把子码留空，而设备
+            // 仍会上报具体子码。只有这个显式零才是通配——非零的声明子码仍必须严格相等，因此确实不同的变体绝不会被静默接受。
+            var subCodeMatches = entry.HardwareSubCode == 0 || entry.HardwareSubCode == device.HardwareSubCode;
+            if (entry.HardwareCode != device.HardwareCode || !subCodeMatches)
             {
                 reasons.Add($"Entry {entry.EntryIndex} declares hardware 0x{entry.HardwareCode:X4}/0x{entry.HardwareSubCode:X4}, "
                     + $"not the queried 0x{device.HardwareCode:X4}/0x{device.HardwareSubCode:X4}.");
@@ -160,7 +167,10 @@ public sealed class MtkLoaderProfile
             }
 
             matched.Add(entry with { Regions = entry.Regions });
-            reasons.Add($"Entry {entry.EntryIndex} matches hardware, subcode, and the {match} revision policy.");
+            reasons.Add(entry.HardwareSubCode == 0 && device.HardwareSubCode != 0
+                ? $"Entry {entry.EntryIndex} matches hardware and the {match} revision policy; its open subcode "
+                    + $"0x0000 was applied to the queried 0x{device.HardwareSubCode:X4}."
+                : $"Entry {entry.EntryIndex} matches hardware, subcode, and the {match} revision policy.");
         }
 
         var (stageOne, stageTwo) = matched.Count == 1 ? matched[0].UsableRegionPair!.Value : (-1, -1);

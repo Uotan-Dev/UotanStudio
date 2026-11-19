@@ -487,6 +487,12 @@ public sealed partial class MtkSession : IProtocolSession
         }
 
         await WriteAsync([BootHandshakeCommand[0]], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+        // The bare wake-up byte is answered with one unaltered 0xA0 that must be consumed here. Leaving it
+        // buffered would be read as this attempt's own opening echo, and the attempt's real echo would then shift
+        // every later command reply by one byte (the hardware-code query reads a stale 0xA0 instead of 0xFD).
+        // 裸唤醒字节会收到一个未取反的 0xA0，必须在此消费。若留在缓冲区，它会被当作本次尝试自己的开头回显，
+        // 而本次尝试真正的回显则会让之后每条命令的应答整体错位一个字节（硬件码查询会读到陈旧的 0xA0 而不是 0xFD）。
+        await TryConsumeWakeUpEchoOwnedAsync(cancellationToken).ConfigureAwait(false);
         for (var attempt = 0; attempt < BootHandshakeAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -502,6 +508,54 @@ public sealed partial class MtkSession : IProtocolSession
             $"The boot handshake did not synchronize after {BootHandshakeAttempts} attempts.");
     }
 
+    /// <summary>The preloader's plain-text wake-up banner, sent before it will accept the complemented handshake.
+    /// <para>preloader 在接受反码握手之前发出的纯文本唤醒横幅。</para></summary>
+    /// <remarks>
+    /// A preloader that has just enumerated prints <c>READY</c> (sometimes fragmented, sometimes twice) and only
+    /// then answers the handshake. Treating those banner bytes as handshake echoes would desynchronize the
+    /// exchange, so they are consumed as noise up to a bounded count, exactly like the reference implementation
+    /// does. The bound keeps a chatty or hostile port from spinning the handshake forever.
+    /// <para>刚枚举完成的 preloader 会先打印 <c>READY</c>（有时分片、有时重复），之后才应答握手。把这些横幅字节当作
+    /// 握手回显会让交换失步，因此按参考实现的做法把它们当作噪声消费，并有界计数。该上界防止话多的或恶意的端口让握手
+    /// 无限空转。</para>
+    /// </remarks>
+    private static readonly byte[] PreloaderReadyBanner = [0x52, 0x45, 0x41, 0x44, 0x59];
+
+    /// <summary>The most consecutive banner/noise bytes tolerated before the handshake is declared failed.
+    /// <para>握手被判定失败前容忍的连续横幅/噪声字节上限。</para></summary>
+    private const int MaximumHandshakePrefixBytes = 64;
+
+    /// <summary>Reads one handshake byte, consuming a bounded run of <c>READY</c> banner noise first.
+    /// <para>读取一个握手字节，并先消费有界的 <c>READY</c> 横幅噪声。</para></summary>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
+    /// <returns>The first non-banner byte, or <see langword="null"/> when the noise bound was exceeded.
+    /// <para>第一个非横幅字节；超出噪声上界时为 <see langword="null"/>。</para></returns>
+    private async Task<byte?> ReadHandshakeByteOwnedAsync(CancellationToken cancellationToken)
+    {
+        var bannerPosition = 0;
+        for (var consumed = 0; consumed <= MaximumHandshakePrefixBytes; consumed++)
+        {
+            var value = (await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false))[0];
+            if (value == PreloaderReadyBanner[bannerPosition])
+            {
+                if (++bannerPosition == PreloaderReadyBanner.Length)
+                {
+                    bannerPosition = 0;
+                }
+
+                continue;
+            }
+
+            bannerPosition = value == PreloaderReadyBanner[0] ? 1 : 0;
+            if (bannerPosition == 0)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Runs one strict four-byte handshake attempt.
     /// <para>执行一次严格的四字节握手尝试。</para></summary>
     /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
@@ -511,11 +565,29 @@ public sealed partial class MtkSession : IProtocolSession
     {
         try
         {
-            foreach (var value in BootHandshakeCommand)
+            for (var index = 0; index < BootHandshakeCommand.Length; index++)
             {
+                var value = BootHandshakeCommand[index];
                 await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                if (reply[0] != (byte)(value ^ 0xFF))
+                var reply = await ReadHandshakeByteOwnedAsync(cancellationToken).ConfigureAwait(false);
+                if (reply is not { } observed)
+                {
+                    return false;
+                }
+
+                // A target that answers the opening 0xA0 with an unaltered 0xA0 has already completed its
+                // handshake and is waiting for command bytes; resending the remaining three bytes would push
+                // 0x0A/0x50/0x05 into its command decoder. This is echo-based evidence of a live command stage,
+                // not proof of identity, so the caller still has to query the hardware code afterwards.
+                // 若目标对开头的 0xA0 回以未经取反的 0xA0，说明它已完成握手、正在等待命令字节；继续发送其余三个字节
+                // 会把 0x0A/0x50/0x05 推进它的命令解码器。这是“命令阶段仍然存活”的回显证据，而非身份证明，因此调用方
+                // 之后仍必须查询硬件码。
+                if (index == 0 && observed == value)
+                {
+                    return true;
+                }
+
+                if (observed != (byte)(value ^ 0xFF))
                 {
                     return false;
                 }
@@ -545,11 +617,28 @@ public sealed partial class MtkSession : IProtocolSession
     {
         try
         {
-            foreach (var value in BootHandshakeCommand)
+            for (var index = 0; index < BootHandshakeCommand.Length; index++)
             {
+                var value = BootHandshakeCommand[index];
                 await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                if (reply[0] != (byte)(value ^ 0xFF))
+                var reply = await ReadHandshakeByteOwnedAsync(cancellationToken).ConfigureAwait(false);
+                if (reply is not { } observed)
+                {
+                    return false;
+                }
+
+                // The preloader banner is followed by an extra echoed 0xA0 before the complemented sequence, so an
+                // unaltered opening byte means the port is already synchronized and awaiting command bytes. Any
+                // other non-complemented byte stays a mismatch: accepting it would report a live stage for a port
+                // that is merely noisy.
+                // preloader 横幅之后、反码序列之前还会多回一个 0xA0；未取反的开头字节意味着端口已同步、正在等待命令
+                // 字节。其余任何非反码字节仍然算不匹配：接受它会为仅仅“话多”的端口错误地报告阶段存活。
+                if (index == 0 && observed == value)
+                {
+                    return true;
+                }
+
+                if (observed != (byte)(value ^ 0xFF))
                 {
                     return false;
                 }
@@ -560,6 +649,24 @@ public sealed partial class MtkSession : IProtocolSession
         catch (Exception error) when (error is TimeoutException or MtkProtocolException)
         {
             return false;
+        }
+    }
+
+    /// <summary>Consumes the single unaltered echo a preloader returns for the bare wake-up byte, tolerating a
+    /// silent port. Timeouts are expected: a Boot ROM port answers with the complement instead and a port that has
+    /// not finished enumerating says nothing at all, so this step never fails the handshake.
+    /// <para>消费 preloader 为裸唤醒字节返回的单个未取反回显，并容忍端口沉默。超时是预期情况：Boot ROM 端口以反码
+    /// 应答，尚未枚举完成的端口则什么都不回，因此该步骤绝不让握手失败。</para>
+    /// </summary>
+    /// <param name="cancellationToken">The operation cancellation token. <para>操作取消令牌。</para></param>
+    private async Task TryConsumeWakeUpEchoOwnedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _ = await ReadHandshakeByteOwnedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception error) when (error is TimeoutException or MtkProtocolException)
+        {
         }
     }
 
@@ -1043,8 +1150,28 @@ public sealed partial class MtkSession : IProtocolSession
     internal void NoteUsbDescriptor(UsbDeviceInfo device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        _usbVendorId = device.VendorId;
-        _usbProductId = device.ProductId;
+        NoteUsbIdentity(device.VendorId, device.ProductId);
+    }
+
+    /// <summary>Records the observed USB vendor and product identifiers directly, for adoption paths that hold the
+    /// endpoint identity but no <see cref="UsbDeviceInfo"/> instance, such as a serial fallback lease built from a
+    /// discovered endpoint.
+    /// <para>直接记录已观测的 USB 厂商与产品标识，供持有端点身份但没有 <see cref="UsbDeviceInfo"/> 实例的接管
+    /// 路径使用，例如由已发现端点构建的串口回退租约。</para>
+    /// </summary>
+    /// <remarks>
+    /// The boot handshake decides between the strict and the relaxed resynchronization from this pair alone, so a
+    /// serial lease that skipped it would silently force the strict path onto a preloader port that needs the bare
+    /// <c>0xA0</c> warm-up and then fail every retry.
+    /// <para>boot 握手仅依这一对标识在严格重同步与宽松重同步之间选择，因此跳过记录会让串口租约静默地对一个需要裸
+    /// <c>0xA0</c> 预热的 preloader 端口改用严格路径，随后每次重试都失败。</para>
+    /// </remarks>
+    /// <param name="vendorId">The observed USB vendor id. <para>已观测的 USB 厂商 ID。</para></param>
+    /// <param name="productId">The observed USB product id. <para>已观测的 USB 产品 ID。</para></param>
+    internal void NoteUsbIdentity(ushort vendorId, ushort productId)
+    {
+        _usbVendorId = vendorId;
+        _usbProductId = productId;
     }
 
     /// <summary>Records a command-interface selection performed by an adoption path such as the device session
