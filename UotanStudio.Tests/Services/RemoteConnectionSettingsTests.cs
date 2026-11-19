@@ -21,6 +21,7 @@ public sealed class RemoteConnectionSettingsTests
             Username = "root",
             Password = "secretpassword",
             IsAnonymous = false,
+            InitialPath = "/sdcard/Download",
             LastConnected = new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero)
         });
         settings.RemoteConnectionHistory.Add(new RemoteConnectionProfile
@@ -52,6 +53,7 @@ public sealed class RemoteConnectionSettingsTests
         Assert.Equal("root", first.Username);
         Assert.Equal("secretpassword", first.Password);
         Assert.False(first.IsAnonymous);
+        Assert.Equal("/sdcard/Download", first.InitialPath);
         Assert.NotNull(first.LastConnected);
 
         var second = reloaded.RemoteConnectionHistory[1];
