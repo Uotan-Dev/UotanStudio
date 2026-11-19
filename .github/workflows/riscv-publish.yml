@@ -30,7 +30,9 @@ jobs:
   publish:
     name: linux-riscv64
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    # 360 is the platform ceiling for a single job. This used to be 240, so long runs
+    # were cancelled by our own limit well before GitHub would have stepped in.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v5
         with:
@@ -161,6 +163,17 @@ jobs:
           path: ${{ runner.temp }}/riscv/crossjit
           key: riscv64-crossjit-${{ runner.os }}-v${{ steps.sdk.outputs.runtime_ver }}
 
+      # The cache above is saved by its post-step, which does NOT run when the job is
+      # cancelled by a timeout. So a run cut off mid-JIT leaves no cache and the next
+      # attempt starts over. Pull a previously uploaded JIT artifact as a fallback, so
+      # the expensive build only has to succeed once.
+      - name: Restore cross JIT artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: riscv64-crossjit
+          path: ${{ runner.temp }}/riscv/crossjit
+
       - name: Build riscv64 cross JIT (first run only)
         shell: bash
         env:
@@ -208,6 +221,18 @@ jobs:
           cd /
           rm -rf "$src"
           echo "Staged cross JIT as $jit"
+
+      # Published so the fallback above can pick it up on a later run. Note this does
+      # not rescue a run that is already timing out: a timeout kills the job outright
+      # and no later step runs. It makes the *next* run cheap.
+      - name: Upload cross JIT
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riscv64-crossjit
+          path: ${{ runner.temp }}/riscv/crossjit/libclrjit_unix_riscv64_x64.so
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Prepare local feed and ilc host
         shell: bash
