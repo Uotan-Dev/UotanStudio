@@ -1,4 +1,6 @@
+using UotanStudio.DD;
 using UotanStudio.DD.Drives;
+using UotanStudio.DD.Drives.Linux;
 using UotanStudio.DD.Images;
 using UotanStudio.DD.Writing;
 using Xunit;
@@ -7,6 +9,46 @@ namespace UotanStudio.Tests.DD;
 
 public sealed class OpticalDiscTests
 {
+    [Fact]
+    public async Task BurnAsync_NonIsoImage_ThrowsBeforeWriterCreation()
+    {
+        var drive = CreateOpticalDrive(writable: true);
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllText(path, "not an iso");
+        var image = new FlashImage
+        {
+            Path = path,
+            DisplayName = Path.GetFileName(path),
+            Format = ImageFormat.Raw,
+            CompressedSize = 10,
+            Size = 10,
+        };
+        var factory = new ThrowingWriterFactory();
+        var burner = new OpticalDiscBurner(factory);
+        try
+        {
+            await Assert.ThrowsAsync<FlashException>(() =>
+                burner.BurnAsync(image, drive, new OpticalDiscSession(path),
+                    cancellationToken: TestContext.Current.CancellationToken));
+            Assert.False(factory.Called);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class ThrowingWriterFactory : IDiscWriterFactory
+    {
+        internal bool Called { get; private set; }
+
+        public IDiscWriter Create(FlashDrive drive)
+        {
+            Called = true;
+            throw new InvalidOperationException("Writer must not be created for an invalid ISO.");
+        }
+    }
+
     [Fact]
     public void Evaluate_OpticalDriveWithoutMedia_ReturnsNoWritableDiscError()
     {
@@ -69,6 +111,41 @@ public sealed class OpticalDiscTests
         Assert.True(DriveCompatibilityEvaluator.IsBlocking(
             new DriveCompatibilityIssueInfo(DriveCompatibilityIssue.UnsupportedDiscImage, DriveCompatibilitySeverity.Error),
             allowLargeDrive: true));
+    }
+
+    [Fact]
+    public void ParseCdromInfo_RealKernelFields_ReportsWriterCapability()
+    {
+        var lines = new[]
+        {
+            "CD-ROM information, Id: cdrom.c 3.20 2003/12/17",
+            "",
+            "drive name:		sr0 sr1",
+            "drive speed:		0 0",
+            "Can read DVD:		1 1",
+            "Can write CD-R:		1 0",
+            "Can write CD-RW:		1 0",
+            "Can write DVD-R:		1 0",
+            "Can write DVD-RAM:		0 0",
+        };
+
+        var caps = LinuxOpticalDriveScanner.ParseCdromInfo(lines, ["sr0", "sr1"]);
+
+        Assert.Equal(2, caps.Count);
+        Assert.Equal(OpticalDiscFormat.Dvd, caps["sr0"].Format);
+        Assert.True(caps["sr0"].Writable);
+        Assert.Equal(OpticalDiscFormat.Dvd, caps["sr1"].Format);
+        Assert.False(caps["sr1"].Writable);
+    }
+
+    [Fact]
+    public void ParseCdromInfo_NoWriteFlags_ReportsNotWritable()
+    {
+        var lines = new[] { "drive name:		sr0", "Can read DVD:		1" };
+
+        var caps = LinuxOpticalDriveScanner.ParseCdromInfo(lines, ["sr0"]);
+
+        Assert.False(caps["sr0"].Writable);
     }
 
     [Fact]
