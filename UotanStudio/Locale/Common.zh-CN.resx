@@ -2359,6 +2359,21 @@
   <data name="Dock_Partition_Remove" xml:space="preserve">
     <value>删除分区</value>
   </data>
+  <data name="Dock_Partition_Search" xml:space="preserve">
+    <value>搜索分区</value>
+  </data>
+  <data name="Dock_Partition_StartBytes" xml:space="preserve">
+    <value>起始（偏移）</value>
+  </data>
+  <data name="Dock_Partition_SizeBytes" xml:space="preserve">
+    <value>大小（容量）</value>
+  </data>
+  <data name="Dock_Partition_BytesHint" xml:space="preserve">
+    <value>如 512、8M 或 1.5G（无单位按字节）</value>
+  </data>
+  <data name="Dock_Partition_NoSearchResult" xml:space="preserve">
+    <value>没有匹配的分区。</value>
+  </data>
   <data name="Dock_Partition_Unallocated" xml:space="preserve">
     <value>未分配</value>
   </data>

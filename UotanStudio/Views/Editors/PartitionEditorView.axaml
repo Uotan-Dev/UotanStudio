@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.PartitionEditorView"
              x:DataType="viewmodels:PartitionEditorViewModel">
@@ -19,13 +20,85 @@
     <Style Selector="Border.band-label">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+
+    <!-- 顶栏紧凑控件：与日志窗口顶栏同尺寸（ComboBox 高 22 / 字号 11，按钮 20×20，搜索框高 22）。
+         顶栏内边距固定 8,4，页面首行高度与其它编辑器一致。 -->
+    <!-- Compact top-bar controls, matching the log window's toolbar (22px combo at 11px text, 20×20
+         buttons, 22px search box). The strip padding is fixed at 8,4 so the first row keeps the same
+         height as every other editor page. -->
+    <Style Selector="ComboBox.Small">
+      <Setter Property="Height" Value="22" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.Small">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.Small">
+      <Setter Property="Height" Value="22" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- 栏目标题（分区 / 属性）与属性行标签统一字号，视觉层级一致。 -->
+    <!-- Column headings (Partitions / Properties) share the property-row label size. -->
+    <Style Selector="TextBlock.pane-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Opacity" Value="0.8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.field-value">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontFamily" Value="Consolas" />
+    </Style>
+
+    <!-- 分区列表行：主题把行内边距写死在 TreeViewItemPadding 资源上（ContentPresenter 优先取该资源，
+         而不是控件自己的 Padding），所以真正有效的压缩手段是在下方 TreeView.Resources 里覆盖该资源。
+         这里再用后代选择器清掉 MinHeight 与控件自带 Padding 的叠加。 -->
+    <!-- Partition rows: the theme hard-codes the row inset in the TreeViewItemPadding resource (the
+         ContentPresenter prefers that resource over the control's own Padding), so the effective fix is
+         overriding it in the TreeView.Resources block below. This style additionally clears MinHeight and
+         the control's own Padding so nothing stacks on top of it. -->
+    <Style Selector="TreeView.partition-tree TreeViewItem">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <!-- 容量摘要：比「分区」「属性」标题（13px 半粗）再大一档，突出数据源总量。 -->
+    <!-- Capacity summary: one step above the 13px semibold pane titles. -->
+    <Style Selector="TextBlock.capacity">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
   </UserControl.Styles>
+
   <DockPanel IsEnabled="{Binding !IsBusy}">
-    <!-- 顶部工具栏：数据源描述 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <!-- 镜像携带多份分区表时提供切换选择器。 -->
-        <ComboBox DockPanel.Dock="Right" MinWidth="180" Margin="8,0,0,0" FontSize="11"
+    <!-- 顶部工具栏：数据源描述 + 表副本选择器。
+         下拉框只在一部分镜像上出现，隐藏时若只靠内容撑高，整条会比有下拉框时矮一截；
+         这里给行容器固定 22px 最小高度（与 ComboBox.Small 等高），两种情况下顶栏完全一致。 -->
+    <!-- Top toolbar: the data-source description plus the table-copy selector. The selector only exists for
+         some images; without a fixed row height the strip collapses when it is hidden. A 22px MinHeight
+         (the ComboBox.Small height) keeps the toolbar identical in both cases. -->
+    <Border DockPanel.Dock="Top" Padding="8,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel MinHeight="22">
+        <ComboBox DockPanel.Dock="Right" Classes="Small" MinWidth="180" Margin="8,0,0,0"
                   IsVisible="{Binding HasTableCopies}"
                   ItemsSource="{Binding TableCopies}"
                   SelectedItem="{Binding SelectedTableCopy, Mode=TwoWay}">
@@ -49,19 +122,31 @@
       <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
-    <!-- GNOME Disks 风格的可视化分区段布局：条带 + 对齐标签行。 -->
-    <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <!-- GNOME Disks 风格的可视化分区段布局：容量摘要与增删按钮在条带正上方（间距 4），
+         与顶栏之间隔一条分隔线和 3px 内边距，按钮因此既不贴住下拉框，也不远离彩色条带。 -->
+    <!-- GNOME Disks style visual partition band: the capacity summary and the add/remove buttons sit
+         directly above the band (4px gap); a separator and 3px padding separate them from the toolbar
+         above, so the buttons neither hug the combo box nor drift away from the coloured band. -->
+    <Border DockPanel.Dock="Top" Padding="8,3,8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <StackPanel Spacing="4">
         <DockPanel LastChildFill="False">
-          <StackPanel Orientation="Horizontal" Spacing="6" DockPanel.Dock="Right">
-            <Button Content="{x:Static viewmodels:PartitionEditorViewModel.AddLabel}"
-                    Command="{Binding AddPartitionCommand}" Padding="10,2" />
-            <Button Content="{x:Static viewmodels:PartitionEditorViewModel.RemoveLabel}"
-                    Command="{Binding RemovePartitionCommand}" Padding="10,2" />
+          <!-- 图标按钮：与日志窗口顶栏的清空日志按钮同规格（20×20，图标 12）。 -->
+          <!-- Icon buttons, sized like the log window's clear-log button (20×20 with a 12px icon). -->
+          <StackPanel Orientation="Horizontal" Spacing="4" DockPanel.Dock="Right" VerticalAlignment="Center">
+            <Button Classes="Small" Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="2"
+                    Command="{Binding AddPartitionCommand}"
+                    ToolTip.Tip="{x:Static viewmodels:PartitionEditorViewModel.AddLabel}"
+                    AutomationProperties.Name="{x:Static viewmodels:PartitionEditorViewModel.AddLabel}">
+              <icons:Add Width="12" Height="12" />
+            </Button>
+            <Button Classes="Small" Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="2"
+                    Command="{Binding RemovePartitionCommand}"
+                    ToolTip.Tip="{x:Static viewmodels:PartitionEditorViewModel.RemoveLabel}"
+                    AutomationProperties.Name="{x:Static viewmodels:PartitionEditorViewModel.RemoveLabel}">
+              <icons:Delete Width="12" Height="12" />
+            </Button>
           </StackPanel>
-          <TextBlock Text="{Binding CapacityText}" VerticalAlignment="Center"
-                     FontSize="11" Opacity="0.8" FontFamily="Consolas"
-                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Classes="capacity" Text="{Binding CapacityText}" />
         </DockPanel>
 
         <!-- 条带段：宽度按扇区占比；点击联动选中分区。 -->
@@ -110,22 +195,46 @@
       </StackPanel>
     </Border>
 
-    <!-- 左：分区列表；右：选中分区属性编辑 -->
+    <!-- 左：分区列表（含搜索）；右：选中分区属性编辑 -->
     <Grid ColumnDefinitions="280,*">
       <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Padding="6,4" FontSize="11" Opacity="0.7"
+          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="6,6,6,4"
                      Text="{x:Static viewmodels:PartitionEditorViewModel.PartitionsLabel}" />
-          <TreeView x:Name="PartitionTree"
-                    ItemsSource="{Binding Partitions}"
+          <TextBox DockPanel.Dock="Top" Classes="Small" Margin="6,0,6,4"
+                   Text="{Binding SearchText, Mode=TwoWay}"
+                   PlaceholderText="{x:Static viewmodels:PartitionEditorViewModel.SearchLabel}"
+                   AutomationProperties.Name="{x:Static viewmodels:PartitionEditorViewModel.SearchLabel}">
+            <TextBox.InnerRightContent>
+              <!-- 清除按钮不带提示文本，避免与搜索占位文本重复。 -->
+              <Button Classes="Small" Width="18" Height="18" MinHeight="0" Padding="2"
+                      Command="{Binding ClearSearchCommand}">
+                <TextBlock Text="&#x2715;" FontSize="9" />
+              </Button>
+            </TextBox.InnerRightContent>
+          </TextBox>
+          <TextBlock DockPanel.Dock="Top" Margin="6,0,6,4" FontSize="11" Opacity="0.6"
+                     IsVisible="{Binding HasNoSearchResult}"
+                     Text="{x:Static viewmodels:PartitionEditorViewModel.NoSearchResultLabel}" />
+          <TreeView x:Name="PartitionTree" Classes="partition-tree"
+                    ItemsSource="{Binding VisiblePartitions}"
                     SelectedItem="{Binding SelectedPartition, Mode=TwoWay}">
+            <!-- 主题默认行内边距 0 4 8 4（上下各 4），压成上下各 1 让列表更密。 -->
+            <!-- The theme's row inset is 0 4 8 4 (4px top and bottom); 1px each keeps the list compact. -->
+            <TreeView.Resources>
+              <Thickness x:Key="TreeViewItemPadding">0 1 8 1</Thickness>
+            </TreeView.Resources>
             <TreeView.ItemTemplate>
               <TreeDataTemplate x:DataType="viewmodels:PartitionItemViewModel">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
-                  <TextBlock Text="{Binding Size, StringFormat='({0})'}"
-                             FontSize="10" Opacity="0.6" FontFamily="Consolas" />
-                </StackPanel>
+                <!-- 名称与括号内大小同基线：同一 TextBlock 的 Run 序列，去掉独立 TextBlock 造成的错位。 -->
+                <!-- Name and its parenthesised size share one baseline via runs in a single TextBlock,
+                     which removes the misalignment of two separate TextBlocks. -->
+                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding Name}" FontFamily="Consolas" FontSize="13" />
+                  <Run Text=" (" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                  <Run Text="{Binding Size}" FontFamily="Consolas" FontSize="11" />
+                  <Run Text=")" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </TextBlock>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
           </TreeView>
@@ -134,38 +243,52 @@
 
       <Border Grid.Column="1">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Padding="6,4" FontSize="11" Opacity="0.7"
+          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="6,6,6,4"
                      Text="{x:Static viewmodels:PartitionEditorViewModel.PropertiesLabel}" />
           <TextBlock Text="{x:Static viewmodels:PartitionEditorViewModel.NoSelectionLabel}"
-                     Margin="8,8,0,0" Opacity="0.6"
+                     Margin="8,8,0,0" FontSize="13" Opacity="0.6"
                      IsVisible="{Binding HasSelection, Converter={x:Static BoolConverters.Not}}" />
           <ScrollViewer IsVisible="{Binding HasSelection}">
             <StackPanel Margin="8" Spacing="6">
               <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static viewmodels:PartitionEditorViewModel.NameLabel}"
-                           VerticalAlignment="Center" Opacity="0.8" />
-                <TextBox Grid.Row="0" Grid.Column="1"
-                         Text="{Binding SelectedPartition.Name, Mode=TwoWay}" FontFamily="Consolas" />
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.NameLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.Name, Mode=TwoWay}" />
               </Grid>
               <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static viewmodels:PartitionEditorViewModel.StartLabel}"
-                           VerticalAlignment="Center" Opacity="0.8" />
-                <TextBox Grid.Row="0" Grid.Column="1"
-                         Text="{Binding SelectedPartition.Start, Mode=TwoWay}" FontFamily="Consolas"
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.StartLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.Start, Mode=TwoWay}"
                          PlaceholderText="0x..." />
               </Grid>
               <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static viewmodels:PartitionEditorViewModel.SizeLabel}"
-                           VerticalAlignment="Center" Opacity="0.8" />
-                <TextBox Grid.Row="0" Grid.Column="1"
-                         Text="{Binding SelectedPartition.Size, Mode=TwoWay}" FontFamily="Consolas"
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.StartBytesLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.StartBytes, Mode=TwoWay}"
+                         PlaceholderText="{x:Static viewmodels:PartitionEditorViewModel.BytesHintLabel}" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.SizeLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.Size, Mode=TwoWay}"
                          PlaceholderText="0x..." />
               </Grid>
               <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static viewmodels:PartitionEditorViewModel.TypeLabel}"
-                           VerticalAlignment="Center" Opacity="0.8" />
-                <TextBox Grid.Row="0" Grid.Column="1"
-                         Text="{Binding SelectedPartition.Type, Mode=TwoWay}" FontFamily="Consolas"
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.SizeBytesLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.SizeBytes, Mode=TwoWay}"
+                         PlaceholderText="{x:Static viewmodels:PartitionEditorViewModel.BytesHintLabel}" />
+              </Grid>
+              <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                           Text="{x:Static viewmodels:PartitionEditorViewModel.TypeLabel}" />
+                <TextBox Grid.Row="0" Grid.Column="1" Classes="field-value"
+                         Text="{Binding SelectedPartition.Type, Mode=TwoWay}"
                          PlaceholderText="{x:Static viewmodels:PartitionEditorViewModel.TypeHintLabel}" />
               </Grid>
             </StackPanel>

@@ -122,4 +122,121 @@ public static class PartitionTableFormat
     /// <param name="sectors">The sector count to format. <para>要格式化的扇区数。</para></param>
     /// <returns>The 0x-prefixed hexadecimal text.<para>带 0x 前缀的十六进制文本。</para></returns>
     public static string FormatSectors(ulong sectors) => "0x" + sectors.ToString("X", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses a byte count accepting a bare number (bytes), 0x-hex, decimals and B/K/KB/KiB/M/MB/MiB/G/GB/GiB/T/TB/TiB
+    /// suffixes (the "i" spellings are accepted on input but never produced on output).
+    /// Unlike <see cref="TryParseSectors"/>, a bare value is a byte count and is not divided by the sector size.
+    /// <para>解析字节数，支持纯数字（字节）、0x 十六进制、小数以及 B/K/KB/KiB/M/MB/MiB/G/GB/GiB/T/TB/TiB 后缀。
+    /// 与 <see cref="TryParseSectors"/> 不同，纯数字按字节计，不再除以扇区大小。</para>
+    /// </summary>
+    /// <param name="text">The text to parse. <para>要解析的文本。</para></param>
+    /// <param name="bytes">The parsed byte count, zero on failure. <para>解析出的字节数，失败时为 0。</para></param>
+    /// <returns>True when the value parsed; otherwise, false.<para>解析成功时为 true，否则为 false。</para></returns>
+    public static bool TryParseBytes(string? text, out ulong bytes)
+    {
+        bytes = 0;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var value = text.Trim();
+        if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            var digits = 2;
+            while (digits < value.Length && Uri.IsHexDigit(value[digits]))
+            {
+                digits++;
+            }
+
+            if (digits == 2
+                || !ulong.TryParse(value[2..digits], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)
+                || !TryGetUnitMultiplier(value[digits..], out var hexMultiplier))
+            {
+                return false;
+            }
+
+            return TryScale(hex, hexMultiplier, out bytes);
+        }
+
+        var length = 0;
+        while (length < value.Length && (char.IsAsciiDigit(value[length]) || value[length] == '.'))
+        {
+            length++;
+        }
+
+        if (length == 0
+            || !decimal.TryParse(value[..length], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number)
+            || !TryGetUnitMultiplier(value[length..], out var multiplier))
+        {
+            return false;
+        }
+
+        var scaled = number * multiplier;
+        if (scaled < 0 || scaled > ulong.MaxValue)
+        {
+            return false;
+        }
+
+        bytes = (ulong)decimal.Ceiling(scaled);
+        return true;
+    }
+
+    /// <summary>
+    /// Formats a byte count with a short unit suffix ("512 B", "1.5 GB"); the result parses back through
+    /// <see cref="TryParseBytes"/>.
+    /// <para>以短单位后缀格式化字节数（"512 B"、"1.5 GB"）；结果可被 <see cref="TryParseBytes"/> 原样解析回来。</para>
+    /// </summary>
+    /// <param name="bytes">The byte count to format. <para>要格式化的字节数。</para></param>
+    /// <returns>The value followed by its unit.<para>数值加单位。</para></returns>
+    public static string FormatBytes(ulong bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{value:0} {units[unit]}")
+            : string.Create(CultureInfo.InvariantCulture, $"{value:0.##} {units[unit]}");
+    }
+
+    /// <summary>
+    /// Converts a byte count to the sector count that covers it (rounding up).
+    /// <para>把字节数换算为覆盖它的扇区数（向上取整）。</para>
+    /// </summary>
+    /// <param name="bytes">The byte count. <para>字节数。</para></param>
+    /// <returns>The covering sector count.<para>覆盖该字节数的扇区数。</para></returns>
+    public static ulong BytesToSectors(ulong bytes) => (bytes + SectorSize - 1) / SectorSize;
+
+    private static bool TryGetUnitMultiplier(string suffix, out ulong multiplier)
+    {
+        multiplier = suffix.Trim().ToUpperInvariant() switch
+        {
+            "" or "B" => 1UL,
+            "K" or "KB" or "KIB" => 1024UL,
+            "M" or "MB" or "MIB" => 1024UL * 1024,
+            "G" or "GB" or "GIB" => 1024UL * 1024 * 1024,
+            "T" or "TB" or "TIB" => 1024UL * 1024 * 1024 * 1024,
+            _ => 0UL
+        };
+        return multiplier != 0;
+    }
+
+    private static bool TryScale(ulong value, ulong multiplier, out ulong bytes)
+    {
+        bytes = 0;
+        if (multiplier != 1 && value > ulong.MaxValue / multiplier)
+        {
+            return false;
+        }
+
+        bytes = value * multiplier;
+        return true;
+    }
 }

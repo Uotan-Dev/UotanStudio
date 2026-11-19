@@ -120,6 +120,36 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     public static string UnallocatedLabel => LanguageService.Instance.GetString("Dock_Partition_Unallocated");
 
     /// <summary>
+    /// The localized placeholder of the partition search box.
+    /// <para>分区搜索框的本地化占位提示。</para>
+    /// </summary>
+    public static string SearchLabel => LanguageService.Instance.GetString("Dock_Partition_Search");
+
+    /// <summary>
+    /// The localized label of the start field expressed in bytes.
+    /// <para>“起始”字节输入框的本地化标签。</para>
+    /// </summary>
+    public static string StartBytesLabel => LanguageService.Instance.GetString("Dock_Partition_StartBytes");
+
+    /// <summary>
+    /// The localized label of the size field expressed in bytes.
+    /// <para>“大小”字节输入框的本地化标签。</para>
+    /// </summary>
+    public static string SizeBytesLabel => LanguageService.Instance.GetString("Dock_Partition_SizeBytes");
+
+    /// <summary>
+    /// The localized placeholder shown for the byte inputs (unit suffixes are accepted).
+    /// <para>字节输入框的本地化占位提示（接受单位后缀）。</para>
+    /// </summary>
+    public static string BytesHintLabel => LanguageService.Instance.GetString("Dock_Partition_BytesHint");
+
+    /// <summary>
+    /// The localized hint shown when the search filters out every partition.
+    /// <para>搜索滤掉全部分区时显示的本地化提示。</para>
+    /// </summary>
+    public static string NoSearchResultLabel => LanguageService.Instance.GetString("Dock_Partition_NoSearchResult");
+
+    /// <summary>
     /// The file path of the document.
     /// <para>文档对应的文件路径。</para>
     /// </summary>
@@ -189,6 +219,26 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     public ObservableCollection<PartitionItemViewModel> Partitions { get; } = [];
 
     /// <summary>
+    /// The partition rows the left list actually shows: <see cref="Partitions"/> narrowed by <see cref="SearchText"/>.
+    /// <para>左栏实际显示的分区行：由 <see cref="Partitions"/> 按 <see cref="SearchText"/> 过滤得到。</para>
+    /// </summary>
+    public ObservableCollection<PartitionItemViewModel> VisiblePartitions { get; } = [];
+
+    /// <summary>
+    /// The partition search text; empty shows every partition.
+    /// <para>分区搜索文本；为空时显示全部分区。</para>
+    /// </summary>
+    [ObservableProperty] private string _searchText = string.Empty;
+
+    partial void OnSearchTextChanged(string value) => RefreshVisiblePartitions();
+
+    /// <summary>
+    /// Whether the search hides every partition (drives the empty hint in the left pane).
+    /// <para>搜索是否滤掉了全部分区（驱动左栏的空结果提示）。</para>
+    /// </summary>
+    public bool HasNoSearchResult => VisiblePartitions.Count == 0 && Partitions.Count > 0;
+
+    /// <summary>
     /// Segments of the visual partition band (including unallocated gaps), ordered by start sector.
     /// <para>可视化分区段布局的段列表（含未分配间隙），按起始扇区排序。</para>
     /// </summary>
@@ -214,6 +264,12 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     public RelayCommand RemovePartitionCommand { get; }
 
     /// <summary>
+    /// Clears the partition search text (the search box's inline clear button).
+    /// <para>清空分区搜索文本（搜索框内置的清除按钮）。</para>
+    /// </summary>
+    public RelayCommand ClearSearchCommand { get; }
+
+    /// <summary>
     /// Total partition count; 0 when not loaded.
     /// <para>分区总数；未加载时为 0。</para>
     /// </summary>
@@ -234,6 +290,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
         SaveCommand = new AsyncRelayCommand(SaveAsync);
         AddPartitionCommand = new RelayCommand(AddPartition, () => _isLoaded && !IsBusy);
         RemovePartitionCommand = new RelayCommand(RemoveSelectedPartition, () => _isLoaded && SelectedPartition is not null);
+        ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
     }
 
     /// <summary>
@@ -431,6 +488,8 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     {
         SelectedPartition = null;
         Partitions.Clear();
+        VisiblePartitions.Clear();
+        SearchText = string.Empty;
         Segments.Clear();
         _lpMetadata = null;
         _gpt = null;
@@ -493,6 +552,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 group,
                 MarkDirtyAndRefresh));
         }
+        RefreshVisiblePartitions();
     }
 
     private void BuildRockchipItems(IReadOnlyList<RockchipPartition> partitions)
@@ -513,6 +573,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 group: null,
                 MarkDirtyAndRefresh));
         }
+        RefreshVisiblePartitions();
     }
 
     private async Task<bool> TryLoadTableAsync(string path)
@@ -741,6 +802,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 group: null,
                 MarkDirtyAndRefresh));
         }
+        RefreshVisiblePartitions();
     }
 
     private void BuildMbrItems(MbrTableInfo info)
@@ -761,6 +823,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 group: null,
                 MarkDirtyAndRefresh));
         }
+        RefreshVisiblePartitions();
     }
 
     private void BuildAmlogicItems(AmlogicPartitionTableInfo info)
@@ -781,6 +844,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 group: null,
                 MarkDirtyAndRefresh));
         }
+        RefreshVisiblePartitions();
     }
 
     private async Task SaveGptAsync(IReadOnlyList<PartitionItemViewModel> items)
@@ -1072,6 +1136,57 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     {
         IsDirty = true;
         RebuildBand();
+        RefreshVisiblePartitions();
+    }
+
+    /// <summary>
+    /// Rebuilds the filtered partition list from <see cref="Partitions"/> and <see cref="SearchText"/>.
+    /// Entries are synced in place so entry identity and the current selection survive each keystroke.
+    /// <para>按 <see cref="Partitions"/> 与 <see cref="SearchText"/> 重建过滤后的分区列表。
+    /// 条目原地同步，条目对象与当前选中在每次键入时保持不变。</para>
+    /// </summary>
+    private void RefreshVisiblePartitions()
+    {
+        var filter = SearchText.Trim();
+        bool Matches(PartitionItemViewModel item) => filter.Length == 0
+            || item.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+            || (item.Group?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
+
+        // 原地同步而不是清空重建：保留条目对象与选中状态，TreeView 不会在每次键入时丢失选择。
+        // Sync in place instead of clearing: entry identity and the selection survive each keystroke.
+        for (var index = VisiblePartitions.Count - 1; index >= 0; index--)
+        {
+            if (!Matches(VisiblePartitions[index]))
+            {
+                VisiblePartitions.RemoveAt(index);
+            }
+        }
+
+        var cursor = 0;
+        foreach (var item in Partitions)
+        {
+            if (!Matches(item))
+            {
+                continue;
+            }
+
+            if (cursor >= VisiblePartitions.Count || !ReferenceEquals(VisiblePartitions[cursor], item))
+            {
+                var existing = VisiblePartitions.IndexOf(item);
+                if (existing >= 0)
+                {
+                    VisiblePartitions.Move(existing, cursor);
+                }
+                else
+                {
+                    VisiblePartitions.Insert(cursor, item);
+                }
+            }
+
+            cursor++;
+        }
+
+        OnPropertyChanged(nameof(HasNoSearchResult));
     }
 
     private void AddPartition()
@@ -1119,6 +1234,10 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
             MarkDirtyAndRefresh);
         Partitions.Add(added);
         PartitionCount = Partitions.Count;
+
+        // 新分区必须可见：先清掉搜索过滤，否则它会被过滤条件挡住而看不到选中效果。
+        // The new partition must be visible, so the filter is cleared before it is selected.
+        SearchText = string.Empty;
         SelectedPartition = added;
         MarkDirtyAndRefresh();
     }
@@ -1254,19 +1373,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     private static ulong SaturatingEnd(ulong start, ulong size) =>
         size > ulong.MaxValue - start ? ulong.MaxValue : start + size;
 
-    private static string FormatBytes(ulong bytes)
-    {
-        string[] units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
-        double value = bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
-    }
+    private static string FormatBytes(ulong bytes) => PartitionTableFormat.FormatBytes(bytes);
 }
 
 /// <summary>
@@ -1392,6 +1499,7 @@ public partial class PartitionItemViewModel : ObservableObject
 {
     private readonly PartitionEntry _entry;
     private readonly Action? _onChanged;
+    private bool _linking;
 
     /// <summary>
     /// Creates a partition-entry view model.
@@ -1408,10 +1516,23 @@ public partial class PartitionItemViewModel : ObservableObject
         _onChanged = onChanged;
         OriginalIndex = index;
         Group = group;
-        Name = entry.Name;
-        Start = PartitionTableFormat.FormatSectors(entry.StartSector);
-        Size = PartitionTableFormat.FormatSectors(entry.SizeSectors);
-        Type = entry.Type;
+
+        // 构造期间关闭联动：四个字段都要按原值写一遍，联动只会互相覆盖并额外触发变更回调。
+        // Linkage stays off while the four fields are seeded, so the pairs cannot overwrite each other.
+        _linking = true;
+        try
+        {
+            Name = entry.Name;
+            Start = PartitionTableFormat.FormatSectors(entry.StartSector);
+            Size = PartitionTableFormat.FormatSectors(entry.SizeSectors);
+            StartBytes = PartitionTableFormat.FormatBytes(entry.StartSector * (ulong)PartitionTableFormat.SectorSize);
+            SizeBytes = PartitionTableFormat.FormatBytes(entry.SizeSectors * (ulong)PartitionTableFormat.SectorSize);
+            Type = entry.Type;
+        }
+        finally
+        {
+            _linking = false;
+        }
     }
 
     /// <summary>
@@ -1436,18 +1557,92 @@ public partial class PartitionItemViewModel : ObservableObject
     partial void OnNameChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
-    /// The partition start display value (editable, 0x-hex).
-    /// <para>分区起始显示值（可编辑，0x 十六进制）。</para>
+    /// The partition start display value (editable, 0x-hex sector count).
+    /// <para>分区起始显示值（可编辑，0x 十六进制扇区数）。</para>
     /// </summary>
     [ObservableProperty] private string _start;
-    partial void OnStartChanged(string value) => _onChanged?.Invoke();
+    partial void OnStartChanged(string value)
+    {
+        if (_linking)
+        {
+            return;
+        }
+
+        if (PartitionTableFormat.TryParseSectors(value, out var sectors))
+        {
+            SetLinked(ref _linking, () =>
+                StartBytes = PartitionTableFormat.FormatBytes(sectors * (ulong)PartitionTableFormat.SectorSize));
+        }
+
+        _onChanged?.Invoke();
+    }
 
     /// <summary>
-    /// The partition size display value (editable, 0x-hex).
-    /// <para>分区大小显示值（可编辑，0x 十六进制）。</para>
+    /// The partition size display value (editable, 0x-hex sector count).
+    /// <para>分区大小显示值（可编辑，0x 十六进制扇区数）。</para>
     /// </summary>
     [ObservableProperty] private string _size;
-    partial void OnSizeChanged(string value) => _onChanged?.Invoke();
+    partial void OnSizeChanged(string value)
+    {
+        if (_linking)
+        {
+            return;
+        }
+
+        if (PartitionTableFormat.TryParseSectors(value, out var sectors))
+        {
+            SetLinked(ref _linking, () =>
+                SizeBytes = PartitionTableFormat.FormatBytes(sectors * (ulong)PartitionTableFormat.SectorSize));
+        }
+
+        _onChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The partition start in bytes, editable with a unit suffix (B/K/M/G/T, plain numbers are bytes);
+    /// writing it rewrites the sector field and the other way round.
+    /// <para>分区起始的字节表示，可带单位后缀（B/K/M/G/T，纯数字为字节）；
+    /// 写入它会同步改写扇区字段，反之亦然。</para>
+    /// </summary>
+    [ObservableProperty] private string _startBytes;
+    partial void OnStartBytesChanged(string value)
+    {
+        if (_linking)
+        {
+            return;
+        }
+
+        if (PartitionTableFormat.TryParseBytes(value, out var bytes))
+        {
+            SetLinked(ref _linking, () => Start = PartitionTableFormat.FormatSectors(
+                PartitionTableFormat.BytesToSectors(bytes)));
+        }
+
+        _onChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The partition size in bytes, editable with a unit suffix (B/K/M/G/T, plain numbers are bytes);
+    /// writing it rewrites the sector field and the other way round.
+    /// <para>分区大小的字节表示，可带单位后缀（B/K/M/G/T，纯数字为字节）；
+    /// 写入它会同步改写扇区字段，反之亦然。</para>
+    /// </summary>
+    [ObservableProperty] private string _sizeBytes;
+    partial void OnSizeBytesChanged(string value)
+    {
+        if (_linking)
+        {
+            return;
+        }
+
+        if (PartitionTableFormat.TryParseBytes(value, out var bytes))
+        {
+            SetLinked(ref _linking, () => Size = PartitionTableFormat.FormatSectors(
+                PartitionTableFormat.BytesToSectors(bytes)));
+        }
+
+        _onChanged?.Invoke();
+    }
 
     /// <summary>
     /// The partition type (editable; written back to the LP extent target type, display-only for Rockchip).
@@ -1455,6 +1650,24 @@ public partial class PartitionItemViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private string _type;
     partial void OnTypeChanged(string value) => _onChanged?.Invoke();
+
+    /// <summary>
+    /// Runs a two-way field synchronisation with the re-entrancy guard raised, so the linked field's own
+    /// handler does not echo the write back.
+    /// <para>在重入保护生效时执行一次双向字段同步，避免被联动字段的回调再次写回。</para>
+    /// </summary>
+    private static void SetLinked(ref bool linking, Action write)
+    {
+        linking = true;
+        try
+        {
+            write();
+        }
+        finally
+        {
+            linking = false;
+        }
+    }
 
     /// <summary>
     /// The parsed start sector (current value after a successful <see cref="TryApply"/>).
