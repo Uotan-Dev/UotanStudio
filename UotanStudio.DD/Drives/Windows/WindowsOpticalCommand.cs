@@ -9,14 +9,13 @@ namespace UotanStudio.DD.Drives.Windows;
 /// <para>通过 Windows 内置的 IMAPI2 COM 自动化对象完成光驱枚举与刻录。</para>
 /// </summary>
 /// <remarks>
-/// IMAPI2 is an operating-system component, so no third-party recorder library or executable is required.
-/// The scripts instantiate only Microsoft-published COM objects (<c>IMAPI2.MsftDiscMaster2</c>,
-/// <c>IMAPI2.MsftDiscRecorder2</c>, <c>IMAPI2.MsftDiscFormat2RawCD</c>) and create the source stream with
-/// <c>SHCreateStreamOnFileEx</c>. A tab character is used as the record separator, inserted with
-/// <c>[char]9</c> to keep the script free of escaping-sensitive sequences.
+/// ISO-9660 images are data streams with 2048-byte sectors and must be written through
+/// <c>IMAPI2.MsftDiscFormat2Data</c>, the same writer the Windows disc image burning tool uses. The
+/// <c>MsftDiscFormat2RawCD</c> writer is only for DAO-96 raw (2352-byte sector) images on blank CD-R/RW.
 /// <para>
-/// IMAPI2 是操作系统组件，无需第三方刻录库或可执行文件。脚本只实例化微软发布的 COM 对象，
-/// 并用 <c>SHCreateStreamOnFileEx</c> 创建源流。记录分隔符使用制表符，通过 <c>[char]9</c> 插入以避开转义敏感序列。
+/// ISO-9660 镜像是每扇区 2048 字节的数据流，必须通过 <c>IMAPI2.MsftDiscFormat2Data</c> 写入，
+/// 这也是 Windows 光盘镜像刻录工具使用的写入器。<c>MsftDiscFormat2RawCD</c> 只用于空白 CD-R/RW 上的
+/// DAO-96 raw（2352 字节扇区）镜像。
 /// </para>
 /// </remarks>
 internal static class WindowsOpticalCommand
@@ -24,8 +23,8 @@ internal static class WindowsOpticalCommand
     private const string PowerShell = "powershell.exe";
 
     /// <summary>
-    /// Builds the PowerShell script that lists optical recorders and their unique device identifiers.
-    /// <para>构建用于列出光驱及其唯一设备标识的 PowerShell 脚本。</para>
+    /// Builds the PowerShell script that lists optical recorders, their unique identifiers and media state.
+    /// <para>构建用于列出光驱、唯一标识与介质状态的 PowerShell 脚本。</para>
     /// </summary>
     /// <returns>The script text.<para>脚本文本。</para></returns>
     internal static string BuildListScript()
@@ -42,8 +41,19 @@ internal static class WindowsOpticalCommand
         s.AppendLine("  $product = [string]$recorder.ProductId");
         s.AppendLine("  $desc = ($vendor.Trim() + ' ' + $product.Trim()).Trim()");
         s.AppendLine("  if (-not $desc) { $desc = 'Optical Recorder ' + $i }");
-        s.AppendLine("  Write-Output ('RECORDER' + [char]9 + $id + [char]9 + $desc)");
+        s.AppendLine("  $mediaType = -1");
+        s.AppendLine("  $mediaState = -1");
+        s.AppendLine("  try {");
+        s.AppendLine("    $writer = New-Object -ComObject IMAPI2.MsftDiscFormat2Data");
+        s.AppendLine("    $writer.Recorder = $recorder");
+        s.AppendLine("    $mediaType = [int]$writer.CurrentPhysicalMediaType");
+        s.AppendLine("    $mediaState = [int]$writer.CurrentMediaStatus");
+        s.AppendLine("    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($writer)");
+        s.AppendLine("  } catch { }");
+        s.AppendLine("  Write-Output ('RECORDER' + [char]9 + $id + [char]9 + $desc + [char]9 + $mediaType + [char]9 + $mediaState)");
+        s.AppendLine("  [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($recorder)");
         s.AppendLine("}");
+        s.AppendLine("[void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($master)");
         return s.ToString();
     }
 
@@ -53,7 +63,7 @@ internal static class WindowsOpticalCommand
     /// </summary>
     /// <param name="deviceId">Unique IMAPI2 recorder identifier.<para>IMAPI2 刻录机唯一标识。</para></param>
     /// <param name="imagePath">Absolute path of the ISO image.<para>ISO 镜像的绝对路径。</para></param>
-    /// <param name="closeSession">Whether to close the disc session.<para>是否关闭光盘会话。</para></param>
+    /// <param name="closeSession">Whether to finalise the disc session.<para>是否结束光盘会话。</para></param>
     /// <returns>The script text.<para>脚本文本。</para></returns>
     internal static string BuildBurnScript(string deviceId, string imagePath, bool closeSession)
     {
@@ -70,22 +80,22 @@ internal static class WindowsOpticalCommand
         s.AppendLine("'@");
         s.AppendLine("$recorder = New-Object -ComObject IMAPI2.MsftDiscRecorder2");
         s.AppendLine("$recorder.InitializeDiscRecorder(" + Quote(deviceId) + ")");
-        s.AppendLine("$writer = New-Object -ComObject IMAPI2.MsftDiscFormat2RawCD");
+        s.AppendLine("$writer = New-Object -ComObject IMAPI2.MsftDiscFormat2Data");
         s.AppendLine("$writer.Recorder = $recorder");
         s.AppendLine("$writer.ClientName = 'UotanStudio'");
+        s.AppendLine("$writer.ForceMediaToBeClosed = " + (closeSession ? "$true" : "$false"));
         s.AppendLine("$stream = $null");
         s.AppendLine("[UotanOpticalStream]::SHCreateStreamOnFileEx(" + Quote(imagePath) + ", 0, 0, $false, [IntPtr]::Zero, [ref]$stream)");
         s.AppendLine("try {");
-        s.AppendLine("  $writer.PrepareMedia()");
-        s.AppendLine("  $writer.WriteMedia($stream)");
-        if (closeSession)
-        {
-            s.AppendLine("  $writer.ReleaseMedia()");
-        }
-
+        s.AppendLine("  $writer.Write($stream)");
         s.AppendLine("  Write-Output 'BURN_OK'");
+        s.AppendLine("} catch {");
+        s.AppendLine("  try { $writer.CancelWrite() } catch { }");
+        s.AppendLine("  throw");
         s.AppendLine("} finally {");
         s.AppendLine("  if ($stream -ne $null) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($stream) }");
+        s.AppendLine("  [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($writer)");
+        s.AppendLine("  [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($recorder)");
         s.AppendLine("}");
         return s.ToString();
     }
@@ -145,8 +155,8 @@ internal static class WindowsOpticalCommand
         if (process.ExitCode != 0)
         {
             throw new FlashException(
-                "The Windows optical disc command failed with exit code " +
-                process.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) + ": " + error.Trim());
+                "The Windows optical disc command failed with exit code "
+                + process.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) + ": " + error.Trim());
         }
 
         return output;

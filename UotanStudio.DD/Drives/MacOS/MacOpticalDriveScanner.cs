@@ -1,9 +1,17 @@
 namespace UotanStudio.DD.Drives.MacOS;
 
 /// <summary>
-/// Enumerates optical recorders on macOS through <c>drutil list</c> and <c>drutil status</c>.
-/// <para>在 macOS 上通过 <c>drutil list</c> 与 <c>drutil status</c> 枚举光驱。</para>
+/// Enumerates optical recorders on macOS through <c>drutil list -xml</c> and <c>drutil -drive N status -xml</c>.
+/// <para>在 macOS 上通过 <c>drutil list -xml</c> 与 <c>drutil -drive N status -xml</c> 枚举光驱。</para>
 /// </summary>
+/// <remarks>
+/// A recorder is always reported, even without media, so the caller can distinguish "no recorder attached"
+/// from "recorder attached but no disc loaded". <see cref="FlashDrive.IsDiscWritable"/> carries the media state.
+/// <para>
+/// 即便没有介质也始终上报刻录机，便于调用方区分“没有接刻录机”与“接着刻录机但没放光盘”；
+/// 介质状态由 <see cref="FlashDrive.IsDiscWritable"/> 承载。
+/// </para>
+/// </remarks>
 internal sealed class MacOpticalDriveScanner : IDriveScanner
 {
     /// <inheritdoc />
@@ -14,7 +22,7 @@ internal sealed class MacOpticalDriveScanner : IDriveScanner
         try
         {
             listing = await MacCommand
-                .RunAsync(MacOpticalDevice.DrutilPath, ["list"], cancellationToken)
+                .RunAsync(MacOpticalDevice.DrutilPath, ["list", "-xml"], cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (FlashException)
@@ -23,20 +31,14 @@ internal sealed class MacOpticalDriveScanner : IDriveScanner
         }
 
         var drives = new List<FlashDrive>();
-        var index = 0;
-        foreach (var line in listing.Split('\n'))
+        foreach (var (index, name, description) in MacOpticalDevice.ParseList(listing))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!MacOpticalDevice.TryParse(line, out var name, out var description))
-            {
-                continue;
-            }
-
             var (format, writable) = await ReadStatusAsync(index, cancellationToken).ConfigureAwait(false);
             drives.Add(new FlashDrive
             {
-                DevicePath = "/dev/r" + name,
-                DisplayName = description.Length > 0 ? description : name,
+                DevicePath = name,
+                DisplayName = description,
                 Size = 0,
                 IsRemovable = true,
                 IsReadOnly = false,
@@ -47,7 +49,6 @@ internal sealed class MacOpticalDriveScanner : IDriveScanner
                 DiscFormat = format,
                 IsDiscWritable = writable,
             });
-            index++;
         }
 
         return drives;
@@ -62,17 +63,10 @@ internal sealed class MacOpticalDriveScanner : IDriveScanner
             var status = await MacCommand
                 .RunAsync(
                     MacOpticalDevice.DrutilPath,
-                    ["status", "-device", deviceIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+                    MacOpticalDevice.StatusArguments(deviceIndex),
                     cancellationToken)
                 .ConfigureAwait(false);
-            var format = status.Contains("BD-", StringComparison.OrdinalIgnoreCase) ? OpticalDiscFormat.BluRay
-                : status.Contains("DVD", StringComparison.OrdinalIgnoreCase) ? OpticalDiscFormat.Dvd
-                : status.Contains("CD-", StringComparison.OrdinalIgnoreCase) ? OpticalDiscFormat.Cd
-                : OpticalDiscFormat.Unknown;
-            var writable = status.Contains("writable", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("blank", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("recordable", StringComparison.OrdinalIgnoreCase);
-            return (format, writable);
+            return MacOpticalDevice.ParseStatus(status);
         }
         catch (FlashException)
         {

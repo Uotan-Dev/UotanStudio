@@ -36,6 +36,18 @@
 
 真实磁盘写入需要管理员/root 权限；未执行的原生挂载与真实介质验证不得写成已通过。
 
+### 光盘刻录调用契约
+
+| 平台 | 枚举 | 刻录 |
+| --- | --- | --- |
+| Windows | IMAPI2 `MsftDiscMaster2` + `MsftDiscFormat2Data` 的 `CurrentPhysicalMediaType`/`CurrentMediaStatus` | `MsftDiscFormat2Data.Write(stream)` + `ForceMediaToBeClosed`；ISO 为 2048 字节/扇区，绝不用只收空白 CD-R/RW 的 `MsftDiscFormat2RawCD` |
+| Linux | `/sys/class/block/sr*` + `/proc/sys/dev/cdrom/info`（`Can write CD-R:` 等真实字段）作能力，`udevadm info` 作介质状态 | `xorriso -as cdrecord -v -eject dev=/dev/srN blank=as_needed [-multi] <iso>`；`closeSession=false` 用 `-multi` |
+| macOS | `drutil list -xml`（`index`/`vendor`/`product`，`index` 即 1 基序号），`drutil -drive N status -xml` 的 `deviceStatus`（`mediaInfo` 下的 `blank`/`appendable`/`overwritable`/`erasable`、`mediaClass`、`mediaType`、`discInfoBlock.discType`） | `drutil -drive N burn [-appendable] -eject <iso>`；`-drive` 为 1 基且必须写在动词前，不存在 `-device`，序号原样取自 `list -xml`，不做 `+1` |
+
+`<iso>` 在刻录前必须通过 `IsoImageValidator`：长度是 2048 的倍数、LBA 16 含 `CD001` 主卷描述符，否则在创建写入器前抛出。
+
+macOS 契约已在真实主机（macOS 27.3 arm64、ASUS SBW-06D2X-U、未插盘）上实测：`drutil help driveselect` 与 `drutil help burn` 明确 `-drive` 取 1 基序号，且 `drutil list -xml` 的 `device` 元素本身从 `index="1"` 起编号；`drutil -drive 1 status` 返回 0 而 `-drive 0`/`-drive 2` 均报 “Could not find a valid device”（退出码 1）。两种 XML 输出都带内部子集缺根元素名的 `DOCTYPE`，严格解析器会拒绝，扫描器与写入器解析前先剥离文件序言。Windows 与 Debian 主机的 CLI/API 契约按上述形态对齐官方文档，未执行真实烧录；三台主机均未执行过真实光盘刻录。
+
 ## 已知限制
 
 - Windows 只自动锁定 `<盘符>:\` 形式的挂载点；目录挂载点会直接拒绝并要求手动卸载。
@@ -43,6 +55,10 @@
 - 压缩流的解压后大小未知，容量检查按磁盘上的文件大小估算；写阶段的百分比可能为空，校验阶段仍提供百分比与剩余时间。
 - ZIP 镜像必须恰好包含一个文件条目，多条目归档直接拒绝。
 - 不支持 `.dmg` 与 `.etch` 容器。
+- Linux 光驱介质可写性依赖 `udevadm info`（`ID_CDROM_MEDIA_*`）；无 udev 或无法判定时 `IsDiscWritable=false`，拒绝刻录而不冒险写盘。
+- 光盘刻录按会话写入，不提供裸设备逐字节回读校验；启用写入器默认的设备端校验（macOS `drutil burn` 默认 verify、Windows IMAPI2 内建）。
+- macOS 只能按 1 基序号选中刻录机：`drutil` 没有 `-device`，序号之外的稳定标识（`drutil info -xml` 的 `serialNumber`/`ioRegistryEntryPath`）无法传给 `burn`。扫描与刻录前都会重新解析 `list -xml`，但枚举顺序若发生变化仍可能指向另一台刻录机。
+- macOS 用 `drutil:index`（即 1 基序号）标识刻录机，扫描与刻录前都重新解析 `list -xml`，避免光驱重新枚举后按过期序号烧错设备。
 
 ## 验证命令
 

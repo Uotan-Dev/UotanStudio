@@ -39,6 +39,10 @@ internal sealed class WindowsOpticalDriveScanner : IDriveScanner
 
             var id = fields[1];
             var description = fields[2];
+            var mediaType = fields.Length > 3 && int.TryParse(fields[3], out var type) ? type : -1;
+            var mediaState = fields.Length > 4 && int.TryParse(fields[4], out var state) ? state : -1;
+            var format = MediaTypeToFormat(mediaType);
+            var writable = IsWritableMedia(mediaType) && IsWritableState(mediaState);
             drives.Add(new FlashDrive
             {
                 DevicePath = id,
@@ -50,11 +54,34 @@ internal sealed class WindowsOpticalDriveScanner : IDriveScanner
                 Description = description,
                 MountPoints = [],
                 MediaKind = FlashMediaKind.OpticalDisc,
-                DiscFormat = OpticalDiscFormat.Unknown,
-                IsDiscWritable = false,
+                DiscFormat = format,
+                IsDiscWritable = writable,
             });
         }
 
         return drives;
+    }
+
+    private static OpticalDiscFormat MediaTypeToFormat(int mediaType) => mediaType switch
+    {
+        1 or 2 or 3 => OpticalDiscFormat.Cd,
+        >= 4 and <= 13 => OpticalDiscFormat.Dvd,
+        0x11 or 0x12 or 0x13 => OpticalDiscFormat.BluRay,
+        _ => OpticalDiscFormat.Unknown,
+    };
+
+    private static bool IsWritableMedia(int mediaType) => mediaType switch
+    {
+        2 or 3 => true,
+        >= 5 and <= 13 => true,
+        0x12 or 0x13 => true,
+        _ => false,
+    };
+
+    private static bool IsWritableState(int mediaState)
+    {
+        const int errorMask = 0xFC00;
+        const int writableBits = 0x1 | 0x2 | 0x4;
+        return (mediaState & errorMask) == 0 && (mediaState & writableBits) != 0;
     }
 }
