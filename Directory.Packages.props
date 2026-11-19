@@ -82,6 +82,8 @@
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <!-- Text diffing (line-level diff for the compare services) -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
+    <PackageVersion Include="SSH.NET" Version="2026.0.1" />
+    <PackageVersion Include="FluentFTP" Version="55.1.0" />
     <!-- FAT12/FAT16/FAT32 and exFAT volume implementation (pure managed, net11.0 target, trimming/NativeAOT friendly). -->
     <PackageVersion Include="LTRData.DiscUtils.Fat" Version="1.0.91" />
     <PackageVersion Include="LTRData.DiscUtils.ExFat" Version="1.0.91" />

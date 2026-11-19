@@ -694,6 +694,13 @@ public sealed class RemoteConnectionProfile
     [JsonPropertyName("isAnonymous")]
     public bool IsAnonymous { get; set; }
 
+    /// <summary>
+    /// Initial remote directory the multi-column browser opens for this profile; empty means the server root.
+    /// <para>多列文件浏览器为该档案打开的初始远程目录；为空表示服务器根目录。</para>
+    /// </summary>
+    [JsonPropertyName("initialPath")]
+    public string InitialPath { get; set; } = string.Empty;
+
     /// <summary>Last connected time in ISO 8601 string format.<para>上次连接时间。</para></summary>
     [JsonPropertyName("lastConnected")]
     public DateTimeOffset? LastConnected { get; set; }
@@ -709,6 +716,7 @@ public sealed class RemoteConnectionProfile
         Username = Username,
         Password = Password,
         IsAnonymous = IsAnonymous,
+        InitialPath = InitialPath,
         LastConnected = LastConnected
     };
 }

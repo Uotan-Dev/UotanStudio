@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services.Compare;
+using UotanStudio.Services.Remote;
 
 namespace UotanStudio.ViewModels.Compare;
 
@@ -65,6 +66,49 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         return new CompareTreeNodeViewModel(
             name, fullPath, string.Empty, isDirectory, status: null,
             leftName: name, rightName: string.Empty, leftSize: size, rightSize: -1,
+            childrenLoaded: false, cancellationToken, childrenLoader);
+    }
+
+    /// <summary>
+    /// Creates the root node of a remote browsing tree: children are enumerated through the provided loader
+    /// delegate, so the node never touches the local disk.
+    /// <para>创建远程浏览树的根节点：子项通过提供的加载委托枚举，节点不会访问本地磁盘。</para>
+    /// </summary>
+    /// <param name="name">Node display name.<para>节点显示名称。</para></param>
+    /// <param name="fullPath">Absolute remote directory path ('/'-separated).<para>远程目录绝对路径（'/' 分隔）。</para></param>
+    /// <param name="childrenLoader">Asynchronous remote children loader delegate.<para>异步远程子项加载委托。</para></param>
+    /// <param name="cancellationToken">The owning column's load token.<para>所属列的加载令牌。</para></param>
+    /// <returns>The created remote root node.<para>创建的远程根节点。</para></returns>
+    public static CompareTreeNodeViewModel ForRemote(
+        string name,
+        string fullPath,
+        Func<CompareTreeNodeViewModel, CancellationToken, Task<IReadOnlyList<CompareTreeNodeViewModel>>> childrenLoader,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(childrenLoader);
+        return new CompareTreeNodeViewModel(
+            name, fullPath, string.Empty, isDirectory: true, status: null,
+            leftName: name, rightName: string.Empty, leftSize: -1, rightSize: -1,
+            childrenLoaded: false, cancellationToken, childrenLoader);
+    }
+
+    /// <summary>
+    /// Creates one remote entry node: directories carry the lazy loader, files terminate the tree.
+    /// <para>创建一个远程条目节点：目录节点带惰性加载器，文件节点作为树的叶子。</para>
+    /// </summary>
+    /// <param name="entry">The enumerated remote entry.<para>已枚举的远程条目。</para></param>
+    /// <param name="childrenLoader">Children loader for a directory; null for a file.<para>目录的子项加载器；文件为 null。</para></param>
+    /// <param name="cancellationToken">The owning column's load token.<para>所属列的加载令牌。</para></param>
+    /// <returns>The created remote entry node.<para>创建的远程条目节点。</para></returns>
+    public static CompareTreeNodeViewModel ForRemoteEntry(
+        RemoteFileEntry entry,
+        Func<CompareTreeNodeViewModel, CancellationToken, Task<IReadOnlyList<CompareTreeNodeViewModel>>>? childrenLoader,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return new CompareTreeNodeViewModel(
+            entry.Name, entry.FullPath, string.Empty, entry.IsDirectory, status: null,
+            leftName: entry.Name, rightName: string.Empty, leftSize: entry.Size, rightSize: -1,
             childrenLoaded: false, cancellationToken, childrenLoader);
     }
 

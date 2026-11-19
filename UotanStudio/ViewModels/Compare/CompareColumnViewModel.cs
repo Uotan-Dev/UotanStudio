@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;using Avalonia.Controls;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using UotanStudio.Services;using UotanStudio.Services.Devices;
+using System.Collections.ObjectModel;using Avalonia.Controls;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using UotanStudio.Services;using UotanStudio.Services.Devices;using UotanStudio.Services.Remote;
 
 namespace UotanStudio.ViewModels.Compare;
 
@@ -313,6 +313,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        if (IsRemoteColumn && RemoteTarget is { } remoteProfile)
+        {
+            await LoadRemotePathAsync(remoteProfile, path);
+            return;
+        }
+
         var isDirectory = Directory.Exists(path);
         if (!isDirectory && !File.Exists(path))
         {
@@ -351,6 +357,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        if (IsRemoteColumn)
+        {
+            await ReloadRemoteContentAsync();
+            return;
+        }
+
         await LoadPathAsync(path, Directory.Exists(path));
     }
 
@@ -379,6 +391,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         {
             var parentPath = DeviceFileSystemService.GetParentPath(path);
             await LoadDevicePathAsync(device, parentPath);
+            return;
+        }
+
+        if (IsRemoteColumn && RemoteTarget is { } remoteProfile)
+        {
+            await LoadRemotePathAsync(remoteProfile, RemoteFileSystemService.GetParentPath(path));
             return;
         }
 
@@ -726,6 +744,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        if (IsRemoteColumn && RemoteTarget is { } remoteProfile)
+        {
+            await LoadRemotePathAsync(remoteProfile, node.FullPath);
+            return;
+        }
+
         if (!Directory.Exists(node.FullPath))
         {
             return;
@@ -918,6 +942,9 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     internal void ClearContent()
     {
         BeginLoad();
+        DisposeRemoteSession();
+        RemoteTarget = null;
+        OnPropertyChanged(nameof(IsRemoteColumn));
         TreeRoot = null;
         _ownRows = null;
         _isDirty = false;
@@ -947,6 +974,12 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             return;
         }
 
+        if (IsRemoteColumn)
+        {
+            await ReloadRemoteContentAsync();
+            return;
+        }
+
         await LoadPathAsync(path, Directory.Exists(path));
     }
 
@@ -961,6 +994,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
         _treeExpansionLock.Dispose();
         (Rows as IDisposable)?.Dispose();
         ClearBrowseHex();
+        DisposeRemoteSession();
     }
 
     /// <summary>

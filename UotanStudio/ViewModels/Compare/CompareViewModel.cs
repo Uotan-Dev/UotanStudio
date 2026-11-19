@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;using System.Collections.Specialized;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using CommunityToolkit.Mvvm.Messaging;using Dock.Model.Controls;using Dock.Model.Mvvm.Controls;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Compare;using UotanStudio.Services.Devices;
+using System.Collections.ObjectModel;using System.Collections.Specialized;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using CommunityToolkit.Mvvm.Messaging;using Dock.Model.Controls;using Dock.Model.Mvvm.Controls;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Compare;using UotanStudio.Services.Devices;using UotanStudio.Services.Remote;
 
 namespace UotanStudio.ViewModels.Compare;
 
@@ -595,6 +595,34 @@ public sealed partial class CompareViewModel : Document, ITool
     /// 并按其类型显示目录树或文件内容（不做对比）。</para>
     /// </summary>
     /// <param name="path">The selected file or directory path. <para>选中的文件或目录路径。</para></param>
+    /// <summary>
+    /// Adds a device path column to the multi-column browser.
+    /// <para>向多列文件浏览器添加设备路径列。</para>
+    /// </summary>
+    /// <param name="device">Target device.<para>目标设备。</para></param>
+    /// <param name="remotePath">Optional remote directory path.<para>可选远程目录路径。</para></param>
+    /// <summary>
+    /// Adds a remote file column to the multi-column browser: the column browses the profile's server and
+    /// loads its initial directory (no comparison is started).
+    /// <para>向多列文件浏览器添加远程文件列：该列浏览配置档案对应的服务器并加载其初始目录（不启动对比）。</para>
+    /// </summary>
+    /// <param name="profile">The connection profile produced by the remote connection window.<para>远程连接窗口产生的连接配置档案。</para></param>
+    /// <param name="remotePath">Optional remote directory path; empty uses the profile's initial path.<para>可选远程目录路径；为空时使用档案的初始路径。</para></param>
+    /// <returns>Whether the column was added.<para>是否成功添加该列。</para></returns>
+    public async Task<bool> AddRemotePathAsync(RemoteConnectionProfile profile, string? remotePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (IsComparing)
+        {
+            ReportError(LanguageService.Instance.GetString("Compare_AddColumnWhileComparing"));
+            return false;
+        }
+
+        var column = ReserveColumn();
+        await column.LoadRemotePathAsync(profile, remotePath);
+        return true;
+    }
+
     /// <summary>
     /// Adds a device path column to the multi-column browser.
     /// <para>向多列文件浏览器添加设备路径列。</para>

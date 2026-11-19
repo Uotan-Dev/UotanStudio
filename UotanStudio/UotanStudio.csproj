@@ -90,6 +90,10 @@
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
+    <!-- Remote file browsing (multi-column browser "Remote Files"): SFTP/SCP over SSH.NET, FTP/FTPS over FluentFTP.
+         WebDAV uses HttpClient only: no WebDAV package is trim/AOT clean enough for the NativeAOT gate. -->
+    <PackageReference Include="SSH.NET" />
+    <PackageReference Include="FluentFTP" />
     <!-- Image viewer: the facade sniffs magic bytes and dispatches to these per-format decoders.
          HEIF is not part of the facade and is registered explicitly by ImageFileCatalog. -->
     <PackageReference Include="Sdcb.SimdCodecs" />
