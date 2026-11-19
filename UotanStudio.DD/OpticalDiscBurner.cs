@@ -57,6 +57,8 @@ public sealed class OpticalDiscBurner
             throw new FlashValidationException([new DriveValidationFailure(drive, blocking)]);
         }
 
+        Images.IsoImageValidator.Validate(session.ImagePath);
+
         var writer = _writerFactory.Create(drive);
         await writer.WriteAsync(session, progress, cancellationToken).ConfigureAwait(false);
     }
