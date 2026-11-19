@@ -76,8 +76,8 @@ internal sealed class CommDeviceTransportOpener(
     /// </summary>
     private const int NativeOpenRetryDelayMs = 250;
 
-    /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> or <c>unisoc</c> endpoint whose device was bound as a COM port falls back to that serial port.
-    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 或 <c>unisoc</c> 端点回退到该串口。</para></summary>
+    /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c>, <c>unisoc</c> or <c>mtk</c> endpoint whose device was bound as a COM port falls back to that serial port.
+    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c>、<c>unisoc</c> 或 <c>mtk</c> 端点回退到该串口。</para></summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
     /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
     /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own bounded socket timeouts.
@@ -124,6 +124,24 @@ internal sealed class CommDeviceTransportOpener(
                         return new OwnedDeviceTransport<SerialTransport>(serial);
                     }
                 }
+                else if (string.Equals(endpoint.Protocol, "mtk", StringComparison.OrdinalIgnoreCase))
+                {
+                    // A MediaTek preloader bound to its VCOM serial driver exposes a COM port instead of a
+                    // WinUSB interface; the boot protocol runs unchanged over that pipe, so the MTK lease
+                    // falls back to it exactly like the EDL and UNISOC paths do.
+                    // 绑定到联发科 VCOM 串口驱动的 preloader 暴露的是 COM 口而不是 WinUSB 接口；boot 协议在
+                    // 该管道上原样运行，因此 MTK 租约与 EDL、UNISOC 路径一样回退到它。
+                    var serial = MtkSerialPortFallback.TryOpenConnected(usb.Path);
+                    if (serial is not null)
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            serial.Dispose();
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                        return new OwnedDeviceTransport<SerialTransport>(serial);
+                    }
+                }
                 else if (string.Equals(endpoint.Protocol, "sunxi", StringComparison.OrdinalIgnoreCase))
                 {
                     // A device bound to Allwinner's legacy AWUSB driver (USBDrv / usbUDisc) exposes no WinUSB
@@ -152,7 +170,7 @@ internal sealed class CommDeviceTransportOpener(
                 else
                 {
                     UsbTrace.LogFormatted(
-                        $"Serial fallback skipped for the '{endpoint.Protocol}' endpoint at '{usb.Path}'; only 'edl' and 'unisoc' endpoints may fall back to a serial port.");
+                        $"Serial fallback skipped for the '{endpoint.Protocol}' endpoint at '{usb.Path}'; only 'edl', 'unisoc' and 'mtk' endpoints may fall back to a serial port.");
                 }
                 throw new IOException(DescribeUnopenableEndpoint(endpoint, usb));
             }

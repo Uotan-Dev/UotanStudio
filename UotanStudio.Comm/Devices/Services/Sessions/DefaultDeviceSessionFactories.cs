@@ -273,6 +273,20 @@ internal sealed class TegraDeviceSessionFactory : IDeviceSessionFactory
     }
 }
 
+/// <summary>
+/// Builds an MTK boot-protocol session over the leased USB command interface or, when the preloader is
+/// bound to its VCOM serial driver, over the leased serial port.
+/// <para>在已租用的 USB 命令接口之上构建 MTK 启动协议会话；当 preloader 绑定到其 VCOM 串口驱动时，则在
+/// 已租用的串口之上构建。</para>
+/// </summary>
+/// <remarks>
+/// The serial shape carries no USB descriptors, so the descriptor-level stage classification and command
+/// interface selection cannot run and are deliberately skipped: identity comes from the boot handshake
+/// itself. The USB shape keeps both guards, because an ambiguous or logging-only interface must never
+/// receive MTK commands.
+/// <para>串口形态不携带 USB 描述符，因此描述符级阶段分类与命令接口选择无法进行、被有意跳过：身份来自
+/// 启动握手本身。USB 形态保留两道守卫，因为歧义或仅日志接口绝不能收到联科命令。</para>
+/// </remarks>
 internal sealed class MtkDeviceSessionFactory : IDeviceSessionFactory
 {
     public DeviceSessionKind Kind => DeviceSessionKind.Mtk;
@@ -281,6 +295,22 @@ internal sealed class MtkDeviceSessionFactory : IDeviceSessionFactory
     {
         cancellationToken.ThrowIfCancellationRequested();
         LeasedTransport.RequireProtocol(endpoint, "mtk");
+        if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
+        {
+            var serialSession = new MtkSession(serial);
+            // The serial shape carries no live descriptors, but discovery already observed this endpoint's USB
+            // identity. Recording it is what selects the relaxed handshake the preloader ports need; without it
+            // every serial lease would be forced onto the strict Boot ROM path and fail all of its retries.
+            // 串口形态没有实时描述符，但发现层已观测到该端点的 USB 身份。记录它正是选择 preloader 端口所需宽松
+            // 握手的依据；缺少它会让每次串口租约都被迫走严格 Boot ROM 路径，并在全部重试中失败。
+            if (endpoint.Usb is { } usbDetails)
+            {
+                serialSession.NoteUsbIdentity(usbDetails.VendorId, usbDetails.ProductId);
+            }
+
+            return Task.FromResult<object>(serialSession);
+        }
+
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         var classification = MtkModeClassifier.Classify(usb.DeviceInfo);
         if (classification.Mode == MtkUsbMode.LoggingOnly)
