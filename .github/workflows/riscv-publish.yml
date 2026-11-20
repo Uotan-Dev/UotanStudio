@@ -43,6 +43,10 @@ jobs:
     # publish itself is expected to take tens of minutes; the ceiling only covers the
     # first run, which also builds the cross JIT from source.
     timeout-minutes: 360
+    # actions: read is required to pull the cross JIT artifact from an earlier run.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -260,12 +264,41 @@ jobs:
       # The cache is written by its post-step, which does not run when a job is cancelled by
       # a timeout, so a run cut off mid-build leaves nothing behind. Pull a previously
       # uploaded artifact as a fallback so the expensive build only has to succeed once.
+      #
+      # download-artifact@v4 only searches the *current* run unless run-id is given, and the
+      # upload step has not executed yet at this point, so it always reported "Artifact not
+      # found" and the fallback never worked. Walk the earlier runs of this workflow instead.
       - name: Restore cross JIT artifact
-        uses: actions/download-artifact@v4
+        id: jit_artifact
         continue-on-error: true
-        with:
-          name: riscv64-crossjit
-          path: ${{ runner.temp }}/riscv/crossjit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/riscv/crossjit"
+          jit="$dest/libclrjit_unix_riscv64_x64.so"
+          if [ -f "$jit" ]; then
+            echo "Cross JIT already restored from cache."
+            exit 0
+          fi
+          mkdir -p "$dest"
+          tmp=$(mktemp -d)
+          while read -r run_id; do
+            [ -n "$run_id" ] || continue
+            [ "$run_id" != "$GITHUB_RUN_ID" ] || continue
+            rm -rf "${tmp:?}"
+            mkdir -p "$tmp"
+            if gh run download "$run_id" -n riscv64-crossjit -D "$tmp" 2>/dev/null; then
+              found=$(find "$tmp" -name 'libclrjit_unix_riscv64_x64.so' -print -quit)
+              if [ -n "$found" ]; then
+                cp "$found" "$jit"
+                echo "Cross JIT restored from run $run_id."
+                exit 0
+              fi
+            fi
+          done < <(gh run list --workflow "${{ github.workflow }}" --limit 15 \
+                     --json databaseId --jq '.[].databaseId')
+          echo "No earlier run provided the cross JIT artifact; it will be built now."
 
       - name: Build riscv64 cross JIT (first run only)
         shell: bash
@@ -332,7 +365,7 @@ jobs:
       # job outright and no later step runs, so this only makes the *next* run cheap.
       - name: Upload cross JIT
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: riscv64-crossjit
           path: ${{ runner.temp }}/riscv/crossjit/libclrjit_unix_riscv64_x64.so
