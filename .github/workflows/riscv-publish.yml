@@ -312,7 +312,9 @@ jobs:
             exit 1
           fi
           file "$built"
-          nm -D "$built" | grep -qE ' getJit$' || {
+          # getJit is exported with a version suffix (getJit@@V1.0), so do not anchor the
+          # match at the end of the line.
+          nm -D "$built" | grep -qE ' getJit(@@|$)' || {
             echo "::error::Built JIT does not export getJit." >&2
             exit 1
           }
