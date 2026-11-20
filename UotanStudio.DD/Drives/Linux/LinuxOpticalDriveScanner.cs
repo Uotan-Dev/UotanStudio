@@ -167,6 +167,16 @@ internal sealed class LinuxOpticalDriveScanner : IDriveScanner
         return result;
     }
 
+    /// <summary>
+    /// Re-reads the udev media state of one device immediately before recording.
+    /// <para>在刻录前重读一个设备的 udev 介质状态。</para>
+    /// </summary>
+    /// <param name="devicePath">Device node such as <c>/dev/sr0</c>.<para>设备节点，例如 <c>/dev/sr0</c>。</para></param>
+    /// <param name="cancellationToken">Cancels the query.<para>取消查询。</para></param>
+    internal static Task<(OpticalDiscFormat Format, bool Writable)> ConfirmMediaStateAsync(
+        string devicePath,
+        CancellationToken cancellationToken) => ReadMediaStateAsync(devicePath, cancellationToken);
+
     private static async Task<(OpticalDiscFormat Format, bool Writable)> ReadMediaStateAsync(
         string devicePath,
         CancellationToken cancellationToken)
