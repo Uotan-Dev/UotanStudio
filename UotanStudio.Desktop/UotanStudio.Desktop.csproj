@@ -4,8 +4,13 @@
        (NativeAOT included); the version tracks upstream development and needs periodic NuGet checks. -->
   <Sdk Name="PublishWithSatoriGC" Version="11.0.0-satori.42242472725.2" />
   <!-- riscv64 与 loongarch64 没有 Satori 运行时包：这些 RID 回落到默认 GC。
-       riscv64 and loongarch64 have no Satori runtime packs: these RIDs fall back to the default GC. -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.Contains('riscv64')) or $(RuntimeIdentifier.Contains('loongarch64')))">
+       restore 的外层求值只有 RuntimeIdentifiers（复数），RuntimeIdentifier 为空，所以两种形式都要判断，
+       否则 Satori SDK 会为不存在的 AotSdk/AotTools.linux-riscv64 添加包引用并导致 NU1101。
+       riscv64 and loongarch64 have no Satori runtime packs: these RIDs fall back to the default GC.
+       The outer restore evaluation only populates RuntimeIdentifiers, so both spellings must be
+       checked; otherwise the Satori SDK adds package references for the non-existent
+       AotSdk/AotTools.linux-riscv64 packs and restore fails with NU1101. -->
+  <PropertyGroup Condition="($(RuntimeIdentifier.Contains('riscv64')) or $(RuntimeIdentifier.Contains('loongarch64')) or $(RuntimeIdentifiers.Contains('riscv64')) or $(RuntimeIdentifiers.Contains('loongarch64')))">
     <UseSatoriGC>false</UseSatoriGC>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
