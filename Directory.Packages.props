@@ -4,8 +4,6 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Avalonia packages -->
-    <!-- Important: keep version in sync! -->
     <PackageVersion Include="Avalonia" Version="12.1.6" />
     <PackageVersion Include="Avalonia.Skia" Version="12.1.6" />
     <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
@@ -28,7 +26,6 @@
     <PackageVersion Include="Irihi.Iconica.TDesign" Version="1.1.0" />
     <PackageVersion Include="Irihi.Ursa" Version="2.3.1" />
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.3.1" />
-    <!-- Irihi.Lingua i18n source generator: turns Locale/*.resx into strongly-typed reactive managers. -->
     <PackageVersion Include="Irihi.Lingua" Version="1.1.0" />
     <PackageVersion Include="Sdcb.SimdCodecs" Version="2.0.0" />
     <PackageVersion Include="Sdcb.SimdCodecs.Abstractions" Version="2.0.0" />
@@ -46,12 +43,11 @@
     <PackageVersion Include="Sdcb.SimdCodecs.Qoi" Version="2.0.0" />
     <PackageVersion Include="Sdcb.SimdCodecs.Tiff" Version="2.0.0" />
     <PackageVersion Include="Sdcb.SimdCodecs.Webp" Version="2.0.0" />
-    <PackageVersion Include="Semi.Avalonia" Version="12.1.0.1" />
+    <PackageVersion Include="Semi.Avalonia" Version="12.1.0.2" />
     <PackageVersion Include="Semi.Avalonia.AvaloniaEdit" Version="12.0.0" />
-    <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.1" />
+    <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.2" />
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
-    <!-- Device communication packages -->
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="SkiaSharp" Version="4.157.0" />
@@ -62,12 +58,8 @@
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.200" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="14.4.0.200" />
     <PackageVersion Include="System.IO.Ports" Version="11.0.0" />
-    <!-- QR code generation for the wireless-debugging pairing popup (pure managed PNG writer). -->
-    <PackageVersion Include="QRCoder" Version="1.8.1" />
-    <!-- UotanStudio.Firmware third-party dependencies -->
-    <!-- Zero-allocation LINQ over arrays, lists and spans for per-item firmware/metadata loops (source-generated, AOT-safe). -->
+    <PackageVersion Include="QRCoder" Version="1.9.0" />
     <PackageVersion Include="ZLinq" Version="1.6.1" />
-    <!-- UTF-8 string interpolation handler for protocol frames that are encoded straight to bytes. -->
     <PackageVersion Include="BsDiff" Version="1.1.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
@@ -77,20 +69,15 @@
     <PackageVersion Include="System.IO.Hashing" Version="11.0.0" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
-    <!-- AVB signature verification (RSASSA-PSS / PKCS#1 v1.5), pure managed & AOT-friendly -->
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
-    <!-- Text diffing (line-level diff for the compare services) -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <PackageVersion Include="SSH.NET" Version="2026.0.1" />
     <PackageVersion Include="FluentFTP" Version="55.1.0" />
-    <!-- FAT12/FAT16/FAT32 and exFAT volume implementation (pure managed, net11.0 target, trimming/NativeAOT friendly). -->
     <PackageVersion Include="LTRData.DiscUtils.Fat" Version="1.0.91" />
     <PackageVersion Include="LTRData.DiscUtils.ExFat" Version="1.0.91" />
-    <!-- Official Model Context Protocol C# SDK for the embedded MCP server -->
     <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
     <PackageVersion Include="ModelContextProtocol.Core" Version="2.4.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
-    <!-- Source-compatible command parsing with trimming/AOT support. -->
   </ItemGroup>
 </Project>
