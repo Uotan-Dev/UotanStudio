@@ -212,41 +212,76 @@ public sealed class OpticalCommandTests
     }
 
     [Fact]
-    public void WindowsListScript_UsesImapiDiscMasterAndMediaState()
+    public void Imapi2InteropSlots_MatchSdkHeaderVtableOrder()
     {
-        var script = WindowsOpticalCommand.BuildListScript();
-
-        Assert.Contains("IMAPI2.MsftDiscMaster2", script, StringComparison.Ordinal);
-        Assert.Contains("IMAPI2.MsftDiscRecorder2", script, StringComparison.Ordinal);
-        Assert.Contains("IMAPI2.MsftDiscFormat2Data", script, StringComparison.Ordinal);
-        Assert.Contains("CurrentPhysicalMediaType", script, StringComparison.Ordinal);
-        Assert.Contains("CurrentMediaStatus", script, StringComparison.Ordinal);
-        Assert.Contains("[char]9", script, StringComparison.Ordinal);
+        // Frozen against the Windows SDK imapi2.h / ocidl.h C++ declarations; a mismatch silently
+        // calls the wrong native method, so any SDK change must bump these values.
+        Assert.Equal(8, Imapi2Interop.MasGetItem);
+        Assert.Equal(9, Imapi2Interop.MasGetCount);
+        Assert.Equal(10, Imapi2Interop.MasGetIsSupportedEnvironment);
+        Assert.Equal(13, Imapi2Interop.RecInitializeDiscRecorder);
+        Assert.Equal(15, Imapi2Interop.RecGetVendorId);
+        Assert.Equal(16, Imapi2Interop.RecGetProductId);
+        Assert.Equal(7, Imapi2Interop.FmtPutRecorder);
+        Assert.Equal(13, Imapi2Interop.FmtGetCurrentMediaStatus);
+        Assert.Equal(20, Imapi2Interop.FmtPutForceMediaToBeClosed);
+        Assert.Equal(24, Imapi2Interop.FmtGetCurrentPhysicalMediaType);
+        Assert.Equal(25, Imapi2Interop.FmtPutClientName);
+        Assert.Equal(36, Imapi2Interop.FmtWrite);
+        Assert.Equal(37, Imapi2Interop.FmtCancelWrite);
+        Assert.Equal(0x200, Imapi2Interop.UpdateDispatchId);
+        Assert.Equal(0x4, Imapi2Interop.WriteActionWritingData);
+        Assert.Equal(0x7, Imapi2Interop.WriteActionVerifying);
+        Assert.Equal(0x1, Imapi2Interop.MediaStateOverwriteOnly);
+        Assert.Equal(0x2, Imapi2Interop.MediaStateBlank);
+        Assert.Equal(0x4, Imapi2Interop.MediaStateAppendable);
+        Assert.Equal(0xFC00, Imapi2Interop.MediaStateUnsupportedMask);
+        Assert.Equal(0x2000, Imapi2Interop.MediaStateWriteProtected);
+        Assert.Equal(0x4000, Imapi2Interop.MediaStateFinalized);
+        Assert.Equal(0x8000, Imapi2Interop.MediaStateUnsupportedMedia);
     }
 
     [Fact]
-    public void WindowsBurnScript_UsesDataWriterAndQuotesImagePath()
+    public void WindowsMediaTypeToFormat_MapsImapiPhysicalTypes()
     {
-        var script = WindowsOpticalCommand.BuildBurnScript(
-            "id-with-'quote'",
-            "C:\\images\\disc.iso",
-            closeSession: true);
-
-        Assert.Contains("IMAPI2.MsftDiscFormat2Data", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("MsftDiscFormat2RawCD", script, StringComparison.Ordinal);
-        Assert.Contains("$writer.Write($stream)", script, StringComparison.Ordinal);
-        Assert.Contains("ForceMediaToBeClosed = $true", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("PrepareMedia", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReleaseMedia", script, StringComparison.Ordinal);
-        Assert.Contains("id-with-''quote''", script, StringComparison.Ordinal);
-        Assert.Contains("C:\\images\\disc.iso", script, StringComparison.Ordinal);
+        Assert.Equal(OpticalDiscFormat.Cd, WindowsOpticalDriveScanner.MediaTypeToFormat(1));
+        Assert.Equal(OpticalDiscFormat.Cd, WindowsOpticalDriveScanner.MediaTypeToFormat(3));
+        Assert.Equal(OpticalDiscFormat.Dvd, WindowsOpticalDriveScanner.MediaTypeToFormat(4));
+        Assert.Equal(OpticalDiscFormat.Dvd, WindowsOpticalDriveScanner.MediaTypeToFormat(0xD));
+        Assert.Equal(OpticalDiscFormat.BluRay, WindowsOpticalDriveScanner.MediaTypeToFormat(0x11));
+        Assert.Equal(OpticalDiscFormat.BluRay, WindowsOpticalDriveScanner.MediaTypeToFormat(0x13));
+        Assert.Equal(OpticalDiscFormat.Unknown, WindowsOpticalDriveScanner.MediaTypeToFormat(0));
+        Assert.Equal(OpticalDiscFormat.Unknown, WindowsOpticalDriveScanner.MediaTypeToFormat(-1));
+        Assert.Equal(OpticalDiscFormat.Unknown, WindowsOpticalDriveScanner.MediaTypeToFormat(0x14));
     }
 
     [Fact]
-    public void WindowsBurnScript_LeaveSessionOpen_ClearsForceMediaToBeClosed()
+    public void WindowsIsWritableMedia_AcceptsRecordableFamiliesOnly()
     {
-        var script = WindowsOpticalCommand.BuildBurnScript("id", "/tmp/disc.iso", closeSession: false);
+        Assert.False(WindowsOpticalDriveScanner.IsWritableMedia(-1));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableMedia(0));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableMedia(1));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(2));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(3));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(5));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(0xD));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(0x12));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableMedia(0x13));
+    }
 
-        Assert.Contains("ForceMediaToBeClosed = $false", script, StringComparison.Ordinal);
+    [Fact]
+    public void WindowsIsWritableState_RejectsErrorBitsAndAcceptsWritableBits()
+    {
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(-1));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableState(0x2));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableState(0x4));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableState(0x1));
+        Assert.True(WindowsOpticalDriveScanner.IsWritableState(0x2 | 0x4));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x400));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x800));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x2000));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x4000));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x8000));
+        Assert.False(WindowsOpticalDriveScanner.IsWritableState(0x2 | 0x2000));
     }
 }
