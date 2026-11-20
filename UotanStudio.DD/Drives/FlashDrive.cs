@@ -59,25 +59,4 @@ public sealed record FlashDrive
     /// <value>Windows uses <c>C:\</c> style roots, Unix uses paths such as <c>/media/card</c>.
     /// <para>Windows 使用 <c>C:\</c> 形式的根路径，Unix 使用 <c>/media/card</c> 等路径。</para></value>
     public IReadOnlyList<string> MountPoints { get; init; } = [];
-
-    /// <summary>
-    /// Gets the category of recordable media; defaults to a raw block device.
-    /// <para>获取可记录介质类别；默认为裸块设备。</para>
-    /// </summary>
-    public FlashMediaKind MediaKind { get; init; } = FlashMediaKind.Disk;
-
-    /// <summary>
-    /// Gets the optical disc family reported by the recorder, when <see cref="MediaKind"/> is
-    /// <see cref="FlashMediaKind.OpticalDisc"/>.
-    /// <para>当 <see cref="MediaKind"/> 为 <see cref="FlashMediaKind.OpticalDisc"/> 时，获取刻录机上报的光盘类型。</para>
-    /// </summary>
-    public OpticalDiscFormat DiscFormat { get; init; } = OpticalDiscFormat.Unknown;
-
-    /// <summary>
-    /// Gets whether the optical recorder accepts this disc family for recording.
-    /// <para>获取光驱是否支持在当前光盘类型上刻录。</para>
-    /// </summary>
-    /// <value>Always <see langword="false"/> for raw block devices and when the recorder reported no writable media.
-    /// <para>对于裸块设备，以及刻录机未上报可写介质时，始终为 <see langword="false"/>。</para></value>
-    public bool IsDiscWritable { get; init; }
 }

@@ -17,13 +17,10 @@ public static class ExplorerIconCatalog
 {
     /// <summary>
     /// Extensions of image files (partition and raw images). OTA artifacts (<c>.dat</c>) and compressed
-    /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs. Optical-disc
-    /// images stay in this glyph family even though they are not conversion inputs, because the two questions
-    /// are answered by different owners: this table picks the glyph, <see cref="Services.Firmware.ImageInputService"/>
-    /// decides conversion scope.
+    /// streams (<c>.br</c>) are excluded: they share the disk icon but are not conversion inputs. This table
+    /// picks the glyph, <see cref="Services.Firmware.ImageInputService"/> decides conversion scope.
     /// <para>镜像类文件的扩展名（分区镜像与裸镜像）。不含 OTA 产物 <c>.dat</c> 与压缩流 <c>.br</c>：
-    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。光盘镜像保留在本字形家族内，即使它不是转换输入，
-    /// 因为这两个问题由不同所有者回答：本表只决定字形，转换范围由
+    /// 它们与镜像共用磁盘图标，但不是「格式转换」的输入。本表只决定字形，转换范围由
     /// <see cref="Services.Firmware.ImageInputService"/> 判定。</para>
     /// </summary>
     private static readonly FrozenSet<string> ImageFileExtensions =

@@ -33,23 +33,17 @@ public static class DriveScanner
     {
         if (OperatingSystem.IsWindows())
         {
-            return new CompositeDriveScanner(
-                new Windows.WindowsDriveScanner(),
-                new Windows.WindowsOpticalDriveScanner());
+            return new Windows.WindowsDriveScanner();
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return new CompositeDriveScanner(
-                new Linux.LinuxDriveScanner(),
-                new Linux.LinuxOpticalDriveScanner());
+            return new Linux.LinuxDriveScanner();
         }
 
         if (OperatingSystem.IsMacOS())
         {
-            return new CompositeDriveScanner(
-                new MacOS.MacDriveScanner(),
-                new MacOS.MacOpticalDriveScanner());
+            return new MacOS.MacDriveScanner();
         }
 
         throw new PlatformNotSupportedException("Drive scanning is supported on Windows, Linux and macOS only.");

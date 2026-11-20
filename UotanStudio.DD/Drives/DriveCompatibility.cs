@@ -54,18 +54,6 @@ public enum DriveCompatibilityIssue
     /// <para>驱动器容量不足以容纳镜像。</para>
     /// </summary>
     TooSmall,
-
-    /// <summary>
-    /// The optical recorder has no writable disc loaded.
-    /// <para>光驱中没有可写光盘。</para>
-    /// </summary>
-    NoWritableDisc,
-
-    /// <summary>
-    /// The image is not a raw ISO that can be recorded to optical disc.
-    /// <para>镜像不是可刻录到光盘的 raw ISO。</para>
-    /// </summary>
-    UnsupportedDiscImage,
 }
 
 /// <summary>
