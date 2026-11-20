@@ -277,10 +277,15 @@ public sealed class MtkDeviceOperationNodeViewModel : FlowNodeViewModel
 
         if (device is not null)
         {
-            var startup = await MtkNodeSupport.BuildStartupAsync(protocol, storage, loaderPath, emiPath,
-                context.CancellationToken).ConfigureAwait(false);
+            // The loader parse and the lease/handshake run concurrently: a preloader port keeps its handshake
+            // window open only briefly after enumeration, so the session handshakes while the DA file is parsed.
+            // 加载器解析与租约+握手并发执行：preloader 端口在枚举后仅短窗口内接受握手，
+            // 因此会话在 DA 文件解析期间完成握手。
+            var startupTask = MtkNodeSupport.BuildStartupAsync(protocol, storage, loaderPath, emiPath,
+                context.CancellationToken);
             await App.DeviceMonitor.RunMtkAsync(device, async session =>
             {
+                var startup = await startupTask.ConfigureAwait(false);
                 var ready = await MtkBootstrap.MatchAsync(session, MtkNodeSupport.ToDaProtocol(protocol), startup,
                     context.CancellationToken).ConfigureAwait(false);
                 await RunCoreAsync(context, ready, protocol, storage, null, operation, partition, image, scatter,

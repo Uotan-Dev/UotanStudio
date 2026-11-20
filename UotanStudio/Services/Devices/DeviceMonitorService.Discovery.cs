@@ -15,10 +15,18 @@ public sealed partial class DeviceMonitorService
 {
     private const int SlowScanMilliseconds = 120;
     private const int AutomaticEdlProbeTimeoutSeconds = 20;
+
+    /// <summary>Background budget for one automatic MTK boot handshake. <para>一次自动 MTK boot 握手的后台预算。</para></summary>
+    private const int AutomaticMtkHandshakeTimeoutSeconds = 8;
+
+    /// <summary>The baud rate of the MTK preloader VCOM port. <para>MTK preloader VCOM 端口的波特率。</para></summary>
+    private const int AutomaticMtkBaudRate = 115200;
     private static readonly TimeSpan ScanLockWait = TimeSpan.FromMilliseconds(250);
     private readonly Lock _scanLock = new();
     private readonly Lock _scheduledEdlProbesGate = new();
     private readonly HashSet<string> _scheduledEdlProbes = new(StringComparer.Ordinal);
+    private readonly Lock _scheduledMtkHandshakesGate = new();
+    private readonly HashSet<string> _scheduledMtkHandshakes = new(StringComparer.Ordinal);
     private volatile IReadOnlyList<DetectedDevice>? _lastScan;
     /// <summary>
     /// Full scan of the direct-USB endpoints plus the adb and HDC server targets, cached until the
@@ -68,6 +76,7 @@ public sealed partial class DeviceMonitorService
             }
 
             ScheduleEdlStageProbes(devices);
+            ScheduleMtkHandshakes(devices);
             return devices;
         }
         finally
@@ -333,6 +342,9 @@ public sealed partial class DeviceMonitorService
         _edlConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
             .Select(device => device.Key).ToHashSet(StringComparer.Ordinal));
         ForgetRemovedEdlProbes(devices);
+        _mtkConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Mtk)
+            .Select(device => device.Key).ToHashSet(StringComparer.Ordinal));
+        ForgetRemovedMtkHandshakes(devices);
         return CoalesceSameEndpoint(devices);
     }
 

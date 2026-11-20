@@ -588,17 +588,16 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Mtk)
             throw new ArgumentException("An MTK target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Mtk, cancellationToken: cancellationToken);
-        try
+        // A preloader/BROM port keeps its handshake window open for only a few seconds after enumeration, so a
+        // lease the automatic probe parked with a completed handshake is consumed first; a miss opens fresh and
+        // the session runs its own handshake inside the operation delegate.
+        // preloader/BROM 端口在枚举后仅数秒内保持握手窗口，因此优先消费自动探测暂存的已完成握手的租约；
+        // 未命中时现开租约，由操作委托中的会话自行握手。
+        EnsureMtkLivenessProbe();
+        return await _mtkConnections.RunAsync(device, async session =>
         {
-            if (!lease.TryGetSession<MtkSession>(out var session))
-                throw new IOException("The selected device does not expose an MTK session.");
             cancellationToken.ThrowIfCancellationRequested();
             return await operation(session).ConfigureAwait(false);
-        }
-        finally
-        {
-            CloseLease(lease);
-        }
+        }, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -336,28 +336,16 @@ public sealed partial class DeviceMonitorService
             snapshot = _controller.RefreshAsync(cancellationToken).GetAwaiter().GetResult();
         }
 
-        DeviceEndpoint? selected;
-        if (useAdbServer)
+        DeviceEndpoint? selected = FindEndpoint(snapshot, device, useAdbServer);
+        if (selected is null)
         {
-            selected = snapshot.Endpoints.SingleOrDefault(endpoint => endpoint.Protocol == "adb" &&
-                endpoint.Route == "server" && string.Equals(endpoint.Address, device.Serial, StringComparison.Ordinal));
-        }
-        else if (device.Key.StartsWith("apple:", StringComparison.Ordinal))
-        {
-            selected = snapshot.Endpoints.SingleOrDefault(endpoint =>
-                endpoint.Source == "usbmuxd" &&
-                string.Equals(endpoint.Address, device.Key["apple:".Length..], StringComparison.Ordinal));
-        }
-        else if (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
-            device.Key.StartsWith("hdc:", StringComparison.Ordinal))
-        {
-            throw new IOException("A server-origin target cannot fall back to direct USB.");
-        }
-        else
-        {
-            selected = snapshot.Endpoints.SingleOrDefault(endpoint =>
-                endpoint.Source == UsbDiscoverySource.SourceName &&
-                string.Equals(endpoint.Address, device.Key, StringComparison.Ordinal));
+            // A device that just arrived may not be in the cached snapshot yet — the topology event fires before
+            // the inventory generation is committed. Refresh once on a miss so an immediate handshake can open
+            // the lease instead of reporting a phantom disappearance.
+            // 刚到达的设备可能还不在缓存快照中——拓扑事件先于清单 generation 提交。未命中时刷新一次，
+            // 使立即握手能够开租约，而非误报设备已消失。
+            snapshot = _controller.RefreshAsync(cancellationToken).GetAwaiter().GetResult();
+            selected = FindEndpoint(snapshot, device, useAdbServer);
         }
 
         if (selected is null)
@@ -376,6 +364,31 @@ public sealed partial class DeviceMonitorService
             : _controller.OpenAsync(snapshot, selected.Id, cancellationToken).GetAwaiter().GetResult();
     }
 
+    private static DeviceEndpoint? FindEndpoint(DeviceSnapshot snapshot, DetectedDevice device, bool useAdbServer)
+    {
+        if (useAdbServer)
+        {
+            return snapshot.Endpoints.SingleOrDefault(endpoint => endpoint.Protocol == "adb" &&
+                endpoint.Route == "server" && string.Equals(endpoint.Address, device.Serial, StringComparison.Ordinal));
+        }
+
+        if (device.Key.StartsWith("apple:", StringComparison.Ordinal))
+        {
+            return snapshot.Endpoints.SingleOrDefault(endpoint =>
+                endpoint.Source == "usbmuxd" &&
+                string.Equals(endpoint.Address, device.Key["apple:".Length..], StringComparison.Ordinal));
+        }
+
+        if (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
+            device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+        {
+            throw new IOException("A server-origin target cannot fall back to direct USB.");
+        }
+
+        return snapshot.Endpoints.SingleOrDefault(endpoint =>
+            endpoint.Source == UsbDiscoverySource.SourceName &&
+            string.Equals(endpoint.Address, device.Key, StringComparison.Ordinal));
+    }
     /// <summary>
     /// Maps a device protocol to the endpoint protocol string produced during discovery. Every
     /// defined protocol must have a mapping, otherwise leasing an endpoint fails before any I/O.

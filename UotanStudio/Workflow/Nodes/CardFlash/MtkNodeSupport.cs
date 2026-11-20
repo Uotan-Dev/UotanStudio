@@ -192,13 +192,45 @@ internal static class MtkNodeSupport
         };
     }
 
+    /// <summary>
+    /// Opens the serial line and starts the boot handshake concurrently with the loader/EMI parse, so a preloader
+    /// port that accepts the complemented handshake only for a few seconds is not lost to file parsing. The
+    /// handshaken session is matched against the parsed startup afterwards; the session-level handshake is
+    /// idempotent, so the identity captured during the parallel window is reused instead of re-exchanged.
+    /// <para>并发执行串口打开+boot 握手与加载器/EMI 解析，使只在数秒内接受反码握手的 preloader 端口
+    /// 不会因文件解析而错失窗口；握手完成后再与解析出的启动配置匹配。会话级握手是幂等的，
+    /// 并行窗口内捕获的身份会被复用而不是重新交换。</para>
+    /// </summary>
     internal static async Task<MtkSession> ConnectSerialAsync(string port, int baudRate, MtkNodeProtocol protocol,
         MtkXFlashStorageKind storage, string loaderPath, string? emiPath, CancellationToken cancellationToken)
     {
-        var startup = await BuildStartupAsync(protocol, storage, loaderPath, emiPath, cancellationToken)
+        ArgumentException.ThrowIfNullOrWhiteSpace(loaderPath);
+        var handshakeTask = MtkSession.OpenSerialAsync(port, baudRate, cancellationToken);
+        MtkAutoStartup startup;
+        try
+        {
+            startup = await BuildStartupAsync(protocol, storage, loaderPath, emiPath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // The handshake attempt cannot proceed without the loader; releasing a session it already opened
+            // keeps the serial handle from lingering after the parse failure.
+            // 握手尝试缺少加载器无法继续；释放已打开的会话，避免串口句柄在解析失败后滞留。
+            try
+            {
+                (await handshakeTask.ConfigureAwait(false)).Dispose();
+            }
+            catch
+            {
+            }
+
+            throw;
+        }
+
+        var session = await handshakeTask.ConfigureAwait(false);
+        return await MtkBootstrap.MatchAsync(session, ToDaProtocol(protocol), startup, cancellationToken)
             .ConfigureAwait(false);
-        return await MtkBootstrap.MatchSerialAsync(SerialOptions(port, baudRate), ToDaProtocol(protocol),
-            startup, cancellationToken).ConfigureAwait(false);
     }
 
     internal static MtkEmiParameters ReadEmi(string path)

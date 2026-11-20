@@ -98,6 +98,17 @@ public sealed partial class DeviceMonitorService
     private DeviceMonitorService()
     {
         _controller = Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
+        // Open by stable key instead of the snapshot-based path: a transient preloader must be handshaken before
+        // the debounced inventory refresh can classify it, and OpenLeaseByKeyAsync opens the exact device directly.
+        // 按稳定键开租约，而非走基于快照的路径：短暂 preloader 必须在去抖动清单刷新完成前完成握手，
+        // OpenLeaseByKeyAsync 直接打开精确设备。
+        _mtkConnections = new MtkConnectionCache(
+            async (device, token) =>
+                await _controller.OpenLeaseByKeyAsync(device.Key, Comm.Contracts.DeviceSessionKind.Mtk, token)
+                    .ConfigureAwait(false)
+                    ?? throw new IOException($"The MTK device '{device.Key}' is no longer present."),
+            ScheduleChange,
+            (info, baudRate, token) => _controller.OpenVcomLeaseAsync(info, baudRate, token));
         _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
             () => LeaseEndpoint(device, sessionKind: Comm.Contracts.DeviceSessionKind.Edl,
                 cancellationToken: token), token), ScheduleChange);
@@ -170,16 +181,30 @@ public sealed partial class DeviceMonitorService
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
+        StartMtkComPortProbe();
 
         Action<IReadOnlyList<UsbDeviceChange>> handler = changes =>
         {
             LogDeviceChanges(changes);
+            // A preloader/BROM port accepts the boot handshake only for a few seconds after enumeration. Handshake
+            // arrivals here, from the event's fresh descriptors, instead of waiting for the debounced full scan.
+            // preloader/BROM 端口仅在枚举后数秒内接受 boot 握手；在此直接用事件携带的最新描述符握手，
+            // 不等去抖动后的全量扫描。
+            foreach (var change in changes)
+            {
+                if (change.Kind == UsbDeviceChangeKind.Added)
+                {
+                    ScheduleImmediateMtkHandshake(change.Device);
+                }
+            }
+
             if (changes.Any(static c => IsRelevantDevice(c.Device)))
             {
                 ScheduleChange();
             }
         };
         _controller.UsbTopologyChanged += handler;
+        _controller.UsbArrivalPathObserved += OnUsbArrivalPath;
         _controller.DeviceRemoved += OnEndpointGone;
         _controller.DeviceChanged += OnEndpointGone;
         lock (_sync)
@@ -187,6 +212,7 @@ public sealed partial class DeviceMonitorService
             if (_disposed)
             {
                 _controller.UsbTopologyChanged -= handler;
+                _controller.UsbArrivalPathObserved -= OnUsbArrivalPath;
                 _controller.DeviceRemoved -= OnEndpointGone;
                 _controller.DeviceChanged -= OnEndpointGone;
                 return;
@@ -312,6 +338,16 @@ public sealed partial class DeviceMonitorService
     {
         try
         {
+            _mtkConnections.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DeviceMonitor",
+                $"MTK connection cache release failed: {ex.Message}");
+        }
+
+        try
+        {
             _edlConnections.Dispose();
         }
         catch (Exception ex)
@@ -347,6 +383,7 @@ public sealed partial class DeviceMonitorService
                 _usbTopologyHandler = null;
             }
 
+            _controller.UsbArrivalPathObserved -= OnUsbArrivalPath;
             _controller.DeviceRemoved -= OnEndpointGone;
             _controller.DeviceChanged -= OnEndpointGone;
 
@@ -385,6 +422,9 @@ public sealed partial class DeviceMonitorService
         }
 
         monitorLifetime?.Dispose();
+        _comPortProbe?.Dispose();
+        _comPortProbe = null;
+        _mtkConnections.Dispose();
         _edlConnections.Dispose();
         DisposeSharedAdbSessions();
         _controller.Dispose();
