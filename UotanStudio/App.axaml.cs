@@ -117,6 +117,7 @@ public partial class App : Application
                 _macApplicationMenu = new MacOSApplicationMenu(this,
                     () => GetDesktopMainViewModel()?.MenuVM.AboutCommand.Execute(null));
             desktop.Exit += OnDesktopExit;
+            RegisterBundledFonts();
             var splash = new MainSplashWindow
             {
                 DataContext = new SplashViewModel(LanguageService.Instance.GetString("Splash_Initializing"))
@@ -143,6 +144,29 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Decodes the bundled MiSans faces and registers their font collection under
+    /// <see cref="BundledFont.CollectionKey"/>. Runs before the first window is created because the Linux build
+    /// links a Skia without fontconfig: no system font is available to cover a window that is shown earlier.
+    /// A failure is logged only; the caller still shows the splash, whose text then falls back to whatever the
+    /// platform can resolve.
+    /// <para>解码随包 MiSans 字形，并在 <see cref="BundledFont.CollectionKey"/> 下注册其字体集合。必须在第一个窗口创建前
+    /// 运行：Linux 构建链接的 Skia 不带 fontconfig，提前显示的窗口没有系统字体可用。失败只记录日志，调用方仍会显示
+    /// 启动窗，此时其文本退回到平台可解析的字体。</para>
+    /// </summary>
+    private static void RegisterBundledFonts()
+    {
+        try
+        {
+            var faces = ZstdEmbeddedFontCollection.DecompressFaces();
+            FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection(faces));
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Startup", $"Bundled font registration failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Startup sequence: applies persisted settings, starts device monitoring with the initial full
     /// USB scan while reporting stage status, and pre-builds the main window once the scan completes.
     /// <para>启动序列：应用持久化设置，启动设备监视并执行首次全局 USB 扫描且上报阶段状态，扫描完成后预构建主窗口。</para>
@@ -161,17 +185,6 @@ public partial class App : Application
             previousPhase = phase;
             stageTimer.Restart();
         }
-        await ReportAsync(SplashPhase.Resources);
-        try
-        {
-            var faces = await Task.Run(ZstdEmbeddedFontCollection.DecompressFaces).ConfigureAwait(true);
-            FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection(faces));
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Startup", $"Bundled font registration failed: {ex.Message}");
-        }
-
         await ReportAsync(SplashPhase.Settings);
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;

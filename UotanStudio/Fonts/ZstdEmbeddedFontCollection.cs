@@ -10,7 +10,7 @@ namespace UotanStudio.Fonts;
 /// </summary>
 internal sealed class ZstdEmbeddedFontCollection : FontCollectionBase
 {
-    private static readonly Uri _key = new("fonts:UotanStudio/MiSans");
+    private static readonly Uri _key = new(BundledFont.CollectionKey);
     private static readonly (string Label, AssetEntry Entry)[] _faces =
     [
         ("Regular", AssetCatalog.Fonts[AssetNames.Fonts.Regular]),

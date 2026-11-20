@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Fonts;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -38,12 +39,14 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     private SplashPhase _phase;
 
     /// <summary>
-    /// Font family used by the splash before the bundled MiSans frames are decompressed: the platform default, resolved
-    /// without reaching for the <c>fonts:</c> collection that is still empty at that point.
-    /// <para>内嵌 MiSans 解压前启动窗使用的字体族：平台默认字体，解析时不触碰此时仍为空的 <c>fonts:</c> 集合。</para>
+    /// Font family used by the splash: the bundled MiSans collection, which the host registers before this window
+    /// is created. No system family is requested, because the Linux build links a Skia without fontconfig and
+    /// therefore cannot resolve one.
+    /// <para>启动窗使用的字体族：宿主在创建本窗口前注册的随包 MiSans 集合。不请求系统字族，因为 Linux 构建链接的
+    /// Skia 不带 fontconfig，无法解析系统字体。</para>
     /// </summary>
-    /// <value>A system font family:<para>系统字体族：</para> <see cref="FontFamily"/>.</value>
-    public FontFamily SplashFontFamily { get; } = ResolveSystemFontFamily();
+    /// <value>The <c>fonts:UotanStudio/MiSans#MiSans</c> family.<para><c>fonts:UotanStudio/MiSans#MiSans</c> 字族。</para></value>
+    public FontFamily SplashFontFamily { get; } = new(BundledFont.Reference);
 
     /// <summary>Publishes the next stage before allowing synchronous UI construction to continue.</summary>
     /// <param name="phase">The stage to publish; it must not move backwards.
@@ -81,14 +84,6 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     }
 
     private static string Text(string key) => LanguageService.Instance.GetString(key);
-
-    private static FontFamily ResolveSystemFontFamily()
-    {
-        return FontManager.Current.TryMatchCharacter('A', FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
-            null, CultureInfo.CurrentCulture, out var typeface)
-            ? typeface.FontFamily
-            : FontFamily.Default;
-    }
 }
 
 internal enum SplashPhase

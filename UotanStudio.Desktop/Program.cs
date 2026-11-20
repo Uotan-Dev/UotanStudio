@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Logging;
 using Avalonia.Media;
 using Dock.Settings;
+using UotanStudio.Fonts;
 using UotanStudio.Services;
 
 namespace UotanStudio.Desktop;
@@ -181,7 +182,7 @@ sealed class Program
         builder = builder
             .With(new FontManagerOptions
             {
-                DefaultFamilyName = "fonts:UotanStudio/MiSans#MiSans"
+                DefaultFamilyName = BundledFont.Reference
             })
             .WithDockSettings(new DockSettingsOptions
             {
