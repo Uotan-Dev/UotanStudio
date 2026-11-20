@@ -164,7 +164,7 @@ Linux archives are self-contained directories, but rendering depends on system f
 
 - **fonts-inter** (required): the default UI theme uses the Inter composite font; without it the first text render throws `Could not create glyphTypeface`. Debian/Ubuntu/Deepin: `sudo apt-get install -y fonts-inter`; Fedora: `sudo dnf install -y inter-fonts`; Arch: `sudo pacman -S inter-font`. Any font package resolving the `Inter` family name works.
 - **System libraries** (present on every desktop distro): `fontconfig`, `freetype`, `expat`, `libstdc++`, `zlib`, and for the X11 backend `libX11`/`libXcursor`/`libXi`/`libXrandr`/`libXrender`/`libEGL`/`libGL`.
-- **SkiaSharp native library**: linux-x64/arm64 ship in the archive; for `linux-loongarch64` the publish pipeline copies `libSkiaSharp.so` from `skiasharp.nativeassets.linux` 4.157.0 (official LoongArch64 glibc assets exist since 4.157.0); `linux-riscv64` has no official asset and needs a source-built copy next to the executable.
+- **SkiaSharp native library**: all four glibc RIDs (`linux-x64`, `linux-arm64`, `linux-loongarch64`, `linux-riscv64`) get an official `libSkiaSharp.so` from `skiasharp.nativeassets.linux` 4.157.0, which lands in the publish output through normal NuGet RID asset resolution; no manual copy or source build is involved. The 4.157.0 `linux-riscv64` and `linux-loongarch64` builds require `GLIBC_2.38`, so older-glibc distributions need a newer system or `3.119.x` (its `linux-riscv64` build only needs `GLIBC_2.27`; `linux-loongarch64` still needs `GLIBC_2.38`).
 - Every package contains `Linux-DEPENDS.txt` listing these dependencies and install commands.
 
 ## 🧾 License and notes

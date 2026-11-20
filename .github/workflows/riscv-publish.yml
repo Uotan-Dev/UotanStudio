@@ -3,8 +3,9 @@ name: Publish linux-riscv64 (cross)
 # Experimental cross-compilation publish, verified against dotnet-riscv SDK 11.0.100:
 # the community SDK ships no x64-hosted ilc, so ilc alone runs under qemu-user while
 # MSBuild/Roslyn/clang run natively on the x64 host. glibc target only; musl is not wired.
-# Known gap: SkiaSharp ships no linux-riscv64 native assets, so the GUI binary will not
-# run until libSkiaSharp is built for riscv64 separately.
+# SkiaSharp.NativeAssets.Linux ships runtimes/linux-riscv64/native/libSkiaSharp.so (glibc and
+# musl variants) since 3.119.0, so the RID asset resolves and lands in the publish output
+# without a source build. The 4.157.0 build is linked against GLIBC_2.38.
 
 on:
   workflow_dispatch:
@@ -324,7 +325,9 @@ jobs:
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
           fi
-          echo "::warning::SkiaSharp has no linux-riscv64 native assets; the published GUI binary needs a source-built libSkiaSharp to render."
+          test -f "$RUNNER_TEMP/publish/libSkiaSharp.so" \
+            || echo "::warning::libSkiaSharp.so is missing from the publish output; check the RID asset resolution."
+          file "$RUNNER_TEMP/publish/libSkiaSharp.so" 2>/dev/null || true
 
       - name: Package (tar.gz)
         shell: bash

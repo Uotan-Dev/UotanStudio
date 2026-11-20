@@ -4,7 +4,9 @@ name: Publish linux-loongarch64 (cross)
 # cross container (azurelinux-3.0-net10.0-cross-loongarch64) exists, and the
 # loongson/dotnet release layout matches dotnet-riscv, but this pipeline has not
 # been executed end to end yet; expect small deltas (interp path, pack names).
-# Known gap: SkiaSharp ships no linux-loongarch64 native assets.
+# SkiaSharp.NativeAssets.Linux ships runtimes/linux-loongarch64/native/libSkiaSharp.so since
+# 4.157.0, so the RID asset resolves and lands in the publish output without a source build.
+# That build is linked against GLIBC_2.38.
 
 on:
   workflow_dispatch:
@@ -311,7 +313,9 @@ jobs:
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
           fi
-          echo "::warning::SkiaSharp has no linux-loongarch64 native assets; the published GUI binary needs a source-built libSkiaSharp to render."
+          test -f "$RUNNER_TEMP/publish/libSkiaSharp.so" \
+            || echo "::warning::libSkiaSharp.so is missing from the publish output; check the RID asset resolution."
+          file "$RUNNER_TEMP/publish/libSkiaSharp.so" 2>/dev/null || true
 
       - name: Package (tar.gz)
         shell: bash
