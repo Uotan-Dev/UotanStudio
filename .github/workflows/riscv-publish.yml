@@ -292,10 +292,20 @@ jobs:
           src="$RUNNER_TEMP/runtime-src"
           git clone --depth 1 --branch "v$RUNTIME_VER" https://github.com/dotnet/runtime "$src"
           cd "$src"
-          ./build.sh clr.crossarchtools -os linux -arch riscv64 -c release
+          # clr.crossarchtools is what turns on the cross-component build, but it only
+          # requests "-component jit", and create_standalone_jit installs every per-arch JIT
+          # under COMPONENT alljits. That is why the first attempt produced only the plain
+          # libclrjit.so: the riscv64 backend compiled fine, but the arch-suffixed target was
+          # never installed. Add clr.alljits for that component. No COMMUNITY_ALTJITS switch
+          # is needed here: with a riscv64 target the
+          # "if (CLR_CMAKE_TARGET_ARCH_RISCV64)" branch creates
+          # clrjit_unix_riscv64_<host> unconditionally.
+          ./build.sh clr.crossarchtools+clr.alljits -os linux -arch riscv64 -c release
           built=$(find "$src/artifacts/bin" -name 'libclrjit_unix_riscv64_x64.so' -print -quit)
           if [ -z "$built" ]; then
             echo "::error::Cross-component build produced no libclrjit_unix_riscv64_x64.so." >&2
+            echo "Artifacts containing 'clrjit':" >&2
+            find "$src/artifacts/bin" -name '*clrjit*' -printf '  %p\n' 2>/dev/null >&2 || true
             exit 1
           fi
           file "$built"
