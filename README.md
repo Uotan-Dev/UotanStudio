@@ -131,6 +131,15 @@ flowchart TD
 - MCP：`--mcp-headless` 以 stdio 运行无头服务器，`--mcp` 在 GUI 内启动伴随服务器，`--mcp-root <目录>` 限定路径沙箱，`--allow-flash` 显式放开刷写；设置页可开启仅监听 `127.0.0.1` 的 Streamable HTTP
 - 命令行：`--managed-device-shell <Adb|Hdc> <serial>` 在当前终端复用 server 通道执行交互 shell；直接传入文件路径可按文件关联打开
 
+## 🐧 Linux 运行依赖
+
+Linux 产物为自包含目录，但渲染依赖系统字体与少数系统库（在 Deepin 23.1 loongarch64 上实测验证）：
+
+- **fonts-inter**（必装）：默认 UI 主题使用 Inter 复合字体，缺失时首次渲染文本会抛出 `Could not create glyphTypeface`。Debian/Ubuntu/Deepin：`sudo apt-get install -y fonts-inter`；Fedora：`sudo dnf install -y inter-fonts`；Arch：`sudo pacman -S inter-font`。任何能解析 `Inter` 字族名的字体包均可。
+- **系统库**（桌面发行版默认齐全）：`fontconfig`、`freetype`、`expat`、`libstdc++`、`zlib`、X11 后端的 `libX11`/`libXcursor`/`libXi`/`libXrandr`/`libXrender`/`libEGL`/`libGL`。
+- **SkiaSharp 原生库**：linux-x64/arm64 随包提供；`linux-loongarch64` 的 `libSkiaSharp.so` 由发布流水线从 `skiasharp.nativeassets.linux` 4.157.0 复制进包（4.157.0 起提供官方 LoongArch64 glibc 原生资产）；`linux-riscv64` 无官方资产，需要自行源码构建后放到可执行文件同目录。
+- 每个发布包内含 `Linux-DEPENDS.txt`，列出上述依赖与安装命令。
+
 ## ⚙️ 开发
 
 构建、运行与验证：

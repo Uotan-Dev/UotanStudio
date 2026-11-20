@@ -158,6 +158,15 @@ Benchmarks run on their own:
 dotnet run -c Release --project UotanStudio.Benchmarks -- --filter <BenchmarkName>
 ```
 
+## 🐧 Linux runtime dependencies
+
+Linux archives are self-contained directories, but rendering depends on system fonts and a few system libraries (verified on Deepin 23.1 loongarch64):
+
+- **fonts-inter** (required): the default UI theme uses the Inter composite font; without it the first text render throws `Could not create glyphTypeface`. Debian/Ubuntu/Deepin: `sudo apt-get install -y fonts-inter`; Fedora: `sudo dnf install -y inter-fonts`; Arch: `sudo pacman -S inter-font`. Any font package resolving the `Inter` family name works.
+- **System libraries** (present on every desktop distro): `fontconfig`, `freetype`, `expat`, `libstdc++`, `zlib`, and for the X11 backend `libX11`/`libXcursor`/`libXi`/`libXrandr`/`libXrender`/`libEGL`/`libGL`.
+- **SkiaSharp native library**: linux-x64/arm64 ship in the archive; for `linux-loongarch64` the publish pipeline copies `libSkiaSharp.so` from `skiasharp.nativeassets.linux` 4.157.0 (official LoongArch64 glibc assets exist since 4.157.0); `linux-riscv64` has no official asset and needs a source-built copy next to the executable.
+- Every package contains `Linux-DEPENDS.txt` listing these dependencies and install commands.
+
 ## 🧾 License and notes
 
 - This project is published under the GNU General Public License v3.0; see `LICENSE.txt`.
