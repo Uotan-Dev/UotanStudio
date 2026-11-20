@@ -407,8 +407,31 @@ jobs:
           NUGET
 
           dotnet --info
+
+          # IlcHostPackagePath is overwritten unconditionally by
+          # Microsoft.DotNet.ILCompiler.SingleEntry.targets, and IlcToolsPath cannot be
+          # used either because the targets concatenate it with a literal backslash
+          # ("$(IlcToolsPath)\ilc"), which is not a path separator on Unix. ilc therefore
+          # always runs from the restored host package and probes for the JIT next to
+          # itself, so restore first and drop the cross JIT into that exact directory.
+          dotnet restore "$PUBLISH_PROJECT" -r linux-riscv64 \
+            -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
+            -p:IlcHostRuntimeIdentifier=linux-x64
+
+          ilc_tools=$(dirname "$(find /work/home/.nuget/packages -maxdepth 5 \
+            -path "*runtime.linux-x64.microsoft.dotnet.ilcompiler/*/tools/ilc" | head -1)")
+          [ -n "$ilc_tools" ] && [ -d "$ilc_tools" ] || {
+            echo "::error::Could not locate the restored ilc host package tools directory." >&2
+            exit 1
+          }
+          echo "ilc host tools: $ilc_tools"
+          cp /work/ilc-host-x64/tools/libclrjit_unix_riscv64_x64.so "$ilc_tools/"
+          ls -l "$ilc_tools/libclrjit"*riscv64*
+          export LD_LIBRARY_PATH="$ilc_tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
           dotnet publish "$PUBLISH_PROJECT" \
             -c Release -r linux-riscv64 --self-contained true \
+            --no-restore \
             -p:DebugType=none -p:DebugSymbols=false \
             -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
             -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
