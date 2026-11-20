@@ -133,4 +133,42 @@ public sealed class MtkBootHandshakeTests
         Assert.Null(info.Meid);
         Assert.Null(info.Socid);
     }
+    /// <remarks>
+    /// A parked preloader connection was already handshaken by the automatic probe; re-running InitializeAsync
+    /// must return the recorded identity without sending any further byte, or the exchange desynchronizes a
+    /// target that now sits in its command stage.
+    /// <para>暂存的 preloader 连接已被自动探测握手；再次调用 InitializeAsync 必须原样返回已记录的身份、
+    /// 不再发送任何字节，否则交换会使处于命令阶段的目标失步。</para>
+    /// </remarks>
+    [Fact]
+    public async Task InitializeAfterHandshakeIsIdempotentAndSendsNoByte()
+    {
+        var device = new MtkBootScriptDevice();
+        using var session = new MtkSession(device.Transport, timeoutMs: 1_000, handshakeTimeoutMs: 1_000);
+        var first = await session.InitializeAsync(TestContext.Current.CancellationToken);
+        var bytesBefore = device.HandshakeReceived.Count + device.CommandsReceived.Count;
+
+        var second = await session.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Same(first, second);
+        Assert.Equal(MtkSessionState.Bootloader, session.State);
+        Assert.Equal(bytesBefore, device.HandshakeReceived.Count + device.CommandsReceived.Count);
+    }
+
+    /// <remarks>
+    /// A faulted session must not be mistaken for a parked one: the recorded identity of a failed initialization
+    /// is never returned, and the fault keeps blocking further protocol work.
+    /// <para>故障会话绝不能被当成暂存会话：失败的初始化不会返回已记录的身份，故障状态继续阻止后续协议操作。</para>
+    /// </remarks>
+    [Fact]
+    public async Task InitializeOnFaultedSessionThrowsInsteadOfReportingStaleIdentity()
+    {
+        var device = new MtkBootScriptDevice { RejectedHandshakeAttempts = 50 };
+        using var session = new MtkSession(device.Transport, timeoutMs: 1_000, handshakeTimeoutMs: 1_000);
+        await Assert.ThrowsAsync<MtkProtocolException>(
+            () => session.InitializeAsync(TestContext.Current.CancellationToken));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.InitializeAsync(TestContext.Current.CancellationToken));
+    }
 }
