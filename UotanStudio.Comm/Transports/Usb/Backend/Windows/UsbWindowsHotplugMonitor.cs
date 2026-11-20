@@ -238,7 +238,16 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL || wParam == (IntPtr)Win32API.DBT_DEVICEREMOVECOMPLETE) &&
             Windows.TryGetValue(hWnd, out var monitor))
         {
-            WinUSBFinder.InvalidateInventoryForPath(ReadBroadcastInterfacePath(lParam));
+            var path = ReadBroadcastInterfacePath(lParam);
+            WinUSBFinder.InvalidateInventoryForPath(path);
+            if (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL && path is not null)
+            {
+                // Publish the arrival path before the inventory pass starts: a preloader accepts the boot handshake
+                // for only a few seconds, and the poll this line precedes takes longer than that.
+                // 在清单遍历开始前先发布到达路径：preloader 只在数秒内接受 boot 握手，而本行之后的轮询更慢。
+                UsbArrivalBroadcast.Publish(path);
+            }
+
             monitor.TriggerPoll();
         }
 

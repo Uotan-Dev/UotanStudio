@@ -58,6 +58,17 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     public event Action<IReadOnlyList<UsbDeviceChange>>? UsbTopologyChanged;
 
     /// <summary>
+    /// Raised the moment the OS names an arriving USB device-interface path, before any inventory pass runs.
+    /// A MediaTek preloader accepts the boot handshake for only a few seconds, and the inventory walk that
+    /// <see cref="UsbTopologyChanged"/> waits for costs more than that, so this is the only signal early enough to
+    /// handshake one. Subscribers run on the OS message thread and must return immediately, queueing real work.
+    /// <para>操作系统给出到达 USB 设备接口路径的瞬间触发，早于任何清单遍历。联发科 preloader 只在数秒内接受
+    /// boot 握手，而 <see cref="UsbTopologyChanged"/> 所等待的清单遍历比这更慢；因此这是唯一足够早、可用于握手的
+    /// 信号。订阅方运行在操作系统消息线程上，必须立即返回并把实际工作排队。</para>
+    /// </summary>
+    public event Action<string>? UsbArrivalPathObserved;
+
+    /// <summary>
     /// Raised after each committed inventory: one transition per physical identity whose observed
     /// protocol set changed between the previous and the new snapshot, correlated by container id
     /// first and usable physical port path second; never by VID/PID, enumeration order, or position.

@@ -5,6 +5,7 @@ using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -305,6 +306,22 @@ public sealed partial class DeviceController
     private ICommKit RequiredKit => _kit
         ?? throw new NotSupportedException("This controller was composed without a communication kit and cannot expose the raw USB surface.");
 
+    /// <summary>
+    /// Forwards one arrival path from the WinUSB broadcast to <see cref="UsbArrivalPathObserved"/> subscribers,
+    /// isolating their failures so one bad handler never breaks device monitoring.
+    /// <para>把 WinUSB 广播的一条到达路径转发给 <see cref="UsbArrivalPathObserved"/> 订阅方，并隔离其失败，
+    /// 使单个异常处理程序不会破坏设备监视。</para>
+    /// </summary>
+    private void OnUsbArrivalPath(string path)
+    {
+        try
+        {
+            UsbArrivalPathObserved?.Invoke(path);
+        }
+        catch (Exception)
+        {
+        }
+    }
     /// <summary>Starts the OS-driven USB removal watch: on device removal every open lease bound to that physical device is disposed (queued commands cancelled first), its cached properties are dropped and <see cref="DeviceRemoved"/> fires; on a metadata change (mode switch) leases on the old interface are released and <see cref="DeviceChanged"/> fires with the cache retained.
     /// <para>启动操作系统驱动的 USB 移除监视：设备移除时释放绑定该物理设备的所有租约 （先取消排队指令）、丢弃缓存参数并触发 <see cref="DeviceRemoved"/>； 元数据变化（模式切换）时释放旧接口租约、保留缓存并触发 <see cref="DeviceChanged"/>。</para>Does nothing when the controller has no communication kit or the watch already runs.<para>控制器没有通信套件或监视已在运行时不执行任何操作。</para></summary>
     /// <param name="onError">Optional callback for monitor failures.<para>监视失败的可选回调。</para></param>
@@ -325,6 +342,7 @@ public sealed partial class DeviceController
                 }
             }
 
+            UsbArrivalBroadcast.PathArrived += OnUsbArrivalPath;
             var watch = _kit.MonitorUsbDevices(
                 changes =>
                 {

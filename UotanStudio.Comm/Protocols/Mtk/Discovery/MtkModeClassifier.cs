@@ -104,7 +104,12 @@ public static class MtkModeClassifier
                 continue;
             }
 
-            if (interfaceInfo.Class != 0xFF)
+            // A preloader either publishes a vendor-specific 0xFF interface pair or, when it presents itself as a
+            // CDC-ACM composite device, the CDC Data class 0x0A carrying that same bulk pair. Both shapes are the
+            // command stage; only 0xFF used to be recognised, which made a CDC preloader classify as Unknown.
+            // preloader 要么公布厂商专属 0xFF 接口对，要么在把自身呈现为 CDC-ACM 复合设备时由 CDC Data 类 0x0A
+            // 承载同一 bulk 对。两种形态都是命令阶段；此前只识别 0xFF，使 CDC preloader 被判为 Unknown。
+            if (interfaceInfo.Class is not (0xFF or 0x0A))
             {
                 continue;
             }

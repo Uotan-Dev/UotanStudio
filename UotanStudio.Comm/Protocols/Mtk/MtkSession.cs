@@ -326,6 +326,16 @@ public sealed partial class MtkSession : IProtocolSession
     /// <returns>The queried identity. <para>查询到的身份信息。</para></returns>
     private async Task<MtkDeviceInfo> InitializeOwnedAsync(CancellationToken cancellationToken)
     {
+        ThrowIfDisposed();
+        if (_state == MtkSessionState.Bootloader && DeviceInfo is { } completed)
+        {
+            // A parked connection was already handshaken during the automatic preloader/BROM probe; re-running
+            // the exchange would desynchronize a command-stage target, so the recorded identity is returned as-is.
+            // 暂存连接已在自动 preloader/BROM 探测时完成握手；对处于命令阶段的目标重跑交换会使其失步，
+            // 因此原样返回已记录的身份。
+            return completed;
+        }
+
         RequireState(MtkSessionState.Created);
         cancellationToken.ThrowIfCancellationRequested();
         NoteUploadStage(MtkDaUploadStage.Handshake);

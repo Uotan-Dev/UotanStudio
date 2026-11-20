@@ -169,6 +169,11 @@ internal static partial class MtkSerialPortFallback
             return null;
         }
 
+        // The node itself may be the Ports device, or a USB-class function whose serial port lives on a child
+        // node (a vendor VCOM driver that keeps the function under the USB class). Both shapes are valid MTK
+        // preloader attachments, so the child walk runs whenever the node itself answers nothing.
+        // 节点本身可能就是 Ports 设备，也可能是 USB 类功能而串口位于子节点（把功能挂在 USB 类下的厂商 VCOM 驱动）。
+        // 两种形态都是合法的 MTK preloader 挂接，因此节点本身无答案时总是继续查找子节点。
         return TryReadSerialPortName(devInst) ?? ReadChildSerialPortName(devInst);
     }
 

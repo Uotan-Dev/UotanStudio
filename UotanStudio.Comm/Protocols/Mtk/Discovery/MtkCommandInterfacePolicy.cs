@@ -108,19 +108,37 @@ public static class MtkCommandInterfacePolicy
                 "The backend reported no per-interface metadata; the caller-provided interface binding is preserved.");
         }
 
-        var requiredClass = options?.CommandInterfaceClass ?? 0xFF;
+        var requiredClass = options?.CommandInterfaceClass;
         var requiredSubClass = options?.CommandInterfaceSubClass;
         var candidates = new List<UsbInterfaceInfo>();
         var loggingCandidates = 0;
         foreach (var interfaceInfo in device.Interfaces)
         {
-            if (interfaceInfo.Class != requiredClass
-                || (requiredSubClass is { } sub && interfaceInfo.SubClass != sub))
+            // The caller's explicit class filter wins; without one, both documented command shapes qualify: the
+            // vendor-specific 0xFF pair and the CDC Data class 0x0A pair that a preloader publishing a CDC-ACM
+            // composite device uses instead. That device exposes 0x0A with the bulk pair and 0x02 with the
+            // notification interrupt endpoint, so requiring 0xFF would reject a healthy preloader.
+            // 调用方显式的类过滤优先；未指定时两种已记载的命令形态都合格：厂商专属 0xFF 对，以及把自身公布为
+            // CDC-ACM 复合设备的 preloader 所使用的 CDC Data 类 0x0A 对。该类设备以 0x0A 提供 bulk 对、以 0x02
+            // 提供通知中断端点，因此要求 0xFF 会把健康的 preloader 拒之门外。
+            if (requiredClass is { } wantedClass && interfaceInfo.Class != wantedClass)
+            {
+                continue;
+            }
+
+            if (requiredSubClass is { } sub && interfaceInfo.SubClass != sub)
             {
                 continue;
             }
 
             if (interfaceInfo.Class == 0xFF && interfaceInfo.SubClass == 0x42 && interfaceInfo.Protocol == 0x01)
+            {
+                continue;
+            }
+
+            var isVendorCommandClass = interfaceInfo.Class == 0xFF;
+            var isCdcDataClass = interfaceInfo.Class == 0x0A;
+            if (requiredClass is null && !isVendorCommandClass && !isCdcDataClass)
             {
                 continue;
             }

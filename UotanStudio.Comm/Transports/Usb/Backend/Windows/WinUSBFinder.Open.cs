@@ -38,7 +38,12 @@ internal static partial class WinUSBFinder
 
         if (!WinUsbInventoryCache.TryGet(instanceId, out var cached))
         {
-            return null;
+            // The topology event invalidates this instance right before the handshake runs, so a just-arrived
+            // preloader always misses the cache. Probing the single path directly costs one CreateFileW plus a
+            // descriptor read instead of a whole inventory walk, which is the only way to meet its short window.
+            // 拓扑事件会在握手前让该实例失效，因此刚到达的 preloader 必然缓存未命中。直接探测这条路径只需要一次
+            // CreateFileW 与一次描述符读取，而不是整棵清单遍历；这是赶上其短窗口的唯一方式。
+            return ProbeDevice(devicePath, options: null, serial: null, cached: null) as UsbDevice;
         }
 
         var metadata = CreateCachedMetadataDevice(vid.Value, pid.Value, cached);
