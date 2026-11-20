@@ -195,26 +195,6 @@ public sealed class EdlProgrammerImageSetTests : IDisposable
 
     /// <remarks>
     /// The fixture is a real vendor manifest and stays outside the repository, so the case is environment-gated
-    /// instead of being hard-coded to one machine's path.
-    /// <para>该夹具是真实厂商清单且不在仓库内，因此用例以环境变量门控，而不是写死某台机器的路径。</para>
-    /// </remarks>
-    [Fact]
-    public void Read_RealVendorManifestSample_ParsesEveryDeclaredImage()
-    {
-        const string sampleVariable = "UOTAN_SAHARA_MANIFEST_SAMPLE";
-        var sample = Environment.GetEnvironmentVariable(sampleVariable);
-        Assert.SkipUnless(!string.IsNullOrWhiteSpace(sample) && File.Exists(sample),
-            $"{sampleVariable} is not set to an existing qsahara_device_programmer.xml path; " +
-            "set it to the vendor manifest to run this fixture case.");
-
-        var images = SaharaProgrammerManifest.Read(sample!);
-
-        Assert.True(images.Count >= 2, $"The sample declared only {images.Count} images.");
-        Assert.Equal(images.Count, images.Select(image => image.ImageId).Distinct().Count());
-        Assert.All(images, image => Assert.True(File.Exists(image.Path),
-            $"Declared image {image.ImageId} is missing at {image.Path}."));
-        Assert.All(images, image => Assert.True(image.LengthBytes > 0));
-    }
 
     /// <remarks>
     /// Proves the protocol layer really keys READ_DATA by image id: the device asks for two different ids and

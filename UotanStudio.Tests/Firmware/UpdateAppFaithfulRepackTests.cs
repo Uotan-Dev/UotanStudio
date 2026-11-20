@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class UpdateAppFaithfulRepackTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-updateapp-faithful-" + Guid.NewGuid().ToString("N"));

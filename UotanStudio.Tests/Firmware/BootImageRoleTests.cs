@@ -12,6 +12,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>Boot 镜像角色测试：依据头部版本、区段空性与分区名提示检测 init_boot / recovery / boot，打包时对 init_boot
 /// 空 kernel 规则的强制，以及格式处理器元数据与目录重打包管道报告的角色。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class BootImageRoleTests
 {
     private static readonly byte[] TestKernel = BuildBytes(1024, factor: 7);

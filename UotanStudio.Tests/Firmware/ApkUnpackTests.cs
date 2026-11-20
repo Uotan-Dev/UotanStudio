@@ -6,6 +6,7 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>Verifies that APK unpack extracts every ZIP entry with bounded output and zip-slip protection.
 /// <para>验证 APK 解包完整解出全部 ZIP 条目，并实施有界输出与 zip-slip 防护。</para></summary>
+[Collection("Workspace state")]
 public class ApkUnpackTests
 {
     private static string CreateApk(Action<ZipArchive> populate)

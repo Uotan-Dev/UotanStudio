@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware.Fat;
 
+[Collection("Workspace state")]
 public sealed class ExFatKernelVolumeTests
 {
     private const string FixtureAsset = "exfat-kernel-written.deflate";

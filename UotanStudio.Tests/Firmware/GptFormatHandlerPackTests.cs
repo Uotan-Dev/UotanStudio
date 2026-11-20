@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class GptFormatHandlerPackTests : IDisposable
 {
     private static readonly Guid LinuxFileSystemData = new("0FC63DAF-8483-4772-8E79-3D69D8477DE4");

@@ -13,6 +13,7 @@ namespace UotanStudio.Tests.Firmware;
 /// file before extraction, and byte progress spans the whole job smoothly.
 /// <para>ZIP 包裹载荷提取测试：内嵌 payload 始终在提取前物化到临时文件，字节进度平滑覆盖整个作业。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class PayloadZipExtractionTests
 {
     private const uint BlockSize = 4;

@@ -6,6 +6,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class CpbTests : IDisposable
 {
     private readonly TempDirectory _temp = new();

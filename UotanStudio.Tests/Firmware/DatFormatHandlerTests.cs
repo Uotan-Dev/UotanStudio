@@ -18,6 +18,7 @@ namespace UotanStudio.Tests.Firmware;
 /// transfer list 或 <c>.new.dat</c> 时暴露非空的 transfer list 元数据；无关的 <c>.dat</c>/<c>.list</c> 文件
 /// 不得被误路由。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class DatFormatHandlerTests
 {
     private const string DatFormatName = "Android DAT (transfer list)";

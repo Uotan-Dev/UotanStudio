@@ -7,6 +7,7 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>Checks complete LP handler workflows and failed-output preservation. <para>检查 LP 处理器完整流程及失败输出保护。</para></summary>
+[Collection("Workspace state")]
 public class LpFormatHandlerTests
 {
     private const long DataOffset = 300 * 1024;

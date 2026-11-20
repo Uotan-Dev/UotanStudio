@@ -15,6 +15,7 @@ namespace UotanStudio.Tests.Firmware;
 /// EROFS 打包 → 解析往返测试（含压缩路径）。
 /// <para>EROFS build → parse round-trip tests (including the compressed path).</para>
 /// </summary>
+[Collection("Workspace state")]
 public class ErofsTests
 {
     /// <summary>

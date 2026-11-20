@@ -14,6 +14,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class FirmwareExtractionConformanceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-extraction-" + Guid.NewGuid().ToString("N"));

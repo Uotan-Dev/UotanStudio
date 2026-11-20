@@ -8,6 +8,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public class ErofsPreservedRebuildReplayTests
 {
     [Fact]

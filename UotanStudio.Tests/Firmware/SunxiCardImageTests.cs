@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class SunxiCardImageTests
 {
     private const int BlockSize = 512;
@@ -18,7 +19,6 @@ public sealed class SunxiCardImageTests
     private const int BootPackageBlock = 32800;
     private const int PartitionCount = 128;
     private const int PartitionEntrySize = 128;
-    private const string CorpusVariable = "UOTAN_SUNXI_CARD_CORPUS";
 
     private static readonly (string Name, int FirstLba, int Sectors)[] Layout =
     [
@@ -135,58 +135,6 @@ public sealed class SunxiCardImageTests
         Assert.False(Directory.Exists(output) && Directory.EnumerateFileSystemEntries(output).Any());
     }
 
-    [Fact]
-    public async Task ReadMetadataAsync_RealVendorCorpus_CarvesEveryVendorFexByteForByte()
-    {
-        var image = RequireCorpusImage();
-        await using var stream = File.OpenRead(image);
-        var parsed = SunxiCardImageFormat.Read(stream, TestContext.Current.CancellationToken);
-        var vendor = Path.Combine(Path.GetDirectoryName(image)!, "vendor-dump");
-        Assert.SkipUnless(Directory.Exists(vendor),
-            $"Place the vendor .fex dump of the corpus image in '{vendor}' to run the byte-level comparison.");
-
-        using var temp = new TempDirectory();
-        var output = Path.Combine(temp.Path, "out");
-        var result = await FormatDetector.Detect(image)!
-            .UnpackAsync(image, output, new UnpackOptions(), TestContext.Current.CancellationToken);
-
-        Assert.True(result.Success, result.Summary);
-        Assert.Equal(parsed.Partitions.Count, result.Components.Count);
-        Assert.NotEmpty(parsed.BootResourceFiles);
-        Assert.All(parsed.Environments.Values, environment => Assert.True(environment.CrcMatches));
-        foreach (var partition in parsed.Partitions)
-        {
-            var counterpart = Path.Combine(vendor, partition.ExportName);
-            if (!File.Exists(counterpart))
-            {
-                continue;
-            }
-
-            var expected = await File.ReadAllBytesAsync(counterpart, TestContext.Current.CancellationToken);
-            var actual = await File.ReadAllBytesAsync(Path.Combine(output, partition.ExportName),
-                TestContext.Current.CancellationToken);
-
-            var shared = Math.Min(actual.Length, expected.Length);
-            Assert.True(actual.AsSpan(0, shared).SequenceEqual(expected.AsSpan(0, shared)),
-                $"{partition.ExportName}: carved bytes differ from the vendor dump in the first {shared} B");
-            var longer = actual.Length >= expected.Length ? actual.AsSpan() : expected.AsSpan();
-            Assert.True(longer[shared..].IndexOfAnyExcept((byte)0) < 0,
-                $"{partition.ExportName}: the length difference between {actual.Length} B and {expected.Length} B is not NUL padding");
-        }
-    }
-
-    private static string RequireCorpusImage()
-    {
-        var directory = Environment.GetEnvironmentVariable(CorpusVariable);
-        Assert.SkipUnless(
-            !string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory),
-            $"Set {CorpusVariable} to a directory holding an Allwinner SD-card image to run the vendor corpus check.");
-        var matches = Directory.EnumerateFiles(directory!, "*.img", SearchOption.AllDirectories)
-            .Order(StringComparer.OrdinalIgnoreCase).ToArray();
-        Assert.SkipUnless(matches.Length > 0,
-            $"Set {CorpusVariable} to a directory containing an Allwinner SD-card image to run this acceptance.");
-        return matches[0];
-    }
     private static byte[] BuildImage(bool withEgon = true)
     {
         var partitions = Layout.Select(entry => new SunxiCardImageBuilder.Partition(

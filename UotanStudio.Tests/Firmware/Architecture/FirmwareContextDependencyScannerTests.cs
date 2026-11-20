@@ -8,6 +8,7 @@ namespace UotanStudio.Tests.Firmware.Architecture;
 /// <para>针对 <see cref="FirmwareContextDependencyScanner"/> 的反向对照：用合成源码证明新增上下文边与环确实会被报告，
 /// 而仅出现在文档注释中的提及不会被计入。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class FirmwareContextDependencyScannerTests
 {
     private static readonly IReadOnlySet<string> KnownContextNames = new HashSet<string>(StringComparer.Ordinal)

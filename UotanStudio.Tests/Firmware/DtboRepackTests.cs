@@ -11,6 +11,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class DtboRepackTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-dtbo-repack-" + Guid.NewGuid().ToString("N"));

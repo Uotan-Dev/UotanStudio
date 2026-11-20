@@ -5,6 +5,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class OnePlusOpsUnpackTests
 {
     [Theory]

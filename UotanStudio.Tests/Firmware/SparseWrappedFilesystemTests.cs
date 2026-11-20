@@ -13,6 +13,7 @@ namespace UotanStudio.Tests.Firmware;
 /// Tests filesystem parsing through sparse logical streams and recursive unpacking.
 /// <para>验证稀疏逻辑流上的文件系统解析与级联解包。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class SparseWrappedFilesystemTests
 {
     public SparseWrappedFilesystemTests() => FirmwareFormatRegistry.RegisterAll();

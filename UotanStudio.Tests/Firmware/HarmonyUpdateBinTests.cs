@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class HarmonyUpdateBinTests
 {
     private const string FormatName = "HarmonyOS update.bin";

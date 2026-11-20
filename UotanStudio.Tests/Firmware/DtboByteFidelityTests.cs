@@ -3,6 +3,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class DtboByteFidelityTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-dtbo-fidelity-" + Guid.NewGuid().ToString("N"));

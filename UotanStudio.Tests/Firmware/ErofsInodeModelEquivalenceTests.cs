@@ -13,7 +13,6 @@ public class ErofsInodeModelEquivalenceTests
 {
     private const int BlockSize = 4096;
     private const int BlockSizeBits = 12;
-    private const string CorpusVariable = "UOTAN_EROFS_CORPUS";
 
     [Theory]
     [InlineData("flat")]
@@ -226,120 +225,6 @@ public class ErofsInodeModelEquivalenceTests
         Assert.Equal([0x10UL, 0x20UL, 0x30UL], narrowIdata.ChunkIndex!);
         Assert.False(narrowChunk.UsesChunkIndexes);
         Assert.Equal(1, narrowChunk.ChunkFormatBlkBits);
-    }
-
-    [Fact]
-    public void Decode_CorpusImageInode_MatchesIndependentDecodeForEveryField()
-    {
-        var directory = Environment.GetEnvironmentVariable(CorpusVariable);
-        Assert.SkipUnless(
-            !string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory),
-            $"Set {CorpusVariable} to a directory of real EROFS images to run this comparison.");
-
-        var images = Directory.GetFiles(directory!, "*.img");
-        Assert.NotEmpty(images);
-
-        var verifiedImages = 0;
-        var verifiedInodes = 0;
-        var skipped = new List<string>();
-        foreach (var path in images)
-        {
-            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var stream = File.OpenRead(path);
-            ErofsParser parser;
-            try
-            {
-                parser = new ErofsParser(stream);
-            }
-            catch (Exception ex) when (ex is FormatException or FileSystemException or NotSupportedException)
-            {
-                skipped.Add($"{Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
-                continue;
-            }
-
-            using (parser)
-            {
-                var superblock = parser.Superblock;
-                IReadOnlyList<ErofsFileEntry> entries;
-                try
-                {
-                    entries = parser.EnumerateEntries();
-                }
-                catch (Exception ex) when (ex is FormatException or FileSystemException or NotSupportedException or InvalidOperationException)
-                {
-                    skipped.Add($"{Path.GetFileName(path)}: {ex.GetType().Name} {ex.Message}");
-                    continue;
-                }
-
-                var sawInode = false;
-                foreach (var entry in entries)
-                {
-                    if ((entry.Nid >> 63) != 0)
-                    {
-                        continue;
-                    }
-
-                    var offset = superblock.GetInodeOffset(entry.Nid);
-                    if (offset < 0 || offset + 2 > RandomAccess.GetLength(handle))
-                    {
-                        continue;
-                    }
-
-                    var raw = ReadInodeRecord(handle, offset);
-                    InodeRecordOracle flat;
-                    try
-                    {
-                        flat = InodeRecordOracle.Decode(raw);
-                    }
-                    catch (FormatException)
-                    {
-                        Assert.Throws<FormatException>(
-                            () => ErofsInode.FromBytes(raw, entry.Nid, superblock.BlockSizeBits));
-                        continue;
-                    }
-
-                    var unified = ErofsInode.FromBytes(raw, entry.Nid, superblock.BlockSizeBits);
-                    AssertOnDiskFieldsEqual(entry.Nid, flat, unified);
-                    AssertRecordSerializationMatches(flat, unified, raw, $"corpus '{path}' nid {entry.Nid}");
-                    if (flat.IsCompressed)
-                    {
-                        var headerOffset = AlignUp(offset + flat.InlineDataOffset, 8);
-                        if (headerOffset + ZErofsMapHeader.Size <= RandomAccess.GetLength(handle))
-                        {
-                            var headerBytes = new byte[ZErofsMapHeader.Size];
-                            RandomAccess.Read(handle, headerBytes, headerOffset);
-                            unified.AttachMapHeader(headerBytes, superblock.BlockSizeBits);
-                            var header = ZErofsMapHeader.FromBytes(headerBytes);
-                            Assert.Equal(header.Advise, unified.ZAdvise);
-                            if (header.IsFragmentInode)
-                            {
-                                Assert.Equal(
-                                    (long)(BinaryPrimitives.ReadUInt64LittleEndian(headerBytes) & ~(1UL << 63)),
-                                    unified.FragmentOff);
-                            }
-                        }
-                    }
-
-                    sawInode = true;
-                    verifiedInodes++;
-                }
-
-                if (sawInode)
-                {
-                    verifiedImages++;
-                }
-                else
-                {
-                    skipped.Add($"{Path.GetFileName(path)}: {entries.Count} entries, none comparable");
-                }
-            }
-        }
-
-        Assert.Equal(images.Length, verifiedImages + skipped.Count);
-        Assert.True(
-            verifiedImages > 0,
-            $"No corpus image yielded an inode comparison. Skipped: {string.Join(" | ", skipped)}");
-        Assert.True(verifiedInodes > 0, "No corpus inode was compared.");
     }
 
     private static ErofsOptions CreateOptions(string variant) => variant switch

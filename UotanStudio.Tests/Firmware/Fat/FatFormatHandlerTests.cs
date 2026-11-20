@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware.Fat;
 
+[Collection("Workspace state")]
 public class FatFormatHandlerTests
 {
     public FatFormatHandlerTests() => FirmwareFormatRegistry.RegisterAll();

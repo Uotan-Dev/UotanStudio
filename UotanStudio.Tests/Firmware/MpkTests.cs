@@ -6,6 +6,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class MpkTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-mpk-" + Guid.NewGuid().ToString("N"));

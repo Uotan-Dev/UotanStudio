@@ -6,6 +6,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class AllwinnerImageWtyTests : IDisposable
 {
     private const int HeaderRecordSize = 1024;

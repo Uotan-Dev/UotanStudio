@@ -15,6 +15,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>SPRD/UNISOC PAC 处理器的格式级测试，基于测试内合成的最小合法 PAC 镜像
 /// （头部 + 目录表 + 条目数据 + CRC-16 校验和）。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class PacFormatHandlerTests
 {
     private const string PacFormatName = "SPRD/UNISOC PAC Firmware";

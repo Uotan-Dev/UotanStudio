@@ -8,6 +8,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware.Fat;
 
+[Collection("Workspace state")]
 public class FatBuilderTests
 {
     private static readonly byte[] Readme = Encoding.UTF8.GetBytes("firmware readme payload");

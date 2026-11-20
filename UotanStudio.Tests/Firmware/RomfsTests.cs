@@ -13,6 +13,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>RomFS read-only parsing and unpacking tests: synthetic volume round-trips, hard and symbolic
 /// links, and malformed-image rejection.</para>
 /// </summary>
+[Collection("Workspace state")]
 public class RomfsTests
 {
     private enum NextMode

@@ -6,6 +6,7 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>Tests strict verification of footer-referenced VBMeta images. <para>测试 footer 引用的 VBMeta 镜像的严格验证。</para></summary>
+[Collection("Workspace state")]
 public class AvbFooterVerificationTests
 {
     [Theory]

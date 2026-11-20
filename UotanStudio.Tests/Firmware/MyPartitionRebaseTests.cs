@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class MyPartitionRebaseTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-mypartition-" + Guid.NewGuid().ToString("N"));

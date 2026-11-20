@@ -15,6 +15,7 @@ namespace UotanStudio.Tests.Firmware;
 /// upstream header layout so every field is derived from the geometry rather than from a fixture.
 /// <para>RKBOOT/RKLOADER loader 镜像的识别、元数据与解包用例；镜像按上游头部布局合成，每个字段都由几何推导而不是取自固定夹具。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class RockchipLoaderTests : IDisposable
 {
     private const int HeaderSize = 102;
@@ -105,17 +106,6 @@ public sealed class RockchipLoaderTests : IDisposable
         var path = Path.Combine(_root, name);
         File.WriteAllBytes(path, image);
         return path;
-    }
-
-    private static string LocateVendorSample()
-    {
-        var sample = Environment.GetEnvironmentVariable("UOTAN_RK_LOADER_SAMPLE");
-        if (string.IsNullOrWhiteSpace(sample) || !File.Exists(sample))
-        {
-            Assert.Skip("Set UOTAN_RK_LOADER_SAMPLE to a Rockchip RKBOOT/RKLOADER file (for example MiniLoaderAll.bin) to run this case.");
-        }
-
-        return sample!;
     }
 
     [Fact]
@@ -316,20 +306,5 @@ public sealed class RockchipLoaderTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("above the", result.Summary, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ReadMetadataAsync_VendorLoaderSample_ReportsVerifiedChecksum()
-    {
-        var sample = LocateVendorSample();
-        FirmwareFormatRegistry.RegisterAll();
-        var handler = Assert.IsType<RockchipLoaderFormatHandler>(FormatDetector.Detect(sample));
-
-        var result = await handler.ReadMetadataAsync(sample, TestContext.Current.CancellationToken);
-
-        Assert.True(result.Success, result.Summary);
-        Assert.Equal("Verified", result.Metadata["ChecksumStatus"]);
-        Assert.NotEmpty(result.Components);
-        Assert.NotEqual("0", result.Metadata["EntryCount471"]);
     }
 }

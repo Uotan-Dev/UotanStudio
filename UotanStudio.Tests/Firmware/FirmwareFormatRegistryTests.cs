@@ -11,6 +11,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>反射守卫用例：当 Firmware 程序集中存在具体格式处理器却未被 <see cref="FirmwareFormatRegistry.RegisterAll"/>
 /// 发布时使测试失败，从而防止新写的处理器未接入检测链路。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class FirmwareFormatRegistryTests
 {
     private static readonly Type[] IntentionallyUnregisteredHandlers =

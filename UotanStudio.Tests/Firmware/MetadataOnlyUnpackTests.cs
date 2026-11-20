@@ -6,6 +6,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class MetadataOnlyUnpackTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uot-metadata-only-" + Guid.NewGuid().ToString("N"));

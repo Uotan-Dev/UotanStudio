@@ -10,6 +10,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public class ErofsFormatConformanceTests
 {
     private const int SuperblockFeatureCompatOffset = ErofsSuperblock.SuperblockOffset + 8;

@@ -15,6 +15,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>F2FS 构建器 → 解析器往返测试：从含文件、子目录、符号链接与大文件（跨越 direct 节点）的
 /// 临时目录构建镜像，再读回并断言文件树、文件内容、稀疏洞补零、处理器判定与畸形输入的有界性检查。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class F2fsTests
 {
     private const int BlockSize = 4096;

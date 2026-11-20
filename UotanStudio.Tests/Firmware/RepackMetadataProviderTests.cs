@@ -4,6 +4,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class RepackMetadataProviderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-repack-provider-" + Guid.NewGuid().ToString("N"));

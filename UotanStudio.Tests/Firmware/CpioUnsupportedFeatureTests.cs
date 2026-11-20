@@ -14,6 +14,7 @@ namespace UotanStudio.Tests.Firmware;
 /// Leaf-type coverage for the CPIO compressed-capture and CPIO writer exception classifications.
 /// <para>为 CPIO 压缩捕获与 CPIO 写入器的异常分类提供叶子类型覆盖。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class CpioUnsupportedFeatureTests
 {
     private static readonly byte[] TrailerOnlyNewcCpio = Encoding.ASCII.GetBytes(

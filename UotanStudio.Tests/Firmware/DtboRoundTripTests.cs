@@ -14,6 +14,7 @@ namespace UotanStudio.Tests.Firmware;
 /// 32 字节条目描述符、数据块位于 dt_offset），并包含按该定义手工编码的用例，避免读取端
 /// 只被自家写入端验证。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class DtboRoundTripTests
 {
     private static byte[] BuildDtb(string marker)

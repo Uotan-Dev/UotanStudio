@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class VendorFormatBoundaryTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-vendor-" + Guid.NewGuid().ToString("N"));

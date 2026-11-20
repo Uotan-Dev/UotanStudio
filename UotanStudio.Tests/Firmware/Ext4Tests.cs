@@ -14,6 +14,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>EXT4 构建器 → 解析器往返测试：从含文件、子目录、符号链接与大文件的临时目录构建镜像，
 /// 再读回并断言文件树、文件内容与稀疏洞补零。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class Ext4Tests
 {
     private const int BlockSize = 4096;

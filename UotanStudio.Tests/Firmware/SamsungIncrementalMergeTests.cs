@@ -19,6 +19,7 @@ namespace UotanStudio.Tests.Firmware;
 /// 槽位配对、ZIP 文件名查找、prism 跳过、LZ4 super 封装与确定性失败均在无设备环境验证。
 /// 闭源 arm64 oracle 对比受环境门控，在没有持久模拟桩时跳过。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class SamsungIncrementalMergeTests
 {
     private static readonly byte[] OldSystem = BlockPattern(0x40, 4);

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public class GptWriterTests
 {
     [Fact]

@@ -15,6 +15,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <para>SquashFS v4 read-only parsing tests: synthetic images (stored and gzip metadata, LZ4 data blocks,
 /// both byte orders), extraction round-trips, and malformed-image rejection.</para>
 /// </summary>
+[Collection("Workspace state")]
 public class SquashfsTests
 {
     private const int BlockSize = 4096;

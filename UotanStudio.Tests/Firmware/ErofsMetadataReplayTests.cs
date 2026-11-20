@@ -10,6 +10,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public class ErofsMetadataReplayTests
 {
     private static readonly ulong Timestamp = (ulong)DateTimeOffset.UtcNow.AddHours(-2).ToUnixTimeSeconds();

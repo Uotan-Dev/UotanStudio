@@ -23,6 +23,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <c>Name</c> 槽位并以 NUL 收尾（可用 255 字节）。每种格式都校验拒绝路径（消息携带测得的字节数、字段上限与原值）
 /// 以及上限路径（检查实际产出的原始字节），因此 <c>'?'</c> 替换或被裁剪的前缀无法借往返读取蒙混过关。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class VendorNameFieldTests : IDisposable
 {
     private const byte QuestionMark = (byte)'?';

@@ -18,6 +18,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <see cref="FirmwareFormatRegistry.RegisterAll"/> 后须能被 <see cref="FormatDetector"/> 识别并暴露非空的
 /// 头部元数据；无扩展名时裸 'BSDIFF40' 头部也能按内容识别，而无关数据不得被误路由。</para>
 /// </summary>
+[Collection("Workspace state")]
 public class DiffFormatHandlerTests
 {
     private const string DiffFormatName = "bsdiff Binary Patch";

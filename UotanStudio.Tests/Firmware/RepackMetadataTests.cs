@@ -16,6 +16,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class RepackMetadataTests : IDisposable
 {
     private readonly string _root = Path.Combine(OperatingSystem.IsWindows()

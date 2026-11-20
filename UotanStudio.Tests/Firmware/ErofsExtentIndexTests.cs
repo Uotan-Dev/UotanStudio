@@ -21,6 +21,7 @@ namespace UotanStudio.Tests.Firmware;
 /// 传统完整索引形态所用的常量十六；而 advise 字的第 0 位只在 compressed-full 布局下表示 <c>EXTENTS</c>，因为
 /// 紧凑索引布局把同一位读作 <c>COMPACTED_2B</c>。</para>
 /// </summary>
+[Collection("Workspace state")]
 public sealed class ErofsExtentIndexTests
 {
     private const int BlockSize = 4096;
