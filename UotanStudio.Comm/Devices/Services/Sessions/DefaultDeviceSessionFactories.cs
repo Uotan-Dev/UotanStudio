@@ -298,14 +298,13 @@ internal sealed class MtkDeviceSessionFactory : IDeviceSessionFactory
         if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
         {
             var serialSession = new MtkSession(serial);
-            // The serial shape carries no live descriptors, but discovery already observed this endpoint's USB
-            // identity. Recording it is what selects the relaxed handshake the preloader ports need; without it
-            // every serial lease would be forced onto the strict Boot ROM path and fail all of its retries.
-            // 串口形态没有实时描述符，但发现层已观测到该端点的 USB 身份。记录它正是选择 preloader 端口所需宽松
-            // 握手的依据；缺少它会让每次串口租约都被迫走严格 Boot ROM 路径，并在全部重试中失败。
             if (endpoint.Usb is { } usbDetails)
             {
                 serialSession.NoteUsbIdentity(usbDetails.VendorId, usbDetails.ProductId);
+            }
+            else
+            {
+                serialSession.NoteDescriptorlessSerial();
             }
 
             return Task.FromResult<object>(serialSession);

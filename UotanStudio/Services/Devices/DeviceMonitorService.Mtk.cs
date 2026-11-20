@@ -105,8 +105,10 @@ public sealed partial class DeviceMonitorService
                 .ConfigureAwait(false);
             if (lease is not null)
             {
+                await _mtkConnections.ParkArrivalLeaseAsync(lease, devicePath, budget.Token)
+                    .ConfigureAwait(false);
                 LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                    $"Automatic MTK handshake completed on arrival path '{devicePath}'.");
+                    $"Automatic MTK handshake completed on arrival path '{devicePath}' and parked for reuse.");
                 return;
             }
 
@@ -180,16 +182,32 @@ public sealed partial class DeviceMonitorService
         _ = HandshakeComPortInBackgroundAsync(port);
     }
 
+    /// <summary>
+    /// Handshakes one newly appeared COM port and parks the lease under its port name. Ports that do not answer
+    /// the boot handshake are simply left alone: a Bluetooth serial port is a legitimate COM device on this
+    /// machine and must not be treated as a failure. Disposing a completed handshake instead of parking it would
+    /// burn the preloader's few-second window for every later consumer.
+    /// <para>对刚出现的 COM 口执行握手，并按端口名暂存租约。不应答 boot 握手的端口会被直接放过：蓝牙串口在
+    /// 本机是合法的 COM 设备，不得当作失败。若握手完成后直接释放而不暂存，就会为后续所有消费方烧掉
+    /// preloader 的数秒窗口。</para>
+    /// </summary>
     private async Task HandshakeComPortInBackgroundAsync(string port)
     {
         try
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(AutomaticMtkHandshakeTimeoutSeconds));
-            var session = await MtkSession.OpenSerialAsync(port, AutomaticMtkBaudRate, budget.Token)
-                .ConfigureAwait(false);
-            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                $"MTK VCOM handshake completed on '{port}': hardware 0x{session.DeviceInfo?.HardwareCode:X4}.");
-            session.Dispose();
+            var lease = await _mtkConnections.HandshakePortAsync(port,
+                token => _controller.HandshakeMtkSerialPortAsync(port, AutomaticMtkBaudRate, token),
+                budget.Token).ConfigureAwait(false);
+            if (lease is not null)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                    $"MTK VCOM handshake completed on '{port}' and parked for reuse.");
+                return;
+            }
+
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"COM port '{port}' was skipped: another handshake owns it.");
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -280,7 +298,7 @@ public sealed partial class DeviceMonitorService
                 return;
             }
 
-            await _mtkConnections.HandshakeAsync(device, budget.Token).ConfigureAwait(false);
+            await _mtkConnections.HandshakeAsync(device, budget.Token, info).ConfigureAwait(false);
             LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
                 $"Automatic MTK USB handshake completed for '{deviceKey}' ({info.VendorId:X4}:{info.ProductId:X4}).");
         }

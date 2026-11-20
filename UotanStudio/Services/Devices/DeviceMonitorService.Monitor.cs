@@ -108,7 +108,18 @@ public sealed partial class DeviceMonitorService
                     .ConfigureAwait(false)
                     ?? throw new IOException($"The MTK device '{device.Key}' is no longer present."),
             ScheduleChange,
-            (info, baudRate, token) => _controller.OpenVcomLeaseAsync(info, baudRate, token));
+            (info, baudRate, token) => _controller.OpenVcomLeaseAsync(info, baudRate, token),
+            portResolver: info =>
+            {
+                try
+                {
+                    return _controller.ResolveMtkSerialPort(info);
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            });
         _edlConnections = new EdlConnectionCache((device, token) => Task.Run(
             () => LeaseEndpoint(device, sessionKind: Comm.Contracts.DeviceSessionKind.Edl,
                 cancellationToken: token), token), ScheduleChange);

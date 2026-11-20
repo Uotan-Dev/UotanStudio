@@ -94,6 +94,28 @@ public sealed class MtkBootHandshakeTests
         Assert.Equal(1 + 5, device.HandshakeReceived.Count);
     }
 
+    /// <summary>
+    /// A serial lease with no USB identity cannot classify the target from product ids and must not fall onto the
+    /// strict Boot ROM sequence, which a VCOM preloader rejects; the descriptor-less hint selects the relaxed
+    /// wake-up handshake instead, byte-for-byte the same shape the descriptor-based relaxed path produces.
+    /// <para>不带 USB 身份的串口租约无法按产品 ID 分类目标，绝不能落到 VCOM preloader 会拒绝的严格 Boot ROM
+    /// 序列上；无描述符提示改选宽松唤醒握手，其字节形态与基于描述符的宽松路径完全一致。</para>
+    /// </summary>
+    [Fact]
+    public async Task DescriptorlessSerialHintSelectsRelaxedHandshake()
+    {
+        var device = new MtkBootScriptDevice { RejectedHandshakeAttempts = 50 };
+        using var session = new MtkSession(device.Transport, timeoutMs: 1_000, handshakeTimeoutMs: 1_000);
+        session.NoteDescriptorlessSerial();
+
+        await Assert.ThrowsAsync<MtkProtocolException>(
+            () => session.InitializeAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(MtkSessionState.Faulted, session.State);
+
+        Assert.Equal(1 + 5, device.HandshakeReceived.Count);
+    }
+
     [Fact]
     public async Task TargetConfigurationStatusIsChecked()
     {

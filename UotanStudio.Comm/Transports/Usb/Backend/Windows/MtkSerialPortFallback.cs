@@ -47,6 +47,31 @@ internal static partial class MtkSerialPortFallback
     private static partial Regex ComPortNamePattern();
 
     /// <summary>
+    /// Resolves the serial port name a MediaTek boot endpoint is bound to without opening it, so callers can key a
+    /// parked connection by the exact port the endpoint owns. Every branch is fail-closed and resolves identity
+    /// from the platform's own topology, matching the rules of <see cref="TryOpenConnected"/>.
+    /// <para>解析联发科启动端点绑定的串口名但不打开它，使调用方可以用端点实际拥有的端口作为暂存连接的键。
+    /// 每个分支都 fail-closed，并按 <see cref="TryOpenConnected"/> 的规则从平台自身拓扑解析身份。</para>
+    /// </summary>
+    /// <param name="devicePath">The exact device-interface path of the endpoint.
+    /// <para>端点的精确设备接口路径。</para></param>
+    /// <returns>The resolved port name, or <see langword="null"/> when no port is bound or the platform is
+    /// unsupported. <para>解析出的端口名；未绑定串口或平台不支持时为 <see langword="null"/>。</para></returns>
+    internal static string? TryResolvePortName(string? devicePath)
+    {
+        if (string.IsNullOrWhiteSpace(devicePath))
+        {
+            return null;
+        }
+
+        return OperatingSystem.IsWindows()
+            ? TryResolveWindowsPortName(devicePath)
+            : OperatingSystem.IsOSPlatform("OSX")
+                ? MacIoRegistryNative.TryFindSerialDeviceNode(devicePath)
+                : null;
+    }
+
+    /// <summary>
     /// Resolves the serial port owned by the endpoint and opens it without flow control, which is what the
     /// MediaTek boot protocol expects over a VCOM pipe.
     /// <para>解析端点所属的串口并以无流控方式打开，这正是联发科启动协议在 VCOM 管道上期望的方式。</para>
@@ -60,11 +85,7 @@ internal static partial class MtkSerialPortFallback
     /// <see langword="null"/>。</para></returns>
     internal static SerialTransport? TryOpenConnected(string? devicePath, int baudRate = 115200)
     {
-        var portName = OperatingSystem.IsWindows()
-            ? TryResolveWindowsPortName(devicePath)
-            : OperatingSystem.IsOSPlatform("OSX")
-                ? MacIoRegistryNative.TryFindSerialDeviceNode(devicePath)
-                : null;
+        var portName = TryResolvePortName(devicePath);
         if (portName is null)
         {
             return null;

@@ -53,6 +53,7 @@ public sealed partial class MtkSession : IProtocolSession
     private PhysicalDeviceIdentity? _physicalIdentity;
     private ushort? _usbVendorId;
     private ushort? _usbProductId;
+    private bool _relaxedHandshakeHint;
     private IMtkTransportReopener? _reopener;
     private volatile bool _disposed;
 
@@ -188,12 +189,20 @@ public sealed partial class MtkSession : IProtocolSession
     /// An initialized bootloader session which owns the serial transport.
     /// <para>已初始化的 bootloader 会话，拥有该串口传输。</para>
     /// </returns>
+    /// <remarks>
+    /// The session has no USB descriptors, so it cannot classify the target stage from product ids and runs the
+    /// relaxed handshake: a VCOM preloader requires the bare wake-up byte before the complemented sequence, while
+    /// a Boot ROM or silent port still completes or fails cleanly under the same sequence.
+    /// <para>会话没有 USB 描述符，无法按产品 ID 分类目标阶段，因此运行宽松握手：VCOM preloader 在反码序列之前
+    /// 需要裸唤醒字节，而 Boot ROM 或静默端口在同一序列下仍能干净地完成或失败。</para>
+    /// </remarks>
     public static async Task<MtkSession> OpenSerialAsync(string portName, int baudRate = 921600,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(portName);
         var transport = new SerialTransport(portName, baudRate, handshake: Handshake.None);
         var session = new MtkSession(transport);
+        session._relaxedHandshakeHint = true;
         try
         {
             await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
@@ -611,12 +620,14 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
-    /// <summary>Gets whether the observed USB product id is not a documented Boot ROM port.
-    /// <para>获取已观测 USB 产品 ID 是否不是已记载的 Boot ROM 端口。</para></summary>
-    /// <value><see langword="true"/> only when a USB descriptor was recorded and the pair is not a Boot ROM port;
-    /// serial transports and unknown ports keep the strict path.
-    /// <para>仅在已记录 USB 描述符且该组合不是 Boot ROM 端口时为 <see langword="true"/>；串口传输与未知端口保持严格路径。</para></value>
-    private bool UsesRelaxedBootHandshake => _usbProductId is { } productId && !IsBootRomUsbProduct(productId);
+    /// <summary>Gets whether the complemented handshake may use the preloader wake-up sequence first.
+    /// <para>获取反码握手是否可以先使用 preloader 唤醒序列。</para></summary>
+    /// <value><see langword="true"/> when a descriptor-less serial session requested the relaxed sequence or a
+    /// recorded USB descriptor names a non-Boot-ROM product id; strict otherwise.
+    /// <para>无描述符串口会话请求宽松序列、或已记录 USB 描述符指向非 Boot ROM 产品 ID 时为
+    /// <see langword="true"/>；其余为严格路径。</para></value>
+    private bool UsesRelaxedBootHandshake =>
+        _relaxedHandshakeHint || (_usbProductId is { } productId && !IsBootRomUsbProduct(productId));
 
     private bool IsBootRomUsbProduct(ushort productId) =>
         productId == 0x0003
@@ -1183,6 +1194,19 @@ public sealed partial class MtkSession : IProtocolSession
         _usbVendorId = vendorId;
         _usbProductId = productId;
     }
+
+    /// <summary>Marks a serial transport whose endpoint carries no USB identity, selecting the preloader wake-up
+    /// handshake instead of the strict Boot ROM sequence.
+    /// <para>标记端点不带 USB 身份的串口传输，使其选择 preloader 唤醒握手而非严格 Boot ROM 序列。</para>
+    /// </summary>
+    /// <remarks>
+    /// A serial lease without descriptors cannot classify the target from product ids; the relaxed sequence
+    /// completes for a preloader that requires the wake-up byte, degrades to the plain complemented exchange for
+    /// a Boot ROM, and fails cleanly on any other serial device.
+    /// <para>没有描述符的串口租约无法按产品 ID 分类目标；宽松序列对需要唤醒字节的 preloader 可完成，对 Boot ROM
+    /// 退化为普通反码交换，对其余任何串口设备都干净失败。</para>
+    /// </remarks>
+    internal void NoteDescriptorlessSerial() => _relaxedHandshakeHint = true;
 
     /// <summary>Records a command-interface selection performed by an adoption path such as the device session
     /// factory; only <see cref="MtkCommandInterfaceStatus.Selected"/> and <see cref="MtkCommandInterfaceStatus.NoMetadata"/>

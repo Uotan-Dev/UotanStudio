@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Ports;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Mtk;
@@ -214,17 +215,68 @@ public sealed partial class DeviceController
         CancellationToken cancellationToken)
     {
         var (vid, pid) = TryParsePathVidPid(devicePath);
+        return await BuildSerialLeaseCoreAsync(devicePath, devicePath, serial, vid, pid,
+            new UsbEndpointDetails(UsbApiKind.Native, devicePath, vid, pid, null, null, null),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handshakes an MTK boot session over an explicitly named serial port, without any device-path resolution or
+    /// USB inventory walk. This is the arrival path for a watcher that only knows the port name — a VCOM preloader
+    /// publishes its COM port for a few seconds and every step between the port appearing and the handshake costs
+    /// part of that window.
+    /// <para>在显式指定的串口名上握手 MTK boot 会话，不做任何设备路径解析或 USB 清单遍历。这是只知端口名的
+    /// 监视器所用的到达路径——VCOM preloader 只公布数秒 COM 口，端口出现与握手之间的每一步都在消耗该窗口。</para>
+    /// </summary>
+    /// <param name="portName">The exact COM/TTY port to open. <para>要打开的确切 COM/TTY 端口名。</para></param>
+    /// <param name="baudRate">The serial line speed. <para>串口线路速度。</para></param>
+    /// <param name="cancellationToken">Cancels the open and handshake. <para>取消打开与握手。</para></param>
+    /// <returns>The lease owning the serial transport and the handshaken MTK session, or <see langword="null"/>
+    /// when the endpoint is already leased. <para>持有串口传输与已握手 MTK 会话的租约；端点已被租用时为
+    /// <see langword="null"/>。</para></returns>
+    public async Task<DeviceLease?> HandshakeMtkSerialPortAsync(string portName, int baudRate = 115200,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        var serial = new SerialTransport(portName, baudRate, Parity.None, 8, StopBits.One, Handshake.None);
+        try
+        {
+            await serial.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            serial.Dispose();
+            throw;
+        }
+
+        return await BuildSerialLeaseCoreAsync(portName, portName, serial, vid: 0, pid: 0, usb: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Wraps an already-opened serial transport in an MTK lease, runs the boot handshake on it and registers the
+    /// lease. The endpoint identity is built from the given address; USB details are optional because a watcher
+    /// that only knows a port name has none, and a lease without them selects the preloader wake-up handshake.
+    /// <para>把已打开的串口传输包装为 MTK 租约，在其上执行 boot 握手并登记。端点身份由给定地址构建；
+    /// USB 详情可选——只知端口名的监视器没有这些详情，缺少它们的租约会选中 preloader 唤醒握手。</para>
+    /// </summary>
+    private async Task<DeviceLease> BuildSerialLeaseCoreAsync(string address, string displayName,
+        SerialTransport serial, ushort vid, ushort pid, UsbEndpointDetails? usb,
+        CancellationToken cancellationToken)
+    {
         var endpoint = new DeviceEndpoint
         {
             Source = UsbDiscoverySource.SourceName,
             Transport = "Serial",
-            Address = devicePath,
-            DisplayName = devicePath,
-            Serial = devicePath,
+            Address = address,
+            DisplayName = displayName,
+            Serial = displayName,
             Route = "direct-usb",
             Protocol = "mtk",
             RouteEpoch = DebugBridgeRoute.Current.Epoch,
-            Usb = new(UsbApiKind.Native, devicePath, vid, pid, null, null, null)
+            Usb = usb
         };
 
         lock (_gate)
@@ -233,7 +285,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 serial.Dispose();
-                return null;
+                throw new DeviceEndpointBusyException(endpoint);
             }
         }
 
@@ -390,5 +442,21 @@ public sealed partial class DeviceController
 
             throw;
         }
+    }
+
+    /// <summary>
+    /// Resolves the serial port an MTK boot endpoint is bound to without opening it. The resolution walks the
+    /// platform's own topology and never touches the device, so callers can key a parked connection by the exact
+    /// port the endpoint owns before deciding to open anything.
+    /// <para>解析 MTK 启动端点绑定的串口名但不打开它。解析只遍历平台自身拓扑、绝不触碰设备，使调用方在决定
+    /// 是否打开任何东西之前就能用端点实际拥有的端口作为暂存连接的键。</para>
+    /// </summary>
+    /// <param name="info">The USB descriptors of the endpoint. <para>端点的 USB 描述符。</para></param>
+    /// <returns>The resolved port name, or <see langword="null"/> when the endpoint publishes no serial port.
+    /// <para>解析出的端口名；端点不公布串口时为 <see langword="null"/>。</para></returns>
+    public string? ResolveMtkSerialPort(UsbDeviceInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return MtkSerialPortFallback.TryResolvePortName(info.DevicePath);
     }
 }
