@@ -23,7 +23,8 @@ public sealed class SerialTransport(
     Parity parity = Parity.None,
     int dataBits = 8,
     StopBits stopBits = StopBits.One,
-    Handshake handshake = Handshake.RequestToSend) : ICommTransport
+    Handshake handshake = Handshake.RequestToSend)
+    : ICommTransport, ICommTransportBaudRateControl
 {
     private SerialPort? _port;
     private int _baudRate = baudRate;

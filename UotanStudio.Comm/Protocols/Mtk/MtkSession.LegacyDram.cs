@@ -12,7 +12,8 @@ public sealed partial class MtkSession
             return;
         }
         if (emi.Length is <= 0 or > 4 * 1024 * 1024
-            || emi.Version is not (0 or 0xA or 0xB or 0xC or 0xD or 0xF or 0x10 or 0x11 or 0x14 or 0x15))
+            || emi.Version is not (0 or 0xA or 0xB or 0xC or 0xD or 0xE or 0xF or 0x10 or 0x11 or 0x12 or 0x13
+                or 0x14 or 0x15))
         {
             throw new NotSupportedException("The selected Legacy EMI resource has an unsupported version or length.");
         }
@@ -24,17 +25,27 @@ public sealed partial class MtkSession
         var indication = await ReadLegacyWordAsync(token).ConfigureAwait(false);
         if (indication != 0xBC4)
         {
-            throw new MtkProtocolException("The Legacy DRAM request lacks its NAND-info marker.", indication);
+            // A repeated 0xBC3 means the agent re-asked for DRAM parameters, which happens when the
+            // version word it received was rejected; naming it keeps that apart from a truncated frame.
+            throw indication == 0xBC3
+                ? new MtkProtocolException(
+                    "The Legacy agent repeated its DRAM request instead of publishing NAND information; "
+                    + "the EMI version word was most likely rejected.", indication)
+                : new MtkProtocolException("The Legacy DRAM request lacks its NAND-info marker.", indication);
         }
         await ReadLegacyNandIdsAsync(token).ConfigureAwait(false);
         if (emi is null)
         {
             throw new InvalidOperationException("The Legacy agent requires an explicitly selected DRAM resource.");
         }
-        var request = new byte[5];
-        request[0] = 0xE8;
-        BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(1), emi.Version == 0 ? uint.MaxValue : (uint)emi.Version);
-        await WriteAsync(request, _timeoutMs, token).ConfigureAwait(false);
+        // ENABLE_DRAM and its version word travel as two separate writes: the reference issues
+        // usbwrite(0xE8) and usbwrite(vend) individually, each followed by a flush, so the device
+        // latches the command before the payload arrives. A single five-byte write lets the version
+        // bytes land inside the command decoder.
+        await WriteAsync([0xE8], _timeoutMs, token).ConfigureAwait(false);
+        var versionWord = new byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(versionWord, emi.Version == 0 ? uint.MaxValue : (uint)emi.Version);
+        await WriteAsync(versionWord, _timeoutMs, token).ConfigureAwait(false);
         await RequireLegacyByteAsync(0x5A, "DRAM version", token).ConfigureAwait(false);
         if (emi.Version is 0xA or 0xB)
         {
@@ -71,7 +82,10 @@ public sealed partial class MtkSession
         }
         await WriteAsync(payload, _timeoutMs, token).ConfigureAwait(false);
         LegacyDramReportedChecksum = BinaryPrimitives.ReadUInt16BigEndian(await ReadAsync(2, _timeoutMs, token).ConfigureAwait(false));
-        await WriteAsync([0x5A, 0x80, 0x00, 0x00, 0x01], _timeoutMs, token).ConfigureAwait(false);
+        // ACK and the 0x80000001 "send DRAM config" word are distinct transactions in the
+        // reference exchange, so they must not share one write.
+        await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
+        await WriteAsync([0x80, 0x00, 0x00, 0x01], _timeoutMs, token).ConfigureAwait(false);
         var result = await ReadLegacyWordAsync(token).ConfigureAwait(false);
         if (result != 0)
         {

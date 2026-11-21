@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Hash.Sums;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
@@ -256,11 +257,16 @@ public sealed partial class MtkSession
     private async Task<MtkLegacyTransferSpeedResult> SetLegacySpeedOwnedAsync(int baudrate,
         CancellationToken cancellationToken)
     {
-        var header = new byte[4];
-        BinaryPrimitives.WriteUInt32BigEndian(header, (uint)baudrate);
-        await WriteAsync([0xD2], _timeoutMs, cancellationToken).ConfigureAwait(false);
-        await WriteAsync(header, _timeoutMs, cancellationToken).ConfigureAwait(false);
+        var speedCode = MtkLegacyBaudRate.FromBaudrate(baudrate);
+        await WriteAsync([MtkLegacyBaudRate.SpeedCommand], _timeoutMs, cancellationToken).ConfigureAwait(false);
+        await WriteAsync([speedCode], _timeoutMs, cancellationToken).ConfigureAwait(false);
         await RequireLegacyByteAsync(0x5A, "speed change", cancellationToken).ConfigureAwait(false);
+        // The agent applied the new rate to its own UART as soon as it acknowledged, so the host has
+        // to follow before the next byte or the 0xC0 resynchronisation arrives at the wrong rate.
+        if (Transport is ICommTransportBaudRateControl control)
+        {
+            control.SetBaudRate(baudrate);
+        }
         var synced = false;
         for (var attempt = 0; attempt < 10 && !synced; attempt++)
         {
