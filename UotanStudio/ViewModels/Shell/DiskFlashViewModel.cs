@@ -7,6 +7,7 @@ using UotanStudio.DD;
 using UotanStudio.DD.Drives;
 using UotanStudio.DD.Images;
 using UotanStudio.DD.Writing;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
 using UotanStudio.UiAbstractions;
@@ -34,6 +35,8 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     private CancellationTokenSource? _operationCts;
     private FlashImage? _image;
     private SpacemiTCardPackage? _cardPackage;
+    private LoongHongFlashPackage? _loongHongPackage;
+    private SunxiCardPackage? _sunxiPackage;
     private volatile bool _synthesizing;
     private ProgressMeter? _meter;
     private FlashStage? _meterStage;
@@ -123,6 +126,16 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _allowLargeDrive;
+
+    /// <summary>
+    /// Gets or sets whether a LoongHong package writes its userdata image and extends that partition to the rest of
+    /// the selected drive, mirroring the vendor script's <c>-u</c> switch.
+    /// <para>获取或设置 LoongHong 包是否写入其 userdata 镜像并把该分区扩展到选中驱动器的剩余空间，对应厂商脚本的
+    /// <c>-u</c> 开关。</para>
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoongHongPackage))]
+    private bool _includeUserData;
 
     /// <summary>
     /// Gets or sets whether the user accepted that the selected drive will be overwritten.
@@ -218,7 +231,14 @@ public sealed partial class DiskFlashViewModel : ObservableObject
     /// Gets whether an image has been probed or a card package has been recognized.
     /// <para>获取是否已成功探测镜像或已识别卡包。</para>
     /// </summary>
-    public bool HasImage => _image is not null || _cardPackage is not null;
+    public bool HasImage => _image is not null || _cardPackage is not null || _loongHongPackage is not null
+        || _sunxiPackage is not null;
+
+    /// <summary>
+    /// Gets whether the selected package is a LoongHong flash-tool package, whose userdata switch is available.
+    /// <para>获取选中的包是否为 LoongHong 烧录工具包；只有它能提供 userdata 开关。</para>
+    /// </summary>
+    public bool HasLoongHongPackage => _loongHongPackage is not null;
 
     /// <summary>
     /// Gets whether any scanned drive is available.
@@ -283,6 +303,8 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         }
 
         _cardPackage = null;
+        _loongHongPackage = null;
+        _sunxiPackage = null;
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -306,7 +328,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is FlashException or IOException or UnauthorizedAccessException)
         {
-            if (!TryAdoptCardPackage(path))
+            if (!TryAdoptCardPackage(path) && !TryAdoptLoongHongPackage(path) && !TryAdoptSunxiPackage(path))
             {
                 _image = null;
                 ImagePath = path;
@@ -347,6 +369,78 @@ public sealed partial class DiskFlashViewModel : ObservableObject
                                    or ArgumentException or FormatException)
         {
             LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Card package recognition failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Recognizes a LoongHong flash-tool package whose per-partition images are assembled into one disk image
+    /// immediately before writing.
+    /// <para>识别 LoongHong 烧录工具包；其逐分区镜像会在写入前即时组装为一张磁盘镜像。</para>
+    /// </summary>
+    /// <param name="path">The selected package path. <para>选中的包路径。</para></param>
+    /// <returns>Whether the file was a LoongHong package. <para>该文件是否为 LoongHong 包。</para></returns>
+    private bool TryAdoptLoongHongPackage(string path)
+    {
+        try
+        {
+            var package = LoongHongFlashPackage.TryOpen(path);
+            if (package is null)
+            {
+                return false;
+            }
+
+            _image = null;
+            _loongHongPackage = package;
+            ImagePath = package.PackagePath;
+            ImageSummary = string.Format(
+                Language.GetString("DiskFlash_ImageLoongHong"),
+                package.Partitions.Count,
+                ProgressMeter.FormatSize(package.EstimatedImageSizeBytes));
+            StatusMessage = string.Empty;
+            StatusIsError = false;
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException
+                                   or ArgumentException or FormatException)
+        {
+            LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"LoongHong package recognition failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Recognizes Allwinner card material (a vendor <c>.fex</c> directory or an <c>IMAGEWTY</c> container) whose
+    /// partitions are assembled into one SD-card image immediately before writing.
+    /// <para>识别全志卡材料（厂商 <c>.fex</c> 目录或 <c>IMAGEWTY</c> 容器）；其分区会在写入前即时组装为一张 SD 卡镜像。</para>
+    /// </summary>
+    /// <param name="path">The selected directory or container. <para>选中的目录或容器。</para></param>
+    /// <returns>Whether the path was Allwinner card material. <para>该路径是否为全志卡材料。</para></returns>
+    private bool TryAdoptSunxiPackage(string path)
+    {
+        try
+        {
+            var package = SunxiCardPackage.TryOpen(path);
+            if (package is null)
+            {
+                return false;
+            }
+
+            _image = null;
+            _sunxiPackage = package;
+            ImagePath = package.SourcePath;
+            ImageSummary = string.Format(
+                Language.GetString("DiskFlash_ImageSunxi"),
+                package.PartitionCount,
+                ProgressMeter.FormatSize(package.EstimatedImageSizeBytes));
+            StatusMessage = string.Empty;
+            StatusIsError = false;
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException
+                                   or ArgumentException or FormatException)
+        {
+            LogService.Instance.Write(LogLevel.Error, "DiskFlash", $"Sunxi package recognition failed: {ex.Message}");
             return false;
         }
     }
@@ -511,6 +605,66 @@ public sealed partial class DiskFlashViewModel : ObservableObject
                 IsProgressIndeterminate = true;
                 ProgressStats = string.Empty;
             }
+            else if (_sunxiPackage is { } sunxi)
+            {
+                temporaryImage = CreateTemporaryImagePath();
+                ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+                _synthesizing = true;
+                var sunxiProgress = new Progress<SunxiCardAssemblyProgress>(
+                    value => ApplySunxiProgress(generation, value));
+                try
+                {
+                    var synthesis = await Task.Run(
+                        () => sunxi.Synthesize(temporaryImage, sunxiProgress, cts.Token),
+                        cts.Token).ConfigureAwait(true);
+                    imageSize = synthesis.ImageBytes;
+                }
+                finally
+                {
+                    _synthesizing = false;
+                }
+
+                flashPath = temporaryImage;
+                ProgressStage = Language.GetString("DiskFlash_StagePreparing");
+                ProgressPercent = 0;
+                IsProgressIndeterminate = true;
+                ProgressStats = string.Empty;
+            }
+            else if (_loongHongPackage is { } package)
+            {
+                temporaryImage = CreateTemporaryImagePath();
+                ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+                _synthesizing = true;
+                var loongHongProgress = new Progress<LoongHongProgress>(
+                    value => ApplyLoongHongProgress(generation, value));
+                LoongHongSynthesisResult synthesis;
+                try
+                {
+                    // The vendor script only extends userdata to the rest of the disk when -u is given; the same
+                    // switch caps the image at the target capacity instead of the vendor content sizes.
+                    // 厂商脚本只在带 -u 时把 userdata 扩展到整盘剩余空间；同一开关让镜像按目标容量而不是厂商内容
+                    // 大小成型。
+                    var synthesisOptions = new LoongHongSynthesisOptions
+                    {
+                        IncludeUserData = IncludeUserData,
+                        CapacityBytes = IncludeUserData && target.Drive.Size > 0 ? target.Drive.Size : null,
+                    };
+                    synthesis = await Task.Run(
+                        () => package.Synthesize(temporaryImage, synthesisOptions, loongHongProgress, cts.Token),
+                        cts.Token).ConfigureAwait(true);
+                }
+                finally
+                {
+                    _synthesizing = false;
+                }
+
+                imageSize = synthesis.ImageSizeBytes;
+                flashPath = temporaryImage;
+                ProgressStage = Language.GetString("DiskFlash_StagePreparing");
+                ProgressPercent = 0;
+                IsProgressIndeterminate = true;
+                ProgressStats = string.Empty;
+            }
             else
             {
                 flashPath = _image!.Path;
@@ -593,6 +747,73 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         StatusIsError = true;
         ProgressStage = Language.GetString("DiskFlash_Ready");
         await _dialogs.ShowErrorAsync(Language.GetString("DiskFlash_Title"), message).ConfigureAwait(true);
+    }
+
+    private void ApplySunxiProgress(int generation, SunxiCardAssemblyProgress value)
+    {
+        if (Volatile.Read(ref _progressGeneration) != generation || !_synthesizing)
+        {
+            return;
+        }
+
+        ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+        var meter = _meter;
+        if (meter is null)
+        {
+            return;
+        }
+
+        var total = value.BytesTotal;
+        var completed = value.BytesCompleted;
+        if (total is > 0 && completed.HasValue)
+        {
+            var totalBytes = total.Value;
+            var done = completed.Value;
+            ProgressPercent = Math.Clamp(done * 100.0 / totalBytes, 0, 100);
+            IsProgressIndeterminate = false;
+            meter.Report(done, totalBytes);
+            var template = meter.EstimatedRemaining is null ? "Progress_StatsNoEta" : "Progress_Stats";
+            ProgressStats = meter.FormatStats(Language.GetString(template));
+            return;
+        }
+
+        IsProgressIndeterminate = true;
+        if (value.Partition is { Length: > 0 } partition)
+        {
+            ProgressStats = partition;
+        }
+    }
+
+    private void ApplyLoongHongProgress(int generation, LoongHongProgress value)
+    {
+        if (Volatile.Read(ref _progressGeneration) != generation || !_synthesizing)
+        {
+            return;
+        }
+
+        ProgressStage = Language.GetString("DiskFlash_StageSynthesizing");
+        var meter = _meter;
+        if (meter is null)
+        {
+            return;
+        }
+
+        var total = value.BytesTotal;
+        var completed = value.BytesCompleted;
+        if (total is > 0 && completed.HasValue)
+        {
+            var totalBytes = total.Value;
+            var done = completed.Value;
+            ProgressPercent = Math.Clamp(done * 100.0 / totalBytes, 0, 100);
+            IsProgressIndeterminate = false;
+            meter.Report(done, totalBytes);
+            var template = meter.EstimatedRemaining is null ? "Progress_StatsNoEta" : "Progress_Stats";
+            ProgressStats = meter.FormatStats(Language.GetString(template));
+        }
+        else
+        {
+            IsProgressIndeterminate = true;
+        }
     }
 
     private void ApplySynthesisProgress(int generation, SpacemiTCardImageProgress value)
@@ -757,6 +978,7 @@ public sealed partial class DiskFlashViewModel : ObservableObject
         OnPropertyChanged(nameof(CanRefresh));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(HasImage));
+        OnPropertyChanged(nameof(HasLoongHongPackage));
         OnPropertyChanged(nameof(HasDrives));
         OnPropertyChanged(nameof(SelectedItem));
         OnPropertyChanged(nameof(SelectedCount));

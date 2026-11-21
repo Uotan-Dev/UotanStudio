@@ -258,6 +258,11 @@
           <CheckBox Content="{DynamicResource DiskFlash_AllowLargeDrive}"
                     IsChecked="{Binding AllowLargeDrive, Mode=TwoWay}"
                     IsEnabled="{Binding IsIdle}" />
+          <!-- 官方 -u 开关：仅在选中 LoongHong 烧录包时有意义，其它镜像保持隐藏。 -->
+          <CheckBox Content="{DynamicResource DiskFlash_IncludeUserData}"
+                    IsChecked="{Binding IncludeUserData, Mode=TwoWay}"
+                    IsVisible="{Binding HasLoongHongPackage}"
+                    IsEnabled="{Binding IsIdle}" />
           <CheckBox Content="{DynamicResource DiskFlash_ConfirmOverwrite}"
                     IsChecked="{Binding ConfirmOverwrite, Mode=TwoWay}"
                     IsEnabled="{Binding IsIdle}" />

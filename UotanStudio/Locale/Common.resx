@@ -4977,6 +4977,15 @@ Continue?</value>
   <data name="DiskFlash_ImageCard" xml:space="preserve">
     <value>SpacemiT card package · {0} partitions · synthesized ≈ {1}</value>
   </data>
+  <data name="DiskFlash_ImageLoongHong" xml:space="preserve">
+    <value>LoongHong flash package · {0} partitions · synthesized ≈ {1}</value>
+  </data>
+  <data name="DiskFlash_ImageSunxi" xml:space="preserve">
+    <value>Allwinner card material · {0} partitions · assembled ≈ {1}</value>
+  </data>
+  <data name="DiskFlash_IncludeUserData" xml:space="preserve">
+    <value>Write userdata and extend it to the rest of the drive</value>
+  </data>
   <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
     <value>One drive at a time. Selecting a drive clears the previous choice.</value>
   </data>

@@ -4977,6 +4977,15 @@
   <data name="DiskFlash_ImageCard" xml:space="preserve">
     <value>进迭时空卡刷包 · {0} 个分区 · 合成后约 {1}</value>
   </data>
+  <data name="DiskFlash_ImageLoongHong" xml:space="preserve">
+    <value>龙芯烧录包 · {0} 个分区 · 合成后约 {1}</value>
+  </data>
+  <data name="DiskFlash_ImageSunxi" xml:space="preserve">
+    <value>全志卡材料 · {0} 个分区 · 组装后约 {1}</value>
+  </data>
+  <data name="DiskFlash_IncludeUserData" xml:space="preserve">
+    <value>写入 userdata 并扩展到驱动器剩余空间</value>
+  </data>
   <data name="DiskFlash_SingleTargetHint" xml:space="preserve">
     <value>一次仅限一个驱动器；选中新的驱动器会取消之前的选择。</value>
   </data>
