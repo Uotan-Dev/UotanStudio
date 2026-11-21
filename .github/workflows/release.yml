@@ -236,7 +236,7 @@ jobs:
             -e PUBLISH_PROJECT="$PUBLISH_PROJECT" \
             -e MATRIX_RID="${{ matrix.rid }}" \
             mcr.microsoft.com/dotnet/sdk:11.0-alpine \
-            sh -c 'apk add --no-cache clang zlib-dev binutils >/dev/null &&
+            sh -c 'apk add --no-cache clang gcc zlib-dev binutils >/dev/null &&
               export DOTNET_CLI_HOME=/dotnet-home DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 &&
               dotnet publish "/src/$PUBLISH_PROJECT" \
                 -c Release -r "$MATRIX_RID" --self-contained true \
