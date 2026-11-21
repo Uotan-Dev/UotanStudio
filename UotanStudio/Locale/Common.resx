@@ -4551,6 +4551,9 @@ Continue?</value>
   <data name="Flash_SunxiFlashDone" xml:space="preserve">
     <value>Firmware flash completed.</value>
   </data>
+  <data name="Flash_SunxiAssembling" xml:space="preserve">
+    <value>Assembling the card image from the selected material…</value>
+  </data>
   <data name="Flash_SunxiFlashMode" xml:space="preserve">
     <value>Erase mode</value>
   </data>

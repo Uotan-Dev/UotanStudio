@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Comm.Protocols.Sunxi;
+using UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Ui;
@@ -464,6 +465,7 @@ public sealed partial class FlashViewModel
         _flashCancellation = cancellation;
         SetBusy(true);
         _deviceViewModel?.BeginSelectionHold();
+        string? assembledImage = null;
         try
         {
             var progress = new Progress<SunxiFlashProgress>(report =>
@@ -474,7 +476,31 @@ public sealed partial class FlashViewModel
                     ReportBusyTransfer(done, total);
                 }
             });
-            await App.DeviceMonitor.FlashSunxiAsync(device, PackagePath, options, progress,
+
+            // Vendor .fex directories cannot be flashed directly, so they are assembled into one SD-card image
+            // first. A container or an existing card image is written as it is.
+            // 厂商 .fex 目录无法直接烧录，因此先组装成一张 SD 卡镜像。容器或既有的卡镜像按原样写入。
+            var imagePath = PackagePath;
+            if (Directory.Exists(imagePath))
+            {
+                SunxiStatusText = language.GetString("Flash_SunxiAssembling");
+                assembledImage = Path.Combine(Path.GetTempPath(),
+                    $"uotan-sunxi-flash-{Guid.NewGuid():N}.img");
+                var assemblyProgress = new Progress<SunxiCardAssemblyProgress>(report =>
+                {
+                    if (report is { BytesCompleted: { } done, BytesTotal: { } total } && total > 0)
+                    {
+                        ReportBusyTransfer(done, total);
+                    }
+                });
+                var assemblyTarget = assembledImage;
+                await Task.Run(() => SunxiCardAssembler.Assemble(PackagePath, assemblyTarget,
+                    capacityBytes: null, progress: assemblyProgress, cancellation.Token),
+                    cancellation.Token).ConfigureAwait(true);
+                imagePath = assembledImage;
+            }
+
+            await App.DeviceMonitor.FlashSunxiAsync(device, imagePath, options, progress,
                 cancellation.Token).ConfigureAwait(true);
             SunxiStatusText = language.GetString("Flash_SunxiFlashDone");
             AppendLog(language.GetString("Flash_SunxiFlashDone"));
@@ -493,8 +519,37 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             _flashCancellation = null;
             _sunxiStatusCache = null;
+            DeleteAssembledImage(assembledImage);
             RefreshSunxiDeviceStatus();
             UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// Removes the card image assembled for a directory flash, so a completed or failed run leaves nothing behind.
+    /// <para>删除为目录烧录组装出的卡镜像，使完成或失败都不留残留文件。</para>
+    /// </summary>
+    /// <param name="path">Temporary image path, or <see langword="null"/> when nothing was assembled.
+    /// <para>临时镜像路径；未组装任何内容时为 <see langword="null"/>。</para></param>
+    private static void DeleteAssembledImage(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 

@@ -4551,6 +4551,9 @@
   <data name="Flash_SunxiFlashDone" xml:space="preserve">
     <value>固件烧录完成。</value>
   </data>
+  <data name="Flash_SunxiAssembling" xml:space="preserve">
+    <value>正在按所选材料组装卡镜像…</value>
+  </data>
   <data name="Flash_SunxiFlashMode" xml:space="preserve">
     <value>擦除模式</value>
   </data>

@@ -1494,6 +1494,7 @@ internal static class LocaleKeySets
         "Flash_SunxiFlash",
         "Flash_SunxiFlashConfirmDetail",
         "Flash_SunxiFlashDone",
+        "Flash_SunxiAssembling",
         "Flash_SunxiFlashMode",
         "Flash_SunxiModeFullErase",
         "Flash_SunxiModePartitionErase",
