@@ -171,7 +171,7 @@ jobs:
 
       - name: Cache NuGet packages
         if: ${{ !contains(matrix.rid, 'musl') }}
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
@@ -179,7 +179,7 @@ jobs:
 
       - name: Cache NuGet packages (musl container)
         if: ${{ contains(matrix.rid, 'musl') }}
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/home/.nuget
           key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
@@ -243,6 +243,7 @@ jobs:
                 -p:DebugType=none -p:DebugSymbols=false \
                 -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
                 -o /out'
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/home"
 
       - name: "Package (Windows: zip)"
         if: matrix.os == 'windows'
