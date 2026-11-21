@@ -401,6 +401,7 @@ jobs:
         shell: bash
         env:
           ARCH: ${{ matrix.arch_deb }}
+          GLIBC_FLOOR: ${{ (contains(matrix.rid, 'riscv64') || contains(matrix.rid, 'loongarch64')) && '2.38' || '2.27' }}
         run: |
           set -euo pipefail
           pkg="$RUNNER_TEMP/deb/uotanstudio_$VER-1_$ARCH"
@@ -434,9 +435,10 @@ jobs:
           Priority: optional
           Architecture: $ARCH
           Maintainer: UotanStudio <uotan@openatom.club>
-          Depends: libc6 (>= 2.23), libstdc++6, libfontconfig1, libssl3, libx11-6,
-           libxext6, libxfixes3, libxcursor1, libxrandr2, libice6, libglib2.0-0,
-           libwayland-cursor0, libwayland-egl1, libxkbcommon0, libgbm1, libdrm2, libegl1
+          Depends: libc6 (>= $GLIBC_FLOOR), libstdc++6, libfontconfig1, libssl3, libx11-6,
+           libxext6, libxfixes3, libxcursor1, libxi6, libxrandr2, libice6, libglib2.0-0,
+           libwayland-cursor0, libwayland-egl1, libxkbcommon0, libgbm1, libdrm2, libegl1,
+           libgl1
           Recommends: libgtk-3-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good,
            gstreamer1.0-plugins-bad, gstreamer1.0-libav
           Description: UotanStudio desktop toolkit
@@ -451,6 +453,7 @@ jobs:
         shell: bash
         env:
           ARCH: ${{ matrix.arch_rpm }}
+          GLIBC_FLOOR: ${{ (contains(matrix.rid, 'riscv64') || contains(matrix.rid, 'loongarch64')) && '2.38' || '2.27' }}
         run: |
           set -euo pipefail
           sudo apt-get install -y -qq rpm >/dev/null
@@ -465,10 +468,10 @@ jobs:
           License:        GPL-3.0-only
           URL:            https://github.com/UotanStudio/UotanStudio
           Source0:        uotanstudio-$rpmver.tar.gz
-          Requires:       glibc >= 2.23, libstdc++, fontconfig, openssl-libs,
-          Requires:       libX11, libXext, libXfixes, libXcursor, libXrandr, libICE,
+          Requires:       glibc >= $GLIBC_FLOOR, libstdc++, fontconfig, openssl-libs,
+          Requires:       libX11, libXext, libXfixes, libXi, libXcursor, libXrandr, libICE,
           Requires:       glib2, libwayland-cursor, libwayland-egl, libxkbcommon,
-          Requires:       mesa-libgbm, libdrm, mesa-libEGL
+          Requires:       mesa-libgbm, libdrm, mesa-libEGL, mesa-libGL
           Recommends:     gtk3, gstreamer1-plugins-base, gstreamer1-plugins-good,
           Recommends:     gstreamer1-plugins-bad-free
 
@@ -583,7 +586,7 @@ jobs:
           arch="${{ matrix.apk_arch }}"
           license="GPL-3.0-only"
           depends="musl libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr
-           libxext libxfixes libice glib wayland libxkbcommon mesa-egl mesa-gbm libdrm"
+           libxext libxfixes libxi libice glib wayland libxkbcommon mesa-egl mesa-gl mesa-gbm libdrm"
           options="!check"
           source="uotanstudio.tar.gz"
           package() {
@@ -684,7 +687,7 @@ jobs:
           arch=('x86_64' 'aarch64' 'riscv64' 'loongarch64')
           license=('GPL-3.0-only')
           depends=('glibc' 'gcc-libs' 'fontconfig' 'openssl' 'libx11' 'libxext'
-                   'libxfixes' 'libxcursor' 'libxrandr' 'libice' 'glib2' 'wayland'
+                   'libxfixes' 'libxi' 'libxcursor' 'libxrandr' 'libice' 'glib2' 'wayland'
                    'libxkbcommon' 'mesa' 'libdrm')
           optdepends=('gtk3: GTK file dialogs'
                       'gstreamer: screen-mirror audio and video (1.24+)'
