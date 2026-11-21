@@ -1,0 +1,313 @@
+name: Release (NativeAOT)
+
+on:
+  workflow_dispatch:
+    inputs:
+      rid:
+        description: "Comma-separated RIDs (empty = all eight stable)"
+        required: false
+        default: ""
+      version:
+        description: "Override version (defaults to Version.props / git tag)"
+        required: false
+        default: ""
+      channel:
+        description: "release / beta / auto"
+        required: false
+        type: choice
+        options:
+          - auto
+          - release
+          - beta
+        default: auto
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+  PUBLISH_PROJECT: "UotanStudio.Desktop/UotanStudio.Desktop.csproj"
+
+jobs:
+  prepare:
+    name: Resolve RID matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Resolve RID matrix
+        id: matrix
+        shell: bash
+        env:
+          RID_INPUT: ${{ github.event.inputs.rid }}
+        run: |
+          set -euo pipefail
+
+          declare -A runners=(
+            [win-x64]=windows-2025
+            [win-arm64]=windows-11-arm
+            [linux-x64]=ubuntu-24.04
+            [linux-arm64]=ubuntu-24.04-arm
+            [linux-musl-x64]=ubuntu-24.04
+            [linux-musl-arm64]=ubuntu-24.04-arm
+            [osx-x64]=macos-15-intel
+            [osx-arm64]=macos-15
+          )
+          declare -A platforms=(
+            [win-x64]=windows
+            [win-arm64]=windows
+            [linux-x64]=linux
+            [linux-arm64]=linux
+            [linux-musl-x64]=linux
+            [linux-musl-arm64]=linux
+            [osx-x64]=macos
+            [osx-arm64]=macos
+          )
+          declare -A distros=(
+            [linux-x64]=glibc
+            [linux-arm64]=glibc
+            [linux-musl-x64]=musl
+            [linux-musl-arm64]=musl
+          )
+          all_rids=(win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64)
+
+          requested="${RID_INPUT:-}"
+          selected=()
+          declare -A seen=()
+          if [ -z "${requested//[[:space:],]/}" ]; then
+            selected=("${all_rids[@]}")
+          else
+            IFS=', ' read -r -a parts <<< "$requested"
+            for rid in "${parts[@]}"; do
+              if [ -z "$rid" ]; then
+                continue
+              fi
+              if [ -z "${runners[$rid]+x}" ]; then
+                echo "::error::Unsupported RID '$rid'. Stable RIDs: ${all_rids[*]}, or leave empty for all." >&2
+                exit 1
+              fi
+              if [ -z "${seen[$rid]+x}" ]; then
+                seen[$rid]=1
+                selected+=("$rid")
+              fi
+            done
+          fi
+
+          entries=()
+          for rid in "${selected[@]}"; do
+            entries+=("{\"rid\":\"$rid\",\"os\":\"${platforms[$rid]}\",\"runner\":\"${runners[$rid]}\",\"distro\":\"${distros[$rid]:-}\"}")
+          done
+          joined=$(IFS=,; printf '%s' "${entries[*]}")
+          echo "matrix={\"include\":[$joined]}" >> "$GITHUB_OUTPUT"
+          echo "Selected RIDs: ${selected[*]}"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          file_prefix=$(sed -n 's:.*<VersionPrefix>\([^<]*\)</VersionPrefix>.*:\1:p' Version.props | head -1)
+          file_channel=$(sed -n 's:.*<VersionChannel>\([^<]*\)</VersionChannel>.*:\1:p' Version.props | head -1)
+          prefix="${file_prefix:-1.0.0}"
+          channel="${file_channel:-beta}"
+          version=""
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            prefix="${tag%%-*}"
+            case "$tag" in
+              *-beta*) channel=beta ;;
+              *) channel=release ;;
+            esac
+            version="$tag"
+          fi
+
+          input_version="${{ github.event.inputs.version }}"
+          if [ -n "$input_version" ]; then
+            version="${input_version#v}"
+            prefix="${version%%-*}"
+            if [[ "$version" == *-beta* ]]; then
+              channel=beta
+            else
+              channel=release
+            fi
+          fi
+
+          input_channel="${{ github.event.inputs.channel }}"
+          if [ -n "$input_channel" ] && [ "$input_channel" != "auto" ]; then
+            channel="$input_channel"
+          fi
+
+          if [ -z "$version" ]; then
+            if [ "$channel" = "release" ]; then
+              version="$prefix"
+            else
+              version="$prefix-$channel.$GITHUB_RUN_NUMBER"
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $version ($channel)"
+
+      - name: Cache NuGet packages
+        if: ${{ !contains(matrix.rid, 'musl') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ matrix.rid }}-
+
+      - name: Cache NuGet packages (musl container)
+        if: ${{ contains(matrix.rid, 'musl') }}
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/home/.nuget
+          key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ matrix.rid }}-
+
+      - name: Setup .NET
+        if: ${{ !contains(matrix.rid, 'musl') }}
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "11.0.x"
+
+      - name: Install NativeAOT toolchain (Linux)
+        if: ${{ matrix.os == 'linux' && !contains(matrix.rid, 'musl') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang zlib1g-dev libicu-dev
+          clang --version
+
+      - name: Install NativeAOT toolchain (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          xcode-select --install || true
+          sudo xcodebuild -license accept || true
+          clang --version
+
+      - name: Publish NativeAOT (${{ matrix.rid }})
+        if: ${{ !contains(matrix.rid, 'musl') }}
+        shell: bash
+        run: |
+          dotnet publish "$PUBLISH_PROJECT" \
+            -c Release \
+            -r "${{ matrix.rid }}" \
+            --self-contained true \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            -p:Version="${{ steps.ver.outputs.version }}" \
+            -p:VersionChannel="${{ steps.ver.outputs.channel }}" \
+            -o "$RUNNER_TEMP/publish"
+
+      - name: Publish NativeAOT in alpine container (${{ matrix.rid }})
+        if: ${{ contains(matrix.rid, 'musl') }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          CHANNEL: ${{ steps.ver.outputs.channel }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/publish" "$RUNNER_TEMP/home"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -v "$RUNNER_TEMP/publish:/out" \
+            -v "$RUNNER_TEMP/home:/dotnet-home" \
+            -e VERSION="$VERSION" -e CHANNEL="$CHANNEL" \
+            -e PUBLISH_PROJECT="$PUBLISH_PROJECT" \
+            -e MATRIX_RID="${{ matrix.rid }}" \
+            mcr.microsoft.com/dotnet/sdk:11.0-alpine \
+            sh -c 'apk add --no-cache clang gcc zlib-dev binutils >/dev/null &&
+              export DOTNET_CLI_HOME=/dotnet-home DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 &&
+              dotnet publish "/src/$PUBLISH_PROJECT" \
+                -c Release -r "$MATRIX_RID" --self-contained true \
+                -p:DebugType=none -p:DebugSymbols=false \
+                -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
+                -o /out'
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/home"
+
+      - name: "Package (Windows: zip)"
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "pkg"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $exclude = @('*.pdb', '*.dbg', '*.xml')
+          Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse -File |
+            Where-Object {
+              $name = $_.Name; $p = $_.FullName
+              -not (($exclude | Where-Object { $name -like $_ }) -or ($p -like "*.dSYM*"))
+            } |
+            ForEach-Object {
+              $rel = $_.FullName.Substring("$env:RUNNER_TEMP/publish".Length).TrimStart('\','/')
+              $dst = Join-Path $stage $rel
+              if ($_.PSIsContainer) { New-Item -ItemType Directory -Force -Path $dst | Out-Null }
+              else { New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null; Copy-Item $_.FullName $dst -Force }
+            }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath "$env:RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.zip" -Force
+
+      - name: "Package (Unix: tar.gz)"
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/publish"
+          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" \) -delete
+          rm -rf *.dSYM
+          chmod +x UotanStudio.Desktop 2>/dev/null || true
+          find . -type d -empty -delete
+          rid="${{ matrix.rid }}"
+          distro="${{ matrix.distro }}"
+          if [ -n "$distro" ]; then
+            pkg_rid="linux-$distro-${rid#linux-}"
+          else
+            pkg_rid="$rid"
+          fi
+          tar -czf "$RUNNER_TEMP/uotanstudio-$pkg_rid.tar.gz" -C "$RUNNER_TEMP/publish" .
+          echo "Packaged as uotanstudio-$pkg_rid.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ steps.ver.outputs.version }}-${{ matrix.rid }}
+          path: |
+            ${{ runner.temp }}/uotanstudio-*.zip
+            ${{ runner.temp }}/uotanstudio-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*/*
+          generate_release_notes: true
