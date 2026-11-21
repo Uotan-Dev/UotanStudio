@@ -464,6 +464,7 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/publish"
           cp -R "$work/out/." "$RUNNER_TEMP/publish/"
+          sudo chown -R "$(id -u):$(id -g)" "$work/home"
           cp "$work/natives/out/libonigwrap.so" "$work/natives/out/libporta_pty.so" "$RUNNER_TEMP/publish/"
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
