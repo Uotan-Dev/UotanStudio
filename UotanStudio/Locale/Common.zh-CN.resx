@@ -622,7 +622,7 @@
     <value>刷入后重启设备</value>
   </data>
   <data name="Flash_Image" xml:space="preserve">
-    <value>镜像操作</value>
+    <value>镜像操作 Image actions</value>
   </data>
   <data name="Flash_ExtractSelected" xml:space="preserve">
     <value>提取选中镜像</value>
@@ -4699,7 +4699,7 @@
     <value>安全字</value>
   </data>
   <data name="Flash_Tegra" xml:space="preserve">
-    <value>NVIDIA Tegra</value>
+    <value>英伟达 NVIDIA Tegra</value>
   </data>
   <data name="Flash_TegraHint" xml:space="preserve">
     <value>Tegra 内核实现的三个重启目标。强制恢复就是从软件进入 RCM（APX）的入口：boot ROM 把强制恢复位读作"不启动镜像"的请求。</value>
@@ -4738,7 +4738,7 @@
     <value>强制进入 recovery</value>
   </data>
   <data name="Flash_Unisoc" xml:space="preserve">
-    <value>紫光展锐（UNISOC）</value>
+    <value>紫光展锐 UNISOC</value>
   </data>
   <data name="Flash_UnisocHint" xml:space="preserve">
     <value>经厂商下载串口深刷。加载阶段由握手识别；存储动作需要 FDL2，PAC 包内的加载器会先把链路提升到该阶段。</value>
