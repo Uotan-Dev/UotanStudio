@@ -1,14 +1,5 @@
 name: Publish linux-riscv64 (cross)
 
-# Experimental cross-compilation publish, verified against dotnet-riscv SDK 11.0.100:
-# the community SDK ships no x64-hosted ilc, so the x64 ILCompiler host pack runs natively
-# and only the RyuJIT it loads emits riscv64 code (built once from dotnet/runtime's
-# clr.crossarchtools subset and cached). Nothing executes riscv64 instructions during the
-# build. glibc target only; musl is not wired.
-# SkiaSharp.NativeAssets.Linux ships runtimes/linux-riscv64/native/libSkiaSharp.so (glibc and
-# musl variants) since 3.119.0, so the RID asset resolves and lands in the publish output
-# without a source build. The 4.157.0 build is linked against GLIBC_2.38.
-
 on:
   workflow_dispatch:
     inputs:
@@ -39,18 +30,14 @@ jobs:
   publish:
     name: linux-riscv64
     runs-on: ubuntu-24.04
-    # 360 is the platform ceiling for a single job. With the qemu-user round trip gone the
-    # publish itself is expected to take tens of minutes; the ceiling only covers the
-    # first run, which also builds the cross JIT from source.
     timeout-minutes: 360
-    # actions: read is required to pull the cross JIT artifact from an earlier run.
     permissions:
       contents: read
       actions: read
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Resolve version
         id: ver
@@ -63,10 +50,6 @@ jobs:
           version="${prefix:-1.0.0}-${channel}.${GITHUB_RUN_NUMBER}"
           input="${{ github.event.inputs.version }}"
           if [ -n "$input" ]; then version="${input#v}"; fi
-          # The version input replaces the whole version, so a manual dispatch can drop the
-          # channel. The publish step forwards both values to MSBuild, and the host project
-          # rejects anything other than release or beta, so resolve the channel here and
-          # always publish it.
           if [ -z "$version" ] || [ -z "$channel" ]; then
             echo "::error::Resolved version or channel is empty (version='$version', channel='$channel')." >&2
             exit 1
@@ -114,10 +97,6 @@ jobs:
           sdk_digest=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.name == "dotnet-sdk-" + $ver + "-linux-riscv64.tar.gz")][0].digest // ""' releases.json)
-          # The artifacts asset carries the source-build version, not the SDK version:
-          # Private.SourceBuilt.Artifacts.11.0.100-rtm.26561.199.linux-riscv64.tar.gz.
-          # Matching "Artifacts.<sdk-version>." therefore yields null and curl then tries to
-          # resolve the literal host "null", so select on the prefix and RID suffix only.
           artifacts_url=$(jq -r --arg tag "$tag" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.state == "uploaded")
@@ -136,10 +115,6 @@ jobs:
               exit 1
             fi
           done
-          # The ILCompiler host pack and the dotnet/runtime sources used to build the cross
-          # JIT are versioned by the runtime ABI, which is not the SDK version: SDK 11.0.100
-          # maps to runtime 11.0.0. Derive the patch from the SDK band unless the caller
-          # pinned a tag, so preview SDKs can be matched against their own runtime branch.
           runtime_tag="$WANT_RUNTIME_TAG"
           if [ -z "$runtime_tag" ]; then
             sdk3=$(printf '%s' "$ver" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
@@ -157,6 +132,16 @@ jobs:
           echo "artifacts_url=$artifacts_url" >> "$GITHUB_OUTPUT"
           echo "::notice::dotnet-riscv SDK $tag ($ver), runtime ABI $runtime_tag"
 
+      - name: Restore toolchain cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/riscv/nuget-local
+            ${{ runner.temp }}/riscv/ilc-host-x64
+            ${{ runner.temp }}/riscv/home/.nuget
+          key: riscv64-toolchain-${{ steps.sdk.outputs.tag }}-${{ steps.sdk.outputs.runtime_ver }}
+          restore-keys: riscv64-toolchain-${{ steps.sdk.outputs.tag }}-
+
       - name: Download SDKs and artifacts
         shell: bash
         env:
@@ -164,28 +149,34 @@ jobs:
           SDK_DIGEST: ${{ steps.sdk.outputs.sdk_digest }}
           ARTIFACTS_URL: ${{ steps.sdk.outputs.artifacts_url }}
           TAG: ${{ steps.sdk.outputs.tag }}
+          RUNTIME_VER: ${{ steps.sdk.outputs.runtime_ver }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/riscv"
           mkdir -p "$work"
-          curl -fL --retry 3 -o "$work/sdk-riscv64.tar.gz" "$SDK_URL"
-          if [[ "$SDK_DIGEST" == sha256:* ]]; then
-            echo "${SDK_DIGEST#sha256:}  $work/sdk-riscv64.tar.gz" | sha256sum -c -
-          else
-            echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
+          if [ -f "$work/nuget-local/.toolchain-ready" ]; then
+            echo "Toolchain feed restored from cache; skipping downloads."
+            exit 0
           fi
-          curl -fL --retry 3 -o "$work/artifacts-riscv64.tar.gz" "$ARTIFACTS_URL"
-          # Official x64 SDK: derive the branded version from the community tag instead of
-          # assuming the tag equals it. Release tags are bare (11.0.100), but preview tags
-          # carry branded suffixes (11.0.100-rc.3.26522.148), and only the first three
-          # segments exist on builds.dotnet.microsoft.com.
           official=$(printf '%s' "$TAG" | grep -oE '^v?[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "$official" ]; then
             echo "::error::Cannot derive an official SDK version from tag '$TAG'." >&2
             exit 1
           fi
+          curl -fL --retry 3 -o "$work/sdk-riscv64.tar.gz" "$SDK_URL" & p1=$!
+          curl -fL --retry 3 -o "$work/artifacts-riscv64.tar.gz" "$ARTIFACTS_URL" & p2=$!
           curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
-            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz"
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz" & p3=$!
+          curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
+            "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg" & p4=$!
+          status=0
+          for p in $p1 $p2 $p3 $p4; do wait "$p" || status=1; done
+          [ "$status" -eq 0 ] || { echo "::error::One or more downloads failed." >&2; exit 1; }
+          if [[ "$SDK_DIGEST" == sha256:* ]]; then
+            echo "${SDK_DIGEST#sha256:}  $work/sdk-riscv64.tar.gz" | sha256sum -c -
+          else
+            echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
+          fi
 
       - name: Prepare local feed and ilc host
         shell: bash
@@ -195,9 +186,11 @@ jobs:
           set -euo pipefail
           work="$RUNNER_TEMP/riscv"
           mkdir -p "$work/nuget-local" "$work/ilc-host-x64"
+          if [ -f "$work/nuget-local/.toolchain-ready" ]; then
+            echo "Feed already prepared; skipping."
+            exit 0
+          fi
 
-          # Runtime pack versions do not map 1:1 from the SDK tag (e.g. 11.0.101 -> 11.0.1,
-          # preview tags carry branding suffixes); read the exact names from the archive.
           artlist=$(tar tzf "$work/artifacts-riscv64.tar.gz")
           pick() { printf '%s\n' "$artlist" | grep -E "^$1\$" | head -1; }
           naot=$(pick "Microsoft\.NETCore\.App\.Runtime\.NativeAOT\.linux-riscv64\.[0-9][^/]*\.nupkg")
@@ -208,21 +201,13 @@ jobs:
           ilcm=$(pick "Microsoft\.DotNet\.ILCompiler\.[0-9][^/]*\.nupkg")
           aspnet=$(pick "Microsoft\.AspNetCore\.App\.Runtime\.linux-riscv64\.[0-9][^/]*\.nupkg")
           aspnetref=$(pick "Microsoft\.AspNetCore\.App\.Ref\.[0-9][^/]*\.nupkg")
-          # The riscv64 ilc package stays in the feed: it carries the native runtime pack the
-          # compile targets expect for the target RID. The host pack below is what actually
-          # runs, so the two do not conflict.
           paths=()
           for p in "$naot" "$ref" "$host" "$runtime" "$ilc" "$ilcm" "$aspnet" "$aspnetref"; do
             [ -n "$p" ] || { echo "::error::Required package missing from Private.SourceBuilt.Artifacts." >&2; exit 1; }
             paths+=("$p")
           done
-          # One list pass plus one extract pass; per-package `-O` pipes would rescan the
-          # ~780 MB archive once per package.
           tar xzf "$work/artifacts-riscv64.tar.gz" -C "$work/nuget-local" "${paths[@]}"
 
-          # The official RID graph has no linux-riscv64, so SetupOSSpecificProps leaves
-          # CrossCompileArch/TargetTriple empty and the link misses --target. Patch the
-          # fallback into the ILCompiler targets before restoring them into the cache.
           unzip -q -o "$work/nuget-local/$ilcm" -d "$work/ilc-nupkg"
           python3 - "$work/ilc-nupkg/build/Microsoft.NETCore.Native.Unix.targets" <<'PY'
           import sys
@@ -241,9 +226,6 @@ jobs:
           PY
           (cd "$work/ilc-nupkg" && zip -qr "$work/nuget-local/$ilcm" .)
 
-          # The host pack supplies the ilc that runs. It ships JITs for the targets Microsoft
-          # builds (arm, arm64, wasm, x64), but none for riscv64, which is why the cross JIT
-          # built in the next step is copied into tools/ next to it.
           curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
             "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg"
           unzip -q -o "$work/ilc-host-x64.nupkg" -d "$work/ilc-host-x64"
@@ -254,6 +236,7 @@ jobs:
             echo "::error::tools/ilc is not an x86-64 binary." >&2
             exit 1
           }
+          touch "$work/nuget-local/.toolchain-ready"
 
       - name: Restore riscv64 cross JIT cache
         uses: actions/cache@v4
@@ -261,13 +244,6 @@ jobs:
           path: ${{ runner.temp }}/riscv/crossjit
           key: riscv64-crossjit-${{ runner.os }}-v${{ steps.sdk.outputs.runtime_ver }}
 
-      # The cache is written by its post-step, which does not run when a job is cancelled by
-      # a timeout, so a run cut off mid-build leaves nothing behind. Pull a previously
-      # uploaded artifact as a fallback so the expensive build only has to succeed once.
-      #
-      # download-artifact@v4 only searches the *current* run unless run-id is given, and the
-      # upload step has not executed yet at this point, so it always reported "Artifact not
-      # found" and the fallback never worked. Walk the earlier runs of this workflow instead.
       - name: Restore cross JIT artifact
         id: jit_artifact
         continue-on-error: true
@@ -314,10 +290,6 @@ jobs:
             file "$jit"
             exit 0
           fi
-          # dotnet/runtime's own Linux prerequisite list. Probing for individual commands is
-          # not enough: the PAL configure step hard-fails when FEATURE_EVENTSOURCE_XPLAT is
-          # on and liblttng-ust-dev is missing, and that is a header/package check no
-          # command probe would catch.
           sudo apt-get update
           sudo apt-get install -y build-essential cmake llvm lld clang \
             python-is-python3 curl git libicu-dev liblttng-ust-dev \
@@ -325,17 +297,6 @@ jobs:
           src="$RUNNER_TEMP/runtime-src"
           git clone --depth 1 --branch "v$RUNTIME_VER" https://github.com/dotnet/runtime "$src"
           cd "$src"
-          # Build the host-runnable riscv64 JIT. Two things matter here:
-          #
-          # 1. clr.alljitscommunity sets "-component alljits" AND
-          #    -DCLR_CMAKE_BUILD_COMMUNITY_ALTJITS=1. create_standalone_jit installs every
-          #    per-arch JIT under COMPONENT alljits, and the COMMUNITY_ALTJITS switch is what
-          #    adds the riscv64 target to the AMD64/ARM64 host block in jit/CMakeLists.txt.
-          #    Without the switch that block emits arm64/x64/win only, which is exactly what
-          #    an earlier attempt produced.
-          # 2. No -arch riscv64. That would ask for a riscv64 *target* build, which is the
-          #    JIT that runs on riscv64, not the one that runs here and emits riscv64 code.
-          #    A native host build gives clrjit_unix_riscv64_${ARCH_HOST_NAME} = _x64.
           ./build.sh clr.alljitscommunity -c release
           built=$(find "$src/artifacts/bin" -name 'libclrjit_unix_riscv64_x64.so' -print -quit)
           if [ -z "$built" ]; then
@@ -345,8 +306,6 @@ jobs:
             exit 1
           fi
           file "$built"
-          # getJit is exported with a version suffix (getJit@@V1.0), so do not anchor the
-          # match at the end of the line.
           nm -D "$built" | grep -qE ' getJit(@@|$)' || {
             echo "::error::Built JIT does not export getJit." >&2
             exit 1
@@ -356,13 +315,10 @@ jobs:
             exit 1
           }
           cp "$built" "$jit"
-          # The checkout plus build tree is several GB; free it before the publish continues.
           cd /
           rm -rf "$src"
           echo "Staged cross JIT as $jit"
 
-      # Published so the fallback above can pick it up on a later run. A timeout kills the
-      # job outright and no later step runs, so this only makes the *next* run cheap.
       - name: Upload cross JIT
         if: always()
         uses: actions/upload-artifact@v7
@@ -400,16 +356,8 @@ jobs:
           export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
           export DOTNET_CLI_HOME=/work/home HOME=/work/home
 
-          # The cross image sets no WORKDIR (it runs as /), so anchor every relative path.
           cd /work/src
 
-          # No emulator is installed: ilc runs natively and only the RyuJIT it loads emits
-          # riscv64 code, so nothing in this container executes riscv64 instructions.
-
-          # Mixed SDK: official x64 host/runtime with the community managed sdk tree
-          # (its Microsoft.NET.Build.Tasks knows the linux-riscv64 packs). The six
-          # riscv64-native files inside the tree are overlaid back with official x64
-          # binaries so MSBuild/Roslyn run natively on the host.
           mkdir -p /work/dotnet-x64 /work/community
           tar xzf /work/sdk-x64.tar.gz -C /work/dotnet-x64
           tar xzf /work/sdk-riscv64.tar.gz -C /work/community ./sdk
@@ -441,12 +389,6 @@ jobs:
 
           dotnet --info
 
-          # IlcHostPackagePath is overwritten unconditionally by
-          # Microsoft.DotNet.ILCompiler.SingleEntry.targets, and IlcToolsPath cannot be
-          # used either because the targets concatenate it with a literal backslash
-          # ("$(IlcToolsPath)\ilc"), which is not a path separator on Unix. ilc therefore
-          # always runs from the restored host package and probes for the JIT next to
-          # itself, so restore first and drop the cross JIT into that exact directory.
           dotnet restore "$PUBLISH_PROJECT" -r linux-riscv64 \
             -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
             -p:IlcHostRuntimeIdentifier=linux-x64
@@ -490,9 +432,6 @@ jobs:
           else
             echo "::warning::UotanStudio.Desktop is missing from the publish output."
           fi
-          # NativeAOT leaves one native executable and no managed app assemblies behind. A
-          # leftover UotanStudio.Desktop.dll means the publish silently fell back to a
-          # framework-dependent build, so report it instead of shipping it unnoticed.
           if ls "$RUNNER_TEMP/publish"/UotanStudio*.dll >/dev/null 2>&1; then
             echo "::warning::Managed assemblies are present in the publish output; the build is not a NativeAOT publish."
           fi
