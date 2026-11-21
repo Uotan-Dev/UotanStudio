@@ -36,8 +36,6 @@ env:
 
 jobs:
   prepare:
-    # Pinned to the Ubuntu 24.04 image: the ubuntu-latest label migrates to Ubuntu 26 on 2026-10-19, and every
-    # Linux RID below publishes on 24.04, so the matrix must resolve on the same image.
     name: Resolve RID matrix
     runs-on: ubuntu-24.04
     outputs:
@@ -56,13 +54,8 @@ jobs:
             [win-arm64]=windows-11-arm
             [linux-x64]=ubuntu-24.04
             [linux-arm64]=ubuntu-24.04-arm
-            # The musl rids publish inside the official alpine SDK container (musl
-            # toolchain is not available on the glibc runners); the runner only hosts docker.
             [linux-musl-x64]=ubuntu-24.04
             [linux-musl-arm64]=ubuntu-24.04-arm
-            # Both osx RIDs are pinned to macOS 15 (the oldest supported GA image): the macos-26
-            # pool repeatedly failed to come online (assignment loops). macos-15-intel is the
-            # x64-native image for osx-x64; macos-15 is the arm64 image for osx-arm64.
             [osx-x64]=macos-15-intel
             [osx-arm64]=macos-15
           )
@@ -221,7 +214,7 @@ jobs:
             -e PUBLISH_PROJECT="$PUBLISH_PROJECT" \
             -e MATRIX_RID="${{ matrix.rid }}" \
             mcr.microsoft.com/dotnet/sdk:11.0-alpine \
-            sh -c 'apk add --no-cache clang zlib-dev >/dev/null &&
+            sh -c 'apk add --no-cache clang zlib-dev binutils >/dev/null &&
               export DOTNET_CLI_HOME=/dotnet-home DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 &&
               dotnet publish "/src/$PUBLISH_PROJECT" \
                 -c Release -r "$MATRIX_RID" --self-contained true \
