@@ -133,7 +133,7 @@ jobs:
           echo "::notice::loongson/dotnet SDK $tag ($ver), runtime ABI $runtime_tag"
 
       - name: Restore toolchain cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ${{ runner.temp }}/loongarch/nuget-local
@@ -234,7 +234,7 @@ jobs:
           touch "$work/nuget-local/.toolchain-ready"
 
       - name: Restore cross natives cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/loongarch/natives/out
           # Bump vN when tools/cross-natives/build.sh or the pinned sources change.
@@ -260,7 +260,12 @@ jobs:
             git -C "$onigwrap" remote add origin https://github.com/aikawayataro/Onigwrap
             git -C "$onigwrap" fetch -q --depth 1 origin 98683ee59d6d18d5aa579a11499cde753e5a6b34
             git -C "$onigwrap" checkout -q FETCH_HEAD
-            git clone -q --depth 1 --branch v2.2.4 https://github.com/tomlm/Porta.Pty "$src/portapty"
+            portapty="$src/portapty"
+            git init -q "$portapty"
+            git -C "$portapty" remote add origin https://github.com/tomlm/Porta.Pty
+            # v2.2.4 was shipped without a tag; pin the 2.2.4 merge commit.
+            git -C "$portapty" fetch -q --depth 1 origin 5fd8cc38428b345e252327bf6b438bee6c6a62a6
+            git -C "$portapty" checkout -q FETCH_HEAD
             curl -fL --retry 3 -o "$src/onig.tar.gz" \
               "https://github.com/kkos/oniguruma/releases/download/v6.9.10/onig-6.9.10.tar.gz"
             mkdir "$src/oniguruma"
@@ -276,7 +281,7 @@ jobs:
           readelf -h "${libs[1]}" | grep -q LoongArch || { echo "::error::libporta_pty.so is not a loongarch64 ELF." >&2; exit 1; }
 
       - name: Restore loongarch64 cross JIT cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/loongarch/crossjit
           key: loongarch64-crossjit-${{ runner.os }}-v${{ steps.sdk.outputs.runtime_ver }}
