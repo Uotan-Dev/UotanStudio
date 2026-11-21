@@ -278,8 +278,10 @@ jobs:
           echo "VER=$ver" >> "$GITHUB_ENV"
           if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
             gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
-              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
-            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" \
+              --pattern "uotanstudio-$ver-linux-glibc-*.tar.gz" --clobber
+            src=$(find . -maxdepth 1 -name 'uotanstudio-*.tar.gz' | head -1)
           else
             gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
               --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
@@ -383,8 +385,10 @@ jobs:
           echo "VER=$ver" >> "$GITHUB_ENV"
           if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
             gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
-              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
-            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" \
+              --pattern "uotanstudio-$ver-linux-glibc-*.tar.gz" --clobber
+            src=$(find . -maxdepth 1 -name 'uotanstudio-*.tar.gz' | head -1)
           else
             gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
               --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
@@ -530,8 +534,10 @@ jobs:
           echo "VER=$ver" >> "$GITHUB_ENV"
           if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
             gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
-              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
-            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" \
+              --pattern "uotanstudio-$ver-linux-glibc-*.tar.gz" --clobber
+            src=$(find . -maxdepth 1 -name 'uotanstudio-*.tar.gz' | head -1)
           else
             gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
               --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
@@ -629,8 +635,10 @@ jobs:
           echo "VER=$ver" >> "$GITHUB_ENV"
           if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
             gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
-              --repo "$GITHUB_REPOSITORY" --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" --clobber
-            src="uotanstudio-$ver-${{ matrix.rid }}.tar.gz"
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" \
+              --pattern "uotanstudio-$ver-linux-glibc-*.tar.gz" --clobber
+            src=$(find . -maxdepth 1 -name 'uotanstudio-*.tar.gz' | head -1)
           else
             gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
               --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact

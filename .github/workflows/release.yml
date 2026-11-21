@@ -69,6 +69,12 @@ jobs:
             [osx-x64]=macos
             [osx-arm64]=macos
           )
+          declare -A distros=(
+            [linux-x64]=glibc
+            [linux-arm64]=glibc
+            [linux-musl-x64]=musl
+            [linux-musl-arm64]=musl
+          )
           all_rids=(win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64)
 
           requested="${RID_INPUT:-}"
@@ -95,7 +101,7 @@ jobs:
 
           entries=()
           for rid in "${selected[@]}"; do
-            entries+=("{\"rid\":\"$rid\",\"os\":\"${platforms[$rid]}\",\"runner\":\"${runners[$rid]}\"}")
+            entries+=("{\"rid\":\"$rid\",\"os\":\"${platforms[$rid]}\",\"runner\":\"${runners[$rid]}\",\"distro\":\"${distros[$rid]:-}\"}")
           done
           joined=$(IFS=,; printf '%s' "${entries[*]}")
           echo "matrix={\"include\":[$joined]}" >> "$GITHUB_OUTPUT"
@@ -112,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Resolve version
         id: ver
@@ -162,6 +168,22 @@ jobs:
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $version ($channel)"
+
+      - name: Cache NuGet packages
+        if: ${{ !contains(matrix.rid, 'musl') }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ matrix.rid }}-
+
+      - name: Cache NuGet packages (musl container)
+        if: ${{ contains(matrix.rid, 'musl') }}
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/home/.nuget
+          key: nuget-${{ matrix.rid }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ matrix.rid }}-
 
       - name: Setup .NET
         if: ${{ !contains(matrix.rid, 'musl') }}
@@ -251,15 +273,23 @@ jobs:
           rm -rf *.dSYM
           chmod +x UotanStudio.Desktop 2>/dev/null || true
           find . -type d -empty -delete
-          tar -czf "$RUNNER_TEMP/uotanstudio-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP/publish" .
+          rid="${{ matrix.rid }}"
+          distro="${{ matrix.distro }}"
+          if [ -n "$distro" ]; then
+            pkg_rid="linux-$distro-${rid#linux-}"
+          else
+            pkg_rid="$rid"
+          fi
+          tar -czf "$RUNNER_TEMP/uotanstudio-$pkg_rid.tar.gz" -C "$RUNNER_TEMP/publish" .
+          echo "Packaged as uotanstudio-$pkg_rid.tar.gz"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: uotanstudio-${{ steps.ver.outputs.version }}-${{ matrix.rid }}
           path: |
-            ${{ runner.temp }}/uotanstudio-${{ matrix.rid }}.zip
-            ${{ runner.temp }}/uotanstudio-${{ matrix.rid }}.tar.gz
+            ${{ runner.temp }}/uotanstudio-*.zip
+            ${{ runner.temp }}/uotanstudio-*.tar.gz
           if-no-files-found: error
           retention-days: 30
 
