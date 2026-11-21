@@ -73,10 +73,6 @@ public sealed class SunxiFlasher
                 $"No package file for partition '{missing}'; skipped."));
         }
 
-        // Every mode sends an erase flag, including the plain partition mode: the vendor flow maps it to 0x1 and a
-        // NAND medium refuses to write a page that has not been erased, answering 0xFF instead.
-        // 每种模式都会发送擦除标志，包括普通分区模式：厂商流程把它映射为 0x1，而 NAND 介质拒绝写入未擦除的页，
-        // 只会以 0xFF 回应。
         progress?.Report(new SunxiFlashProgress("erase", null, null, null,
             $"Erasing storage with flag 0x{(uint)_options.EraseFlag:X}."));
         await session.EraseAsync(_options.EraseFlag, cancellationToken, SunxiFesSession.EraseTimeoutMilliseconds)
@@ -251,14 +247,6 @@ public sealed class SunxiFlasher
             cancellationToken.ThrowIfCancellationRequested();
             var length = (int)Math.Min(buffer.Length, step.ByteCount - offset);
             var last = offset + length == step.ByteCount;
-
-            // Every 64 KiB frame is a complete download of its own in the vendor flow: the reference tool calls the
-            // transfer once per 64 KiB block, and its finish tag appears whenever the bytes left in that call reach
-            // zero — which is every block. Marking only the partition's final block leaves the service waiting on
-            // the earlier frames, and a NAND medium answers 0xFF to a write it considers incomplete.
-            // 在厂商流程中，每个 64 KiB 帧本身就是一次完整下载：参考工具每 64 KiB 调用一次传输，其完成标记在该次调用
-            // 剩余字节归零时出现——也就是每一块。只在分区最后一块标记会让服务等待前面的帧，NAND 介质会以 0xFF
-            // 回应它认为不完整的写入。
             var flags = (uint)step.Tag | SunxiEfexConstants.TransferFinishTag;
             var written = await _plan.ExtractSegmentAsync(step, offset, buffer, cancellationToken)
                 .ConfigureAwait(false);
@@ -350,6 +338,14 @@ public sealed class SunxiFlasher
         {
             progress?.Report(new SunxiFlashProgress("verify", step.Name, null, null,
                 $"Verify '{step.Name}' did not return a valid CRC flag; continuing."));
+            return;
+        }
+
+        if (result.FesCrc == 0)
+        {
+            progress?.Report(new SunxiFlashProgress("verify", step.Name, null, null,
+                $"Verify '{step.Name}' returned no source CRC (media 0x{result.MediaCrc:X8}); the medium did "
+                + "not confirm a comparable CRC; continuing."));
             return;
         }
 

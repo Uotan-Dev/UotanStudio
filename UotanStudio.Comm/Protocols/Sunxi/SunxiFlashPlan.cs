@@ -348,24 +348,33 @@ public sealed class SunxiFlashPlan : IDisposable
             }
 
             var capacity = checked((long)partition.SectorCount * SunxiEfexConstants.SectorSize);
-            var source = SunxiPartitionSource.Create(container, header.Entries[entryIndex], header.IsEncrypted,
-                capacity, cancellationToken);
-            if (sources.ContainsKey(entryIndex))
+            SunxiPartitionSource source;
+            if (sources.TryGetValue(entryIndex, out var existing))
             {
-                source.Dispose();
-                throw new InvalidDataException(
-                    $"More than one partition names the package entry '{header.Entries[entryIndex].Name}'.");
+                if (existing.Length > capacity)
+                {
+                    throw new InvalidDataException(
+                        $"The payload for partition '{partition.Name}' is {existing.Length} bytes, above its "
+                        + $"{capacity}-byte capacity.");
+                }
+
+                source = existing;
+            }
+            else
+            {
+                source = SunxiPartitionSource.Create(container, header.Entries[entryIndex], header.IsEncrypted,
+                    capacity, cancellationToken);
+                if (source.Length > capacity)
+                {
+                    source.Dispose();
+                    throw new InvalidDataException(
+                        $"The payload for partition '{partition.Name}' is {source.Length} bytes, above its "
+                        + $"{capacity}-byte capacity.");
+                }
+
+                sources[entryIndex] = source;
             }
 
-            if (source.Length > capacity)
-            {
-                source.Dispose();
-                throw new InvalidDataException(
-                    $"The payload for partition '{partition.Name}' is {source.Length} bytes, above its "
-                    + $"{capacity}-byte capacity.");
-            }
-
-            sources[entryIndex] = source;
             steps.Add(new SunxiFlashStep(SunxiFlashStepKind.Partition, partition.Name, SunxiFesDataTag.Flash,
                 (uint)partition.FirstSector, source.Length, entryIndex));
         }
