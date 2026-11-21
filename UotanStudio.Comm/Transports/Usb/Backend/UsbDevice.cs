@@ -437,12 +437,6 @@ internal enum UsbDeviceType
     MacOS = 4,
 
     /// <summary>
-    /// HarmonyOS USB DDK backend.
-    /// <para>HarmonyOS USB DDK 后端。</para>
-    /// </summary>
-    HarmonyOS = 5,
-
-    /// <summary>
     /// Android USB Host backend (android.hardware.usb).
     /// <para>Android USB Host 后端（android.hardware.usb）。</para>
     /// </summary>

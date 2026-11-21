@@ -78,8 +78,8 @@ internal sealed class UsbApiRegistry
     public IReadOnlyList<string> GetApiNames() => [.. _factories.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
-    /// Creates the default registry with native, libusb and harmony providers.
-    /// <para>创建包含 native、libusb 与 harmony 提供器的默认注册表。</para>
+    /// Creates the default registry with native and libusb providers.
+    /// <para>创建包含 native 与 libusb 提供器的默认注册表。</para>
     /// </summary>
     /// <returns>The default registry. <para>默认注册表实例。</para></returns>
     public static UsbApiRegistry CreateDefault()
@@ -87,7 +87,6 @@ internal sealed class UsbApiRegistry
         var registry = new UsbApiRegistry();
         registry.Register(NativeUsbApiProvider.ApiNameConst, () => new NativeUsbApiProvider());
         registry.Register(LibUsbApiProvider.ApiNameConst, () => new LibUsbApiProvider());
-        registry.Register(HarmonyOSUsbApiProvider.ApiNameConst, () => new HarmonyOSUsbApiProvider());
         return registry;
     }
 

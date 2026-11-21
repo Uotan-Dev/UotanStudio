@@ -28,12 +28,5 @@ public enum UsbApiKind
     /// Represents a custom backend registration.
     /// <para>表示自定义后端注册类型。</para>
     /// </summary>
-    Custom = 3,
-
-    /// <summary>
-    /// Uses the HarmonyOS USB DDK backend (<c>libusb_ndk.z.so</c>, enabled by
-    /// <c>FIRMWAREKIT_USB_ENABLE_HARMONY=1</c>).
-    /// <para>使用 HarmonyOS USB DDK 后端（<c>libusb_ndk.z.so</c>，由 <c>FIRMWAREKIT_USB_ENABLE_HARMONY=1</c> 开启）。</para>
-    /// </summary>
-    HarmonyOS = 4
+    Custom = 3
 }

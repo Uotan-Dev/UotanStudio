@@ -4,8 +4,8 @@ namespace UotanStudio.Comm.Transports.Usb.Backend;
 
 /// <summary>
 /// Shared USB speed inference helpers used by backends that do not report the negotiated
-/// link speed directly (macOS, HarmonyOS, Linux fallback).
-/// <para>供不直接报告协商链路速度的后端（macOS、HarmonyOS、Linux 回退）使用的共享
+/// link speed directly (macOS, Linux fallback).
+/// <para>供不直接报告协商链路速度的后端（macOS、Linux 回退）使用的共享
 /// USB 速度推断工具。</para>
 /// </summary>
 internal static class UsbSpeedInference

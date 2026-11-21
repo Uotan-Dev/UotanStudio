@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 using UotanStudio.Comm.Transports.Usb.Backend.Linux;
 using UotanStudio.Comm.Transports.Usb.Backend.MacOS;
@@ -104,7 +103,6 @@ public sealed partial class DeviceController
         }
 
         yield return UsbTopologyBackendKind.LibUsb;
-        yield return UsbTopologyBackendKind.HarmonyOS;
     }
 
     private static IUsbTopologyProvider? ProviderFor(UsbTopologyBackendKind backend) => backend switch
@@ -113,7 +111,6 @@ public sealed partial class DeviceController
         UsbTopologyBackendKind.LinuxSysfs => OperatingSystem.IsLinux() ? LinuxSysfsTopologyProvider.Instance : null,
         UsbTopologyBackendKind.MacOSIoRegistry => OperatingSystem.IsMacOS() ? MacIoRegistryTopologyProvider.Instance : null,
         UsbTopologyBackendKind.LibUsb => LibUsbTopologyProvider.Instance,
-        UsbTopologyBackendKind.HarmonyOS => HarmonyUsbTopologyProvider.Instance,
         _ => null
     };
 }
