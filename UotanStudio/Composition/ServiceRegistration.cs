@@ -5,6 +5,7 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Services.NativeBin;
 using UotanStudio.Services.Network;
 using UotanStudio.Services.PatchPackages;
 using UotanStudio.Services.Projects;
@@ -84,6 +85,8 @@ internal static class ServiceRegistration
         services.AddSingleton<ScrcpyServerService>(_ => ScrcpyServerService.Shared);
         services.AddSingleton<Services.Update.AppUpdateService>(sp =>
             new Services.Update.AppUpdateService(sp.GetRequiredService<HttpClient>()));
+        services.AddSingleton<Services.NativeBin.NativeBinProvisioner>(sp =>
+            new Services.NativeBin.NativeBinProvisioner(sp.GetRequiredService<HttpClient>()));
         services.AddTransient<CheckUpdateViewModel>(sp => new CheckUpdateViewModel(
             sp.GetRequiredService<Services.Update.AppUpdateService>(),
             sp.GetRequiredService<ILocalizer>()));

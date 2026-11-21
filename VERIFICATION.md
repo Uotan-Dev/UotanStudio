@@ -76,6 +76,7 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 - RKDL `WIPE`、子码返回值、坏块位图与 SDRAM 重枚举只有线格式证据；maskrom→usbplug 端到端与无 loader 烧录未复测；`bcdUSB` 阶段证据未在真机观测。
 - SPINOR/SPINAND/SATA/PCIE/UFS/RVD 的存储切换只有 eMMC/SD 可对照官方工具；READ_STORAGE 多位置位语义未观测。
 - Windows 未覆盖 alt setting 切换与 Legacy/Rockusb 分支；Linux、libusb、macOS、HarmonyOS 后端只有编译与静态核对；macOS IOKit 与 HarmonyOS DDK 路径未上机。
+- NativeBin 启动自动下载链路（`NativeBinProvisioner.EnsureForCurrentProcessAsync` + 归档提取注册）只有单元测试覆盖；真实网络下载、镜像回退与提取后的 libusb 后端启用未实测。
 - HDC 文件收发、ADB 通道逐帧 trace 与调试模式未用真实设备执行；HDC 缓存复用未在 HarmonyOS 真机跑完第二轮；运行中拔插设备只经代码路径验证。
 
 **界面与平台**

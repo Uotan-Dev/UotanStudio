@@ -1,3 +1,5 @@
+using UotanStudio.Comm;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 using UotanStudio.Hash.Digests;
 
@@ -181,17 +183,20 @@ public sealed class NativeBinProvisioner
 
                 Report(new NativeBinProgress(rid, url.Url, downloadResult.Bytes, downloadResult.TotalBytes,
                     NativeBinStage.Verifying, $"Verifying SHA-256 for {url.Url}"));
-                var actual = await HashFileAsync(tmpPath, ct).ConfigureAwait(false);
-                if (!string.Equals(actual, entry.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                await using (var archive = new FileStream(tmpPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
                 {
-                    lastFailure = new InvalidDataException(
-                        $"SHA-256 mismatch from {url.Url} (expected {entry.ExpectedSha256}, got {actual}); retrying next URL.");
-                    continue;
+                    if (!await NativeBinArchiveExtractor.TryExtractAsync(
+                            archive, rid, entry.ExpectedSha256, cachePath, ct).ConfigureAwait(false))
+                    {
+                        lastFailure = new InvalidDataException(
+                            $"Archive from {url.Url} does not contain a libusb-1.0 library matching the expected SHA-256 {entry.ExpectedSha256}; retrying next URL.");
+                        continue;
+                    }
                 }
 
                 Report(new NativeBinProgress(rid, url.Url, downloadResult.Bytes, downloadResult.TotalBytes,
                     NativeBinStage.Installing, $"Installing {rid} libusb"));
-                File.Move(tmpPath, cachePath, overwrite: true);
                 SetLibraryPath(cachePath);
                 Report(new NativeBinProgress(rid, url.Url, downloadResult.Bytes, downloadResult.TotalBytes,
                     NativeBinStage.Done, $"Installed libusb from {url.Url}"));
@@ -218,6 +223,47 @@ public sealed class NativeBinProvisioner
             "You can manually place a compatible libusb into " +
             $"'{Path.Combine(_settings.CacheDir, rid)}' and retry, or call " +
             "LibUsbRuntime.SetLibraryPath with the absolute path to a system-installed libusb.");
+    }
+
+    /// <summary>
+    /// Provisions the libusb runtime for the current process when startup conditions require it:
+    /// the USB backend must be explicitly <see cref="UsbApiKind.LibUsbDotNet"/>, no platform
+    /// library may be bundled next to the application, and the current RID must be in
+    /// <see cref="NativeBinCatalog"/>. Any other combination returns <see langword="null"/> without
+    /// touching the network, so a bundled runtime always wins over the download cache.
+    /// <para>当启动条件要求时为当前进程准备 libusb 运行库：USB 后端必须是显式
+    /// <see cref="UsbApiKind.LibUsbDotNet"/>、程序目录没有随包平台库，且当前 RID 在
+    /// <see cref="NativeBinCatalog"/> 内。其他组合直接返回 <see langword="null"/>、不发起网络请求，
+    /// 随包运行库始终优先于下载缓存。</para>
+    /// </summary>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The registered cache path, or <see langword="null"/> when provisioning was skipped.
+    /// <para>已注册的缓存路径；跳过准备时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="NativeRuntimeNotAvailableException">Every configured URL failed.
+    /// <para>所有已配置的 URL 都失败。</para></exception>
+    public async Task<string?> EnsureForCurrentProcessAsync(CancellationToken ct = default)
+    {
+        if (DeviceCommunicationConfiguration.Current.UsbBackend != UsbApiKind.LibUsbDotNet)
+        {
+            return null;
+        }
+
+        if (LibUsbRuntime.HasApplicationDirectoryLibrary)
+        {
+            return null;
+        }
+
+        string rid;
+        try
+        {
+            rid = NativeBinCatalog.CurrentRid();
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return null;
+        }
+
+        return await EnsureAsync(rid, ct).ConfigureAwait(false);
     }
 
     /// <summary>

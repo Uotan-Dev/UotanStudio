@@ -19,6 +19,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Services.NativeBin;
 using UotanStudio.Services.Plugins;
 using UotanStudio.Build;
 using UotanStudio.Services.Update;
@@ -167,6 +168,39 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// <summary>
+    /// Kicks off the libusb runtime provisioning in the background. Device scanning may start
+    /// before registration completes: the libusb backend reports itself unavailable first and
+    /// re-enables once <c>LibUsbRuntime.SetLibraryPath</c> succeeds, which the loader documents
+    /// as a supported path. Failures are logged only and never block startup.
+    /// <para>在后台启动 libusb 运行库准备。设备扫描可能先于注册完成：libusb 后端先报告不可用，
+    /// 待 <c>LibUsbRuntime.SetLibraryPath</c> 成功后重新启用，加载器文档明确支持该路径。
+    /// 失败只记日志，绝不阻塞启动。</para>
+    /// </summary>
+    private static void ProvisionNativeRuntimeInBackground()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (ServiceHub.TryGet<NativeBinProvisioner>() is not { } provisioner)
+                {
+                    return;
+                }
+
+                var path = await provisioner.EnsureForCurrentProcessAsync().ConfigureAwait(false);
+                if (path is not null)
+                {
+                    LogService.Instance.Write(LogLevel.Info, "Startup", $"libusb runtime provisioned at '{path}'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Startup", $"libusb runtime provisioning failed: {ex.Message}");
+            }
+        });
+    }
+
     /// Startup sequence: applies persisted settings, starts device monitoring with the initial full
     /// USB scan while reporting stage status, and pre-builds the main window once the scan completes.
     /// <para>启动序列：应用持久化设置，启动设备监视并执行首次全局 USB 扫描且上报阶段状态，扫描完成后预构建主窗口。</para>
@@ -188,6 +222,7 @@ public partial class App : Application
         await ReportAsync(SplashPhase.Settings);
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
+        ProvisionNativeRuntimeInBackground();
         Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
         _desktopServices = new DesktopApplicationServices();
 

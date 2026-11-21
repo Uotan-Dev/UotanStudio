@@ -34,4 +34,8 @@ public static class LibUsbRuntime
     /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     public static void SetLibraryPath(string libraryPath)
         => LibUsbNativeLoader.SetLibraryPath(libraryPath);
+
+    /// <summary>Gets a value indicating whether a libusb platform file for this process exists next to the application. This is an existence check only; it neither loads the library nor guarantees that the libusb backend is usable.
+    /// <para>获取一个值，指示本进程对应的 libusb 平台文件是否存在于程序目录。这只是存在性检查；既不加载库，也不保证 libusb 后端可用。</para></summary>
+    public static bool HasApplicationDirectoryLibrary => LibUsbNativeLoader.HasApplicationDirectoryLibrary;
 }
