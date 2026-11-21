@@ -238,6 +238,48 @@ jobs:
           }
           touch "$work/nuget-local/.toolchain-ready"
 
+      - name: Restore cross natives cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/riscv/natives/out
+          # Bump vN when tools/cross-natives/build.sh or the pinned sources change.
+          key: riscv64-natives-v1-${{ runner.os }}-oniguruma6.9.10-portapty2.2.4
+
+      - name: Build cross native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/riscv"
+          natives="$work/natives"
+          mkdir -p "$natives/out"
+          libs=("$natives/out/libonigwrap.so" "$natives/out/libporta_pty.so")
+          if [ -f "${libs[0]}" ] && [ -f "${libs[1]}" ]; then
+            echo "Cross native libraries restored from cache."
+          else
+            src="$natives/src"
+            mkdir -p "$src"
+            # Pinned sources: onigwrap main @98683ee5, oniguruma v6.9.10 (release
+            # tarball ships the pre-generated configure), Porta.Pty v2.2.4.
+            onigwrap="$src/onigwrap"
+            git init -q "$onigwrap"
+            git -C "$onigwrap" remote add origin https://github.com/aikawayataro/Onigwrap
+            git -C "$onigwrap" fetch -q --depth 1 origin 98683ee59d6d18d5aa579a11499cde753e5a6b34
+            git -C "$onigwrap" checkout -q FETCH_HEAD
+            git clone -q --depth 1 --branch v2.2.4 https://github.com/tomlm/Porta.Pty "$src/portapty"
+            curl -fL --retry 3 -o "$src/onig.tar.gz" \
+              "https://github.com/kkos/oniguruma/releases/download/v6.9.10/onig-6.9.10.tar.gz"
+            mkdir "$src/oniguruma"
+            tar xzf "$src/onig.tar.gz" -C "$src/oniguruma" --strip-components=1
+            rm "$src/onig.tar.gz"
+            docker run --rm --platform linux/amd64 \
+              -v "$src:/natives-src" \
+              -v "$GITHUB_WORKSPACE:/work/src:ro" \
+              "$CROSS_IMAGE" bash /work/src/tools/cross-natives/build.sh riscv64 /natives-src /natives-src/out
+            cp "$src/out/"*.so "$natives/out/"
+          fi
+          readelf -h "${libs[0]}" | grep -q RISC-V || { echo "::error::libonigwrap.so is not a riscv64 ELF." >&2; exit 1; }
+          readelf -h "${libs[1]}" | grep -q RISC-V || { echo "::error::libporta_pty.so is not a riscv64 ELF." >&2; exit 1; }
+
       - name: Restore riscv64 cross JIT cache
         uses: actions/cache@v4
         with:
@@ -427,6 +469,9 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/publish"
           cp -R "$work/out/." "$RUNNER_TEMP/publish/"
+          # Self-built cross natives: managed packages carry no riscv64
+          # runtime assets, so the libraries ship next to the apphost.
+          cp "$work/natives/out/libonigwrap.so" "$work/natives/out/libporta_pty.so" "$RUNNER_TEMP/publish/"
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
           else
