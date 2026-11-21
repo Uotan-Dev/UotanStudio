@@ -137,7 +137,9 @@ jobs:
 
           alp=()
           has linux-musl-x64 && alp+=('{"rid":"linux-musl-x64","apk_arch":"x86_64","runner":"ubuntu-24.04"}')
-          has linux-musl-arm64 && alp+=('{"rid":"linux-musl-arm64","apk_arch":"aarch64","runner":"ubuntu-24.04-arm"}')
+          has linux-musl-arm64 && alp+=('{"rid":"linux-musl-arm64","apk_arch":"aarch64","runner":"ubuntu-24.04"}')
+          has linux-riscv64 && alp+=('{"rid":"linux-riscv64","apk_arch":"riscv64","runner":"ubuntu-24.04"}')
+          has linux-loongarch64 && alp+=('{"rid":"linux-loongarch64","apk_arch":"loongarch64","runner":"ubuntu-24.04"}')
           emit_matrix alpine alpine "$(IFS=,; printf '%s' "${alp[*]:-}")"
 
           arc=()
@@ -627,7 +629,7 @@ jobs:
           license="GPL-3.0-only"
           depends="musl libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr
            libxext libxfixes libxi libice glib wayland libxkbcommon mesa-egl mesa-gl mesa-gbm libdrm"
-          options="!check !fhs"
+          options="!check !fhs !strip !tracedeps"
           source="uotanstudio.tar.gz"
           package() {
             install -d "\$pkgdir"/opt/UotanStudio \\
@@ -643,7 +645,7 @@ jobs:
           }
           APKBUILD
 
-          docker run --rm -v "$work:/work" -e PKGVER="$pkgver" alpine:3.20 sh -c '
+          docker run --rm -v "$work:/work" -e PKGVER="$pkgver" -e APK_ARCH="${{ matrix.apk_arch }}" alpine:3.20 sh -c '
             set -eu
             apk add --no-cache alpine-sdk imagemagick sudo \
               libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr \
@@ -653,12 +655,13 @@ jobs:
             addgroup builder abuild
             echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
             chown -R builder:builder /work/build /var/cache/distfiles
-            abuild-keygen -a -n -i >/dev/null 2>&1 || true
-            mkdir -p /home/builder/.abuild
-            cp /root/.abuild/*.rsa /home/builder/.abuild/key.rsa 2>/dev/null || true
-            cp /root/.abuild/*.rsa.pub /home/builder/.abuild/key.rsa.pub 2>/dev/null || true
+            mkdir -p /home/builder/.abuild /etc/apk/keys
+            openssl genrsa -out /home/builder/.abuild/key.rsa 2048 >/dev/null 2>&1
+            openssl rsa -in /home/builder/.abuild/key.rsa -pubout \
+              -out /home/builder/.abuild/key.rsa.pub >/dev/null 2>&1
+            cp /home/builder/.abuild/key.rsa.pub /etc/apk/keys/key.rsa.pub
             chown -R builder:builder /home/builder
-            su builder -c "cd /work/build && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild checksum && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild -F"
+            su builder -c "cd /work/build && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild checksum && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa CARCH=\$APK_ARCH abuild -F"
             find /home/builder/packages -name "*.apk" -exec cp {} /work/out/ \;
             cp /home/builder/.abuild/*.pub /work/out/ 2>/dev/null || true
           '
