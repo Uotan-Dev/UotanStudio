@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "release.yml run id (empty = newest success)"
+        description: "ci.yml run id (empty = newest success)"
         required: false
         default: ""
       tag:
@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           fetch() {
-            if [ -n "$RUN_ID" ] && [ "$1" = release.yml ]; then printf '%s' "$RUN_ID"; return 0; fi
+            if [ -n "$RUN_ID" ] && [ "$1" = ci.yml ]; then printf '%s' "$RUN_ID"; return 0; fi
             local out
             if out=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow="$1" --status=success \
                        --limit 1 --json databaseId -q '.[0].databaseId // empty' 2>&1); then
@@ -68,7 +68,7 @@ jobs:
             done
           fi
           searched=()
-          for wf in release.yml riscv-publish.yml loongarch-publish.yml; do
+          for wf in ci.yml; do
             run_id=$(fetch "$wf")
             if [ -z "$run_id" ]; then
               echo "::warning::No successful $wf run found; skipping its artifacts." >&2
