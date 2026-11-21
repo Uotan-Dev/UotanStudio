@@ -14,11 +14,11 @@
 ## USB 与生命周期
 
 - `CommKit` 静态构造把 `UsbAccessPolicy` 配到 `DebugBridgeSessionOpener.RequireDirectUsb`。策略未配置时，debug 接口（class `0xff`、protocol `1`、subclass `0x42`/`0x50`）必须 fail-closed，不得先开句柄再检查。
-- `UsbApiKind.Auto` 解析为平台原生后端（Windows WinUSB、Linux usbfs、macOS IOKit）；libusb 是 `DeviceCommunicationConfiguration.UsbBackend` 的显式 opt-in，HarmonyOS DDK 由 `FIRMWAREKIT_USB_ENABLE_HARMONY=1` 显式开启。原生 USB 会话按精确设备/接口路径打开，Linux 在打开后额外核对物理端口链；接口申请失败要立即释放本会话已申请的资源。
+- `UsbApiKind.Auto` 解析为平台原生后端（Windows WinUSB、Linux usbfs、macOS IOKit）；libusb 是 `DeviceCommunicationConfiguration.UsbBackend` 的显式 opt-in。原生 USB 会话按精确设备/接口路径打开，Linux 在打开后额外核对物理端口链；接口申请失败要立即释放本会话已申请的资源。
 - 每设备 `DeviceCommandDispatcher` 是 FIFO、严格串行；结果与异常通过提交的 `Task` 返回。流式工作（logcat、shell streaming、投屏）不得走命令池。`DeviceLease` 按命令池 → 会话 → 传输 → 端点占用的顺序释放且只释放一次。
 - 取消只影响该次提交；Dispose 取消队列并等待正在执行的命令真正结束。取消原生传输时不得提前复用缓冲区。
 - Sahara 首包一次读取不超过 64 字节的前缀；传输读取宽度使用 `PacketBurstBufferBytes`=1 KiB，`EdlProbeTransport` 同样读取 1 KiB，避免窄请求触发 URB overflow。多读字节进入待分类缓冲。链路静默只表示 HELLO 已被消费或目标正在运行 Firehose。`SaharaProtocol.LinkReportsSahara` 为真时跳过 Firehose NOP 探测并直接写 `RESET_STATE_MACHINE`，不得向 bootrom 发送 Firehose XML；预算耗尽按 `ReadPortTimeout` 上报。
-- `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册；相对路径按当前目录解析为绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
+- `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。每个 RID 目录只含一个文件，文件名必须与 LibUsbDotNet resolver 的探测名一致（Windows `libusb-1.0.dll`、macOS `libusb-1.0.0.dylib`、Linux `libusb-1.0.so.0`）；无版本名（`libusb-1.0.dylib`/`libusb-1.0.so`）不随包，加载器仅将其作为外部手工放置文件的兜底，且仍优先版本化名，使 Comm 与 LibUsbDotNet 绑定同一映像。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册；相对路径按当前目录解析为绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
 - Comm 不启动或调用 adb/hdc 可执行文件；server 存活只做 TCP 探测。HDC 关闭优先走 `HdcServerClient.KillAsync` 的 host-channel `kill`；仅当 greeting 未宣告 `CMD_SERVER_KILL` 时，允许读取 pid 文件并在校验进程名与可执行路径后终止该单个进程。
 
 ## Windows 驱动与 WinUSB 接管
@@ -56,4 +56,4 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.HeadlessControllerGatewayTests --minimum-expected-tests 1
 ```
 
-- 设备 I/O 归属与 scrcpy 分离没有自动架构门禁，只能靠评审；Windows-only 构建与测试不证明 Linux/macOS/HarmonyOS 后端或 NativeAOT 行为。
+- 设备 I/O 归属与 scrcpy 分离没有自动架构门禁，只能靠评审；Windows-only 构建与测试不证明 Linux/macOS 后端或 NativeAOT 行为。

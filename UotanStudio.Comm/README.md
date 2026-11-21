@@ -19,7 +19,7 @@ leaves that every upper layer may reference.
 
 | Boundary | Code | Responsibility |
 | --- | --- | --- |
-| OS adapters | `Transports/Usb/Backend/{Windows,Linux,MacOS,HarmonyOS,LibUsb}` | Native enumeration, handles, endpoint I/O and hotplug. |
+| OS adapters | `Transports/Usb/Backend/{Windows,Linux,MacOS,LibUsb}` | Native enumeration, handles, endpoint I/O and hotplug. |
 | Bearers | `Transports/{Usb,Serial,Tcp,Udp}` | Bounded I/O, timeouts, cancellation and disposal; USB session extensions and `UsbStream` live beside the sessions they wrap. |
 | Protocols | `Protocols/{Adb,Hdc,Fastboot,Edl,Bootrom,Mtk,Sunxi}` | Framing, authentication, command and session state. Fastboot network transports and framing live under `Protocols/Fastboot/Transport`; flash-time image helpers under `Protocols/Fastboot/Images`. Screen mirroring is not a protocol here: scrcpy lives in `UotanStudio.Mirroring`. |
 | Contracts | `Contracts/` | Host-facing façade interfaces (`IAdbDeviceSession`, `HdcSession` contracts, endpoints, session kinds). No internal dependencies. |
@@ -149,17 +149,14 @@ check. Without a configured policy, ADB/HDC debug interfaces fail closed.
 
 `UsbApiKind.Auto` resolves to the platform-native backend everywhere: Windows → WinUSB,
 Linux → usbfs, macOS → IOKit/IOUSBHost. libusb is an explicit opt-in through
-`DeviceCommunicationConfiguration.UsbBackend = UsbApiKind.LibUsbDotNet`; the HarmonyOS DDK is
-an explicit opt-in through `FIRMWAREKIT_USB_ENABLE_HARMONY=1` (that value normalizes to `Auto`
-in `DeviceCommunicationConfiguration`).
+`DeviceCommunicationConfiguration.UsbBackend = UsbApiKind.LibUsbDotNet`.
 
 | Platform (native backend) | Change-event source | Fallback |
 | --- | --- | --- |
 | Windows (WinUSB) | `WM_DEVICECHANGE` message-only window | polling |
 | Linux (usbfs) | uevent netlink socket (`NETLINK_KOBJECT_UEVENT`) | polling |
-| macOS (IOKit/IOUSBHost) | not implemented yet | polling |
+| macOS (IOKit/IOUSBHost) | IOKit `IOServiceAddMatchingNotification` (matched + terminated) | polling |
 | libusb (opt-in) | libusb hotplug callbacks (Linux/macOS; the monitor falls back to polling when libusb reports no hotplug support) | polling |
-| HarmonyOS DDK (opt-in) | not implemented (the provider reports no native monitoring) | polling |
 
 ## Lifecycle services
 
@@ -350,9 +347,13 @@ confirmation, not just a button.
 
 `Native/LibUsb` carries the libusb binaries for the supported RIDs. `UotanStudio.Comm.csproj` selects the
 directory matching the build's `LibUsbRuntimeIdentifier`, copies its platform library
-(`libusb-1.0.dll`, `libusb-1.0.dylib`, `libusb-1.0.so`/`libusb-1.0.so.0`) and `libusb-LICENSE.txt` next to the
-application, and the content items flow through `ProjectReference`; the host neither downloads nor copies the
-library for a supported RID.
+(`libusb-1.0.dll`; macOS `libusb-1.0.0.dylib`; Linux `libusb-1.0.so.0`) and `libusb-LICENSE.txt` next to the
+application, and the content items flow through
+`ProjectReference`; the host neither downloads nor copies the library for a supported RID. The bundled name per
+platform matches LibUsbDotNet's own resolver probe, so the backend resolves the bundled file instead of falling
+back to a system libusb; the loader prefers that same name so both assemblies bind one image. The unversioned
+names (`libusb-1.0.dylib`/`libusb-1.0.so`) are not bundled; the loader accepts them only as a fallback for
+externally supplied files.
 
 The libusb backend is enabled only when that platform file is present in the application directory or an explicit
 path is registered. A libusb installed elsewhere on the system does not enable it. Availability additionally requires
@@ -388,6 +389,6 @@ ADB or HDC target: a device test that finds no target skips, and hardware-side b
 the solution gate. Do not stop a server, claim its USB interface, deploy scrcpy, flash, install or reboot a
 connected device as part of routine validation.
 
-Windows-only builds do not prove Linux/macOS/HarmonyOS backend behavior or
+Windows-only builds do not prove Linux/macOS backend behavior or
 NativeAOT runtime behavior. Tests skipped for absent equipment remain skipped,
 not passed.
