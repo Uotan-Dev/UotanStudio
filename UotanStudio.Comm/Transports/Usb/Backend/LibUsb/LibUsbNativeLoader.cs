@@ -13,19 +13,21 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// 使 libusb 后端在裸 SONAME <c>libusb-1.0</c> 不在加载器默认搜索路径时也能工作。</para>
 /// </summary>
 /// <remarks>
-/// <b>Why an explicit path.</b> LibUsbDotNet 3.0.224
-/// registers its own <c>NativeLibrary.SetDllImportResolver</c> and probes one per-platform file name —
-/// <c>libusb-1.0.dll</c>, <c>libusb-1.0.so.0</c> and <c>libusb-1.0.0.dylib</c> — both by bare name and inside every
-/// directory listed in <c>NATIVE_DLL_SEARCH_DIRECTORIES</c>. On macOS a bare name never matches an image that was
-/// loaded by absolute path, so this loader pre-loads the caller-registered or bundled file to answer this assembly's
-/// own imports, while LibUsbDotNet's imports are served by the runtime's default probing of the application
-/// directory (measured with the bundled file next to the application: only <c>libusb-1.0.dylib</c> is required).
-/// <para><b>为何需要显式路径。</b>LibUsbDotNet 3.0.224
-/// 自注册 <c>NativeLibrary.SetDllImportResolver</c>，按平台探测固定文件名——<c>libusb-1.0.dll</c>、
-/// <c>libusb-1.0.so.0</c> 与 <c>libusb-1.0.0.dylib</c>——既按裸名称，也在
-/// <c>NATIVE_DLL_SEARCH_DIRECTORIES</c> 的每个目录内查找。macOS 上裸名称不会命中按绝对路径加载的映像，
-/// 因此本加载器预加载调用者注册或程序目录中的文件来应答本程序集自己的导入；LibUsbDotNet 的导入由运行时
-/// 对程序目录的默认探测提供（已在程序目录只放 <c>libusb-1.0.dylib</c> 的真机条件下验证）。</para>
+/// <b>Why the versioned file name.</b> LibUsbDotNet 3.0.224 registers its own
+/// <c>NativeLibrary.SetDllImportResolver</c> and probes exactly one per-platform file name —
+/// <c>libusb-1.0.dll</c>, <c>libusb-1.0.so.0</c> and <c>libusb-1.0.0.dylib</c> — inside every directory listed in
+/// <c>NATIVE_DLL_SEARCH_DIRECTORIES</c> (the application directory), then by bare name. It never probes the
+/// unversioned <c>libusb-1.0.dylib</c>. The bundle therefore ships only the versioned name and this
+/// loader prefers it, so LibUsbDotNet and this assembly bind the same image instead of the backend
+/// relying on a system libusb happening to satisfy a bare-name lookup (the failure mode observed on a macOS 27
+/// arm64 host where only <c>libusb-1.0.dylib</c> was bundled).
+/// <para><b>为何使用版本化文件名。</b>LibUsbDotNet 3.0.224
+/// 自注册 <c>NativeLibrary.SetDllImportResolver</c>，只探测一个固定平台文件名——<c>libusb-1.0.dll</c>、
+/// <c>libusb-1.0.so.0</c> 与 <c>libusb-1.0.0.dylib</c>——在 <c>NATIVE_DLL_SEARCH_DIRECTORIES</c>（程序目录）
+/// 的每个目录内查找，然后才按裸名查找；它从不探测无版本号的 <c>libusb-1.0.dylib</c>。因此随包目录
+/// 只保留版本化文件名，且本加载器优先选择它，使 LibUsbDotNet 与本程序集绑定同一映像，
+/// 而不是让后端依赖系统中恰好存在能满足裸名查找的 libusb（在只打包 <c>libusb-1.0.dylib</c> 的
+/// macOS 27 arm64 真机上已观察到该失败模式）。</para>
 /// <b>Usage.</b> The backend reports itself available only when
 /// <see cref="TryEnsureLoaded"/> can load the caller-registered path or the platform file
 /// copied next to the application (<c>libusb-1.0.dll</c>, <c>libusb-1.0.dylib</c> or
@@ -59,12 +61,19 @@ internal static partial class LibUsbNativeLoader
 {
     private static readonly Lock Gate = new();
 
+    /// <summary>Candidate file names for the bundled libusb, probed in order.
+    /// <para>随包 libusb 的候选文件名，按顺序探测。</para></summary>
+    /// <remarks><para>
+    /// Order matters: the first name must match LibUsbDotNet's own probe so this loader and LibUsbDotNet bind the
+    /// same image (one libusb global state), with the unversioned name as fallback.
+    /// 顺序很重要：首个名称必须与 LibUsbDotNet 自身的探测一致，使两者绑定同一镜像（共享一份 libusb 全局状态），
+    /// 未带版本号的名称作为回退。</para></remarks>
     private static readonly string[] PlatformLibraryFileNames =
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? ["libusb-1.0.dll"]
             : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                ? ["libusb-1.0.dylib", "libusb-1.0.0.dylib"]
-                : ["libusb-1.0.so", "libusb-1.0.so.0"];
+                ? ["libusb-1.0.0.dylib", "libusb-1.0.dylib"]
+                : ["libusb-1.0.so.0", "libusb-1.0.so"];
 
     private static string? _libraryPath;
     private static string? _resolvedPath;
@@ -183,6 +192,13 @@ internal static partial class LibUsbNativeLoader
             return true;
         }
     }
+
+    /// <summary>
+    /// Reports whether a platform libusb file for this process exists next to the application,
+    /// without loading it.
+    /// <para>报告本进程对应的平台 libusb 文件是否存在于程序目录，但不加载它。</para>
+    /// </summary>
+    internal static bool HasApplicationDirectoryLibrary => FindProgramDirectoryLibrary() is not null;
 
     /// <summary>
     /// Finds the platform libusb file copied next to the application by the project's RID
