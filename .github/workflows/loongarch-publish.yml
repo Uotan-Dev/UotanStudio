@@ -376,9 +376,22 @@ jobs:
             <packageSources>
               <Clear />
               <add key="local-loongarch64" value="/work/nuget-local" />
-              <add key="lnuget" value="https://nuget.loongnix.cn/v3/index.json" />
+              <add key="lnuget" value="https://nuget.loongnix.cn/v3/index.json" allowInsecureConnections="true" />
               <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
             </packageSources>
+            <packageSourceMapping>
+              <packageSource key="local-loongarch64">
+                <package pattern="Microsoft.DotNet.*" />
+                <package pattern="runtime.*" />
+              </packageSource>
+              <packageSource key="lnuget">
+                <package pattern="PublishWithSatoriGC" />
+                <package pattern="ltrdata.*" />
+              </packageSource>
+              <packageSource key="nuget.org">
+                <package pattern="*" />
+              </packageSource>
+            </packageSourceMapping>
           </configuration>
           NUGET
 
