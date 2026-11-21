@@ -39,10 +39,10 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     /// Gets the names of the APIs that are supported on the current platform.
     /// <para>获取当前平台上受支持的 API 名称列表。</para>
     /// Only providers whose <see cref="IUsbApiProvider.IsSupportedOnCurrentPlatform"/>
-    /// is <c>true</c> are listed; providers that are registered but unavailable
-    /// (e.g. the opt-in HarmonyOS DDK backend) stay hidden.
+    /// is <c>true</c> are listed; providers that are registered but unavailable on the
+    /// current platform stay hidden.
     /// <para>仅列出 <see cref="IUsbApiProvider.IsSupportedOnCurrentPlatform"/> 为 <c>true</c>
-    /// 的提供器；已注册但在当前平台不可用的提供器（例如需显式开启的 HarmonyOS DDK 后端）不会出现。</para>
+    /// 的提供器；已注册但在当前平台不可用的提供器不会出现。</para>
     /// </summary>
     /// <returns>A read-only list of names. <para>名称只读列表。</para></returns>
     public IReadOnlyList<string> GetAvailableApis()
@@ -192,11 +192,14 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
             throw new ArgumentOutOfRangeException(nameof(pollInterval));
         }
 
+        var providers = ResolveProviders(apiKind);
+        var incremental = new UsbIncrementalEnumerator(providers, filter);
+
         IReadOnlyList<UsbDeviceInfo> Enumerator()
         {
             try
             {
-                return EnumerateDevicesCore(apiKind, filter, cancellationToken: default);
+                return incremental.Enumerate(forceFull: true);
             }
             catch (Exception ex)
             {
@@ -206,11 +209,27 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
             }
         }
 
+        IReadOnlyList<UsbDeviceChange> IncrementalPass(IReadOnlyList<UsbDeviceProbeHint> hints)
+        {
+            try
+            {
+                return incremental.Apply(hints);
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex);
+                UsbTrace.Log($"MonitorDevices incremental pass failed: {ex.GetType().Name}: {ex.Message}");
+                return [];
+            }
+        }
+
+        var initialDevices = Enumerator();
+
         if (apiKind == UsbApiKind.LibUsbDotNet)
         {
             try
             {
-                return new UsbLibUsbHotplugMonitor(Enumerator, onChanged, onError, filter, fireInitialSnapshot);
+                return new UsbLibUsbHotplugMonitor(IncrementalPass, initialDevices, onChanged, onError, filter, fireInitialSnapshot);
             }
             catch (PlatformNotSupportedException)
             {
@@ -235,7 +254,7 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             try
             {
-                return new UsbWindowsHotplugMonitor(Enumerator, onChanged, onError, fireInitialSnapshot);
+                return new UsbWindowsHotplugMonitor(IncrementalPass, initialDevices, onChanged, onError, fireInitialSnapshot);
             }
             catch (Exception ex)
             {
@@ -248,12 +267,25 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             try
             {
-                return new UdevHotplugMonitor(Enumerator, onChanged, onError, fireInitialSnapshot);
+                return new UdevHotplugMonitor(IncrementalPass, initialDevices, onChanged, onError, fireInitialSnapshot);
             }
             catch (Exception ex)
             {
                 onError?.Invoke(ex);
                 UsbTrace.Log($"UdevHotplugMonitor creation failed: {ex.GetType().Name}: {ex.Message} - falling back to polling monitor.");
+            }
+        }
+
+        if (apiKind == UsbApiKind.Native && RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            try
+            {
+                return new IOKitUsbHotplugMonitor(IncrementalPass, initialDevices, onChanged, onError, fireInitialSnapshot);
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex);
+                UsbTrace.Log($"IOKitUsbHotplugMonitor creation failed: {ex.GetType().Name}: {ex.Message} - falling back to polling monitor.");
             }
         }
 
@@ -618,7 +650,6 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
             UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
-            UsbApiKind.HarmonyOS => HarmonyOSUsbApiProvider.ApiNameConst,
             UsbApiKind.Auto => string.Empty,
             UsbApiKind.Custom => string.Empty,
             _ => string.Empty

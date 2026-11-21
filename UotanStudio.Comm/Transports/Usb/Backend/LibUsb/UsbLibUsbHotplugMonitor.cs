@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using LibUsbDotNet;
 using LibUsbDotNet.LibUsb;
 using UotanStudio.Comm.Diagnostics;
@@ -18,23 +19,24 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// </summary>
 internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 {
-    private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
+    private readonly Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> _pass;
+    private readonly ConcurrentQueue<UsbDeviceProbeHint> _hints = new();
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
     private UsbContext? _context;
-    private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
     private int _polling, _pending;
 
     public UsbLibUsbHotplugMonitor(
-        Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
+        Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> pass,
+        IReadOnlyList<UsbDeviceInfo> initialDevices,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
         Action<Exception>? onError,
         UsbDeviceFilter? filter,
         bool fireInitialSnapshot = false)
     {
-        _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
+        _pass = pass ?? throw new ArgumentNullException(nameof(pass));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
 
@@ -46,7 +48,6 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
             context.HotplugOptions.DeviceClass = (int)HotplugOptionFlag.LibusbHotplugMatchAny;
             context.HotplugOptions.HotplugEventFlags = HotplugEvent.DeviceArrived | HotplugEvent.DeviceLeft;
 
-            _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
             context.DeviceEvent += OnDeviceEvent;
             context.RegisterHotPlug();
             _context = context;
@@ -57,21 +58,21 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
             throw;
         }
 
-        RaiseInitialSnapshot(fireInitialSnapshot);
+        RaiseInitialSnapshot(initialDevices, fireInitialSnapshot);
     }
 
     /// <summary>
     /// Reports the baseline inventory as additions once hot-plug registration is live.
     /// <para>在热插拔注册生效后把基线清单作为新增上报一次。</para>
     /// </summary>
-    private void RaiseInitialSnapshot(bool fireInitialSnapshot)
+    private void RaiseInitialSnapshot(IReadOnlyList<UsbDeviceInfo> initialDevices, bool fireInitialSnapshot)
     {
-        if (!fireInitialSnapshot || _lastSnapshot.Count == 0)
+        if (!fireInitialSnapshot || initialDevices.Count == 0)
         {
             return;
         }
 
-        var changes = _lastSnapshot.Values
+        var changes = initialDevices
             .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
             .ToList();
         try
@@ -87,9 +88,40 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 
     private void OnDeviceEvent(object? sender, DeviceEventArgs e)
     {
-        _ = e;
+        UsbDeviceProbeHint hint;
+        if (e is DeviceArrivedEventArgs arrived)
+        {
+            var device = arrived.Device;
+            hint = new UsbDeviceProbeHint
+            {
+                Kind = UsbDeviceChangeKind.Added,
+                DevicePath = BuildPath(device.BusNumber, device.Address, device.VendorId, device.ProductId),
+                VendorId = device.VendorId,
+                ProductId = device.ProductId
+            };
+        }
+        else if (e is DeviceLeftEventArgs left)
+        {
+            var descriptor = left.DeviceInfo.Descriptor;
+            hint = new UsbDeviceProbeHint
+            {
+                Kind = UsbDeviceChangeKind.Removed,
+                PhysicalPortPath = left.DeviceInfo.PortInfo.ToString(),
+                VendorId = descriptor.VendorId,
+                ProductId = descriptor.ProductId
+            };
+        }
+        else
+        {
+            hint = new UsbDeviceProbeHint { Kind = UsbDeviceChangeKind.Changed };
+        }
+
+        _hints.Enqueue(hint);
         TriggerPoll();
     }
+
+    private static string BuildPath(int bus, int address, ushort vendorId, ushort productId) =>
+        $"Bus {bus} Device {address}: {vendorId:X4}:{productId:X4}";
 
     private void TriggerPoll()
     {
@@ -132,9 +164,13 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 
     private void PollOnce()
     {
-        var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
-        List<UsbDeviceChange>? changes;
+        var hints = DrainHints();
+        if (hints.Count == 0)
+        {
+            return;
+        }
 
+        IReadOnlyList<UsbDeviceChange> changes;
         lock (_gate)
         {
             if (_disposed)
@@ -142,11 +178,10 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
                 return;
             }
 
-            changes = UsbDeviceMonitor.ComputeChanges(currentSnapshot, _lastSnapshot);
-            _lastSnapshot = currentSnapshot;
+            changes = _pass(hints);
         }
 
-        if (changes is { Count: > 0 })
+        if (changes.Count > 0)
         {
             try
             {
@@ -158,6 +193,17 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
                 UsbTrace.Log($"UsbLibUsbHotplugMonitor change callback failed: {ex.GetType().Name}: {ex.Message}");
             }
         }
+    }
+
+    private List<UsbDeviceProbeHint> DrainHints()
+    {
+        var hints = new List<UsbDeviceProbeHint>();
+        while (_hints.TryDequeue(out var hint))
+        {
+            hints.Add(hint);
+        }
+
+        return hints;
     }
 
     public void Dispose()
@@ -196,6 +242,8 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
             }
         }
 
-        _lastSnapshot.Clear();
+        while (_hints.TryDequeue(out _))
+        {
+        }
     }
 }

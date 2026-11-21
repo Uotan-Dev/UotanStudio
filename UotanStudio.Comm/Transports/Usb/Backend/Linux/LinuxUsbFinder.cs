@@ -9,6 +9,7 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 internal static class LinuxUsbFinder
 {
     private const int O_RDONLY = 0;
+    private const string DefaultUsbFsRoot = "/dev/bus/usb";
     private const string DefaultSysfsDevicesRoot = "/sys/bus/usb/devices";
     private static int _permissionDeniedCount;
     private static int _busyCount;
@@ -178,6 +179,89 @@ internal static class LinuxUsbFinder
         }
         LastMatchedDeviceCount = devices.Count;
         return devices;
+    }
+
+    /// <summary>
+    /// Re-probes one usbfs device node named by a hotplug event instead of walking the whole bus.
+    /// <para>只重新探测热插拔事件点名的一个 usbfs 设备节点，而不遍历整条总线。</para>
+    /// </summary>
+    /// <param name="devicePath">The <c>/dev/bus/usb/BBB/DDD</c> device node. <para>设备节点路径。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <param name="handled">Whether this backend could answer incrementally. <para>后端能否增量作答。</para></param>
+    /// <returns>The probed device, or <see langword="null"/> when absent. <para>探测到的设备；不在位时为空。</para></returns>
+    internal static UsbDevice? ProbeDevice(string? devicePath, UsbDeviceFilter? filter, out bool handled)
+    {
+        handled = false;
+        if (string.IsNullOrWhiteSpace(devicePath) || !File.Exists(devicePath!))
+        {
+            return null;
+        }
+
+        LastUsbfsRootExists = Directory.Exists(DefaultUsbFsRoot);
+        LastScannedNodes = 1;
+
+        var fd = open(devicePath!, O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+        {
+            if (Marshal.GetLastWin32Error() == EACCES)
+            {
+                ReportPermissionDenied(devicePath!);
+                return null;
+            }
+
+            handled = true;
+            return null;
+        }
+
+        try
+        {
+            var desc = LinuxUsbDescriptors.Read(fd);
+            if (desc is null)
+            {
+                handled = true;
+                return null;
+            }
+
+            var info = TryParseDescriptor(desc, desc.Length, filter);
+            if (info is null)
+            {
+                handled = true;
+                return null;
+            }
+
+            handled = true;
+            return new LinuxUsbDevice
+            {
+                DevicePath = devicePath!,
+                PhysicalPortPath = LinuxUsbPortIdentity.Observe(fd, devicePath!),
+                VendorId = info.VendorId,
+                ProductId = info.ProductId,
+                BcdUsb = info.BcdUsb,
+                InterfaceClass = info.InterfaceClass,
+                InterfaceSubClass = info.InterfaceSubClass,
+                InterfaceProtocol = info.InterfaceProtocol,
+                InterfaceMetadataObserved = true,
+                Speed = ResolveSpeed(devicePath!, info.BcdUsb, BuildSysfsDeviceIndex(DefaultSysfsDevicesRoot)),
+                Interfaces = info.Interfaces,
+                Ep_in = info.EndpointIn,
+                Ep_out = info.EndpointOut,
+                InterfaceId = info.InterfaceId,
+                ClaimedInterfaceIds = filter?.InterfaceNumbers?.ToArray() ?? [],
+                ISerialNumber = info.ISerialNumber,
+                UsbDeviceType = UsbDeviceType.Linux,
+                SerialNumber = null
+            };
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.Log($"LinuxUsbFinder probe failed for path '{devicePath}': {ex.GetType().Name}: {ex.Message}");
+            handled = true;
+            return null;
+        }
+        finally
+        {
+            close(fd);
+        }
     }
 
     /// <summary>

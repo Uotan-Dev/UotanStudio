@@ -48,6 +48,13 @@ internal sealed class LibUsbApiProvider : UsbApiProviderBase
     protected override List<UsbDevice> EnumerateBackendDevices(UsbDeviceFilter? filter)
         => SafeEnumerate(() => LibUsbFinder.FindDevice(filter), "LibUsb");
 
+    /// <inheritdoc/>
+    protected override UsbDeviceProbeResult ProbeDeviceInfoCore(UsbDeviceProbeHint hint, UsbDeviceFilter? filter)
+    {
+        var probed = LibUsbFinder.ProbeDevice(hint, filter, out var handled);
+        return handled ? FromProbe(probed, filter) : UsbDeviceProbeResult.Unhandled;
+    }
+
     public override UsbApiCapabilities GetCapabilities()
     {
         var supportsNativeHotPlug = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||

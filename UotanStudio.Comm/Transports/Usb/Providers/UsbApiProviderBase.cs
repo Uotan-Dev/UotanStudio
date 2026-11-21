@@ -86,6 +86,44 @@ internal abstract class UsbApiProviderBase : IUsbApiProvider
     }
 
     /// <inheritdoc/>
+    public virtual UsbDeviceProbeResult ProbeDeviceInfo(UsbDeviceProbeHint hint, UsbDeviceFilter? filter)
+    {
+        ArgumentNullException.ThrowIfNull(hint);
+        return !IsSupportedOnCurrentPlatform
+            ? UsbDeviceProbeResult.Unhandled
+            : ProbeDeviceInfoCore(hint, filter);
+    }
+
+    /// <summary>
+    /// Backend hook that probes exactly one hotplug-identified device. The default answer is unhandled,
+    /// which asks the communication layer to enumerate fully.
+    /// <para>后端钩子，只探测一台热插拔事件命中的设备。默认回答为未处理，由通信层执行全量枚举。</para>
+    /// </summary>
+    /// <param name="hint">The device the event source reported. <para>事件来源上报的设备。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <returns>The probe result. <para>探测结果。</para></returns>
+    protected virtual UsbDeviceProbeResult ProbeDeviceInfoCore(UsbDeviceProbeHint hint, UsbDeviceFilter? filter)
+        => UsbDeviceProbeResult.Unhandled;
+
+    /// <summary>
+    /// Projects one probed backend device into the public result, disposing the backend object.
+    /// <para>把一台探测到的后端设备投影为公开结果，并释放后端对象。</para>
+    /// </summary>
+    /// <param name="device">The probed backend device. <para>探测到的后端设备。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <returns>The projected result. <para>投影结果。</para></returns>
+    protected UsbDeviceProbeResult FromProbe(UsbDevice? device, UsbDeviceFilter? filter)
+    {
+        if (device is null)
+        {
+            return UsbDeviceProbeResult.Absent;
+        }
+
+        var infos = UsbProviderProjection.ToInfos(ApiName, ApiKind, [device], filter);
+        return infos.Count > 0 ? UsbDeviceProbeResult.Found(infos[0]) : UsbDeviceProbeResult.Absent;
+    }
+
+    /// <inheritdoc/>
     public IUsbDeviceSession? TryOpenExactSession(UsbDeviceFilter filter)
     {
         if (!IsSupportedOnCurrentPlatform || string.IsNullOrEmpty(filter.DevicePathEquals))

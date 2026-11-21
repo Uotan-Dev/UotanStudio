@@ -82,10 +82,10 @@ public sealed class UsbDeviceFilter
     /// <summary>
     /// Gets or sets the required USB interface number.
     /// <para>获取或设置要求的 USB 接口编号。</para>
-    /// Backends that can select an interface (Linux/macOS/libusb/HarmonyOS) prefer this
+    /// Backends that can select an interface (Linux/macOS/libusb) prefer this
     /// interface when opening a session; on WinUSB the bound interface is determined by the
     /// driver, so mismatches are filtered out during projection.
-    /// <para>可选择接口的后端（Linux/macOS/libusb/HarmonyOS）打开会话时优先使用该接口；
+    /// <para>可选择接口的后端（Linux/macOS/libusb）打开会话时优先使用该接口；
     /// WinUSB 的绑定接口由驱动决定，不匹配的设备会在投影阶段被过滤。</para>
     /// </summary>
     /// <value>The interface number the device must expose, or <see langword="null"/> to skip the check.

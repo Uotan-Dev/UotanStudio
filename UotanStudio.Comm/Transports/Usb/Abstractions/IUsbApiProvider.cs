@@ -3,9 +3,9 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// <summary>
 /// Provides a complete USB backend contract: discovery, session enumeration, and capabilities.
 /// <para>提供完整的 USB 后端契约：发现、会话枚举和能力描述。</para>
-/// Implementations back a specific USB API (WinUSB, libusb, native, HarmonyOS) and
+/// Implementations back a specific USB API (WinUSB, libusb, native) and
 /// expose both metadata-only discovery and full session opening through this single contract.
-/// <para>实现类支撑特定 USB API（WinUSB、libusb、原生、HarmonyOS），
+/// <para>实现类支撑特定 USB API（WinUSB、libusb、原生），
 /// 通过单一契约暴露仅元数据发现与会话打开能力。</para>
 /// </summary>
 internal interface IUsbApiProvider
@@ -35,6 +35,17 @@ internal interface IUsbApiProvider
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
     /// <returns>A list of matching device metadata. <para>匹配设备元数据列表。</para></returns>
     IReadOnlyList<UsbDeviceInfo> EnumerateDeviceInfos(UsbDeviceFilter? filter = null);
+
+    /// <summary>
+    /// Probes only the device named by a hotplug hint. Backends that cannot isolate one device return
+    /// <see cref="UsbDeviceProbeResult.Unhandled"/> so the caller performs a full pass.
+    /// <para>只探测热插拔提示点名的设备。无法隔离单台设备的后端返回
+    /// <see cref="UsbDeviceProbeResult.Unhandled"/>，由调用方执行全量轮次。</para>
+    /// </summary>
+    /// <param name="hint">The device the event source reported. <para>事件来源上报的设备。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <returns>The probe result. <para>探测结果。</para></returns>
+    UsbDeviceProbeResult ProbeDeviceInfo(UsbDeviceProbeHint hint, UsbDeviceFilter? filter) => UsbDeviceProbeResult.Unhandled;
 
     /// <summary>
     /// Opens only the interface an exact-path filter names, skipping the device-tree walk a full

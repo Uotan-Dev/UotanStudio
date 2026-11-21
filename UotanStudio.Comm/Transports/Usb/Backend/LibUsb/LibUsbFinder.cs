@@ -221,6 +221,94 @@ internal static partial class LibUsbFinder
     }
 
     /// <summary>
+    /// Re-probes the single libusb device a hotplug hint names. libusb has no single-device list API,
+    /// so this still obtains the device list but skips descriptor reads for every non-target device.
+    /// <para>只重新探测热插拔提示点名的单台 libusb 设备。libusb 没有单设备列举接口，因此仍需获取设备列表，
+    /// 但会跳过所有非目标设备的描述符读取。</para>
+    /// </summary>
+    /// <param name="hint">The hotplug hint. <para>热插拔提示。</para></param>
+    /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
+    /// <param name="handled">Whether the hint uniquely selected one device. <para>提示是否唯一选中一台设备。</para></param>
+    /// <returns>The probed backend device, or <see langword="null"/> when absent.
+    /// <para>探测到的后端设备；不在位时为空。</para></returns>
+    internal static UsbDevice? ProbeDevice(UsbDeviceProbeHint hint, UsbDeviceFilter? filter, out bool handled)
+    {
+        handled = false;
+        if (!IsNativeRuntimePresent() || !TryGetProbeIdentity(hint, out var bus, out var address, out var vid, out var pid))
+        {
+            return null;
+        }
+
+        using (var context = LibUsbContextFactory.Create())
+        using (var deviceList = context.List())
+        {
+            LibUsbDotNet.LibUsb.UsbDevice? target = null;
+            foreach (var candidate in deviceList)
+            {
+                if (candidate is not LibUsbDotNet.LibUsb.UsbDevice libDevice)
+                {
+                    continue;
+                }
+
+                if (bus is not null && address is not null &&
+                    (libDevice.BusNumber != bus.Value || libDevice.Address != address.Value))
+                {
+                    continue;
+                }
+
+                if (vid is not null && pid is not null &&
+                    (libDevice.VendorId != vid.Value || libDevice.ProductId != pid.Value))
+                {
+                    continue;
+                }
+
+                if (target is not null)
+                {
+                    return null;
+                }
+
+                target = libDevice;
+            }
+
+            handled = true;
+            return target is null ? null : BuildDevice(target, filter);
+        }
+    }
+
+    private static bool TryGetProbeIdentity(
+        UsbDeviceProbeHint hint,
+        out int? bus,
+        out int? address,
+        out ushort? vid,
+        out ushort? pid)
+    {
+        bus = null;
+        address = null;
+        vid = hint.VendorId;
+        pid = hint.ProductId;
+
+        var path = hint.DevicePath;
+        if (string.IsNullOrWhiteSpace(path) ||
+            !path!.StartsWith("Bus ", StringComparison.OrdinalIgnoreCase))
+        {
+            return vid is not null && pid is not null;
+        }
+
+        var deviceMarker = path.IndexOf(" Device ", StringComparison.OrdinalIgnoreCase);
+        var separator = path.IndexOf(':', deviceMarker < 0 ? 0 : deviceMarker);
+        if (deviceMarker < 0 || separator < 0 ||
+            !int.TryParse(path.AsSpan(4, deviceMarker - 4), out var parsedBus) ||
+            !int.TryParse(path.AsSpan(deviceMarker + 8, separator - deviceMarker - 8), out var parsedAddress))
+        {
+            return vid is not null && pid is not null;
+        }
+
+        bus = parsedBus;
+        address = parsedAddress;
+        return true;
+    }
+
+    /// <summary>
     /// Builds a backend device (or metadata-only entry) for a single libusb device,
     /// reading its configuration descriptors. Thread-safe: no shared mutable state.
     /// <para>为单个 libusb 设备构建后端设备（或仅元数据条目），读取其配置描述符。

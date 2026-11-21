@@ -27,6 +27,9 @@ internal static partial class WinUSBFinder
     /// <para>没有记住的接口时，它的类三元组、容器 ID 与后端都无从廉价作答；仅凭路径猜测会报告一个
     /// 遍历从未确认过的设备。</para>
     /// </remarks>
+    internal static UsbDevice? ProbeSingleDevice(string? devicePath)
+        => string.IsNullOrWhiteSpace(devicePath) ? null : TryOpenSingleDevice(devicePath!);
+
     internal static UsbDevice? TryOpenSingleDevice(string devicePath)
     {
         (var vid, var pid) = TryParseVidPid(devicePath);
@@ -38,11 +41,6 @@ internal static partial class WinUSBFinder
 
         if (!WinUsbInventoryCache.TryGet(instanceId, out var cached))
         {
-            // The topology event invalidates this instance right before the handshake runs, so a just-arrived
-            // preloader always misses the cache. Probing the single path directly costs one CreateFileW plus a
-            // descriptor read instead of a whole inventory walk, which is the only way to meet its short window.
-            // 拓扑事件会在握手前让该实例失效，因此刚到达的 preloader 必然缓存未命中。直接探测这条路径只需要一次
-            // CreateFileW 与一次描述符读取，而不是整棵清单遍历；这是赶上其短窗口的唯一方式。
             return ProbeDevice(devicePath, options: null, serial: null, cached: null) as UsbDevice;
         }
 

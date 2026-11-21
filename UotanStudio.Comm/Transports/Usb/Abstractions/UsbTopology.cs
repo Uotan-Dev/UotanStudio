@@ -2,10 +2,10 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 
 /// <summary>
 /// The role of a node in the USB bus topology. The role only describes where the node sits in the
-/// tree and carries no platform-specific notion, so the Windows, Linux, macOS, libusb and HarmonyOS
+/// tree and carries no platform-specific notion, so the Windows, Linux, macOS and libusb
 /// backends can share one tree shape.
 /// <para>USB 总线拓扑中一类节点的角色。角色只描述该节点在拓扑里的位置，不携带平台专有概念，
-/// 以便 Windows、Linux、macOS、libusb 与 HarmonyOS 后端共用同一棵树。</para>
+/// 以便 Windows、Linux、macOS 与 libusb 后端共用同一棵树。</para>
 /// </summary>
 public enum UsbTopologyNodeKind
 {
@@ -47,10 +47,7 @@ public enum UsbTopologyBackendKind
     MacOSIoRegistry,
 
     /// <summary>libusb device list, reconstructed into a bus/port tree. <para>libusb 设备清单，重建为总线/端口树。</para></summary>
-    LibUsb,
-
-    /// <summary>HarmonyOS USB DDK device list. <para>HarmonyOS USB DDK 设备清单。</para></summary>
-    HarmonyOS
+    LibUsb
 }
 
 /// <summary>

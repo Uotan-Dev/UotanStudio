@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
-using UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;
 using UotanStudio.Comm.Transports.Usb.Backend.Linux;
 using UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 using UotanStudio.Comm.Transports.Usb.Backend.Windows;
@@ -11,9 +10,6 @@ namespace UotanStudio.Comm.Transports.Usb.Providers;
 
 internal sealed class NativeUsbApiProvider : UsbApiProviderBase
 {
-    private static readonly Lazy<bool> IsHarmonyOS =
-        new(HarmonyOSUsbDDK.IsHarmonyOSPlatform, isThreadSafe: true);
-
     public const string ApiNameConst = "native";
 
     public override string ApiName => ApiNameConst;
@@ -27,15 +23,9 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
 
     public override UsbApiCapabilities GetCapabilities()
     {
-        var isHarmonyOS = IsHarmonyOS.Value;
         var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        var notes = "WinUSB overlapped I/O (Windows) and USBDEVFS URBs (Linux) implement bulk and interrupt async I/O natively; macOS IOUSBHost/IOKit calls are synchronous. Hot-plug monitoring is event-driven on Windows (WM_DEVICECHANGE) and Linux (uevent netlink), and polling-based on macOS.";
-
-        if (isHarmonyOS)
-        {
-            notes = "HarmonyOS detected; use the dedicated 'harmony' provider for the USB DDK (libusb_ndk.z.so), or this native provider for direct usbfs access.";
-        }
+        var notes = "WinUSB overlapped I/O (Windows) and USBDEVFS URBs (Linux) implement bulk and interrupt async I/O natively; macOS IOUSBHost/IOKit calls are synchronous. Hot-plug monitoring is event-driven on Windows (WM_DEVICECHANGE), Linux (uevent netlink) and macOS (IOKit service notifications).";
 
         return new UsbApiCapabilities
         {
@@ -47,7 +37,7 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             SupportsControlTransfers = true,
             SupportsInterfaceConfigSwitching = true,
             SupportsNativeAsyncIo = isWindows || isLinux,
-            SupportsNativeHotPlugMonitoring = isWindows || isLinux,
+            SupportsNativeHotPlugMonitoring = isWindows || isLinux || RuntimeInformation.IsOSPlatform(OSPlatform.OSX),
             RequiresExternalRuntime = false,
             ResetReenumeratesDevice = true,
             Notes = notes,
@@ -58,10 +48,42 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
                 new UsbBackendCapability { BackendName = "winusb-legacy", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "macos-usbhost", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },
-                new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },
-                new UsbBackendCapability { BackendName = "harmony-ddk", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false }
+                new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true }
             ],
         };
+    }
+
+    /// <inheritdoc/>
+    protected override UsbDeviceProbeResult ProbeDeviceInfoCore(UsbDeviceProbeHint hint, UsbDeviceFilter? filter)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            if (string.IsNullOrWhiteSpace(hint.DevicePath))
+            {
+                return UsbDeviceProbeResult.Unhandled;
+            }
+
+            return FromProbe(WinUSBFinder.ProbeSingleDevice(hint.DevicePath!), filter);
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            var probed = LinuxUsbFinder.ProbeDevice(hint.DevicePath, filter, out var handled);
+            return handled ? FromProbe(probed, filter) : UsbDeviceProbeResult.Unhandled;
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            if (!hint.IsSpecific)
+            {
+                return UsbDeviceProbeResult.Unhandled;
+            }
+
+            var match = EnumerateDeviceInfos(filter).FirstOrDefault(hint.Matches);
+            return match is null ? UsbDeviceProbeResult.Absent : UsbDeviceProbeResult.Found(match);
+        }
+
+        return UsbDeviceProbeResult.Unhandled;
     }
 
     /// <summary>

@@ -25,7 +25,9 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 /// </summary>
 internal sealed class UsbWindowsHotplugMonitor : IDisposable
 {
-    private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
+    private readonly Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> _pass;
+    private readonly IReadOnlyList<UsbDeviceInfo> _initialDevices;
+    private readonly ConcurrentQueue<UsbDeviceProbeHint> _hints = new();
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
@@ -34,7 +36,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly ManualResetEventSlim _ready = new(initialState: false);
     private Exception? _startupError;
     private IntPtr _hwnd;
-    private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
     private int _polling, _pending;
 
@@ -53,16 +54,17 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     ];
 
     public UsbWindowsHotplugMonitor(
-        Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
+        Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> pass,
+        IReadOnlyList<UsbDeviceInfo> initialDevices,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
         Action<Exception>? onError,
         bool fireInitialSnapshot = false)
     {
-        _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
+        _pass = pass ?? throw new ArgumentNullException(nameof(pass));
+        _initialDevices = initialDevices ?? throw new ArgumentNullException(nameof(initialDevices));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
 
-        _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         _fireInitialSnapshot = fireInitialSnapshot;
 
         _thread = new Thread(MessagePump)
@@ -97,12 +99,12 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     /// </summary>
     private void RaiseInitialSnapshot()
     {
-        if (!_fireInitialSnapshot || _lastSnapshot.Count == 0)
+        if (!_fireInitialSnapshot || _initialDevices.Count == 0)
         {
             return;
         }
 
-        var changes = _lastSnapshot.Values
+        var changes = _initialDevices
             .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
             .ToList();
         try
@@ -239,12 +241,17 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             Windows.TryGetValue(hWnd, out var monitor))
         {
             var path = ReadBroadcastInterfacePath(lParam);
+            var hint = new UsbDeviceProbeHint
+            {
+                Kind = wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL
+                    ? UsbDeviceChangeKind.Added
+                    : UsbDeviceChangeKind.Removed,
+                DevicePath = path
+            };
+            monitor._hints.Enqueue(hint);
             WinUSBFinder.InvalidateInventoryForPath(path);
             if (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL && path is not null)
             {
-                // Publish the arrival path before the inventory pass starts: a preloader accepts the boot handshake
-                // for only a few seconds, and the poll this line precedes takes longer than that.
-                // 在清单遍历开始前先发布到达路径：preloader 只在数秒内接受 boot 握手，而本行之后的轮询更慢。
                 UsbArrivalBroadcast.Publish(path);
             }
 
@@ -320,9 +327,13 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     private void PollOnce()
     {
-        var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
-        List<UsbDeviceChange>? changes;
+        var hints = DrainHints();
+        if (hints.Count == 0)
+        {
+            return;
+        }
 
+        IReadOnlyList<UsbDeviceChange> changes;
         lock (_gate)
         {
             if (_disposed)
@@ -330,11 +341,10 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 return;
             }
 
-            changes = UsbDeviceMonitor.ComputeChanges(currentSnapshot, _lastSnapshot);
-            _lastSnapshot = currentSnapshot;
+            changes = _pass(hints);
         }
 
-        if (changes is { Count: > 0 })
+        if (changes.Count > 0)
         {
             try
             {
@@ -346,6 +356,17 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 UsbTrace.Log($"UsbWindowsHotplugMonitor change callback failed: {ex.GetType().Name}: {ex.Message}");
             }
         }
+    }
+
+    private List<UsbDeviceProbeHint> DrainHints()
+    {
+        var hints = new List<UsbDeviceProbeHint>();
+        while (_hints.TryDequeue(out var hint))
+        {
+            hints.Add(hint);
+        }
+
+        return hints;
     }
 
     public void Dispose()
@@ -373,6 +394,8 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
 
         _ready.Dispose();
-        _lastSnapshot.Clear();
+        while (_hints.TryDequeue(out _))
+        {
+        }
     }
 }

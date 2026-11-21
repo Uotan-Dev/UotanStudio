@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Diagnostics;
@@ -23,12 +25,12 @@ internal sealed class UdevHotplugMonitor : IDisposable
     private const int SockCloexec = 0x80000;
     private static readonly TimeSpan ReceiveShutdownTimeout = TimeSpan.FromSeconds(2);
 
-    private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
+    private readonly Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> _pass;
+    private readonly ConcurrentQueue<UsbDeviceProbeHint> _hints = new();
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
     private readonly int _socket;
-    private Dictionary<string, UsbDeviceInfo> _lastSnapshot;
     private CancellationTokenSource? _receiveLoop;
     private Task? _receiveTask;
     private volatile bool _disposed;
@@ -36,7 +38,8 @@ internal sealed class UdevHotplugMonitor : IDisposable
     private int _polling, _pending;
 
     public UdevHotplugMonitor(
-        Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
+        Func<IReadOnlyList<UsbDeviceProbeHint>, IReadOnlyList<UsbDeviceChange>> pass,
+        IReadOnlyList<UsbDeviceInfo> initialDevices,
         Action<IReadOnlyList<UsbDeviceChange>> onChanged,
         Action<Exception>? onError,
         bool fireInitialSnapshot = false)
@@ -46,7 +49,7 @@ internal sealed class UdevHotplugMonitor : IDisposable
             throw new PlatformNotSupportedException("The uevent netlink monitor is Linux-only.");
         }
 
-        _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
+        _pass = pass ?? throw new ArgumentNullException(nameof(pass));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
 
@@ -70,11 +73,10 @@ internal sealed class UdevHotplugMonitor : IDisposable
             throw;
         }
 
-        _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         _receiveLoop = new CancellationTokenSource();
         _token = _receiveLoop.Token;
         _receiveTask = Task.Run(() => ReceiveLoop(_token));
-        RaiseInitialSnapshot(fireInitialSnapshot);
+        RaiseInitialSnapshot(initialDevices, fireInitialSnapshot);
     }
 
     /// <summary>
@@ -83,14 +85,14 @@ internal sealed class UdevHotplugMonitor : IDisposable
     /// <para>在 uevent 循环启动后把基线清单作为新增上报一次，使请求初始快照的调用方无需等待设备事件就能知道
     /// 当前已在位的设备。</para>
     /// </summary>
-    private void RaiseInitialSnapshot(bool fireInitialSnapshot)
+    private void RaiseInitialSnapshot(IReadOnlyList<UsbDeviceInfo> initialDevices, bool fireInitialSnapshot)
     {
-        if (!fireInitialSnapshot || _lastSnapshot.Count == 0)
+        if (!fireInitialSnapshot || initialDevices.Count == 0)
         {
             return;
         }
 
-        var changes = _lastSnapshot.Values
+        var changes = initialDevices
             .Select(device => new UsbDeviceChange { Kind = UsbDeviceChangeKind.Added, Device = device })
             .ToList();
         try
@@ -127,11 +129,12 @@ internal sealed class UdevHotplugMonitor : IDisposable
                     continue;
                 }
 
-                if (!IsUsbDeviceUevent(buffer, received))
+                if (!TryParseUsbHint(buffer, received, out var hint))
                 {
                     continue;
                 }
 
+                _hints.Enqueue(hint);
                 TriggerPoll();
             }
         }
@@ -235,6 +238,73 @@ internal sealed class UdevHotplugMonitor : IDisposable
             text.Contains("DEVTYPE=usb_device", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Extracts the single-device identity carried by a USB uevent.
+    /// <para>提取 USB uevent 携带的单台设备身份。</para>
+    /// </summary>
+    internal static bool TryParseUsbHint(byte[] buffer, int length, out UsbDeviceProbeHint hint)
+    {
+        hint = null!;
+        if (!IsUsbDeviceUevent(buffer, length))
+        {
+            return false;
+        }
+
+        var text = Encoding.UTF8.GetString(buffer, 0, length);
+        var kind = text.StartsWith("add@", StringComparison.Ordinal)
+            ? UsbDeviceChangeKind.Added
+            : text.StartsWith("remove@", StringComparison.Ordinal)
+                ? UsbDeviceChangeKind.Removed
+                : UsbDeviceChangeKind.Changed;
+
+        string? devicePath = null;
+        string? devicePort = null;
+        ushort? vendorId = null;
+        ushort? productId = null;
+
+        foreach (var line in text.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = line.IndexOf('=');
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..separator];
+            var value = line[(separator + 1)..];
+            switch (key)
+            {
+                case "DEVNAME":
+                    devicePath = value.StartsWith('/') ? value : "/" + value;
+                    break;
+                case "DEVPATH":
+                    devicePort = value;
+                    break;
+                case "PRODUCT":
+                    var parts = value.Split('/');
+                    if (parts.Length >= 2 &&
+                        ushort.TryParse(parts[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var vid) &&
+                        ushort.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var pid))
+                    {
+                        vendorId = vid;
+                        productId = pid;
+                    }
+
+                    break;
+            }
+        }
+
+        hint = new UsbDeviceProbeHint
+        {
+            Kind = kind,
+            DevicePath = devicePath,
+            PhysicalPortPath = devicePort,
+            VendorId = vendorId,
+            ProductId = productId
+        };
+        return hint.IsSpecific;
+    }
+
     private void PollOnce()
     {
         if (_disposed)
@@ -242,8 +312,13 @@ internal sealed class UdevHotplugMonitor : IDisposable
             return;
         }
 
-        var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
-        List<UsbDeviceChange>? changes;
+        var hints = DrainHints();
+        if (hints.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<UsbDeviceChange> changes;
         lock (_gate)
         {
             if (_disposed)
@@ -251,11 +326,10 @@ internal sealed class UdevHotplugMonitor : IDisposable
                 return;
             }
 
-            changes = UsbDeviceMonitor.ComputeChanges(currentSnapshot, _lastSnapshot);
-            _lastSnapshot = currentSnapshot;
+            changes = _pass(hints);
         }
 
-        if (changes is { Count: > 0 })
+        if (changes.Count > 0)
         {
             try
             {
@@ -267,6 +341,17 @@ internal sealed class UdevHotplugMonitor : IDisposable
                 UsbTrace.Log($"UdevHotplugMonitor change callback failed: {ex.GetType().Name}: {ex.Message}");
             }
         }
+    }
+
+    private List<UsbDeviceProbeHint> DrainHints()
+    {
+        var hints = new List<UsbDeviceProbeHint>();
+        while (_hints.TryDequeue(out var hint))
+        {
+            hints.Add(hint);
+        }
+
+        return hints;
     }
 
     public void Dispose()
@@ -312,9 +397,8 @@ internal sealed class UdevHotplugMonitor : IDisposable
         }
 
         lifetime?.Dispose();
-        lock (_gate)
+        while (_hints.TryDequeue(out _))
         {
-            _lastSnapshot.Clear();
         }
     }
 
