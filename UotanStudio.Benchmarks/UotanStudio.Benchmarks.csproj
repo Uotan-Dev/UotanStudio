@@ -18,7 +18,6 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="SkiaSharp" />
     <PackageReference Include="ZLinq" />
   </ItemGroup>
 

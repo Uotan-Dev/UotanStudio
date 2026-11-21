@@ -75,7 +75,6 @@
     <PackageVersion Include="LTRData.DiscUtils.Fat" Version="1.0.91" />
     <PackageVersion Include="LTRData.DiscUtils.ExFat" Version="1.0.91" />
     <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
-    <PackageVersion Include="ModelContextProtocol.Core" Version="2.4.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
   </ItemGroup>
 </Project>
