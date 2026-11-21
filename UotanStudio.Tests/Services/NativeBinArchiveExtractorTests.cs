@@ -148,7 +148,7 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream([0x00]);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => NativeBinArchiveExtractor.TryExtractAsync(
-            archive, "freebsd-x64", Sha256Hex(LibraryBytes), destination));
+            archive, "freebsd-x64", Sha256Hex(LibraryBytes), destination, TestContext.Current.CancellationToken));
     }
 
     [Fact]
