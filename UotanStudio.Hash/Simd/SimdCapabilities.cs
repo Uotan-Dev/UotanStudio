@@ -53,12 +53,25 @@ public static class SimdCapabilities
     /// <summary>
     /// Returns a compact diagnostic line naming the architecture, every supported family, the active family and its
     /// block width.
-    /// <para>返回一行紧凑的诊断信息，列出架构、全部可用指令族、当前指令族及块宽度。</para>
+    /// <para>返回一行紧凑的诊断信息，列出架构、全部可用指令族、当前指令族、块宽度与原生内核发射状态。</para>
     /// </summary>
-    /// <returns>A semicolon-separated report such as <c>arch=X64;supported=Scalar|...;active=Avx512;width=64</c>.
-    /// <para>以分号分隔的报告，例如 <c>arch=X64;supported=Scalar|...;active=Avx512;width=64</c>。</para></returns>
+    /// <returns>A semicolon-separated report such as <c>arch=X64;supported=Scalar|...;active=Avx512;width=64;native=unused</c>.
+    /// <para>以分号分隔的报告，例如 <c>arch=X64;supported=Scalar|...;active=Avx512;width=64;native=unused</c>。</para></returns>
     public static string Describe()
-        => $"arch={RuntimeInformation.OSArchitecture};supported={Names(SupportedValue)};active={ActiveIsa};width={ActiveVectorWidthBytes}";
+        => $"arch={RuntimeInformation.OSArchitecture};supported={Names(SupportedValue)};active={ActiveIsa};width={ActiveVectorWidthBytes};native={NativeState()}";
+
+    /// <summary>
+    /// Describes the runtime-emitted native kernel state for diagnostics: <c>ready</c>, a failure code, or
+    /// <c>unused</c> on architectures that do not use emitted kernels.
+    /// <para>描述运行时发射原生内核的诊断状态：<c>ready</c>、失败码，或不使用发射内核架构上的 <c>unused</c>。</para>
+    /// </summary>
+    /// <returns>The compact native state token. <para>紧凑的原生状态记号。</para></returns>
+    private static string NativeState() => RuntimeInformation.ProcessArchitecture switch
+    {
+        System.Runtime.InteropServices.Architecture.LoongArch64
+            or System.Runtime.InteropServices.Architecture.RiscV64 => NativeVectorKernels.ActivationFailure ?? "ready",
+        _ => "unused",
+    };
 
     /// <summary>
     /// Maps a block kernel to the instruction family that executes it.
@@ -74,6 +87,8 @@ public static class SimdCapabilities
             : SimdIsa.Avx512,
         SimdOps.SimdKernel.Vector256 => SimdIsa.Avx2,
         SimdOps.SimdKernel.Vector128 => Sse2.IsSupported ? SimdIsa.Sse2 : SimdIsa.AdvSimd,
+        SimdOps.SimdKernel.LoongArchVector => NativeVectorKernels.LoongArchWide ? SimdIsa.LoongArchLasx : SimdIsa.LoongArchLsx,
+        SimdOps.SimdKernel.RiscVVector => SimdIsa.RiscVVector,
         SimdOps.SimdKernel.PortableVectors => SimdIsa.PortableVectors,
         _ => SimdIsa.Scalar,
     };
@@ -90,6 +105,8 @@ public static class SimdCapabilities
         SimdOps.SimdKernel.Vector512 => Vector512<byte>.Count,
         SimdOps.SimdKernel.Vector256 => Vector256<byte>.Count,
         SimdOps.SimdKernel.Vector128 => Vector128<byte>.Count,
+        SimdOps.SimdKernel.LoongArchVector => NativeVectorKernels.LoongArchWide ? 32 : 16,
+        SimdOps.SimdKernel.RiscVVector => NativeVectorKernels.RiscVBlockBytes,
         _ => 1,
     };
 
@@ -146,6 +163,26 @@ public static class SimdCapabilities
             isas |= SimdIsa.Sve2;
         }
 
+        if (RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.LoongArch64
+            && NativeCpuFeatures.TryGetLoongArchFeatures(out var lsx, out var lasx))
+        {
+            if (lsx)
+            {
+                isas |= SimdIsa.LoongArchLsx;
+            }
+
+            if (lasx)
+            {
+                isas |= SimdIsa.LoongArchLasx;
+            }
+        }
+
+        if (RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.RiscV64
+            && NativeCpuFeatures.TryGetRiscVVectorFlag(out var vector))
+        {
+            isas |= SimdIsa.RiscVVector;
+        }
+
         return isas;
     }
 
@@ -163,6 +200,9 @@ public static class SimdCapabilities
         AppendName(names, isas, SimdIsa.ArmCrypto);
         AppendName(names, isas, SimdIsa.Sve);
         AppendName(names, isas, SimdIsa.Sve2);
+        AppendName(names, isas, SimdIsa.LoongArchLsx);
+        AppendName(names, isas, SimdIsa.LoongArchLasx);
+        AppendName(names, isas, SimdIsa.RiscVVector);
         return names.ToString();
     }
 

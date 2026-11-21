@@ -57,4 +57,17 @@ public enum SimdIsa
 
     /// <summary>ARM64 Scalable Vector Extension version 2.<para>ARM64 可伸缩向量扩展第二版。</para></summary>
     Sve2 = 1 << 10,
+
+    /// <summary>LoongArch 128-bit LSX vector operations executed through the runtime-emitted native kernels.
+    /// <para>经运行时发射的原生内核执行的 LoongArch 128 位 LSX 向量运算。</para></summary>
+    LoongArchLsx = 1 << 11,
+
+    /// <summary>LoongArch 256-bit LASX vector operations executed through the runtime-emitted native kernels.
+    /// <para>经运行时发射的原生内核执行的 LoongArch 256 位 LASX 向量运算。</para></summary>
+    LoongArchLasx = 1 << 12,
+
+    /// <summary>RISC-V vector extension (RVV 1.0) operations executed through the runtime-emitted native kernels,
+    /// with the length-agnostic loop adapting to the hart's register width.
+    /// <para>经运行时发射的原生内核执行的 RISC-V 向量扩展（RVV 1.0）运算，长度无关循环自适应核心的寄存器宽度。</para></summary>
+    RiscVVector = 1 << 13,
 }

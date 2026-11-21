@@ -4,6 +4,8 @@
     <RootNamespace>UotanStudio.Hash</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Required by the LoongArch64/RiscV64 native kernel emitters; pointer use stays inside Simd/. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

@@ -35,7 +35,9 @@
 
 `SimdOps` 按 ARM SVE/SVE2（运行时决定向量宽度）、AVX-512F/BW 与 AVX10 512 位、AVX2 256 位、SSE2/AdvSIMD 128 位、`System.Numerics.Vector<T>` 的顺序选择最宽内核，尾部不足一个整块的字节以及完全没有向量指令集的处理器都交给同一个逐字节标量循环。`XorInPlace`、`XorConstantInPlace`、`SumBytes` 与 `XorFoldWords` 在任意内核、任意长度、任意开关状态下结果一致；`ByteSum8`、`ByteSum16`、`ByteSum32` 直接消费 `SumBytes`，`WordXor16LittleEndian` 在小端处理器上消费 `XorFoldWords`，`UotanStudio.Firmware` 的 OPS/OZIP 流密码与 AES-CFB 反馈 XOR 消费 `XorInPlace`。
 
-ARM SVE intrinsic 在 BCL 中仍标记为实验性（SYSLIB5003），抑制只写在引用它的两个文件内，不做项目级 `NoWarn`。`Adler32`、`Crc32c` 与 `Crc32Register` 各自保留按算法特性定制的指令分派和查表回退，不经 `SimdOps` 转发。逐内核等价性由 `UotanStudio.Tests/Firmware/SimdOpsEquivalenceTests.cs` 钉住，未支持的指令族在测试中自动退化为标量路径。
+LoongArch64 与 RiscV64 的 JIT 没有向量后端，`System.Numerics.Vector<T>` 在这两个架构上不可用。`Simd/NativeVectorKernels.cs` 弥补这一缺口：`Simd/Native/loongarch64.S` 与 `riscv64.S` 手写汇编（LASX/LSX 与 RVV 1.0）经真机与交叉 GNU as 汇编出的 `.text` 以字节数组内嵌，类型初始化时经 memfd 双别名映射发布到可执行页、以无混编函数指针调用（RISC-V 附加 `riscv_flush_icache` 系统调用，发射后读回校验）。`NativeCpuFeatures` 经 `getauxval(AT_HWCAP)` 检测（LoongArch 第 4/5 位报告 LSX/LASX，RISC-V 第 21 位报告向量扩展，`vsetvli` 探针实测块宽）；激活前每个内核先与本地标量预言做确定性自测，失败即保持指针为空、分派留在标量循环。LoongArch 路径要求缓冲区 8 字节对齐（托管端剥离对齐头），RISC-V 路径接受任意长度与元素对齐。
+
+ARM SVE intrinsic 在 BCL 中仍标记为实验性（SYSLIB5003），抑制只写在引用它的两个文件内，不做项目级 `NoWarn`。`Adler32`、`Crc32c` 与 `Crc32Register` 各自保留按算法特性定制的指令分派和查表回退，不经 `SimdOps` 转发；`Crc32c` 的 LoongArch `crcc.w.*.w` 指令族经实测与 crc32c_le 寄存器约定不匹配，暂维持 SSE4.2/ARM CRC/查表的既有分派。逐内核等价性由 `UotanStudio.Tests/Firmware/SimdOpsEquivalenceTests.cs` 钉住，未支持的指令族在测试中自动退化为标量路径。
 
 ## 标准式与寄存器式是两个类型
 

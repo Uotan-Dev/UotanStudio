@@ -8,21 +8,25 @@ using ArmSve = System.Runtime.Intrinsics.Arm.Sve;
 namespace UotanStudio.Hash.Simd;
 
 /// <summary>
-/// Byte-block XOR and additive-sum primitives dispatched across AVX-512, AVX10, AVX2, SSE2, ARM SVE, AdvSIMD and
-/// portable vectors, with a scalar software fallback on every processor.
-/// <para>在 AVX-512、AVX10、AVX2、SSE2、ARM SVE、AdvSIMD 与可移植向量之间分派的字节块异或及累加原语，
-/// 并在所有处理器上提供标量软件回退。</para>
+/// Byte-block XOR and additive-sum primitives dispatched across AVX-512, AVX10, AVX2, SSE2, ARM SVE, AdvSIMD,
+/// runtime-emitted LoongArch LSX/LASX and RISC-V RVV native kernels, and portable vectors, with a scalar software
+/// fallback on every processor.
+/// <para>在 AVX-512、AVX10、AVX2、SSE2、ARM SVE、AdvSIMD、运行时发射的 LoongArch LSX/LASX 与 RISC-V RVV 原生内核
+/// 以及可移植向量之间分派的字节块异或及累加原语，并在所有处理器上提供标量软件回退。</para>
 /// </summary>
 /// <remarks>
 /// The widest kernel the processor and runtime can execute is selected once. Every kernel consumes whole fixed-width
 /// blocks and hands the trailing bytes to the same scalar loop, so results are bit-identical across all kernels, on
 /// processors without any vector ISA, and when <see cref="ForceSoftwareFallback"/> is set. ARM SVE uses the
-/// runtime-determined <see cref="Vector{T}"/> width instead of a fixed register width. ARM SVE intrinsics remain
-/// experimental in the base class library, so SYSLIB5003 is suppressed locally in this file.
+/// runtime-determined <see cref="Vector{T}"/> width instead of a fixed register width. The LoongArch and RISC-V
+/// kernels execute machine code emitted at type initialization because the JIT has no vector backend on those
+/// architectures; see <see cref="NativeVectorKernels"/>. ARM SVE intrinsics remain experimental in the base class
+/// library, so SYSLIB5003 is suppressed locally in this file.
 /// <para>处理器与运行时能执行的最宽内核只在类型初始化时选择一次。每个内核消费完整的定宽块，尾部字节交给同一个标量循环，
 /// 因此在任意内核、无向量指令集的处理器以及设置 <see cref="ForceSoftwareFallback"/> 时结果都逐位一致。ARM SVE 使用由运行时
-/// 决定的 <see cref="Vector{T}"/> 宽度而非固定寄存器宽度。基础类库仍将 ARM SVE intrinsic 标记为实验性，
-/// 故本文件在本地抑制 SYSLIB5003。</para>
+/// 决定的 <see cref="Vector{T}"/> 宽度而非固定寄存器宽度。LoongArch 与 RISC-V 内核在类型初始化时发射机器码执行，
+/// 因为这两个架构的 JIT 没有向量后端；详见 <see cref="NativeVectorKernels"/>。基础类库仍将 ARM SVE intrinsic 标记为
+/// 实验性，故本文件在本地抑制 SYSLIB5003。</para>
 /// </remarks>
 public static class SimdOps
 {
@@ -49,6 +53,14 @@ public static class SimdOps
 
         /// <summary>ARM scalable-vector loop.<para>ARM 可伸缩向量循环。</para></summary>
         Sve,
+
+        /// <summary>LoongArch LSX/LASX loop running the runtime-emitted native kernels.
+        /// <para>执行运行时发射原生内核的 LoongArch LSX/LASX 循环。</para></summary>
+        LoongArchVector,
+
+        /// <summary>RISC-V vector loop running the runtime-emitted native kernels.
+        /// <para>执行运行时发射原生内核的 RISC-V 向量循环。</para></summary>
+        RiscVVector,
     }
 
     [ThreadStatic]
@@ -145,6 +157,12 @@ public static class SimdOps
             case SimdKernel.Sve:
                 XorSve(destination, source);
                 break;
+            case SimdKernel.LoongArchVector:
+                XorLoongArchVector(destination, source);
+                break;
+            case SimdKernel.RiscVVector:
+                XorRiscVVector(destination, source);
+                break;
             case SimdKernel.Vector512:
                 XorVector512(destination, source);
                 break;
@@ -178,6 +196,12 @@ public static class SimdOps
             case SimdKernel.Sve:
                 XorConstantSve(destination, value);
                 break;
+            case SimdKernel.LoongArchVector:
+                XorConstantLoongArchVector(destination, value);
+                break;
+            case SimdKernel.RiscVVector:
+                XorConstantRiscVVector(destination, value);
+                break;
             case SimdKernel.Vector512:
                 XorConstantVector512(destination, value);
                 break;
@@ -208,6 +232,8 @@ public static class SimdOps
         SimdKernel.Vector512 => SumBytesVector512(data),
         SimdKernel.Vector256 => SumBytesVector256(data),
         SimdKernel.Vector128 => SumBytesVector128(data),
+        SimdKernel.LoongArchVector => SumBytesLoongArchVector(data),
+        SimdKernel.RiscVVector => SumBytesRiscVVector(data),
         SimdKernel.Sve or SimdKernel.PortableVectors => SumBytesPortableVectors(data),
         _ => SumBytesSoftware(data),
     };
@@ -225,6 +251,8 @@ public static class SimdOps
         SimdKernel.Vector512 => XorFoldWordsVector512(words),
         SimdKernel.Vector256 => XorFoldWordsVector256(words),
         SimdKernel.Vector128 => XorFoldWordsVector128(words),
+        SimdKernel.LoongArchVector => XorFoldWordsLoongArchVector(words),
+        SimdKernel.RiscVVector => XorFoldWordsRiscVVector(words),
         SimdKernel.Sve or SimdKernel.PortableVectors => XorFoldWordsPortableVectors(words),
         _ => XorFoldWordsSoftware(words),
     };
@@ -235,11 +263,24 @@ public static class SimdOps
     private static SimdKernel CurrentKernel()
         => ForceSoftwareFallback ? SimdKernel.Software : SelectedKernel;
 
-    /// <summary>Selects the widest kernel the processor and runtime can execute.
-    /// <para>选择处理器与运行时能执行的最宽内核。</para></summary>
+    /// <summary>Selects the widest kernel the processor and runtime can execute. On LoongArch64 and RiscV64 the JIT
+    /// has no vector backend, so the runtime-emitted native kernels are probed first and the portable chain below
+    /// stays on the scalar loop there.
+    /// <para>选择处理器与运行时能执行的最宽内核。LoongArch64 与 RiscV64 上 JIT 没有向量后端，因此先探测运行时
+    /// 发射的原生内核，下方的可移植链条在这些平台上保持在标量循环。</para></summary>
     /// <returns>The selected kernel.<para>选定的内核。</para></returns>
     private static SimdKernel SelectKernel()
     {
+        if (RuntimeInformation.ProcessArchitecture == Architecture.LoongArch64 && NativeVectorKernels.TryActivateLoongArch())
+        {
+            return SimdKernel.LoongArchVector;
+        }
+
+        if (RuntimeInformation.ProcessArchitecture == Architecture.RiscV64 && NativeVectorKernels.TryActivateRiscV())
+        {
+            return SimdKernel.RiscVVector;
+        }
+
         if (ArmSve.IsSupported && Vector.IsHardwareAccelerated)
         {
             return SimdKernel.Sve;
@@ -544,6 +585,251 @@ public static class SimdOps
         }
 
         XorConstantSoftware(destination[offset..], value);
+    }
+
+    /// <summary>XORs the whole-buffer middle through the emitted LoongArch kernels; the scalar loop peels the head
+    /// until both pointers share the natural alignment of the active width and drains every trailing byte.
+    /// <para>用发射的 LoongArch 内核处理整段中段；标量循环剥离头部直到两个指针都达到激活宽度的自然对齐，
+    /// 并排干全部尾部字节。</para></summary>
+    /// <param name="destination">Buffer to update in place.<para>就地更新的缓冲区。</para></param>
+    /// <param name="source">Bytes to XOR in.<para>参与异或的字节。</para></param>
+    /// <remarks>
+    /// The LoongArch vector loads need naturally aligned addresses, so when the two buffers cannot be brought to
+    /// that alignment by one common head the whole call stays on the scalar loop.
+    /// <para>LoongArch 向量访存需要自然对齐的地址，因此当两个缓冲区无法经同一段头部对齐时，整次调用都走标量循环。</para>
+    /// </remarks>
+    private static unsafe void XorLoongArchVector(Span<byte> destination, ReadOnlySpan<byte> source)
+    {
+        if (!NativeVectorKernels.LoongArchReady)
+        {
+            XorSoftware(destination, source);
+            return;
+        }
+
+        var width = NativeVectorKernels.LoongArchWide ? 32 : 16;
+        fixed (byte* destinationPointer = destination)
+        fixed (byte* sourcePointer = source)
+        {
+            if ((((nuint)destinationPointer ^ (nuint)sourcePointer) & (nuint)(width - 1)) != 0)
+            {
+                XorSoftware(destination, source);
+                return;
+            }
+
+            var head = (int)(((nuint)0 - (nuint)destinationPointer) & (nuint)(width - 1));
+            if (head > destination.Length)
+            {
+                XorSoftware(destination, source);
+                return;
+            }
+
+            XorSoftware(destination[..head], source[..head]);
+            var middle = (destination.Length - head) & ~(width - 1);
+            if (middle != 0)
+            {
+                if (NativeVectorKernels.LoongArchWide)
+                {
+                    NativeVectorKernels.LoongArchXor256(destinationPointer + head, sourcePointer + head, (nuint)middle);
+                }
+                else
+                {
+                    NativeVectorKernels.LoongArchXor128(destinationPointer + head, sourcePointer + head, (nuint)middle);
+                }
+            }
+
+            XorSoftware(destination[(head + middle)..], source[(head + middle)..]);
+        }
+    }
+
+    /// <summary>XORs the whole buffer through the emitted RISC-V kernels; byte elements never need alignment, so no
+    /// head peeling is required and the length-agnostic loop drains the tail itself.
+    /// <para>用发射的 RISC-V 内核处理整段缓冲；字节元素无需对齐，因此不需要剥离头部，长度无关循环自行处理尾部。</para></summary>
+    /// <param name="destination">Buffer to update in place.<para>就地更新的缓冲区。</para></param>
+    /// <param name="source">Bytes to XOR in.<para>参与异或的字节。</para></param>
+    private static unsafe void XorRiscVVector(Span<byte> destination, ReadOnlySpan<byte> source)
+    {
+        if (!NativeVectorKernels.RiscVReady)
+        {
+            XorSoftware(destination, source);
+            return;
+        }
+
+        fixed (byte* destinationPointer = destination)
+        fixed (byte* sourcePointer = source)
+        {
+            NativeVectorKernels.RiscVXor(destinationPointer, sourcePointer, (nuint)destination.Length);
+        }
+    }
+
+    /// <summary>XORs a repeated byte through the emitted LoongArch kernels with the same head and tail handling as
+    /// <see cref="XorLoongArchVector"/>.
+    /// <para>经发射的 LoongArch 内核异或重复字节，头尾处理与 <see cref="XorLoongArchVector"/> 相同。</para></summary>
+    /// <param name="destination">Buffer to update in place.<para>就地更新的缓冲区。</para></param>
+    /// <param name="value">Byte XORed into every position.<para>异或到每个位置的字节。</para></param>
+    private static unsafe void XorConstantLoongArchVector(Span<byte> destination, byte value)
+    {
+        if (!NativeVectorKernels.LoongArchReady)
+        {
+            XorConstantSoftware(destination, value);
+            return;
+        }
+
+        var width = NativeVectorKernels.LoongArchWide ? 32 : 16;
+        fixed (byte* destinationPointer = destination)
+        {
+            var head = (int)(((nuint)0 - (nuint)destinationPointer) & (nuint)(width - 1));
+            if (head > destination.Length)
+            {
+                XorConstantSoftware(destination, value);
+                return;
+            }
+
+            XorConstantSoftware(destination[..head], value);
+            var middle = (destination.Length - head) & ~(width - 1);
+            if (middle != 0)
+            {
+                if (NativeVectorKernels.LoongArchWide)
+                {
+                    NativeVectorKernels.LoongArchXorConstant256(destinationPointer + head, value, (nuint)middle);
+                }
+                else
+                {
+                    NativeVectorKernels.LoongArchXorConstant128(destinationPointer + head, value, (nuint)middle);
+                }
+            }
+
+            XorConstantSoftware(destination[(head + middle)..], value);
+        }
+    }
+
+    /// <summary>XORs a repeated byte through the emitted RISC-V kernels over the whole buffer.
+    /// <para>经发射的 RISC-V 内核对整段缓冲异或重复字节。</para></summary>
+    /// <param name="destination">Buffer to update in place.<para>就地更新的缓冲区。</para></param>
+    /// <param name="value">Byte XORed into every position.<para>异或到每个位置的字节。</para></param>
+    private static unsafe void XorConstantRiscVVector(Span<byte> destination, byte value)
+    {
+        if (!NativeVectorKernels.RiscVReady)
+        {
+            XorConstantSoftware(destination, value);
+            return;
+        }
+
+        fixed (byte* destinationPointer = destination)
+        {
+            NativeVectorKernels.RiscVXorConstant(destinationPointer, value, (nuint)destination.Length);
+        }
+    }
+
+    /// <summary>Sums bytes through the emitted LoongArch kernels over the aligned middle, adding the scalar head and
+    /// tail sums modulo 2^32.
+    /// <para>用发射的 LoongArch 内核对对齐中段累加字节，头尾标量和按模 2^32 相加。</para></summary>
+    /// <param name="data">Bytes to sum.<para>待累加的字节。</para></param>
+    /// <returns>The sum modulo 2^32.<para>按模 2^32 得到的和。</para></returns>
+    private static unsafe uint SumBytesLoongArchVector(ReadOnlySpan<byte> data)
+    {
+        if (!NativeVectorKernels.LoongArchReady || data.Length == 0)
+        {
+            return SumBytesSoftware(data);
+        }
+
+        var width = NativeVectorKernels.LoongArchWide ? 32 : 16;
+        fixed (byte* dataPointer = data)
+        {
+            var head = (int)(((nuint)0 - (nuint)dataPointer) & (nuint)(width - 1));
+            if (head > data.Length)
+            {
+                return SumBytesSoftware(data);
+            }
+
+            var headSum = SumBytesSoftware(data[..head]);
+            var middle = (data.Length - head) & ~(width - 1);
+            var middleSum = middle == 0
+                ? 0u
+                : NativeVectorKernels.LoongArchWide
+                    ? NativeVectorKernels.LoongArchSum256(dataPointer + head, (nuint)middle)
+                    : NativeVectorKernels.LoongArchSum128(dataPointer + head, (nuint)middle);
+            return unchecked(headSum + middleSum + SumBytesSoftware(data[(head + middle)..]));
+        }
+    }
+
+    /// <summary>Sums bytes through the emitted RISC-V kernels over the whole buffer.
+    /// <para>用发射的 RISC-V 内核对整段缓冲累加字节。</para></summary>
+    /// <param name="data">Bytes to sum.<para>待累加的字节。</para></param>
+    /// <returns>The sum modulo 2^32.<para>按模 2^32 得到的和。</para></returns>
+    private static unsafe uint SumBytesRiscVVector(ReadOnlySpan<byte> data)
+    {
+        if (!NativeVectorKernels.RiscVReady || data.Length == 0)
+        {
+            return SumBytesSoftware(data);
+        }
+
+        fixed (byte* dataPointer = data)
+        {
+            return NativeVectorKernels.RiscVSum(dataPointer, (nuint)data.Length);
+        }
+    }
+
+    /// <summary>XOR-folds native 16-bit words through the emitted LoongArch kernels over the aligned middle, with
+    /// the scalar loop covering an unaligned start and the trailing words.
+    /// <para>用发射的 LoongArch 内核折叠对齐中段的本机 16 位字，未对齐起始与尾部字交给标量循环。</para></summary>
+    /// <param name="words">Native 16-bit words to fold.<para>待折叠的本机 16 位字。</para></param>
+    /// <returns>The XOR reduction of all words.<para>全部字的异或归约值。</para></returns>
+    private static unsafe ushort XorFoldWordsLoongArchVector(ReadOnlySpan<ushort> words)
+    {
+        if (!NativeVectorKernels.LoongArchReady || words.Length == 0)
+        {
+            return XorFoldWordsSoftware(words);
+        }
+
+        var width = NativeVectorKernels.LoongArchWide ? 32 : 16;
+        fixed (ushort* wordPointer = words)
+        {
+            if (((nuint)wordPointer & 1) != 0)
+            {
+                return XorFoldWordsSoftware(words);
+            }
+
+            var headBytes = (int)(((nuint)0 - (nuint)wordPointer) & (nuint)(width - 1));
+            var totalBytes = words.Length * 2;
+            if (headBytes > totalBytes)
+            {
+                return XorFoldWordsSoftware(words);
+            }
+
+            var headWords = headBytes / 2;
+            var headFold = XorFoldWordsSoftware(words[..headWords]);
+            var middleBytes = (totalBytes - headBytes) & ~(width - 1);
+            var middleFold = middleBytes == 0
+                ? (ushort)0
+                : NativeVectorKernels.LoongArchWide
+                    ? NativeVectorKernels.LoongArchXorFold256(wordPointer + headWords, (nuint)(middleBytes / 2))
+                    : NativeVectorKernels.LoongArchXorFold128(wordPointer + headWords, (nuint)(middleBytes / 2));
+            return (ushort)(headFold ^ middleFold ^ XorFoldWordsSoftware(words[(headWords + (middleBytes / 2))..]));
+        }
+    }
+
+    /// <summary>XOR-folds native 16-bit words through the emitted RISC-V kernels over the whole span; a span that
+    /// starts on an odd byte address stays on the scalar loop because 16-bit elements need two-byte alignment.
+    /// <para>用发射的 RISC-V 内核折叠整段本机 16 位字；起始字节地址为奇数的区间保持标量循环，
+    /// 因为 16 位元素需要两字节对齐。</para></summary>
+    /// <param name="words">Native 16-bit words to fold.<para>待折叠的本机 16 位字。</para></param>
+    /// <returns>The XOR reduction of all words.<para>全部字的异或归约值。</para></returns>
+    private static unsafe ushort XorFoldWordsRiscVVector(ReadOnlySpan<ushort> words)
+    {
+        if (!NativeVectorKernels.RiscVReady || words.Length == 0)
+        {
+            return XorFoldWordsSoftware(words);
+        }
+
+        fixed (ushort* wordPointer = words)
+        {
+            if (((nuint)wordPointer & 1) != 0)
+            {
+                return XorFoldWordsSoftware(words);
+            }
+
+            return NativeVectorKernels.RiscVXorFold(wordPointer, (nuint)words.Length);
+        }
     }
 
     /// <summary>Sums bytes widened into 32-bit lanes of a 512-bit register.

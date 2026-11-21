@@ -97,6 +97,7 @@ public partial class App : Application
         UnhandledExceptionLogger.Install();
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
+        LogService.Instance.Write(LogLevel.Info, "Simd", UotanStudio.Hash.Simd.SimdCapabilities.Describe());
 
         _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
         _ = RunAutomaticUpdateCheckAsync();
