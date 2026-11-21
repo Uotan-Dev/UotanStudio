@@ -3,13 +3,15 @@ namespace UotanStudio.Comm.Transports.Usb.Drivers;
 /// <summary>
 /// The immutable catalog of vendor Windows driver packages this library knows about, in display order. Every
 /// bundled package is backed by the frames and manifest <see cref="DriverPackageAssets"/> materializes, and each
-/// entry only carries localization key suffixes, so the host owns every user-visible string. The two vendor
-/// packages that are deliberately not bundled report <see cref="DriverPackageDescriptor.IsAvailable"/> as
-/// <see langword="false"/> together with an <see cref="DriverPackageDescriptor.UnavailableReasonKey"/>.
-/// <para>本库已知的厂商 Windows 驱动包的不可变目录，按显示顺序排列。每个随包的驱动包由
-/// <see cref="DriverPackageAssets"/> 物化的帧与清单承载，条目只携带本地化 key 后缀，所有面向用户的字符串归宿主
-/// 所有。两个刻意未随包的厂商包把 <see cref="DriverPackageDescriptor.IsAvailable"/> 置为
-/// <see langword="false"/>，并给出 <see cref="DriverPackageDescriptor.UnavailableReasonKey"/>。</para>
+/// entry only carries localization key suffixes, so the host owns every user-visible string. Every entry here
+/// describes a package this build can stage: USB-to-UART bridge chips are left out on purpose because they never
+/// gate firmware operations, and the two vendor packages that ship only as self-extracting installers report
+/// <see cref="DriverPackageDescriptor.IsAvailable"/> as <see langword="false"/> together with an
+/// <see cref="DriverPackageDescriptor.UnavailableReasonKey"/>.
+/// <para>本库已知的厂商 Windows 驱动包的不可变目录，按显示顺序排列。这里的每个条目都描述本构建可以暂存的包：
+/// USB 转 UART 桥接芯片被有意排除，因为它们从不构成固件操作的前置条件；两个只以自解压安装器发布的厂商包把
+/// <see cref="DriverPackageDescriptor.IsAvailable"/> 置为 <see langword="false"/>，并给出
+/// <see cref="DriverPackageDescriptor.UnavailableReasonKey"/>。</para>
 /// </summary>
 public static class DriverPackageCatalog
 {
@@ -33,8 +35,6 @@ public static class DriverPackageCatalog
         Describe("qualcomm-qud", "QualcommQud", "Qualcomm",
             ["qcadb.inf", "qcfilter.inf", "qcwdfmdm.inf", "qcwdfser.inf", "qcwwan.inf", "qdbusb.inf"],
             null),
-        Describe("silabs-cp210x", "SilabsCp210x", "SiliconLabs", ["silabser.inf"], null),
-        Describe("ftdi-cdm", "FtdiCdm", "Ftdi", ["Image/FTDIBUS.inf", "Image/FTDIPORT.inf"], null),
         Describe("wch-serial", "WchSerial", "Wch", [], "SelfExtractorOnly"),
         Describe("huawei-hisuite", "HuaweiHiSuite", "Huawei", [], "LicenseAndSize"),
     ];
@@ -176,6 +176,21 @@ public static class DriverPackageCatalog
             totalBytes += file.Length;
         }
 
+        var carriesWinUsb = files.Any(static file =>
+            string.Equals(file.PayloadName, "android_winusb.inf", StringComparison.OrdinalIgnoreCase));
+        var fileCount = files.Count;
+        if (carriesWinUsb)
+        {
+            foreach (var shared in DriverPackageAssets.ReadSharedCoinstallers())
+            {
+                if (!files.Any(file => string.Equals(file.PayloadName, shared.PayloadName, StringComparison.Ordinal)))
+                {
+                    totalBytes += shared.Length;
+                    fileCount++;
+                }
+            }
+        }
+
         var declaresEveryInf = infFileNames.Length > 0;
         foreach (var infName in infFileNames)
         {
@@ -193,7 +208,7 @@ public static class DriverPackageCatalog
             DisplayNameKey = displayNameKey,
             VendorNameKey = vendorNameKey,
             InfFileNames = infFileNames,
-            FileCount = files.Count,
+            FileCount = fileCount,
             TotalBytes = totalBytes,
             IsAvailable = OperatingSystem.IsWindows() && declaresEveryInf,
             UnavailableReasonKey = unavailableReasonKey,

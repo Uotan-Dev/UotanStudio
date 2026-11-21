@@ -67,6 +67,33 @@ public class AssetCatalogIntegrityTests
     }
 
     [Fact]
+    public void WinUsbCoinstaller_ShippedBundle_DeclaresTheTwoAmd64Coinstallers()
+    {
+        var bundle = AssetCatalog.WinUsbCoinstaller;
+        string[] names = ["amd64__WdfCoInstaller01009.dll", "amd64__winusbcoinstaller2.dll"];
+
+        Assert.True(bundle.IsPresent);
+        Assert.Equal(2, bundle.Entries.Count);
+        foreach (var name in names)
+        {
+            var entry = bundle[name];
+            var payload = AssetStore.Read(entry);
+            Assert.Equal(entry.Length, payload.LongLength);
+            Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
+        }
+    }
+
+    [Fact]
+    public void AdbDriverBundles_DoNotDuplicateTheSharedCoinstallerPayloads()
+    {
+        foreach (var bundle in new[] { AssetCatalog.GoogleUsbDriver, AssetCatalog.RockchipAdbDriver })
+        {
+            Assert.DoesNotContain(bundle.Entries,
+                static entry => entry.Path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
     public void Fonts_ShippedBundle_DeclaresRegularAndBoldFaces()
     {
         var bundle = AssetCatalog.Fonts;

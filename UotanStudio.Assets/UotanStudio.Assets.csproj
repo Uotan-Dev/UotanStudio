@@ -24,6 +24,15 @@
       <LogicalName>assets/ohos/device/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- 厂商驱动包只在 Windows 目标里嵌入：没有 RID（本地 dotnet build 与测试宿主）时保留，显式指定非 Windows
+       RID（linux-*、osx-*、linux-musl-*）时整块排除，发布包不再背上用不到的 INF/CAT/SYS。清单里的驱动行在
+       缺少帧时按“未随包”处理，因此 AssetBundle.IsPresent 为 false，驱动目录条目也报不可用。
+       Vendor driver packages are embedded only for Windows targets: a build without a RID (local
+       dotnet build and the test host) keeps them, while an explicit non-Windows RID excludes the whole
+       block so the publish output does not carry INF/CAT/SYS payloads it can never stage. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win'))">
     <EmbeddedResource Include="Assets\drivers\rockusb\*.zst">
       <LogicalName>assets/drivers/rockusb/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>
@@ -48,14 +57,13 @@
       <LogicalName>assets/drivers/qualcomm-qud/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
-    <EmbeddedResource Include="Assets\drivers\silabs-cp210x\*.zst">
-      <LogicalName>assets/drivers/silabs-cp210x/%(Filename)%(Extension)</LogicalName>
+    <EmbeddedResource Include="Assets\drivers\winusb-coinstaller\*.zst">
+      <LogicalName>assets/drivers/winusb-coinstaller/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
-    <EmbeddedResource Include="Assets\drivers\ftdi-cdm\*.zst">
-      <LogicalName>assets/drivers/ftdi-cdm/%(Filename)%(Extension)</LogicalName>
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Assets\delivery\*.zst">
       <LogicalName>assets/delivery/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>

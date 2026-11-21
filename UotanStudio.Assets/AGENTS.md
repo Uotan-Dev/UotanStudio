@@ -6,15 +6,16 @@
 
 - 只引用 `UotanStudio.Hash` 与 `UotanStudio.Compress`，净依赖图由 `UotanStudio.Tests` 的 `ProjectReferenceDirectionGuardTests.Allowed` 把关；新增引用前先确认方向，不得引用其他业务项目。
 - 不引用 `UotanStudio.Net`，也不做网络 I/O：负载随程序集分发，运行期只读内嵌帧。
-- 本工程不声明 RID 相关的 `Content`/`None` 复制项，也不按 `RuntimeIdentifier` 分叉：负载只作为 `EmbeddedResource` 进程序集，各平台发布产出一致。
+- 负载只作为 `EmbeddedResource` 进程序集，不声明 RID 相关的 `Content`/`None` 复制项。唯一的 `RuntimeIdentifier` 分叉是驱动帧：`Assets\drivers\**` 的嵌入项整体带 `Condition="'$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win'))"`，即无 RID 的本地构建与测试宿主保留、非 Windows 发布排除。清单与帧文件不随该条件删除，因此 `--check` 与清单测试在任何 RID 下都成立。
 
 ## 资源布局与命名
 
 - 压缩帧路径恒为 `Assets/<bundle>/<path>.zst`，与原始负载同目录。
 - 逻辑资源名恒为 `assets/<bundle>/<path>.zst`，由 csproj 的 `EmbeddedResource` 逐 bundle 指定，运行时按同一规则拼名。`LogicalName` 必须写成 `%(Filename)%(Extension)`，因为 `%(Filename)` 会丢掉 `.zst` 后缀。
-- bundle 是资源根下的相对目录（`fonts`、`ohos/device`、`drivers/rockusb`、`drivers/mediatek-vcom`、`drivers/mediatek-full`、`drivers/google-usb`、`drivers/rockchip-adb`、`drivers/qualcomm-qud`、`drivers/silabs-cp210x`、`drivers/ftdi-cdm`、`delivery`、`firmware/magic`，另有可选 `scrcpy`），path 是纯文件名、不含任何分隔符；bundle 键总长上限 128 字符，每个目录段与文件名也各不超过 128 字符。
+- bundle 是资源根下的相对目录（`fonts`、`ohos/device`、`drivers/rockusb`、`drivers/mediatek-vcom`、`drivers/mediatek-full`、`drivers/google-usb`、`drivers/rockchip-adb`、`drivers/qualcomm-qud`、`drivers/winusb-coinstaller`、`delivery`、`firmware/magic`，另有可选 `scrcpy`），path 是纯文件名、不含任何分隔符；bundle 键总长上限 128 字符，每个目录段与文件名也各不超过 128 字符。
 - 稳定键在 `AssetNames.Bundles` 与 `AssetNames.Fonts`/`AssetNames.Delivery`/`AssetNames.Magic`/`AssetNames.Scrcpy`；`AssetCatalog` 用同一组键暴露 `AssetBundle`。改键或加文件要同步清单、csproj 与消费方，否则消费方查不到条目。
 - 驱动包的 path 用 `__` 编码一级目录（`x64__usb2ser.sys` 代表 `x64/usb2ser.sys`），消费方负责还原目录；因为暂存厂商 INF 需要原始目录布局，而资源 path 只能是纯文件名。
+- `drivers/winusb-coinstaller` 存放各厂商 ADB 包共用的 amd64 coinstaller，避免同一个 DLL 在多个 bundle 里重复；消费方按“包内同名文件优先、共享包补齐”的顺序合并，因此不要把共享文件再复制回各厂商 bundle。
 
 ## 清单
 

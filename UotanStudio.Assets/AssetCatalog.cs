@@ -48,15 +48,12 @@ public static class AssetCatalog
     /// </summary>
     public static AssetBundle QualcommQudDriver => BundledManifest.Get(AssetNames.Bundles.QualcommQudDriver);
 
-    /// <summary>Silicon Labs CP210x driver package staged for driver installation.
-    /// <para>为驱动安装暂存的 Silicon Labs CP210x 驱动包。</para>
+    /// <summary>amd64 coinstallers shared by every bundled INF that binds WinUSB; consumers materialize it
+    /// alongside the vendor package instead of duplicating the payloads per bundle.
+    /// <para>每个随包且绑定 WinUSB 的 INF 共用的 amd64 coinstaller；消费方把它与厂商包一起物化，而不是在每个
+    /// 资源包里各存一份负载。</para>
     /// </summary>
-    public static AssetBundle SilabsCp210xDriver => BundledManifest.Get(AssetNames.Bundles.SilabsCp210xDriver);
-
-    /// <summary>FTDI CDM driver package staged for driver installation.
-    /// <para>为驱动安装暂存的 FTDI CDM 驱动包。</para>
-    /// </summary>
-    public static AssetBundle FtdiCdmDriver => BundledManifest.Get(AssetNames.Bundles.FtdiCdmDriver);
+    public static AssetBundle WinUsbCoinstaller => BundledManifest.Get(AssetNames.Bundles.WinUsbCoinstaller);
 
     /// <summary>Native arm64 Edify updater used by recovery packages.
     /// <para>卡刷包使用的原生 arm64 Edify 更新器。</para>
@@ -89,8 +86,7 @@ public static class AssetCatalog
         GoogleUsbDriver,
         RockchipAdbDriver,
         QualcommQudDriver,
-        SilabsCp210xDriver,
-        FtdiCdmDriver,
+        WinUsbCoinstaller,
         DeliveryUpdater,
         MagicRules,
         ScrcpyServer,

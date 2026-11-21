@@ -41,6 +41,15 @@ public sealed class DriverPackageCatalogMatchTests
     }
 
     [Fact]
+    public void FindMatch_UsbUartBridgeVendorIds_MatchNothing()
+    {
+        Assert.Null(DriverPackageCatalog.Find("silabs-cp210x"));
+        Assert.Null(DriverPackageCatalog.Find("ftdi-cdm"));
+        Assert.Null(DriverPackageCatalog.FindMatch([@"USB\VID_10C4&PID_EA60"]));
+        Assert.Null(DriverPackageCatalog.FindMatch([@"USB\VID_0403&PID_6001"]));
+    }
+
+    [Fact]
     public void FindMatch_UnknownDeviceId_MatchesNothing()
     {
         Assert.Null(DriverPackageCatalog.FindMatch(["USB\\VID_9999&PID_0001"]));

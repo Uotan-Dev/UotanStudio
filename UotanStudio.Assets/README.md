@@ -17,7 +17,8 @@
 | `AssetCatalog` | `Fonts` | `fonts` bundle：`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，启动时解码进内存。 |
 | `AssetCatalog` | `OhosDevice` | `ohos/device` bundle：UI Test 采集库与控制代理。 |
 | `AssetCatalog` | `RockusbDriver` | `drivers/rockusb` bundle：`rockusb.inf`、`rockusb.cat`、`rockusb.sys`。 |
-| `AssetCatalog` | `MediaTekVcomDriver` / `MediaTekFullDriver` / `GoogleUsbDriver` / `RockchipAdbDriver` / `QualcommQudDriver` / `SilabsCp210xDriver` / `FtdiCdmDriver` | 其余七套厂商驱动包，bundle 为 `drivers/<packageId>`；包内目录用 `__` 编码，消费方还原。 |
+| `AssetCatalog` | `MediaTekVcomDriver` / `MediaTekFullDriver` / `GoogleUsbDriver` / `RockchipAdbDriver` / `QualcommQudDriver` | 其余五套厂商驱动包，bundle 为 `drivers/<packageId>`；包内目录用 `__` 编码，消费方还原。 |
+| `AssetCatalog` | `WinUsbCoinstaller` | `drivers/winusb-coinstaller` bundle：绑定 WinUSB 的 INF 共用的 amd64 coinstaller，由消费方与厂商包合并，不在各包内重复。 |
 | `AssetCatalog` | `DeliveryUpdater` | `delivery` bundle：`update-binary-arm64`。 |
 | `AssetCatalog` | `MagicRules` | `firmware/magic` bundle：`CompiledMagicData`。 |
 | `AssetCatalog` | `ScrcpyServer` | 可选 `scrcpy` bundle：`scrcpy-server.jar`；仓库不分发该二进制时 `IsPresent` 为 `false`。 |
@@ -33,7 +34,7 @@
 | `AssetStore` | `Materialize(AssetBundle, CancellationToken)` | 把 bundle 的每个文件写入缓存目录并返回该目录；重复调用复用目录，只重写长度与清单不符的文件。 |
 | `AssetStore` | `Extract(AssetBundle, string, CancellationToken)` | 把 bundle 的每个文件写入必须已存在的目录，按清单顺序返回文件名。 |
 
-`AssetNames` 提供稳定的键与文件名常量：`Bundles.Fonts`/`OhosDevice`/`RockusbDriver`/`MediaTekVcomDriver`/`MediaTekFullDriver`/`GoogleUsbDriver`/`RockchipAdbDriver`/`QualcommQudDriver`/`SilabsCp210xDriver`/`FtdiCdmDriver`/`DeliveryUpdater`/`MagicRules`/`ScrcpyServer`，`Fonts.Regular`/`Fonts.Bold`、`Delivery.Updater`、`Magic.Rules`、`Scrcpy.ServerJar`。
+`AssetNames` 提供稳定的键与文件名常量：`Bundles.Fonts`/`OhosDevice`/`RockusbDriver`/`MediaTekVcomDriver`/`MediaTekFullDriver`/`GoogleUsbDriver`/`RockchipAdbDriver`/`QualcommQudDriver`/`WinUsbCoinstaller`/`DeliveryUpdater`/`MagicRules`/`ScrcpyServer`，`Fonts.Regular`/`Fonts.Bold`、`Delivery.Updater`、`Magic.Rules`、`Scrcpy.ServerJar`。
 
 ## 用法
 

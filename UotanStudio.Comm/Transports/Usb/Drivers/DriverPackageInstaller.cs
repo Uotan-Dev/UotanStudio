@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using UotanStudio.Assets;
 
 namespace UotanStudio.Comm.Transports.Usb.Drivers;
 
@@ -104,7 +105,8 @@ public sealed class DriverPackageInstaller
                 if (!materialized.Contains(infName, StringComparer.OrdinalIgnoreCase))
                 {
                     return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                        $"The embedded driver package '{package.Id}' does not carry '{infName}'.");
+                        $"The embedded driver package '{package.Id}' does not carry '{infName}'; its amd64 coinstallers come from "
+                        + $"the '{AssetNames.Bundles.WinUsbCoinstaller}' bundle, which is only shipped when the driver assets are embedded.");
                 }
 
                 var infPath = Path.Combine(workDirectory, infName);
@@ -157,8 +159,8 @@ public sealed class DriverPackageInstaller
     /// 设备在重新枚举后回退系统驱动。需要管理员令牌。绝不移除由其他提供者安装的包：无法确认已暂存包的归属时，
     /// 调用返回 <see cref="WinUsbDriverOperationStatus.Failed"/> 而不是猜测。</para>
     /// </summary>
-    /// <param name="packageId">The package id from <see cref="DriverPackageCatalog"/>, for example <c>ftdi-cdm</c>.
-    /// <para><see cref="DriverPackageCatalog"/> 中的包标识，例如 <c>ftdi-cdm</c>。</para></param>
+    /// <param name="packageId">The package id from <see cref="DriverPackageCatalog"/>, for example <c>rockusb</c>.
+    /// <para><see cref="DriverPackageCatalog"/> 中的包标识，例如 <c>rockusb</c>。</para></param>
     /// <returns>The operation result; never throws. <para>操作结果；绝不抛出。</para></returns>
     public WinUsbDriverOperationResult Uninstall(string packageId)
     {

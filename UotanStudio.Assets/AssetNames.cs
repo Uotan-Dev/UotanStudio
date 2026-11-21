@@ -30,10 +30,9 @@ public static class AssetNames
         public const string RockchipAdbDriver = "drivers/rockchip-adb";
         /// <summary>Qualcomm QUD driver package. <para>高通 QUD 驱动包。</para></summary>
         public const string QualcommQudDriver = "drivers/qualcomm-qud";
-        /// <summary>Silicon Labs CP210x driver package. <para>Silicon Labs CP210x 驱动包。</para></summary>
-        public const string SilabsCp210xDriver = "drivers/silabs-cp210x";
-        /// <summary>FTDI CDM driver package. <para>FTDI CDM 驱动包。</para></summary>
-        public const string FtdiCdmDriver = "drivers/ftdi-cdm";
+        /// <summary>amd64 coinstallers shared by every INF that binds WinUSB.
+        /// <para>每个绑定 WinUSB 的 INF 共用的 amd64 coinstaller。</para></summary>
+        public const string WinUsbCoinstaller = "drivers/winusb-coinstaller";
 
         /// <summary>Native arm64 Edify updater. <para>原生 arm64 Edify 更新器。</para></summary>
         public const string DeliveryUpdater = "delivery";
