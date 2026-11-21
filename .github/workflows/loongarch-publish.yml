@@ -1,18 +1,14 @@
 name: Publish linux-loongarch64 (cross)
 
-# Experimental cross-compilation publish, mirroring riscv-publish.yml. The MCR
-# cross container (azurelinux-3.0-net10.0-cross-loongarch64) exists, and the
-# loongson/dotnet release layout matches dotnet-riscv, but this pipeline has not
-# been executed end to end yet; expect small deltas (interp path, pack names).
-# SkiaSharp.NativeAssets.Linux ships runtimes/linux-loongarch64/native/libSkiaSharp.so since
-# 4.157.0, so the RID asset resolves and lands in the publish output without a source build.
-# That build is linked against GLIBC_2.38.
-
 on:
   workflow_dispatch:
     inputs:
       sdk_release:
-        description: "loongson/dotnet version prefix (empty = 11.0)"
+        description: "loongson/dotnet version prefix (empty = newest 11.0)"
+        required: false
+        default: ""
+      runtime_tag:
+        description: "dotnet/runtime ABI tag for the cross JIT and ILCompiler host pack (empty = derive from the SDK band)"
         required: false
         default: ""
       version:
@@ -34,11 +30,14 @@ jobs:
   publish:
     name: linux-loongarch64
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Resolve version
         id: ver
@@ -51,10 +50,6 @@ jobs:
           version="${prefix:-1.0.0}-${channel}.${GITHUB_RUN_NUMBER}"
           input="${{ github.event.inputs.version }}"
           if [ -n "$input" ]; then version="${input#v}"; fi
-          # The version input replaces the whole version, so a manual dispatch can drop the
-          # channel. The publish step forwards both values to MSBuild, and the host project
-          # rejects anything other than release or beta, so resolve the channel here and
-          # always publish it.
           if [ -z "$version" ] || [ -z "$channel" ]; then
             echo "::error::Resolved version or channel is empty (version='$version', channel='$channel')." >&2
             exit 1
@@ -69,6 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WANT: ${{ github.event.inputs.sdk_release }}
+          WANT_RUNTIME_TAG: ${{ github.event.inputs.runtime_tag }}
         run: |
           set -euo pipefail
           tfm=$(sed -n 's/.*<TargetFramework[^>]*>net\([0-9][0-9.]*\).*<\/TargetFramework>.*/\1/p' Directory.Build.props | head -1)
@@ -101,10 +97,6 @@ jobs:
           sdk_digest=$(jq -r --arg tag "$tag" --arg ver "$ver" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.name == "dotnet-sdk-" + $ver + "-linux-loongarch64.tar.gz")][0].digest // ""' releases.json)
-          # The artifacts asset carries the source-build version, not the SDK version:
-          # Private.SourceBuilt.Artifacts.11.0.100-rtm.26529.118.linux-loongarch64.tar.gz.
-          # Matching "Artifacts.<sdk-version>." therefore yields null and curl then tries to
-          # resolve the literal host "null", so select on the prefix and RID suffix only.
           artifacts_url=$(jq -r --arg tag "$tag" '
             [.[] | select(.tag_name == $tag) | .assets // [] | .[]
               | select(.state == "uploaded")
@@ -112,6 +104,10 @@ jobs:
               | select(.name | endswith(".linux-loongarch64.tar.gz"))
               | select((.name | contains("musl")) | not)
               | .browser_download_url][0] // ""' releases.json)
+          if [ -z "$sdk_url" ] || [ -z "$artifacts_url" ]; then
+            echo "::error::Release $tag is missing the SDK or Private.SourceBuilt.Artifacts asset." >&2
+            exit 1
+          fi
           for pair in "sdk_url=$sdk_url" "artifacts_url=$artifacts_url"; do
             value="${pair#*=}"
             if [ -z "$value" ] || [ "$value" = "null" ]; then
@@ -119,14 +115,32 @@ jobs:
               exit 1
             fi
           done
+          runtime_tag="$WANT_RUNTIME_TAG"
+          if [ -z "$runtime_tag" ]; then
+            sdk3=$(printf '%s' "$ver" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+            if [ -z "$sdk3" ]; then
+              echo "::error::Cannot derive a runtime ABI version from SDK version '$ver'." >&2
+              exit 1
+            fi
+            runtime_tag=$(printf '%s' "$sdk3" | awk -F. '{ p = int($3 / 100) - 1; if (p < 0) p = 0; printf "%s.%s.%d", $1, $2, p }')
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          # ver feeds the official x64 SDK lookup in the download step; omitting it makes
-          # that step request .../Sdk//dotnet-sdk--linux-x64.tar.gz.
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "runtime_ver=$runtime_tag" >> "$GITHUB_OUTPUT"
           echo "sdk_url=$sdk_url" >> "$GITHUB_OUTPUT"
           echo "sdk_digest=$sdk_digest" >> "$GITHUB_OUTPUT"
           echo "artifacts_url=$artifacts_url" >> "$GITHUB_OUTPUT"
-          echo "::notice::loongson/dotnet SDK $tag ($ver)"
+          echo "::notice::loongson/dotnet SDK $tag ($ver), runtime ABI $runtime_tag"
+
+      - name: Restore toolchain cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/loongarch/nuget-local
+            ${{ runner.temp }}/loongarch/ilc-host-x64
+            ${{ runner.temp }}/loongarch/home/.nuget
+          key: loongarch64-toolchain-${{ steps.sdk.outputs.tag }}-${{ steps.sdk.outputs.runtime_ver }}
+          restore-keys: loongarch64-toolchain-${{ steps.sdk.outputs.tag }}-
 
       - name: Download SDKs and artifacts
         shell: bash
@@ -135,32 +149,54 @@ jobs:
           SDK_DIGEST: ${{ steps.sdk.outputs.sdk_digest }}
           ARTIFACTS_URL: ${{ steps.sdk.outputs.artifacts_url }}
           SDK_VER: ${{ steps.sdk.outputs.ver }}
+          RUNTIME_VER: ${{ steps.sdk.outputs.runtime_ver }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/loongarch"
           mkdir -p "$work"
-          curl -fL --retry 3 -o "$work/sdk-loongarch64.tar.gz" "$SDK_URL"
+          if [ -f "$work/nuget-local/.toolchain-ready" ]; then
+            echo "Toolchain feed restored from cache; skipping downloads."
+            exit 0
+          fi
+          official=$(printf '%s' "$SDK_VER" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "$official" ]; then
+            echo "::error::Cannot derive an official SDK version from tag '$SDK_VER'." >&2
+            exit 1
+          fi
+          curl -fL --retry 3 -o "$work/sdk-loongarch64.tar.gz" "$SDK_URL" & p1=$!
+          curl -fL --retry 3 -o "$work/artifacts-loongarch64.tar.gz" "$ARTIFACTS_URL" & p2=$!
+          curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
+            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz" & p3=$!
+          curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
+            "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg" & p4=$!
+          status=0
+          for p in $p1 $p2 $p3 $p4; do wait "$p" || status=1; done
+          [ "$status" -eq 0 ] || { echo "::error::One or more downloads failed." >&2; exit 1; }
           if [[ "$SDK_DIGEST" == sha256:* ]]; then
             echo "${SDK_DIGEST#sha256:}  $work/sdk-loongarch64.tar.gz" | sha256sum -c -
           else
             echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
           fi
-          curl -fL --retry 3 -o "$work/artifacts-loongarch64.tar.gz" "$ARTIFACTS_URL"
-          # The first three segments of the community version are the official branded
-          # SDK (11.0.100-rc.3.x -> 11.0.100, 10.0.114-servicing.x -> 10.0.114).
-          official=$(printf '%s' "$SDK_VER" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
-          curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
-            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz"
+          unzip -q -o "$work/ilc-host-x64.nupkg" -d "$work/ilc-host-x64"
+          for f in tools/ilc tools/libjitinterface_x64.so; do
+            [ -f "$work/ilc-host-x64/$f" ] || { echo "::error::ILCompiler host pack is missing $f." >&2; exit 1; }
+          done
+          file "$work/ilc-host-x64/tools/ilc" | grep -q "x86-64" || {
+            echo "::error::tools/ilc is not an x86-64 binary." >&2
+            exit 1
+          }
 
-      - name: Prepare local feed and ilc wrapper
+      - name: Prepare local feed
         shell: bash
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/loongarch"
-          mkdir -p "$work/nuget-local" "$work/ilc-pkg"
+          mkdir -p "$work/nuget-local"
+          if [ -f "$work/nuget-local/.toolchain-ready" ]; then
+            echo "Feed already prepared; skipping."
+            exit 0
+          fi
 
-          # Runtime pack versions do not map 1:1 from the SDK tag; read the exact
-          # names from the archive.
           artlist=$(tar tzf "$work/artifacts-loongarch64.tar.gz")
           pick() { printf '%s\n' "$artlist" | grep -E "^$1\$" | head -1; }
           naot=$(pick "Microsoft\.NETCore\.App\.Runtime\.NativeAOT\.linux-loongarch64\.[0-9][^/]*\.nupkg")
@@ -171,13 +207,13 @@ jobs:
           ilcm=$(pick "Microsoft\.DotNet\.ILCompiler\.[0-9][^/]*\.nupkg")
           aspnet=$(pick "Microsoft\.AspNetCore\.App\.Runtime\.linux-loongarch64\.[0-9][^/]*\.nupkg")
           aspnetref=$(pick "Microsoft\.AspNetCore\.App\.Ref\.[0-9][^/]*\.nupkg")
+          paths=()
           for p in "$naot" "$ref" "$host" "$runtime" "$ilc" "$ilcm" "$aspnet" "$aspnetref"; do
             [ -n "$p" ] || { echo "::error::Required package missing from Private.SourceBuilt.Artifacts." >&2; exit 1; }
-            tar xzf "$work/artifacts-loongarch64.tar.gz" -O "$p" > "$work/nuget-local/$p"
+            paths+=("$p")
           done
+          tar xzf "$work/artifacts-loongarch64.tar.gz" -C "$work/nuget-local" "${paths[@]}"
 
-          # Same RID-graph gap as riscv64: patch the CrossCompileArch fallback so the
-          # link step gets --target=loongarch64-linux-gnu.
           unzip -q -o "$work/nuget-local/$ilcm" -d "$work/ilc-nupkg"
           python3 - "$work/ilc-nupkg/build/Microsoft.NETCore.Native.Unix.targets" <<'PY'
           import sys
@@ -195,42 +231,107 @@ jobs:
               handle.write(text)
           PY
           (cd "$work/ilc-nupkg" && zip -qr "$work/nuget-local/$ilcm" .)
+          touch "$work/nuget-local/.toolchain-ready"
 
-          # Community ilc is a loongarch64 ELF; run it via qemu-user through the guest
-          # ld.so with jitinterface on LD_LIBRARY_PATH (same workarounds as riscv64). The
-          # cross image is built with --skipemulation and ships no qemu, so the emulator is
-          # installed in the container; Azure Linux uses a -static binary suffix.
-          unzip -q -o "$work/nuget-local/$ilc" -d "$work/ilc-pkg"
-          mv "$work/ilc-pkg/tools/ilc" "$work/ilc-pkg/tools/real-ilc"
-          cat > "$work/ilc-pkg/tools/ilc" <<'WRAPPER'
-          #!/bin/bash
+      - name: Restore loongarch64 cross JIT cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/loongarch/crossjit
+          key: loongarch64-crossjit-${{ runner.os }}-v${{ steps.sdk.outputs.runtime_ver }}
+
+      - name: Restore cross JIT artifact
+        id: jit_artifact
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           set -euo pipefail
-          export LD_LIBRARY_PATH="/work/ilc-pkg/tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          qemu=$(command -v qemu-loongarch64-static || command -v qemu-loongarch64 || true)
-          if [ -z "$qemu" ]; then
-            echo "qemu-loongarch64-static is missing; the cross image needs tdnf install qemu-user-static-loongarch64." >&2
-            exit 127
+          dest="$RUNNER_TEMP/loongarch/crossjit"
+          jit="$dest/libclrjit_unix_loongarch64_x64.so"
+          if [ -f "$jit" ]; then
+            echo "Cross JIT already restored from cache."
+            exit 0
           fi
-          # The loader triple is loongarch-lp64d (not loongarch64-lp64d), matching the
-          # apphost PT_INTERP, and the cross rootfs keeps it under usr/lib with top-level
-          # lib/lib64 as symlinks into usr/. Probe the real locations instead of assuming
-          # the distro layout: an unresolvable path makes qemu exit 1 with no output.
-          root=/crossrootfs/loongarch64
-          interp=
-          for candidate in \
-            "$root/usr/lib/loongarch64-linux-gnu/ld-linux-loongarch-lp64d.so.1" \
-            "$root/usr/lib64/ld-linux-loongarch-lp64d.so.1" \
-            "$root/lib64/ld-linux-loongarch-lp64d.so.1" \
-            "$root/lib/ld-linux-loongarch-lp64d.so.1"; do
-            if [ -e "$candidate" ]; then interp="$candidate"; break; fi
-          done
-          if [ -z "$interp" ]; then
-            echo "No loongarch64 loader found under $root; cannot run ilc under qemu." >&2
-            exit 127
+          mkdir -p "$dest"
+          tmp=$(mktemp -d)
+          while read -r run_id; do
+            [ -n "$run_id" ] || continue
+            [ "$run_id" != "$GITHUB_RUN_ID" ] || continue
+            rm -rf "${tmp:?}"
+            mkdir -p "$tmp"
+            if gh run download "$run_id" -n loongarch64-crossjit -D "$tmp" 2>/dev/null; then
+              found=$(find "$tmp" -name 'libclrjit_unix_loongarch64_x64.so' -print -quit)
+              if [ -n "$found" ]; then
+                cp "$found" "$jit"
+                echo "Cross JIT restored from run $run_id."
+                exit 0
+              fi
+            fi
+          done < <(gh run list --workflow "${{ github.workflow }}" --limit 15 \
+                     --json databaseId --jq '.[].databaseId')
+          echo "No earlier run provided the cross JIT artifact; it will be built now."
+
+      - name: Build loongarch64 cross JIT (first run only)
+        shell: bash
+        env:
+          RUNTIME_VER: ${{ steps.sdk.outputs.runtime_ver }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/loongarch"
+          mkdir -p "$work/crossjit"
+          jit="$work/crossjit/libclrjit_unix_loongarch64_x64.so"
+          if [ -f "$jit" ]; then
+            echo "Cross JIT restored from cache or artifact."
+            file "$jit"
+            exit 0
           fi
-          exec "$qemu" -L "$root" "$interp" /work/ilc-pkg/tools/real-ilc "$@"
-          WRAPPER
-          chmod +x "$work/ilc-pkg/tools/ilc"
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake llvm lld clang \
+            python-is-python3 curl git libicu-dev liblttng-ust-dev \
+            libssl-dev libkrb5-dev ninja-build pigz cpio binutils file
+          src="$RUNNER_TEMP/runtime-src"
+          git clone --depth 1 --branch "v$RUNTIME_VER" https://github.com/dotnet/runtime "$src"
+          cd "$src"
+          ./build.sh clr.alljitscommunity -c release
+          built=$(find "$src/artifacts/bin" -name 'libclrjit_unix_loongarch64_x64.so' -print -quit)
+          if [ -z "$built" ]; then
+            echo "::error::Build produced no libclrjit_unix_loongarch64_x64.so." >&2
+            echo "Artifacts containing 'clrjit':" >&2
+            find "$src/artifacts/bin" -name '*clrjit*' -printf '  %p\n' 2>/dev/null >&2 || true
+            exit 1
+          fi
+          file "$built"
+          nm -D "$built" | grep -qE ' getJit(@@|$)' || {
+            echo "::error::Built JIT does not export getJit." >&2
+            exit 1
+          }
+          file "$built" | grep -q "x86-64" || {
+            echo "::error::Built JIT is not an x86-64 ELF; the host build did not produce a host-loadable JIT." >&2
+            exit 1
+          }
+          cp "$built" "$jit"
+          cd /
+          rm -rf "$src"
+          echo "Staged cross JIT as $jit"
+
+      - name: Upload cross JIT
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: loongarch64-crossjit
+          path: ${{ runner.temp }}/loongarch/crossjit/libclrjit_unix_loongarch64_x64.so
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stage the cross JIT into the ilc host
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/loongarch"
+          jit="$work/crossjit/libclrjit_unix_loongarch64_x64.so"
+          [ -f "$jit" ] || { echo "::error::Cross JIT is missing at $jit." >&2; exit 1; }
+          cp "$jit" "$work/ilc-host-x64/tools/"
+          ls -l "$work/ilc-host-x64/tools/"
 
       - name: Publish NativeAOT (cross container)
         shell: bash
@@ -249,14 +350,8 @@ jobs:
           export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
           export DOTNET_CLI_HOME=/work/home HOME=/work/home
 
-          # The cross image sets no WORKDIR (it runs as /), so anchor every relative path.
           cd /work/src
 
-          # ilc runs under qemu-user and the emulator is not part of the cross rootfs image.
-          tdnf install -y qemu-user-static-loongarch64 >/dev/null
-
-          # Mixed SDK: official x64 host/runtime with the community managed sdk tree
-          # (its Microsoft.NET.Build.Tasks knows the linux-loongarch64 packs).
           mkdir -p /work/dotnet-x64 /work/community
           tar xzf /work/sdk-x64.tar.gz -C /work/dotnet-x64
           tar xzf /work/sdk-loongarch64.tar.gz -C /work/community ./sdk
@@ -281,26 +376,43 @@ jobs:
             <packageSources>
               <Clear />
               <add key="local-loongarch64" value="/work/nuget-local" />
+              <add key="lnuget" value="https://nuget.loongnix.cn/v3/index.json" />
               <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
             </packageSources>
           </configuration>
           NUGET
 
           dotnet --info
+
+          dotnet restore "$PUBLISH_PROJECT" -r linux-loongarch64 \
+            -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
+            -p:IlcHostRuntimeIdentifier=linux-x64
+
+          ilc_tools=$(dirname "$(find /work/home/.nuget/packages -maxdepth 5 \
+            -path "*runtime.linux-x64.microsoft.dotnet.ilcompiler/*/tools/ilc" | head -1)")
+          [ -n "$ilc_tools" ] && [ -d "$ilc_tools" ] || {
+            echo "::error::Could not locate the restored ilc host package tools directory." >&2
+            exit 1
+          }
+          echo "ilc host tools: $ilc_tools"
+          cp /work/ilc-host-x64/tools/libclrjit_unix_loongarch64_x64.so "$ilc_tools/"
+          ls -l "$ilc_tools/libclrjit"*loongarch64*
+          export LD_LIBRARY_PATH="$ilc_tools${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
           dotnet publish "$PUBLISH_PROJECT" \
             -c Release -r linux-loongarch64 --self-contained true \
+            --no-restore \
             -p:DebugType=none -p:DebugSymbols=false \
             -p:Version="$VERSION" -p:VersionChannel="$CHANNEL" \
             -p:NETCoreSdkPortableRuntimeIdentifier=linux-x64 \
-            -p:IlcHostRuntimeIdentifier=linux-loongarch64 \
-            -p:IlcHostPackagePath=/work/ilc-pkg \
+            -p:IlcHostRuntimeIdentifier=linux-x64 \
+            -p:IlcHostPackagePath=/work/ilc-host-x64 \
             -p:SysRoot=/crossrootfs/loongarch64 \
             -p:LinkerFlavor=lld \
             -nr:false \
             -o /work/out
           CONTAINER
 
-          # The official x64 SDK arrives as /work/sdk-x64.tar.gz (downloaded in an earlier step).
           docker run --rm --platform linux/amd64 \
             -v "$work:/work" \
             -v "$GITHUB_WORKSPACE:/work/src" \
@@ -312,6 +424,16 @@ jobs:
           cp -R "$work/out/." "$RUNNER_TEMP/publish/"
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
+          else
+            echo "::warning::UotanStudio.Desktop is missing from the publish output."
+          fi
+          if ls "$RUNNER_TEMP/publish"/UotanStudio*.dll >/dev/null 2>&1; then
+            echo "::warning::Managed assemblies are present in the publish output; the build is not a NativeAOT publish."
+          fi
+          if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
+            if readelf -d "$RUNNER_TEMP/publish/UotanStudio.Desktop" 2>/dev/null | grep -q "libcoreclr"; then
+              echo "::warning::The published binary links libcoreclr; the build is not a NativeAOT publish."
+            fi
           fi
           test -f "$RUNNER_TEMP/publish/libSkiaSharp.so" \
             || echo "::warning::libSkiaSharp.so is missing from the publish output; check the RID asset resolution."
