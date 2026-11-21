@@ -129,10 +129,10 @@ jobs:
           emit_matrix macos macos "$(IFS=,; printf '%s' "${mac[*]:-}")"
 
           lin=()
-          has linux-x64 && lin+=('{"rid":"linux-x64","arch_deb":"amd64","arch_rpm":"x86_64"}')
-          has linux-arm64 && lin+=('{"rid":"linux-arm64","arch_deb":"arm64","arch_rpm":"aarch64"}')
-          has linux-riscv64 && lin+=('{"rid":"linux-riscv64","arch_deb":"riscv64","arch_rpm":"riscv64"}')
-          has linux-loongarch64 && lin+=('{"rid":"linux-loongarch64","arch_deb":"loong64","arch_rpm":"loongarch64"}')
+          has linux-x64 && lin+=('{"rid":"linux-x64","arch_deb":"amd64","arch_rpm":"x86_64","strip_pkg":"binutils","strip_bin":"/usr/bin/strip"}')
+          has linux-arm64 && lin+=('{"rid":"linux-arm64","arch_deb":"arm64","arch_rpm":"aarch64","strip_pkg":"binutils-aarch64-linux-gnu","strip_bin":"/usr/bin/aarch64-linux-gnu-strip"}')
+          has linux-riscv64 && lin+=('{"rid":"linux-riscv64","arch_deb":"riscv64","arch_rpm":"riscv64","strip_pkg":"binutils-riscv64-linux-gnu","strip_bin":"/usr/bin/riscv64-linux-gnu-strip"}')
+          has linux-loongarch64 && lin+=('{"rid":"linux-loongarch64","arch_deb":"loong64","arch_rpm":"loongarch64","strip_pkg":"binutils-loongarch64-linux-gnu","strip_bin":"/usr/bin/loongarch64-linux-gnu-strip"}')
           emit_matrix linux linux "$(IFS=,; printf '%s' "${lin[*]:-}")"
 
           alp=()
@@ -366,8 +366,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  linux:
-    name: DEB/RPM ${{ matrix.rid }}
+  deb:
+    name: DEB ${{ matrix.rid }}
     needs: prepare
     if: needs.prepare.outputs.linux_ready == 'true'
     runs-on: ubuntu-24.04
@@ -449,14 +449,56 @@ jobs:
           dpkg-deb --build --root-owner-group "$pkg" \
             "$RUNNER_TEMP/uotanstudio-$VER-${{ matrix.rid }}.deb"
 
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-deb
+          path: ${{ runner.temp }}/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  rpm:
+    name: RPM ${{ matrix.rid }}
+    needs: prepare
+    if: needs.prepare.outputs.linux_ready == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.linux_matrix) }}
+    steps:
+      - name: Fetch build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ver='${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].ver }}'
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          if [ '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].mode }}' = release ]; then
+            gh release download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].tag }}' \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "uotanstudio-$ver-${{ matrix.rid }}.tar.gz" \
+              --pattern "uotanstudio-$ver-linux-glibc-*.tar.gz" --clobber
+            src=$(find . -maxdepth 1 -name 'uotanstudio-*.tar.gz' | head -1)
+          else
+            gh run download '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].run_id }}' \
+              --repo "$GITHUB_REPOSITORY" --name '${{ fromJSON(needs.prepare.outputs.packages)[matrix.rid].artifact }}' -D artifact
+            src=$(find artifact -name 'uotanstudio-*.tar.gz' | head -1)
+          fi
+          mkdir -p publish
+          tar -xzf "$src" -C publish
+
       - name: Build RPM
         shell: bash
         env:
           ARCH: ${{ matrix.arch_rpm }}
+          STRIP_BIN: ${{ matrix.strip_bin }}
+          STRIP_PKG: ${{ matrix.strip_pkg }}
           GLIBC_FLOOR: ${{ (contains(matrix.rid, 'riscv64') || contains(matrix.rid, 'loongarch64')) && '2.38' || '2.27' }}
         run: |
           set -euo pipefail
-          sudo apt-get install -y -qq rpm >/dev/null
+          sudo apt-get install -y -qq rpm "$STRIP_PKG" >/dev/null
+          strip_bin=$(command -v "$(basename "$STRIP_BIN")")
           rpmver="${VER%%-*}"
           mkdir -p "$RUNNER_TEMP/rpmbuild"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           tar -czf "$RUNNER_TEMP/rpmbuild/SOURCES/uotanstudio-$rpmver.tar.gz" -C publish .
@@ -505,16 +547,9 @@ jobs:
           SPEC
           rpmbuild -bb --target "$ARCH" \
             --define "_topdir $RUNNER_TEMP/rpmbuild" \
+            --define "__strip $strip_bin" \
             "$RUNNER_TEMP/rpmbuild/SPECS/uotanstudio.spec"
           find "$RUNNER_TEMP/rpmbuild/RPMS" -name "*.rpm" -exec cp {} "$RUNNER_TEMP/" \;
-
-      - name: Upload DEB package
-        uses: actions/upload-artifact@v7
-        with:
-          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-deb
-          path: ${{ runner.temp }}/*.deb
-          if-no-files-found: error
-          retention-days: 30
 
       - name: Upload RPM package
         uses: actions/upload-artifact@v7
@@ -605,13 +640,17 @@ jobs:
 
           docker run --rm -v "$work:/work" -e PKGVER="$pkgver" alpine:3.20 sh -c '
             set -eu
-            apk add --no-cache alpine-sdk >/dev/null
+            apk add --no-cache alpine-sdk imagemagick >/dev/null
+            adduser -D builder
+            addgroup builder abuild
+            chown -R builder:builder /work/build /var/cache/distfiles
             abuild-keygen -a -n -i >/dev/null 2>&1 || true
-            cd /work/build
-            abuild checksum >/dev/null
-            abuild -F
-            find /root/packages -name "*.apk" -exec cp {} /work/out/ \;
-            cp /root/.abuild/*.pub /work/out/ 2>/dev/null || true
+            mkdir -p /home/builder/.abuild
+            cp /root/.abuild/* /home/builder/.abuild/ 2>/dev/null || true
+            chown -R builder:builder /home/builder
+            su builder -c "cd /work/build && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild checksum && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild -F"
+            find /home/builder/packages -name "*.apk" -exec cp {} /work/out/ \;
+            cp /home/builder/.abuild/*.pub /work/out/ 2>/dev/null || true
           '
           find "$work/out" -type f -ls
 
@@ -701,7 +740,7 @@ jobs:
             install -d "\$pkgdir"/opt/uotanstudio \\
               "\$pkgdir"/usr/share/applications \\
               "\$pkgdir"/usr/share/icons/hicolor/256x256/apps
-            cp -R "\$srcdir"/uotanstudio/. "\$pkgdir"/opt/uotanstudio/
+            cp -R "\$srcdir"/. "\$pkgdir"/opt/uotanstudio/
             find "\$pkgdir"/opt/uotanstudio -name '*.pdb' -delete
             chmod +x "\$pkgdir"/opt/uotanstudio/UotanStudio.Desktop
             install -Dm 644 "\$srcdir"/icon.png \\
