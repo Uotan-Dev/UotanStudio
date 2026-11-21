@@ -385,7 +385,6 @@ jobs:
                 <package pattern="runtime.*" />
               </packageSource>
               <packageSource key="lnuget">
-                <package pattern="PublishWithSatoriGC" />
                 <package pattern="ltrdata.*" />
               </packageSource>
               <packageSource key="nuget.org">
