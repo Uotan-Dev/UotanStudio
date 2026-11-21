@@ -645,7 +645,10 @@ jobs:
 
           docker run --rm -v "$work:/work" -e PKGVER="$pkgver" alpine:3.20 sh -c '
             set -eu
-            apk add --no-cache alpine-sdk imagemagick sudo >/dev/null
+            apk add --no-cache alpine-sdk imagemagick sudo \
+              libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr \
+              libxext libxfixes libxi libice glib wayland libxkbcommon \
+              mesa-egl mesa-gl mesa-gbm libdrm >/dev/null
             adduser -D builder
             addgroup builder abuild
             echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
@@ -655,7 +658,7 @@ jobs:
             cp /root/.abuild/*.rsa /home/builder/.abuild/key.rsa 2>/dev/null || true
             cp /root/.abuild/*.rsa.pub /home/builder/.abuild/key.rsa.pub 2>/dev/null || true
             chown -R builder:builder /home/builder
-            su builder -c "cd /work/build && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild checksum && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild -F -r"
+            su builder -c "cd /work/build && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild checksum && PACKAGER_PRIVKEY=/home/builder/.abuild/key.rsa abuild -F"
             find /home/builder/packages -name "*.apk" -exec cp {} /work/out/ \;
             cp /home/builder/.abuild/*.pub /work/out/ 2>/dev/null || true
           '
@@ -758,7 +761,7 @@ jobs:
           PKGBUILD
 
           img=archlinux:latest
-          if [ "$(uname -m)" = aarch64 ]; then img=archlinux/arm64:latest; fi
+          if [ "$(uname -m)" = aarch64 ]; then img=ghcr.io/archlinux/archlinux:latest; fi
           docker run --rm -v "$work:/work" -e PKG_ARCH="${{ matrix.pkg_arch }}" "$img" bash -c '
             set -eu
             pacman -Syu --noconfirm base-devel >/dev/null
