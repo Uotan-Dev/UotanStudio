@@ -505,13 +505,19 @@ jobs:
             "$RUNNER_TEMP/rpmbuild/SPECS/uotanstudio.spec"
           find "$RUNNER_TEMP/rpmbuild/RPMS" -name "*.rpm" -exec cp {} "$RUNNER_TEMP/" \;
 
-      - name: Upload packages
+      - name: Upload DEB package
         uses: actions/upload-artifact@v7
         with:
-          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-linux-packages
-          path: |
-            ${{ runner.temp }}/*.deb
-            ${{ runner.temp }}/*.rpm
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-deb
+          path: ${{ runner.temp }}/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v7
+        with:
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-rpm
+          path: ${{ runner.temp }}/*.rpm
           if-no-files-found: error
           retention-days: 30
 
@@ -609,7 +615,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-alpine-packages
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-apk
           path: |
             ${{ runner.temp }}/apkbuild/out/*.apk
             ${{ runner.temp }}/apkbuild/out/*.pub
@@ -717,7 +723,7 @@ jobs:
       - name: Upload pacman package
         uses: actions/upload-artifact@v7
         with:
-          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-arch-packages
+          name: uotanstudio-${{ needs.prepare.outputs.ver }}-${{ matrix.rid }}-pacman
           path: ${{ runner.temp }}/archbuild/out/*.pkg.tar.zst
           if-no-files-found: error
           retention-days: 30
