@@ -23,7 +23,7 @@ case "$arch" in
     ;;
 esac
 
-cc="clang --target=$triple --sysroot=/crossrootfs/$arch"
+cc="clang --target=$triple --sysroot=/crossrootfs/$arch -fuse-ld=lld"
 
 if ! command -v make >/dev/null 2>&1; then
   tdnf install -y make >/dev/null 2>&1 || apt-get install -y make >/dev/null 2>&1
@@ -38,7 +38,11 @@ if [ ! -f configure ]; then
   autoreconf -i
 fi
 CC="$cc" ./configure --enable-shared=no --with-pic=yes --host="$triple" \
-  --prefix="$onig_prefix" --disable-dependency-tracking -q
+  --prefix="$onig_prefix" --disable-dependency-tracking -q || {
+  echo "::error::oniguruma configure failed; config.log tail:" >&2
+  tail -40 config.log >&2 || true
+  exit 1
+}
 make -j"$(nproc)" >/dev/null
 make install >/dev/null
 
