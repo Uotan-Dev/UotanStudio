@@ -76,10 +76,10 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream(bytes);
 
         var result = await NativeBinArchiveExtractor.TryExtractAsync(
-            archive, "win-x64", Sha256Hex(LibraryBytes), destination);
+            archive, "win-x64", Sha256Hex(LibraryBytes), destination, TestContext.Current.CancellationToken);
 
         Assert.True(result);
-        Assert.Equal(LibraryBytes, await File.ReadAllBytesAsync(destination));
+        Assert.Equal(LibraryBytes, await File.ReadAllBytesAsync(destination, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream(bytes);
 
         var wrongDigest = Convert.ToHexString(Sha256.ComputeHash([0x99])).ToLowerInvariant();
-        var result = await NativeBinArchiveExtractor.TryExtractAsync(archive, "win-x64", wrongDigest, destination);
+        var result = await NativeBinArchiveExtractor.TryExtractAsync(archive, "win-x64", wrongDigest, destination, TestContext.Current.CancellationToken);
 
         Assert.False(result);
         Assert.False(File.Exists(destination));
@@ -106,7 +106,7 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream(bytes);
 
         var result = await NativeBinArchiveExtractor.TryExtractAsync(
-            archive, "win-x64", Sha256Hex(LibraryBytes), destination);
+            archive, "win-x64", Sha256Hex(LibraryBytes), destination, TestContext.Current.CancellationToken);
 
         Assert.False(result);
         Assert.False(File.Exists(destination));
@@ -121,11 +121,11 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream(bytes);
 
         var result = await NativeBinArchiveExtractor.TryExtractAsync(
-            archive, "linux-x64", Sha256Hex(LibraryBytes), destination);
+            archive, "linux-x64", Sha256Hex(LibraryBytes), destination, TestContext.Current.CancellationToken);
 
         Assert.True(result);
-        Assert.Equal(LibraryBytes, await File.ReadAllBytesAsync(destination));
-        Assert.Empty(Directory.GetFiles(System.IO.Path.GetDirectoryName(destination)!).Where(static f => f.Contains(".extract-", StringComparison.Ordinal)));
+        Assert.Equal(LibraryBytes, await File.ReadAllBytesAsync(destination, TestContext.Current.CancellationToken));
+        Assert.DoesNotContain(Directory.GetFiles(System.IO.Path.GetDirectoryName(destination)!), static f => f.Contains(".extract-", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class NativeBinArchiveExtractorTests
         using var archive = new MemoryStream([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00]);
 
         await Assert.ThrowsAsync<EndOfStreamException>(() => NativeBinArchiveExtractor.TryExtractAsync(
-            archive, "linux-x64", Convert.ToHexString(Sha256.ComputeHash(LibraryBytes)).ToLowerInvariant(), destination));
+            archive, "linux-x64", Convert.ToHexString(Sha256.ComputeHash(LibraryBytes)).ToLowerInvariant(), destination, TestContext.Current.CancellationToken));
         Assert.False(File.Exists(destination));
     }
 

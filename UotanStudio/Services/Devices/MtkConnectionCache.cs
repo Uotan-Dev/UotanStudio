@@ -223,14 +223,16 @@ internal sealed class MtkConnectionCache(
     /// 保留已完成的握手。</para>
     /// </summary>
     /// <param name="portName">The exact port the watcher observed. <para>监视器观测到的确切端口名。</para></param>
-    /// <param name="openPort">Opens and handshakes the port, returning the live lease.
-    /// <para>打开并握手该端口，返回在线租约。</para></param>
+    /// <param name="openPort">Opens and handshakes the port, returning the live lease or
+    /// <see langword="null"/> when the open could not take the port.
+    /// <para>打开并握手该端口，返回在线租约；无法取得端口时返回 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Cancellation for the open and handshake.
     /// <para>取消打开与握手。</para></param>
-    /// <returns>The parked lease, or <see langword="null"/> when another handshake already owns the port.
-    /// <para>已暂存的租约；另一个握手已占用该端口时为 <see langword="null"/>。</para></returns>
+    /// <returns>The parked lease, or <see langword="null"/> when another handshake already owns the port or the
+    /// open delegate yielded nothing. <para>已暂存的租约；另一个握手已占用该端口或打开委托未返回租约时为
+    /// <see langword="null"/>。</para></returns>
     internal async Task<DeviceLease?> HandshakePortAsync(string portName,
-        Func<CancellationToken, Task<DeviceLease>> openPort, CancellationToken cancellationToken)
+        Func<CancellationToken, Task<DeviceLease?>> openPort, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(portName);
         ArgumentNullException.ThrowIfNull(openPort);
@@ -250,9 +252,16 @@ internal sealed class MtkConnectionCache(
             }
             if (entry.Parked is null)
             {
-                Park(entry, await openPort(cancellationToken).ConfigureAwait(false));
+                var opened = await openPort(cancellationToken).ConfigureAwait(false);
+                if (opened is null)
+                {
+                    return null;
+                }
+
+                Park(entry, opened);
                 Publish();
             }
+
             return entry.Parked;
         }
         catch
