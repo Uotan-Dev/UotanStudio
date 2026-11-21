@@ -919,12 +919,7 @@ public sealed partial class FlashViewModel
             return (FlashFolderKind.SpacemiT, null);
         }
 
-        var scatter = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => Path.GetExtension(path) is ".txt" or ".xml")
-            .Where(path => Path.GetFileName(path).Contains("scatter", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault(LooksLikeScatter);
-        if (scatter is not null)
+        if (FindScatterDocument(folder) is { } scatter)
         {
             return (FlashFolderKind.MtkScatter, scatter);
         }
@@ -958,6 +953,85 @@ public sealed partial class FlashViewModel
         }
 
         return (FlashFolderKind.Images, null);
+    }
+
+    /// <summary>
+    /// Roles a vendor package uses for the directory that holds the scatter document and its images.
+    /// <para>厂商包用来存放 scatter 文档及其镜像的目录名。</para>
+    /// </summary>
+    private static readonly string[] ScatterImageDirectories = ["images", "IMAGES"];
+
+    /// <summary>
+    /// Finds the scatter document a folder is anchored on. The package root is searched first so a flattened
+    /// package keeps winning, then the <c>images</c>/<c>IMAGES</c> child directory that Xiaomi and several other
+    /// vendor packages use, because a MediaTek package normally keeps the scatter next to the images it lists.
+    /// <para>查找目录所锚定的 scatter 文档。优先搜索包根，使扁平的包仍按原顺序胜出；随后搜索小米等厂商包
+    /// 使用的 <c>images</c>/<c>IMAGES</c> 子目录，因为联发科包通常把 scatter 与它列出的镜像放在一起。</para>
+    /// </summary>
+    /// <param name="folder">Picked package folder. <para>所选包目录。</para></param>
+    /// <returns>The scatter path when one parses as a MediaTek scatter, otherwise <see langword="null"/>.
+    /// <para>一个能解析为联发科 scatter 的文档路径；否则为 <see langword="null"/>。</para></returns>
+    private static string? FindScatterDocument(string folder)
+    {
+        foreach (var directory in EnumerateScatterDirectories(folder))
+        {
+            var candidate = Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
+                .Where(path => Path.GetExtension(path) is ".txt" or ".xml")
+                .Where(path => Path.GetFileName(path).Contains("scatter", StringComparison.OrdinalIgnoreCase))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(LooksLikeScatter);
+            if (candidate is not null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Enumerates the package root and its image child directories that exist, in recognition order.
+    /// <para>按识别顺序枚举存在的包根目录及其镜像子目录。</para>
+    /// </summary>
+    /// <param name="folder">Picked package folder. <para>所选包目录。</para></param>
+    /// <returns>The package root followed by its existing image child directories, in recognition order.
+    /// <para>包根目录，随后是按识别顺序排列的已存在镜像子目录。</para></returns>
+    private static IEnumerable<string> EnumerateScatterDirectories(string folder)
+    {
+        yield return folder;
+        var children = Directory.EnumerateDirectories(folder, "*", SearchOption.TopDirectoryOnly)
+            .Select(path => (Path: path, Name: Path.GetFileName(path)))
+            .Where(child => child.Name.Length > 0 && !string.IsNullOrEmpty(child.Path))
+            .Where(child => Array.Exists(ScatterImageDirectories,
+                name => string.Equals(name, child.Name, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(child => ScatterDirectoryRank(child.Name))
+            .ThenBy(child => child.Path, StringComparer.OrdinalIgnoreCase);
+        foreach (var child in children)
+        {
+            yield return child.Path;
+        }
+    }
+
+    /// <summary>
+    /// Ranks a resolved child directory by its declared recognition position, so <c>images</c> is searched
+    /// before <c>IMAGES</c> when a filesystem keeps both names as distinct directories.
+    /// <para>按声明的识别位置为已解析出的子目录排序，使文件系统把两个名字视为不同目录时，
+    /// 先搜索 <c>images</c> 再搜索 <c>IMAGES</c>。</para>
+    /// </summary>
+    /// <param name="name">The on-disk directory name. <para>磁盘上的目录名。</para></param>
+    /// <returns>The zero-based declaration rank, or the candidate count when the name is not recognised.
+    /// <para>从零开始的声明序号；名字未识别时为候选数量。</para></returns>
+    private static int ScatterDirectoryRank(string name)
+    {
+        for (var index = 0; index < ScatterImageDirectories.Length; index++)
+        {
+            if (string.Equals(ScatterImageDirectories[index], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return ScatterImageDirectories.Length;
     }
 
     /// <summary>
