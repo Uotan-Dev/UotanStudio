@@ -53,10 +53,8 @@
     <PackageVersion Include="SkiaSharp" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.HarfBuzz" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.157.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.157.0" />
     <PackageVersion Include="HarfBuzzSharp" Version="14.4.0.200" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.200" />
-    <PackageVersion Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="14.4.0.200" />
     <PackageVersion Include="System.IO.Ports" Version="11.0.0" />
     <PackageVersion Include="QRCoder" Version="1.9.0" />
     <PackageVersion Include="ZLinq" Version="1.6.1" />

@@ -115,11 +115,8 @@
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.HarfBuzz" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
-    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" />
     <PackageReference Include="HarfBuzzSharp" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" />
   </ItemGroup>
 
 </Project>
