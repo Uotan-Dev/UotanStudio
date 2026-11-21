@@ -54,7 +54,7 @@ CC="$cc" LD=ld.lld AR="$host_ar" RANLIB="$host_ranlib" \
 make -j"$(nproc)" >/dev/null
 make install >/dev/null
 
-"${cc}" -shared -fPIC -O2 -s \
+${cc} -shared -fPIC -O2 -s \
   -I"$onig_prefix/include" \
   "$src/onigwrap/onigwrap/onigwrap.c" \
   "$onig_prefix/lib/libonig.a" \
@@ -62,7 +62,7 @@ make install >/dev/null
 
 pty_dir="$src/portapty/src/Porta.Pty.Native"
 printf '%s\n#include "porta_pty.c"\n' "$symver_asm" > "$pty_dir/shim.c"
-"${cc}" -std=gnu99 -O2 -fvisibility=hidden -shared -fPIC \
+${cc} -std=gnu99 -O2 -fvisibility=hidden -shared -fPIC \
   -I"$pty_dir" \
   "$pty_dir/shim.c" \
   -lutil \
