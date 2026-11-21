@@ -142,7 +142,7 @@ jobs:
 
           arc=()
           has linux-x64 && arc+=('{"rid":"linux-x64","pkg_arch":"x86_64","runner":"ubuntu-24.04"}')
-          has linux-arm64 && arc+=('{"rid":"linux-arm64","pkg_arch":"aarch64","runner":"ubuntu-24.04-arm"}')
+          has linux-arm64 && arc+=('{"rid":"linux-arm64","pkg_arch":"aarch64","runner":"ubuntu-24.04"}')
           has linux-riscv64 && arc+=('{"rid":"linux-riscv64","pkg_arch":"riscv64","runner":"ubuntu-24.04"}')
           has linux-loongarch64 && arc+=('{"rid":"linux-loongarch64","pkg_arch":"loongarch64","runner":"ubuntu-24.04"}')
           emit_matrix arch arch "$(IFS=,; printf '%s' "${arc[*]:-}")"
@@ -627,15 +627,15 @@ jobs:
           license="GPL-3.0-only"
           depends="musl libstdc++ fontconfig libssl3 libx11 libxcursor libxrandr
            libxext libxfixes libxi libice glib wayland libxkbcommon mesa-egl mesa-gl mesa-gbm libdrm"
-          options="!check"
+          options="!check !fhs"
           source="uotanstudio.tar.gz"
           package() {
-            install -d "\$pkgdir"/opt/uotanstudio \\
+            install -d "\$pkgdir"/opt/UotanStudio \\
               "\$pkgdir"/usr/share/applications \\
               "\$pkgdir"/usr/share/icons/hicolor/256x256/apps
-            cp -R "\$srcdir"/. "\$pkgdir"/opt/uotanstudio/
-            find "\$pkgdir"/opt/uotanstudio -name '*.pdb' -delete
-            chmod +x "\$pkgdir"/opt/uotanstudio/UotanStudio.Desktop
+            cp -R "\$srcdir"/. "\$pkgdir"/opt/UotanStudio/
+            find "\$pkgdir"/opt/UotanStudio -name '*.pdb' -delete
+            chmod +x "\$pkgdir"/opt/UotanStudio/UotanStudio.Desktop
             convert "\$startdir"/icon.png \\
               "\$pkgdir"/usr/share/icons/hicolor/256x256/apps/uotanstudio.png
             install -m 644 "\$startdir"/uotanstudio.desktop \\
@@ -747,12 +747,12 @@ jobs:
           source=(uotanstudio.tar.gz)
           sha256sums=('SKIP')
           package() {
-            install -d "\$pkgdir"/opt/uotanstudio \\
+            install -d "\$pkgdir"/opt/UotanStudio \\
               "\$pkgdir"/usr/share/applications \\
               "\$pkgdir"/usr/share/icons/hicolor/256x256/apps
-            cp -R "\$srcdir"/. "\$pkgdir"/opt/uotanstudio/
-            find "\$pkgdir"/opt/uotanstudio -name '*.pdb' -delete
-            chmod +x "\$pkgdir"/opt/uotanstudio/UotanStudio.Desktop
+            cp -R "\$srcdir"/. "\$pkgdir"/opt/UotanStudio/
+            find "\$pkgdir"/opt/UotanStudio -name '*.pdb' -delete
+            chmod +x "\$pkgdir"/opt/UotanStudio/UotanStudio.Desktop
             install -Dm 644 "\$startdir"/icon.png \\
               "\$pkgdir"/usr/share/icons/hicolor/256x256/apps/uotanstudio.png
             install -Dm 644 "\$startdir"/uotanstudio.desktop \\
@@ -760,9 +760,7 @@ jobs:
           }
           PKGBUILD
 
-          img=archlinux:latest
-          if [ "$(uname -m)" = aarch64 ]; then img=ghcr.io/archlinux/archlinux:latest; fi
-          docker run --rm -v "$work:/work" -e PKG_ARCH="${{ matrix.pkg_arch }}" "$img" bash -c '
+          docker run --rm -v "$work:/work" -e PKG_ARCH="${{ matrix.pkg_arch }}" archlinux:latest bash -c '
             set -eu
             pacman -Syu --noconfirm base-devel >/dev/null
             useradd -m builder
