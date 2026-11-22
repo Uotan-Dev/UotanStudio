@@ -23,7 +23,10 @@
 - Linux aarch64 真机已验证 EDL 串口回退：`qcserial` 绑定 9008 后经 `EdlSerialPortFallback` 找到 `/dev/ttyUSB0`，完成 Sahara、programmer 上传与 Firehose 初始化。Firehose `power reset` 在 ACK 后约 1.0 秒断开、约 39 秒重新枚举为 05C6:90db。
 - SpacemiT 整包烧录已在 OrangePi RV2/K1 完成；勾选子集烧录、LE2110/ferrari 的 EDL 整包烧录与通用 fastboot 子集路径未上真机。
 - 全志整机烧录、RKDL 真机维护命令、macOS/HarmonyOS USB 后端与部分 HDC 文件收发没有真机通过记录。
-- 紫光展锐（Unisoc）深刷协议只有线格式与模拟传输证据：BootROM/FDL1/FDL2 阶段识别各线路、两级加载器上传、原生分区表、GPT 读取、分区读写擦、禁转义与 Chip UID 未上真机；`reference/spreadtrum_flash`（Unlicense）与 `reference/GeekFlashCore` docs（ums512 实机）是行为对照源。
+- 紫光展锐（Unisoc）深刷协议只有线格式与模拟传输证据：BootROM/FDL1/FDL2 阶段识别各线路、两级加载器上传、原生分区表、GPT 读取、分区读写擦、禁转义与 Chip UID 未上真机。帧校验和按大端 16 位字求和、折叠两次取反、奇数尾字节按原值累加，收发两个方向同值且无方向性字节交换；该字序由向量测试覆盖，未上真机。
+- 紫光展锐刷写计划的选取范围已用真实 PAC 包核对：包内目录条目由 `type=1` 镜像、XML、FDL 与零长度操作条目组成；scheme 的 `Flag` 区分有负载的镜像步骤与无负载的操作步骤，scheme 选取的镜像集合与包内 `type=1` 条目集合相同，仅顺序不同，因此刷写计划按 scheme 声明顺序驱动，包目录顺序不参与。`flash_use` 在多数条目非零，不具选取力，未用于过滤。以上是文件级证据，写入设备仍未上真机。
+- 上述方案的语义已逐条落到本仓库实现：`Flag` 按第 0 位掩码判断是否需要负载，无负载步骤是擦除或检查操作，不携带镜像；`CheckFlag` 暴露为 `SprdPacSchemeStep.IsMandatory`，表示全选也不能清除，默认仍全选。scheme 由产品名经 `/BMAConfig/ProductList/Product[@name]/SchemeName` 选取，产品名取自 PAC 头的 `szPrdName`；仓库按 `PacImage.ProductName` 精确匹配，产品名缺失或匹配不唯一时回退到第一个携带 FDL 角色的 scheme。`Flag=0` 的操作步骤中以 `EraseFlash` 开头的展开为擦除计划条目与界面行，`PhaseCheck` 等检查类步骤不列入；擦除行不参与全选，勾选时先弹确认框，执行时按分区名擦除并沿用 NV 分区保护。
+- 紫光展锐厂商驱动包 `drivers/unisoc-spreadtrum`（13 个负载：`sprdadb`/`sprdvcom`/`sprdvmdm`/`rdavcom` 的 INF+CAT、`amd64__sprdvcom.sys`/`amd64__sprdvmdm.sys`/`amd64__rdavcom.sys`、`amd64__WdfCoInstaller01009.dll`、`amd64__winusbcoinstaller2.dll`）已随包，`compress-embedded-assets.cs --check` 报告 `manifest.tsv is up to date`。USB 树接线由 `UsbDriverInstallWiringTests` 覆盖（紫光下载口 `VID_1782&PID_4D00` 与 ADB 复合口 `VID_1782&PID_5A5B&MI_01` 经 `DriverPackageCatalog.FindMatch` 解析到该包并给出 `CanInstallDriver`，未匹配 ID、已绑定驱动、非 Windows 驱动信息三种情况保持隐藏）。本机无紫光实机，`sprdadb.inf`/`sprdvcom.inf` 的暂存与绑定未在真机验证。
 
 ## 性能
 
