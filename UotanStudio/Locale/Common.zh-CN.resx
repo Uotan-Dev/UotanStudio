@@ -622,7 +622,7 @@
     <value>刷入后重启设备</value>
   </data>
   <data name="Flash_Image" xml:space="preserve">
-    <value>镜像操作 Image actions</value>
+    <value>镜像操作</value>
   </data>
   <data name="Flash_ExtractSelected" xml:space="preserve">
     <value>提取选中镜像</value>
@@ -775,7 +775,7 @@
     <value>单个分区失败后继续</value>
   </data>
   <data name="Flash_Mtk" xml:space="preserve">
-    <value>联发科 Mediatek</value>
+    <value>联发科</value>
   </data>
   <data name="Flash_MtkDaFile" xml:space="preserve">
     <value>选择 DA/加载器</value>
@@ -1027,7 +1027,7 @@
     <value>，校验 {0:F1} MB</value>
   </data>
   <data name="Flash_Edl" xml:space="preserve">
-    <value>高通 Qualcomm</value>
+    <value>高通</value>
   </data>
   <data name="Flash_EdlRegionDirChoose" xml:space="preserve">
     <value>选择转储目录</value>
@@ -4123,7 +4123,7 @@
     <value>所选引导程序要求 EDL 签名；未选择签名文件时初始化会失败。</value>
   </data>
   <data name="Flash_Rockchip" xml:space="preserve">
-    <value>瑞芯微 Rockchip</value>
+    <value>瑞芯微</value>
   </data>
   <data name="Flash_RkSetStorageType" xml:space="preserve">
     <value>设置存储类型</value>
@@ -4486,7 +4486,7 @@
     <value>烧录包将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作不可撤销。</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
-    <value>全志 Allwinner</value>
+    <value>全志</value>
   </data>
   <data name="Flash_SunxiHint" xml:space="preserve">
     <value>FEL 是 USB boot ROM 模式，FES 是 U-Boot 服务模式。设备进入 FES 后可烧录 IMAGEWTY 整包。</value>
@@ -4702,7 +4702,7 @@
     <value>安全字</value>
   </data>
   <data name="Flash_Tegra" xml:space="preserve">
-    <value>英伟达 NVIDIA Tegra</value>
+    <value>英伟达 Tegra</value>
   </data>
   <data name="Flash_TegraHint" xml:space="preserve">
     <value>Tegra 内核实现的三个重启目标。强制恢复就是从软件进入 RCM（APX）的入口：boot ROM 把强制恢复位读作"不启动镜像"的请求。</value>
@@ -4741,7 +4741,7 @@
     <value>强制进入 recovery</value>
   </data>
   <data name="Flash_Unisoc" xml:space="preserve">
-    <value>紫光展锐 UNISOC</value>
+    <value>紫光展锐</value>
   </data>
   <data name="Flash_UnisocHint" xml:space="preserve">
     <value>经厂商下载串口深刷。加载阶段由握手识别；存储动作需要 FDL2，PAC 包内的加载器会先把链路提升到该阶段。</value>
