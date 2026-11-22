@@ -205,11 +205,8 @@
               Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" IsHitTestVisible="False" />
       <GridSplitter x:Name="PaneSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
                     HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeWestEast" />
-      <controls:AppIcon x:Name="SplitterGrip" Kind="DragHandle" Grid.Column="1" Width="7" Height="20"
-                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                             Foreground="{DynamicResource EditorPaneSplitterGripBrush}" IsHitTestVisible="False" Opacity="0.8" />
 
-      <Grid x:Name="FilePane" Grid.Column="2" RowDefinitions="Auto,*,Auto" SizeChanged="OnFilePaneSizeChanged">
+      <Grid x:Name="FilePane" Grid.Column="2" RowDefinitions="Auto,*" SizeChanged="OnFilePaneSizeChanged">
         <Border Padding="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
           <Grid ColumnDefinitions="Auto,*">
             <Button Classes="Small" Command="{Binding NavigateUpCommand}"
@@ -232,15 +229,6 @@
         <TextBlock Grid.Row="1" Text="{DynamicResource FileManager_EmptyDirectory}" IsVisible="{Binding IsDirectoryEmpty}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsHitTestVisible="False" />
-
-        <Border Grid.Row="2" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
-                IsVisible="{Binding SelectedEntry, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <Grid ColumnDefinitions="Auto,*">
-            <TextBlock Text="{DynamicResource FileManager_Path}" FontSize="11" Margin="0,0,8,0" />
-            <TextBlock Grid.Column="1" Text="{Binding SelectedEntry.Path}" FontSize="11" FontFamily="Consolas"
-                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedEntry.Path}" />
-          </Grid>
-        </Border>
       </Grid>
     </Grid>
   </DockPanel>

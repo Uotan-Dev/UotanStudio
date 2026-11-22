@@ -79,7 +79,6 @@ public partial class ManifestEditorView : UserControl
         SetPanePosition(AttributesPane, 0, 0);
         SetPanePosition(RightPaneSplitterTrack, 1, 0);
         SetPanePosition(RightPaneSplitter, 1, 0);
-        SetPanePosition(RightPaneSplitterGrip, 1, 0);
         SetPanePosition(SourceEditor, 2, 0);
 
         RightPaneSplitter.ResizeDirection = GridResizeDirection.Rows;
@@ -89,9 +88,6 @@ public partial class ManifestEditorView : UserControl
         RightPaneSplitter.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         RightPaneSplitter.Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
 
-        RightPaneSplitterGrip.Kind = AppIconKind.DragHandle;
-        RightPaneSplitterGrip.Width = 20;
-        RightPaneSplitterGrip.Height = 7;
         RightViewLayoutIcon.Kind = AppIconKind.SplitVertical;
     }
 
@@ -103,7 +99,6 @@ public partial class ManifestEditorView : UserControl
         SetPanePosition(AttributesPane, 0, 0);
         SetPanePosition(RightPaneSplitterTrack, 0, 1);
         SetPanePosition(RightPaneSplitter, 0, 1);
-        SetPanePosition(RightPaneSplitterGrip, 0, 1);
         SetPanePosition(SourceEditor, 0, 2);
 
         RightPaneSplitter.ResizeDirection = GridResizeDirection.Columns;
@@ -113,9 +108,6 @@ public partial class ManifestEditorView : UserControl
         RightPaneSplitter.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
         RightPaneSplitter.Cursor = new Cursor(StandardCursorType.SizeWestEast);
 
-        RightPaneSplitterGrip.Kind = AppIconKind.DragHandle;
-        RightPaneSplitterGrip.Width = 7;
-        RightPaneSplitterGrip.Height = 20;
         RightViewLayoutIcon.Kind = AppIconKind.SplitHorizontal;
     }
 
