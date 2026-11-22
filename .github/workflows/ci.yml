@@ -504,37 +504,58 @@ jobs:
           set -euo pipefail
           work="$RUNNER_TEMP/cross"
           mkdir -p "$work"
-          if [ -f "$work/nuget-local/.toolchain-ready" ]; then
-            echo "Toolchain feed restored from cache; skipping downloads."
-            exit 0
-          fi
           official=$(printf '%s' "$SDK_VER" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "$official" ]; then
             echo "::error::Cannot derive an official SDK version from tag '$SDK_VER'." >&2
             exit 1
           fi
-          curl -fL --retry 3 -o "$work/sdk-${{ matrix.arch }}.tar.gz" "$SDK_URL" & p1=$!
-          curl -fL --retry 3 -o "$work/artifacts-${{ matrix.arch }}.tar.gz" "$ARTIFACTS_URL" & p2=$!
-          curl -fL --retry 3 -o "$work/sdk-x64.tar.gz" \
-            "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz" & p3=$!
-          curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
-            "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg" & p4=$!
+
+          sdk_arch="$work/sdk-${{ matrix.arch }}.tar.gz"
+          sdk_x64="$work/sdk-x64.tar.gz"
+          feed_ready=0
+          if [ -f "$work/nuget-local/.toolchain-ready" ] \
+             && [ -s "$work/ilc-host-x64/tools/ilc" ] \
+             && [ -s "$work/ilc-host-x64/tools/libjitinterface_x64.so" ]; then
+            feed_ready=1
+          fi
+
+          p1=""; p2=""; p3=""; p4=""
+          if [ ! -s "$sdk_arch" ]; then
+            curl -fL --retry 3 -o "$sdk_arch" "$SDK_URL" & p1=$!
+          fi
+          if [ ! -s "$sdk_x64" ]; then
+            curl -fL --retry 3 -o "$sdk_x64" \
+              "https://builds.dotnet.microsoft.com/dotnet/Sdk/$official/dotnet-sdk-$official-linux-x64.tar.gz" & p2=$!
+          fi
+          if [ "$feed_ready" -eq 1 ]; then
+            echo "Toolchain feed restored from cache; downloading only the SDK tarballs."
+          else
+            curl -fL --retry 3 -o "$work/artifacts-${{ matrix.arch }}.tar.gz" "$ARTIFACTS_URL" & p3=$!
+            curl -fL --retry 3 -o "$work/ilc-host-x64.nupkg" \
+              "https://api.nuget.org/v3-flatcontainer/runtime.linux-x64.microsoft.dotnet.ilcompiler/$RUNTIME_VER/runtime.linux-x64.microsoft.dotnet.ilcompiler.$RUNTIME_VER.nupkg" & p4=$!
+          fi
           status=0
           for p in $p1 $p2 $p3 $p4; do wait "$p" || status=1; done
           [ "$status" -eq 0 ] || { echo "::error::One or more downloads failed." >&2; exit 1; }
+
+          [ -s "$sdk_arch" ] || { echo "::error::The ${{ matrix.arch }} SDK download produced no $sdk_arch." >&2; exit 1; }
+          [ -s "$sdk_x64" ] || { echo "::error::The official host SDK download produced no $sdk_x64." >&2; exit 1; }
           if [[ "$SDK_DIGEST" == sha256:* ]]; then
-            echo "${SDK_DIGEST#sha256:}  $work/sdk-${{ matrix.arch }}.tar.gz" | sha256sum -c -
+            echo "${SDK_DIGEST#sha256:}  $sdk_arch" | sha256sum -c -
           else
             echo "::warning::SDK asset has no sha256 digest; skipping the integrity check."
           fi
-          unzip -q -o "$work/ilc-host-x64.nupkg" -d "$work/ilc-host-x64"
-          for f in tools/ilc tools/libjitinterface_x64.so; do
-            [ -f "$work/ilc-host-x64/$f" ] || { echo "::error::ILCompiler host pack is missing $f." >&2; exit 1; }
-          done
-          file "$work/ilc-host-x64/tools/ilc" | grep -q "x86-64" || {
-            echo "::error::tools/ilc is not an x86-64 binary." >&2
-            exit 1
-          }
+
+          if [ "$feed_ready" -eq 0 ]; then
+            unzip -q -o "$work/ilc-host-x64.nupkg" -d "$work/ilc-host-x64"
+            for f in tools/ilc tools/libjitinterface_x64.so; do
+              [ -f "$work/ilc-host-x64/$f" ] || { echo "::error::ILCompiler host pack is missing $f." >&2; exit 1; }
+            done
+            file "$work/ilc-host-x64/tools/ilc" | grep -q "x86-64" || {
+              echo "::error::tools/ilc is not an x86-64 binary." >&2
+              exit 1
+            }
+          fi
 
       - name: Prepare local feed
         shell: bash
@@ -735,6 +756,9 @@ jobs:
           set -euo pipefail
           work="$RUNNER_TEMP/cross"
           mkdir -p "$work/out" "$work/home"
+          for f in "$work/sdk-x64.tar.gz" "$work/sdk-${{ matrix.arch }}.tar.gz"; do
+            [ -s "$f" ] || { echo "::error::The cross container needs $f but it is missing." >&2; exit 1; }
+          done
           cat > "$work/container.sh" <<'CONTAINER'
           set -euo pipefail
           export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
