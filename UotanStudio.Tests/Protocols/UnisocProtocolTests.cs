@@ -29,6 +29,28 @@ public class UnisocProtocolTests
         Assert.Equal(payload, parsed.Payload);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    public void EncodeThenParse_OddLengthPayload_RoundTripsThroughTranscode(int length)
+    {
+        var payload = new byte[length];
+        for (var index = 0; index < length; index++)
+        {
+            payload[index] = (byte)(0x30 + index);
+        }
+
+        var frame = UnisocFrames.EncodeCommand(UnisocCommand.StartData, payload, UnisocChecksumKind.Sum,
+            transcode: true);
+        var parser = new UnisocFrameParser();
+
+        parser.Append(frame);
+        Assert.Equal(UnisocParseStatus.Frame, parser.TryRead(UnisocChecksumKind.Sum, true, out var parsed));
+        Assert.Equal(payload, parsed.Payload);
+    }
+
     [Fact]
     public void Parser_ByteByByteDelivery_FindsTheSameFrame()
     {
@@ -454,9 +476,9 @@ public class UnisocProtocolTests
     }
 
     /// <summary>
-    /// Builds one device-originated frame with the device's own wire convention: the additive checksum is swapped
-    /// before it is written big-endian, and the payload is escape-transcoded.
-    /// <para>构造一条设备发出的帧，遵循设备自身的线上约定：加性校验和先交换字节再按大端写出，负载做转义变换。</para>
+    /// Builds one device-originated frame with the device's own wire convention: the additive checksum is written
+    /// big-endian without any byte swap, and the payload is escape-transcoded.
+    /// <para>构造一条设备发出的帧，遵循设备自身的线上约定：加性校验和按大端原样写出、不做字节交换，负载做转义变换。</para>
     /// </summary>
     private sealed class DeviceBroker
     {
@@ -480,7 +502,7 @@ public class UnisocProtocolTests
             _payload.CopyTo(raw, 4);
             var checksum = _kind == UnisocChecksumKind.Crc16
                 ? Crc16Xmodem.Compute(raw.AsSpan(0, 4 + _payload.Length))
-                : SprdChecksum16.ComputeReceive(raw.AsSpan(0, 4 + _payload.Length));
+                : SprdChecksum16.Compute(raw.AsSpan(0, 4 + _payload.Length));
             BinaryPrimitives.WriteUInt16BigEndian(raw.AsSpan(4 + _payload.Length), checksum);
 
             var frame = new List<byte> { UnisocConstants.HeaderByte };

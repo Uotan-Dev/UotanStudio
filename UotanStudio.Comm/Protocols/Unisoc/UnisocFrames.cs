@@ -17,11 +17,14 @@ namespace UotanStudio.Comm.Protocols.Unisoc;
 internal static class UnisocFrames
 {
     /// <summary>
-    /// Encodes the baud probe: <paramref name="count"/> repeated header bytes, which both stages answer with a
-    /// version frame. <para>编码波特率探测：<paramref name="count"/> 个重复帧头字节，两个阶段都会以版本帧应答。</para>
+    /// Encodes the baud probe as repeated header bytes, which both stages answer with a version frame. The vendor
+    /// tools send exactly one header byte, so callers pass <c>1</c>; the count stays a parameter so a probe budget
+    /// experiment does not need a second builder.
+    /// <para>编码波特率探测为重复帧头字节，两个阶段都会以版本帧应答。厂商工具只发送一个帧头字节，因此调用方传
+    /// <c>1</c>；数量保留为参数，使探测预算的调整不必再写第二个构造器。</para>
     /// </summary>
-    /// <param name="count">Number of header bytes to send; must be positive.
-    /// <para>发送的帧头字节数；必须为正。</para></param>
+    /// <param name="count">Number of header bytes to send; must be positive, and the vendor tools use <c>1</c>.
+    /// <para>发送的帧头字节数；必须为正，厂商工具使用 <c>1</c>。</para></param>
     /// <returns>The probe bytes. <para>探测字节。</para></returns>
     public static byte[] EncodeCheckBaud(int count)
     {
@@ -59,7 +62,7 @@ internal static class UnisocFrames
         payload.CopyTo(raw.AsSpan(4));
         var checksum = kind == UnisocChecksumKind.Crc16
             ? Crc16Xmodem.Compute(raw.AsSpan(0, 4 + payload.Length))
-            : SprdChecksum16.ComputeTransmit(raw.AsSpan(0, 4 + payload.Length));
+            : SprdChecksum16.Compute(raw.AsSpan(0, 4 + payload.Length));
         BinaryPrimitives.WriteUInt16BigEndian(raw.AsSpan(4 + payload.Length), checksum);
 
         var frame = new byte[2 * (4 + payload.Length + 2) + 2];
@@ -328,7 +331,7 @@ internal sealed class UnisocFrameParser
 
         var expected = kind == UnisocChecksumKind.Crc16
             ? Crc16Xmodem.Compute(raw.AsSpan(0, length - 2))
-            : SprdChecksum16.ComputeReceive(raw.AsSpan(0, length - 2));
+            : SprdChecksum16.Compute(raw.AsSpan(0, length - 2));
         if (BinaryPrimitives.ReadUInt16BigEndian(raw.AsSpan(length - 2)) != expected)
         {
             return UnisocParseStatus.Malformed;

@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Comm.Protocols.Unisoc;
+namespace UotanStudio.Comm.Protocols.Unisoc;
 
 /// <summary>
 /// One resolved device partition a flash pass can address: GPT partitions carry confirmed byte extents, native
@@ -138,10 +138,34 @@ public sealed class UnisocFlasher
                 continue;
             }
 
-            if (!targetsByName.TryGetValue(image.Name, out var target))
+            // An erase step names a scheme operation such as EraseMisc while the device reports the partition as
+            // "misc", so the erase is resolved by its partition instead of by the row name the payload steps use.
+            // 擦除步骤给出的是 EraseMisc 这类 scheme 操作名，而设备把该分区报告为 "misc"，因此擦除按分区解析，
+            // 而不是按负载步骤使用的行名。
+            var partition = image.EraseOnly ? image.Partition : image.Name;
+            if (!targetsByName.TryGetValue(partition, out var target))
             {
                 Report(new UnisocFlashProgress(UnisocFlashPhase.Skip, image.Name, 0, image.Length,
                     "The device reports no partition with this name."));
+                continue;
+            }
+
+            if (image.EraseOnly)
+            {
+                if (target.Name.Contains("nv", StringComparison.OrdinalIgnoreCase))
+                {
+                    // The storage session refuses NV partitions, and a real scheme does declare an erase of
+                    // l_runtimenv1. Skipping keeps that protection without aborting the rest of the plan.
+                    // 存储会话会拒绝 NV 分区，而真实 scheme 确实声明了 l_runtimenv1 的擦除。跳过可在不中断计划其余
+                    // 步骤的前提下保留该保护。
+                    Report(new UnisocFlashProgress(UnisocFlashPhase.Skip, image.Name, 0, 0,
+                        "NV partitions are never erased."));
+                    continue;
+                }
+
+                Report(new UnisocFlashProgress(UnisocFlashPhase.Erase, image.Name, 0, 0));
+                await storage.ErasePartitionAsync(target.Name, confirmation, cancellationToken)
+                    .ConfigureAwait(false);
                 continue;
             }
 

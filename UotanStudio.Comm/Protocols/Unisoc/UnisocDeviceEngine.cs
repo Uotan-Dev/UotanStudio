@@ -177,7 +177,7 @@ internal sealed class UnisocDeviceEngine : UnisocSession
         DiscardBuffered();
         for (var attempt = 0; attempt < Options.CheckBaudRetries; attempt++)
         {
-            var probeReply = await ProbeAsync(UnisocFrames.EncodeCheckBaud(4), UnisocChecksumKind.Sum,
+            var probeReply = await ProbeAsync(UnisocFrames.EncodeCheckBaud(1), UnisocChecksumKind.Sum,
                 Options.EntryProbeTimeoutMs, cancellationToken).ConfigureAwait(false);
             if (probeReply is not { } reply)
             {
@@ -261,7 +261,7 @@ internal sealed class UnisocDeviceEngine : UnisocSession
         UnisocFrame? version = null;
         for (var attempt = 0; attempt < Options.CheckBaudRetries && version is null; attempt++)
         {
-            version = await ProbeAsync(UnisocFrames.EncodeCheckBaud(4), UnisocChecksumKind.Sum,
+            version = await ProbeAsync(UnisocFrames.EncodeCheckBaud(1), UnisocChecksumKind.Sum,
                 Options.EntryProbeTimeoutMs, cancellationToken).ConfigureAwait(false);
         }
 

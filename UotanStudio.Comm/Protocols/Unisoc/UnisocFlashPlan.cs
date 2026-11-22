@@ -1,4 +1,4 @@
-﻿using UotanStudio.Firmware.VendorFirmware.Pac;
+using UotanStudio.Firmware.VendorFirmware.Pac;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
 
@@ -7,21 +7,33 @@ namespace UotanStudio.Comm.Protocols.Unisoc;
 /// </summary>
 public sealed class UnisocFlashImage
 {
-    internal UnisocFlashImage(string name, long length, PacEntry entry)
+    internal UnisocFlashImage(string name, string partition, long length, PacEntry? entry, bool eraseOnly = false)
     {
         Name = name;
+        Partition = partition;
         Length = length;
         Entry = entry;
+        EraseOnly = eraseOnly;
     }
 
-    /// <summary>Gets the partition name the image targets, taken from the PAC entry identifier.
-    /// <para>获取镜像指向的分区名，取自 PAC 条目标识。</para></summary>
+    /// <summary>Gets the scheme identifier of the image, taken from the <c>BMAConfig</c> scheme <c>ID</c>.
+    /// <para>获取镜像的 scheme 标识，取自 <c>BMAConfig</c> scheme 的 <c>ID</c>。</para></summary>
     public string Name { get; }
+
+    /// <summary>Gets the block identifier the scheme targets for this image, which is the partition name the
+    /// official tool writes to. <para>获取 scheme 为该镜像指定的块标识，也就是官方工具写入的分区名。</para></summary>
+    public string Partition { get; }
 
     /// <summary>Gets the image length in bytes. <para>获取镜像长度（字节）。</para></summary>
     public long Length { get; }
 
-    internal PacEntry Entry { get; }
+    /// <summary>Gets whether the entry erases its partition instead of writing a payload; such an entry carries no
+    /// image bytes and never reaches <see cref="UnisocFlashPlan.OpenImage"/>.
+    /// <para>获取该条目是否擦除其分区而不是写入负载；这类条目不含镜像字节，永远不进入
+    /// <see cref="UnisocFlashPlan.OpenImage"/>。</para></summary>
+    public bool EraseOnly { get; }
+
+    internal PacEntry? Entry { get; }
 }
 
 /// <summary>
@@ -31,10 +43,15 @@ public sealed class UnisocFlashImage
 /// 包内流式读取，从不落地暂存。</para>
 /// </summary>
 /// <remarks>
-/// Loader roles (<c>FDL</c>/<c>FDL1</c>/<c>FDL2</c>) and XML/certificate entries are excluded from the image list;
-/// duplicate image names are rejected because a flash target must be unambiguous.
-/// <para>加载器角色（<c>FDL</c>/<c>FDL1</c>/<c>FDL2</c>）与 XML/证书条目不进入镜像列表；镜像名重复会被拒绝，
-/// 因为刷写目标必须无歧义。</para>
+/// The image list follows the <c>BMAConfig</c> scheme rather than the package directory: an image is listed when the
+/// scheme declares a <c>File</c> step that carries a payload, and a payload-free step whose <c>Type</c> is an
+/// <c>EraseFlash</c> variant is listed as an erase-only entry with no bytes. The order and the scope therefore match
+/// what the official tool executes. A package may carry payload entries the scheme never references, and those are
+/// deliberately not listed. Loader roles (<c>FDL</c>/<c>FDL1</c>/<c>FDL2</c>) are reported separately and never appear.
+/// <para>镜像列表以 <c>BMAConfig</c> scheme 为准而不是包目录：scheme 声明了携带负载的 <c>File</c> 步骤时该镜像被列出，
+/// 而 <c>Type</c> 为 <c>EraseFlash</c> 变体的无负载步骤被列为不含字节的仅擦除条目，因此顺序与范围都与官方工具执行的一致。
+/// 包内可能带有 scheme 从未引用的负载条目，它们被有意排除。加载器角色（<c>FDL</c>/<c>FDL1</c>/<c>FDL2</c>）单独上报，
+/// 绝不作为镜像出现。</para>
 /// </remarks>
 public sealed class UnisocFlashPlan : IDisposable
 {
@@ -55,8 +72,8 @@ public sealed class UnisocFlashPlan : IDisposable
     /// <summary>Gets the confirmed two-stage loader set. <para>获取确认的两级加载器集合。</para></summary>
     public SprdPacLoaderSet Loaders { get; }
 
-    /// <summary>Gets the flashable partition images in package order.
-    /// <para>按包顺序获取可刷写的分区镜像。</para></summary>
+    /// <summary>Gets the plan entries in scheme declaration order: payload images plus the erase operations the scheme
+    /// declares without a payload. <para>按 scheme 声明顺序获取计划条目：负载镜像，以及 scheme 声明的不含负载的擦除操作。</para></summary>
     public IReadOnlyList<UnisocFlashImage> Images { get; }
 
     /// <summary>
@@ -80,28 +97,25 @@ public sealed class UnisocFlashPlan : IDisposable
         try
         {
             var loaders = SprdPacLoaders.Resolve(image);
-            var loaderIdentifiers = new[] { loaders.FirstStage.Id, loaders.SecondStage.Id, "XML" };
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var steps = SprdPacLoaders.ResolveScheme(image);
             var images = new List<UnisocFlashImage>();
-            foreach (var entry in image.Entries)
+            foreach (var step in steps)
             {
-                if (entry.Type != PacFileType.Image || entry.Length <= 0)
+                cancellationToken.ThrowIfCancellationRequested();
+                if (step.Entry is not { } entry)
                 {
+                    // Only erase operations become plan entries without a payload; other payload-free steps are
+                    // inspections the official tool runs around the write sequence and never as a partition job.
+                    // 只有擦除操作成为不含负载的计划条目；其它无负载步骤是官方工具在写入顺序之外的检查动作。
+                    if (step.IsErase && step.Partition.Length > 0)
+                    {
+                        images.Add(new UnisocFlashImage(step.Identifier, step.Partition, 0, null, eraseOnly: true));
+                    }
+
                     continue;
                 }
 
-                if (loaderIdentifiers.Any(identifier =>
-                        string.Equals(entry.Id, identifier, StringComparison.OrdinalIgnoreCase)))
-                {
-                    continue;
-                }
-
-                if (!seen.Add(entry.Id))
-                {
-                    throw new InvalidDataException($"The PAC package declares duplicate flash image '{entry.Id}'.");
-                }
-
-                images.Add(new UnisocFlashImage(entry.Id, entry.Length, entry));
+                images.Add(new UnisocFlashImage(step.Identifier, step.Partition, entry.Length, entry));
             }
 
             return new UnisocFlashPlan(packagePath, image, loaders, images);
@@ -120,12 +134,18 @@ public sealed class UnisocFlashPlan : IDisposable
     /// <param name="image">An image of this plan. <para>本计划中的镜像。</para></param>
     /// <returns>The read-only stream positioned at the image start.
     /// <para>定位在镜像起点的只读流。</para></returns>
-    /// <exception cref="ArgumentException">The image does not belong to this plan.
-    /// <para>镜像不属于本计划。</para></exception>
+    /// <exception cref="ArgumentException">The image is an erase-only entry, which carries no bytes to open.
+    /// <para>该镜像是仅擦除的条目，没有可打开的字节。</para></exception>
     public Stream OpenImage(UnisocFlashImage image)
     {
         ArgumentNullException.ThrowIfNull(image);
-        return _image.OpenEntryStream(image.Entry);
+        if (image.Entry is not { } entry)
+        {
+            throw new ArgumentException(
+                $"The plan entry '{image.Name}' is an erase operation and carries no image bytes.", nameof(image));
+        }
+
+        return _image.OpenEntryStream(entry);
     }
 
     /// <summary>Opens the bounded stream of one loader or image entry directly.
