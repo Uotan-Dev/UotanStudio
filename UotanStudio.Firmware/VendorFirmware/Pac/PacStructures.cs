@@ -232,14 +232,24 @@ internal sealed class SprdFile
     public uint Size;
 
     /// <summary>
-    /// Raw entry category word; <see cref="PacFileType"/> names the codes this layout uses for images, XML and certificates.
-    /// <para>原始条目类别字；<see cref="PacFileType"/> 给出该布局对镜像、XML 与证书使用的编码。</para>
+    /// High 32 bits of the declared payload length. Packages above 4 GiB store <c>size = (SizeHigh &lt;&lt; 32) | Size</c>;
+    /// smaller packages leave it zero.
+    /// <para>声明负载长度的高 32 位。超过 4 GiB 的包以 <c>size = (SizeHigh &lt;&lt; 32) | Size</c> 组合，
+    /// 较小的包保持为 0。</para>
+    /// </summary>
+    public uint SizeHigh;
+
+    /// <summary>
+    /// Raw entry category word; <see cref="PacFileType"/> names the codes this layout uses for operation records, file payloads, the XML configuration and FDL loaders.
+    /// <para>原始条目类别字；<see cref="PacFileType"/> 给出该布局对操作记录、文件负载、XML 配置与 FDL 加载器使用的编码。</para>
     /// </summary>
     public uint Type;
 
     /// <summary>
-    /// Flash-usage flag word stored verbatim; no bit layout is interpreted here.
-    /// <para>原样存放的刷写用途标志字；此处不解释具体位含义。</para>
+    /// Flash-usage word stored verbatim; the reference unpacker treats <c>1</c> as "used during the flashing process",
+    /// but a packaged image sets it on almost every entry, so it cannot select the flashing set on its own.
+    /// <para>原样存放的刷写用途字；参考解包工具把 <c>1</c> 解释为「刷写过程中使用」，但打包后的镜像几乎在每个条目上
+    /// 都给它置位，因此它无法单独判定刷写集合。</para>
     /// </summary>
     public uint FlashUse;
 
@@ -248,6 +258,14 @@ internal sealed class SprdFile
     /// <para>条目数据在包内的绝对字节偏移。</para>
     /// </summary>
     public uint PacOffset;
+
+    /// <summary>
+    /// High 32 bits of the absolute payload offset. Packages above 4 GiB relocate some payloads past the 32-bit
+    /// wrap boundary, so the true offset is <c>PacOffset | (OffsetHigh &lt;&lt; 32)</c>; smaller packages leave it zero.
+    /// <para>绝对负载偏移的高 32 位。超过 4 GiB 的包会把部分负载重定位到 32 位回绕边界之外，因此真实偏移为
+    /// <c>PacOffset | (OffsetHigh &lt;&lt; 32)</c>；较小的包保持为 0。</para>
+    /// </summary>
+    public uint OffsetHigh;
 
     /// <summary>
     /// Omission marker word stored verbatim; no value is interpreted here.
@@ -298,10 +316,12 @@ internal sealed class SprdFile
         PacFieldCodec.ReadUInt16Array(raw, 4, file.Id);
         PacFieldCodec.ReadUInt16Array(raw, 516, file.Name);
         PacFieldCodec.ReadUInt16Array(raw, 1028, file.Unknown1);
+        file.SizeHigh = BinaryPrimitives.ReadUInt32LittleEndian(raw[1532..]);
         file.Size = BinaryPrimitives.ReadUInt32LittleEndian(raw[1540..]);
         file.Type = BinaryPrimitives.ReadUInt32LittleEndian(raw[1544..]);
         file.FlashUse = BinaryPrimitives.ReadUInt32LittleEndian(raw[1548..]);
         file.PacOffset = BinaryPrimitives.ReadUInt32LittleEndian(raw[1552..]);
+        file.OffsetHigh = BinaryPrimitives.ReadUInt32LittleEndian(raw[1536..]);
         file.OmitFlag = BinaryPrimitives.ReadUInt32LittleEndian(raw[1556..]);
         file.AddrNum = BinaryPrimitives.ReadUInt32LittleEndian(raw[1560..]);
         PacFieldCodec.ReadUInt32Array(raw, 1564, file.Addr);
@@ -321,10 +341,12 @@ internal sealed class SprdFile
         PacFieldCodec.WriteUInt16Array(bytes, 4, Id);
         PacFieldCodec.WriteUInt16Array(bytes, 516, Name);
         PacFieldCodec.WriteUInt16Array(bytes, 1028, Unknown1);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1532), SizeHigh);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1540), Size);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1544), Type);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1548), FlashUse);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1552), PacOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1536), OffsetHigh);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1556), OmitFlag);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(1560), AddrNum);
         PacFieldCodec.WriteUInt32Array(bytes, 1564, Addr);
@@ -359,22 +381,24 @@ internal sealed class SprdFile
 }
 
 /// <summary>
-/// Entry category codes carried in <see cref="SprdFile.Type"/>.
-/// <para>存放于 <see cref="SprdFile.Type"/> 的条目类别编码。</para>
+/// Entry category codes carried in <see cref="SprdFile.Type"/>, as documented by the reference unpacker: <c>0</c> is
+/// an operation record, <c>1</c> a file payload, <c>2</c> the XML configuration and <c>0x101</c> an FDL loader.
+/// <para>存放于 <see cref="SprdFile.Type"/> 的条目类别编码，取值含义以参考解包工具为准：<c>0</c> 是操作记录，
+/// <c>1</c> 是文件负载，<c>2</c> 是 XML 配置，<c>0x101</c> 是 FDL 加载器。</para>
 /// </summary>
 public enum PacFileType : uint
 {
-    /// <summary>No category recorded (code <c>0</c>). <para>未记录类别（编码 <c>0</c>）。</para></summary>
-    Unknown = 0,
+    /// <summary>Operation record without a payload (code <c>0</c>). <para>不携带负载的操作记录（编码 <c>0</c>）。</para></summary>
+    Operation = 0,
 
-    /// <summary>Flashable image payload (code <c>1</c>). <para>可刷写镜像数据（编码 <c>1</c>）。</para></summary>
+    /// <summary>File payload (code <c>1</c>). <para>文件负载（编码 <c>1</c>）。</para></summary>
     Image = 1,
 
     /// <summary>XML configuration payload (code <c>2</c>). <para>XML 配置数据（编码 <c>2</c>）。</para></summary>
     Xml = 2,
 
-    /// <summary>Signing certificate payload (code <c>3</c>). <para>签名证书数据（编码 <c>3</c>）。</para></summary>
-    Certificate = 3
+    /// <summary>FDL loader payload (code <c>0x101</c>). <para>FDL 加载器负载（编码 <c>0x101</c>）。</para></summary>
+    Fdl = 0x101
 }
 /// <summary>
 /// Copies little-endian PAC word arrays between raw structure bytes and the strongly typed fields.

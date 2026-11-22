@@ -1,4 +1,4 @@
-﻿using UotanStudio.Firmware.Core.Streams;
+using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.VendorFirmware.Pac;
 
@@ -22,12 +22,18 @@ public sealed class PacImage : IDisposable
     private readonly object _syncRoot = new();
     private bool _disposed;
 
-
-    private PacImage(FileStream file, IReadOnlyList<PacEntry> entries)
+    private PacImage(FileStream file, string productName, IReadOnlyList<PacEntry> entries)
     {
         _file = file;
+        ProductName = productName;
         Entries = entries;
     }
+
+    /// <summary>Gets the product name recorded in the package header, or an empty string when every code unit is NUL;
+    /// this is the value the official tool matches against <c>BMAConfig</c> <c>ProductList</c> entries.
+    /// <para>获取包头记录的产品名；全部码元为 NUL 时为空字符串。官方工具用它匹配 <c>BMAConfig</c> 的
+    /// <c>ProductList</c> 条目。</para></summary>
+    public string ProductName { get; }
 
     /// <summary>Gets the package entries in directory-table order.
     /// <para>按目录表顺序获取包条目。</para></summary>
@@ -68,13 +74,13 @@ public sealed class PacImage : IDisposable
                     fileRecord.GetId(),
                     fileRecord.GetName(),
                     (PacFileType)fileRecord.Type,
-                    fileRecord.Size,
-                    fileRecord.PacOffset,
+                    ((long)fileRecord.SizeHigh << 32) | fileRecord.Size,
+                    ((long)fileRecord.OffsetHigh << 32) | fileRecord.PacOffset,
                     fileRecord.AddrNum,
                     [.. fileRecord.Addr]));
             }
 
-            return new PacImage(file, entries);
+            return new PacImage(file, head.GetFwName(), entries);
         }
         catch
         {
@@ -164,8 +170,8 @@ public sealed class PacEntry(
     string id,
     string name,
     PacFileType type,
-    uint length,
-    uint offset,
+    long length,
+    long offset,
     uint addressCount,
     uint[] addresses)
 {
