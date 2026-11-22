@@ -2142,4 +2142,22 @@
   <data name="Apk_Permissions" xml:space="preserve">
     <value>权限</value>
   </data>
+  <data name="Dock_Logo_ReplaceSelected" xml:space="preserve">
+    <value>替换图片</value>
+  </data>
+  <data name="Dock_Logo_AddImage" xml:space="preserve">
+    <value>添加图片</value>
+  </data>
+  <data name="Dock_Logo_PickImage" xml:space="preserve">
+    <value>选择替换图片</value>
+  </data>
+  <data name="Dock_Logo_ReplaceFailed" xml:space="preserve">
+    <value>更新 Logo 图片失败。</value>
+  </data>
+  <data name="Dock_Logo_ReplaceDone" xml:space="preserve">
+    <value>Logo 图片已更新，分区已原地重写。</value>
+  </data>
+  <data name="Dock_Logo_SelectEntryFirst" xml:space="preserve">
+    <value>请先选择一个内嵌图片。</value>
+  </data>
 </root>

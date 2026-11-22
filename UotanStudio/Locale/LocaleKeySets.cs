@@ -2876,6 +2876,12 @@ internal static class LocaleKeySets
         "Dock_Partition_Title",
         "Apk_General",
         "Apk_Permissions",
+        "Dock_Logo_ReplaceSelected",
+        "Dock_Logo_AddImage",
+        "Dock_Logo_PickImage",
+        "Dock_Logo_ReplaceFailed",
+        "Dock_Logo_ReplaceDone",
+        "Dock_Logo_SelectEntryFirst",
     ];
 
     internal static readonly string[] Node =

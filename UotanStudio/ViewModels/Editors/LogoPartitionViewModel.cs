@@ -227,6 +227,92 @@ public partial class LogoPartitionViewModel : Document
     [RelayCommand]
     private Task ExtractAllAsync() => ExtractCoreAsync(all: true);
 
+    /// <summary>The localized image-picker title. <para>本地化的图片选择器标题。</para></summary>
+    public static string PickImageLabel => LanguageService.Instance.GetString("Dock_Logo_PickImage");
+
+    /// <summary>Replaces the selected image with a user-picked image file.
+    /// <para>用用户选择的图片文件替换当前选中的内嵌图片。</para></summary>
+    [RelayCommand]
+    private Task ReplaceSelectedAsync() => UpdateImageCoreAsync(replace: true);
+
+    /// <summary>Appends a user-picked image file as a new entry.
+    /// <para>把用户选择的图片文件作为新条目追加到分区。</para></summary>
+    [RelayCommand]
+    private Task AddImageAsync() => UpdateImageCoreAsync(replace: false);
+
+    private async Task UpdateImageCoreAsync(bool replace)
+    {
+        if (IsBusy || string.IsNullOrWhiteSpace(FilePath) || _image is null)
+        {
+            return;
+        }
+
+        var selected = SelectedEntry;
+        if (replace && selected is null)
+        {
+            StatusText = LanguageService.Instance.GetString("Dock_Logo_SelectEntryFirst");
+            return;
+        }
+
+        var topLevel = TopLevelExtensions.GetTopLevel();
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = PickImageLabel,
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        }).ConfigureAwait(true);
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var source = files[0].Path.LocalPath;
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = LoadingLabel;
+        try
+        {
+            var path = FilePath;
+            var index = selected?.Entry.Index ?? -1;
+            await Task.Run(() =>
+            {
+                if (replace)
+                {
+                    LogoPartitionWriter.ReplaceEntry(path, index, source);
+                }
+                else
+                {
+                    LogoPartitionWriter.AddEntry(path, source);
+                }
+            }, CancellationToken.None).ConfigureAwait(true);
+
+            await LoadAsync(path).ConfigureAwait(true);
+            StatusText = LanguageService.Instance.GetString("Dock_Logo_ReplaceDone");
+            LogService.Instance.Write(LogLevel.Info, "LogoPartition",
+                $"Updated logo image in '{path}' ({(replace ? "replace" : "add")}).");
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException
+            or UnauthorizedAccessException or ArgumentException or OverflowException)
+        {
+            StatusText = LanguageService.Instance.GetString("Dock_Logo_ReplaceFailed");
+            LogService.Instance.Write(LogLevel.Debug, "LogoPartition",
+                $"Logo image update failed: {exception.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private async Task ExtractCoreAsync(bool all)
     {
         if (IsBusy || string.IsNullOrWhiteSpace(FilePath) || _image is null)

@@ -2142,4 +2142,22 @@
   <data name="Apk_Permissions" xml:space="preserve">
     <value>Permissions</value>
   </data>
+  <data name="Dock_Logo_ReplaceSelected" xml:space="preserve">
+    <value>Replace image</value>
+  </data>
+  <data name="Dock_Logo_AddImage" xml:space="preserve">
+    <value>Add image</value>
+  </data>
+  <data name="Dock_Logo_PickImage" xml:space="preserve">
+    <value>Select replacement image</value>
+  </data>
+  <data name="Dock_Logo_ReplaceFailed" xml:space="preserve">
+    <value>Failed to update the logo image.</value>
+  </data>
+  <data name="Dock_Logo_ReplaceDone" xml:space="preserve">
+    <value>Logo image updated. The partition was rewritten in place.</value>
+  </data>
+  <data name="Dock_Logo_SelectEntryFirst" xml:space="preserve">
+    <value>Select an embedded image first.</value>
+  </data>
 </root>

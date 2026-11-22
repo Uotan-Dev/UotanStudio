@@ -7,8 +7,8 @@
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="650"
              x:Class="UotanStudio.Views.Editors.LogoPartitionView"
              x:DataType="viewmodels:LogoPartitionViewModel">
-    <!-- Logo partition workbench: embedded images + preview + extraction. -->
-    <!-- Logo 分区工作台：内嵌图片、预览与提取。 -->
+    <!-- Logo partition workbench: embedded images + preview + extraction and replacement. -->
+    <!-- Logo 分区工作台：内嵌图片、预览与提取替换。 -->
     <DockPanel>
         <controls:EditorErrorBanner DockPanel.Dock="Top"
                                     Message="{Binding ErrorMessage, Mode=TwoWay}" />
@@ -28,6 +28,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" SharedSizeGroup="HeaderRow" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                     <TextBlock Grid.Column="0" Text="{DynamicResource Dock_Logo_Entries}"
@@ -105,6 +106,12 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                    <Button Content="{DynamicResource Dock_Logo_ReplaceSelected}"
+                            Command="{Binding ReplaceSelectedCommand}" FontSize="12" />
+                    <Button Content="{DynamicResource Dock_Logo_AddImage}"
+                            Command="{Binding AddImageCommand}" FontSize="12" />
+                </StackPanel>
             </Grid>
 
             <!-- 选中条目预览 -->
