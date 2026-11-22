@@ -585,6 +585,17 @@ public partial class FileManagerEditorViewModel : Document, ITool
     }
 
     /// <summary>
+    /// Dismisses the top error banner.
+    /// <para>关闭顶部错误提示栏。</para>
+    /// </summary>
+    [RelayCommand]
+    private void DismissError()
+    {
+        ErrorMessage = string.Empty;
+        HasError = false;
+    }
+
+    /// <summary>
     /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
     /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
     /// </summary>

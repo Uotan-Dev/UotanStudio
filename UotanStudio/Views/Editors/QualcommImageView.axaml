@@ -1,10 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
              xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Editors.QualcommImageView"
              x:DataType="vm:QualcommImageViewModel">
     <DockPanel>
+        <controls:EditorErrorBanner DockPanel.Dock="Top"
+                                    Message="{Binding ErrorMessage, Mode=TwoWay}" />
         <Border DockPanel.Dock="Top" Padding="16,10" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1">
             <StackPanel Spacing="8">
@@ -42,9 +45,6 @@
         </Border>
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsBusy}" Padding="12,8">
             <ProgressBar IsIndeterminate="True" Height="3" />
-        </Border>
-        <Border DockPanel.Dock="Top" IsVisible="{Binding HasError}" Padding="16,8">
-            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
         </Border>
         <Border DockPanel.Dock="Top" Padding="16,8" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1">

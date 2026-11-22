@@ -8,14 +8,12 @@
              x:Class="UotanStudio.Views.Editors.DtbEditorView"
              x:DataType="viewmodels:DtbEditorViewModel">
   <DockPanel>
-    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式（此窗口不含文件路径行）。
+    <!-- 顶部错误提示条：与对比视图同一套单行样式与关闭按钮（此窗口不含文件路径行）。
          本页没有「重建并保存」按钮（保存经菜单 / Ctrl+S 走 ISaveableDocument 通道）。 -->
-    <!-- Top error banner: same styling as the FileManager editor (this window has no file path row).
+    <!-- Top error banner: same single-line styling and dismiss button as the Compare view (this window has no file path row).
          This page has no "Rebuild & Save" button (saving goes through the menu / Ctrl+S). -->
-    <Border Classes="error-banner" DockPanel.Dock="Top"
-            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
-    </Border>
+    <controls:EditorErrorBanner DockPanel.Dock="Top"
+                                Message="{Binding CompileError, Mode=TwoWay}" />
 
     <!-- 设备节点树（左） + DTS 源码（右） -->
     <Grid>

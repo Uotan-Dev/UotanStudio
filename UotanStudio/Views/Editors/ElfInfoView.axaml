@@ -15,6 +15,8 @@
         </Style>
     </UserControl.Styles>
     <DockPanel>
+        <controls:EditorErrorBanner DockPanel.Dock="Top"
+                                    Message="{Binding ErrorMessage, Mode=TwoWay}" />
         <Border DockPanel.Dock="Top" Padding="16,12,16,0">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="4">
@@ -30,10 +32,6 @@
             <TextBlock Text="{DynamicResource Dock_Elf_Loading}" />
             <ProgressBar IsIndeterminate="True" Height="3" />
         </StackPanel>
-        <Border DockPanel.Dock="Top" Classes="error-banner"
-                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
-        </Border>
         <TabControl SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}" IsVisible="{Binding IsRecognized}" Margin="16,8,16,16">
             <TabItem Header="{DynamicResource Dock_Elf_Header}">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">

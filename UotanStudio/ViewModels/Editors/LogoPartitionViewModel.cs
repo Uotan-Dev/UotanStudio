@@ -91,6 +91,9 @@ public partial class LogoPartitionViewModel : Document
     /// <summary>Status text shown in place of the preview. <para>替代预览显示的状态文案。</para></summary>
     [ObservableProperty] private string _statusText = string.Empty;
 
+    /// <summary>Error message shown in the top error banner. <para>显示在顶部错误栏的错误文本。</para></summary>
+    [ObservableProperty] private string _errorMessage = string.Empty;
+
     /// <summary>Whether a load or extraction is running. <para>是否正在加载或提取。</para></summary>
     [ObservableProperty] private bool _isBusy;
 
@@ -169,6 +172,8 @@ public partial class LogoPartitionViewModel : Document
     {
         FilePath = Path.GetFullPath(path);
         IsBusy = true;
+        ErrorMessage = string.Empty;
+        ErrorMessage = string.Empty;
         StatusText = LoadingLabel;
         ReplacePreview(null);
         ClearEntries();
@@ -197,12 +202,14 @@ public partial class LogoPartitionViewModel : Document
         }
         catch (OperationCanceledException)
         {
+            ErrorMessage = string.Empty;
             StatusText = LoadingLabel;
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException
             or UnauthorizedAccessException or ArgumentException or OverflowException)
         {
-            StatusText = exception.Message;
+            ErrorMessage = exception.Message;
+            StatusText = string.Empty;
             LogService.Instance.Write(LogLevel.Debug, "LogoPartition",
                 $"Failed to open logo partition '{FilePath}': {exception.Message}");
         }
@@ -263,6 +270,7 @@ public partial class LogoPartitionViewModel : Document
         }
 
         IsBusy = true;
+        ErrorMessage = string.Empty;
         try
         {
             var names = await Task.Run(() => LogoPartitionFormat.Extract(FilePath, target,
@@ -276,7 +284,7 @@ public partial class LogoPartitionViewModel : Document
         catch (Exception exception) when (exception is IOException or InvalidDataException
             or UnauthorizedAccessException or ArgumentException or OverflowException)
         {
-            StatusText = FailedLabel;
+            ErrorMessage = FailedLabel;
             LogService.Instance.Write(LogLevel.Debug, "LogoPartition",
                 $"Logo extraction failed: {exception.Message}");
         }
@@ -359,6 +367,7 @@ public partial class LogoPartitionViewModel : Document
             return;
         }
 
+        ErrorMessage = string.Empty;
         StatusText = LoadingLabel;
         try
         {
@@ -374,7 +383,8 @@ public partial class LogoPartitionViewModel : Document
             or UnauthorizedAccessException or ArgumentException or OverflowException)
         {
             ReplacePreview(null);
-            StatusText = exception.Message;
+            ErrorMessage = exception.Message;
+            StatusText = string.Empty;
         }
     }
 

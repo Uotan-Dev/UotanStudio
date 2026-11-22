@@ -35,6 +35,11 @@
   </UserControl.Styles>
 
   <DockPanel>
+    <!-- 顶部错误提示条：与对比视图同一套单行样式与关闭按钮。 -->
+    <!-- Top error banner: same single-line styling and dismiss button as the Compare view. -->
+    <controls:EditorErrorBanner DockPanel.Dock="Top"
+                                Message="{Binding CompileError, Mode=TwoWay}" />
+
     <Border DockPanel.Dock="Top" Padding="16,16,16,6">
       <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
         <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}" VerticalAlignment="Center">
@@ -59,12 +64,6 @@
       </Grid>
     </Border>
 
-    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
-    <!-- Top error banner: same styling as the FileManager editor. -->
-    <Border Classes="error-banner" DockPanel.Dock="Top"
-            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
-    </Border>
     <TabControl Margin="16,0,16,16">
       <TabItem Header="{DynamicResource Apk_General}">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">

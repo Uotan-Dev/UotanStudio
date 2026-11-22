@@ -12,8 +12,11 @@
              x:DataType="vm:ScreenMirrorViewModel"
              x:Class="UotanStudio.Views.Editors.ScreenMirrorView"
              Focusable="True">
-  <Grid RowDefinitions="Auto,*,Auto">
-    <Border Grid.Row="0"
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <controls:EditorErrorBanner Grid.Row="0"
+                                Message="{Binding ErrorMessage, Mode=TwoWay}" />
+
+    <Border Grid.Row="1"
             Padding="8,4"
             Background="{DynamicResource PageBackground}">
       <StackPanel Spacing="2">
@@ -29,7 +32,7 @@
       </StackPanel>
     </Border>
 
-    <Panel Grid.Row="1" Background="Black">
+    <Panel Grid.Row="2" Background="Black">
       <local:ScreenMirrorVideoControl x:Name="FrameImage"
              HorizontalAlignment="Stretch"
              VerticalAlignment="Stretch" />
@@ -41,7 +44,7 @@
                  Text="{Binding DeviceName}" />
     </Panel>
 
-    <Border Grid.Row="2"
+    <Border Grid.Row="3"
             Padding="6"
             Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"

@@ -164,6 +164,9 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private string _statusText = string.Empty;
 
     [ObservableProperty]
+    private string _errorMessage = string.Empty;
+
+    [ObservableProperty]
     private WriteableBitmap? _frame;
 
     [ObservableProperty]
@@ -190,6 +193,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
 
         _serial = serial;
         InputInjectionBlocked = false;
+        ErrorMessage = string.Empty;
         ApplyMirrorSettingsCommand.NotifyCanExecuteChanged();
         StatusText = GetLocalizedString("ScreenMirror_Preparing");
         _startTask = Task.Run(async () =>
@@ -245,7 +249,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
             }
             catch (Exception ex)
             {
-                StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(ex);
+                ErrorMessage = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(ex);
+                StatusText = GetLocalizedString("ScreenMirror_Stopped");
                 Services.LogService.Instance.Write(
                     Services.LogLevel.Error, "ScreenMirror", $"Start failed: {ex.Message}");
                 _client?.Dispose(); _client = null;
@@ -1060,7 +1065,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception}");
             Dispatcher.UIThread.Post(() =>
             {
-                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(exception);
+                if (!_disposed)
+                {
+                    ErrorMessage = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(exception);
+                    StatusText = GetLocalizedString("ScreenMirror_Stopped");
+                }
             });
         }
         catch (Exception) when (token.IsCancellationRequested) { Views.Editors.MirrorTrace.Write("decode loop cancelled"); }

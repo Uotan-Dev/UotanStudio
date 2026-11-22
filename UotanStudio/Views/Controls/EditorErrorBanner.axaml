@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             x:Class="UotanStudio.Views.Controls.EditorErrorBanner"
+             x:DataType="controls:EditorErrorBanner">
+  <Border Padding="6,4"
+          Background="#22C42B1C"
+          BorderBrush="{DynamicResource BorderBrush}"
+          BorderThickness="0,0,0,1"
+          IsVisible="{Binding HasDisplayMessage, RelativeSource={RelativeSource AncestorType=controls:EditorErrorBanner}}">
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding DisplayMessage, RelativeSource={RelativeSource AncestorType=controls:EditorErrorBanner}}"
+                 Foreground="Red"
+                 TextWrapping="Wrap"
+                 FontSize="12"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1"
+              Width="20"
+              Height="20"
+              MinWidth="0"
+              MinHeight="0"
+              Padding="0"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              VerticalAlignment="Center"
+              Click="OnDismissClick"
+              ToolTip.Tip="{DynamicResource Remote_Close}"
+              AutomationProperties.Name="{DynamicResource Remote_Close}">
+        <avalonia:Close Width="12" Height="12" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

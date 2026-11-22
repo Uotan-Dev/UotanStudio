@@ -124,6 +124,10 @@
   </UserControl.Styles>
 
   <DockPanel>
+    <controls:EditorErrorBanner DockPanel.Dock="Top"
+                                Message="{Binding ErrorMessage, Mode=TwoWay}"
+                                DismissCommand="{Binding DismissErrorCommand}" />
+
     <Border DockPanel.Dock="Top" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <!-- 顶部只保留镜像格式与操作按钮，不含镜像文件路径行。 -->
       <!-- Top row keeps only the image format and the action buttons, with no image path row. -->
@@ -162,10 +166,6 @@
         <TextBlock Grid.Column="1" Text="{DynamicResource FileManager_Loading}" FontSize="12" Margin="8,0,0,0"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
       </Grid>
-    </Border>
-
-    <Border Classes="error-banner" DockPanel.Dock="Top" IsVisible="{Binding HasError}">
-      <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
     <Border DockPanel.Dock="Bottom" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">

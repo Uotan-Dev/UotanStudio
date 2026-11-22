@@ -2,23 +2,22 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.RockchipConfigEditorView"
              x:DataType="viewmodels:RockchipConfigEditorViewModel">
   <Grid IsEnabled="{Binding !IsBusy}" RowDefinitions="Auto,Auto,*,Auto">
+    <!-- 错误提示条：与对比视图同一套单行样式与关闭按钮。 -->
+    <controls:EditorErrorBanner Grid.Row="0"
+                                Message="{Binding CompileError, Mode=TwoWay}" />
+
     <!-- 顶部摘要栏：头部长度与行数。 -->
-    <Border Grid.Row="0" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border Grid.Row="1" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <TextBlock Text="{Binding SourceDescription}"
                  VerticalAlignment="Center"
                  FontSize="11" Opacity="0.7" FontFamily="Consolas"
                  TextTrimming="CharacterEllipsis" />
-    </Border>
-
-    <!-- 错误提示条：与其它编辑器同一套样式。 -->
-    <Border Grid.Row="1" Classes="error-banner"
-            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <Grid Grid.Row="2" ColumnDefinitions="*,320">

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:vm="using:UotanStudio.ViewModels"
              xmlns:live="using:UotanStudio.ViewModels.Workspace"
              xmlns:editor="using:UotanStudio.ViewModels.Editors"
@@ -18,8 +19,13 @@
     </Style>
   </UserControl.Styles>
   <Grid RowDefinitions="Auto,Auto,*">
+    <!-- 顶部错误提示条：与对比视图同一套单行样式与关闭按钮（加载/导出失败时出现）。 -->
+    <!-- Top error banner: same single-line styling and dismiss button as the Compare view (shown on load/export failure). -->
+    <controls:EditorErrorBanner Grid.Row="0"
+                                Message="{Binding ErrorMessage, Mode=TwoWay}" />
+
     <!-- 顶栏：筛选与操作按钮 -->
-    <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border Grid.Row="1" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <WrapPanel ItemSpacing="8" LineSpacing="4">
         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11" VerticalAlignment="Center" />
@@ -109,13 +115,6 @@
                    Foreground="{DynamicResource LogErrorBrush}" FontSize="11" MaxWidth="180"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding SearchError}" />
       </WrapPanel>
-    </Border>
-
-    <!-- 顶部错误提示条：与其它编辑器同一套样式（加载/导出失败时出现）。 -->
-    <!-- Top error banner: same styling as the other editors (shown on load/export failure). -->
-    <Border Grid.Row="1" Classes="error-banner"
-            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
     <!-- 日志编辑器 -->

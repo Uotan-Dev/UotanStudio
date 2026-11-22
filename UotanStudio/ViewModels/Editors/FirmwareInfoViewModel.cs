@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Application.Formats;
@@ -296,6 +297,17 @@ public partial class FirmwareInfoViewModel : Document, ITool
         IsRecognized = false;
         IsBusy = false;
         FilePath = null;
+    }
+
+    /// <summary>
+    /// Dismisses the top error banner.
+    /// <para>关闭顶部错误提示栏。</para>
+    /// </summary>
+    [RelayCommand]
+    private void DismissError()
+    {
+        ErrorMessage = string.Empty;
+        HasError = false;
     }
 
     /// <summary>
