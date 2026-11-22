@@ -492,6 +492,9 @@
   <data name="Flash_ChooseFile" xml:space="preserve">
     <value>选择文件</value>
   </data>
+  <data name="Flash_PacFileType" xml:space="preserve">
+    <value>紫光展锐 PAC 包 (*.pac)</value>
+  </data>
   <data name="Flash_ChooseFolder" xml:space="preserve">
     <value>选择目录</value>
   </data>
@@ -4787,6 +4790,12 @@
   </data>
   <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
     <value>选择 FDL2</value>
+  </data>
+  <data name="Flash_UnisocEraseConfirmTitle" xml:space="preserve">
+    <value>擦除分区</value>
+  </data>
+  <data name="Flash_UnisocEraseConfirmDetail" xml:space="preserve">
+    <value>该固件包的 scheme 擦除分区 {0}，而不是写入镜像。该分区内的全部数据都会被销毁且无法恢复。全选不会勾选此行。</value>
   </data>
   <data name="Flash_UnisocFlash" xml:space="preserve">
     <value>烧录固件包</value>

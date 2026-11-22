@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -230,8 +230,72 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Builds one tickable grid row per plan image, each carrying its payload size.
-    /// <para>按计划镜像逐条构建可勾选网格行，每行携带负载大小。</para>
+    /// Confirms a destructive erase the user just ticked. The tick is reverted immediately and only restored once the
+    /// user accepts the confirmation, so the grid never shows an erase as selected before it was agreed to.
+    /// <para>确认用户刚刚勾选的破坏性擦除。勾选会立即撤销，只在用户接受确认后才恢复，因此列表绝不会在得到同意前
+    /// 把擦除显示为已勾选。</para>
+    /// </summary>
+    /// <param name="entry">The erase row that just became selected. <para>刚刚被勾选的擦除行。</para></param>
+    /// <remarks>
+    /// Reverting first keeps the state machine monotonic: a cancelled confirmation leaves the row unticked exactly as
+    /// the user found it, and a second click cannot race the first one into two dialogs. The wipe phrase is the same one
+    /// a full erase asks for, because both destroy data the user did not otherwise choose to overwrite.
+    /// <para>先撤销使状态机保持单调：取消确认后该行回到用户原来看到的未勾选状态，第二次点击也不会与第一次竞态弹出两个窗口。
+    /// 确认短语与整片擦除相同，因为两者都会销毁用户并未选择覆盖的数据。</para>
+    /// </remarks>
+    private async Task ConfirmDestructiveEraseSelectionAsync(FlashPartitionEntry entry)
+    {
+        _suppressDestructiveEraseCheck = true;
+        try
+        {
+            entry.IsSelected = false;
+        }
+        finally
+        {
+            _suppressDestructiveEraseCheck = false;
+        }
+
+        UpdateSelectionState();
+        if (TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        var confirmed = await DialogService.ConfirmDangerousAsync(owner, new DangerousConfirmRequest
+        {
+            TabTitle = _localizer.GetString("Flash_Unisoc"),
+            Title = _localizer.GetString("Flash_UnisocEraseConfirmTitle"),
+            Detail = string.Format(
+                CultureInfo.CurrentCulture,
+                _localizer.GetString("Flash_UnisocEraseConfirmDetail"),
+                entry.Name),
+            ConfirmWord = UnisocFlashOptions.WipeConfirmationPhrase,
+            DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+        }).ConfigureAwait(true);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _suppressDestructiveEraseCheck = true;
+        try
+        {
+            entry.IsSelected = true;
+        }
+        finally
+        {
+            _suppressDestructiveEraseCheck = false;
+        }
+
+        UpdateSelectionState();
+    }
+
+    /// <summary>
+    /// Builds one tickable grid row per plan entry in scheme order, each carrying its payload size; the row name stays
+    /// the plan entry name because the flash path matches ticked rows against that same name. An erase entry gets no
+    /// size and is flagged as destructive so select-all skips it and selecting it asks for confirmation.
+    /// <para>按 scheme 顺序为每个计划条目构建一行可勾选网格行并携带负载大小；行名沿用计划条目名，因为烧录路径
+    /// 以同一个名字匹配已勾选行。擦除条目没有大小并被标记为破坏性，因此全选跳过它，勾选它需要确认。</para>
     /// </summary>
     private static List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan)
     {
@@ -241,9 +305,10 @@ public sealed partial class FlashViewModel
             rows.Add(new FlashPartitionEntry
             {
                 IsScriptStep = false,
+                IsDestructiveErase = image.EraseOnly,
                 Name = image.Name,
                 Offset = string.Empty,
-                Size = FormatByteSize(image.Length),
+                Size = image.EraseOnly ? string.Empty : FormatByteSize(image.Length),
                 AcceptsFile = false
             });
         }

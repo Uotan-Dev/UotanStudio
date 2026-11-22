@@ -260,6 +260,10 @@ public sealed partial class FlashViewModel
             FileTypeFilter =
             [
                 FilePickerFileTypes.All,
+                new FilePickerFileType(_localizer.GetString("Flash_PacFileType"))
+                {
+                    Patterns = ["*.pac"]
+                },
                 new FilePickerFileType(_localizer.GetString("Flash_RkConfigFileType"))
                 {
                     Patterns = ["*.cfg"]

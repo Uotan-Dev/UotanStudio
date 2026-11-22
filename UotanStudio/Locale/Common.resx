@@ -492,6 +492,9 @@ Author: 暮间雾
   <data name="Flash_ChooseFile" xml:space="preserve">
     <value>Select file</value>
   </data>
+  <data name="Flash_PacFileType" xml:space="preserve">
+    <value>Unisoc PAC package (*.pac)</value>
+  </data>
   <data name="Flash_ChooseFolder" xml:space="preserve">
     <value>Select directory</value>
   </data>
@@ -4787,6 +4790,12 @@ Continue?</value>
   </data>
   <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
     <value>Choose FDL2</value>
+  </data>
+  <data name="Flash_UnisocEraseConfirmTitle" xml:space="preserve">
+    <value>Erase partition</value>
+  </data>
+  <data name="Flash_UnisocEraseConfirmDetail" xml:space="preserve">
+    <value>The package scheme erases partition {0} instead of writing an image. Everything stored there is destroyed and cannot be recovered. Select-all never ticks this row.</value>
   </data>
   <data name="Flash_UnisocFlash" xml:space="preserve">
     <value>Flash package</value>

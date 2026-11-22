@@ -55,6 +55,13 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// </summary>
     public bool IsScriptStep { get; set; }
 
+    /// <summary>
+    /// Whether the row erases its partition instead of writing an image. A wipe destroys stored data and cannot be
+    /// undone, so such a row is never included in select-all and its check box asks for confirmation first.
+    /// <para>该行是否擦除其分区而不是写入镜像。擦除会销毁已存数据且不可撤销，因此这类行不参与全选，其复选框在勾选前先请求确认。</para>
+    /// </summary>
+    public bool IsDestructiveErase { get; set; }
+
     /// <summary>Whether the row is selected. <para>是否勾选该分区。</para></summary>
     [ObservableProperty]
     private bool _isSelected;
@@ -149,6 +156,17 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <param name="command">Command token from a script or package. <para>来自脚本或包的命令标记。</para></param>
     /// <returns><see langword="true"/> for <c>flash</c>, <c>wipe_super</c> and the empty fallback.
     /// <para><c>flash</c>、<c>wipe_super</c> 与空回退都为 <see langword="true"/>。</para></returns>
+    /// <summary>
+    /// Whether select-all may tick this row. A script step has no individually runnable action, and an erase row
+    /// destroys stored data, so neither is ever opted in by a bulk action.
+    /// <para>全选是否可以勾选该行。脚本步骤没有可单独执行的动作，擦除行会销毁已存数据，因此批量动作绝不替用户勾选它们。</para>
+    /// </summary>
+    /// <param name="entry">Row to test. <para>要判断的行。</para></param>
+    /// <returns><see langword="true"/> when the row takes part in select-all.
+    /// <para>该行参与全选时为 <see langword="true"/>。</para></returns>
+    internal static bool TakesSelectAll(FlashPartitionEntry entry) =>
+        !entry.IsScriptStep && !entry.IsDestructiveErase;
+
     internal static bool CommandTakesFile(string? command) =>
         string.IsNullOrWhiteSpace(command) ||
         command.Equals("flash", StringComparison.OrdinalIgnoreCase) ||
@@ -220,6 +238,13 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <para>一次发布的最大挂起字符数，与行数阈值取先到的一个，保证超长单行也能及时发布。</para>
     /// </summary>
     private const int LogFlushCharacterThreshold = 4096;
+
+    /// <summary>
+    /// Guards the selection changes this view model makes itself while confirming a destructive erase, so reverting or
+    /// restoring the tick does not start a second confirmation.
+    /// <para>在确认破坏性擦除期间，保护本视图模型自身做出的勾选变更，使撤销与恢复勾选都不会再触发一次确认。</para>
+    /// </summary>
+    private bool _suppressDestructiveEraseCheck;
 
     /// <summary>
     /// Tail window kept in <see cref="LogText"/>; beyond it only the prefix is dropped and the buffer shrinks
@@ -399,10 +424,13 @@ public sealed partial class FlashViewModel : ObservableObject
         try
         {
             // Script-step rows carry no individually runnable action, so select-all leaves their disabled boxes alone.
-            // 脚本步骤行没有可单独执行的动作，因此全选不触碰其禁用的复选框。
+            // Erase rows destroy stored data, so select-all never opts the user into them: they keep their own state and
+            // are only ever ticked one by one behind a confirmation.
+            // 脚本步骤行没有可单独执行的动作，因此全选不触碰其禁用的复选框。擦除行会销毁已存数据，全选绝不替用户勾选它们：
+            // 这类行保持各自状态，只能在确认后逐个勾选。
             foreach (var entry in VisiblePartitions)
             {
-                if (!entry.IsScriptStep)
+                if (FlashPartitionEntry.TakesSelectAll(entry))
                 {
                     entry.IsSelected = value;
                 }
@@ -595,6 +623,12 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(FlashPartitionEntry.IsSelected))
         {
+            if (!_suppressDestructiveEraseCheck &&
+                sender is FlashPartitionEntry { IsSelected: true, IsDestructiveErase: true } erase)
+            {
+                _ = ConfirmDestructiveEraseSelectionAsync(erase);
+            }
+
             UpdateSelectionState();
             if (sender is FlashPartitionEntry { IsSelected: true } selected)
             {
@@ -681,9 +715,10 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         SelectedCount = Partitions.Count(entry => entry.IsSelected);
         HasSelectedPartitions = SelectedCount > 0;
-        // Select-all reflects the rows a user can actually check; the disabled script-step rows never count.
-        // 全选反映用户真正能勾选的行；禁用的脚本步骤行不参与判断。
-        var selectable = VisiblePartitions.Where(entry => !entry.IsScriptStep).ToArray();
+        // Select-all reflects the rows a user can actually check; the disabled script-step rows and the erase rows that
+        // select-all deliberately skips never count toward it.
+        // 全选反映用户真正能勾选的行；禁用的脚本步骤行与全选有意跳过的擦除行都不参与判断。
+        var selectable = VisiblePartitions.Where(FlashPartitionEntry.TakesSelectAll).ToArray();
         var allVisibleSelected = selectable.Length > 0 && selectable.All(entry => entry.IsSelected);
         _updatingSelectAll = true;
         try
