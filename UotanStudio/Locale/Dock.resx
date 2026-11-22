@@ -2130,4 +2130,7 @@
   <data name="Dock_Logo_ColumnSize" xml:space="preserve">
     <value>Size</value>
   </data>
+  <data name="Dock_Logo_ColumnBytes" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
 </root>

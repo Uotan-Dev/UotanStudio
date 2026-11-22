@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,7 +10,6 @@ using UotanStudio.Firmware.BootSecurity.LogoPartition;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
-using UotanStudio.Services.Firmware;
 using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -18,12 +18,16 @@ namespace UotanStudio.ViewModels.Editors;
 /// One embedded image row in the logo partition tool.
 /// <para>Logo 分区工具中的一条内嵌图片行。</para>
 /// </summary>
-public sealed class LogoPartitionEntryItem
+public sealed partial class LogoPartitionEntryItem : ObservableObject
 {
     /// <summary>Creates a display row from a validated container entry.
     /// <para>由经过校验的容器条目创建展示行。</para></summary>
     /// <param name="entry">Parsed entry. <para>已解析的条目。</para></param>
     public LogoPartitionEntryItem(LogoPartitionEntry entry) => Entry = entry;
+
+    /// <summary>Whether the row is checked for batch extraction.
+    /// <para>该行是否被勾选用于提取。</para></summary>
+    [ObservableProperty] private bool _isSelected;
 
     /// <summary>Parsed entry backing this row. <para>本行对应的已解析条目。</para></summary>
     public LogoPartitionEntry Entry { get; }
@@ -39,54 +43,25 @@ public sealed class LogoPartitionEntryItem
     /// <summary>Pixel encoding text. <para>像素编码文本。</para></summary>
     public string Encoding => Entry.Encoding.ToString();
 
-    /// <summary>Stored payload size text. <para>负载大小的展示文本。</para></summary>
-    public string SizeText => $"{Entry.DataSize:N0} bytes";
-}
+    /// <summary>Human-readable payload size text in B/KB/MB.
+    /// <para>换算为 B/KB/MB 的可读负载大小文本。</para></summary>
+    public string SizeText => ProgressMeter.FormatSize(Entry.DataSize);
 
-/// <summary>
-/// One related-partition row in the logo partition tool.
-/// <para>Logo 分区工具中的一条相关分区行。</para>
-/// </summary>
-public sealed class RelatedPartitionRow
-{
-    /// <summary>Creates a display row from a discovered sibling partition.
-    /// <para>由探测到的同目录分区创建展示行。</para></summary>
-    /// <param name="item">Discovery result. <para>探测结果。</para></param>
-    public RelatedPartitionRow(RelatedPartitionItem item) => Item = item;
-
-    /// <summary>Discovery result backing this row. <para>本行对应的探测结果。</para></summary>
-    public RelatedPartitionItem Item { get; }
-
-    /// <summary>Partition name. <para>分区名。</para></summary>
-    public string Name => Item.Name;
-
-    /// <summary>Localized size text, or the missing marker. <para>本地化大小文本；缺失时显示缺失标记。</para></summary>
-    public string SizeText => Item.Exists
-        ? $"{Item.Length:N0} bytes"
-        : LanguageService.Instance.GetString("Dock_Logo_RelatedMissing");
-
-    /// <summary>Localized capability marker. <para>本地化能力标记。</para></summary>
-    public string Capability => !Item.Exists
-        ? LanguageService.Instance.GetString("Dock_Logo_RelatedMissing")
-        : LanguageService.Instance.GetString(Item.IsLogoContainer
-            ? "Dock_Logo_CapabilityExtract"
-            : "Dock_Logo_CapabilityOpen");
-
-    /// <summary>Whether the row can be opened. <para>该行是否可打开。</para></summary>
-    public bool CanOpen => Item.Exists;
+    /// <summary>Raw payload byte count without unit suffix.
+    /// <para>不带单位的原始负载字节数文本。</para></summary>
+    public string BytesText => $"{Entry.DataSize:N0}";
 }
 
 /// <summary>
 /// Read-only logo partition workbench: opens a logo/splash container, lists its embedded images with a
-/// preview, extracts entries to a chosen directory and offers one-click opening of the related boot
-/// partitions found beside it.
-/// <para>只读 Logo 分区工作台：打开 Logo/splash 容器、列出内嵌图片并预览、把条目提取到指定目录，
-/// 并支持一键打开同目录下发现的相关启动分区。</para>
+/// preview, and extracts entries to a chosen directory.
+/// <para>只读 Logo 分区工作台：打开 Logo/splash 容器、列出内嵌图片并预览，把条目提取到指定目录。</para>
 /// </summary>
 public partial class LogoPartitionViewModel : Document
 {
     private readonly List<string> _temporaryFiles = [];
     private LogoPartitionImage? _image;
+    private bool _updatingSelection;
 
     /// <summary>The localized loading status. <para>本地化的加载状态文案。</para></summary>
     public static string LoadingLabel => LanguageService.Instance.GetString("Dock_Logo_Loading");
@@ -121,15 +96,37 @@ public partial class LogoPartitionViewModel : Document
     /// <summary>Selected embedded image row. <para>当前选中的内嵌图片行。</para></summary>
     [ObservableProperty] private LogoPartitionEntryItem? _selectedEntry;
 
-    /// <summary>Selected related-partition row. <para>当前选中的相关分区行。</para></summary>
-    [ObservableProperty] private RelatedPartitionRow? _selectedRelated;
-
     /// <summary>Embedded image rows in container order. <para>按容器顺序排列的内嵌图片行。</para></summary>
     public ObservableCollection<LogoPartitionEntryItem> Entries { get; } = [];
 
-    /// <summary>Related boot/display partitions found beside the opened file.
-    /// <para>在打开文件旁发现的相关启动/显示分区。</para></summary>
-    public ObservableCollection<RelatedPartitionRow> RelatedPartitions { get; } = [];
+    /// <summary>Whether all embedded image rows are checked.
+    /// <para>是否已勾选全部内嵌图片行。</para></summary>
+    public bool IsAllSelected
+    {
+        get => Entries.Count > 0 && Entries.All(static item => item.IsSelected);
+        set
+        {
+            if (_updatingSelection)
+            {
+                return;
+            }
+
+            _updatingSelection = true;
+            try
+            {
+                foreach (var item in Entries)
+                {
+                    item.IsSelected = value;
+                }
+            }
+            finally
+            {
+                _updatingSelection = false;
+            }
+
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>Whether a decoded preview is available. <para>是否已有解码预览。</para></summary>
     public bool HasPreview => Preview is not null;
@@ -139,9 +136,9 @@ public partial class LogoPartitionViewModel : Document
     public LogoPartitionImage? Image => _image;
 
     /// <summary>
-    /// Loads the container at <paramref name="path"/>, reads its entry table and magic description, and
-    /// populates the related-partition list. Failures are reported as status text instead of throwing.
-    /// <para>载入 <paramref name="path"/> 指向的容器，读取条目表与魔数描述并填充相关分区列表；
+    /// Loads the container at <paramref name="path"/> and reads its entry table and magic description.
+    /// Failures are reported as status text instead of throwing.
+    /// <para>载入 <paramref name="path"/> 指向的容器并读取条目表与魔数描述；
     /// 失败以状态文案上报而不抛异常。</para>
     /// </summary>
     /// <param name="path">Absolute or relative path of the partition. <para>分区的绝对或相对路径。</para></param>
@@ -152,8 +149,7 @@ public partial class LogoPartitionViewModel : Document
         IsBusy = true;
         StatusText = LoadingLabel;
         ReplacePreview(null);
-        Entries.Clear();
-        RelatedPartitions.Clear();
+        ClearEntries();
 
         try
         {
@@ -165,10 +161,12 @@ public partial class LogoPartitionViewModel : Document
 
             foreach (var entry in image.Entries)
             {
-                Entries.Add(new LogoPartitionEntryItem(entry));
+                var item = new LogoPartitionEntryItem(entry);
+                item.PropertyChanged += OnEntryPropertyChanged;
+                Entries.Add(item);
             }
 
-            RefreshRelated();
+            OnPropertyChanged(nameof(IsAllSelected));
             StatusText = Entries.Count == 0 ? EmptyLabel : string.Empty;
             if (Entries.Count > 0)
             {
@@ -192,11 +190,7 @@ public partial class LogoPartitionViewModel : Document
         }
     }
 
-    /// <summary>
-    /// Extracts the selected entry or all entries to a user-chosen directory.
-    /// <para>把选中条目或全部条目提取到用户选择的目录。</para>
-    /// </summary>
-    /// <summary>Extracts only the selected embedded image. <para>只提取选中的内嵌图片。</para></summary>
+    /// <summary>Extracts the checked embedded images. <para>提取勾选的内嵌图片。</para></summary>
     [RelayCommand]
     private Task ExtractSelectedAsync() => ExtractCoreAsync(all: false);
 
@@ -211,10 +205,17 @@ public partial class LogoPartitionViewModel : Document
             return;
         }
 
-        var selected = all ? null : SelectedEntry;
-        if (!all && selected is null)
+        HashSet<string>? filter = null;
+        if (!all)
         {
-            return;
+            filter = Entries
+                .Where(static item => item.IsSelected)
+                .Select(static item => item.Entry.FileName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (filter.Count == 0)
+            {
+                return;
+            }
         }
 
         var topLevel = TopLevelExtensions.GetTopLevel();
@@ -243,8 +244,7 @@ public partial class LogoPartitionViewModel : Document
         try
         {
             var names = await Task.Run(() => LogoPartitionFormat.Extract(FilePath, target,
-                    selected is null ? null : new HashSet<string>(StringComparer.OrdinalIgnoreCase) { selected.Entry.FileName },
-                    overwrite: true))
+                    filter, overwrite: true))
                 .ConfigureAwait(true);
             StatusText = string.Format(
                 LanguageService.Instance.GetString("Dock_Logo_ExtractDone"), names.Count);
@@ -262,38 +262,6 @@ public partial class LogoPartitionViewModel : Document
         {
             IsBusy = false;
         }
-    }
-
-    /// <summary>Rescans the sibling directory for related partitions.
-    /// <para>重新扫描同目录的相关分区。</para></summary>
-    [RelayCommand]
-    private void RefreshRelated()
-    {
-        RelatedPartitions.Clear();
-        if (string.IsNullOrWhiteSpace(FilePath))
-        {
-            return;
-        }
-
-        foreach (var item in LogoPartitionCatalog.Scan(FilePath))
-        {
-            RelatedPartitions.Add(new RelatedPartitionRow(item));
-        }
-    }
-
-    /// <summary>Opens a related partition with the existing document dispatch chain.
-    /// <para>用现有文档派发链路打开相关分区。</para></summary>
-    /// <param name="row">Row to open. <para>要打开的行。</para></param>
-    [RelayCommand]
-    private void OpenRelated(RelatedPartitionRow? row)
-    {
-        if (row is not { CanOpen: true })
-        {
-            return;
-        }
-
-        var mode = row.Item.IsLogoContainer ? EditorOpenMode.LogoPartition : EditorOpenMode.Auto;
-        WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(row.Item.Path, mode));
     }
 
     /// <summary>Opens the selected embedded image in the image viewer through a temporary file.
@@ -407,6 +375,25 @@ public partial class LogoPartitionViewModel : Document
 
         Preview = next;
         previous?.Dispose();
+    }
+
+    private void ClearEntries()
+    {
+        foreach (var item in Entries)
+        {
+            item.PropertyChanged -= OnEntryPropertyChanged;
+        }
+
+        Entries.Clear();
+        OnPropertyChanged(nameof(IsAllSelected));
+    }
+
+    private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!_updatingSelection && e.PropertyName == nameof(LogoPartitionEntryItem.IsSelected))
+        {
+            OnPropertyChanged(nameof(IsAllSelected));
+        }
     }
 
     private static string IdentifyMagic(string path)

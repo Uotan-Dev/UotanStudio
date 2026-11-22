@@ -2872,6 +2872,7 @@ internal static class LocaleKeySets
         "Dock_Logo_ColumnDimensions",
         "Dock_Logo_ColumnEncoding",
         "Dock_Logo_ColumnSize",
+        "Dock_Logo_ColumnBytes",
     ];
 
     internal static readonly string[] Node =
