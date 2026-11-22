@@ -13,6 +13,7 @@
 | `drivers/google-usb/`、`drivers/rockchip-adb/` | `android_winusb.inf`、两份 `.cat`；rockchip 另带 `NOTICE.txt` | Google USB Driver r13 与 Rockchip DriverAssistant 的 ADB 包；两包不再各存一份 amd64 coinstaller，改由 `drivers/winusb-coinstaller/` 共享 |
 | `drivers/winusb-coinstaller/` | `amd64__WdfCoInstaller01009.dll`、`amd64__winusbcoinstaller2.dll` | Google USB Driver r13 的 amd64 coinstaller；原样逐字节重复于多个 ADB 包，故只随包一份，由 `DriverPackageAssets` 在物化时合并 |
 | `drivers/qualcomm-qud/` | 高通 QUD 全家桶 INF/CAT/SYS，按 `__` 编码目录 | 高通 QUD 官方签名包 |
+| `drivers/unisoc-spreadtrum/` | 紫光展锐 `sprdadb`/`sprdvcom`/`sprdvmdm`/`rdavcom` 的 INF+CAT、amd64 `.sys` 与 coinstaller，按 `__` 编码目录 | 紫光展锐官方 Windows 驱动包，来源与随包范围见 `reference/driver-pkg/README.md`；该包不含 `android_winusb.inf`，故自备 coinstaller 而不依赖共享包 |
 | `delivery/` | `update-binary-arm64` | 固定版本的原生 arm64 Edify 更新器，用途、卡刷调用与设备侧边界见 `UotanStudio.Pipeline/README.md` |
 | `firmware/magic/` | `CompiledMagicData.zst` | 由 `UotanStudio.Firmware.MagicGen` 从 vendored magic(5) 语料生成，语料来源与 BSD-4-Clause 许可见 `UotanStudio.Firmware.MagicGen/corpus/README.md` |
 | `scrcpy/` | `scrcpy-server.jar`（可选） | 仓库不随包该二进制；目录为空时 `scrcpy` bundle 未随包，`AssetCatalog.ScrcpyServer.IsPresent` 为 `false` |

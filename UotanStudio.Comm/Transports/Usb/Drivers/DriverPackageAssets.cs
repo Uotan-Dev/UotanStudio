@@ -255,6 +255,7 @@ internal static class DriverPackageAssets
         "google-usb" => AssetCatalog.GoogleUsbDriver,
         "rockchip-adb" => AssetCatalog.RockchipAdbDriver,
         "qualcomm-qud" => AssetCatalog.QualcommQudDriver,
+        "unisoc-spreadtrum" => AssetCatalog.UnisocSpreadtrumDriver,
         _ => null,
     };
 

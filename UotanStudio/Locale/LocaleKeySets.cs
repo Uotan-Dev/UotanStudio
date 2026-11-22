@@ -4042,6 +4042,7 @@ internal static class LocaleKeySets
         "DriverPackage_GoogleUsb_Name",
         "DriverPackage_RockchipAdb_Name",
         "DriverPackage_QualcommQud_Name",
+        "DriverPackage_UnisocSpreadtrum_Name",
         "DriverPackage_WchSerial_Name",
         "DriverPackage_HuaweiHiSuite_Name",
     ];

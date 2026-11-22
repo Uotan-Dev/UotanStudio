@@ -810,6 +810,9 @@
   <data name="DriverPackage_QualcommQud_Name" xml:space="preserve">
     <value>高通 USB 驱动（QUD 1.00.95.6）</value>
   </data>
+  <data name="DriverPackage_UnisocSpreadtrum_Name" xml:space="preserve">
+    <value>紫光展锐 USB 驱动（SPRD）</value>
+  </data>
   <data name="DriverPackage_WchSerial_Name" xml:space="preserve">
     <value>沁恒 CH341SER 与 CH343SER</value>
   </data>

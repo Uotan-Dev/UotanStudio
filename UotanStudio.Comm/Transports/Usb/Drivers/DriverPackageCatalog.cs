@@ -35,6 +35,9 @@ public static class DriverPackageCatalog
         Describe("qualcomm-qud", "QualcommQud", "Qualcomm",
             ["qcadb.inf", "qcfilter.inf", "qcwdfmdm.inf", "qcwdfser.inf", "qcwwan.inf", "qdbusb.inf"],
             null),
+        Describe("unisoc-spreadtrum", "UnisocSpreadtrum", "Unisoc",
+            ["sprdadb.inf", "sprdvcom.inf", "sprdvmdm.inf", "rdavcom.inf"],
+            null),
         Describe("wch-serial", "WchSerial", "Wch", [], "SelfExtractorOnly"),
         Describe("huawei-hisuite", "HuaweiHiSuite", "Huawei", [], "LicenseAndSize"),
     ];

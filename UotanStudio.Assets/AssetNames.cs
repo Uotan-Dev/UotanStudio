@@ -30,6 +30,9 @@ public static class AssetNames
         public const string RockchipAdbDriver = "drivers/rockchip-adb";
         /// <summary>Qualcomm QUD driver package. <para>高通 QUD 驱动包。</para></summary>
         public const string QualcommQudDriver = "drivers/qualcomm-qud";
+        /// <summary>UNISOC (Spreadtrum) USB serial, ADB and modem driver package.
+        /// <para>紫光展锐 USB 串口、ADB 与调制解调器驱动包。</para></summary>
+        public const string UnisocSpreadtrumDriver = "drivers/unisoc-spreadtrum";
         /// <summary>amd64 coinstallers shared by every INF that binds WinUSB.
         /// <para>每个绑定 WinUSB 的 INF 共用的 amd64 coinstaller。</para></summary>
         public const string WinUsbCoinstaller = "drivers/winusb-coinstaller";

@@ -1,3 +1,4 @@
+using UotanStudio.Assets;
 using UotanStudio.Comm.Transports.Usb.Drivers;
 using Xunit;
 
@@ -38,6 +39,33 @@ public sealed class DriverPackageCatalogMatchTests
         var package = DriverPackageCatalog.FindMatch(["USB\\VID_0E8D&PID_2000"]);
 
         Assert.Equal("mediatek-vcom", package?.Id);
+    }
+
+    [Fact]
+    public void FindMatch_UnisocDownloadAndAdbHardwareIds_MatchesSpreadtrumPackage()
+    {
+        var download = DriverPackageCatalog.FindMatch([@"USB\VID_1782&PID_4D00"]);
+        var adb = DriverPackageCatalog.FindMatch([@"USB\VID_1782&PID_5A5B&MI_01"]);
+        var diag = DriverPackageCatalog.FindMatch([@"USB\VID_0525&PID_A4A7"]);
+
+        Assert.Equal("unisoc-spreadtrum", download?.Id);
+        Assert.Equal("unisoc-spreadtrum", adb?.Id);
+        Assert.Equal("unisoc-spreadtrum", diag?.Id);
+    }
+
+    [Fact]
+    public void Find_UnisocSpreadtrum_BundlesAllFourInfsForAmd64()
+    {
+        var package = DriverPackageCatalog.Find("unisoc-spreadtrum");
+
+        Assert.NotNull(package);
+        Assert.True(package.IsAvailable);
+        Assert.All(["sprdadb.inf", "sprdvcom.inf", "sprdvmdm.inf", "rdavcom.inf"],
+            inf => Assert.Contains(inf, package.InfFileNames));
+        var paths = AssetCatalog.UnisocSpreadtrumDriver.Entries.Select(static entry => entry.Path).ToList();
+        Assert.Contains("amd64__sprdvcom.sys", paths);
+        Assert.Contains("amd64__winusbcoinstaller2.dll", paths);
+        Assert.DoesNotContain(paths, static path => path.StartsWith("i386__", StringComparison.Ordinal));
     }
 
     [Fact]

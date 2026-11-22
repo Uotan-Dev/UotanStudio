@@ -57,6 +57,10 @@
       <LogicalName>assets/drivers/qualcomm-qud/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\unisoc-spreadtrum\*.zst">
+      <LogicalName>assets/drivers/unisoc-spreadtrum/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
     <EmbeddedResource Include="Assets\drivers\winusb-coinstaller\*.zst">
       <LogicalName>assets/drivers/winusb-coinstaller/%(Filename)%(Extension)</LogicalName>
       <WithCulture>false</WithCulture>

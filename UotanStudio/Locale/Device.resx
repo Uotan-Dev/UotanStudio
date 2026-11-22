@@ -810,6 +810,9 @@
   <data name="DriverPackage_QualcommQud_Name" xml:space="preserve">
     <value>Qualcomm USB Driver (QUD 1.00.95.6)</value>
   </data>
+  <data name="DriverPackage_UnisocSpreadtrum_Name" xml:space="preserve">
+    <value>UNISOC (Spreadtrum) USB Driver (SPRD)</value>
+  </data>
   <data name="DriverPackage_WchSerial_Name" xml:space="preserve">
     <value>WCH CH341SER and CH343SER</value>
   </data>

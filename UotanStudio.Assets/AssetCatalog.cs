@@ -48,6 +48,10 @@ public static class AssetCatalog
     /// </summary>
     public static AssetBundle QualcommQudDriver => BundledManifest.Get(AssetNames.Bundles.QualcommQudDriver);
 
+    /// <summary>UNISOC (Spreadtrum) USB serial, ADB and modem driver package staged for driver installation.
+    /// <para>为驱动安装暂存的紫光展锐 USB 串口、ADB 与调制解调器驱动包。</para></summary>
+    public static AssetBundle UnisocSpreadtrumDriver => BundledManifest.Get(AssetNames.Bundles.UnisocSpreadtrumDriver);
+
     /// <summary>amd64 coinstallers shared by every bundled INF that binds WinUSB; consumers materialize it
     /// alongside the vendor package instead of duplicating the payloads per bundle.
     /// <para>每个随包且绑定 WinUSB 的 INF 共用的 amd64 coinstaller；消费方把它与厂商包一起物化，而不是在每个
@@ -86,6 +90,7 @@ public static class AssetCatalog
         GoogleUsbDriver,
         RockchipAdbDriver,
         QualcommQudDriver,
+        UnisocSpreadtrumDriver,
         WinUsbCoinstaller,
         DeliveryUpdater,
         MagicRules,
