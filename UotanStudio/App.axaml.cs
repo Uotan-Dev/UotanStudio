@@ -7,9 +7,6 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
-#if DEBUG
-using Dock.Avalonia.Diagnostics;
-#endif
 using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Composition;
 using UotanStudio.Fonts;
@@ -84,10 +81,6 @@ public partial class App : Application
                 LanguageService.Instance.ApplyTheme(key);
             }
         };
-#if DEBUG
-        this.AttachDeveloperTools();
-        this.AttachDockDebugOverlay(new KeyGesture(Key.F9));
-#endif
     }
 
     public override void OnFrameworkInitializationCompleted()
