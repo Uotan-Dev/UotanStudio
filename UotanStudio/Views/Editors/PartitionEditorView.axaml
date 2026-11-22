@@ -49,12 +49,10 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
-    <!-- 栏目标题（分区 / 属性）与属性行标签统一字号，视觉层级一致。 -->
-    <!-- Column headings (Partitions / Properties) share the property-row label size. -->
+    <!-- 栏目标题（分区 / 属性）与 Logo 分区页次标题统一字号与字重。 -->
+    <!-- Column headings (Partitions / Properties) match the Logo partition subheadings. -->
     <Style Selector="TextBlock.pane-title">
-      <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Opacity" Value="0.8" />
     </Style>
     <Style Selector="TextBlock.field-label">
       <Setter Property="FontSize" Value="13" />
@@ -79,10 +77,9 @@
       <Setter Property="Margin" Value="0" />
     </Style>
 
-    <!-- 容量摘要：比「分区」「属性」标题（13px 半粗）再大一档，突出数据源总量。 -->
-    <!-- Capacity summary: one step above the 13px semibold pane titles. -->
+    <!-- 容量摘要：与次标题统一字号与字重。 -->
+    <!-- Capacity summary: matches the subheading font size and weight. -->
     <Style Selector="TextBlock.capacity">
-      <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -90,15 +87,17 @@
   </UserControl.Styles>
 
   <DockPanel IsEnabled="{Binding !IsBusy}">
-    <!-- 顶部工具栏：数据源描述 + 表副本选择器。
-         下拉框只在一部分镜像上出现，隐藏时若只靠内容撑高，整条会比有下拉框时矮一截；
-         这里给行容器固定 22px 最小高度（与 ComboBox.Small 等高），两种情况下顶栏完全一致。 -->
-    <!-- Top toolbar: the data-source description plus the table-copy selector. The selector only exists for
-         some images; without a fixed row height the strip collapses when it is hidden. A 22px MinHeight
-         (the ComboBox.Small height) keeps the toolbar identical in both cases. -->
-    <Border DockPanel.Dock="Top" Padding="8,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel MinHeight="22">
-        <ComboBox DockPanel.Dock="Right" Classes="Small" MinWidth="180" Margin="8,0,0,0"
+    <!-- 顶部标题栏：标题 + 数据源描述 + 表副本选择器。 -->
+    <!-- Top header: title, data-source description, and the table-copy selector. -->
+    <Border DockPanel.Dock="Top" Padding="16,12,16,4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{DynamicResource Dock_Partition_Title}" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding SourceDescription}" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding SourceDescription}" Opacity="0.7" />
+        </StackPanel>
+        <ComboBox Grid.Column="1" Classes="Small" MinWidth="180"
+                  VerticalAlignment="Center"
                   IsVisible="{Binding HasTableCopies}"
                   ItemsSource="{Binding TableCopies}"
                   SelectedItem="{Binding SelectedTableCopy, Mode=TwoWay}">
@@ -108,11 +107,7 @@
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <TextBlock Text="{Binding SourceDescription}"
-                   VerticalAlignment="Center"
-                   FontSize="11" Opacity="0.7"
-                   TextTrimming="CharacterEllipsis" />
-      </DockPanel>
+      </Grid>
     </Border>
 
     <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
@@ -127,7 +122,7 @@
     <!-- GNOME Disks style visual partition band: the capacity summary and the add/remove buttons sit
          directly above the band (4px gap); a separator and 3px padding separate them from the toolbar
          above, so the buttons neither hug the combo box nor drift away from the coloured band. -->
-    <Border DockPanel.Dock="Top" Padding="8,3,8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Padding="16,3,16,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <StackPanel Spacing="4">
         <DockPanel LastChildFill="False">
           <!-- 图标按钮：与日志窗口顶栏的清空日志按钮同规格（20×20，图标 12）。 -->
@@ -196,12 +191,12 @@
     </Border>
 
     <!-- 左：分区列表（含搜索）；右：选中分区属性编辑 -->
-    <Grid ColumnDefinitions="280,*">
+    <Grid ColumnDefinitions="280,*" Margin="16,0,16,16">
       <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="6,6,6,4"
+          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="0,6,8,4"
                      Text="{x:Static viewmodels:PartitionEditorViewModel.PartitionsLabel}" />
-          <TextBox DockPanel.Dock="Top" Classes="Small" Margin="6,0,6,4"
+          <TextBox DockPanel.Dock="Top" Classes="Small" Margin="0,0,8,4"
                    Text="{Binding SearchText, Mode=TwoWay}"
                    PlaceholderText="{x:Static viewmodels:PartitionEditorViewModel.SearchLabel}"
                    AutomationProperties.Name="{x:Static viewmodels:PartitionEditorViewModel.SearchLabel}">
@@ -213,7 +208,7 @@
               </Button>
             </TextBox.InnerRightContent>
           </TextBox>
-          <TextBlock DockPanel.Dock="Top" Margin="6,0,6,4" FontSize="11" Opacity="0.6"
+          <TextBlock DockPanel.Dock="Top" Margin="0,0,8,4" FontSize="11" Opacity="0.6"
                      IsVisible="{Binding HasNoSearchResult}"
                      Text="{x:Static viewmodels:PartitionEditorViewModel.NoSearchResultLabel}" />
           <TreeView x:Name="PartitionTree" Classes="partition-tree"
@@ -243,13 +238,13 @@
 
       <Border Grid.Column="1">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="6,6,6,4"
+          <TextBlock DockPanel.Dock="Top" Classes="pane-title" Margin="8,6,0,4"
                      Text="{x:Static viewmodels:PartitionEditorViewModel.PropertiesLabel}" />
           <TextBlock Text="{x:Static viewmodels:PartitionEditorViewModel.NoSelectionLabel}"
                      Margin="8,8,0,0" FontSize="13" Opacity="0.6"
                      IsVisible="{Binding HasSelection, Converter={x:Static BoolConverters.Not}}" />
           <ScrollViewer IsVisible="{Binding HasSelection}">
-            <StackPanel Margin="8" Spacing="6">
+            <StackPanel Margin="8,8,0,0" Spacing="6">
               <Grid ColumnDefinitions="120,*" RowDefinitions="Auto">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
                            Text="{x:Static viewmodels:PartitionEditorViewModel.NameLabel}" />

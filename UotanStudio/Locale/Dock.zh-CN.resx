@@ -2065,7 +2065,7 @@
     <value>内嵌图片数</value>
   </data>
   <data name="Dock_Logo_Title" xml:space="preserve">
-    <value>Logo 分区工作台</value>
+    <value>Logo 分区编辑器</value>
   </data>
   <data name="Dock_Logo_Entries" xml:space="preserve">
     <value>内嵌图片</value>
@@ -2132,5 +2132,14 @@
   </data>
   <data name="Dock_Logo_ColumnBytes" xml:space="preserve">
     <value>字节</value>
+  </data>
+  <data name="Dock_Partition_Title" xml:space="preserve">
+    <value>分区表编辑器</value>
+  </data>
+  <data name="Apk_General" xml:space="preserve">
+    <value>基本信息</value>
+  </data>
+  <data name="Apk_Permissions" xml:space="preserve">
+    <value>权限</value>
   </data>
 </root>

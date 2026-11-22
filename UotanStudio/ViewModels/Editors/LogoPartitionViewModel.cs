@@ -79,10 +79,14 @@ public partial class LogoPartitionViewModel : Document
     [ObservableProperty] private string? _filePath;
 
     /// <summary>Human-readable container format name. <para>可读的容器格式名。</para></summary>
-    [ObservableProperty] private string _formatName = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SubtitleText))]
+    private string _formatName = string.Empty;
 
     /// <summary>Description produced by the compiled magic engine. <para>编译型魔数引擎给出的类型描述。</para></summary>
-    [ObservableProperty] private string _magicDescription = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SubtitleText))]
+    private string _magicDescription = string.Empty;
 
     /// <summary>Status text shown in place of the preview. <para>替代预览显示的状态文案。</para></summary>
     [ObservableProperty] private string _statusText = string.Empty;
@@ -130,6 +134,24 @@ public partial class LogoPartitionViewModel : Document
 
     /// <summary>Whether a decoded preview is available. <para>是否已有解码预览。</para></summary>
     public bool HasPreview => Preview is not null;
+
+    /// <summary>Combined header subtitle showing the format name and, when identified, the magic description.
+    /// <para>合并后的顶部副标题：显示格式名，并在魔数已识别时附加魔数描述。</para></summary>
+    public string SubtitleText
+    {
+        get
+        {
+            var unknown = LanguageService.Instance.GetString("Dock_Logo_MagicUnknown");
+            var hasMagic = !string.IsNullOrWhiteSpace(MagicDescription)
+                && !string.Equals(MagicDescription, unknown, StringComparison.Ordinal);
+            if (string.IsNullOrWhiteSpace(FormatName))
+            {
+                return hasMagic ? MagicDescription : string.Empty;
+            }
+
+            return hasMagic ? $"{FormatName}, {MagicDescription}" : FormatName;
+        }
+    }
 
     /// <summary>Parsed container metadata, or null before the first successful load.
     /// <para>已解析的容器元数据；首次成功加载前为 null。</para></summary>

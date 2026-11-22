@@ -2,57 +2,105 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="using:System"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.ApkEditorView"
              x:DataType="viewmodels:ApkEditorViewModel">
+  <UserControl.Styles>
+    <Style Selector="TabItem">
+      <Setter Property="HeaderTemplate">
+        <DataTemplate x:DataType="sys:String">
+          <TextBlock Text="{Binding}" FontWeight="SemiBold" />
+        </DataTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="controls|ResponsiveFormRow.info-row">
+      <Setter Property="MinLabelWidth" Value="170" />
+      <Setter Property="MaxLabelWidth" Value="210" />
+      <Setter Property="MinEditorWidth" Value="180" />
+      <Setter Property="ColumnSpacing" Value="16" />
+      <Setter Property="RowSpacing" Value="4" />
+      <Setter Property="Margin" Value="4,5" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+    <Style Selector="SelectableTextBlock.field-value">
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </UserControl.Styles>
+
   <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="16,16,16,6">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+        <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}" VerticalAlignment="Center">
+          <Grid>
+            <Image Source="{Binding IconBitmap}" Stretch="Uniform" IsVisible="{Binding HasIcon}" />
+            <TextBlock Text="APK" FontSize="28" FontWeight="Bold" Opacity="0.35" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding HasIcon, Converter={x:Static BoolConverters.Not}}" />
+          </Grid>
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+          <TextBlock Text="{Binding ApplicationName}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding PackageName}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding VersionDisplay}" FontSize="12" Opacity="0.75" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Content="{DynamicResource Apk_Extract}" MinWidth="72" Click="OnExtractClick" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_View}" MinWidth="72" Click="OnViewClick" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_Install}" MinWidth="72" Click="OnInstallClick"
+                  IsEnabled="{Binding CanInstall}" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_Sign}" MinWidth="72" Click="OnSignClick" HorizontalContentAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
     <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
     <!-- Top error banner: same styling as the FileManager editor. -->
     <Border Classes="error-banner" DockPanel.Dock="Top"
             IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
       <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
-    <ScrollViewer>
-      <StackPanel Margin="16" Spacing="16">
-        <Grid ColumnDefinitions="96,*" Margin="0,8,0,0">
-          <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}" VerticalAlignment="Top">
-            <Grid>
-              <Image Source="{Binding IconBitmap}" Stretch="Uniform" IsVisible="{Binding HasIcon}" />
-              <TextBlock Text="APK" FontSize="28" FontWeight="Bold" Opacity="0.35" HorizontalAlignment="Center" VerticalAlignment="Center"
-                         IsVisible="{Binding HasIcon, Converter={x:Static BoolConverters.Not}}" />
-            </Grid>
-          </Border>
-          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
-            <TextBlock Text="{Binding ApplicationName}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding PackageName}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding VersionDisplay}" FontSize="12" Opacity="0.75" />
+    <TabControl Margin="16,0,16,16">
+      <TabItem Header="{DynamicResource Apk_General}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="4,12">
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="{DynamicResource Apk_Size}" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding SizeDisplay}" />
+            </controls:ResponsiveFormRow>
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="{DynamicResource Apk_TargetSystem}" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding TargetSystemDisplay}" />
+            </controls:ResponsiveFormRow>
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="{DynamicResource Apk_MinimumSystem}" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding MinimumSystemDisplay}" />
+            </controls:ResponsiveFormRow>
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="{DynamicResource Apk_SigningStatus}" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding SigningStateDisplay}" />
+            </controls:ResponsiveFormRow>
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="{DynamicResource Apk_HardeningStatus}" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding HardeningStateDisplay}" />
+            </controls:ResponsiveFormRow>
+            <controls:ResponsiveFormRow Classes="info-row">
+              <TextBlock Classes="field-label" Text="ABI" />
+              <SelectableTextBlock Classes="field-value" Text="{Binding AbiDisplay}" />
+            </controls:ResponsiveFormRow>
           </StackPanel>
-        </Grid>
-
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}">
-          <StackPanel Spacing="10">
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_Size}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" TextWrapping="Wrap" /></Grid>
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_TargetSystem}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding TargetSystemDisplay}" /></Grid>
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_MinimumSystem}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding MinimumSystemDisplay}" /></Grid>
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_SigningStatus}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding SigningStateDisplay}" /></Grid>
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="{DynamicResource Apk_HardeningStatus}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding HardeningStateDisplay}" /></Grid>
-            <Grid ColumnDefinitions="150,*"><TextBlock Grid.Column="0" Text="ABI" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding AbiDisplay}" TextWrapping="Wrap" /></Grid>
-          </StackPanel>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
-          <Button Content="{DynamicResource Apk_Extract}" MinWidth="88" Click="OnExtractClick" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_View}" MinWidth="88" Click="OnViewClick" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_Install}" MinWidth="88" Click="OnInstallClick"
-                  IsEnabled="{Binding CanInstall}" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_Sign}" MinWidth="88" Click="OnSignClick" HorizontalContentAlignment="Center" />
-        </StackPanel>
-
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}">
-          <StackPanel Spacing="8"><TextBlock Text="Permissions" FontWeight="SemiBold" FontSize="13" /><TextBlock Text="{Binding PermissionsDisplay}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" /></StackPanel>
-        </Border>
-      </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="{DynamicResource Apk_Permissions}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <SelectableTextBlock Classes="field-value" Margin="4,12" Text="{Binding PermissionsDisplay}" />
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </UserControl>

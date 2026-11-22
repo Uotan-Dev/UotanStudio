@@ -1,11 +1,21 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="using:System"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
              xmlns:controls="using:UotanStudio.Views.Controls"
              x:Class="UotanStudio.Views.Editors.ElfInfoView"
              x:DataType="vm:ElfInfoViewModel">
+    <UserControl.Styles>
+        <Style Selector="TabItem">
+            <Setter Property="HeaderTemplate">
+                <DataTemplate x:DataType="sys:String">
+                    <TextBlock Text="{Binding}" FontWeight="SemiBold" />
+                </DataTemplate>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
     <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="16,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Border DockPanel.Dock="Top" Padding="16,12,16,0">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="4">
                     <TextBlock Text="{DynamicResource Dock_Elf_Title}" FontSize="18" FontWeight="SemiBold" />
@@ -24,7 +34,7 @@
                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
             <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
         </Border>
-        <TabControl SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}" IsVisible="{Binding IsRecognized}" Margin="12,8,12,12">
+        <TabControl SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}" IsVisible="{Binding IsRecognized}" Margin="16,8,16,16">
             <TabItem Header="{DynamicResource Dock_Elf_Header}">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <ItemsControl ItemsSource="{Binding Fields}" Margin="4,12">
@@ -63,9 +73,7 @@
                 </DockPanel>
             </TabItem>
             <TabItem Header="{DynamicResource Dock_Elf_Sections}">
-                <DockPanel Margin="0,8,0,0">
-                    <TextBlock DockPanel.Dock="Top" Margin="8" Text="{DynamicResource Dock_Elf_NoSections}"
-                               IsVisible="{Binding !Sections.Count}" Opacity="0.7" />
+                <Grid Margin="0,8,0,0">
                     <DataGrid ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection, Mode=TwoWay}" IsReadOnly="True" AutoGenerateColumns="False"
                               CanUserResizeColumns="True" GridLinesVisibility="Horizontal" FontFamily="Consolas"
                               Background="Transparent" BorderThickness="1" BorderBrush="{DynamicResource SemiColorBorder}"
@@ -84,7 +92,11 @@
                             <DataGridTextColumn x:DataType="vm:ElfSectionRow" Header="{DynamicResource Dock_Elf_EntrySize}" Binding="{Binding EntrySize}" />
                         </DataGrid.Columns>
                     </DataGrid>
-                </DockPanel>
+                    <TextBlock Text="{DynamicResource Dock_Elf_NoSections}"
+                               IsVisible="{Binding !Sections.Count}" IsHitTestVisible="False"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center" Opacity="0.7" Margin="16" />
+                </Grid>
             </TabItem>
         </TabControl>
     </DockPanel>

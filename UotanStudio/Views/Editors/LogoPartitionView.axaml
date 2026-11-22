@@ -8,15 +8,18 @@
              x:DataType="viewmodels:LogoPartitionViewModel">
     <!-- Logo partition workbench: embedded images + preview + extraction. -->
     <!-- Logo 分区工作台：内嵌图片、预览与提取。 -->
-    <Grid RowDefinitions="Auto,*,Auto" Margin="12">
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,10">
-            <TextBlock Text="{DynamicResource Dock_Logo_Title}" FontSize="16" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding FormatName}" FontSize="12" Opacity="0.8" />
-            <TextBlock Text="{Binding MagicDescription}" FontSize="12" Opacity="0.6"
-                       TextWrapping="Wrap" MaxLines="2" />
-        </StackPanel>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="16,12,16,0">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{DynamicResource Dock_Logo_Title}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding SubtitleText}" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding SubtitleText}" Opacity="0.7"
+                           IsVisible="{Binding SubtitleText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+        </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12" Grid.IsSharedSizeScope="True">
+        <Grid RowDefinitions="*,Auto" Margin="16,8,16,16">
+            <Grid Grid.Row="0" ColumnDefinitions="*,*" ColumnSpacing="16" Grid.IsSharedSizeScope="True">
             <!-- 内嵌图片条目 -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
@@ -124,8 +127,9 @@
             </Grid>
         </Grid>
 
-        <TextBlock Grid.Row="2" Text="{Binding StatusText}" Margin="0,10,0,0"
+        <TextBlock Grid.Row="1" Text="{Binding StatusText}" Margin="0,10,0,0"
                    IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                    FontSize="12" Opacity="0.75" TextWrapping="Wrap" MaxLines="2" />
-    </Grid>
+        </Grid>
+    </DockPanel>
 </UserControl>

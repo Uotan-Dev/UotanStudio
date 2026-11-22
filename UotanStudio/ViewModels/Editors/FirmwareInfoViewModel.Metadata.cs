@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -10,6 +11,27 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>是否渲染分组标题；唯一的分组只会重复分区标题。</para></param>
 public sealed record FirmwareMetadataGroup(string Name, IReadOnlyList<PropertyRow> Rows, bool ShowTitle);
 
+/// <summary>Localized tab item displayed by <see cref="FirmwareInfoViewModel"/>.<para>固件信息面板展示的本地化标签页。</para></summary>
+/// <param name="Header">Localized tab header.<para>本地化的标签页标题。</para></param>
+/// <param name="Rows">Key/value metadata rows.<para>元数据键值行。</para></param>
+/// <param name="Components">Component name/size rows.<para>组件名称与大小行。</para></param>
+/// <param name="Entries">Entry lines.<para>条目行。</para></param>
+public sealed record FirmwareInfoTabItem(
+    string Header,
+    IReadOnlyList<PropertyRow>? Rows = null,
+    IReadOnlyList<PropertyRow>? Components = null,
+    IReadOnlyList<string>? Entries = null)
+{
+    /// <summary>Whether metadata rows are present.<para>是否包含元数据行。</para></summary>
+    public bool HasRows => Rows is { Count: > 0 };
+
+    /// <summary>Whether component rows are present.<para>是否包含组件行。</para></summary>
+    public bool HasComponents => Components is { Count: > 0 };
+
+    /// <summary>Whether entry lines are present.<para>是否包含条目行。</para></summary>
+    public bool HasEntries => Entries is { Count: > 0 };
+}
+
 public partial class FirmwareInfoViewModel
 {
     private IReadOnlyDictionary<string, string>? _rawMetadata;
@@ -19,6 +41,11 @@ public partial class FirmwareInfoViewModel
     /// <summary>Grouped metadata, preserving descriptor order and repeated partition names.<para>分组后的元数据，保留描述符顺序与重复的分区名称。</para></summary>
     /// <value>Observable collection of localized metadata groups.<para>本地化元数据分组的可观察集合。</para></value>
     public ObservableCollection<FirmwareMetadataGroup> MetadataGroups { get; } = [];
+
+    /// <summary>Tabs rendered in the firmware info view, one per metadata group plus components/entries.<para>固件信息视图渲染的标签页集合，对应各元数据分组以及组件/条目。</para></summary>
+    public ObservableCollection<FirmwareInfoTabItem> Tabs { get; } = [];
+
+    [ObservableProperty] private int _selectedTabIndex;
 
     private static string FieldLabel(string key)
     {
@@ -77,6 +104,26 @@ public partial class FirmwareInfoViewModel
         }
 
         HasMetadata = Metadata.Count > 0;
+        RebuildTabs();
+    }
+
+    private void RebuildTabs()
+    {
+        var previousIndex = SelectedTabIndex;
+        Tabs.Clear();
+        foreach (var group in MetadataGroups)
+        {
+            Tabs.Add(new FirmwareInfoTabItem(group.Name, Rows: group.Rows));
+        }
+        if (HasComponents)
+        {
+            Tabs.Add(new FirmwareInfoTabItem(ComponentsLabel, Components: Components.ToArray()));
+        }
+        if (HasEntries)
+        {
+            Tabs.Add(new FirmwareInfoTabItem(EntriesLabel, Entries: Entries.ToArray()));
+        }
+        SelectedTabIndex = Tabs.Count > 0 ? Math.Clamp(previousIndex, 0, Tabs.Count - 1) : 0;
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e) => RefreshMetadata();

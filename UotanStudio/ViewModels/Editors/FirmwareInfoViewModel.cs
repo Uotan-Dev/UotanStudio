@@ -169,6 +169,8 @@ public partial class FirmwareInfoViewModel : Document, ITool
         _loadCancellation = source;
         _rawMetadata = null;
         MetadataGroups.Clear();
+        Tabs.Clear();
+        SelectedTabIndex = 0;
         FilePath = path;
         Title = Path.GetFileName(path);
 
@@ -232,6 +234,7 @@ public partial class FirmwareInfoViewModel : Document, ITool
                     Components.Add(new PropertyRow(component.Name, FormatSize(component.SizeBytes)));
                 }
                 HasComponents = Components.Count > 0;
+                RebuildTabs();
             }
             else if (result.Entries is not null)
             {
@@ -240,6 +243,7 @@ public partial class FirmwareInfoViewModel : Document, ITool
                     Entries.Add(entry);
                 }
                 HasEntries = Entries.Count > 0;
+                RebuildTabs();
             }
         }
         catch (OperationCanceledException) when (source.IsCancellationRequested)
@@ -278,6 +282,8 @@ public partial class FirmwareInfoViewModel : Document, ITool
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         _rawMetadata = null;
         MetadataGroups.Clear();
+        Tabs.Clear();
+        SelectedTabIndex = 0;
         Metadata.Clear();
         Entries.Clear();
         Components.Clear();

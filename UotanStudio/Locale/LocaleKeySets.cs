@@ -2873,6 +2873,9 @@ internal static class LocaleKeySets
         "Dock_Logo_ColumnEncoding",
         "Dock_Logo_ColumnSize",
         "Dock_Logo_ColumnBytes",
+        "Dock_Partition_Title",
+        "Apk_General",
+        "Apk_Permissions",
     ];
 
     internal static readonly string[] Node =
