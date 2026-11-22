@@ -1341,7 +1341,7 @@ public sealed class FlashService : IFlashService
             return new FlashResult
             {
                 Success = true,
-                Summary = FlashLogText.Format("Flash_Result_AdbFlashed", Path.GetFileName(imagePath))
+                Summary = FlashLogText.Format("Flash_Result_AdbInstalled", Path.GetFileName(imagePath))
             };
         }, ct).ConfigureAwait(false);
     }

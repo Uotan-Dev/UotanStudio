@@ -5068,7 +5068,7 @@ Continue?</value>
     <value>Select a device first.</value>
   </data>
   <data name="Flash_Exception_AdbInstallFailed" xml:space="preserve">
-    <value>Installing the package failed with exit code {0}: {1}</value>
+    <value>Install failed with exit code {0}: {1}</value>
   </data>
   <data name="Flash_Exception_BackupSizeUnknown" xml:space="preserve">
     <value>The device reported no size for partition '{0}'.</value>
@@ -5266,7 +5266,7 @@ Continue?</value>
     <value>Could not resize '{0}' to {1} bytes: {2}</value>
   </data>
   <data name="Flash_Progress_AdbDone" xml:space="preserve">
-    <value>ADB flash complete.</value>
+    <value>ADB install complete.</value>
   </data>
   <data name="Flash_Progress_AdbOpening" xml:space="preserve">
     <value>Opening the ADB session…</value>
@@ -5433,8 +5433,8 @@ Continue?</value>
   <data name="Flash_Progress_VerifySkippedEmpty" xml:space="preserve">
     <value> Verification skipped: the image is empty.</value>
   </data>
-  <data name="Flash_Result_AdbFlashed" xml:space="preserve">
-    <value>Flashed {0}.</value>
+  <data name="Flash_Result_AdbInstalled" xml:space="preserve">
+    <value>Installed {0}.</value>
   </data>
   <data name="Flash_Result_BackedUpViaFastboot" xml:space="preserve">
     <value>Backed up {0} ({1} bytes).</value>

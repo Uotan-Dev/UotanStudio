@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:schema id="root">
     <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
@@ -5068,7 +5068,7 @@
     <value>请先选择设备。</value>
   </data>
   <data name="Flash_Exception_AdbInstallFailed" xml:space="preserve">
-    <value>安装烧录包失败，退出码 {0}：{1}</value>
+    <value>安装失败，退出码 {0}：{1}</value>
   </data>
   <data name="Flash_Exception_BackupSizeUnknown" xml:space="preserve">
     <value>设备未给出分区 '{0}' 的大小。</value>
@@ -5266,7 +5266,7 @@
     <value>无法将 '{0}' 调整为 {1} 字节：{2}</value>
   </data>
   <data name="Flash_Progress_AdbDone" xml:space="preserve">
-    <value>ADB 烧录完成。</value>
+    <value>ADB 安装完成。</value>
   </data>
   <data name="Flash_Progress_AdbOpening" xml:space="preserve">
     <value>正在打开 ADB 会话…</value>
@@ -5401,7 +5401,7 @@
     <value>Sideload 完成。</value>
   </data>
   <data name="Flash_Progress_SideloadPushing" xml:space="preserve">
-    <value>正在推送烧录包…</value>
+    <value>正在推送安装包…</value>
   </data>
   <data name="Flash_Progress_SideloadReboot" xml:space="preserve">
     <value>正在重启至 sideload…</value>
@@ -5433,8 +5433,8 @@
   <data name="Flash_Progress_VerifySkippedEmpty" xml:space="preserve">
     <value> 已跳过校验：镜像为空。</value>
   </data>
-  <data name="Flash_Result_AdbFlashed" xml:space="preserve">
-    <value>已烧录 {0}。</value>
+  <data name="Flash_Result_AdbInstalled" xml:space="preserve">
+    <value>已安装 {0}。</value>
   </data>
   <data name="Flash_Result_BackedUpViaFastboot" xml:space="preserve">
     <value>已备份 {0}（{1} 字节）。</value>

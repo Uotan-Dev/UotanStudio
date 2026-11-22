@@ -1788,7 +1788,7 @@ internal static class LocaleKeySets
         "Flash_Progress_VerifyPassed",
         "Flash_Progress_VerifySkipped",
         "Flash_Progress_VerifySkippedEmpty",
-        "Flash_Result_AdbFlashed",
+        "Flash_Result_AdbInstalled",
         "Flash_Result_BackedUpViaFastboot",
         "Flash_Result_BackupCanceled",
         "Flash_Result_EdlBackedUp",
