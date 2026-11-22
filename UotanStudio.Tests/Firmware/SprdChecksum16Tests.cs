@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using UotanStudio.Hash.Sums;
 using Xunit;
 
@@ -6,30 +6,57 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Golden vectors and device-model round trips of the UNISOC FDL ones-complement word checksum, cross-checked
-/// against a bit-exact port of the vendor C reference in this class.
-/// <para>紫光展锐 FDL 一补数求和校验的黄金向量与设备端模型往返，与本类内逐位照搬的厂商 C 参考实现互相校验。</para>
+/// against a bit-exact port of the vendor transport routine in this class. The captured bodies come from a vendor
+/// tool wire log, so they pin the endianness of the summed words instead of only the algebra.
+/// <para>紫光展锐 FDL 一补数求和校验的黄金向量与设备端模型往返，与本类内逐位照搬的厂商传输层例程互相校验。抓包
+/// 报文取自厂商工具的线上日志，因此能真正钉住被求和字的字节序，而不只是代数关系。</para>
 /// </summary>
 public class SprdChecksum16Tests
 {
     private static readonly byte[] LongPayload = [.. Enumerable.Range(0, 4096).Select(index => (byte)(index * 29 + 5))];
 
     [Fact]
-    public void Compute_BlackBoxCheckValues_MatchFdLSemantics()
+    public void Compute_CheckValuesOfEveryLength_UseTheVendorWordOrder()
     {
-        Assert.Equal((ushort)0x2AF6, SprdChecksum16.Compute("123456789"u8));
-        Assert.Equal((ushort)0x2B2F, SprdChecksum16.Compute("12345678"u8));
         Assert.Equal((ushort)0xFFFF, SprdChecksum16.Compute(ReadOnlySpan<byte>.Empty));
+        Assert.Equal((ushort)0x2EF2, SprdChecksum16.Compute("123456789"u8));
+        Assert.Equal((ushort)0x2F2B, SprdChecksum16.Compute("12345678"u8));
+    }
+
+    [Theory]
+    [InlineData("00000000", 0xFFFF)]
+    [InlineData("00800000", 0xFF7F)]
+    [InlineData("000900040001c200", 0x3DF1)]
+    [InlineData("00ff00ff", 0xFE01)]
+    [InlineData("0100ffff", 0xFEFF)]
+    [InlineData("003800", 0xFFC7)]
+    [InlineData("0056", 0xFFA9)]
+    public void Compute_CapturedVendorFrameBodies_ProduceTheWireValue(string body, ushort expected)
+    {
+        Assert.Equal(expected, SprdChecksum16.Compute(Convert.FromHexString(body)));
+    }
+
+    [Theory]
+    [InlineData("80", 0xFF7F)]
+    [InlineData("400040", 0xBFBF)]
+    [InlineData("0040780000", 0x87BF)]
+    [InlineData("00408000000000", 0x7FBF)]
+    [InlineData("380000004000000000", 0x87FF)]
+    [InlineData("0040000040000000000000400000000000", 0xBF7F)]
+    public void Compute_VendorRoutineOutputs_ReproduceAtOddAndEvenLengths(string body, ushort expected)
+    {
+        Assert.Equal(expected, SprdChecksum16.Compute(Convert.FromHexString(body)));
     }
 
     [Fact]
-    public void ComputeWireForms_FollowDirectionalSwapRules()
+    public void Compute_CapturedVersionReply_ProducesTheWireValue()
     {
-        Assert.Equal((ushort)0x2AF6, SprdChecksum16.ComputeTransmit("123456789"u8));
-        Assert.Equal((ushort)0x2F2B, SprdChecksum16.ComputeTransmit("12345678"u8));
-        Assert.Equal((ushort)0xF62A, SprdChecksum16.ComputeReceive("123456789"u8));
-        Assert.Equal((ushort)0x2F2B, SprdChecksum16.ComputeReceive("12345678"u8));
-        Assert.Equal((ushort)0xFFFF, SprdChecksum16.ComputeTransmit(ReadOnlySpan<byte>.Empty));
-        Assert.Equal((ushort)0xFFFF, SprdChecksum16.ComputeReceive(ReadOnlySpan<byte>.Empty));
+        var region = new byte[4 + 34];
+        BinaryPrimitives.WriteUInt16BigEndian(region, 0x0081);
+        BinaryPrimitives.WriteUInt16BigEndian(region.AsSpan(2), 34);
+        "Spreadtrum Boot Block version 1.2\0"u8.CopyTo(region.AsSpan(4));
+
+        Assert.Equal((ushort)0xA9E9, SprdChecksum16.Compute(region));
     }
 
     [Theory]
@@ -49,59 +76,56 @@ public class SprdChecksum16Tests
     {
         var data = LongPayload.AsSpan(0, length);
 
-        Assert.Equal(ReferenceChecksum(data), SprdChecksum16.Compute(data));
+        Assert.Equal(VendorReferenceChecksum(data), SprdChecksum16.Compute(data));
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
-    [InlineData(2)]
     [InlineData(3)]
-    [InlineData(4)]
-    [InlineData(7)]
-    [InlineData(8)]
+    [InlineData(5)]
+    [InlineData(9)]
     [InlineData(17)]
-    [InlineData(40)]
-    [InlineData(64)]
-    public void TransmitFrame_SatisfiesDeviceZeroSumVerification(int length)
+    [InlineData(35)]
+    [InlineData(63)]
+    [InlineData(255)]
+    [InlineData(4096)]
+    public void TransmittedField_MatchesTheDeviceRecomputationOverTheRegion(int length)
     {
         var region = LongPayload.AsSpan(0, length);
-        var checksum = SprdChecksum16.ComputeTransmit(region);
         var frame = new byte[region.Length + 2];
         region.CopyTo(frame);
+        var checksum = SprdChecksum16.Compute(region);
         BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(region.Length), checksum);
 
-        Assert.Equal((ushort)0x0000, DeviceFastChecksum(frame));
+        Assert.Equal(DeviceRegionComplement(region), BinaryPrimitives.ReadUInt16BigEndian(frame.AsSpan(region.Length)));
     }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    [InlineData(6)]
-    [InlineData(9)]
-    [InlineData(35)]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
     [InlineData(64)]
-    public void ReceiveFrame_MatchesDeviceSwappedWireForm(int length)
+    [InlineData(4096)]
+    public void TransmittedFrame_EvenRegion_FoldsToTheZeroComplement(int length)
     {
         var region = LongPayload.AsSpan(0, length);
-        var deviceValue = ReferenceChecksum(region);
-        var wire = new byte[region.Length + 2];
-        region.CopyTo(wire);
-        BinaryPrimitives.WriteUInt16BigEndian(wire.AsSpan(region.Length), Reverse(deviceValue));
-        var received = BinaryPrimitives.ReadUInt16BigEndian(wire.AsSpan(region.Length));
+        var frame = new byte[region.Length + 2];
+        region.CopyTo(frame);
+        BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(region.Length), SprdChecksum16.Compute(region));
 
-        Assert.Equal(received, SprdChecksum16.ComputeReceive(region));
+        Assert.Equal((ushort)0xFFFF, DeviceFrameAccumulator(frame));
     }
 
-    private static ushort Reverse(ushort value) => (ushort)((value << 8) | (value >> 8));
-
-    private static ushort ReferenceChecksum(ReadOnlySpan<byte> data)
+    private static ushort VendorReferenceChecksum(ReadOnlySpan<byte> data)
     {
         uint sum = 0;
         var offset = 0;
         for (; offset + 2 <= data.Length; offset += 2)
         {
-            sum += (uint)(data[offset] | (data[offset + 1] << 8));
+            sum += (uint)((data[offset] << 8) | data[offset + 1]);
         }
 
         if (offset < data.Length)
@@ -114,30 +138,45 @@ public class SprdChecksum16Tests
         return (ushort)~sum;
     }
 
-    private static ushort DeviceFastChecksum(ReadOnlySpan<byte> frame)
+    private static ushort DeviceRegionComplement(ReadOnlySpan<byte> region)
     {
         uint sum = 0;
-        var offset = 0;
-        while (offset + 4 <= frame.Length)
+        for (var offset = 0; offset + 1 < region.Length; offset += 2)
         {
-            sum += BinaryPrimitives.ReadUInt16LittleEndian(frame[offset..]);
-            sum += BinaryPrimitives.ReadUInt16LittleEndian(frame[(offset + 2)..]);
-            offset += 4;
+            sum += BinaryPrimitives.ReadUInt16BigEndian(region[offset..]);
         }
 
-        if (((frame.Length - offset) & 2) != 0 && offset + 2 <= frame.Length)
+        if ((region.Length & 1) != 0)
         {
-            sum += BinaryPrimitives.ReadUInt16LittleEndian(frame[offset..]);
-            offset += 2;
+            sum += region[^1];
         }
 
-        if (offset < frame.Length)
+        while (sum > ushort.MaxValue)
         {
-            sum += frame[offset];
+            sum = (sum & ushort.MaxValue) + (sum >> 16);
         }
 
-        sum = (sum >> 16) + (sum & 0xFFFF);
-        sum += sum >> 16;
         return (ushort)~sum;
+    }
+
+    private static ushort DeviceFrameAccumulator(ReadOnlySpan<byte> frame)
+    {
+        uint sum = 0;
+        for (var offset = 0; offset + 1 < frame.Length; offset += 2)
+        {
+            sum += BinaryPrimitives.ReadUInt16BigEndian(frame[offset..]);
+        }
+
+        if ((frame.Length & 1) != 0)
+        {
+            sum += frame[^1];
+        }
+
+        while (sum > ushort.MaxValue)
+        {
+            sum = (sum & ushort.MaxValue) + (sum >> 16);
+        }
+
+        return (ushort)sum;
     }
 }

@@ -20,11 +20,11 @@
 | `RockchipCrc32` | 高位优先 0x04C11DB7，带 seed | RKAF 资源镜像 |
 | `XzCrc64` | 反射 0xC96C5795D7870F42，全 1 初值，出值取反 | XZ 容器的 CRC-64 校验字段 |
 | `Adler32` | 模 65521，按 5552 字节分块归约 | zlib 风格载荷与 DTBO/DEX 尾部校验 |
-| `Xxh32` | erofs-utils 与内核一致的 XXH32 | EROFS xattr 名称过滤器 |
+| `Xxh32` | 与 EROFS 格式一致的 XXH32 | EROFS xattr 名称过滤器 |
 | `F2fsDentryHash`、`HalfMd4Hash` | 半 MD4 家族 | F2FS 目录项哈希与 ext4 HTree 目录哈希 |
 | `Sums.ByteSum8` / `ByteSum16` / `ByteSum32` | 逐字节累加，mod 2^8 / 2^16 / 2^32 | HDC 负载、MTK legacy 与 XFlash 帧、ADB 消息、CPIO `070702` 负载、TAR 头块 |
 | `Sums.WordSum32LittleEndian` | 小端双字求和后补尾部字节 | MTK preloader 命令校验 |
-| `Sums.SprdChecksum16` | 小端 16 位字求和折叠取反；发送方向偶长交换/奇长原样，接收方向恒交换 | UNISOC FDL 帧校验 |
+| `Sums.SprdChecksum16` | 大端 16 位字求和、折叠取反；奇数尾字节按原值累加，收发两个方向同值 | UNISOC FDL 帧校验 |
 | `Digests.Md5` / `Sha1` / `Sha256` / `Sha384` / `Sha512` | 转发 `System.Security.Cryptography` | 一次性、目标缓冲区、小写十六进制、同步与异步整流、`CreateAccumulator()` 续算 |
 
 `Crc16CcittReversed` 不声称对应任何目录学名称：不同资料里 “X.25”“CCITT-Reversed” 之类叫法的初值与末异或并不一致，因此类型文档只固定参数串与实测校验值——ASCII `123456789` 得 `0x906E`，空输入得 `0x0000`。`Crc16CcittFalse` 同理：`123456789` 得 `0x29B1`，空输入得 `0xFFFF`，字节 `01..10` 得 `0x0FEF`。`Crc16Xmodem` 与 `Crc16CcittFalse` 只差初值：`123456789` 得 `0x31C3`，空输入得 `0x0000`。
