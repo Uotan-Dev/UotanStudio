@@ -10,6 +10,13 @@
   <ItemGroup>
     <!-- Compression / binary processing (used across formats) -->
     <PackageReference Include="Google.Protobuf" />
+    <!-- Bounded image decoding/encoding for logo partitions: SimdCodecs owns raster codecs; the
+         format domain keeps the container parsing and byte budgets. -->
+    <PackageReference Include="Sdcb.SimdCodecs" />
+    <PackageReference Include="Sdcb.SimdCodecs.Bmp" />
+    <PackageReference Include="Sdcb.SimdCodecs.Png" />
+    <PackageReference Include="Sdcb.SimdCodecs.Jpeg" />
+    <PackageReference Include="Sdcb.SimdCodecs.Abstractions" />
     <PackageReference Include="LTRData.DiscUtils.ExFat" />
     <PackageReference Include="LTRData.DiscUtils.Fat" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />

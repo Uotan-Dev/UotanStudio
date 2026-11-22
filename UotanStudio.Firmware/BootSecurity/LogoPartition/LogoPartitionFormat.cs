@@ -1,4 +1,7 @@
 using System.Buffers.Binary;
+using Sdcb.SimdCodecs;
+using Sdcb.SimdCodecs.Abstractions;
+using Sdcb.SimdCodecs.Bmp;
 using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.BootSecurity.LogoPartition;
@@ -47,7 +50,10 @@ public enum LogoEntryEncoding
     PlanarRle8,
 
     /// <summary>A complete JPEG file. <para>完整的 JPEG 文件。</para></summary>
-    Jpeg
+    Jpeg,
+
+    /// <summary>A complete PNG file. <para>完整的 PNG 文件。</para></summary>
+    Png
 }
 
 /// <summary>
@@ -134,6 +140,8 @@ public static class LogoPartitionFormat
     private const int OplusPayloadOffset = 0x200;
     private const int OplusFrameDataOffset = 0x1000;
     private const int MaximumOplusFrameTableEntries = 256;
+
+    private static ReadOnlySpan<byte> PngSignature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
     private static readonly int[] LogoMagicOffsets = [0, LogoTableOffset, MioFormatProbeOffset];
     private static readonly int[] SplashMagicOffsets = [QualcommPrefixOffset, 0];
@@ -319,7 +327,7 @@ public static class LogoPartitionFormat
         {
             return entry.Encoding switch
             {
-                LogoEntryEncoding.BmpFile or LogoEntryEncoding.Jpeg => ReadStoredImage(input, entry, cancellationToken),
+                LogoEntryEncoding.BmpFile or LogoEntryEncoding.Jpeg or LogoEntryEncoding.Png => ReadStoredImage(input, entry, cancellationToken),
                 LogoEntryEncoding.Rle24Bgr or LogoEntryEncoding.RawBgr => DecodeBgrFrame(input, entry, cancellationToken),
                 LogoEntryEncoding.PlanarRle8 => DecodePlanarRle8Frame(input, entry, cancellationToken),
                 _ => throw new InvalidDataException("Unsupported logo entry encoding.")
@@ -379,37 +387,180 @@ public static class LogoPartitionFormat
         var metadata = new Dictionary<string, string>
         {
             ["Container"] = "LOGO!!!! block table",
-            ["BlockSize"] = BlockSize.ToString(),
             ["TableOffset"] = tableOffset.ToString()
         };
 
-        while (cursor + 8 <= length && entries.Count < MaximumEntries)
+        var blockSize = DetectLogoBlockSize(input, length, cursor, cancellationToken);
+        metadata["BlockSize"] = blockSize.ToString();
+
+        while (cursor + 8 <= Math.Min(length, header.Length) && entries.Count < MaximumEntries)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var record = new byte[8];
-            input.Position = cursor;
-            input.ReadExactly(record);
-            var blockIndex = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(0, 4));
-            var blockCount = BinaryPrimitives.ReadUInt32LittleEndian(record.AsSpan(4, 4));
+            var blockIndex = ReadUInt32(header, cursor);
+            var blockCount = ReadUInt32(header, cursor + 4);
+            cursor += 8;
             if (blockIndex == 0)
             {
                 break;
             }
 
-            var dataOffset = checked((long)blockIndex * BlockSize);
-            var blockBytes = checked((long)blockCount * BlockSize);
-            FileExtraction.ValidateRange(dataOffset, blockBytes, length, "LOGO!!!! block");
-            var bmp = ReadBmpDescriptor(input, dataOffset, blockBytes, entries.Count, cancellationToken);
+            var dataOffset = checked((long)blockIndex * blockSize);
+            // An out-of-range block is malformed, not merely an unknown image: reject it.
+            FileExtraction.ValidateRange(dataOffset, 0, length, "LOGO!!!! block");
+            var available = Math.Min(length - dataOffset, MaximumEntryBytes);
+            if (available > int.MaxValue)
+            {
+                available = int.MaxValue;
+            }
+
+            var probeLength = (int)Math.Min(available, 64 * 1024);
+            var probe = new byte[probeLength];
+            input.Position = dataOffset;
+            input.ReadExactly(probe);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var format = ImageCodecs.DetectFormat(probe);
+            if (!ImageCodecs.IsDecodable(format) && format != ImageFormat.Bmp && format != ImageFormat.Png)
+            {
+                continue;
+            }
+
+            var declared = GetImageLength(probe, format);
+            var size = declared > 0 ? (int)Math.Min(declared, available) : (int)Math.Min(available, (long)blockCount * blockSize);
+            size = (int)Math.Min(size, MaximumEntryBytes);
+            if (size <= BmpHeaderSize)
+            {
+                continue;
+            }
+
+            var payload = new byte[size];
+            var copied = Math.Min(size, probeLength);
+            probe.AsSpan(0, copied).CopyTo(payload);
+            if (size > copied)
+            {
+                input.Position = dataOffset + copied;
+                input.ReadExactly(payload.AsSpan(copied));
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            LogoEntryEncoding encoding;
+            string extension;
+            (int Width, int Height, int BitsPerPixel) geometry;
+            var imageLength = 0;
+            if (format == ImageFormat.Bmp && HasBmpMagic(payload))
+            {
+                var bmp = ReadBmpDescriptor(input, dataOffset, size, entries.Count, cancellationToken);
+                encoding = LogoEntryEncoding.BmpFile;
+                extension = "bmp";
+                geometry = (bmp.Width, bmp.Height, bmp.BitsPerPixel);
+                imageLength = bmp.Length;
+            }
+            else if (format == ImageFormat.Png && HasPngMagic(payload))
+            {
+                if (!ImageCodecs.TryReadInfo(payload, out var info) || info.Width <= 0 || info.Height <= 0)
+                {
+                    throw new InvalidDataException($"LOGO!!!! block {entries.Count} has an invalid PNG header.");
+                }
+
+                encoding = LogoEntryEncoding.Png;
+                extension = "png";
+                geometry = (info.Width, info.Height, info.BitDepth);
+                imageLength = (int)size;
+            }
+            else
+            {
+                throw new InvalidDataException($"LOGO!!!! block {entries.Count} does not hold a supported image.");
+            }
+
             var index = entries.Count;
             entries.Add(new LogoPartitionEntry(index, $"logo_{index:00}",
-                $"logo_{index:00}.bmp", LogoEntryEncoding.BmpFile, dataOffset, bmp.Length,
-                bmp.Length, bmp.Width, bmp.Height, bmp.BitsPerPixel));
-            cursor += 8;
+                $"logo_{index:00}.{extension}", encoding, dataOffset, imageLength,
+                imageLength, geometry.Width, geometry.Height, geometry.BitsPerPixel));
         }
 
         metadata["EntryCount"] = entries.Count.ToString();
         return new LogoPartitionImage(LogoPartitionKind.LogoBlockTable, "LOGO!!!! Logo Partition",
             tableOffset, length, entries, metadata);
+    }
+
+    /// <summary>
+    /// Returns the declared file length from a standard image header, or zero when the header does not
+    /// carry a length (for example a PNG whose length is the trailing IEND chunk).
+    /// <para>从标准图片头中读取声明的文件长度；头部不含长度（例如以 IEND 结束的 PNG）时返回零。</para>
+    /// </summary>
+    private static long GetImageLength(ReadOnlySpan<byte> header, ImageFormat format)
+    {
+        if (format == ImageFormat.Bmp && header.Length >= BmpHeaderSize && HasBmpMagic(header))
+        {
+            return BinaryPrimitives.ReadUInt32LittleEndian(header[2..6]);
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Determines the block unit of a LOGO!!!! table. Most Qualcomm partitions use 4096-byte blocks; Xiaomi
+    /// variants use 512-byte blocks. The first record is probed in place and the unit whose target carries a
+    /// recognised image header wins, so both layouts are read without configuration.
+    /// <para>确定 LOGO!!!! 表的块单位。多数高通分区使用 4096 字节块，小米变体使用 512 字节块。
+    /// 就地探测第一条记录，目标处带可识别图片头的单位胜出，无需配置即可读取两种布局。</para>
+    /// </summary>
+    private static int DetectLogoBlockSize(Stream input, long length, long tableCursor,
+        CancellationToken cancellationToken)
+    {
+        Span<byte> record = stackalloc byte[8];
+        input.Position = tableCursor;
+        input.ReadExactly(record);
+        var blockIndex = BinaryPrimitives.ReadUInt32LittleEndian(record);
+        if (blockIndex == 0)
+        {
+            return BlockSize;
+        }
+
+        Span<byte> magic = stackalloc byte[8];
+        Span<byte> probeRecord = stackalloc byte[8];
+        var bestUnit = BlockSize;
+        var bestScore = -1;
+        foreach (var candidate in new[] { BlockSize, 512 })
+        {
+            var score = 0;
+            for (var i = 0; i < 4; i++)
+            {
+                var recordOffset = tableCursor + (i * 8);
+                if (recordOffset + 8 > length)
+                {
+                    break;
+                }
+
+                input.Position = recordOffset;
+                input.ReadExactly(probeRecord);
+                var index = BinaryPrimitives.ReadUInt32LittleEndian(probeRecord);
+                if (index == 0)
+                {
+                    break;
+                }
+
+                var offset = checked((long)index * candidate);
+                if (offset < 0 || offset + BmpHeaderSize > length)
+                {
+                    continue;
+                }
+
+                input.Position = offset;
+                input.ReadExactly(magic);
+                if (magic[..2].SequenceEqual("BM"u8) || magic[..8].SequenceEqual(PngSignature))
+                {
+                    score++;
+                }
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestUnit = candidate;
+            }
+        }
+
+        return bestUnit;
     }
 
     private static LogoPartitionImage ReadQualcommSplash(Stream input, byte[] header, long length,
@@ -681,6 +832,11 @@ public static class LogoPartitionFormat
             throw new InvalidDataException("Logo block does not start with a BMP file header.");
         }
 
+        if (entry.Encoding == LogoEntryEncoding.Png && !HasPngMagic(data))
+        {
+            throw new InvalidDataException("Logo block does not start with a PNG file header.");
+        }
+
         return data;
     }
 
@@ -835,25 +991,25 @@ public static class LogoPartitionFormat
             throw new InvalidDataException("Decoded BMP exceeds the output budget.");
         }
 
-        var result = new byte[fileSize];
-        "BM"u8.CopyTo(result);
-        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(2), (uint)fileSize);
-        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(10), BmpHeaderSize);
-        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(14), 40);
-        BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(18), width);
-        BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(22), height);
-        BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(26), 1);
-        BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(28), 24);
-        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(34), (uint)pixelBytes);
-
-        for (var y = 0; y < height; y++)
+        // DecodeBgrFrame and DecodePlanarRle8Frame produce top-row-first, tightly packed BGR rows.
+        // Sdcb's BMP encoder expects that same top-row-first layout and writes the standard 54-byte,
+        // 24-bit, bottom-up DIB itself; pass the tightly packed stride and zero DPI so its bytes
+        // match the original layout exactly (verified on real Oplus SPLASH frames).
+        var options = new BmpEncodeOptions
         {
-            var sourceRow = checked(y * width * 3);
-            var targetRow = checked(BmpHeaderSize + (height - 1 - y) * rowSize);
-            bgr.Slice(sourceRow, width * 3).CopyTo(result.AsSpan(targetRow, width * 3));
-        }
+            Format = BmpEncodeFormat.Rgb24,
+            PixelsPerMeterX = 0,
+            PixelsPerMeterY = 0
+        };
 
-        return result;
+        try
+        {
+            return BmpEncoder.Encode(bgr, width, height, PixelFormat.Bgr24, options, checked(width * 3));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException("Decoded BMP exceeds the output budget.", exception);
+        }
     }
 
     private static (int Length, int Width, int Height, int BitsPerPixel) ReadBmpDescriptor(
@@ -909,6 +1065,9 @@ public static class LogoPartitionFormat
 
     private static bool HasBmpMagic(ReadOnlySpan<byte> data) =>
         data.Length >= 2 && data[0] == (byte)'B' && data[1] == (byte)'M';
+
+    private static bool HasPngMagic(ReadOnlySpan<byte> data) =>
+        data.Length >= 8 && data[..8].SequenceEqual(PngSignature);
 
     private static bool IsGuoKeHeader(ReadOnlySpan<byte> header)
     {

@@ -258,6 +258,78 @@ public sealed class LogoPartitionFormatTests
         }
     }
 
+    [Fact]
+    public void Read_XiaomiBlockTable512_DecodesPngAndBmpEntries()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "uotan-logo-xiaomi-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(directory, "logo.img");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var bmp = BuildBmp(2, 2);
+            var image = new byte[33 * 512 + bmp.Length];
+            "LOGO!!!!"u8.CopyTo(image.AsSpan(0x4000));
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(0x4008), 33);
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(0x400C), 1);
+            bmp.CopyTo(image.AsSpan(33 * 512));
+            File.WriteAllBytes(source, image);
+
+            var parsed = LogoPartitionFormat.Read(source, TestContext.Current.CancellationToken);
+            Assert.Equal(LogoPartitionKind.LogoBlockTable, parsed.Kind);
+            Assert.Equal("512", parsed.Metadata["BlockSize"]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Write_ReplaceAndAdd_PreservesContainerAndRoundTrips()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "uotan-logo-write-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(directory, "splash.img");
+        var replacement = Path.Combine(directory, "replacement.bmp");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var bmp = BuildBmp(2, 2);
+            File.WriteAllBytes(replacement, bmp);
+            var frame = new byte[2048];
+            "SPLASH!!"u8.CopyTo(frame.AsSpan(1024));
+            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(1032), 2);
+            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(1036), 2);
+            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(1040), 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(1044), 1);
+            File.WriteAllBytes(source, frame);
+
+            LogoPartitionWriter.ReplaceEntry(source, 0, replacement, TestContext.Current.CancellationToken);
+            var replaced = LogoPartitionFormat.Read(source, TestContext.Current.CancellationToken);
+            Assert.Single(replaced.Entries);
+            using (var input = File.OpenRead(source))
+            {
+                var decoded = LogoPartitionFormat.ReadEntryImage(input, replaced, replaced.Entries[0],
+                    TestContext.Current.CancellationToken);
+                Assert.Equal(2, BinaryPrimitives.ReadInt32LittleEndian(decoded.AsSpan(18, 4)));
+            }
+
+            var added = LogoPartitionWriter.AddEntry(source, replacement, TestContext.Current.CancellationToken);
+            Assert.Equal(1, added);
+            var after = LogoPartitionFormat.Read(source, TestContext.Current.CancellationToken);
+            Assert.Equal(2, after.Entries.Count);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     /// <summary>
     /// Builds an Oplus splash main header (0x2000 bytes) whose frame offset table lists the given
     /// frame offsets and whose leading geometry fields mirror the first frame.
