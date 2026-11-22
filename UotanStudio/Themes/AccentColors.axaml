@@ -47,6 +47,7 @@
             <SolidColorBrush x:Key="NodeHeaderForegroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="NodeContentForegroundBrush" Color="#2A1715" />
             <SolidColorBrush x:Key="NodePortBackgroundBrush" Color="#FFF1EF" />
+            <SolidColorBrush x:Key="NodePortHoverBrush" Color="#F7CDC9" />
             <SolidColorBrush x:Key="NodePortConnectedBrush" Color="#D03A2F" />
             <SolidColorBrush x:Key="NodePortBorderBrush" Color="#D03A2F" />
             <SolidColorBrush x:Key="NodePendingBackgroundBrush" Color="#FFF1EF" />
@@ -113,6 +114,7 @@
             <SolidColorBrush x:Key="NodeHeaderForegroundBrush" Color="#FFF4F2" />
             <SolidColorBrush x:Key="NodeContentForegroundBrush" Color="#FFF1EF" />
             <SolidColorBrush x:Key="NodePortBackgroundBrush" Color="#4A2522" />
+            <SolidColorBrush x:Key="NodePortHoverBrush" Color="#4A2522" />
             <SolidColorBrush x:Key="NodePortConnectedBrush" Color="#E36A60" />
             <SolidColorBrush x:Key="NodePortBorderBrush" Color="#DE6A5D" />
             <SolidColorBrush x:Key="NodePendingBackgroundBrush" Color="#4A2522" />
