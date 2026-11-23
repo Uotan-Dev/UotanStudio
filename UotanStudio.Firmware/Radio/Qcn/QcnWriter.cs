@@ -9,8 +9,8 @@ namespace UotanStudio.Firmware.Radio.Qcn;
 /// </summary>
 public static class QcnWriter
 {
-    /// <summary>Patches the NV records of a QCN file with the data held by the supplied items.
-    /// <para>用给定条目持有的数据修补 QCN 文件的 NV 记录。</para></summary>
+    /// <summary>Patches the NV records of a QCN file in either supported container with the data held by the supplied items.
+    /// <para>用给定条目持有的数据修补受支持容器（二进制复合文档或 XML 导出）中的 QCN NV 记录。</para></summary>
     /// <param name="path">The QCN file path to patch.<para>要补丁的 QCN 文件路径。</para></param>
     /// <param name="items">The complete item set originating from this file (e.g. an edited QcnReader.ParseAsync result).
     /// <para>来自该文件的完整条目集合（可为编辑后的 QcnReader.ParseAsync 结果）。</para></param>
@@ -22,9 +22,19 @@ public static class QcnWriter
     /// <para>条目集合与文件不匹配（记录数、流路径、索引、id 或 flags 不一致）。</para></exception>
     /// <exception cref="QcnException">Post-patch verification failed; the source file is left untouched.
     /// <para>补丁后的校验失败；源文件保持原样。</para></exception>
-    /// <exception cref="CompoundFileException">The container structure is corrupted or unsupported.
-    /// <para>容器结构损坏或不受支持。</para></exception>
     public static async Task<int> PatchAsync(string path, IReadOnlyList<QcnNvItem> items, CancellationToken cancellationToken = default)
+    {
+        var format = await QcnFormatDetector.DetectAsync(path, cancellationToken).ConfigureAwait(false);
+        if (format == QcnContainerFormat.Xml)
+        {
+            var xml = await QcnXmlContainer.OpenAsync(path, cancellationToken).ConfigureAwait(false);
+            return await xml.PatchAsync(path, items, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await PatchBinaryAsync(path, items, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<int> PatchBinaryAsync(string path, IReadOnlyList<QcnNvItem> items, CancellationToken cancellationToken)
     {
         List<PatchedRecordLayout> layout;
         {

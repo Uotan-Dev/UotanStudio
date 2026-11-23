@@ -43,6 +43,17 @@ public class InvalidQcnFormatException : QcnException
         : base(message)
     {
     }
+
+    /// <summary>
+    /// Initializes a new instance of the InvalidQcnFormatException class with a specified error message and a reference to the inner exception that is the cause of this exception.
+    /// <para>使用指定的错误消息和对作为此异常原因的内部异常的引用，初始化 InvalidQcnFormatException 类的新实例。</para>
+    /// </summary>
+    /// <param name="message">Error message describing the defect. <para>描述该缺陷的错误消息。</para></param>
+    /// <param name="innerException">The exception that caused this failure. <para>导致此异常的内部异常。</para></param>
+    public InvalidQcnFormatException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }
 
 /// <summary>
