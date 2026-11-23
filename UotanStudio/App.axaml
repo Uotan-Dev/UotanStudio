@@ -54,6 +54,9 @@
             <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
             <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="32" />
             <Setter Property="WindowDecorations" Value="Full" />
+            <!-- 显式声明由 Avalonia 绘制标题与窗口按钮；下面的模板选择器只负责自定义图标与文字边距。 -->
+            <!-- Declare the drawn title and buttons explicitly; the template selectors below only style the icon and text margins. -->
+            <Setter Property="WindowDrawnDecorations.TitleBarDecorations" Value="All" />
         </Style>
         <Style Selector="HostWindow[IsToolWindow=False] WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
             <Setter Property="Background">

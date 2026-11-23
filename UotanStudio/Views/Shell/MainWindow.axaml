@@ -15,8 +15,11 @@
    Title="{OnPlatform Default={Binding WindowTitle}, macOS=''}"
    MinWidth="720"
    ExtendClientAreaToDecorationsHint="True"
-   ExtendClientAreaTitleBarHeightHint="32">
+   ExtendClientAreaTitleBarHeightHint="32"
+   WindowDrawnDecorations.TitleBarDecorations="MinimizeButton, MaximizeButton, CloseButton, FullScreenButton">
 	<Window.Styles>
+		<!-- 隐藏 Avalonia 绘制的窗口标题文本，避免与顶部工具栏文本叠加影响可读性。
+		     Hide the Avalonia-drawn window title text so it does not overlap the top toolbar text. -->
 		<Style Selector="WindowDrawnDecorations /template/ TextBlock">
 			<Setter Property="IsVisible" Value="False" />
 		</Style>
