@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
@@ -489,6 +490,43 @@ public partial class ProjectExplorerView : UserControl
         var owner = GetOwnerWindow(); if (owner is null) return;
         if (await ExplorerItemCreationService.CreateAsync(owner, node.Path, isDirectory: false) is not null)
             node.RefreshChildren();
+    }
+
+    private async void OnImportExistingFile(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder)
+        {
+            return;
+        }
+
+        var owner = GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var title = LanguageService.Instance.GetString("Explorer_ImportExistingFile");
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false
+            });
+            var source = files.FirstOrDefault()?.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                return;
+            }
+
+            await ExplorerFileOperations.TransferAsync(source, node.Path, move: false);
+            node.RefreshChildren();
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Import existing file failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, title, UserError.Describe(ex), MessageBoxIcon.Error);
+        }
     }
 
     private async void OnNewFolder(object? sender, RoutedEventArgs e)

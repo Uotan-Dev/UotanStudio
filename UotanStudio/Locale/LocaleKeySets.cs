@@ -682,6 +682,7 @@ internal static class LocaleKeySets
         "Explorer_ImportExistingSubProject",
         "Explorer_Add",
         "Explorer_NewFile",
+        "Explorer_ImportExistingFile",
         "Explorer_NewFolder",
         "Explorer_Unpack",
         "Explorer_SplitVolumes",

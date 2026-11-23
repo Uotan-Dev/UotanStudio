@@ -2106,6 +2106,9 @@ Author: 暮间雾
   <data name="Explorer_NewFile" xml:space="preserve">
     <value>New File</value>
   </data>
+  <data name="Explorer_ImportExistingFile" xml:space="preserve">
+    <value>Import Existing File</value>
+  </data>
   <data name="Explorer_NewFolder" xml:space="preserve">
     <value>New Folder</value>
   </data>

@@ -2106,6 +2106,9 @@
   <data name="Explorer_NewFile" xml:space="preserve">
     <value>新建文件</value>
   </data>
+  <data name="Explorer_ImportExistingFile" xml:space="preserve">
+    <value>导入现有文件</value>
+  </data>
   <data name="Explorer_NewFolder" xml:space="preserve">
     <value>新建文件夹</value>
   </data>
