@@ -1,5 +1,4 @@
-using System.Collections.ObjectModel;using System.Collections.Specialized;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using CommunityToolkit.Mvvm.Messaging;using Dock.Model.Controls;using Dock.Model.Mvvm.Controls;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Compare;using UotanStudio.Services.Devices;using UotanStudio.Services.Remote;
-
+using System.Collections.ObjectModel;using System.Collections.Specialized;using CommunityToolkit.Mvvm.ComponentModel;using CommunityToolkit.Mvvm.Input;using CommunityToolkit.Mvvm.Messaging;using Dock.Model.Controls;using Dock.Model.Mvvm.Controls;using UotanStudio.Messages;using UotanStudio.Services;using UotanStudio.Services.Compare;using UotanStudio.Services.Devices;
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>

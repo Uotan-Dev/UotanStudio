@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>Maps host baud rates onto the speed codes the download agent accepts on DA_SPEED_CMD.

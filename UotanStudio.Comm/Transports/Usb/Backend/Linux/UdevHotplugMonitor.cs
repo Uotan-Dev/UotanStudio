@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 

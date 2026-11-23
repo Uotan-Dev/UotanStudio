@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession

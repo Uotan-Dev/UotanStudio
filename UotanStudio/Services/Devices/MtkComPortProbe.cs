@@ -1,4 +1,3 @@
-using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Serial;
 
 namespace UotanStudio.Services.Devices;

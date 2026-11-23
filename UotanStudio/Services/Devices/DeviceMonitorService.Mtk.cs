@@ -1,7 +1,5 @@
-using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
-using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 

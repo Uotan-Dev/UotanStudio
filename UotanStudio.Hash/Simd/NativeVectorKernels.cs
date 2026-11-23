@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace UotanStudio.Hash.Simd;
 
 /// <summary>

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.VendorFirmware.Allwinner.CardImage;
 using UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 using UotanStudio.Tests.TestInfrastructure;
