@@ -6,7 +6,7 @@
 
 | 目录 | 负载 | 来源与许可 |
 | --- | --- | --- |
-| `fonts/` | `MiSans-Regular.ttf`、`MiSans-Bold.ttf` | MiSans 字形，许可见 `fonts/NOTICE.md`；原始文件取自 `reference/resource/fonts-source/` |
+| `fonts/` | `MiSansVF.ttf` | MiSans 可变字形（`wght` 轴 150–700），许可见 `fonts/NOTICE.md`；原始文件取自 `reference/resource/fonts-source/MiSans/可变字体/` |
 | `ohos/device/` | `libscrcpy_server*.z.so`、`uitest_agent*.so` | DevEco Studio 随附的设备端原生文件，来源、版本与许可见 `ohos/README.md`；提取脚本 `tools/deveco-mirroring/extract.ps1` |
 | `drivers/rockusb/` | `rockusb.inf`、`rockusb.cat`、`rockusb.sys` | 厂商 Rockusb 驱动包，来源 URL、签名与许可见 `reference/driver/driver-pkg/README.md` |
 | `drivers/mediatek-vcom/`、`drivers/mediatek-full/` | 联发科 `cdc-acm`（VCOM）与 ADB 的 INF/CAT/SYS 及 amd64 coinstaller | 微软更新目录分发的 MediaTek WHQL 包，随包范围与排除项见 `reference/driver/driver-pkg/README.md` 的打包范围一节 |

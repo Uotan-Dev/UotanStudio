@@ -53,11 +53,11 @@ public static class AssetNames
     /// </summary>
     public static class Fonts
     {
-        /// <summary>Regular face. <para>常规字重字形。</para></summary>
-        public const string Regular = "MiSans-Regular.ttf";
-
-        /// <summary>Bold face. <para>粗体字重字形。</para></summary>
-        public const string Bold = "MiSans-Bold.ttf";
+        /// <summary>
+        /// The MiSans variable face. Its single <c>wght</c> axis spans every weight the UI needs.
+        /// <para>MiSans 可变字形。其唯一的 <c>wght</c> 轴覆盖界面需要的全部字重。</para>
+        /// </summary>
+        public const string Variable = "MiSansVF.ttf";
     }
 
     /// <summary>File names inside <see cref="Bundles.DeliveryUpdater"/>.

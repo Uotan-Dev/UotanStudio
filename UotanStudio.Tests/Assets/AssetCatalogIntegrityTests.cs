@@ -94,16 +94,17 @@ public class AssetCatalogIntegrityTests
     }
 
     [Fact]
-    public void Fonts_ShippedBundle_DeclaresRegularAndBoldFaces()
+    public void Fonts_ShippedBundle_DeclaresTheVariableFace()
     {
         var bundle = AssetCatalog.Fonts;
 
         Assert.True(bundle.IsPresent);
-        Assert.Equal(2, bundle.Entries.Count);
-        var regular = bundle[AssetNames.Fonts.Regular];
-        var bold = bundle[AssetNames.Fonts.Bold];
-        Assert.Equal(regular.Sha256, Sha256.ComputeHexLower(AssetStore.Read(regular)));
-        Assert.Equal(bold.Sha256, Sha256.ComputeHexLower(AssetStore.Read(bold)));
+        var entry = bundle[AssetNames.Fonts.Variable];
+        var payload = AssetStore.Read(entry);
+        Assert.Equal(entry.Length, payload.LongLength);
+        Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
+        Assert.True(payload.Length > 0x00010000, "a TrueType variable face must be a full sfnt");
+        Assert.Equal(0x00010000u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(payload));
     }
 
     [Fact]

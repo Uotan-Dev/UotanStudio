@@ -45,7 +45,7 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     /// <para>启动窗使用的字体族：宿主在创建本窗口前注册的随包 MiSans 集合。不请求系统字族，因为 Linux 构建链接的
     /// Skia 不带 fontconfig，无法解析系统字体。</para>
     /// </summary>
-    /// <value>The <c>fonts:UotanStudio/MiSans#MiSans</c> family.<para><c>fonts:UotanStudio/MiSans#MiSans</c> 字族。</para></value>
+    /// <value>The <c>fonts:UotanStudio/MiSansVF#MiSans VF</c> family.<para><c>fonts:UotanStudio/MiSansVF#MiSans VF</c> 字族。</para></value>
     public FontFamily SplashFontFamily { get; } = new(BundledFont.Reference);
 
     /// <summary>Publishes the next stage before allowing synchronous UI construction to continue.</summary>

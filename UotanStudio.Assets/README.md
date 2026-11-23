@@ -14,7 +14,7 @@
 
 | 类型 | 成员 | 语义 |
 | --- | --- | --- |
-| `AssetCatalog` | `Fonts` | `fonts` bundle：`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，启动时解码进内存。 |
+| `AssetCatalog` | `Fonts` | `fonts` bundle：可变字形 `MiSansVF.ttf`，启动时解码进内存，宿主按请求字重设置其 `wght` 轴。 |
 | `AssetCatalog` | `OhosDevice` | `ohos/device` bundle：UI Test 采集库与控制代理。 |
 | `AssetCatalog` | `RockusbDriver` | `drivers/rockusb` bundle：`rockusb.inf`、`rockusb.cat`、`rockusb.sys`。 |
 | `AssetCatalog` | `MediaTekVcomDriver` / `MediaTekFullDriver` / `GoogleUsbDriver` / `RockchipAdbDriver` / `QualcommQudDriver` | 其余五套厂商驱动包，bundle 为 `drivers/<packageId>`；包内目录用 `__` 编码，消费方还原。 |

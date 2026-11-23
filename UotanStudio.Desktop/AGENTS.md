@@ -19,7 +19,7 @@
 - `--mcp` 伴随在 GUI 启动前 `Task.Run`，设备经 `DesktopDeviceManagerGateway`、签名经 `DeliveryKeyProvider`、审计经 `McpToolCallLog`；不要在 Desktop 复制工具实现。`--mcp-root`/`--allow-flash` 由 `UotanStudio.Mcp` 的 `McpServerConfig.Parse` 读取；伴随模式未带显式 `--mcp-root` 时使用持久化的 `McpExposeRootDirectory` 作为沙箱根（空白回退不受限沙箱并关闭刷写门控），不再依赖进程工作目录。`Main` 在读取设置前先调用一次 `AppPaths.MigrateLegacyLocations`，日志目录取 `AppPaths.Logs`。
 - `--open-screen-mirror <serial>` 写入 `App.StartupScreenMirrorSerial`（`Array.IndexOf`，区分大小写且必须有后继参数）；文件参数只取 `File.Exists` 的路径，由宿主决定打开解决方案还是文档。不要从 `args` 删除参数，也不要在 `Program` 里做项目打开。
 - GUI 启动在 `BuildAvaloniaApp` 前调用宿主 `Services.Launch.DesktopInstanceRelay.Start`：首个进程持有 `AppPaths.Root/desktop-instance.lock` 并监听命名管道，后续普通 GUI 启动把文件与投屏参数转发给该实例后返回 0；转发失败时仍降级启动窗口而不是丢弃文件。`--mcp` 伴随进程跳过单实例，因为它独占客户端 stdio 通道。
-- `BuildAvaloniaApp` 保留 `[STAThread]`、`UsePlatformDetect`、默认字体 `fonts:UotanStudio/MiSans#MiSans` 与 Dock 合并范围 `ActiveDocument`；默认字体指向宿主在 `App.Initialize` 注册的 zstd 字体集合（`UotanStudio/Fonts/ZstdEmbeddedFontCollection`），这些会影响宿主资源路径与停靠行为。
+- `BuildAvaloniaApp` 保留 `[STAThread]`、`UsePlatformDetect`、默认字体 `fonts:UotanStudio/MiSansVF#MiSans VF` 与 Dock 合并范围 `ActiveDocument`；默认字体指向宿主在 `App.Initialize` 注册的 zstd 字体集合（`UotanStudio/Fonts/ZstdEmbeddedFontCollection`），这些会影响宿主资源路径与停靠行为。
 - Linux 在 `UsePlatformDetect` 之后调用 `UseWaylandWithFallback`（`Avalonia.Wayland` 包），有可用 compositor 时走原生 Wayland，否则回退 X11；该调用只有 `OperatingSystem.IsLinux()` 分支可达，NativeAOT 按 RID 折叠该判断并剔除其它 RID 的 Wayland/`NWayland` 程序集。
 - 持久化的 `renderingBackend`/`renderingCompositionMode` 在启动时转换成各平台的 `*PlatformOptions`；平台不接受的值回退到自动，设置页只负责持久化并提示重启。
 - `Logger.Sink` 只过滤 `LogArea.Binding` 的 Warning；不要依赖它掩盖新增绑定/裁剪警告。GUI 路径没有控制台，诊断写 `LogService`，不要写 `Console.WriteLine`。
