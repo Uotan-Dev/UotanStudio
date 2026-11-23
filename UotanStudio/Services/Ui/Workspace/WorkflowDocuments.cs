@@ -18,6 +18,8 @@ public interface IWorkflowDocuments
 
 internal sealed class WorkspaceWorkflowDocuments(WorkspaceViewModel workspace) : IWorkflowDocuments
 {
+    private const int MaximumWorkflowTextLength = 8 * 1024 * 1024;
+
     public async Task<WorkflowDocumentSnapshot> ReadAsync(WorkflowDocumentSnapshot snapshot, CancellationToken cancellationToken)
         => await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -59,7 +61,7 @@ internal sealed class WorkspaceWorkflowDocuments(WorkspaceViewModel workspace) :
             {
                 throw Error("Node_Document_Changed");
             }
-            if (text.Length > TextSearchService.MaximumTextLength)
+            if (text.Length > MaximumWorkflowTextLength)
             {
                 throw Error("Node_Document_TooLarge");
             }
@@ -78,7 +80,7 @@ internal sealed class WorkspaceWorkflowDocuments(WorkspaceViewModel workspace) :
     {
         var searchable = document as ISearchableDocument;
         var text = searchable?.SearchText;
-        if (text?.Length > TextSearchService.MaximumTextLength)
+        if (text?.Length > MaximumWorkflowTextLength)
         {
             throw Error("Node_Document_TooLarge");
         }

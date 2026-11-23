@@ -126,8 +126,6 @@ public partial class WorkspaceView
             var snapshots = selected.Select(d => new SearchDocument(d, SearchPath(d), SearchText(d)!,
                 scope == 1 ? _selectionStart : 0, scope == 1 ? _selectionLength : SearchText(d)!.Length)).ToArray();
             if (scope == 1 && _selectionLength == 0) snapshots = [];
-            if (snapshots.Sum(snapshot => (long)snapshot.Text.Length) > 64 * 1024 * 1024)
-                throw new IOException("Search exceeds the 64 MiB text limit. Narrow the scope.");
             if (scope == 3 && root is null) throw new IOException(LanguageService.Instance.GetString("FindReplace_NoProject"));
             var excluded = open.Select(SearchPath).OfType<string>().Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var found = await Task.Run(() =>
@@ -138,7 +136,6 @@ public partial class WorkspaceView
                     cancellationToken.ThrowIfCancellationRequested();
                     foreach (var match in TextSearchService.Find(snapshot.Text, options, snapshot.Start, snapshot.Length, cancellationToken))
                         matches.Add((snapshot, match));
-                    if (matches.Count > TextSearchService.MaximumMatches) throw new IOException("Search exceeds 10000 matches.");
                 }
                 if (scope == 3 && options.Pattern.Length != 0)
                 {
@@ -146,7 +143,6 @@ public partial class WorkspaceView
                     {
                         var snapshot = new SearchDocument(null, file.Path, file.Text, 0, file.Text.Length);
                         foreach (var match in file.Matches) matches.Add((snapshot, match));
-                        if (matches.Count > TextSearchService.MaximumMatches) throw new IOException("Search exceeds 10000 matches.");
                     }
                 }
                 return matches;
@@ -235,12 +231,10 @@ public partial class WorkspaceView
             }
             var targets = action == SearchAction.ReplaceAll ? _searchMatches.ToArray() : [_searchMatches[_searchMatchIndex]];
             var groups = targets.GroupBy(hit => hit.Document, (IEqualityComparer<SearchDocument>)ReferenceEqualityComparer.Instance).ToArray();
-            if (groups.Length > 100) throw new IOException("Replace all is limited to 100 documents. Narrow the scope.");
             if (groups.Length > 1 && DialogService.GetOwnerWindow() is { } owner
                 && !await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("FindReplace_ReplaceAll"),
                     string.Format(LanguageService.Instance.GetString("FindReplace_ConfirmReplaceAll"), targets.Length, groups.Length))) return;
             List<(IDockable Document, SearchDocument Snapshot, TextSearchMatch[] Matches, string Result)> edits = [];
-            long replacementSize = 0;
             foreach (var group in groups)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -249,8 +243,6 @@ public partial class WorkspaceView
                 if (document is not ISearchableDocument { SupportsSearchReplacement: true })
                     throw new IOException(LanguageService.Instance.GetString("FindReplace_NotSupported"));
                 var matches = group.Select(item => item.Match).ToArray();
-                replacementSize += group.Key.Text.Length + matches.Sum(match => (long)match.Replacement.Length - match.Length);
-                if (replacementSize > 64 * 1024 * 1024) throw new IOException("Replacement exceeds the 64 MiB total limit. Narrow the scope.");
                 edits.Add((document, group.Key, matches, TextSearchService.Apply(group.Key.Text, matches)));
             }
             cancellationToken.ThrowIfCancellationRequested();
@@ -339,6 +331,14 @@ public partial class WorkspaceView
                 throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
             locator.LocateSearchMatch(match.Offset, match.Length);
             return;
+        }
+
+        if (document is IHexSearchMatchLocator hex)
+        {
+            if (SearchText(document) != snapshot)
+                throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
+            if (hex.TryRevealSearchMatch(match.Offset, match.Length))
+                return;
         }
 
         var ready = new TaskCompletionSource<TextEditor>(TaskCreationOptions.RunContinuationsAsynchronously);

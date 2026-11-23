@@ -92,6 +92,9 @@ public class HexViewer : Grid
         _viewport.Goto(offset);
         _scroll.Offset = new Vector(_scroll.Offset.X, HexMetrics.YFromLine((int)(offset / HexMetrics.BytesPerLine)));
     }
+
+    internal void RevealMatch(int offset, int length) => _viewport.RevealMatch(offset, length);
+
     internal void RefreshComparison() => _viewport.InvalidateVisual();
 
     private byte[]? _data = [];
@@ -400,6 +403,21 @@ public class HexViewer : Grid
             _hasSelection = false;
             _selectionAnchor = -1;
             SetCaret(Math.Clamp(offset, 0, _data.Length - 1));
+        }
+
+        public void RevealMatch(int offset, int length)
+        {
+            if (_data is null || _data.Length == 0)
+            {
+                return;
+            }
+
+            var start = Math.Clamp(offset, 0, _data.Length - 1);
+            _selectionAnchor = start;
+            _hasSelection = length > 1;
+            SetCaret(Math.Clamp(start + Math.Max(0, length - 1), 0, _data.Length - 1));
+            EnsureCaretVisible();
+            Focus();
         }
 
         protected override Size MeasureOverride(Size availableSize)

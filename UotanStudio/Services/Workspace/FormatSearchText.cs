@@ -8,9 +8,9 @@ using UotanStudio.Services.Workspace.Documents;
 namespace UotanStudio.Services.Workspace;
 
 /// <summary>
-/// Bounded text-ification of unopened project binary formats (DTB, ARSC, AXML, DEX/JAR) for
-/// project-scope text search; unrecognized or oversized files are skipped.
-/// <para>把项目内未打开的二进制格式（DTB、ARSC、AXML、DEX/JAR）有界地文本化，用于项目范围的文本搜索；无法识别或超限的文件按跳过处理。</para>
+/// Text-ification of unopened project binary formats (DTB, ARSC, AXML, DEX/JAR) for project-scope
+/// text search; unrecognized files are skipped.
+/// <para>把项目内未打开的二进制格式（DTB、ARSC、AXML、DEX/JAR）文本化，用于项目范围的文本搜索；无法识别的文件按跳过处理。</para>
 /// </summary>
 internal static class FormatSearchText
 {
@@ -23,9 +23,8 @@ internal static class FormatSearchText
     private const int ArscHeaderLength = 12;
 
     /// <summary>
-    /// Identifies and text-ifies a project file by extension/magic; <c>null</c> when unrecognized or
-    /// over-limit.
-    /// <para>按扩展名/魔数识别并文本化项目文件；无法识别或超限时为 <c>null</c>。</para>
+    /// Identifies and text-ifies a project file by extension/magic; <c>null</c> when unrecognized.
+    /// <para>按扩展名/魔数识别并文本化项目文件；无法识别时为 <c>null</c>。</para>
     /// </summary>
     /// <param name="path">
     /// The project file path.
@@ -47,11 +46,6 @@ internal static class FormatSearchText
             return null;
         }
 
-        if (new FileInfo(path).Length > TextSearchService.MaximumTextLength)
-        {
-            return null;
-        }
-
         var extension = Path.GetExtension(path);
         byte[] header;
         try
@@ -67,27 +61,27 @@ internal static class FormatSearchText
         {
             if (DocumentFormatPolicy.IsDtbExtension(extension) || DocumentFormatPolicy.IsDtbMagic(header))
             {
-                return Bound(ReadDtb(path));
+                return ReadDtb(path);
             }
 
             if (DocumentFormatPolicy.IsArscExtension(extension) || ArscParser.IsArsc(header))
             {
-                return Bound(ReadArsc(path, cancellationToken));
+                return ReadArsc(path, cancellationToken);
             }
 
             if (DocumentFormatPolicy.IsDexExtension(extension) || DocumentFormatPolicy.IsDexMagic(header))
             {
-                return Bound(ReadDex(path, cancellationToken));
+                return ReadDex(path, cancellationToken);
             }
 
             if (DocumentFormatPolicy.IsJarExtension(extension))
             {
-                return Bound(ReadContainer(path, cancellationToken));
+                return ReadContainer(path, cancellationToken);
             }
 
             if (IsManifestPath(path) || AXmlParser.IsAxml(header))
             {
-                return Bound(ReadAxml(path, cancellationToken));
+                return ReadAxml(path, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -207,22 +201,6 @@ internal static class FormatSearchText
         cancellationToken.ThrowIfCancellationRequested();
         return document.ToXml();
     }
-
-    /// <summary>
-    /// Discards the file when the search text exceeds the 8 MiB limit, keeping oversized text out
-    /// of the matching channel.
-    /// <para>超过 8 MiB 搜索文本上限时放弃该文件，避免把超长文本带入匹配通道。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The text produced for a candidate file.
-    /// <para>为候选文件生成的文本。</para>
-    /// </param>
-    /// <returns>
-    /// The text when within the limit, or <c>null</c>.
-    /// <para>未超限时返回该文本，否则为 <c>null</c>。</para>
-    /// </returns>
-    private static string? Bound(string text) =>
-        text.Length > TextSearchService.MaximumTextLength ? null : text;
 
     /// <summary>
     /// Whether the file name is AndroidManifest.xml (case-insensitive).

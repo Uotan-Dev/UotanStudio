@@ -1,5 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Editors;
 
@@ -11,6 +13,8 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class HexEditorView : UserControl
 {
+    private HexEditorViewModel? _searchDocument;
+
     /// <summary>
     /// Creates the Hex editor view and initializes its components.
     /// <para>创建 Hex 编辑器视图并初始化组件。</para>
@@ -18,17 +22,53 @@ public partial class HexEditorView : UserControl
     public HexEditorView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        BindSearchDocument(null);
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e) => BindSearchDocument(DataContext as HexEditorViewModel);
+
+    private void BindSearchDocument(HexEditorViewModel? document)
+    {
+        if (ReferenceEquals(_searchDocument, document))
+        {
+            return;
+        }
+
+        if (_searchDocument is not null)
+        {
+            _searchDocument.SearchMatchLocated -= OnSearchMatchLocated;
+        }
+
+        _searchDocument = document;
+        if (_searchDocument is not null)
+        {
+            _searchDocument.SearchMatchLocated += OnSearchMatchLocated;
+        }
+    }
+
+    private void OnSearchMatchLocated(int offset, int length)
+    {
+        if (this.FindControl<HexViewer>("HexEditor") is { } viewer)
+        {
+            viewer.RevealMatch(offset, length);
+        }
     }
 
     /// <summary>
-    /// HexViewer byte-edit event: marks the document dirty.
-    /// <para>HexViewer 字节编辑事件：把文档标记为已修改。</para>
+    /// HexViewer byte-edit event: marks the document dirty and refreshes its search projection.
+    /// <para>HexViewer 字节编辑事件：把文档标记为已修改并刷新其搜索投影。</para>
     /// </summary>
     private void OnBytesEdited(object? sender, EventArgs e)
     {
         if (DataContext is HexEditorViewModel vm)
         {
-            vm.IsDirty = true;
+            vm.MarkModifiedByHexEdit();
         }
     }
 }
