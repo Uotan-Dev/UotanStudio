@@ -2088,6 +2088,9 @@
   <data name="Explorer_OpenAsApk" xml:space="preserve">
     <value>以 APK 打开</value>
   </data>
+  <data name="Explorer_OpenAsApplication" xml:space="preserve">
+    <value>以应用信息打开</value>
+  </data>
   <data name="Explorer_OpenAsFirmware" xml:space="preserve">
     <value>在固件信息中打开</value>
   </data>

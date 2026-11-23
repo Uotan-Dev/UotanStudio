@@ -676,6 +676,7 @@ internal static class LocaleKeySets
         "Explorer_OpenAsAxml",
         "Explorer_OpenAsArsc",
         "Explorer_OpenAsApk",
+        "Explorer_OpenAsApplication",
         "Explorer_OpenAsFirmware",
         "Explorer_OpenAsFileSystem",
         "Explorer_OpenAsMenu",

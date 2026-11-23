@@ -2088,6 +2088,9 @@ Author: 暮间雾
   <data name="Explorer_OpenAsApk" xml:space="preserve">
     <value>Open as APK</value>
   </data>
+  <data name="Explorer_OpenAsApplication" xml:space="preserve">
+    <value>Open as Application Info</value>
+  </data>
   <data name="Explorer_OpenAsFirmware" xml:space="preserve">
     <value>Open in Firmware Info</value>
   </data>

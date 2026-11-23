@@ -14,6 +14,7 @@ using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Firmware.HarmonyMeta.Hap;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.VendorFirmware.Rockchip;
 using UotanStudio.Services.Flash;
@@ -148,6 +149,46 @@ public static class DocumentFormatPolicy
     /// <returns><see langword="true"/> for <c>.apk</c>.<para>为 <c>.apk</c> 时返回 <see langword="true"/>。</para></returns>
     public static bool IsApkExtension(string? ext) =>
         ext is not null && ext.Equals(".apk", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the path names a supported HarmonyOS application package by extension.
+    /// <para>路径按扩展名是否为受支持的 HarmonyOS 应用包。</para>
+    /// </summary>
+    /// <param name="path">Candidate file path.<para>候选文件路径。</para></param>
+    /// <returns><see langword="true"/> for <c>.hap</c>, <c>.hsp</c> and <c>.app</c>.
+    /// <para>扩展名为 <c>.hap</c>、<c>.hsp</c> 或 <c>.app</c> 时返回 <see langword="true"/>。</para></returns>
+    public static bool IsHarmonyApplicationExtension(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".hap", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".hsp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".app", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether the path holds a HarmonyOS application package that the application info editor can open.
+    /// <para>路径是否为应用信息编辑器可以打开的 HarmonyOS 应用包。</para>
+    /// </summary>
+    /// <param name="path">Candidate file path.<para>候选文件路径。</para></param>
+    /// <returns><see langword="true"/> when the extension and archive metadata both match.
+    /// <para>扩展名与归档元数据均匹配时返回 <see langword="true"/>。</para></returns>
+    public static bool IsHarmonyApplicationPackage(string? path) =>
+        HapParser.IsApplicationContainer(path);
+
+    /// <summary>
+    /// Whether the path holds any supported application package, Android APK or HarmonyOS app package.
+    /// <para>路径是否为受支持的应用包，包括 Android APK 与 HarmonyOS 应用包。</para>
+    /// </summary>
+    /// <param name="path">Candidate file path.<para>候选文件路径。</para></param>
+    /// <returns><see langword="true"/> for APK, HAP, HSP and APP containers.
+    /// <para>对 APK、HAP、HSP 与 APP 容器返回 <see langword="true"/>。</para></returns>
+    public static bool IsApplicationPackage(string? path) =>
+        IsApkExtension(Path.GetExtension(path ?? string.Empty)) || IsHarmonyApplicationPackage(path);
 
     /// <summary>
     /// Whether the extension is a QCN one. The OLE2/CFB magic is shared with .doc/.msi files, so
@@ -775,15 +816,24 @@ public static class DocumentFormatPolicy
             return false;
         }
 
-        if (!string.IsNullOrEmpty(SyntaxLanguageRegistry.GetLanguageId(ext)))
+        var withDot = ext.Length > 0 && ext[0] == '.' ? ext : "." + ext;
+        if (!string.IsNullOrEmpty(SyntaxLanguageRegistry.GetLanguageId(withDot)))
         {
             return true;
         }
 
-        return ext.ToLowerInvariant() switch
-        {
-            ".txt" or ".log" or ".dtsi" or ".dts" or ".cfg" or ".conf" => true,
-            _ => false
-        };
+        return _textCodeExtensions.Contains(withDot);
     }
+
+    /// <summary>
+    /// Text and source-code extensions without a registered syntax grammar that still open in the text editor.
+    /// <para>没有注册语法高亮、但仍应以文本编辑器打开的文本与源码扩展名。</para>
+    /// </summary>
+    private static readonly FrozenSet<string> _textCodeExtensions =
+        [with(StringComparer.OrdinalIgnoreCase),
+         ".txt", ".log", ".cfg", ".conf", ".dts", ".dtsi", ".dtso",
+         ".py", ".pyw", ".pyi", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".java", ".kt", ".kts",
+         ".go", ".rs", ".rb", ".php", ".swift", ".m", ".mm", ".scala", ".groovy", ".gradle",
+         ".pl", ".pm", ".r", ".sql", ".html", ".htm", ".css", ".scss", ".less", ".vue", ".svelte",
+         ".toml", ".ps1", ".psm1", ".bat", ".cmd", ".vbs", ".asm", ".inc", ".cmake", ".mk", ".pro"];
 }

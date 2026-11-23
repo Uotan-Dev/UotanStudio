@@ -179,10 +179,10 @@ internal static class DocumentOpenRegistry
             Kind = "Apk",
             Mode = EditorOpenMode.Apk,
             ViewModelType = typeof(ApkEditorViewModel),
-            LocaleKey = "Explorer_OpenAsApk",
+            LocaleKey = "Explorer_OpenAsApplication",
             MenuOrder = 12,
             IconKind = AppIconKind.Android,
-            Probe = static r => DocumentFormatPolicy.IsApkExtension(Path.GetExtension(r.Path ?? string.Empty)),
+            Probe = static r => DocumentFormatPolicy.IsApplicationPackage(r.Path),
             Open = static (w, r) => w.OpenApkAsync(r.Path!),
             GetPath = vm => ((ApkEditorViewModel)vm).FilePath,
         },
@@ -428,6 +428,19 @@ internal static class DocumentOpenRegistry
 
     private static readonly AutoRule[] _autoRules =
     [
+        // Application containers must outrank format detection: their ZIP magic is otherwise
+        // claimed by a firmware handler and would open the firmware metadata view.
+        new(EditorOpenMode.Apk, static (path, _, _, _) =>
+            DocumentFormatPolicy.IsApplicationPackage(path)),
+
+        // A JAR is a ZIP container holding classes*.dex, but the generic ZIP handler reports it as an
+        // APK; without an extension-first rule the catch-all detection rule opens the firmware view.
+        new(EditorOpenMode.Dex, static (path, _, _, _) =>
+        {
+            var ext = Path.GetExtension(path);
+            return DocumentFormatPolicy.IsDexExtension(ext) || DocumentFormatPolicy.IsJarExtension(ext);
+        }),
+
         new(EditorOpenMode.Elf, static (_, header, _, _) =>
             header is not null && header.AsSpan().StartsWith("\u007fELF"u8) && ElfReader.TryReadHeader(header, out _)),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
@@ -451,6 +464,7 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.FileSystem, static (path, header, _, _) =>
             header is not null && DocumentFormatPolicy.IsZipMagic(header)
             && !DocumentFormatPolicy.IsApkExtension(Path.GetExtension(path))
+            && !DocumentFormatPolicy.IsHarmonyApplicationPackage(path)
             && !DocumentFormatPolicy.IsJarExtension(Path.GetExtension(path))),
 
         new(EditorOpenMode.FileSystem, static (_, header, _, _) =>
@@ -513,6 +527,15 @@ internal static class DocumentOpenRegistry
             header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path))
             && (detection ?? DetectDetailedWithRegistry(path)) is not null),
 
+        // Magic rules also describe textual formats (for example "Python script text executable" from a
+        // source file containing an import statement), so a text/script description on non-binary content
+        // belongs in the text editor instead of the hex view.
+        new(EditorOpenMode.Text, static (_, header, _, _) =>
+            header is not null
+            && !DocumentFormatPolicy.IsBinaryContent(header)
+            && FileMagic.Describe(header) is { } description
+            && (description.Contains("text", StringComparison.OrdinalIgnoreCase)
+                || description.Contains("script", StringComparison.OrdinalIgnoreCase))),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
             header is not null && FileMagic.Describe(header) is not null),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
@@ -571,7 +594,7 @@ internal static class DocumentOpenRegistry
             return EditorOpenMode.Arsc;
         }
 
-        if (DocumentFormatPolicy.IsApkExtension(ext))
+        if (DocumentFormatPolicy.IsApplicationPackage(path))
         {
             return EditorOpenMode.Apk;
         }
