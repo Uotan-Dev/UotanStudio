@@ -11,29 +11,8 @@ namespace UotanStudio.Views.Controls;
 /// <para>GNOME Disks 风格的可视化分区段面板：子项按 <see cref="IBandSegmentLayout.BandWidthRatio"/>
 /// 顺序分配宽度；非间隙段保证最小宽度，空间不足时整体等比压缩并裁剪文本。</para>
 /// </summary>
-public sealed class PartitionBandPanel : Panel
+public sealed partial class PartitionBandPanel : Panel
 {
-    /// <summary>
-    /// Spacing between adjacent segments.
-    /// <para>相邻段之间的间距。</para>
-    /// </summary>
-    public static readonly StyledProperty<double> SpacingProperty =
-        AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(Spacing), 2);
-
-    /// <summary>
-    /// Minimum width of a real (non-gap) segment.
-    /// <para>非间隙段的最小宽度。</para>
-    /// </summary>
-    public static readonly StyledProperty<double> MinSegmentWidthProperty =
-        AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(MinSegmentWidth), 26);
-
-    /// <summary>
-    /// Minimum width of a gap segment.
-    /// <para>间隙段的最小宽度。</para>
-    /// </summary>
-    public static readonly StyledProperty<double> MinGapWidthProperty =
-        AvaloniaProperty.Register<PartitionBandPanel, double>(nameof(MinGapWidth), 4);
-
     static PartitionBandPanel()
     {
         AffectsMeasure<PartitionBandPanel>(SpacingProperty);
@@ -45,19 +24,22 @@ public sealed class PartitionBandPanel : Panel
     /// Gets or sets the spacing between adjacent segments.
     /// <para>获取或设置相邻段之间的间距。</para>
     /// </summary>
-    public double Spacing { get => GetValue(SpacingProperty); set => SetValue(SpacingProperty, value); }
+    [GeneratedStyledProperty(DefaultValue = 2d)]
+    public partial double Spacing { get; set; }
 
     /// <summary>
     /// Gets or sets the minimum width of a real (non-gap) segment.
     /// <para>获取或设置非间隙段的最小宽度。</para>
     /// </summary>
-    public double MinSegmentWidth { get => GetValue(MinSegmentWidthProperty); set => SetValue(MinSegmentWidthProperty, value); }
+    [GeneratedStyledProperty(DefaultValue = 26d)]
+    public partial double MinSegmentWidth { get; set; }
 
     /// <summary>
     /// Gets or sets the minimum width of a gap segment.
     /// <para>获取或设置间隙段的最小宽度。</para>
     /// </summary>
-    public double MinGapWidth { get => GetValue(MinGapWidthProperty); set => SetValue(MinGapWidthProperty, value); }
+    [GeneratedStyledProperty(DefaultValue = 4d)]
+    public partial double MinGapWidth { get; set; }
 
     protected override Size MeasureOverride(Size availableSize)
     {

@@ -25,12 +25,11 @@ public partial class DeliveryOutputView : UserControl
 {
     private const double MinimumSettingsHeight = 340;
 
-    /// <summary>Width shared by the output settings and the neighboring image list. <para>输出设置栏与相邻镜像列表共用的宽度。</para></summary>
-    public static readonly StyledProperty<double> SettingsWidthProperty =
-        AvaloniaProperty.Register<DeliveryOutputView, double>(nameof(SettingsWidth), 180);
-
-    /// <summary>Gets or sets the width of the output settings pane. <para>获取或设置输出设置栏的宽度。</para></summary>
-    public double SettingsWidth { get => GetValue(SettingsWidthProperty); set => SetValue(SettingsWidthProperty, value); }
+    /// <summary>Gets or sets the width shared by the output settings and the neighboring image list.
+    /// <para>获取或设置输出设置栏与相邻镜像列表共用的宽度。</para>
+    /// </summary>
+    [GeneratedStyledProperty(DefaultValue = 180d)]
+    public partial double SettingsWidth { get; set; }
 
     private DeliveryViewModel? _model;
     private readonly Dictionary<string, DeliveryScriptDocument> _allDocuments = [];

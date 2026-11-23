@@ -7,24 +7,8 @@ namespace UotanStudio.Views.Controls;
 /// Wraps children according to both their minimum and content widths, then justifies every line.
 /// <para>按子项的最小宽度和实际内容宽度自动换行，并让每一行填满可用宽度。</para>
 /// </summary>
-public sealed class JustifiedWrapPanel : Panel
+public sealed partial class JustifiedWrapPanel : Panel
 {
-    public static readonly StyledProperty<double> MinItemWidthProperty =
-        AvaloniaProperty.Register<JustifiedWrapPanel, double>(nameof(MinItemWidth), 110d);
-
-    public static readonly StyledProperty<double> ItemSpacingProperty =
-        AvaloniaProperty.Register<JustifiedWrapPanel, double>(nameof(ItemSpacing), 6d);
-
-    public static readonly StyledProperty<double> LineSpacingProperty =
-        AvaloniaProperty.Register<JustifiedWrapPanel, double>(nameof(LineSpacing), 6d);
-
-    /// <summary>
-    /// Identifies the <see cref="EqualColumns"/> styled property.
-    /// <para>标识 <see cref="EqualColumns"/> 样式属性。</para>
-    /// </summary>
-    public static readonly StyledProperty<bool> EqualColumnsProperty =
-        AvaloniaProperty.Register<JustifiedWrapPanel, bool>(nameof(EqualColumns), true);
-
     private readonly List<RowLayout> _rows = [];
     private double[] _requiredWidths = [];
 
@@ -38,41 +22,29 @@ public sealed class JustifiedWrapPanel : Panel
     /// Gets or sets the base minimum width; wider content raises the effective minimum.
     /// <para>获取或设置每个子项的基础最小宽度；内容需要更宽时以内容宽度为准。</para>
     /// </summary>
-    public double MinItemWidth
-    {
-        get => GetValue(MinItemWidthProperty);
-        set => SetValue(MinItemWidthProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 110d)]
+    public partial double MinItemWidth { get; set; }
 
     /// <summary>
     /// Gets or sets the spacing between children on the same line.
     /// <para>获取或设置同一行子项之间的距离。</para>
     /// </summary>
-    public double ItemSpacing
-    {
-        get => GetValue(ItemSpacingProperty);
-        set => SetValue(ItemSpacingProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 6d)]
+    public partial double ItemSpacing { get; set; }
 
     /// <summary>
     /// Gets or sets the spacing between adjacent lines.
     /// <para>获取或设置相邻行之间的距离。</para>
     /// </summary>
-    public double LineSpacing
-    {
-        get => GetValue(LineSpacingProperty);
-        set => SetValue(LineSpacingProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 6d)]
+    public partial double LineSpacing { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether children in the same row share equal width.
     /// <para>获取或设置同一行中的子项是否均分可用宽度。</para>
     /// </summary>
-    public bool EqualColumns
-    {
-        get => GetValue(EqualColumnsProperty);
-        set => SetValue(EqualColumnsProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = true)]
+    public partial bool EqualColumns { get; set; }
 
     protected override Size MeasureOverride(Size availableSize)
     {

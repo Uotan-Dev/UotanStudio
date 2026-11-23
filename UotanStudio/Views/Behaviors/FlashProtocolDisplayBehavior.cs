@@ -8,28 +8,16 @@ namespace UotanStudio.Views.Behaviors;
 /// Applies view model-managed protocol order and visibility to the flash page's protocol panel host.
 /// <para>把视图模型管理的协议顺序与可见性应用到烧录页面的协议面板容器。</para>
 /// </summary>
-public static class FlashProtocolDisplayBehavior
+public static partial class FlashProtocolDisplayBehavior
 {
-    /// <summary>Defines the ordered flash protocol display source.<para>定义有序的烧录协议显示数据源。</para></summary>
-    public static readonly AttachedProperty<IEnumerable<DisplayPreference>?> DisplayProperty =
-        AvaloniaProperty.RegisterAttached<Panel, IEnumerable<DisplayPreference>?>(
-            "Display",
-            typeof(FlashProtocolDisplayBehavior));
-
     static FlashProtocolDisplayBehavior() =>
         DisplayProperty.Changed.AddClassHandler<Panel>(OnDisplayChanged);
 
-    /// <summary>Gets the protocol display source.<para>获取协议显示数据源。</para></summary>
+    /// <summary>Gets the ordered flash protocol display source.<para>获取有序的烧录协议显示数据源。</para></summary>
     /// <param name="panel">The protocol panel host.<para>协议面板容器。</para></param>
     /// <returns>The ordered protocol preferences.<para>有序的协议偏好。</para></returns>
-    public static IEnumerable<DisplayPreference>? GetDisplay(Panel panel) =>
-        panel.GetValue(DisplayProperty);
-
-    /// <summary>Sets the protocol display source.<para>设置协议显示数据源。</para></summary>
-    /// <param name="panel">The protocol panel host.<para>协议面板容器。</para></param>
-    /// <param name="value">The ordered protocol preferences.<para>有序的协议偏好。</para></param>
-    public static void SetDisplay(Panel panel, IEnumerable<DisplayPreference>? value) =>
-        panel.SetValue(DisplayProperty, value);
+    [GeneratedAttachedProperty]
+    public static partial IEnumerable<DisplayPreference>? GetDisplay(Panel panel);
 
     private static void OnDisplayChanged(Panel panel, AvaloniaPropertyChangedEventArgs args) =>
         Apply(panel, args.GetNewValue<IEnumerable<DisplayPreference>?>());

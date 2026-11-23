@@ -19,8 +19,14 @@ namespace UotanStudio.Views.Controls;
 /// </summary>
 public partial class CodeEditor : TextEditor
 {
-    public static readonly StyledProperty<string?> LanguageProperty =
-        AvaloniaProperty.Register<CodeEditor, string?>(nameof(Language));
+    protected override Type StyleKeyOverride => typeof(TextEditor);
+
+    /// <summary>
+    /// Gets or sets the TextMate grammar identifier used for syntax highlighting.
+    /// <para>获取或设置语法高亮使用的 TextMate 语法标识。</para>
+    /// </summary>
+    [GeneratedStyledProperty]
+    public partial string? Language { get; set; }
 
     /// <summary>
     /// Bindable text content property. The underlying <see cref="TextEditor.Text"/> is a plain CLR
@@ -29,26 +35,8 @@ public partial class CodeEditor : TextEditor
     /// <para>可绑定的文本内容属性。底层 <see cref="TextEditor.Text"/> 是普通 CLR 属性，无法被
     /// XAML 编译绑定直接识别，因此这里注册一个桥接属性并在两侧同步。</para>
     /// </summary>
-    public static readonly StyledProperty<string?> TextProperty =
-        AvaloniaProperty.Register<CodeEditor, string?>(nameof(Text), defaultValue: null, defaultBindingMode: BindingMode.TwoWay);
-
-    protected override Type StyleKeyOverride => typeof(TextEditor);
-
-    public string? Language
-    {
-        get => GetValue(LanguageProperty);
-        set => SetValue(LanguageProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the editor text content (binding bridged to <see cref="TextProperty"/>).
-    /// <para>获取或设置编辑器文本内容（绑定桥接到 <see cref="TextProperty"/>）。</para>
-    /// </summary>
-    public new string? Text
-    {
-        get => GetValue(TextProperty);
-        set => SetValue(TextProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultBindingMode = BindingMode.TwoWay)]
+    public new partial string? Text { get; set; }
 
     /// <summary>
     /// The TextMate highlight installation (created on first install or theme change, releasing the

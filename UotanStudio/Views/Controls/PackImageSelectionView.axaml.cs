@@ -15,12 +15,6 @@ namespace UotanStudio.Views.Controls;
 /// <summary>Shared delivery image picker; reads file sizes and holds local selections. <para>交付表单共用的镜像选择列表，读取文件大小并维护本地选择。</para></summary>
 public partial class PackImageSelectionView : UserControl
 {
-    public static readonly StyledProperty<bool> ShowOriginalsProperty =
-        AvaloniaProperty.Register<PackImageSelectionView, bool>(nameof(ShowOriginals));
-    /// <summary>Controls the empty-list placeholder. <para>空列表占位的显示属性。</para></summary>
-    public static readonly StyledProperty<bool> ShowEmptyListProperty =
-        AvaloniaProperty.Register<PackImageSelectionView, bool>(nameof(ShowEmptyList));
-
     private readonly List<PackImageGroup> _groups = [];
     private readonly PackImageGroup _emptyGroup = new(string.Empty, []);
     private CancellationTokenSource? _load;
@@ -34,9 +28,12 @@ public partial class PackImageSelectionView : UserControl
     private bool _selectionNotificationPending;
 
     /// <summary>Whether to include original images. <para>是否显示原包镜像。</para></summary>
-    public bool ShowOriginals { get => GetValue(ShowOriginalsProperty); set => SetValue(ShowOriginalsProperty, value); }
+    [GeneratedStyledProperty]
+    public partial bool ShowOriginals { get; set; }
+
     /// <summary>Whether to show an empty list when no image groups exist. <para>没有镜像分组时是否显示一个空列表。</para></summary>
-    public bool ShowEmptyList { get => GetValue(ShowEmptyListProperty); set => SetValue(ShowEmptyListProperty, value); }
+    [GeneratedStyledProperty]
+    public partial bool ShowEmptyList { get; set; }
     /// <summary>Whether files are being loaded or picked. <para>是否正在加载或选择文件。</para></summary>
     public bool IsBusy => _loading || _picking;
     /// <summary>Loading or file-picker state changed. <para>加载及文件选择状态发生变化。</para></summary>

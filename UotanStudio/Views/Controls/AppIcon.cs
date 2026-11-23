@@ -15,12 +15,8 @@ namespace UotanStudio.Views.Controls;
 /// 静态 XAML 直接使用强类型 Iconica 控件；只有图标由数据绑定时才用本宿主。
 /// <see cref="Viewbox"/> 把原生 24 单位图标缩放到宿主尺寸且保持矢量渲染，继承的前景色仍会经逻辑树传到图标。</para>
 /// </summary>
-public sealed class AppIcon : ContentControl
+public sealed partial class AppIcon : ContentControl
 {
-    /// <summary>Identifies the <see cref="Kind"/> property. <para>标识 <see cref="Kind"/> 属性。</para></summary>
-    public static readonly StyledProperty<AppIconKind?> KindProperty =
-        AvaloniaProperty.Register<AppIcon, AppIconKind?>(nameof(Kind));
-
     static AppIcon()
     {
         HorizontalContentAlignmentProperty.OverrideDefaultValue<AppIcon>(HorizontalAlignment.Stretch);
@@ -38,11 +34,8 @@ public sealed class AppIcon : ContentControl
     /// <para>本宿主显示的语义图标；<c>null</c> 时不渲染内容。</para>
     /// </summary>
     /// <value>The icon selected by the owning view model or binding. <para>由所属视图模型或绑定选择的图标。</para></value>
-    public AppIconKind? Kind
-    {
-        get => GetValue(KindProperty);
-        set => SetValue(KindProperty, value);
-    }
+    [GeneratedStyledProperty]
+    public partial AppIconKind? Kind { get; set; }
 
     private void UpdateContent()
     {

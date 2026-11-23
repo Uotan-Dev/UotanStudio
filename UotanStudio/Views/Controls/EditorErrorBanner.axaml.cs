@@ -13,22 +13,6 @@ namespace UotanStudio.Views.Controls;
 public partial class EditorErrorBanner : UserControl
 {
     /// <summary>
-    /// Defines the <see cref="Message"/> property.
-    /// <para>定义 <see cref="Message"/> 属性。</para>
-    /// </summary>
-    public static readonly StyledProperty<string?> MessageProperty =
-        AvaloniaProperty.Register<EditorErrorBanner, string?>(
-            nameof(Message),
-            defaultBindingMode: BindingMode.TwoWay);
-
-    /// <summary>
-    /// Defines the <see cref="DismissCommand"/> property.
-    /// <para>定义 <see cref="DismissCommand"/> 属性。</para>
-    /// </summary>
-    public static readonly StyledProperty<ICommand?> DismissCommandProperty =
-        AvaloniaProperty.Register<EditorErrorBanner, ICommand?>(nameof(DismissCommand));
-
-    /// <summary>
     /// Defines the <see cref="DisplayMessage"/> property.
     /// <para>定义 <see cref="DisplayMessage"/> 属性。</para>
     /// </summary>
@@ -62,21 +46,15 @@ public partial class EditorErrorBanner : UserControl
     /// Gets or sets the raw error message to display.
     /// <para>获取或设置要显示的原始错误文本。</para>
     /// </summary>
-    public string? Message
-    {
-        get => GetValue(MessageProperty);
-        set => SetValue(MessageProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultBindingMode = BindingMode.TwoWay)]
+    public partial string? Message { get; set; }
 
     /// <summary>
     /// Gets or sets the optional command executed when the dismiss button is clicked; when unset, <see cref="Message"/> is cleared directly.
     /// <para>获取或设置点击关闭按钮时执行的可选命令；未设置时直接清空 <see cref="Message"/>。</para>
     /// </summary>
-    public ICommand? DismissCommand
-    {
-        get => GetValue(DismissCommandProperty);
-        set => SetValue(DismissCommandProperty, value);
-    }
+    [GeneratedStyledProperty]
+    public partial ICommand? DismissCommand { get; set; }
 
     /// <summary>
     /// Gets the single-line normalized error text shown in the banner.

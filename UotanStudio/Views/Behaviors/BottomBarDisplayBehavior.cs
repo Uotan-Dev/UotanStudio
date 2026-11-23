@@ -18,30 +18,18 @@ namespace UotanStudio.Views.Behaviors;
 /// Applies the view model-managed bottom-bar order and visibility to a <see cref="TabbedPage"/> without putting that state in code-behind.
 /// <para>把视图模型管理的底栏顺序与可见性应用到 <see cref="TabbedPage"/>，避免把状态逻辑写进 code-behind。</para>
 /// </summary>
-public static class BottomBarDisplayBehavior
+public static partial class BottomBarDisplayBehavior
 {
-    /// <summary>Defines the ordered bottom-bar display source.<para>定义有序底栏显示数据源。</para></summary>
-    public static readonly AttachedProperty<IEnumerable<DisplayPreferenceItem>?> DisplayProperty =
-        AvaloniaProperty.RegisterAttached<TabbedPage, IEnumerable<DisplayPreferenceItem>?>(
-            "Display",
-            typeof(BottomBarDisplayBehavior));
-
     private static readonly ConditionalWeakTable<TabbedPage, State> States = new();
 
     static BottomBarDisplayBehavior() =>
         DisplayProperty.Changed.AddClassHandler<TabbedPage>(OnDisplayChanged);
 
-    /// <summary>Gets the bottom-bar display source.<para>获取底栏显示数据源。</para></summary>
+    /// <summary>Gets the ordered bottom-bar display source.<para>获取有序底栏显示数据源。</para></summary>
     /// <param name="page">The target tabbed page.<para>目标分页控件。</para></param>
     /// <returns>The ordered display items.<para>有序的显示项。</para></returns>
-    public static IEnumerable<DisplayPreferenceItem>? GetDisplay(TabbedPage page) =>
-        page.GetValue(DisplayProperty);
-
-    /// <summary>Sets the bottom-bar display source.<para>设置底栏显示数据源。</para></summary>
-    /// <param name="page">The target tabbed page.<para>目标分页控件。</para></param>
-    /// <param name="value">The ordered display items.<para>有序的显示项。</para></param>
-    public static void SetDisplay(TabbedPage page, IEnumerable<DisplayPreferenceItem>? value) =>
-        page.SetValue(DisplayProperty, value);
+    [GeneratedAttachedProperty]
+    public static partial IEnumerable<DisplayPreferenceItem>? GetDisplay(TabbedPage page);
 
     private static void OnDisplayChanged(TabbedPage page, AvaloniaPropertyChangedEventArgs args) =>
         States.GetValue(page, static owner => new State(owner))

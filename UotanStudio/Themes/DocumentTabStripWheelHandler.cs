@@ -17,68 +17,30 @@ namespace UotanStudio.Themes;
 /// <para>为 <see cref="DocumentTabStrip"/> 提供鼠标滚轮展开行为：
 /// 滚轮向下滚动时展开为多行，向上滚动时收起为单行。</para>
 /// </summary>
-public static class DocumentTabStripWheelHandler
+public static partial class DocumentTabStripWheelHandler
 {
-    /// <summary>
-    /// Defines the <see cref="EnableWheelExpand"/> attached property.
-    /// <para>定义 <see cref="EnableWheelExpand"/> 附加属性。</para>
-    /// </summary>
-    public static readonly AttachedProperty<bool> EnableWheelExpandProperty =
-        AvaloniaProperty.RegisterAttached<DocumentTabStrip, bool>(
-            "EnableWheelExpand",
-            typeof(DocumentTabStripWheelHandler),
-            defaultValue: false);
-
-    /// <summary>
-    /// Defines the <see cref="IsExpanded"/> attached property.
-    /// <para>定义 <see cref="IsExpanded"/> 附加属性。</para>
-    /// </summary>
-    public static readonly AttachedProperty<bool> IsExpandedProperty =
-        AvaloniaProperty.RegisterAttached<DocumentTabStrip, bool>(
-            "IsExpanded",
-            typeof(DocumentTabStripWheelHandler),
-            defaultValue: false);
-
     static DocumentTabStripWheelHandler()
     {
         EnableWheelExpandProperty.Changed.AddClassHandler<DocumentTabStrip>(OnEnableWheelExpandChanged);
     }
 
     /// <summary>
-    /// Gets the value of the <see cref="EnableWheelExpandProperty"/> on the target element.
-    /// <para>获取目标元素上的 <see cref="EnableWheelExpandProperty"/> 附加属性值。</para>
+    /// Gets whether wheel expansion is enabled on the target element.
+    /// <para>获取目标元素是否启用滚轮展开。</para>
     /// </summary>
     /// <param name="element">The target element.<para>目标元素。</para></param>
     /// <returns>True when wheel expansion is enabled; otherwise, false.<para>若启用滚轮展开则为 true；否则为 false。</para></returns>
-    public static bool GetEnableWheelExpand(DocumentTabStrip element) =>
-        element.GetValue(EnableWheelExpandProperty);
+    [GeneratedAttachedProperty(DefaultValue = false)]
+    public static partial bool GetEnableWheelExpand(DocumentTabStrip element);
 
     /// <summary>
-    /// Sets the value of the <see cref="EnableWheelExpandProperty"/> on the target element.
-    /// <para>设置目标元素上的 <see cref="EnableWheelExpandProperty"/> 附加属性值。</para>
-    /// </summary>
-    /// <param name="element">The target element.<para>目标元素。</para></param>
-    /// <param name="value">True to enable wheel expansion; otherwise, false.<para>若启用滚轮展开则为 true；否则为 false。</para></param>
-    public static void SetEnableWheelExpand(DocumentTabStrip element, bool value) =>
-        element.SetValue(EnableWheelExpandProperty, value);
-
-    /// <summary>
-    /// Gets the value of the <see cref="IsExpandedProperty"/> on the target element.
-    /// <para>获取目标元素上的 <see cref="IsExpandedProperty"/> 附加属性值。</para>
+    /// Gets whether the tab strip is expanded to multiple rows.
+    /// <para>获取标签栏是否已展开为多行。</para>
     /// </summary>
     /// <param name="element">The target element.<para>目标元素。</para></param>
     /// <returns>True when the tab strip is expanded to multiple rows; otherwise, false.<para>若标签栏已展开为多行则为 true；否则为 false。</para></returns>
-    public static bool GetIsExpanded(DocumentTabStrip element) =>
-        element.GetValue(IsExpandedProperty);
-
-    /// <summary>
-    /// Sets the value of the <see cref="IsExpandedProperty"/> on the target element.
-    /// <para>设置目标元素上的 <see cref="IsExpandedProperty"/> 附加属性值。</para>
-    /// </summary>
-    /// <param name="element">The target element.<para>目标元素。</para></param>
-    /// <param name="value">True to expand to multiple rows; false to collapse to a single row.<para>若展开为多行则为 true；若收起为单行则为 false。</para></param>
-    public static void SetIsExpanded(DocumentTabStrip element, bool value) =>
-        element.SetValue(IsExpandedProperty, value);
+    [GeneratedAttachedProperty(DefaultValue = false)]
+    public static partial bool GetIsExpanded(DocumentTabStrip element);
 
     private static void OnEnableWheelExpandChanged(DocumentTabStrip strip, AvaloniaPropertyChangedEventArgs args)
     {

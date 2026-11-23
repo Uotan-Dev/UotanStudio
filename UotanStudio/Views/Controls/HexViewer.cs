@@ -16,7 +16,7 @@ namespace UotanStudio.Views.Controls;
 /// <para>面向二进制文件的自定义绘制十六进制编辑器：单次渲染绘制偏移列、十六进制与 ASCII 列，支持范围选择、
 /// 剪贴板复制/粘贴、跳转偏移、键盘导航与已编辑字节高亮。通过 <c>Hex*</c> 资源画刷适配主题。</para>
 /// </summary>
-public class HexViewer : Grid
+public partial class HexViewer : Grid
 {
     /// <summary>
     /// The bound source data (raw byte array). Edits are written back to this array in place.
@@ -32,23 +32,12 @@ public class HexViewer : Grid
     public event EventHandler? BytesEdited;
 
     /// <summary>
-    /// Encoding name used to decode the text column and encode text input; <c>null</c> keeps the
-    /// legacy single-byte ASCII rendering.
-    /// <para>文本列解码与文本输入使用的编码名称；<c>null</c> 保持旧的单字节 ASCII 渲染。</para>
-    /// </summary>
-    public static readonly StyledProperty<string?> EncodingNameProperty =
-        AvaloniaProperty.Register<HexViewer, string?>(nameof(EncodingName));
-
-    /// <summary>
     /// Gets or sets the encoding name for the text column and text input (e.g. "ASCII", "UTF-8",
-    /// "GB18030"); <c>null</c> means plain ASCII.
-    /// <para>获取或设置文本列与文本输入的编码名称（如 "ASCII"、"UTF-8"、"GB18030"）；<c>null</c> 表示纯 ASCII。</para>
+    /// "GB18030"); <c>null</c> selects plain single-byte ASCII rendering.
+    /// <para>获取或设置文本列与文本输入的编码名称（如 "ASCII"、"UTF-8"、"GB18030"）；<c>null</c> 使用纯单字节 ASCII 渲染。</para>
     /// </summary>
-    public string? EncodingName
-    {
-        get => GetValue(EncodingNameProperty);
-        set => SetValue(EncodingNameProperty, value);
-    }
+    [GeneratedStyledProperty]
+    public partial string? EncodingName { get; set; }
 
     /// <inheritdoc />
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -67,21 +56,12 @@ public class HexViewer : Grid
     }
 
     /// <summary>
-    /// Supplies the other side's bytes for comparison highlighting; null disables comparison.
-    /// <para>提供对侧字节以显示差异高亮；null 表示关闭对比。</para>
+    /// Gets or sets the counterpart bytes for comparison highlighting; null disables comparison.
+    /// Comparison uses fixed 16-byte rows on both sides.
+    /// <para>获取或设置用于差异高亮的对侧字节；null 表示关闭对比。两侧均按固定每行 16 字节比较。</para>
     /// </summary>
-    public static readonly StyledProperty<byte[]?> ComparisonDataProperty =
-        AvaloniaProperty.Register<HexViewer, byte[]?>(nameof(ComparisonData));
-
-    /// <summary>
-    /// Gets or sets the counterpart bytes. Comparison uses fixed 16-byte rows on both sides.
-    /// <para>获取或设置对侧字节；对比时两侧固定每行 16 字节。</para>
-    /// </summary>
-    public byte[]? ComparisonData
-    {
-        get => GetValue(ComparisonDataProperty);
-        set => SetValue(ComparisonDataProperty, value);
-    }
+    [GeneratedStyledProperty]
+    public partial byte[]? ComparisonData { get; set; }
 
     internal event Action<HexViewer, int, int>? RangeEdited;
     internal event Action<HexViewer>? ViewportChanged;

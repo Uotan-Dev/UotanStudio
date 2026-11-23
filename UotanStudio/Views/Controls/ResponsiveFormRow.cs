@@ -7,23 +7,8 @@ namespace UotanStudio.Views.Controls;
 /// Places a label beside its editor when space permits and stacks them when the row becomes narrow.
 /// <para>在空间足够时横向排列标签和输入控件，空间不足时自动切换为上下排列。</para>
 /// </summary>
-public sealed class ResponsiveFormRow : Panel
+public sealed partial class ResponsiveFormRow : Panel
 {
-    public static readonly StyledProperty<double> MinLabelWidthProperty =
-        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(MinLabelWidth), 75d);
-
-    public static readonly StyledProperty<double> MaxLabelWidthProperty =
-        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(MaxLabelWidth), 180d);
-
-    public static readonly StyledProperty<double> MinEditorWidthProperty =
-        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(MinEditorWidth), 0d);
-
-    public static readonly StyledProperty<double> ColumnSpacingProperty =
-        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(ColumnSpacing), 0d);
-
-    public static readonly StyledProperty<double> RowSpacingProperty =
-        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(RowSpacing), 4d);
-
     private bool _isStacked;
     private double _labelWidth;
     private double _editorWidth;
@@ -50,52 +35,37 @@ public sealed class ResponsiveFormRow : Panel
     /// Gets or sets the minimum label-column width.
     /// <para>获取或设置标签列的最小宽度。</para>
     /// </summary>
-    public double MinLabelWidth
-    {
-        get => GetValue(MinLabelWidthProperty);
-        set => SetValue(MinLabelWidthProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 75d)]
+    public partial double MinLabelWidth { get; set; }
 
     /// <summary>
     /// Gets or sets the maximum label-column width in horizontal layout.
     /// <para>获取或设置横向布局时标签列允许增长到的最大宽度。</para>
     /// </summary>
-    public double MaxLabelWidth
-    {
-        get => GetValue(MaxLabelWidthProperty);
-        set => SetValue(MaxLabelWidthProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 180d)]
+    public partial double MaxLabelWidth { get; set; }
 
     /// <summary>
     /// Gets or sets the minimum editor width required to keep the horizontal layout; this value only
     /// controls when stacking occurs and does not constrain the editor width in the stacked layout.
     /// <para>获取或设置输入控件保持横向布局所需的最小宽度；该值只决定换行时机，不限制上下布局中的实际宽度。</para>
     /// </summary>
-    public double MinEditorWidth
-    {
-        get => GetValue(MinEditorWidthProperty);
-        set => SetValue(MinEditorWidthProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 0d)]
+    public partial double MinEditorWidth { get; set; }
 
     /// <summary>
     /// Gets or sets the horizontal spacing between the label and editor.
     /// <para>获取或设置横向布局中标签与输入控件之间的距离。</para>
     /// </summary>
-    public double ColumnSpacing
-    {
-        get => GetValue(ColumnSpacingProperty);
-        set => SetValue(ColumnSpacingProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 0d)]
+    public partial double ColumnSpacing { get; set; }
 
     /// <summary>
     /// Gets or sets the vertical spacing between the label and editor.
     /// <para>获取或设置上下布局中标签与输入控件之间的距离。</para>
     /// </summary>
-    public double RowSpacing
-    {
-        get => GetValue(RowSpacingProperty);
-        set => SetValue(RowSpacingProperty, value);
-    }
+    [GeneratedStyledProperty(DefaultValue = 4d)]
+    public partial double RowSpacing { get; set; }
 
     protected override Size MeasureOverride(Size availableSize)
     {
