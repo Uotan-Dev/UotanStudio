@@ -11,7 +11,7 @@ CPU 架构选择，并通过托管 HDC 会话推送到 `/data/local/tmp`。
 - JAR SHA-256：`62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`
 - 提取方式：`tools/deveco-mirroring/extract.ps1`（默认读取 `C:\Program Files\Huawei\DevEco Studio`）
 
-这些文件与 `reference/HdcMirror/tools/runtime/device/` 中的同名文件逐字节一致；以 DevEco 安装包为权威来源。
+这些文件与 `reference/protocol/harmonyos/HdcMirror/tools/runtime/device/` 中的同名文件逐字节一致；以 DevEco 安装包为权威来源。
 `libscrcpy_server0.z.so` 作为最后的旧版回退候选一并保留，其余 `libscrcpy_server*.z.so` 按文件名中的版本
 从新到旧尝试。`uitest_agent_x86_1.1.12.so` 供 `x86_64` 设备使用。
 
