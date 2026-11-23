@@ -1404,14 +1404,11 @@
   <data name="MirrorSetting_Apply" xml:space="preserve">
     <value>Apply and reconnect</value>
   </data>
-  <data name="MirrorSetting_ApplyHint" xml:space="preserve">
-    <value>Reconnect to apply these settings. Available decoders depend on the operating system, drivers and installed plugins; the device must support the selected format.</value>
+  <data name="MirrorSetting_ApplyTooltip" xml:space="preserve">
+    <value>Changes take effect after reconnecting</value>
   </data>
   <data name="MirrorSetting_UpdateServer" xml:space="preserve">
-    <value>Check for scrcpy server updates</value>
-  </data>
-  <data name="MirrorSetting_UpdateServerHint" xml:space="preserve">
-    <value>Downloads the newest published server into the local cache. A running session keeps its current server; the next connection uses the new one.</value>
+    <value>Check for server updates</value>
   </data>
   <data name="MirrorSetting_AudioBackend" xml:space="preserve">
     <value>Audio decoder</value>

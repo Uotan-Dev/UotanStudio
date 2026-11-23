@@ -1404,14 +1404,11 @@
   <data name="MirrorSetting_Apply" xml:space="preserve">
     <value>应用并重新连接</value>
   </data>
-  <data name="MirrorSetting_ApplyHint" xml:space="preserve">
-    <value>修改后需重新连接生效。可用解码后端取决于系统、驱动与已安装插件；所选编码格式需设备端支持。</value>
+  <data name="MirrorSetting_ApplyTooltip" xml:space="preserve">
+    <value>修改后重新连接生效</value>
   </data>
   <data name="MirrorSetting_UpdateServer" xml:space="preserve">
-    <value>检查 scrcpy 服务端更新</value>
-  </data>
-  <data name="MirrorSetting_UpdateServerHint" xml:space="preserve">
-    <value>把最新发布的服务端下载到本地缓存。已开始的会话继续使用当前服务端，新版本从下一次连接生效。</value>
+    <value>检查服务端更新</value>
   </data>
   <data name="MirrorSetting_AudioBackend" xml:space="preserve">
     <value>音频解码后端</value>
