@@ -878,9 +878,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// Refreshes property rows for an APK document (file name, path, size, package name, version,
-    /// SDK, minimum system, ABIs, permission count).
-    /// <para>刷新 APK 文档的属性行（文件名、路径、大小、包名、版本、SDK、ABI、权限数）。</para>
+    /// Refreshes property rows for an application-info document (file name, path, size, package name,
+    /// version, SDK and permission count), for both APK and HarmonyOS packages.
+    /// <para>刷新应用信息文档的属性行（文件名、路径、大小、包名、版本、SDK、权限数），同时适用于 APK 与 HarmonyOS 包。</para>
     /// </summary>
     public void RefreshForApkDocument(ApkEditorViewModel doc)
     {
@@ -902,7 +902,8 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_PackageName", doc.PackageName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionName", doc.VersionName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionCode", doc.VersionCodeDisplay));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Permissions", doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
+        var permissionCount = doc.HapInfo?.Permissions.Count ?? doc.Info?.Permissions.Count ?? 0;
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Permissions", permissionCount.ToString("N0")));
 
         _log.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
     }

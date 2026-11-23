@@ -37,7 +37,8 @@ public partial class ApkEditorViewModel
     /// <para>必要项齐备（APK、私钥、证书与输出路径）时才允许执行签名，未填写完整时按钮禁用。</para>
     /// </summary>
     private bool CanSignApk() =>
-        !string.IsNullOrWhiteSpace(FilePath)
+        IsAndroidApplication
+        && !string.IsNullOrWhiteSpace(FilePath)
         && !string.IsNullOrWhiteSpace(SigningKeyPath)
         && !string.IsNullOrWhiteSpace(SigningCertificatePath)
         && !string.IsNullOrWhiteSpace(SigningOutputPath);

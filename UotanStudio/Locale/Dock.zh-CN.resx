@@ -1296,6 +1296,36 @@
   <data name="Apk_HardeningNotDetected" xml:space="preserve">
     <value>未检测到</value>
   </data>
+  <data name="Apk_Placeholder" xml:space="preserve">
+    <value>APP</value>
+  </data>
+  <data name="Apk_HarmonyTargetApi" xml:space="preserve">
+    <value>目标 API</value>
+  </data>
+  <data name="Apk_HarmonyCompatibleApi" xml:space="preserve">
+    <value>兼容 API</value>
+  </data>
+  <data name="Apk_HarmonyVendor" xml:space="preserve">
+    <value>供应商</value>
+  </data>
+  <data name="Apk_HarmonyDeviceTypes" xml:space="preserve">
+    <value>设备类型</value>
+  </data>
+  <data name="Apk_HarmonyAbilities" xml:space="preserve">
+    <value>Ability 列表</value>
+  </data>
+  <data name="Apk_HarmonyDetails" xml:space="preserve">
+    <value>包类型 / SDK</value>
+  </data>
+  <data name="Apk_HarmonyUnsigned" xml:space="preserve">
+    <value>未签名</value>
+  </data>
+  <data name="Apk_HarmonySignature" xml:space="preserve">
+    <value>已签名</value>
+  </data>
+  <data name="Apk_HarmonySignatureFormat" xml:space="preserve">
+    <value>{0} · {1} · {2} · {3}</value>
+  </data>
   <data name="MirrorProperty_Status" xml:space="preserve">
     <value>会话状态</value>
   </data>

@@ -2309,7 +2309,7 @@ Author: 暮间雾
     <value>Loading file, please wait…</value>
   </data>
   <data name="Dock_Apk_Busy" xml:space="preserve">
-    <value>Analyzing APK, please wait…</value>
+    <value>Analyzing application, please wait…</value>
   </data>
   <data name="FirmwareInfo_Title" xml:space="preserve">
     <value>Firmware Info</value>

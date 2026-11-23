@@ -6,19 +6,21 @@ using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.Archive.Browsing;
+using UotanStudio.Firmware.HarmonyMeta.Hap;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// APK metadata editor view model: hosts the application info extracted by <see cref="ApkParser"/>
-/// (package name/version/SDK/permissions/ABIs/icon), with the main view showing the icon and all
-/// details.
-/// <para>APK 元数据编辑器视图模型：承载 <see cref="ApkParser"/> 提取的应用信息
-/// （包名/版本/SDK/权限/ABI/图标），主视图展示图标与全部详细信息。</para>
+/// Application info editor view model: hosts the metadata extracted by <see cref="ApkParser"/> or
+/// <see cref="HapParser"/> (package name/version/SDK/permissions/device support/icon), with the main view
+/// showing the icon and all details.
+/// <para>应用信息编辑器视图模型：承载 <see cref="ApkParser"/> 或 <see cref="HapParser"/> 提取的元数据
+/// （包名/版本/SDK/权限/设备支持/图标），主视图展示图标与全部详细信息。</para>
 /// </summary>
 public partial class ApkEditorViewModel : Document, ITool
 {
@@ -90,6 +92,20 @@ public partial class ApkEditorViewModel : Document, ITool
 
     [ObservableProperty] private string _hardeningStateDisplay = "-";
 
+    /// <summary>Whether the loaded document is a HarmonyOS HAP/HSP/APP package.<para>当前文档是否为 HarmonyOS HAP/HSP/APP 包。</para></summary>
+    [ObservableProperty] private bool _isHarmonyApplication;
+
+    /// <summary>Whether the loaded document is an Android APK and supports APK-only actions.<para>当前文档是否为 Android APK，并支持 APK 专属操作。</para></summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SignApkCommand))]
+    private bool _isAndroidApplication = true;
+
+    /// <summary>HarmonyOS ability and extension-ability summary.<para>HarmonyOS Ability 与 ExtensionAbility 摘要。</para></summary>
+    [ObservableProperty] private string _harmonyAbilitiesDisplay = string.Empty;
+
+    /// <summary>HarmonyOS bundle type and compile SDK summary.<para>HarmonyOS 包类型与编译 SDK 摘要。</para></summary>
+    [ObservableProperty] private string _harmonyDetailsDisplay = string.Empty;
+
     /// <summary>
     /// The ABI list text.
     /// <para>ABI 列表文本。</para>
@@ -130,6 +146,18 @@ public partial class ApkEditorViewModel : Document, ITool
     public ApkInfo? Info => _info;
 
     /// <summary>
+    /// The parsed HarmonyOS metadata (for the properties panel).
+    /// <para>解析后的 HarmonyOS 元数据（属性面板取值用）。</para>
+    /// </summary>
+    private HapInfo? _hapInfo;
+
+    /// <summary>
+    /// The parsed HarmonyOS metadata; <c>null</c> when an APK is loaded or nothing is loaded.
+    /// <para>解析后的 HarmonyOS 元数据；加载 APK 或未加载时为 <c>null</c>。</para>
+    /// </summary>
+    public HapInfo? HapInfo => _hapInfo;
+
+    /// <summary>
     /// Creates the APK metadata editor view model.
     /// <para>创建 APK 元数据编辑器视图模型。</para>
     /// </summary>
@@ -143,6 +171,7 @@ public partial class ApkEditorViewModel : Document, ITool
     /// <para>获取安装操作是否具备有效 APK 与在线的已选 ADB 设备；Fastboot、recovery 与 bootrom 设备无法接收 APK 安装命令。</para>
     /// </summary>
     public bool CanInstall => !IsInstalling
+        && IsAndroidApplication
         && !string.IsNullOrWhiteSpace(FilePath)
         && File.Exists(FilePath)
         && DeviceViewModel.Instance?.SelectedDevice is { Protocol: DeviceProtocolKind.Adb, State: var state }
@@ -154,6 +183,8 @@ public partial class ApkEditorViewModel : Document, ITool
     public void RefreshInstallAvailability() => OnPropertyChanged(nameof(CanInstall));
 
     partial void OnIsInstallingChanged(bool value) => OnPropertyChanged(nameof(CanInstall));
+
+    partial void OnIsAndroidApplicationChanged(bool value) => RefreshInstallAvailability();
 
     /// <summary>
     /// Extracts every APK entry into the directory containing the APK.
@@ -207,10 +238,10 @@ public partial class ApkEditorViewModel : Document, ITool
     }
 
     /// <summary>
-    /// Asynchronously analyzes an APK file and populates the metadata display properties.
-    /// <para>异步分析 APK 文件并填充元数据展示属性。</para>
+    /// Asynchronously analyzes an APK or HarmonyOS application container and populates the metadata display properties.
+    /// <para>异步分析 APK 或 HarmonyOS 应用容器并填充元数据展示属性。</para>
     /// </summary>
-    /// <param name="path">APK 文件路径。<para>APK file path.</para></param>
+    /// <param name="path">Application package path.<para>应用包路径。</para></param>
     public async Task LoadAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -219,45 +250,32 @@ public partial class ApkEditorViewModel : Document, ITool
         }
 
         FilePath = path;
-        RefreshInstallAvailability();
-        SigningOutputPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path) + "-signed.apk");
+        IsHarmonyApplication = DocumentFormatPolicy.IsHarmonyApplicationExtension(path);
+        IsAndroidApplication = !IsHarmonyApplication;
+        SigningOutputPath = IsHarmonyApplication
+            ? string.Empty
+            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path) + "-signed.apk");
         Title = Path.GetFileName(path);
+        RefreshInstallAvailability();
 
         IsBusy = true;
         try
         {
-            var info = await Task.Run(() => ApkParser.Analyze(path, LanguageService.Instance.CurrentLanguage), default).ConfigureAwait(true);
+            if (IsHarmonyApplication)
+            {
+                await LoadHapAsync(path).ConfigureAwait(true);
+            }
+            else
+            {
+                await LoadApkAsync(path).ConfigureAwait(true);
+            }
 
-            _info = info;
-            PackageName = info.PackageName;
-            ApplicationName = string.IsNullOrWhiteSpace(info.ApplicationName) || info.ApplicationName.StartsWith("@", StringComparison.Ordinal)
-                ? info.PackageName : info.ApplicationName;
-            VersionName = info.VersionName;
-            VersionCodeDisplay = info.VersionCode.ToString("N0");
-            VersionDisplay = string.IsNullOrWhiteSpace(VersionName)
-                ? VersionCodeDisplay
-                : string.IsNullOrWhiteSpace(VersionCodeDisplay) ? VersionName : $"{VersionName} ({VersionCodeDisplay})";
-            SizeDisplay = FormatFileSize(info.FileSize);
-            TargetSystemDisplay = info.TargetSdkVersion > 0 ? info.TargetSdkVersion.ToString() : "-";
-            MinimumSystemDisplay = info.MinSdkVersion > 0 ? info.MinSdkVersion.ToString() : "-";
-            SdkDisplay = $"min {info.MinSdkVersion} / target {info.TargetSdkVersion} / compile {info.CompileSdkVersion}";
-            var verification = await Task.Run(
-                () => UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSignatureVerifier.Verify(path, default),
-                default).ConfigureAwait(true);
-            SigningStateDisplay = FormatSignatureVerification(info.SigningSchemes, verification);
-            HardeningStateDisplay = info.HardeningProvider is { Length: > 0 } provider
-                ? string.Format(LanguageService.Instance.GetString("Apk_HardeningDetected"), provider)
-                : LanguageService.Instance.GetString("Apk_HardeningNotDetected");
-            AbiDisplay = info.Abis.Count > 0 ? string.Join(", ", info.Abis) : "-";
-            PermissionsDisplay = info.Permissions.Count > 0 ? string.Join(Environment.NewLine, info.Permissions) : "-";
-
-            LoadIcon(info);
             CompileError = string.Empty;
             RefreshInstallAvailability();
         }
         catch (Exception ex)
         {
-            CompileError = UserError.Describe(ex, "UserError_AnalyzeFailed", "APK");
+            CompileError = UserError.Describe(ex, "UserError_AnalyzeFailed", "Application");
             PackageName = string.Empty;
             ApplicationName = string.Empty;
             VersionName = string.Empty;
@@ -268,6 +286,121 @@ public partial class ApkEditorViewModel : Document, ITool
         {
             IsBusy = false;
         }
+    }
+
+    private async Task LoadApkAsync(string path)
+    {
+        var info = await Task.Run(() => ApkParser.Analyze(path, LanguageService.Instance.CurrentLanguage), default).ConfigureAwait(true);
+
+        _info = info;
+        _hapInfo = null;
+        PackageName = info.PackageName;
+        ApplicationName = string.IsNullOrWhiteSpace(info.ApplicationName) || info.ApplicationName.StartsWith("@", StringComparison.Ordinal)
+            ? info.PackageName : info.ApplicationName;
+        VersionName = info.VersionName;
+        VersionCodeDisplay = info.VersionCode.ToString("N0");
+        VersionDisplay = string.IsNullOrWhiteSpace(VersionName)
+            ? VersionCodeDisplay
+            : string.IsNullOrWhiteSpace(VersionCodeDisplay) ? VersionName : $"{VersionName} ({VersionCodeDisplay})";
+        SizeDisplay = FormatFileSize(info.FileSize);
+        TargetSystemDisplay = info.TargetSdkVersion > 0 ? info.TargetSdkVersion.ToString() : "-";
+        MinimumSystemDisplay = info.MinSdkVersion > 0 ? info.MinSdkVersion.ToString() : "-";
+        SdkDisplay = $"min {info.MinSdkVersion} / target {info.TargetSdkVersion} / compile {info.CompileSdkVersion}";
+        var verification = await Task.Run(
+            () => UotanStudio.Firmware.AndroidMeta.Apk.Signing.ApkSignatureVerifier.Verify(path, default),
+            default).ConfigureAwait(true);
+        SigningStateDisplay = FormatSignatureVerification(info.SigningSchemes, verification);
+        HardeningStateDisplay = info.HardeningProvider is { Length: > 0 } provider
+            ? string.Format(LanguageService.Instance.GetString("Apk_HardeningDetected"), provider)
+            : LanguageService.Instance.GetString("Apk_HardeningNotDetected");
+        AbiDisplay = info.Abis.Count > 0 ? string.Join(", ", info.Abis) : "-";
+        PermissionsDisplay = info.Permissions.Count > 0 ? string.Join(Environment.NewLine, info.Permissions) : "-";
+        HarmonyAbilitiesDisplay = string.Empty;
+        HarmonyDetailsDisplay = string.Empty;
+
+        LoadIcon(info.IconBytes);
+    }
+
+    private async Task LoadHapAsync(string path)
+    {
+        var info = await Task.Run(() => HapParser.Analyze(path, LanguageService.Instance.CurrentLanguage), default).ConfigureAwait(true);
+
+        _hapInfo = info;
+        _info = null;
+        PackageName = info.PackageName;
+        ApplicationName = string.IsNullOrWhiteSpace(info.ApplicationName)
+            || info.ApplicationName.StartsWith('$')
+            || info.ApplicationName.StartsWith('@')
+                ? info.PackageName : info.ApplicationName;
+        VersionName = info.VersionName;
+        VersionCodeDisplay = info.VersionCode.ToString("N0");
+        VersionDisplay = string.IsNullOrWhiteSpace(VersionName)
+            ? VersionCodeDisplay
+            : string.IsNullOrWhiteSpace(VersionCodeDisplay) ? VersionName : $"{VersionName} ({VersionCodeDisplay})";
+        SizeDisplay = FormatFileSize(info.FileSize);
+        TargetSystemDisplay = info.TargetApiVersion > 0 ? info.TargetApiVersion.ToString() : "-";
+        MinimumSystemDisplay = info.CompatibleApiVersion > 0 ? info.CompatibleApiVersion.ToString() : "-";
+        SdkDisplay = info.CompileSdkVersion;
+        SigningStateDisplay = FormatHapSignature(info);
+        HardeningStateDisplay = string.IsNullOrWhiteSpace(info.Vendor) ? "-" : info.Vendor;
+        AbiDisplay = info.DeviceTypes.Count > 0 ? string.Join(", ", info.DeviceTypes) : "-";
+        PermissionsDisplay = info.Permissions.Count > 0 ? string.Join(Environment.NewLine, info.Permissions) : "-";
+        HarmonyAbilitiesDisplay = FormatHapAbilities(info);
+        HarmonyDetailsDisplay = FormatHapDetails(info);
+
+        LoadIcon(info.IconBytes);
+    }
+
+    private static string FormatHapSignature(HapInfo info)
+    {
+        var language = LanguageService.Instance;
+        if (!info.IsAppSigned && !info.IsHapSigned)
+        {
+            return language.GetString("Apk_HarmonyUnsigned");
+        }
+
+        var parts = new[]
+        {
+            info.IsAppSigned ? "APP" : "HAP",
+            info.SignatureType,
+            info.Issuer,
+            info.DeveloperId,
+        };
+        return Array.TrueForAll(parts, static part => string.IsNullOrWhiteSpace(part))
+            ? language.GetString("Apk_HarmonySignature")
+            : string.Format(language.GetString("Apk_HarmonySignatureFormat"), parts[0], parts[1], parts[2], parts[3]);
+    }
+
+    private static string FormatHapAbilities(HapInfo info)
+    {
+        var parts = new List<string>();
+        if (info.Abilities.Count > 0)
+        {
+            parts.Add(string.Join(", ", info.Abilities));
+        }
+        if (info.ExtensionAbilities.Count > 0)
+        {
+            parts.Add(string.Join(", ", info.ExtensionAbilities));
+        }
+        return parts.Count > 0 ? string.Join(" | ", parts) : "-";
+    }
+
+    private static string FormatHapDetails(HapInfo info)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(info.BundleType))
+        {
+            parts.Add(info.BundleType);
+        }
+        if (!string.IsNullOrWhiteSpace(info.CompileSdkVersion))
+        {
+            parts.Add(info.CompileSdkVersion);
+        }
+        if (info.EntryCount > 0)
+        {
+            parts.Add(info.EntryCount.ToString("N0"));
+        }
+        return parts.Count > 0 ? string.Join(" · ", parts) : "-";
     }
 
     /// <summary>
@@ -313,12 +446,11 @@ public partial class ApkEditorViewModel : Document, ITool
     /// <para>从图标字节生成位图：PNG/WebP/JPG 直接解码；AXML vector drawable 解析并渲染；
     /// 其余格式显示占位。</para>
     /// </summary>
-    private void LoadIcon(ApkInfo info)
+    private void LoadIcon(byte[]? bytes)
     {
         IconBitmap = null;
         HasIcon = false;
 
-        var bytes = info.IconBytes;
         if (bytes is null || bytes.Length < 8)
         {
             return;
@@ -422,6 +554,9 @@ public partial class ApkEditorViewModel : Document, ITool
     public void Cleanup()
     {
         _info = null;
+        _hapInfo = null;
+        IsHarmonyApplication = false;
+        IsAndroidApplication = true;
         IconBitmap = null;
         HasIcon = false;
         PackageName = string.Empty;
@@ -435,6 +570,8 @@ public partial class ApkEditorViewModel : Document, ITool
         SigningStateDisplay = "-";
         HardeningStateDisplay = "-";
         AbiDisplay = string.Empty;
+        HarmonyAbilitiesDisplay = string.Empty;
+        HarmonyDetailsDisplay = string.Empty;
         PermissionsDisplay = string.Empty;
         SizeDisplay = string.Empty;
         CompileError = string.Empty;
