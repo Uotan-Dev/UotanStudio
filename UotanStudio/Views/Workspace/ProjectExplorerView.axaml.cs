@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -50,9 +52,17 @@ public partial class ProjectExplorerView : UserControl
 
     private void OnTreeDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (e.Source is not Control { DataContext: ExplorerNode node } || node.IsPlaceholder)
+        if (e.Source is not Control { DataContext: ExplorerNode node } source
+            || node.IsPlaceholder
+            || FindDoubleTapExpandTarget(source) is not { } treeViewItem)
         {
             return;
+        }
+
+        if (!e.Handled && treeViewItem.ItemCount > 0)
+        {
+            treeViewItem.SetCurrentValue(TreeViewItem.IsExpandedProperty, !treeViewItem.IsExpanded);
+            e.Handled = true;
         }
 
         if (node.RepackConfigurationPath is { } configurationPath)
@@ -71,13 +81,43 @@ public partial class ProjectExplorerView : UserControl
 
         if (!node.IsDirectory)
         {
-
             if (string.Equals(Path.GetExtension(node.Path), ".uotannode", StringComparison.OrdinalIgnoreCase))
+            {
                 WeakReferenceMessenger.Default.Send(new OpenNodeProjectRequestMessage(
                     Path.GetFileNameWithoutExtension(node.Path)));
+            }
             else
+            {
                 WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path));
+            }
         }
+    }
+
+    /// <summary>
+    /// Walks the visual parent chain from a double-tapped element to the owning <see cref="TreeViewItem"/>
+    /// header row, returning <see langword="null"/> when the pointer landed on the expand chevron or inside
+    /// a child items presenter.
+    /// <para>从双击命中的元素沿可视父链查找所属的 <see cref="TreeViewItem"/> 标题行；若落在展开箭头或子项面板内则返回 <see langword="null"/>。</para>
+    /// </summary>
+    /// <param name="source">The double-tapped visual element. <para>被双击的可视元素。</para></param>
+    /// <returns>The owning <see cref="TreeViewItem"/>, or <see langword="null"/> when the double-tap did not land on an item header.
+    /// <para>所属的 <see cref="TreeViewItem"/>；未落在节点标题行上时返回 <see langword="null"/>。</para></returns>
+    internal static TreeViewItem? FindDoubleTapExpandTarget(Visual? source)
+    {
+        for (var current = source; current is not null; current = current.GetVisualParent())
+        {
+            if (current is ToggleButton or ItemsPresenter)
+            {
+                return null;
+            }
+
+            if (current is TreeViewItem item)
+            {
+                return item;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

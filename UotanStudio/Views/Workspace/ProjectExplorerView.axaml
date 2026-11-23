@@ -167,6 +167,12 @@
                         </MenuItem>
                     </ContextMenu></Template>
                 </Setter>
+                <!-- 标题呈现器默认无背景，双击图标与文字右侧的空白区域不会命中 PART_HeaderPresenter，导致原生的双击展开不触发。 -->
+                <!-- The header presenter has no background by default, so double-clicking blank space to the right of the label misses PART_HeaderPresenter and skips built-in expand/collapse. -->
+                <Style Selector="^ /template/ ContentPresenter#PART_HeaderPresenter">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                </Style>
             </ControlTheme>
         </TreeView.ItemContainerTheme>
         <TreeView.ItemTemplate>
