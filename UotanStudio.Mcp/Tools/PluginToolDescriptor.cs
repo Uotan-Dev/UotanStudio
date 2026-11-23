@@ -29,17 +29,19 @@ internal sealed record PluginToolDescriptor(
 
 /// <summary>
 /// Per-host inputs every catalogued tool needs: the shared path sandbox, the device gateway, the
-/// delivery tool-preparation and signing providers, and the flash gate.
-/// <para>每个目录工具都需要的宿主级输入：共享路径沙箱、设备网关、交付工具准备与签名提供器，以及刷写门控。</para>
+/// delivery tool-preparation and signing providers, artifact store, and the flash gate.
+/// <para>每个目录工具都需要的宿主级输入：共享路径沙箱、设备网关、交付工具准备与签名提供器、工件存储，以及刷写门控。</para>
 /// </summary>
 /// <param name="Sandbox">The sandbox confining every client path. <para>约束全部客户端路径的沙箱。</para></param>
 /// <param name="DeviceManager">The gateway exposing device inventory and sessions. <para>访问设备清单与会话的网关。</para></param>
 /// <param name="DeliveryTools">This host's tool-preparation provider, possibly <see langword="null"/>. <para>本宿主的工具准备服务提供器；可能为 <see langword="null"/>。</para></param>
 /// <param name="SigningKeys">This host's delivery signing key provider, possibly <see langword="null"/>. <para>本宿主的交付签名密钥供应器；可能为 <see langword="null"/>。</para></param>
 /// <param name="AllowFlash">Whether this host authorises flashing tools. <para>本宿主是否已授权刷写类工具。</para></param>
+/// <param name="Artifacts">Sandbox-persisted artifact store. <para>沙箱持久化工件存储。</para></param>
 internal sealed record PluginToolContext(
     PathSandbox Sandbox,
     IDeviceManagerGateway DeviceManager,
     Func<UotanStudio.Pipeline.Delivery.IDeliveryTools?>? DeliveryTools,
     Func<UotanStudio.Pipeline.Delivery.IDeliverySigningKeyProvider?>? SigningKeys,
-    bool AllowFlash);
+    bool AllowFlash,
+    McpArtifactStore Artifacts);

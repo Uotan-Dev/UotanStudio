@@ -105,6 +105,17 @@ sealed class Program
             }
         }
 
+        if (Mcp.McpCliRunner.IsRequested(args))
+        {
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            return Mcp.McpCliRunner.RunAsync(args, cts.Token).GetAwaiter().GetResult();
+        }
+
         if (Mcp.McpLauncher.IsHeadlessRequested(args))
         {
             using var cts = new CancellationTokenSource();

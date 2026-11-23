@@ -16,10 +16,13 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class ToolJson
 {
-    private static readonly JsonSerializerOptions SerializerOptions = CreateFrozenOptions();
+    internal static JsonSerializerOptions SerializerOptions { get; } = CreateFrozenOptions();
 
     private static readonly JsonTypeInfo<ToolResult> ResultTypeInfo =
         (JsonTypeInfo<ToolResult>)SerializerOptions.GetTypeInfo(typeof(ToolResult));
+
+    /// <summary>Empty object schema used by parameterless actions. <para>无参动作使用的空对象 schema。</para></summary>
+    internal static JsonElement EmptyObjectSchema { get; } = JsonDocument.Parse("""{"type":"object","properties":{},"additionalProperties":false}""").RootElement.Clone();
 
     private static JsonSerializerOptions CreateFrozenOptions()
     {
@@ -66,6 +69,29 @@ internal static class ToolJson
         }
 
         return JsonSerializer.SerializeToElement(value, typeInfo);
+    }
+
+    /// <summary>Gets source-generated type info for <typeparamref name="T"/>. <para>获取 <typeparamref name="T"/> 的源生成类型信息。</para></summary>
+    internal static JsonTypeInfo<T> TypeInfo<T>()
+    {
+        if (!SerializerOptions.TryGetTypeInfo(typeof(T), out JsonTypeInfo? info) || info is not JsonTypeInfo<T> typeInfo)
+        {
+            throw new InvalidOperationException($"Type {typeof(T).Name} is not registered in {nameof(McpToolJsonContext)}.");
+        }
+
+        return typeInfo;
+    }
+
+    /// <summary>Serializes an arbitrary registered object as a JSON element. <para>将已注册对象序列化为 JSON 元素。</para></summary>
+    internal static JsonElement DataObject(object value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (!SerializerOptions.TryGetTypeInfo(value.GetType(), out JsonTypeInfo? info))
+        {
+            throw new InvalidOperationException($"Type {value.GetType().Name} is not registered in {nameof(McpToolJsonContext)}.");
+        }
+
+        return JsonSerializer.SerializeToElement(value, info);
     }
 }
 
