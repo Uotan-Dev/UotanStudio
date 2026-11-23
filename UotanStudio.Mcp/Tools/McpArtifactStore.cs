@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Mcp.Tools;
 
@@ -41,7 +41,7 @@ internal sealed class McpArtifactStore
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
         content ??= string.Empty;
         var bytes = Encoding.UTF8.GetBytes(content);
-        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var sha = Sha256.ComputeHexLower(bytes);
         var id = $"{kind}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}"[..Math.Min(80, kind.Length + 33)];
         var safeExt = string.IsNullOrWhiteSpace(extension) ? ".txt" : extension.StartsWith('.') ? extension : "." + extension;
         var fileName = id + safeExt;
@@ -62,7 +62,7 @@ internal sealed class McpArtifactStore
     internal ArtifactRef ReferenceExistingFile(string kind, string fullPath, string? preview = null)
     {
         var bytes = File.ReadAllBytes(fullPath);
-        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var sha = Sha256.ComputeHexLower(bytes);
         var id = $"{kind}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}"[..Math.Min(80, kind.Length + 33)];
         var displayPath = ToDisplayPath(fullPath);
         var p = preview ?? CreatePreview(TryReadTextPreview(fullPath));

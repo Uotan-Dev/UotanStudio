@@ -28,7 +28,7 @@ public static class McpCliRunner
             var options = Parse(args);
             UotanStudio.Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
             var config = McpServerConfig.Parse(args);
-            var sandbox = config.RootDirectory is null ? new PathSandbox(Directory.GetCurrentDirectory()) : new PathSandbox(config.RootDirectory);
+            var sandbox = new PathSandbox(config.RootDirectory);
             var host = new McpServerHost(new McpServerComposition
             {
                 Sandbox = sandbox,
