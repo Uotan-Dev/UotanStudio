@@ -228,7 +228,14 @@ internal partial class ImageViewModel : Tool
             }
         };
 
-        App.DeviceMonitor.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
+        // Resolve the device monitor off the UI thread and subscribe there: the monitor's constructor
+        // enumerates the whole USB bus and probes the adb/HDC servers, and this view model is built while the
+        // workspace dock layout is created, i.e. before the main window can be shown.
+        _ = Task.Run(() =>
+        {
+            var monitor = App.DeviceMonitor;
+            monitor.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
+        });
     }
 
     /// <summary>

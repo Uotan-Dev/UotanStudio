@@ -227,8 +227,9 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         Lines.Replace(HasSearchError ? [] : filtered);
     }
 
-    public AdbLogViewModel() : this(App.DeviceMonitor.StartLogcatStreamingAsync,
-        App.DeviceMonitor.ClearLogcatBuffersAsync)
+    public AdbLogViewModel() : this(
+        static (device, sink, token) => App.DeviceMonitor.StartLogcatStreamingAsync(device, sink, token),
+        static (device, token) => App.DeviceMonitor.ClearLogcatBuffersAsync(device, token))
     { }
 
     internal AdbLogViewModel(Func<DetectedDevice, Action<AdbLogcatEntry>, CancellationToken, Task> stream,

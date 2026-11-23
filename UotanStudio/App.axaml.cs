@@ -1,27 +1,29 @@
 using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
+using UotanStudio.Build;
 using UotanStudio.Composition;
 using UotanStudio.Fonts;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Launch;
 using UotanStudio.Services.Logging;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.NativeBin;
 using UotanStudio.Services.Plugins;
-using UotanStudio.Build;
+using UotanStudio.Services.Ui.Launch;
 using UotanStudio.Services.Update;
-using UotanStudio.UiAbstractions;
 using UotanStudio.Themes;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 
@@ -33,6 +35,9 @@ public partial class App : Application
         new(() => DeviceMonitorService.Create());
     private DesktopApplicationServices? _desktopServices;
     private MacOSApplicationMenu? _macApplicationMenu;
+    private readonly List<DesktopLaunchRequest> _pendingLaunches = [];
+    private DesktopInstanceRelay? _instanceRelay;
+    private MainViewModel? _preparedMainViewModel;
     /// <summary>Existing files passed by desktop file associations, opened after window creation.<para>桌面文件关联传入的已存在文件，在窗口创建后打开。</para></summary>
     /// <value>The file paths collected before the window exists.<para>在窗口存在之前收集到的文件路径。</para></value>
     public static string[] StartupFiles { get; set; } = [];
@@ -43,6 +48,14 @@ public partial class App : Application
     /// </summary>
     /// <value>The requested serial, or null when no mirror was requested.<para>请求的序列号；未请求投屏时为 null。</para></value>
     public static string? StartupScreenMirrorSerial { get; set; }
+
+    /// <summary>
+    /// The single-instance relay created by the desktop entry point; null for a forwarded secondary launch
+    /// that exits before the GUI starts.
+    /// <para>由桌面入口创建的单实例中继；被转发的次级启动会在 GUI 启动前退出，因此为 null。</para>
+    /// </summary>
+    /// <value>The primary relay owned by this process, or null.<para>本进程持有的主实例中继；无则为 null。</para></value>
+    public static DesktopInstanceRelay? PrimaryInstanceRelay { get; set; }
 
     /// <summary>
     /// The application service provider built by <see cref="Initialize"/>; null until the container
@@ -62,15 +75,29 @@ public partial class App : Application
     /// </summary>
     /// <value>The shared desktop device monitor.<para>共享的桌面设备监视实例。</para></value>
     internal static DeviceMonitorService DeviceMonitor =>
-        ServiceHub.TryGet<DeviceMonitorService>() ?? _defaultDeviceMonitor.Value;
+        ServiceHub.TryGet<DeviceMonitorService>() ?? DefaultDeviceMonitor;
+
+    /// <summary>
+    /// Gets the composition-root device monitor without asking the container, so a provider factory can
+    /// create it lazily during the first scan instead of during provider construction.
+    /// <para>获取不查询容器的组合根设备监视实例，使提供程序工厂可以在首次扫描时惰性创建它，而不是在构建提供程序时创建。</para>
+    /// </summary>
+    /// <value>The lazily created fallback monitor.<para>惰性创建的回退监视实例。</para></value>
+    internal static DeviceMonitorService DefaultDeviceMonitor => _defaultDeviceMonitor.Value;
 
     public override void Initialize()
     {
+        LogStartupMark("App.Initialize entry");
         AvaloniaXamlLoader.Load(this);
-        var services = ServiceRegistration.BuildProvider(
-            ServiceRegistration.Register(new ServiceCollection(), DeviceMonitor, Views.UiWindowService.Shared));
+        LogStartupMark("App.Initialize XAML loaded");
+        var collection = ServiceRegistration.Register(
+            new ServiceCollection(), null, Views.UiWindowService.Shared, static () => DefaultDeviceMonitor);
+        LogStartupMark("App.Initialize services registered");
+        var services = ServiceRegistration.BuildProvider(collection);
+        LogStartupMark("App.Initialize container built");
         ServiceHub.Initialize(services);
         AccentPalette.Install(this);
+        LogStartupMark("App.Initialize completed");
         WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
             static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));
         ActualThemeVariantChanged += (_, _) =>
@@ -95,10 +122,6 @@ public partial class App : Application
         _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
         _ = RunAutomaticUpdateCheckAsync();
 
-        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
-
-        _ = PluginHost.Current.Capability;
-
         LanguageService.Instance.Initialize();
         LanguageService.Instance.InitializeFromSystemLanguage();
 
@@ -108,17 +131,22 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            AttachInstanceRelay();
             if (OperatingSystem.IsMacOS())
                 _macApplicationMenu = new MacOSApplicationMenu(this,
                     () => GetDesktopMainViewModel()?.MenuVM.AboutCommand.Execute(null));
             desktop.Exit += OnDesktopExit;
+            // The global text style resolves the bundled MiSans collection, so every platform must register
+            // it before the first window; a missing family fails the splash layout outright.
             RegisterBundledFonts();
             var splash = new MainSplashWindow
             {
                 DataContext = new SplashViewModel(LanguageService.Instance.GetString("Splash_Initializing"))
             };
             desktop.MainWindow = splash;
+            LogStartupMark("Splash showing");
             splash.Show();
+            LogStartupMark("Splash shown");
             splash.StartupTask = RunStartupSequenceAsync(splash, (SplashViewModel)splash.DataContext);
             splash.Close();
         }
@@ -139,13 +167,31 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Writes one cold-start milestone with the elapsed time since process creation; diagnostics only.
+    /// <para>写入一个冷启动里程碑并附带进程创建以来的耗时；仅用于诊断。</para>
+    /// </summary>
+    /// <param name="stage">The milestone name.<para>里程碑名称。</para></param>
+    private static void LogStartupMark(string stage)
+    {
+        try
+        {
+            var elapsed = (long)(DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            LogService.Instance.Write(LogLevel.Debug, "Startup", $"[cold-start] {stage} at +{elapsed} ms.");
+            LogService.Instance.FlushFileLog();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+        }
+    }
+
+    /// <summary>
     /// Decodes the bundled MiSans faces and registers their font collection under
-    /// <see cref="BundledFont.CollectionKey"/>. Runs before the first window is created because the Linux build
-    /// links a Skia without fontconfig: no system font is available to cover a window that is shown earlier.
+    /// <see cref="BundledFont.CollectionKey"/>. Runs before the first window is created because the global
+    /// text style resolves that family; a missing family fails the splash layout outright.
     /// A failure is logged only; the caller still shows the splash, whose text then falls back to whatever the
     /// platform can resolve.
     /// <para>解码随包 MiSans 字形，并在 <see cref="BundledFont.CollectionKey"/> 下注册其字体集合。必须在第一个窗口创建前
-    /// 运行：Linux 构建链接的 Skia 不带 fontconfig，提前显示的窗口没有系统字体可用。失败只记录日志，调用方仍会显示
+    /// 运行：全局文本样式会解析该字体族，缺失会让启动窗布局直接失败。失败只记录日志，调用方仍会显示
     /// 启动窗，此时其文本退回到平台可解析的字体。</para>
     /// </summary>
     private static void RegisterBundledFonts()
@@ -195,9 +241,10 @@ public partial class App : Application
         });
     }
 
-    /// Startup sequence: applies persisted settings, starts device monitoring with the initial full
-    /// USB scan while reporting stage status, and pre-builds the main window once the scan completes.
-    /// <para>启动序列：应用持久化设置，启动设备监视并执行首次全局 USB 扫描且上报阶段状态，扫描完成后预构建主窗口。</para>
+    /// Startup sequence: applies persisted settings and pre-builds the main window without waiting for device
+    /// enumeration; the device panel starts the USB/debug-bridge scan in the background after the shell exists.
+    /// <para>启动序列：应用持久化设置并在不等待设备枚举的情况下预构建主窗口；设备面板在 Shell 建好后于后台
+    /// 启动 USB/调试桥扫描。</para>
     /// </summary>
     /// <param name="splashWindow">The splash window receiving the pre-built main window. <para>接收预构建主窗口的启动窗。</para></param>
     /// <param name="splash">The splash status target receiving stage updates. <para>接收阶段状态更新的启动提示目标。</para></param>
@@ -215,8 +262,16 @@ public partial class App : Application
         }
         await ReportAsync(SplashPhase.Settings);
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
+
+        // Deferred one-time initialization: these steps used to run before the splash was created, which
+        // delayed the first window. The settings load above already yielded to the dispatcher, so they only
+        // affect the following phases. The bundled fonts stay ahead of the first window.
+        Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
+        _ = PluginHost.Current.Capability;
+
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         ProvisionNativeRuntimeInBackground();
+        _ = RefreshFileAssociationsAsync([.. settings.AssociatedFileExtensions]);
         Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
         _desktopServices = new DesktopApplicationServices();
 
@@ -226,23 +281,20 @@ public partial class App : Application
         ServiceHub.GetRequired<McpExposureService>().Apply(settings.McpExposeEnabled, settings.McpExposePort);
         ServiceHub.GetRequired<McpClientConnectionService>().Apply();
 
-        await ReportAsync(SplashPhase.Scanning);
-        LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");
-
-        var scanTask = _desktopServices!.StartAndScanAsync();
-
-        var devices = await scanTask.ConfigureAwait(true);
-        await ReportAsync(SplashPhase.DevicesFound, devices.Count);
-
+        // Device enumeration (the USB bus inventory plus the adb/HDC availability probes) is deliberately not
+        // awaited here. The device panel starts it in the background once the shell exists, so the splash and
+        // the main window never wait for the bus. ShellComposition reports Services/Nodes/Workspace next.
         MainViewModel? preparedModel = null;
         try
         {
             preparedModel = new MainViewModel(await ShellComposition.CreateAsync(
                 phase => ReportAsync(phase), settings.CultureName));
+            _preparedMainViewModel = preparedModel;
             await ReportAsync(SplashPhase.Window);
             var mainWindow = new MainWindow(preparedModel);
             mainWindow.InstallPrebuiltTopLevelPages();
             splashWindow.PreparedMainWindow = mainWindow;
+            DrainPendingLaunches();
         }
         catch (Exception ex)
         {
@@ -262,15 +314,38 @@ public partial class App : Application
             ApplyStartupScreenMirror(splashWindow, mirrorSerial);
         }
 
-        LogService.Instance.Write(LogLevel.Info, "App",
-            $"Startup sequence: initial USB scan found {devices.Count} device(s).");
-
         await ReportAsync(SplashPhase.Ready);
         if (splashWindow.PreparedMainWindow is not null)
         {
             await splashWindow.PresentCompletionAsync();
         }
+
+        DrainPendingLaunches();
+
+        // The device panel starts the monitor on first access. Create it after the shell is ready so the first
+        // enumeration runs after startup even when no binding evaluated it during window construction.
+        _ = ViewModels.Devices.DeviceViewModel.EnsureInstance();
     }
+
+    /// <summary>
+    /// Repairs stale file associations in the background so a moved or rebuilt executable keeps opening its
+    /// associated files; a failure only reaches the log.
+    /// <para>在后台修复过期的文件关联，使移动或重建后的可执行文件仍能打开关联文件；失败只进日志。</para>
+    /// </summary>
+    /// <param name="extensions">The persisted file-association selection.<para>持久化的文件关联选择。</para></param>
+    /// <returns>A task that completes when the repair attempt finished.<para>修复尝试结束后完成的任务。</para></returns>
+    private static Task RefreshFileAssociationsAsync(IReadOnlyList<string> extensions) => Task.Run(() =>
+    {
+        try
+        {
+            FileAssociationService.EnsureRegistration(extensions);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Startup file-association refresh failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    });
 
     /// <summary>
     /// Runs the startup update check when the setting enables it and opens the check window only when a newer
@@ -358,18 +433,21 @@ public partial class App : Application
             _macApplicationMenu?.Dispose();
             _macApplicationMenu = null;
             _desktopServices = null;
+            _instanceRelay?.Dispose();
+            _instanceRelay = null;
+            PrimaryInstanceRelay = null;
             WeakReferenceMessenger.Default.UnregisterAll(this);
             LogService.Instance.FlushFileLog();
         }
     }
 
     /// <summary>
-    /// Applies startup file-association inputs: opens the specified solution and imports files;
+    /// Applies startup file-association inputs: opens solutions and documents through the launch applier;
     /// failures only log and never block startup.
-    /// <para>应用文件关联启动输入：打开指定解决方案并导入文件，失败仅记录日志且不阻断启动。</para>
+    /// <para>应用文件关联启动输入：经启动应用器打开解决方案与文档；失败仅记录日志且不阻断启动。</para>
     /// </summary>
     /// <param name="splashWindow">The splash window whose pre-built main window receives the inputs.<para>其预构建主窗口接收这些输入的启动窗。</para></param>
-    /// <param name="files">The startup paths to open as a project or import as files.<para>作为项目打开或作为文件导入的启动路径。</para></param>
+    /// <param name="files">The startup paths to open as a project or document.<para>作为工程或文档打开的启动路径。</para></param>
     private async Task ApplyStartupFilesAsync(MainSplashWindow splashWindow, string[] files)
     {
         try
@@ -379,16 +457,7 @@ public partial class App : Application
                 return;
             }
 
-            if (files.LastOrDefault(path => path.EndsWith(".uotan", StringComparison.OrdinalIgnoreCase)) is { } projectPath)
-            {
-                await mainVm.MenuVM.OpenProjectFromPathAsync(projectPath);
-            }
-
-            var imports = files.Where(path => !path.EndsWith(".uotan", StringComparison.OrdinalIgnoreCase)).ToArray();
-            if (imports.Length > 0)
-            {
-                await mainVm.MenuVM.ImportFilesAsync(imports);
-            }
+            await LaunchRequestApplier.ApplyAsync(mainVm, files).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -407,16 +476,29 @@ public partial class App : Application
     {
         try
         {
-            if (splashWindow.PreparedMainWindow?.DataContext is MainViewModel mainVm &&
-                mainVm.WorkspaceVM.OpenScreenMirrorDocument(serial) is { } mirror)
+            if (splashWindow.PreparedMainWindow?.DataContext is MainViewModel mainVm)
             {
-                mirror.StartForDevice(serial);
-                LogService.Instance.Write(LogLevel.Info, "App", $"Startup screen mirror requested for {serial}.");
+                ApplyScreenMirror(mainVm, serial);
             }
         }
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "App", $"Startup screen mirror failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens the screen-mirror document for the given device serial on the supplied main model.
+    /// <para>在给定主模型上为设备序列号打开投屏文档。</para>
+    /// </summary>
+    /// <param name="mainVm">The desktop main model hosting the document.<para>承载该文档的桌面主模型。</para></param>
+    /// <param name="serial">The device serial to mirror.<para>需要投屏的设备序列号。</para></param>
+    private static void ApplyScreenMirror(MainViewModel mainVm, string serial)
+    {
+        if (mainVm.WorkspaceVM.OpenScreenMirrorDocument(serial) is { } mirror)
+        {
+            mirror.StartForDevice(serial);
+            LogService.Instance.Write(LogLevel.Info, "App", $"Screen mirror requested for {serial}.");
         }
     }
 
@@ -549,6 +631,115 @@ public partial class App : Application
             controlled.Shutdown();
         }
     }
+
+    /// <summary>
+    /// Binds the single-instance relay created by the desktop entry point to this application.
+    /// <para>把桌面入口创建的单实例中继绑定到本应用。</para>
+    /// </summary>
+    private void AttachInstanceRelay()
+    {
+        if (PrimaryInstanceRelay is not { } relay)
+        {
+            return;
+        }
+
+        _instanceRelay = relay;
+        relay.SetLaunchHandler(OnLaunchRequested);
+    }
+
+    /// <summary>
+    /// Handles one forwarded launch on the UI thread; requests that arrive before the main model exists wait
+    /// in <see cref="_pendingLaunches"/> and are applied once startup has prepared it.
+    /// <para>在 UI 线程处理一条转发的启动请求；主模型尚未建立时先进入 <see cref="_pendingLaunches"/>，
+    /// 待启动序列准备好后统一应用。</para>
+    /// </summary>
+    /// <param name="request">The forwarded launch.<para>转发的启动请求。</para></param>
+    private void OnLaunchRequested(DesktopLaunchRequest request)
+    {
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            _ = ApplyLaunchRequestAsync(request);
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ApplyLaunchRequestAsync(request));
+    }
+
+    private async Task ApplyLaunchRequestAsync(DesktopLaunchRequest request)
+    {
+        if (ResolveMainViewModel() is not { } main)
+        {
+            _pendingLaunches.Add(request);
+            return;
+        }
+
+        try
+        {
+            ActivateMainWindow();
+            await LaunchRequestApplier.ApplyAsync(main, request.Files).ConfigureAwait(true);
+            if (request.ScreenMirrorSerial is { Length: > 0 } serial)
+            {
+                ApplyScreenMirror(main, serial);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Launch",
+                $"Opening the forwarded launch failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Applies launches that were queued before the main model existed.
+    /// <para>应用主模型建立之前排队的启动请求。</para>
+    /// </summary>
+    private void DrainPendingLaunches()
+    {
+        if (_pendingLaunches.Count == 0)
+        {
+            return;
+        }
+
+        var pending = _pendingLaunches.ToArray();
+        _pendingLaunches.Clear();
+        _ = DrainPendingLaunchesAsync(pending);
+    }
+
+    private async Task DrainPendingLaunchesAsync(DesktopLaunchRequest[] pending)
+    {
+        foreach (var request in pending)
+        {
+            await ApplyLaunchRequestAsync(request).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Brings the desktop main window back to the foreground for a forwarded launch.
+    /// <para>为转发的启动请求把桌面主窗口带回前台。</para>
+    /// </summary>
+    private void ActivateMainWindow()
+    {
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
+        {
+            return;
+        }
+
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+
+        window.Show();
+        window.Activate();
+    }
+
+    /// <summary>
+    /// Resolves the main model before the desktop lifetime has swapped the main window to the shell, so a
+    /// launch that arrives during startup is not dropped.
+    /// <para>在桌面生命周期尚未把主窗口切换为外壳之前解析主模型，使启动期间到达的请求不会丢失。</para>
+    /// </summary>
+    /// <returns>The bound or pre-built main model, or null.<para>已绑定或预构建的主模型；无则为 null。</para></returns>
+    private MainViewModel? ResolveMainViewModel() => GetDesktopMainViewModel() ?? _preparedMainViewModel;
 
     /// <summary>
     /// Resolves the desktop main model bound as the main window's data context.

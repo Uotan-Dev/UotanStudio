@@ -45,7 +45,7 @@ public static partial class FileAssociationService
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz", ".app", ".sin",
         ".mpk", ".cpb", ".ntpi",
         // Android / HarmonyOS app & system metadata/config
-        ".apk", ".hap", ".dex", ".arsc", ".prop", ".rc",
+        ".apk", ".hap", ".hsp", ".dex", ".arsc", ".prop", ".rc",
         // Device logs
         ".logcat"
     ];
@@ -58,7 +58,7 @@ public static partial class FileAssociationService
     [
         ".img", ".br", ".dtb", ".dtbo", ".dts", ".dtsi", ".qcn",
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz",
-        ".app", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
+        ".app", ".hap", ".hsp", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
     ];
 
     [LibraryImport("advapi32.dll", EntryPoint = "RegCreateKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
@@ -134,6 +134,41 @@ public static partial class FileAssociationService
     /// <returns>True on success.<para>成功时为真。</para></returns>
     public static bool Register(IReadOnlyList<string>? selectedExtensions = null) =>
         RegisterDetailed(selectedExtensions).Status == FileAssociationStatus.Succeeded;
+
+    /// <summary>
+    /// Keeps an existing registration pointing at the running executable: when the user applied associations
+    /// before and the registered command or extension mapping no longer matches this process, the persisted
+    /// selection is registered again. A no-op when nothing was ever registered; failures only reach the log.
+    /// <para>让已存在的关联始终指向正在运行的可执行文件：用户此前应用过关联、而登记的命令或扩展名映射已与
+    /// 本进程不符时，按持久化选择重新注册。从未注册时为空操作；失败只记录日志。</para>
+    /// </summary>
+    /// <param name="selectedExtensions">The persisted extension selection; null registers only the built-in formats.
+    /// <para>持久化的扩展名选择；为 null 时只注册内置格式。</para></param>
+    /// <returns>True when the registration is current or was refreshed, false when refreshing failed.
+    /// <para>关联已是最新或已刷新时返回 true；刷新失败时返回 false。</para></returns>
+    public static bool EnsureRegistration(IReadOnlyList<string>? selectedExtensions = null)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return EnsureWindowsRegistration(selectedExtensions);
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                return EnsureLinuxRegistration(selectedExtensions);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Refreshing file associations failed: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
+    }
 
     /// <summary>
     /// Removes the built-in project formats and every extension in <paramref name="selectedExtensions"/>.
@@ -339,11 +374,93 @@ public static partial class FileAssociationService
             SetStringValue(Path.Combine(ClassesRoot, spec.ProgId, "DefaultIcon"), null,
                 $"\"{Path.Combine(iconDirectory, spec.IconFile)}\",0");
             SetStringValue(Path.Combine(ClassesRoot, spec.ProgId, "shell", "open", "command"), null,
-                $"\"{exePath}\" \"%1\"");
+                BuildWindowsOpenCommand(exePath));
             SetStringValue(Path.Combine(ClassesRoot, spec.Extension), null, spec.ProgId);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Builds the shell open command that passes the selected file to the executable.
+    /// <para>构造把所选文件传给可执行文件的 shell 打开命令。</para>
+    /// </summary>
+    /// <param name="exePath">The absolute executable path.<para>可执行文件的绝对路径。</para></param>
+    /// <returns>The quoted command line.<para>带引号的命令行。</para></returns>
+    internal static string BuildWindowsOpenCommand(string exePath) => $"\"{exePath}\" \"%1\"";
+
+    /// <summary>
+    /// Re-points an existing Windows registration at the current executable when it became stale.
+    /// <para>Windows 关联过期时把它重新指向当前可执行文件。</para>
+    /// </summary>
+    /// <param name="selectedExtensions">The persisted extension selection.<para>持久化的扩展名选择。</para></param>
+    /// <returns>True when the registration is current or was refreshed.<para>关联已是最新或已刷新时为真。</para></returns>
+    private static bool EnsureWindowsRegistration(IReadOnlyList<string>? selectedExtensions)
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+        {
+            return true;
+        }
+
+        var commandKey = Path.Combine(ClassesRoot, Formats[0].ProgId, "shell", "open", "command");
+        if (GetStringValue(commandKey, null) is not { } registered)
+        {
+            return true;
+        }
+
+        var extensionValue = GetStringValue(Path.Combine(ClassesRoot, Formats[0].Extension), null);
+        if (string.Equals(registered, BuildWindowsOpenCommand(exePath), StringComparison.Ordinal) &&
+            string.Equals(extensionValue, Formats[0].ProgId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "FileAssociation",
+            "Refreshing stale file associations so they open the running executable.");
+        return Register(selectedExtensions);
+    }
+
+    /// <summary>
+    /// Re-points an existing Linux desktop entry at the current executable when it became stale.
+    /// <para>Linux 桌面项过期时把它重新指向当前可执行文件。</para>
+    /// </summary>
+    /// <param name="selectedExtensions">The persisted extension selection.<para>持久化的扩展名选择。</para></param>
+    /// <returns>True when the registration is current or was refreshed.<para>关联已是最新或已刷新时为真。</para></returns>
+    private static bool EnsureLinuxRegistration(IReadOnlyList<string>? selectedExtensions)
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+        {
+            return true;
+        }
+
+        var desktopPath = Path.Combine(ResolveXdgDataHome(), "applications", $"{DesktopEntryId}.desktop");
+        string content;
+        try
+        {
+            if (!File.Exists(desktopPath))
+            {
+                return true;
+            }
+
+            content = File.ReadAllText(desktopPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Reading the desktop entry failed: {ex.Message}");
+            return false;
+        }
+
+        if (content.Contains($"Exec={EscapeDesktopValue(exePath)} %f", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "FileAssociation",
+            "Refreshing stale file associations so they start the running executable.");
+        return Register(selectedExtensions);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

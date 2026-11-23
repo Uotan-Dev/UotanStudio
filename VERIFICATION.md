@@ -100,3 +100,14 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 - 除 win-x64 外的 RID 发布未在宿主全量上执行：riscv64 cross JIT 方案（官方 x64 `ILCompiler` 宿主包 + 自建 `libclrjit_unix_riscv64_x64.so`）尚未在 runner 上端到端跑通；`loongarch-publish.yml` 的 qemu 方案未执行过。release.yml 的 musl 两个 RID（alpine 容器发布）与 package.yml 的 MSIX/DMG/deb/rpm/apk/pacman 打包链均未在 runner 上运行。
 - CI `dotnet test --solution` 路径与 Runner 机器未实测；Satori GC 的延迟与吞吐特性只在合成负载测量，应用混合负载与长期运行未验证。
 - `CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
+
+## 冷启动性能（2026-11-23）
+
+- 测量口径：进程创建（`Process.StartTime`）→ 枚举到标题为 `UotanStudio` 的可见顶层窗口；`Process.MainWindowHandle` 统计的是启动完成后的主窗口，不能用于启动窗。
+- win-x64 NativeAOT（2026-11-16 构建，优化前）：启动窗 4502–4887 ms，主窗口 5034–5413 ms（各 3 次）。
+- win-x64 NativeAOT（2026-11-23 构建，优化后）：启动窗 353–584 ms（3 次），主窗口 5243–5622 ms。
+- Debug（优化后，含 `[cold-start]` 埋点）：进程创建→启动窗约 1862–1901 ms；其中运行时初始化约 255 ms、设置/迁移约 180 ms、Avalonia 平台初始化约 140 ms、App.axaml 加载约 560 ms（Debug JIT）、字体解压/启动窗构造约 490 ms、`Show` 约 140 ms。设备监视器构造（同步全量 USB 枚举约 4.15 s）已从 `App.Initialize` 后移到启动窗之后的扫描线程。
+- AOT 优化后分解（最快一次）：运行时初始化 52 ms、设置/迁移/日志/构建器 24 ms、Avalonia 平台初始化约 133 ms、App.axaml 加载 26 ms、DI 3 ms、字体/语言/启动窗构造 96 ms、`Show` 41 ms。
+- 200 ms 目标未达成：运行时初始化（52–274 ms，受冷缓存与安全软件影响）加 Avalonia 平台初始化（约 133–185 ms）已超过 200 ms，属于框架/平台下限。应用侧可移出的工作（设备枚举、格式注册、插件能力探测）已全部移出启动窗关键路径。
+- 单实例转发已端到端验证：已有主实例时第二个进程 304 ms 内以 0 退出，主实例日志确认打开被转发文件（`Properties - Refreshed for Hex document ... forwarded.img`）。
+- 设备枚举后移（2026-11-23，Debug）：启动阶段顺序变为 `ApplyingSettings → Services`，不再出现 `Scanning/DevicesFound` 等待；`Workspace` 97 ms、`Window` 2093 ms，监视器在 Shell 之后后台启动（启动窗 2.4 s 时扫描尚未开始），扫描在 `Ready` 后完成（0 台设备）。修复前 `Workspace` 阶段曾因 `AdbLogViewModel`/`ImageViewModel` 构造函数直接访问 `App.DeviceMonitor` 阻塞 1.76–3.55 s。

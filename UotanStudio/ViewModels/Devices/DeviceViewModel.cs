@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Keys;
 using UotanStudio.UiAbstractions;
 namespace UotanStudio.ViewModels.Devices;
 
@@ -22,6 +23,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private readonly Func<string, string, IProgress<WirelessPairingProgress>?, CancellationToken, Task<string>> _pairWithCode;
     private readonly Func<string, Task> _showDeviceError;
     private Task? _refreshTask;
+    private bool _monitorSubscribed;
+    private bool _disposed;
 
     /// <summary>Non-zero when a refresh request arrived during a running pass; written and read across the
     /// UI thread and the posted change handler, so it is touched only through <see cref="System.Threading.Volatile"/>.
@@ -287,11 +290,68 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         if (monitorDevices)
         {
             Instance = this;
-            App.DeviceMonitor.DevicesChanged += OnDevicesChanged;
-            App.DeviceMonitor.Start();
-            _ = RefreshDevicesAsync();
+            _ = InitializeMonitorAsync();
         }
         WeakReferenceMessenger.Default.Register<BackupProgressMessage>(this, OnBackupProgress);
+    }
+
+    /// <summary>
+    /// Starts the shared device monitor and runs the first scan away from the UI thread, so building the main
+    /// window never pays for the USB bus inventory or the adb/HDC availability probes.
+    /// <para>在 UI 线程之外启动共享设备监视器并执行首次扫描，使构建主窗口不再承担 USB 总线清单或 adb/HDC
+    /// 可用性探测的开销。</para>
+    /// </summary>
+    /// <returns>A task that completes after the monitor started and the first refresh finished.<para>监视器启动且首次刷新结束后完成的任务。</para></returns>
+    private async Task InitializeMonitorAsync()
+    {
+        DeviceMonitorService monitor;
+        try
+        {
+            monitor = await Task.Run(() =>
+            {
+                try
+                {
+                    DebugBridgeIdentityService.EnsureDefaults();
+                }
+                catch (AggregateException ex)
+                {
+                    foreach (var failure in ex.InnerExceptions)
+                    {
+                        _log.Write(LogLevel.Error, "Authentication", failure.ToString());
+                    }
+                }
+
+                var service = App.DeviceMonitor;
+                service.Start();
+                return service;
+            }).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Warn, "Devices",
+                $"Starting the device monitor failed: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        monitor.DevicesChanged += OnDevicesChanged;
+        _monitorSubscribed = true;
+        _log.Write(LogLevel.Info, "Startup",
+            "Device monitor started after the shell; enumerating the USB bus and debug-bridge targets in the background.");
+        try
+        {
+            await RefreshDevicesAsync().ConfigureAwait(true);
+            _log.Write(LogLevel.Info, "Startup", $"Initial device scan finished: {Devices.Count} device(s).");
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Warn, "Devices",
+                $"Initial device refresh failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void OnDevicesChanged(object? sender, EventArgs e) =>
@@ -615,14 +675,16 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        _disposed = true;
         _connectionCancellation?.Cancel();
         if (SelectedDevice is { } selected)
         {
             selected.PropertyChanged -= OnSelectedDevicePropertyChanged;
         }
-        if (_monitorDevices)
+        if (_monitorSubscribed)
         {
             App.DeviceMonitor.DevicesChanged -= OnDevicesChanged;
+            _monitorSubscribed = false;
         }
         if (ReferenceEquals(Instance, this))
         {

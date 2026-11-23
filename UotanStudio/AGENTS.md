@@ -47,6 +47,10 @@
 ## 启动与呈现
 
 - 启动顺序保持：`FirmwareFormatRegistry.RegisterAll()` → 语言初始化 → 启动窗 → 内嵌资源解压（`SplashPhase.Resources`，MiSans 字体）→ 设置/主题/语言 → `McpExposureService.Apply` → 首次 USB 扫描（结果行 `DevicesFound`）→ `ShellComposition.CreateAsync` → 启动文件/投屏 → `Ready`。启动文件失败只记录日志，不阻断主窗口。
+- 启动窗必须尽早显示：`App.Initialize` 不得构造设备监视器（容器登记 `App.DefaultDeviceMonitor` 工厂）；`FirmwareFormatRegistry.RegisterAll()` 与插件能力探测移到设置加载之后执行。`RegisterBundledFonts()` 必须保持在首个窗口之前：全局文本样式引用 MiSans，缺失字体会让启动窗首次布局直接抛异常。冷启动阶段以 `Debug` 级别写入 `[cold-start]` 行（含进程创建后的毫秒数），新增阻塞步骤要同步维护。
+- 设备枚举（USB 总线清单与 adb/HDC 可用性探测）不得出现在启动关键路径：启动序列不等待扫描，`DeviceViewModel` 构造后只在后台线程解析并启动监视器、首次扫描完成再回填设备列表；停靠布局中的 `AdbLogViewModel`、`ImageViewModel` 等不得在构造函数里直接引用 `App.DeviceMonitor`，否则会把约 4 秒的监视器构造拉回 UI 线程。
+- 启动文件经 `LaunchRequestApplier`（`Services/Ui/Launch`）打开：`.uotan` 按工程打开，`.uotanfw`/`.uotannode` 打开其所属解决方案并切到对应子工程/节点工程，其余文件走 `WorkspaceVM.OpenDocumentAsync` 的文档链路；不得再把这些文件导入镜像清单（未打开工程时导入会被直接丢弃）。`DesktopInstanceRelay` 转发的后续启动复用同一条路径。
+- 文件关联由设置页显式应用；启动序列在后台调用 `FileAssociationService.EnsureRegistration`，仅当此前已注册且命令或扩展名映射与当前可执行文件不符时重注册，使搬移或重建后的可执行文件仍能打开关联文件。
 - 启动窗文本只由 `SplashViewModel.AdvanceAsync` 的 `SplashPhase` 驱动，阶段只能前进；状态文案写在 `Common.resx`/`Common.zh-CN.resx`，新增阶段要同时改 `LocaleKeySets` 与两份 resx。进度条为确定态：`AdvanceAsync` 依 `SplashPhase` 单调写入 `TargetProgress`（0..1），`MainSplashWindow` 用合成层 `Scale` 补间动画平滑填充，阶段跳变不表现为长度突变；动画跑在合成线程，UI 线程解压资源或预构建主窗口时仍持续推进。不要把它退回 `IsIndeterminate`，也不要恢复第二条“完成到 100%”的百分比进度条。
 - `App.Initialize` 先建立容器并调用 `ServiceHub.Initialize`，`OnFrameworkInitializationCompleted` 的既有启动顺序不变；`App.DeviceMonitor` 在容器已注册实例时取容器实例，否则回退组合根持有的默认监视器。
 - 投屏的 GPU 呈现只在 `ScreenMirrorGpuPresenter` 真实取得合成 GPU 上下文并准备好呈现路径后启用；失败时关闭 GPU 导出并保留 CPU 位图回退。不要把“取得 surface”写成“已启用 GPU 解码”。
