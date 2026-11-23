@@ -561,6 +561,24 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL (D3D9)</value>
   </data>
+  <data name="Settings_UseCompositionSwapChain" xml:space="preserve">
+    <value>Composition swap chain</value>
+  </data>
+  <data name="Settings_UseCompositionSwapChainHint" xml:space="preserve">
+    <value>Render into a DXGI flip-model swap chain to reduce latency in fullscreen windows. Only applies with WinUI composition or DirectComposition. Requires a restart.</value>
+  </data>
+  <data name="Settings_UseXShmFramebuffer" xml:space="preserve">
+    <value>Shared-memory framebuffer</value>
+  </data>
+  <data name="Settings_UseXShmFramebufferHint" xml:space="preserve">
+    <value>Transfer frames through MIT-SHM when X11 uses software rendering. Requires a restart.</value>
+  </data>
+  <data name="Settings_UsePartialPresentation" xml:space="preserve">
+    <value>Partial presentation</value>
+  </data>
+  <data name="Settings_UsePartialPresentationHint" xml:space="preserve">
+    <value>Present only damaged regions through EGL when the driver supports it. Requires a restart.</value>
+  </data>
   <data name="Settings_AutoCheckUpdates" xml:space="preserve">
     <value>Automatically check for updates</value>
   </data>

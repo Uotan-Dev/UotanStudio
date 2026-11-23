@@ -345,6 +345,53 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsWindowsRendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsWindowsRendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UseCompositionSwapChain}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UseCompositionSwapChainHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UseCompositionSwapChain, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsCompositionSwapChainEnabled}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsX11Rendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsX11Rendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UseXShmFramebuffer}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UseXShmFramebufferHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UseXShmFramebuffer, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsX11Rendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsX11Rendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UsePartialPresentation}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UsePartialPresentationHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UsePartialPresentation, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPartialPresentationEnabled}" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 

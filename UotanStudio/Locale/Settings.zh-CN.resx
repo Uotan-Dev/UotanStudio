@@ -561,6 +561,24 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL（D3D9）</value>
   </data>
+  <data name="Settings_UseCompositionSwapChain" xml:space="preserve">
+    <value>合成交换链</value>
+  </data>
+  <data name="Settings_UseCompositionSwapChainHint" xml:space="preserve">
+    <value>使用 DXGI 翻转模型交换链降低全屏窗口的呈现延迟；仅 WinUI 合成或直接合成可用。重启后生效。</value>
+  </data>
+  <data name="Settings_UseXShmFramebuffer" xml:space="preserve">
+    <value>共享内存帧缓冲</value>
+  </data>
+  <data name="Settings_UseXShmFramebufferHint" xml:space="preserve">
+    <value>X11 使用软件渲染时通过 MIT-SHM 传输帧。重启后生效。</value>
+  </data>
+  <data name="Settings_UsePartialPresentation" xml:space="preserve">
+    <value>局部呈现</value>
+  </data>
+  <data name="Settings_UsePartialPresentationHint" xml:space="preserve">
+    <value>驱动支持时，EGL 仅呈现脏区域。重启后生效。</value>
+  </data>
   <data name="Settings_AutoCheckUpdates" xml:space="preserve">
     <value>自动检查更新</value>
   </data>

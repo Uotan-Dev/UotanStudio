@@ -150,6 +150,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     private int _renderingBackendIndex;
     private int _compositionModeIndex;
+    private bool _useCompositionSwapChain;
+    private bool _useXShmFramebuffer;
+    private bool _usePartialPresentation;
     private bool _usbBackendConfirmationPending;
     private bool _suppressUsbBackendWriteback;
     private bool _normalizingBottomBarDisplay;
@@ -405,6 +408,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _appSettings.RenderingBackend = _renderingBackends[value];
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsCompositionModeEnabled));
+            OnPropertyChanged(nameof(IsPartialPresentationEnabled));
             DebouncedSaveSettings();
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
         }
@@ -429,8 +433,96 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _compositionModeIndex = value;
             _appSettings.RenderingCompositionMode = _compositionModes[value];
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCompositionSwapChainEnabled));
             DebouncedSaveSettings();
             Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the active platform is Windows, where the composition swap-chain option applies.
+    /// <para>获取当前平台是否为 Windows，即合成交换链选项适用的平台。</para>
+    /// </summary>
+    /// <value>True on Windows.<para>Windows 上为 true。</para></value>
+    public bool IsWindowsRendering =>
+        RenderingPreferenceCatalog.SupportsCompositionSwapChain(_renderingPlatform);
+
+    /// <summary>
+    /// Gets whether the active platform is X11, where the framebuffer tuning options apply.
+    /// <para>获取当前平台是否为 X11，即帧缓冲调优选项适用的平台。</para>
+    /// </summary>
+    /// <value>True on X11.<para>X11 上为 true。</para></value>
+    public bool IsX11Rendering =>
+        RenderingPreferenceCatalog.SupportsX11FramebufferTuning(_renderingPlatform);
+
+    /// <summary>
+    /// Gets whether the selected composition mode can honor the swap-chain option.
+    /// <para>获取所选合成模式是否支持交换链选项。</para>
+    /// </summary>
+    /// <value>True for automatic, WinUI composition or DirectComposition.<para>自动、WinUI 合成或直接合成为 true。</para></value>
+    public bool IsCompositionSwapChainEnabled => IsWindowsRendering &&
+        _compositionModes[_compositionModeIndex] is RenderingCompositionMode.Auto
+            or RenderingCompositionMode.WinUIComposition or RenderingCompositionMode.DirectComposition;
+
+    /// <summary>
+    /// Gets whether the selected X11 backend can honor partial presentation, which requires EGL.
+    /// <para>获取所选 X11 后端是否支持局部呈现；该功能需要 EGL。</para>
+    /// </summary>
+    /// <value>True for automatic or EGL.<para>自动或 EGL 为 true。</para></value>
+    public bool IsPartialPresentationEnabled => IsX11Rendering &&
+        _renderingBackends[_renderingBackendIndex] is RenderingBackend.Auto or RenderingBackend.Egl;
+
+    /// <summary>
+    /// Gets or sets whether Win32 uses a composition swap chain. The change is saved and takes effect after restart.
+    /// <para>获取或设置 Win32 是否使用合成交换链。修改会保存并在重启后生效。</para>
+    /// </summary>
+    public bool UseCompositionSwapChain
+    {
+        get => _useCompositionSwapChain;
+        set
+        {
+            if (SetProperty(ref _useCompositionSwapChain, value))
+            {
+                _appSettings.UseCompositionSwapChain = value;
+                DebouncedSaveSettings();
+                Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets whether X11 software rendering uses MIT-SHM framebuffer transfers.
+    /// <para>获取或设置 X11 软件渲染是否使用 MIT-SHM 帧缓冲传输。</para>
+    /// </summary>
+    public bool UseXShmFramebuffer
+    {
+        get => _useXShmFramebuffer;
+        set
+        {
+            if (SetProperty(ref _useXShmFramebuffer, value))
+            {
+                _appSettings.UseXShmFramebuffer = value;
+                DebouncedSaveSettings();
+                Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets whether the X11 EGL backend presents only damaged regions.
+    /// <para>获取或设置 X11 EGL 后端是否仅呈现脏区域。</para>
+    /// </summary>
+    public bool UsePartialPresentation
+    {
+        get => _usePartialPresentation;
+        set
+        {
+            if (SetProperty(ref _usePartialPresentation, value))
+            {
+                _appSettings.UsePartialPresentation = value;
+                DebouncedSaveSettings();
+                Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+            }
         }
     }
 
@@ -1031,6 +1123,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _compositionModeIndex = Math.Max(0, Array.IndexOf(
                 _compositionModes,
                 RenderingPreferenceCatalog.NormalizeComposition(renderingPlatform, settings.RenderingCompositionMode)));
+            _useCompositionSwapChain = settings.UseCompositionSwapChain;
+            _useXShmFramebuffer = settings.UseXShmFramebuffer;
+            _usePartialPresentation = settings.UsePartialPresentation;
 
             LogService.Instance.ApplyDebugMode(settings.DebugMode);
 
@@ -1149,6 +1244,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             _appSettings.RenderingCompositionMode = _compositionModes[_compositionModeIndex];
         }
+
+        _appSettings.UseCompositionSwapChain = _useCompositionSwapChain;
+        _appSettings.UseXShmFramebuffer = _useXShmFramebuffer;
+        _appSettings.UsePartialPresentation = _usePartialPresentation;
 
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;

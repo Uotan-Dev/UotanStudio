@@ -288,8 +288,10 @@ sealed class Program
             platform, settings.RenderingCompositionMode);
         return platform switch
         {
-            RenderingPlatform.Windows => ApplyWindowsRendering(builder, backend, composition),
-            RenderingPlatform.LinuxX11 => ApplyX11Rendering(builder, backend),
+            RenderingPlatform.Windows => ApplyWindowsRendering(
+                builder, backend, composition, settings.UseCompositionSwapChain),
+            RenderingPlatform.LinuxX11 => ApplyX11Rendering(
+                builder, backend, settings.UseXShmFramebuffer, settings.UsePartialPresentation),
             RenderingPlatform.MacOS => ApplyNativeRendering(builder, backend),
             _ => builder,
         };
@@ -303,12 +305,19 @@ sealed class Program
     /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
     /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
     /// <param name="composition">The normalized composition mode.<para>规范化后的合成模式。</para></param>
+    /// <param name="useCompositionSwapChain">Whether to request a DXGI composition swap chain.
+    /// <para>是否请求 DXGI 合成交换链。</para></param>
     /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static AppBuilder ApplyWindowsRendering(
-        AppBuilder builder, RenderingBackend backend, RenderingCompositionMode composition)
+        AppBuilder builder,
+        RenderingBackend backend,
+        RenderingCompositionMode composition,
+        bool useCompositionSwapChain)
     {
-        if (backend == RenderingBackend.Auto && composition == RenderingCompositionMode.Auto)
+        if (backend == RenderingBackend.Auto &&
+            composition == RenderingCompositionMode.Auto &&
+            !useCompositionSwapChain)
         {
             return builder;
         }
@@ -325,6 +334,7 @@ sealed class Program
             options.CompositionMode = compositionModes;
         }
 
+        options.UseCompositionSwapChain = useCompositionSwapChain;
         return builder.With(options);
     }
 
@@ -334,12 +344,34 @@ sealed class Program
     /// </summary>
     /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
     /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <param name="useXShmFramebuffer">Whether to enable MIT-SHM framebuffer transfers.
+    /// <para>是否启用 MIT-SHM 帧缓冲传输。</para></param>
+    /// <param name="usePartialPresentation">Whether to enable EGL partial presentation.
+    /// <para>是否启用 EGL 局部呈现。</para></param>
     /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static AppBuilder ApplyX11Rendering(AppBuilder builder, RenderingBackend backend) =>
-        X11RenderingModes(backend) is { } renderingModes
-            ? builder.With(new X11PlatformOptions { RenderingMode = renderingModes })
-            : builder;
+    private static AppBuilder ApplyX11Rendering(
+        AppBuilder builder,
+        RenderingBackend backend,
+        bool useXShmFramebuffer,
+        bool usePartialPresentation)
+    {
+        var renderingModes = X11RenderingModes(backend);
+        if (renderingModes is null && !useXShmFramebuffer && !usePartialPresentation)
+        {
+            return builder;
+        }
+
+        var options = new X11PlatformOptions();
+        if (renderingModes is { } modes)
+        {
+            options.RenderingMode = modes;
+        }
+
+        options.UseXShmFramebuffer = useXShmFramebuffer;
+        options.UsePartialPresentation = usePartialPresentation;
+        return builder.With(options);
+    }
 
     /// <summary>
     /// Applies the Avalonia.Native rendering option used by macOS.

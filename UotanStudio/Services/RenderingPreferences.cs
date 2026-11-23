@@ -122,6 +122,24 @@ public static class RenderingPreferenceCatalog
         platform == RenderingPlatform.Windows;
 
     /// <summary>
+    /// Returns whether the Win32 composition swap-chain option applies on the platform.
+    /// <para>返回 Win32 合成交换链选项是否适用于该平台。</para>
+    /// </summary>
+    /// <param name="platform">The platform family.<para>平台族。</para></param>
+    /// <returns>True only for Windows.<para>仅 Windows 为 true。</para></returns>
+    public static bool SupportsCompositionSwapChain(RenderingPlatform platform) =>
+        platform == RenderingPlatform.Windows;
+
+    /// <summary>
+    /// Returns whether the X11 framebuffer and presentation options apply on the platform.
+    /// <para>返回 X11 帧缓冲与呈现选项是否适用于该平台。</para>
+    /// </summary>
+    /// <param name="platform">The platform family.<para>平台族。</para></param>
+    /// <returns>True only for X11.<para>仅 X11 为 true。</para></returns>
+    public static bool SupportsX11FramebufferTuning(RenderingPlatform platform) =>
+        platform == RenderingPlatform.LinuxX11;
+
+    /// <summary>
     /// Maps a persisted backend to <see cref="RenderingBackend.Auto"/> when the platform does not accept it.
     /// <para>平台不接受该后端时映射为 <see cref="RenderingBackend.Auto"/>。</para>
     /// </summary>

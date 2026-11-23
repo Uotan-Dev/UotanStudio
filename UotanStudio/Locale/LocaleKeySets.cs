@@ -3800,6 +3800,12 @@ internal static class LocaleKeySets
         "Settings_RenderingWaylandHint",
         "Settings_RenderingUnsupportedHint",
         "Settings_RenderingBackendAngleEglD3D9",
+        "Settings_UseCompositionSwapChain",
+        "Settings_UseCompositionSwapChainHint",
+        "Settings_UseXShmFramebuffer",
+        "Settings_UseXShmFramebufferHint",
+        "Settings_UsePartialPresentation",
+        "Settings_UsePartialPresentationHint",
         "Settings_AutoCheckUpdates",
         "Settings_AutoCheckUpdatesHint",
     ];

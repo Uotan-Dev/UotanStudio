@@ -486,6 +486,31 @@ public class AppSettings : IJsonOnDeserialized
     public RenderingCompositionMode RenderingCompositionMode { get; set; }
 
     /// <summary>
+    /// Gets or sets whether Win32 renders through a composition swap chain for lower presentation latency.
+    /// The option only applies when composition resolves to WinUI composition or DirectComposition.
+    /// <para>获取或设置 Win32 是否通过合成交换链渲染以降低呈现延迟；仅在合成模式为 WinUI 或 DirectComposition 时生效。</para>
+    /// </summary>
+    /// <value>True enables the swap chain; the default keeps the platform choice.<para>为真时启用交换链；默认保持平台选择。</para></value>
+    [JsonPropertyName("useCompositionSwapChain")]
+    public bool UseCompositionSwapChain { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether X11 software rendering transfers frames through MIT-SHM shared memory.
+    /// <para>获取或设置 X11 软件渲染是否通过 MIT-SHM 共享内存传输帧。</para>
+    /// </summary>
+    /// <value>True enables shared-memory framebuffer transfers.<para>为真时启用共享内存帧缓冲传输。</para></value>
+    [JsonPropertyName("useXShmFramebuffer")]
+    public bool UseXShmFramebuffer { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the X11 EGL backend presents only damaged regions.
+    /// <para>获取或设置 X11 EGL 后端是否仅呈现脏区域。</para>
+    /// </summary>
+    /// <value>True enables partial presentation.<para>为真时启用局部呈现。</para></value>
+    [JsonPropertyName("usePartialPresentation")]
+    public bool UsePartialPresentation { get; set; }
+
+    /// <summary>
     /// Gets or sets the comma-separated partitions skipped by default during readback.
     /// <para>获取或设置回读时默认跳过的逗号分隔分区列表。</para>
     /// </summary>
