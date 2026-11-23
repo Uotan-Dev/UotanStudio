@@ -148,7 +148,9 @@ internal partial class PropertiesViewModel
         bool isLanguageSelector = false,
         string? settingKey = null,
         IReadOnlyList<PropertyChoice>? choices = null,
-        PropertyChoice? selectedChoice = null)
+        PropertyChoice? selectedChoice = null,
+        IReadOnlyList<string>? options = null,
+        string? selectedOption = null)
     {
         var fallbackName = GetEnglishPropertyName(resourceKey);
         var displayName = LocalizeFixedPropertyName(resourceKey, fallbackName);
@@ -160,7 +162,9 @@ internal partial class PropertiesViewModel
             IsLanguageSelector = isLanguageSelector,
             SettingKey = settingKey ?? string.Empty,
             Choices = choices ?? [],
-            SelectedChoice = selectedChoice
+            SelectedChoice = selectedChoice,
+            Options = options ?? [],
+            SelectedOption = selectedOption
         };
     }
 
@@ -223,6 +227,13 @@ internal partial class PropertiesViewModel
         {
 
             PopulateLanguageSelector(textDocument.Language);
+            foreach (var row in Properties)
+            {
+                if (row.IsLanguageSelector)
+                {
+                    row.SetOptionsSilently([.. AvailableLanguages], SelectedLanguage);
+                }
+            }
         }
 
         if (ContentType == PropertiesContentType.ScreenMirror && _mirror is not null)

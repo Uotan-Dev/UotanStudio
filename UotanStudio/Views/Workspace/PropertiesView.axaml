@@ -85,9 +85,9 @@
                              TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
                 </Border>
                 <ComboBox IsVisible="{Binding IsEncodingSelector}"
-                          ItemsSource="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).AvailableEncodings}"
-                          SelectedItem="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedEncoding, Mode=TwoWay}"
-                          ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedEncoding}"
+                          ItemsSource="{Binding Options}"
+                          SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
+                          ToolTip.Tip="{Binding SelectedOption}"
                           Classes="Small" FontSize="13"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           VerticalContentAlignment="Center"
@@ -101,9 +101,9 @@
                   </ComboBox.ItemTemplate>
                 </ComboBox>
                 <ComboBox IsVisible="{Binding IsLanguageSelector}"
-                          ItemsSource="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).AvailableLanguages}"
-                          SelectedItem="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage, Mode=TwoWay}"
-                          ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage}"
+                          ItemsSource="{Binding Options}"
+                          SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
+                          ToolTip.Tip="{Binding SelectedOption}"
                           Classes="Small" FontSize="13"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           VerticalContentAlignment="Center"

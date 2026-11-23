@@ -98,6 +98,45 @@ internal partial class PropertiesViewModel : Tool
         /// <para>此行是否使用文本编码下拉选择器。</para>
         /// </summary>
         public bool IsEncodingSelector { get; init; }
+
+        /// <summary>
+        /// String options for encoding or syntax-language selector rows.
+        /// <para>编码或语法语言选择器行的字符串可选项列表。</para>
+        /// </summary>
+        [ObservableProperty] private IReadOnlyList<string> _options = [];
+
+        /// <summary>
+        /// Currently selected string option for encoding or syntax-language selector rows.
+        /// <para>编码或语法语言选择器行当前选中的字符串项。</para>
+        /// </summary>
+        [ObservableProperty] private string? _selectedOption;
+
+        private bool _suppressOptionChanged;
+
+        internal Action<string>? OptionChanged { get; set; }
+
+        partial void OnSelectedOptionChanged(string? value)
+        {
+            if (!_suppressOptionChanged && !string.IsNullOrEmpty(value))
+            {
+                OptionChanged?.Invoke(value);
+            }
+        }
+
+        internal void SetOptionsSilently(IReadOnlyList<string> options, string? selectedOption)
+        {
+            _suppressOptionChanged = true;
+            try
+            {
+                Options = options;
+                SelectedOption = selectedOption;
+            }
+            finally
+            {
+                _suppressOptionChanged = false;
+            }
+        }
+
         /// <summary>
         /// Choices for editable session settings.
         /// <para>会话设置下拉选项。</para>
@@ -613,10 +652,24 @@ internal partial class PropertiesViewModel : Tool
 
         _currentTextDocument = doc;
         PopulateEncodingSelector(doc);
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
+        var encodingRow = CreateLocalizedRow(
+            "Dock_Properties_Text_Encoding",
+            string.Empty,
+            isEncodingSelector: true,
+            options: [.. AvailableEncodings],
+            selectedOption: SelectedEncoding);
+        encodingRow.OptionChanged = value => SelectedEncoding = value;
+        Properties.Add(encodingRow);
 
         PopulateLanguageSelector(doc.Language);
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Language", string.Empty, isLanguageSelector: true));
+        var languageRow = CreateLocalizedRow(
+            "Dock_Properties_Text_Language",
+            string.Empty,
+            isLanguageSelector: true,
+            options: [.. AvailableLanguages],
+            selectedOption: SelectedLanguage);
+        languageRow.OptionChanged = value => SelectedLanguage = value;
+        Properties.Add(languageRow);
 
         _log.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
     }
@@ -970,7 +1023,14 @@ internal partial class PropertiesViewModel : Tool
 
         _currentHexDocument = doc;
         PopulateHexEncodingSelector(doc.EncodingName);
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
+        var encodingRow = CreateLocalizedRow(
+            "Dock_Properties_Text_Encoding",
+            string.Empty,
+            isEncodingSelector: true,
+            options: [.. AvailableEncodings],
+            selectedOption: SelectedEncoding);
+        encodingRow.OptionChanged = value => SelectedEncoding = value;
+        Properties.Add(encodingRow);
 
         _log.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
     }
