@@ -106,6 +106,8 @@
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.HarfBuzz" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <!-- 屏蔽 Avalonia.Skia 传递来的旧版 Linux 原生库（3.119.4），避免覆盖 4.157.0 -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
     <PackageReference Include="HarfBuzzSharp" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
   </ItemGroup>

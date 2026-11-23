@@ -53,6 +53,8 @@
     <PackageVersion Include="SkiaSharp" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.HarfBuzz" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.157.0" />
+    <!-- Avalonia.Skia 传递引入 3.119.4 版 libSkiaSharp.so，会覆盖 4.157.0，这里统一固定版本 -->
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.157.0" />
     <PackageVersion Include="HarfBuzzSharp" Version="14.4.0.200" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.200" />
     <PackageVersion Include="System.IO.Ports" Version="11.0.0" />
