@@ -1,28 +1,27 @@
 <Project>
-  <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Avalonia" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Skia" Version="12.1.6" />
+    <PackageVersion Include="Avalonia" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.2.0" />
     <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Iciclecreek.Avalonia.Terminal" Version="4.1.4" />
-    <PackageVersion Include="Jint" Version="4.18.0" />
+    <PackageVersion Include="Jint" Version="4.18.1" />
     <PackageVersion Include="Porta.Pty" Version="2.2.4" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <PackageVersion Include="AvaloniaEdit.TextMate" Version="12.0.0" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Wayland" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Headless" Version="12.1.6" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.Wayland" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.2.0" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageVersion Include="Dock.Avalonia" Version="12.1.5" />
+    <PackageVersion Include="Dock.Avalonia" Version="12.2.0" />
     <PackageVersion Include="Dock.Avalonia.Diagnostics" Version="12.1.5" />
-    <PackageVersion Include="Dock.Model" Version="12.1.5" />
-    <PackageVersion Include="Dock.Model.Avalonia" Version="12.1.5" />
-    <PackageVersion Include="Dock.Model.Mvvm" Version="12.1.5" />
+    <PackageVersion Include="Dock.Model" Version="12.2.0" />
+    <PackageVersion Include="Dock.Model.Avalonia" Version="12.2.0" />
+    <PackageVersion Include="Dock.Model.Mvvm" Version="12.2.0" />
     <PackageVersion Include="Irihi.Iconica.TDesign" Version="1.1.0" />
     <PackageVersion Include="Irihi.Ursa" Version="2.3.1" />
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.3.1" />
@@ -53,7 +52,6 @@
     <PackageVersion Include="SkiaSharp" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.HarfBuzz" Version="4.157.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.157.0" />
-    <!-- Avalonia.Skia 传递引入 3.119.4 版 libSkiaSharp.so，会覆盖 4.157.0，这里统一固定版本 -->
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.157.0" />
     <PackageVersion Include="HarfBuzzSharp" Version="14.4.0.200" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.200" />
