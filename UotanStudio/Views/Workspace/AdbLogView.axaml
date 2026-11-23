@@ -3,7 +3,6 @@
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:vm="using:UotanStudio.ViewModels"
              xmlns:live="using:UotanStudio.ViewModels.Workspace"
-             xmlns:editor="using:UotanStudio.ViewModels.Editors"
              xmlns:edit="using:AvaloniaEdit"
              xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Workspace.AdbLogView"
@@ -24,8 +23,8 @@
     <controls:EditorErrorBanner Grid.Row="0"
                                 Message="{Binding ErrorMessage, Mode=TwoWay}" />
 
-    <!-- 顶栏：筛选与操作按钮 -->
-    <Border Grid.Row="1" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <!-- 顶栏：筛选与操作按钮（仅实时 ADB 日志面板显示） -->
+    <Border Grid.Row="1" Name="TopBar" IsVisible="False" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <WrapPanel ItemSpacing="8" LineSpacing="4">
         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11" VerticalAlignment="Center" />
@@ -101,16 +100,6 @@
         <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="180"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         </WrapPanel>
-        <StackPanel Name="FileControls" DataContext="{Binding FileModel}" x:DataType="editor:LogEditorViewModel" IsVisible="False"
-                    Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Name="ReloadLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
-                  Command="{Binding ReloadCommand}" ToolTip.Tip="{DynamicResource Log_Reload}"
-                  AutomationProperties.Name="{DynamicResource Log_Reload}">
-            <icons:Refresh Width="12" Height="12" />
-          </Button>
-          <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Width="64" Height="3"
-                       VerticalAlignment="Center" ToolTip.Tip="{DynamicResource Log_Loading}" />
-        </StackPanel>
         <TextBlock Name="SearchErrorText" Text="{Binding SearchError}" IsVisible="{Binding HasSearchError}"
                    Foreground="{DynamicResource LogErrorBrush}" FontSize="11" MaxWidth="180"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding SearchError}" />

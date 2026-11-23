@@ -4,5 +4,15 @@
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
              x:Class="UotanStudio.Views.Editors.LogEditorView"
              x:DataType="vm:LogEditorViewModel">
-  <workspace:AdbLogView />
+  <Grid>
+    <workspace:AdbLogView />
+    <Border IsVisible="{Binding IsLoading}" IsHitTestVisible="{Binding IsLoading}" ZIndex="1"
+            Background="#A0000000">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+        <ProgressBar Width="220" IsIndeterminate="True" />
+        <TextBlock Text="{DynamicResource Log_Loading}"
+                   Foreground="White" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+  </Grid>
 </UserControl>

@@ -15,6 +15,7 @@ using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
@@ -22,6 +23,8 @@ public partial class AdbLogView : UserControl
 {
     private readonly List<(int Length, int LineCount)> _renderedEntries = [];
     private readonly List<(LogLevel? Level, ILogLine? Entry)> _lines = [];
+    private readonly EditorOwnerBinding<LogEditorViewModel> _editorOwner =
+        new(static model => model.Editor, static (model, editor) => model.Editor = editor);
     private ILogViewModel? _model;
     private ScrollViewer? _scroller;
     private bool _followScheduled;
@@ -45,8 +48,10 @@ public partial class AdbLogView : UserControl
         Unloaded += OnUnloaded;
         DataContextChanged += (_, _) =>
         {
-            LiveControls.IsVisible = DataContext is AdbLogViewModel;
-            FileControls.IsVisible = DataContext is LogEditorViewModel;
+            var isLive = DataContext is AdbLogViewModel;
+            TopBar.IsVisible = isLive;
+            LiveControls.IsVisible = isLive;
+            UpdateEditorOwner();
             if (IsLoaded) BindModel();
         };
         LogEditor.TextArea.SelectionChanged += OnSelectionChanged;
@@ -55,6 +60,7 @@ public partial class AdbLogView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        UpdateEditorOwner();
         Controls.LogEditorMetrics.ApplyLineHeight(LogEditor);
         LanguageService.ThemeChanged += OnThemeChanged;
         _scroller = LogEditor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
@@ -64,6 +70,7 @@ public partial class AdbLogView : UserControl
 
     private void OnUnloaded(object? sender, RoutedEventArgs e)
     {
+        UpdateEditorOwner(detach: true);
         LanguageService.ThemeChanged -= OnThemeChanged;
         if (_model is not null)
         {
@@ -77,6 +84,9 @@ public partial class AdbLogView : UserControl
         _columnTextCache.Clear();
         LogEditor.Document.Text = string.Empty;
     }
+
+    private void UpdateEditorOwner(bool detach = false)
+        => _editorOwner.Update(!detach && IsLoaded ? DataContext as LogEditorViewModel : null, LogEditor);
 
     private void BindModel()
     {

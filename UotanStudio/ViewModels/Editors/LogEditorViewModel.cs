@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,18 +8,39 @@ using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 using UotanStudio.Services.Logging;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>Read-only offline log document with full-line filtering.<para>支持整行筛选的只读离线日志文档。</para></summary>
-public partial class LogEditorViewModel : Document, ITool, ILogViewModel
+public partial class LogEditorViewModel : Document, ITool, ILogViewModel, ISearchableDocument
 {
     private IReadOnlyList<ILogLine> _allEntries = [];
     private CancellationTokenSource? _load;
     private Regex? _searchPattern;
+    private string? _searchableText;
     private bool _closed;
     Workspace.AdbLogViewModel? ILogViewModel.LiveModel => null;
     LogEditorViewModel? ILogViewModel.FileModel => this;
+
+    /// <summary>Active log editor for workspace find operations.<para>供工作区查找操作使用的日志编辑器。</para></summary>
+    internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => GetSearchableText();
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => Editor;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => false;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) =>
+        throw new NotSupportedException("Log editor is read-only for text replacement.");
 
     /// <summary>Opened file path.<para>打开的文件路径。</para></summary>
     [ObservableProperty] private string _filePath = string.Empty;
@@ -155,8 +177,31 @@ public partial class LogEditorViewModel : Document, ITool, ILogViewModel
                     break;
                 }
             }
+        _searchableText = null;
         Entries = matches;
         EntriesChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        OnPropertyChanged(nameof(ISearchableDocument.SearchText));
+    }
+
+    private string GetSearchableText()
+    {
+        if (_searchableText is not null)
+        {
+            return _searchableText;
+        }
+
+        if (Entries.Count == 0)
+        {
+            return _searchableText = string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var entry in Entries)
+        {
+            builder.Append(entry.Text.ReplaceLineEndings("\n")).Append('\n');
+        }
+
+        return _searchableText = builder.ToString();
     }
 
     /// <summary>Cancels pending loading and releases file history on close.<para>关闭时取消加载并释放文件历史。</para></summary>
