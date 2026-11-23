@@ -1938,9 +1938,6 @@
   <data name="Node_Category_Composite" xml:space="preserve">
     <value>我的复合节点</value>
   </data>
-  <data name="Node_Category_Script" xml:space="preserve">
-    <value>我的脚本节点</value>
-  </data>
   <data name="Node_Group_Favorites" xml:space="preserve">
     <value>我的收藏</value>
   </data>

@@ -180,14 +180,14 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "LuaCSharp",
-            DescriptionKey = "About_Project_LuaCSharp",
-            RepositoryUrl = "https://github.com/nuskey8/Lua-CSharp",
-            LicenseName = "MIT",
-            LicenseUrl = "https://licenses.nuget.org/MIT",
-            AuthorName = "Yusuke Nakada (nuskey8)",
-            AuthorGitHubUrl = "https://github.com/nuskey8",
-            AuthorAvatarUrl = "https://github.com/nuskey8.png"
+            Name = "Jint",
+            DescriptionKey = "About_Project_Jint",
+            RepositoryUrl = "https://github.com/sebastienros/jint",
+            LicenseName = "BSD-2-Clause",
+            LicenseUrl = "https://licenses.nuget.org/BSD-2-Clause",
+            AuthorName = "Sebastien Ros and contributors",
+            AuthorGitHubUrl = "https://github.com/sebastienros",
+            AuthorAvatarUrl = "https://github.com/sebastienros.png"
         },
         new OpenSourceProject
         {

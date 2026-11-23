@@ -24,7 +24,6 @@ public static class PluginKindPolicy
     {
         VisualPluginKind.WorkflowTemplate => false,
         VisualPluginKind.CompositeNode => false,
-        VisualPluginKind.ScriptNode => false,
         _ => true
     };
 

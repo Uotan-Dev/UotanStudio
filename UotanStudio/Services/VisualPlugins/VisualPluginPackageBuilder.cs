@@ -109,44 +109,6 @@ public static class VisualPluginPackageBuilder
         return package;
     }
 
-    /// <summary>Builds a script-node package from inline Lua source, without an internal graph or public ports.
-    /// <para>从内联 Lua 源码构建脚本节点包，不含内部图或对外端口。</para></summary>
-    /// <param name="name">The user-visible package name.<para>用户可见的包名称。</para></param>
-    /// <param name="id">The package id; normalized through <see cref="NormalizeId"/>.
-    /// <para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para></param>
-    /// <param name="script">The Lua source stored in the package.<para>包内保存的 Lua 源码。</para></param>
-    /// <param name="author">The package author attribution.<para>包的作者署名。</para></param>
-    /// <param name="version">The package version.<para>包版本。</para></param>
-    /// <returns>The validated script-node package.<para>通过校验的脚本节点包。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="script"/> is empty.
-    /// <para><paramref name="name"/> 或 <paramref name="script"/> 为空。</para></exception>
-    /// <exception cref="InvalidDataException">Validation reports errors, such as an over-long script.
-    /// <para>校验报错，例如脚本超长。</para></exception>
-    public static VisualPluginPackage CreateScript(string name, string id, string script,
-        string author = "", string version = "1.0.0")
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(script);
-        if (string.IsNullOrWhiteSpace(script))
-            throw new ArgumentException("A script-node package requires a non-empty Lua script.", nameof(script));
-
-        var package = new VisualPluginPackage
-        {
-            Kind = VisualPluginKind.ScriptNode,
-            Script = script,
-            Manifest = new VisualPluginManifest
-            {
-                Id = NormalizeId(id),
-                Name = name.Trim(),
-                Version = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version.Trim(),
-                Author = author.Trim()
-            }
-        };
-        var errors = VisualPluginValidation.Validate(package);
-        if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
-        return package;
-    }
-
     /// <summary>
     /// Rebuilds an installed package while retaining its manifest contract and stable public port identities.
     /// <para>重建已安装的包，同时保留其清单契约与稳定的对外端口标识。</para>

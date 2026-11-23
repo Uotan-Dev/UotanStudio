@@ -30,6 +30,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Benchmarks` | BenchmarkDotNet 基准与性能剖析 | [AGENTS.md](UotanStudio.Benchmarks/AGENTS.md) |
 | `UotanStudio.FilesystemFixture` | 手动运行的文件系统往返验证宿主 | [AGENTS.md](UotanStudio.FilesystemFixture/AGENTS.md) |
 | `UotanStudio.RegexInfer` | 从输入/输出样例确定性推导正则 | [AGENTS.md](UotanStudio.RegexInfer/AGENTS.md) |
+| `UotanStudio.Scripting` | Jint 沙箱脚本引擎、白名单 API 契约与有界执行结果，叶子库 | [AGENTS.md](UotanStudio.Scripting/AGENTS.md) |
 
 新增或删除子项目时，同步更新这张表与对应目录的 `AGENTS.md`；项目专属规则留在子文件，根文件只保留全局规则。
 
@@ -37,6 +38,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 - 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`DD` 只引用 `Compress` 与 `Hash`；`Assets` 只引用 `Compress` 与 `Hash`；`Firmware` 引用 `Assets`、`Compress` 与 `Hash`；`Comm` 引用 `Assets`、`Firmware` 与 `Hash`；`Mirroring` 引用 `Assets` 与 `Comm`；`Media` 不引用 `Comm`；`Pipeline` 引用 `Assets`、`Compress`、`Firmware`、`Hash` 与 `Net`，不引用宿主 UI 或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
 - `Assets` 不引用 `Net`，也不做网络 I/O；`Firmware`、`Comm`、`Mirroring`、`Pipeline` 与宿主可引用 `Assets`。
+- `Scripting` 是只依赖 Jint 与 BCL 的叶子库，不引用任何业务项目；设备、镜像与 UI 的真实实现由宿主通过 `IFastbootScriptApi`/`IImageScriptApi`/`IUiScriptApi` 注入，脚本侧只消费白名单与 JSON 桥，不暴露 CLR、文件系统、网络或反射。
 - 校验和与摘要统一经 `UotanStudio.Hash` 计算，通用压缩统一经 `UotanStudio.Compress` 门面（`CompressionService`/`CompressionFile`），ZIP 容器统一经 `Zip/ZipContainer`：底层库之外不得构造 BCL 压缩流、不得使用 `System.IO.Hashing` 或 MD5/SHA 摘要入口、不得自带 CRC 多项式表。保留例外集中登记在 `HashBoundaryGuardTests` 与 `CompressionImplementationBoundaryTests` 的允许列表和 `UotanStudio.Compress/README.md` 的例外一节；格式域压缩（文件系统簇、boot 组件、OTA delta、厂商容器）留在所属固件上下文，不收进门面。
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。操作系统块设备（`\\.\PhysicalDriveN`、`/dev/*`）的整盘镜像烧录归 `UotanStudio.DD`，不经过 USB/串口协议层。
 - 设备扫描只注册 USB/adb/HDC 发现源，不处理 usbmuxd 端点；Apple 协议只经显式直连 USB 会话消费。

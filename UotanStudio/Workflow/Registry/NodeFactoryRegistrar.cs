@@ -25,8 +25,8 @@ public static class NodeFactoryRegistrar
 
     public static void RegisterAll() => PluginRegistry.Shared.RegisterAll();
 
-    /// <summary>Registers or replaces one composite-node or script-node package in the toolbox.<para>在工具箱中注册或替换一个组合节点或脚本节点软件包。</para></summary>
-    /// <param name="package">The composite or script package to register.<para>要注册的组合或脚本软件包。</para></param>
+    /// <summary>Registers or replaces one composite-node package in the toolbox.<para>在工具箱中注册或替换一个组合节点软件包。</para></summary>
+    /// <param name="package">The composite package to register.<para>要注册的组合软件包。</para></param>
     /// <param name="validateExecution">Optional hook that returns validation errors before execution.<para>可选回调，在执行前返回校验错误。</para></param>
     public static void RegisterVisualPlugin(VisualPluginPackage package, Func<IReadOnlyList<string>>? validateExecution = null)
     {
@@ -34,9 +34,8 @@ public static class NodeFactoryRegistrar
         var descriptor = package.Kind switch
         {
             VisualPluginKind.CompositeNode => NodeCatalogSeed.CreateCompositePluginDescriptor(package, validateExecution),
-            VisualPluginKind.ScriptNode => NodeCatalogSeed.CreateScriptPluginDescriptor(package, validateExecution),
             _ => throw new ArgumentException(
-                "Only composite-node or script-node packages can be registered in the toolbox.", nameof(package))
+                "Only composite-node packages can be registered in the toolbox.", nameof(package))
         };
         PluginRegistry.Shared.RegisterNode(descriptor, package);
     }
