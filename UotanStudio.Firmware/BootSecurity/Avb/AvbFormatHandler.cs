@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.DeviceTree.Dt;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
@@ -80,8 +81,8 @@ internal sealed class AvbFormatHandler : IReadonlyFormatHandler
     }
 
     /// <summary>
-    /// Checks whether the image head matches known content-format magic (ext4, erofs, f2fs, boot).
-    /// <para>检查镜像头部是否命中已知内容格式魔数（ext4、erofs、f2fs、boot）。</para>
+    /// Checks whether the image head matches known content-format magic (DTB/DTBO, boot, ext4, erofs, f2fs).
+    /// <para>检查镜像头部是否命中已知内容格式魔数（DTB/DTBO、boot、ext4、erofs、f2fs）。</para>
     /// </summary>
     private static bool HasKnownContentMagic(FileStream fs)
     {
@@ -102,6 +103,11 @@ internal sealed class AvbFormatHandler : IReadonlyFormatHandler
             return false;
         }
 
+        var deviceTreeMagic = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(head[..4]);
+        if (deviceTreeMagic == FdtConstants.FdtMagic || deviceTreeMagic == FdtConstants.DtboMagic)
+        {
+            return true;
+        }
 
         if (read >= 8)
         {
