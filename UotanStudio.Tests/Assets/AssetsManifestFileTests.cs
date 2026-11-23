@@ -97,8 +97,8 @@ public class AssetsManifestFileTests
     private static string RepositoryRoot()
     {
         var found = FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var located);
-        Assert.SkipWhen(
-            !found || located is null,
+        Assert.True(
+            found && located is not null,
             "The test host is not running inside a UotanStudio.slnx checkout, so UotanStudio.Assets/Assets/manifest.tsv is not on disk.");
 
         return RepositoryLayout.LocateRoot();

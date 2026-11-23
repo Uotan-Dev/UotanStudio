@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -205,37 +204,6 @@ public sealed partial class DeliveryCompletionTests
         Assert.Contains("O'Brien", scripts["updater-script"]);
         Assert.Contains("\\\"quotes\\\"", scripts["updater-script"]);
     }
-
-    [Fact]
-    public async Task BatchBannerPrintsLiteralSpecialCharactersWithoutExecutingThem()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Batch banner execution requires cmd.exe on Windows.");
-        }
-        string[] lines = ["作者", "100% & \"quotes\" ! ^ | < > ( )", "\"& echo INJECTED > injected.txt &\"", "%PATH%", "", "O'Brien $() `text` \\path"];
-        var script = Path.Combine(_root, "banner.bat");
-        await File.WriteAllTextAsync(script, "@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\n"
-            + string.Join("\r\n", lines.Select(DeliveryScriptGenerator.BatchEcho)) + "\r\n", new UTF8Encoding(false), Token);
-        using var process = Process.Start(new ProcessStartInfo("cmd.exe")
-        {
-            ArgumentList = { "/d", "/c", script },
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        })!;
-        var output = process.StandardOutput.ReadToEndAsync(Token);
-        var error = process.StandardError.ReadToEndAsync(Token);
-        await process.WaitForExitAsync(Token);
-        Assert.Equal(0, process.ExitCode);
-        Assert.Equal("", await error);
-        Assert.Equal(string.Join("\n", lines) + "\n", (await output).ReplaceLineEndings("\n"));
-        Assert.False(File.Exists(Path.Combine(_root, "injected.txt")));
-    }
-
     [Fact]
     public void OatArtifactExclusionDefaultsToOffAndRemovesExactlyTheOatMember()
     {

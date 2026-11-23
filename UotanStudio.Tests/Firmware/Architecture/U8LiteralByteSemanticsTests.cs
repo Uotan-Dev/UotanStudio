@@ -153,7 +153,7 @@ public partial class U8LiteralByteSemanticsTests
     {
         if (!FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var repositoryRoot))
         {
-            Assert.Skip($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the repository sources are unavailable to this test host.");
+            Assert.Fail($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the repository sources are unavailable to this test host.");
         }
 
         return repositoryRoot!;

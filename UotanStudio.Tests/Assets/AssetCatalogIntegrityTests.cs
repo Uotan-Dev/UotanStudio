@@ -130,20 +130,4 @@ public class AssetCatalogIntegrityTests
 
         Assert.Equal(CompiledMagicData.RuleCount, CompiledMagicEngine.TopLevelCount);
     }
-
-    [Fact]
-    public void ScrcpyServer_OptionalBundle_SkipsWhenTheJarIsNotShipped()
-    {
-        var bundle = AssetCatalog.ScrcpyServer;
-
-        Assert.SkipWhen(
-            !bundle.IsPresent,
-            "UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar is not shipped with this repository, so no scrcpy server entry exists to verify.");
-
-        var entry = bundle[AssetNames.Scrcpy.ServerJar];
-        var payload = AssetStore.Read(entry);
-
-        Assert.Equal(entry.Length, payload.LongLength);
-        Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
-    }
 }

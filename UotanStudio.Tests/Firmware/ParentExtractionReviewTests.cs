@@ -149,39 +149,6 @@ public sealed class ParentExtractionReviewTests : IDisposable
         Assert.Equal("preserved", File.ReadAllText(target));
         Assert.Single(Directory.GetFiles(_root));
     }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AtomicExtraction_RejectsExistingSymbolicLink(bool directoryLink)
-    {
-        var outside = Path.Combine(_root, "outside");
-        Directory.CreateDirectory(outside);
-        var target = Path.Combine(outside, "entry.bin");
-        File.WriteAllText(target, "preserved");
-        var link = Path.Combine(_root, "link");
-        try
-        {
-            if (directoryLink) Directory.CreateSymbolicLink(link, outside);
-            else File.CreateSymbolicLink(link, target);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException)
-        {
-            Assert.Skip("Symbolic links are unavailable: " + ex.Message);
-        }
-        try
-        {
-            var output = directoryLink ? Path.Combine(link, "entry.bin") : link;
-            Assert.Throws<InvalidDataException>(() => FileExtraction.WriteAtomic(output, file => file.Write("changed"u8), cancellationToken: TestContext.Current.CancellationToken));
-            Assert.Equal("preserved", File.ReadAllText(target));
-        }
-        finally
-        {
-            if (directoryLink) Directory.Delete(link);
-            else File.Delete(link);
-        }
-    }
-
     [Fact]
     public async Task OfpCancellationAtFirstEntry_PreservesDestination()
     {

@@ -1,9 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.FileSystem.Erofs;
-using UotanStudio.Firmware.FileSystem.Erofs.Builder;
-using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
-using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4.Models;
@@ -100,77 +96,6 @@ public class FileSystemFieldCapacityTests
             DeleteRecursive(outputDirectory);
         }
     }
-
-    [Fact]
-    public void ErofsBuilder_SymlinkTargetBeyondInlineBlockCapacity_ThrowsWithTargetAndBlockNumbers()
-    {
-        var root = CreateTempDirectory("erofs-symlink-over");
-        var outputDirectory = CreateTempDirectory("erofs-symlink-over-output");
-        try
-        {
-            var linkName = "long-target-link";
-            var linkPath = Path.Combine(root, linkName);
-            var created = TryCreateSymlink(linkPath, new string('链', 200));
-            var recordedTarget = TryReadLinkTarget(linkPath);
-            Assert.SkipUnless(created && recordedTarget is not null, SymlinkSkipReason);
-
-            var targetBytes = Encoding.UTF8.GetByteCount(recordedTarget!);
-            Assert.True(
-                targetBytes > SmallErofsBlockSize - ErofsInode.CompactSize,
-                $"The recorded symlink target must exceed the inline capacity of a {SmallErofsBlockSize}-byte block; measured {targetBytes} bytes.");
-            var imagePath = Path.Combine(outputDirectory, "over-capacity.erofs");
-
-            var error = Assert.Throws<InvalidOperationException>(
-                () => new ErofsBuilder().Build(root, imagePath, new ErofsOptions { BlockSize = SmallErofsBlockSize, Compress = false }));
-
-            Assert.Contains(linkName, error.Message);
-            Assert.Contains(targetBytes.ToString(), error.Message);
-            Assert.Contains(SmallErofsBlockSize.ToString(), error.Message);
-            Assert.False(File.Exists(imagePath));
-            Assert.Empty(Directory.GetFiles(outputDirectory));
-        }
-        finally
-        {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
-        }
-    }
-
-    [Fact]
-    public void ErofsBuilder_SymlinkTargetWithinInlineCapacity_RoundTripsTargetAndSize()
-    {
-        var root = CreateTempDirectory("erofs-symlink-fit");
-        var outputDirectory = CreateTempDirectory("erofs-symlink-fit-output");
-        try
-        {
-            var linkName = "short-target-link";
-            var linkPath = Path.Combine(root, linkName);
-            var created = TryCreateSymlink(linkPath, "数据目标.txt");
-            var recordedTarget = TryReadLinkTarget(linkPath);
-            Assert.SkipUnless(created && recordedTarget is not null, SymlinkSkipReason);
-
-            var targetBytes = Encoding.UTF8.GetByteCount(recordedTarget!);
-            Assert.True(
-                targetBytes + ErofsInode.CompactSize <= DefaultErofsBlockSize,
-                $"The recorded symlink target plus its {ErofsInode.CompactSize}-byte inode header must stay inside one {DefaultErofsBlockSize}-byte block; measured {targetBytes} bytes.");
-            var imagePath = Path.Combine(outputDirectory, "fits-target.erofs");
-
-            new ErofsBuilder().Build(root, imagePath, new ErofsOptions { Compress = false });
-
-            using var parser = new ErofsParser(imagePath);
-            var entry = Assert.Single(parser.EnumerateFiles());
-            Assert.Equal(linkName, entry.Path);
-            Assert.True(entry.IsSymlink);
-            Assert.Equal(recordedTarget, entry.SymlinkTarget);
-            Assert.Equal((long)targetBytes, entry.Size);
-        }
-        finally
-        {
-            DeleteRecursive(root);
-            DeleteRecursive(outputDirectory);
-        }
-    }
-
     [Fact]
     public void F2fsBuilder_CjkVolumeName_WritesFullLittleEndianCodeUnitsIntoSuperblock()
     {

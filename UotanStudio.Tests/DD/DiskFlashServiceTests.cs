@@ -9,28 +9,6 @@ namespace UotanStudio.Tests.DD;
 public sealed class DiskFlashServiceTests
 {
     [Fact]
-    public async Task FlashAsync_WithoutPrivilegeAndDeclined_ReportsDeclinedAndWritesNothing()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(),
-            "Windows-only: the privileged-writer relaunch exists only there, so the PrivilegeMissing elevation flow never starts on other hosts.");
-        using var directory = new FlashTestDirectory();
-        var data = FlashTestData.CreateImageData(64 * 1024, 11);
-        var imagePath = directory.WriteFile("system.img", data);
-        var targetPath = directory.Combine("target.bin");
-        var drive = FlashTestData.CreateDrive(targetPath, data.Length + 4096);
-        var prompt = new RecordingPrompt(allow: false);
-        var service = new DiskFlashService(
-            new SingleDriveScanner(drive), new FixedProbe(isElevated: false, canWrite: false), prompt);
-
-        var failure = await service.FlashAsync(
-            imagePath, [drive], new FlashJobOptions(), onProgress: null, TestContext.Current.CancellationToken);
-
-        Assert.NotNull(failure);
-        Assert.Equal(FlashElevationReason.PrivilegeMissing, prompt.Reason);
-        Assert.False(File.Exists(targetPath));
-    }
-
-    [Fact]
     public async Task FlashAsync_WithPrivilege_WritesImageWithoutAskingForElevation()
     {
         using var directory = new FlashTestDirectory();

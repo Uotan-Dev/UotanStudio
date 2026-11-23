@@ -82,7 +82,7 @@ public sealed class WinUsbTakeoverEndpointTests
     {
         if (!OperatingSystem.IsWindows())
         {
-            Assert.Skip("The WinUSB takeover helpers only apply to Windows.");
+            Assert.Fail("The WinUSB takeover helpers only apply to Windows.");
         }
     }
 }

@@ -18,13 +18,13 @@ public static class CompressSourceTree
     {
         if (!FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var repositoryRoot))
         {
-            Assert.Skip($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the compression source tree is unavailable to this test host.");
+            Assert.Fail($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the compression source tree is unavailable to this test host.");
         }
 
         var compressDirectory = Path.Combine(repositoryRoot!, "UotanStudio.Compress");
         if (!Directory.Exists(compressDirectory))
         {
-            Assert.Skip($"Compression source directory '{compressDirectory}' is missing; the library was not checked out next to the solution.");
+            Assert.Fail($"Compression source directory '{compressDirectory}' is missing; the library was not checked out next to the solution.");
         }
 
         return compressDirectory;
