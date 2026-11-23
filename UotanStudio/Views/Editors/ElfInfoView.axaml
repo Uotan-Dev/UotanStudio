@@ -14,7 +14,8 @@
             </Setter>
         </Style>
     </UserControl.Styles>
-    <DockPanel>
+    <Grid>
+        <DockPanel>
         <controls:EditorErrorBanner DockPanel.Dock="Top"
                                     Message="{Binding ErrorMessage, Mode=TwoWay}" />
         <Border DockPanel.Dock="Top" Padding="16,12,16,0">
@@ -28,10 +29,6 @@
                         Command="{Binding OpenHexCommand}" VerticalAlignment="Center" />
             </Grid>
         </Border>
-        <StackPanel DockPanel.Dock="Top" IsVisible="{Binding IsBusy}" Margin="16,8" Spacing="6">
-            <TextBlock Text="{DynamicResource Dock_Elf_Loading}" />
-            <ProgressBar IsIndeterminate="True" Height="3" />
-        </StackPanel>
         <TabControl SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}" IsVisible="{Binding IsRecognized}" Margin="16,8,16,16">
             <TabItem Header="{DynamicResource Dock_Elf_Header}">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
@@ -97,5 +94,14 @@
                 </Grid>
             </TabItem>
         </TabControl>
-    </DockPanel>
+        </DockPanel>
+        <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="{Binding IsBusy}" ZIndex="1"
+                Background="#A0000000">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+                <ProgressBar Width="220" IsIndeterminate="True" />
+                <TextBlock Text="{DynamicResource Dock_Elf_Loading}"
+                           Foreground="White" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
 </UserControl>

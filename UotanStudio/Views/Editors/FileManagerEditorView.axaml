@@ -123,7 +123,8 @@
     </Style>
   </UserControl.Styles>
 
-  <DockPanel>
+  <Grid>
+    <DockPanel>
     <controls:EditorErrorBanner DockPanel.Dock="Top"
                                 Message="{Binding ErrorMessage, Mode=TwoWay}"
                                 DismissCommand="{Binding DismissErrorCommand}" />
@@ -157,14 +158,6 @@
             </Panel>
           </ToggleButton>
         </StackPanel>
-      </Grid>
-    </Border>
-
-    <Border DockPanel.Dock="Top" Padding="8,4" IsVisible="{Binding IsLoading}">
-      <Grid ColumnDefinitions="32,*">
-        <ProgressBar IsIndeterminate="True" Height="4" VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1" Text="{DynamicResource FileManager_Loading}" FontSize="12" Margin="8,0,0,0"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
       </Grid>
     </Border>
 
@@ -231,5 +224,14 @@
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsHitTestVisible="False" />
       </Grid>
     </Grid>
-  </DockPanel>
+      </DockPanel>
+      <Border IsVisible="{Binding IsLoading}" IsHitTestVisible="{Binding IsLoading}" ZIndex="1"
+              Background="#A0000000">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+          <ProgressBar Width="220" IsIndeterminate="True" />
+          <TextBlock Text="{DynamicResource FileManager_Loading}"
+                     Foreground="White" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
 </UserControl>

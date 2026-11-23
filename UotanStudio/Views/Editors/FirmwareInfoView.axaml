@@ -57,7 +57,8 @@
     </Style>
   </UserControl.Styles>
 
-  <DockPanel>
+  <Grid>
+    <DockPanel>
     <!-- 顶部错误提示条：与对比视图同一套单行样式与关闭按钮。 -->
     <!-- Top error banner: same single-line styling and dismiss button as the Compare view. -->
     <controls:EditorErrorBanner DockPanel.Dock="Top"
@@ -72,14 +73,6 @@
                    ToolTip.Tip="{Binding FormatName}" Opacity="0.7"
                    IsVisible="{Binding FormatName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       </StackPanel>
-    </Border>
-
-    <!-- 加载中提示条 -->
-    <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="0,0,0,1"
-            IsVisible="{Binding IsBusy}">
-      <TextBlock Text="{DynamicResource FirmwareInfo_Loading}"
-                 VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
     </Border>
 
     <TabControl ItemsSource="{Binding Tabs}"
@@ -127,5 +120,14 @@
         </DataTemplate>
       </TabControl.ContentTemplate>
     </TabControl>
-  </DockPanel>
+    </DockPanel>
+    <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="{Binding IsBusy}" ZIndex="1"
+            Background="#A0000000">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+        <ProgressBar Width="220" IsIndeterminate="True" />
+        <TextBlock Text="{DynamicResource FirmwareInfo_Loading}"
+                   Foreground="White" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+  </Grid>
 </UserControl>
