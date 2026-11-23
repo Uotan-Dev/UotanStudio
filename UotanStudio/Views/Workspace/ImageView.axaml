@@ -245,7 +245,7 @@
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <Grid IsEnabled="{Binding CanOperate}">
-                        <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsUnpackMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
@@ -269,9 +269,9 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
-                        </controls:JustifiedWrapPanel>
+                        </WrapPanel>
 
-                        <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsPackMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
@@ -315,9 +315,9 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
-                        </controls:JustifiedWrapPanel>
+                        </WrapPanel>
 
-                        <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsOutputMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
@@ -340,7 +340,7 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
-                        </controls:JustifiedWrapPanel>
+                        </WrapPanel>
                     </Grid>
                 </StackPanel>
             </StackPanel>

@@ -1171,7 +1171,7 @@
                         <ItemsControl ItemsSource="{Binding FailedNodes}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6" />
+                                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>

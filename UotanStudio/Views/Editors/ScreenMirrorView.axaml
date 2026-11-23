@@ -49,7 +49,7 @@
             Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
-      <controls:JustifiedWrapPanel MinItemWidth="80" ItemSpacing="6" LineSpacing="6">
+      <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
         <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnBackClick"
@@ -146,7 +146,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-      </controls:JustifiedWrapPanel>
+      </WrapPanel>
     </Border>
   </Grid>
 </UserControl>

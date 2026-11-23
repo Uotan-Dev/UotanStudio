@@ -41,7 +41,7 @@
             <Setter Property="Height" Value="NaN" />
             <Setter Property="Padding" Value="6,4" />
         </Style>
-        <Style Selector="controls|JustifiedWrapPanel > Button, controls|JustifiedWrapPanel > DropDownButton">
+        <Style Selector="controls|JustifiedWrapPanel > Button, controls|JustifiedWrapPanel > DropDownButton, WrapPanel[ItemsAlignment=StretchAll] > Button, WrapPanel[ItemsAlignment=StretchAll] > DropDownButton">
             <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
         <Style Selector="MenuFlyoutPresenter">
@@ -739,7 +739,7 @@
                                     </Grid>
                                     <!-- 已有的 EDL 区域动作：回读、擦除、整区转储与复位。它们一直存在处理器，这里补上入口。 -->
                                     <!-- Existing EDL region actions: read-back, erase, whole-region dump and reset. Their handlers already existed; this adds the entries. -->
-                                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                         <Button Name="EdlReadbackButton" Classes="pane-action" MinWidth="110"
                                                 Click="OnEdlReadbackClick"
                                                 ToolTip.Tip="{DynamicResource Flash_EdlReadbackSelected}"
@@ -772,7 +772,7 @@
                                                        FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                        VerticalAlignment="Center" MaxLines="2" />
                                         </Button>
-                                    </controls:JustifiedWrapPanel>
+                                    </WrapPanel>
                                 </StackPanel>
                                 <!-- 回读清单两项由 OnEdlReadbackClick 消费；它们随 EDL 分类一起呈现，回读入口不可用时随同分类置灰而不隐藏。 -->
                                 <!-- The two read-back manifest boxes are consumed by OnEdlReadbackClick; they stay on the
@@ -944,7 +944,7 @@
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
                                           AutomationProperties.Name="{DynamicResource Flash_RkSetStorageType}" />
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="RkGetStorageButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnRkGetStorageClick"
@@ -963,8 +963,8 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                </WrapPanel>
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="RkEnterMaskromButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnRkEnterMaskromClick"
@@ -1028,7 +1028,7 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,2">
@@ -1050,7 +1050,7 @@
                                              PlaceholderText="{DynamicResource Flash_RkLbaCount}"
                                              AutomationProperties.Name="{DynamicResource Flash_RkLbaCount}" />
                                 </Grid>
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="RkLbaReadButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnRkLbaReadClick"
@@ -1078,10 +1078,10 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="RkExportConfigButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnRkExportConfigClick"
@@ -1100,7 +1100,7 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                             </StackPanel>
                         </Expander>
                         <!-- 全志 Sunxi 分类 -->
@@ -1163,7 +1163,7 @@
                                             Content="{DynamicResource Flash_SunxiChooseBoardConfig}"
                                             AutomationProperties.Name="{DynamicResource Flash_SunxiChooseBoardConfig}" />
                                 </Grid>
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="SunxiChooseUbootButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnSunxiChooseUbootClick"
@@ -1182,7 +1182,7 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_SunxiFlashSourceHint}" FontSize="12"
@@ -1223,7 +1223,7 @@
                                              PlaceholderText="{DynamicResource Flash_SunxiLength}"
                                              AutomationProperties.Name="{DynamicResource Flash_SunxiLength}" />
                                 </Grid>
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="SunxiReadMemoryButton" Classes="pane-action"
                                             MinWidth="110"
                                             Click="OnSunxiReadMemoryClick"
@@ -1242,7 +1242,7 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                                 <TextBox Name="SunxiExecuteAddressBox" Height="32" VerticalContentAlignment="Center"
                                          Text="{Binding SunxiExecuteAddress}"
                                          PlaceholderText="{DynamicResource Flash_SunxiExecuteAddress}"
@@ -1356,7 +1356,7 @@
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="ImagePane" Spacing="8">
-                                <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
                                     <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
                                             MinWidth="110"
                                             Click="OnExtractSelectedClick"
@@ -1373,7 +1373,7 @@
                                                    FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
                                     </Button>
-                                </controls:JustifiedWrapPanel>
+                                </WrapPanel>
                             </StackPanel>
                         </Expander>
                     </StackPanel>
