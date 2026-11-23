@@ -222,6 +222,7 @@ internal static class LocaleKeySets
         "Flash_PackageChanged",
         "Flash_ProductMismatch",
         "Flash_PartitionsLoaded",
+        "Flash_UnisocRemainingSpace",
         "Flash_SwitchSlot",
         "Flash_SlotResetCurrent",
         "Flash_SlotSetA",

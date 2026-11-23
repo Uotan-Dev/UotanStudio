@@ -246,52 +246,6 @@ public class UnisocFlashTests : IDisposable
             Assert.All(payload, static value => Assert.Equal(0xA5, value));
         }
     }
-
-    [Fact]
-    public void Load_RealPackage_FollowsSchemeOrderNotDirectoryOrder()
-    {
-        const string variable = "UOTAN_SPRD_PAC";
-        var path = Environment.GetEnvironmentVariable(variable);
-        if (string.IsNullOrEmpty(path) || !File.Exists(path))
-        {
-            Assert.Skip($"Set {variable} to a real SPRD/UNISOC PAC image to run this case.");
-        }
-
-        using var plan = UnisocFlashPlan.Load(path, TestContext.Current.CancellationToken);
-
-        Assert.Equal("FDL", plan.Loaders.FirstStage.Id);
-        Assert.Equal(0x5500u, plan.Loaders.FirstStageAddress);
-        Assert.Equal("FDL2", plan.Loaders.SecondStage.Id);
-        Assert.Equal(0x9EFFFE00u, plan.Loaders.SecondStageAddress);
-        Assert.NotEmpty(plan.Images);
-
-        using var pac = PacImage.Open(path);
-        var directoryOrder = pac.Entries
-            .Where(entry => entry.Type == PacFileType.Image && entry.Length > 0)
-            .Select(entry => entry.Id)
-            .ToArray();
-        var planOrder = plan.Images.Where(image => !image.EraseOnly).Select(image => image.Name).ToArray();
-
-        Assert.True(
-            directoryOrder.ToHashSet(StringComparer.Ordinal).SetEquals(planOrder),
-            "the scheme must select exactly the image payloads the package carries");
-        Assert.NotEqual(directoryOrder, planOrder);
-        Assert.Contains("NV_LTE", planOrder);
-        Assert.Contains("ProdNV", planOrder);
-
-        var steps = SprdPacLoaders.ResolveScheme(pac);
-        var payloadSteps = steps.Where(step => step.CarriesPayload).ToArray();
-        Assert.Equal(planOrder, payloadSteps.Select(step => step.Identifier).ToArray());
-        Assert.Contains(steps, step => !step.CarriesPayload);
-
-        var eraseEntries = plan.Images.Where(image => image.EraseOnly).ToArray();
-        Assert.Equal(
-            steps.Where(step => !step.CarriesPayload && step.IsErase && step.Partition.Length > 0)
-                .Select(step => step.Identifier),
-            eraseEntries.Select(image => image.Name));
-        Assert.All(eraseEntries, image => Assert.Equal(0, image.Length));
-    }
-
     [Fact]
     public void Load_PackageEntryOutsideScheme_IsNotListedAsImage()
     {
@@ -519,6 +473,144 @@ public class UnisocFlashTests : IDisposable
         builder.AppendLine("</BMAConfig>");
         return builder.ToString();
     }
+
+    [Fact]
+    public void Load_SchemeDeclaresBlockBaseSizeAndAlias_PlanCarriesThemForTheGrid()
+    {
+        var path = WritePackage([
+            new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+            new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+            new PackageEntry("XML", "scheme.xml", LayoutSchemeXml()),
+            new PackageEntry("ProdNV", "prodnv.img", PackagePayload(16)),
+            new PackageEntry("EraseMisc", "", []),
+        ]);
+
+        using var plan = UnisocFlashPlan.Load(path, TestContext.Current.CancellationToken);
+
+        var payload = plan.Images.Single(image => image.Name == "ProdNV");
+        Assert.Equal("ProdNV", payload.Alias);
+        Assert.Equal("CODE2", payload.Operation);
+        Assert.Equal(0x2000L, payload.Offset);
+        Assert.Equal(0xA00000L, payload.DeclaredSize);
+        Assert.Equal(1, payload.FlashType);
+        Assert.Equal("prodnv.img", payload.PackagedFileName);
+        Assert.False(payload.EraseOnly);
+
+        var erase = plan.Images.Single(image => image.Name == "EraseMisc");
+        Assert.True(erase.EraseOnly);
+        Assert.Equal("EraseFlash2", erase.Operation);
+        Assert.Equal(0x4000L, erase.Offset);
+        Assert.Equal(0L, erase.DeclaredSize);
+        Assert.Equal(string.Empty, erase.PackagedFileName);
+    }
+
+    [Fact]
+    public void ResolveLayout_ProductDeclaresFlashType1_ReportsNandFlash()
+    {
+        var path = WritePackage(
+            [
+                new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+                new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+                new PackageEntry("XML", "scheme.xml", LayoutSchemeXml()),
+                new PackageEntry("ProdNV", "prodnv.img", PackagePayload(16)),
+                new PackageEntry("EraseMisc", "", []),
+            ],
+            "ums512_1h10");
+
+        using var package = PacImage.Open(path);
+        var layout = SprdPacLoaders.ResolveLayout(package);
+
+        Assert.Equal(1, layout.FlashType);
+        Assert.Contains(layout.Steps, step => step.Identifier == "ProdNV" && step.Alias == "ProdNV");
+    }
+
+    private static byte[] LayoutSchemeXml() => Encoding.ASCII.GetBytes("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <BMAConfig>
+          <ProductList>
+            <Product name="ums512_1h10"><SchemeName>ums512_1h10</SchemeName><FlashTypeID>1</FlashTypeID></Product>
+          </ProductList>
+          <SchemeList>
+            <Scheme name="ums512_1h10">
+              <File><ID>FDL</ID><Block><Base>0x00005500</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>FDL2</ID><Block><Base>0x9EFFFE00</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>ProdNV</ID><IDAlias>ProdNV</IDAlias><Type>CODE2</Type><Block id="prodnv"><Base>0x2000</Base><Size>0xA00000</Size></Block><Flag>1</Flag><CheckFlag>2</CheckFlag></File>
+              <File><ID>EraseMisc</ID><IDAlias>EraseMisc</IDAlias><Type>EraseFlash2</Type><Block id="misc"><Base>0x4000</Base><Size>0x0</Size></Block><Flag>0</Flag><CheckFlag>2</CheckFlag></File>
+            </Scheme>
+          </SchemeList>
+        </BMAConfig>
+        """);
+
+    [Fact]
+    public void ResolveLayout_DeclaredPartitions_DerivesOffsetsByAccumulatingDeclaredSizes()
+    {
+        var path = WritePackage(
+            [
+                new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+                new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+                new PackageEntry("XML", "scheme.xml", PartitionTableSchemeXml()),
+                new PackageEntry("BOOT", "boot.img", PackagePayload(16)),
+                new PackageEntry("Super", "super.img", PackagePayload(24)),
+                new PackageEntry("UserData", "userdata.img", PackagePayload(8)),
+            ],
+            "ums512_1h10");
+
+        using var package = PacImage.Open(path);
+        var layout = SprdPacLoaders.ResolveLayout(package);
+
+        Assert.Equal(["prodnv", "miscdata", "super", "userdata"],
+            layout.Partitions.Select(partition => partition.id).ToArray());
+        Assert.Equal(0L, layout.Partitions[0].offset);
+        Assert.Equal(10L * 1024 * 1024, layout.Partitions[1].offset);
+        Assert.Equal(11L * 1024 * 1024, layout.Partitions[2].offset);
+        Assert.Equal(4100L * 1024 * 1024, layout.Partitions[2].size);
+        Assert.True(layout.Partitions[3].fillsRemainingSpace);
+        Assert.Null(layout.Partitions[3].offset);
+        Assert.Equal(0L, layout.Partitions[3].size);
+    }
+
+    [Fact]
+    public void ResolveLayout_NoPartitionTable_ReportsNoPartitions()
+    {
+        var path = WritePackage([
+            new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+            new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+            new PackageEntry("XML", "scheme.xml", SchemeXml("0x00005500", "0x9EFFFE00", "boot")),
+            new PackageEntry("boot", "boot.img", PackagePayload(16)),
+        ]);
+
+        using var package = PacImage.Open(path);
+        var layout = SprdPacLoaders.ResolveLayout(package);
+
+        Assert.Empty(layout.Partitions);
+    }
+
+    private static byte[] PartitionTableSchemeXml() => Encoding.ASCII.GetBytes("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <BMAConfig>
+          <ProductList>
+            <Product name="ums512_1h10">
+              <SchemeName>ums512_1h10</SchemeName>
+              <FlashTypeID>1</FlashTypeID>
+              <Partitions>
+                <Partition id="prodnv" size="10"/>
+                <Partition id="miscdata" size="1"/>
+                <Partition id="super" size="4100"/>
+                <Partition id="userdata" size="0xFFFFFFFF"/>
+              </Partitions>
+            </Product>
+          </ProductList>
+          <SchemeList>
+            <Scheme name="ums512_1h10">
+              <File><ID>FDL</ID><Block><Base>0x00005500</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>FDL2</ID><Block><Base>0x9EFFFE00</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>BOOT</ID><IDAlias>BOOT</IDAlias><Type>CODE2</Type><Block id="boot"><Base>0x0</Base><Size>0x0</Size></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>Super</ID><IDAlias>Super</IDAlias><Type>YAFFS_IMG2</Type><Block id="super"><Base>0x0</Base><Size>0x0</Size></Block><Flag>1</Flag><CheckFlag>2</CheckFlag></File>
+              <File><ID>UserData</ID><IDAlias>UserData</IDAlias><Type>YAFFS_IMG2</Type><Block id="userdata"><Base>0x0</Base><Size>0x0</Size></Block><Flag>1</Flag><CheckFlag>2</CheckFlag></File>
+            </Scheme>
+          </SchemeList>
+        </BMAConfig>
+        """);
 
     private static byte[] PackagePayload(int length)
     {

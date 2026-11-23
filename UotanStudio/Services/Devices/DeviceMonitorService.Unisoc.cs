@@ -1,4 +1,4 @@
-﻿using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Unisoc;
 
@@ -201,7 +201,8 @@ public sealed partial class DeviceMonitorService
     /// <exception cref="FileNotFoundException">The package does not exist. <para>包不存在。</para></exception>
     internal async Task FlashUnisocAsync(DetectedDevice device, string packagePath, UnisocFlashOptions options,
         IReadOnlyList<string>? selectedNames, IProgress<UnisocFlashProgress>? progress,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string>? externalImages = null)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(options);
@@ -220,7 +221,8 @@ public sealed partial class DeviceMonitorService
         {
             using var plan = await Task.Run(() => UnisocFlashPlan.Load(packagePath, token), token)
                 .ConfigureAwait(false);
-            await new UnisocFlasher(session, progress).ExecuteAsync(plan, options, selectedNames, token)
+            await new UnisocFlasher(session, progress)
+                .ExecuteAsync(plan, options, selectedNames, token, externalImages)
                 .ConfigureAwait(false);
             return true;
         }, cancellationToken).ConfigureAwait(false);

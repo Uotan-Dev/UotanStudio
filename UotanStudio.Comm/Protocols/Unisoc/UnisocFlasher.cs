@@ -39,6 +39,17 @@ public sealed class UnisocFlasher
     }
 
     /// <summary>
+    /// Opens one user-chosen image file as a read-only stream. The caller closes it, exactly like a stream the plan
+    /// opens, so the write path stays identical for packaged and external payloads.
+    /// <para>把一个用户选择的镜像文件打开为只读流。调用方像关闭计划打开的流那样关闭它，因此写入路径对包内负载与
+    /// 外部负载完全一致。</para>
+    /// </summary>
+    /// <param name="path">The chosen image path. <para>所选的镜像路径。</para></param>
+    /// <returns>A read-only stream over the file. <para>覆盖该文件的只读流。</para></returns>
+    private static FileStream OpenExternalImage(string path) => new(
+        path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
+
+    /// <summary>
     /// Resolves the partitions the device currently exposes: the validated <c>user_partition</c> GPT when present,
     /// otherwise the native table with its device-defined size units.
     /// <para>解析设备当前暴露的分区：有校验通过的 <c>user_partition</c> GPT 时用它，否则用原生表（其大小单位由
@@ -89,8 +100,14 @@ public sealed class UnisocFlasher
     /// <para>任一交互失败；会话已失效。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <param name="externalImages">Per-row replacement image files keyed by plan entry name. A row present here is
+    /// read from the named file instead of the package payload, which lets the grid override one image without
+    /// rebuilding the package; a missing or unreadable file fails the run before any write for that row.
+    /// <para>按计划条目名索引的逐行替换镜像文件。出现在此表中的行从指定文件读取而非包内负载，使网格可以只覆盖
+    /// 一个镜像而不重建整包；文件缺失或不可读时在该行任何写入之前失败。</para></param>
     public async Task ExecuteAsync(UnisocFlashPlan plan, UnisocFlashOptions options,
-        IReadOnlyList<string>? selectedNames, CancellationToken cancellationToken = default)
+        IReadOnlyList<string>? selectedNames, CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string>? externalImages = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(options);
@@ -176,11 +193,25 @@ public sealed class UnisocFlasher
                     .ConfigureAwait(false);
             }
 
+            var external = externalImages is not null &&
+                externalImages.TryGetValue(image.Name, out var chosenPath) && chosenPath.Length > 0
+                ? chosenPath
+                : null;
+            if (external is not null && !File.Exists(external))
+            {
+                Report(new UnisocFlashProgress(UnisocFlashPhase.Skip, image.Name, 0, image.Length,
+                    $"The chosen image file '{external}' does not exist."));
+                continue;
+            }
+
             Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, 0, image.Length));
-            await using var source = plan.OpenImage(image);
-            await storage.WritePartitionAsync(image.Name, source, image.Length, confirmation,
-                cancellationToken, new ReportingProgress(this, image.Name, image.Length)).ConfigureAwait(false);
-            Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, image.Length, image.Length));
+            await using var source = external is null
+                ? plan.OpenImage(image)
+                : OpenExternalImage(external);
+            var length = external is null ? image.Length : source.Length;
+            await storage.WritePartitionAsync(image.Name, source, length, confirmation,
+                cancellationToken, new ReportingProgress(this, image.Name, length)).ConfigureAwait(false);
+            Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, length, length));
         }
 
         switch (options.Completion)

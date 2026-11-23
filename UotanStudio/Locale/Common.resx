@@ -699,6 +699,9 @@ Author: 暮间雾
   <data name="Flash_PartitionsLoaded" xml:space="preserve">
     <value>device partitions loaded</value>
   </data>
+  <data name="Flash_UnisocRemainingSpace" xml:space="preserve">
+    <value>rest of device</value>
+  </data>
   <data name="Flash_SwitchSlot" xml:space="preserve">
     <value>Switch Slot</value>
   </data>
