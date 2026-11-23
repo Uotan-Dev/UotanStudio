@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Dock.Model.Core;
 using UotanStudio.Services;
@@ -100,9 +103,25 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
     private static AppIcon CreateIcon(AppIconKind kind)
         => new() { Kind = kind, Width = 16, Height = 16 };
 
+    private Window? GetOwnerWindow()
+    {
+        if (TopLevel.GetTopLevel(this) is Window window)
+        {
+            return window;
+        }
+
+        if (this.FindLogicalAncestorOfType<ContextMenu>() is { PlacementTarget: Visual target }
+            && TopLevel.GetTopLevel(target) is Window placementWindow)
+        {
+            return placementWindow;
+        }
+
+        return (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+    }
+
     private async Task ConvertAsync(string direction)
     {
-        if (string.IsNullOrWhiteSpace(_path) || TopLevel.GetTopLevel(this) is not Window owner)
+        if (string.IsNullOrWhiteSpace(_path) || GetOwnerWindow() is not { } owner)
         {
             return;
         }
@@ -132,14 +151,13 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
 
     private async void OnDisableAvb(object? sender, RoutedEventArgs e)
     {
-        if (_path is not null)
+        if (string.IsNullOrWhiteSpace(_path) || GetOwnerWindow() is not { } owner)
         {
-            if (TopLevel.GetTopLevel(this) is Window owner)
-            {
-                var window = new AvbToolWindow(_path);
-                await window.ShowDialog(owner);
-            }
+            return;
         }
+
+        var window = new AvbToolWindow(_path);
+        await window.ShowDialog(owner);
     }
 
     private void OnChecksum(object? sender, RoutedEventArgs e)
