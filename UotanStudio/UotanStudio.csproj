@@ -56,7 +56,6 @@
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="Iciclecreek.Avalonia.Terminal" />
-    <PackageReference Include="LuaCSharp" />
     <PackageReference Include="Porta.Pty" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="AvaloniaEdit.TextMate" />

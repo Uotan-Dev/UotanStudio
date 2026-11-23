@@ -32,7 +32,6 @@ public static class SyntaxLanguageRegistry
         ("markdown", "Markdown"),
         ("yaml", "YAML"),
         ("dts", "DTS"),
-        ("lua", "Lua"),
     ];
 
     /// <summary>
@@ -66,7 +65,6 @@ public static class SyntaxLanguageRegistry
             ".md" => "markdown",
             ".yaml" or ".yml" => "yaml",
             ".dts" or ".dtsi" => "dts",
-            ".lua" => "lua",
             _ => null
         };
     }

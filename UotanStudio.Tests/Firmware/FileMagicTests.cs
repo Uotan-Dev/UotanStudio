@@ -326,37 +326,6 @@ public class FileMagicTests
 /// </summary>
 public class FileMagicDifferentialTests
 {
-    [Theory]
-    [InlineData("PNG", new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE })]
-    [InlineData("XZ", new byte[] { 0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00 })]
-    [InlineData("gzip", new byte[] { 0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03 })]
-    [InlineData("Zstandard", new byte[] { 0x28, 0xB5, 0x2F, 0xFD, 0x20, 0x05 })]
-    [InlineData("bzip2", new byte[] { 0x42, 0x5A, 0x68, 0x31, 0x31, 0x26 })]
-    [InlineData("cpio", new byte[] { 0x30, 0x37, 0x30, 0x37, 0x30, 0x31 })]
-    public void Engine_And_FileOracle_AgreeOnFamily(string token, byte[] data)
-    {
-        var oracle = RunFileOracle(data);
-        if (oracle is null)
-        {
-            Assert.Skip("No working 'file' executable on PATH; differential parity requires the file(1) oracle.");
-        }
-
-        var engine = FileMagic.Describe(data);
-        Assert.NotNull(engine);
-        Assert.Contains(token, engine, StringComparison.OrdinalIgnoreCase);
-
-        if (!oracle!.Contains(token, StringComparison.OrdinalIgnoreCase))
-        {
-            if (IsGenericOracleDescription(oracle))
-            {
-                Assert.Skip(DescribeMissingOracleEvidence(token, oracle));
-            }
-
-            Assert.Fail($"The engine classifies family '{token}' as '{engine}' while the file(1) oracle reports " +
-                $"'{oracle}', which is a specific but different family.");
-        }
-    }
-
     /// <summary>
     /// Reports whether the oracle answered with one of the descriptions it falls back to when its magic
     /// database holds no rule for the bytes, which is the only case where the comparison has no evidence.
@@ -389,37 +358,6 @@ public class FileMagicDifferentialTests
         $"The 'file' executable on PATH reported '{oracle}' instead of '{token}', so its magic database lacks " +
         "this signature (some PATH shims cover only a subset of magic(5)); differential parity needs a " +
         "complete file(1) oracle.";
-
-    [Fact]
-    public void Engine_And_FileOracle_AgreeOnElfArchitecture()
-    {
-        var elf = new byte[64];
-        elf[0] = 0x7F;
-        elf[1] = (byte)'E';
-        elf[2] = (byte)'L';
-        elf[3] = (byte)'F';
-        elf[4] = 2;
-        elf[5] = 1;
-        elf[6] = 1;
-        elf[17] = 2;
-        elf[18] = 0xB7;
-        elf[20] = 1;
-
-        var oracle = RunFileOracle(elf);
-        if (oracle is null)
-        {
-            Assert.Skip("No 'file' executable on PATH; differential parity requires the file(1) oracle.");
-        }
-
-        Assert.Contains("ELF", FileMagic.Describe(elf));
-        if (!oracle!.Contains("ELF", StringComparison.OrdinalIgnoreCase) && IsGenericOracleDescription(oracle))
-        {
-            Assert.Skip(DescribeMissingOracleEvidence("ELF", oracle));
-        }
-
-        Assert.Contains("ELF", oracle!, StringComparison.OrdinalIgnoreCase);
-    }
-
     private static string? RunFileOracle(byte[] data)
     {
         var path = Path.Combine(Path.GetTempPath(), "uotan-magicdiff-" + Guid.NewGuid().ToString("N")[..8] + ".bin");

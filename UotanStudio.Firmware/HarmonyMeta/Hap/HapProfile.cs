@@ -45,6 +45,9 @@ public sealed class HapProfile
     /// <summary>Gets the application identifier. <para>应用标识。</para></summary>
     public string AppIdentifier => GetBundleString("app-identifier");
 
+    /// <summary>Gets the profile issuer, for example <c>app_gallery</c>. <para>Profile 签发方，例如 <c>app_gallery</c>。</para></summary>
+    public string Issuer => GetString("issuer");
+
     /// <summary>Gets the profile validity window in Unix seconds.
     /// <para>Profile 有效期（Unix 秒）。</para></summary>
     public (long NotBefore, long NotAfter) Validity

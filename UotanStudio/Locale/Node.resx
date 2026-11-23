@@ -1938,9 +1938,6 @@
   <data name="Node_Category_Composite" xml:space="preserve">
     <value>My composite nodes</value>
   </data>
-  <data name="Node_Category_Script" xml:space="preserve">
-    <value>My script nodes</value>
-  </data>
   <data name="Node_Group_Favorites" xml:space="preserve">
     <value>Favorites</value>
   </data>

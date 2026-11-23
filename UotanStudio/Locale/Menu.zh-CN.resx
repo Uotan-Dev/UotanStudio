@@ -495,9 +495,6 @@
   <data name="Plugin_Composite" xml:space="preserve">
     <value>复合节点</value>
   </data>
-  <data name="Plugin_Script" xml:space="preserve">
-    <value>脚本节点</value>
-  </data>
   <data name="Plugin_Enabled" xml:space="preserve">
     <value>已启用</value>
   </data>
@@ -551,18 +548,6 @@
   </data>
   <data name="Plugin_GraphSaved" xml:space="preserve">
     <value>复合节点图已保存</value>
-  </data>
-  <data name="Plugin_EditScript" xml:space="preserve">
-    <value>编辑 Lua 脚本</value>
-  </data>
-  <data name="Plugin_SaveScript" xml:space="preserve">
-    <value>保存插件脚本</value>
-  </data>
-  <data name="Plugin_ExportScript" xml:space="preserve">
-    <value>导出 Lua 源码…</value>
-  </data>
-  <data name="Plugin_ScriptSaved" xml:space="preserve">
-    <value>脚本节点源码已保存</value>
   </data>
   <data name="Plugin_EditorUnavailable" xml:space="preserve">
     <value>节点编辑器当前不可用。</value>
@@ -963,8 +948,8 @@
   <data name="About_Project_IrihiLingua" xml:space="preserve">
     <value>resx 到强类型多语言管理器的源生成器（构建期使用，不进入发布产物）</value>
   </data>
-  <data name="About_Project_LuaCSharp" xml:space="preserve">
-    <value>Lua 解释器与 C# 互操作（可视化插件的脚本运行时）</value>
+  <data name="About_Project_Jint" xml:space="preserve">
+    <value>沙箱脚本引擎使用的纯托管 ECMAScript 解释器（无原生运行时依赖）</value>
   </data>
   <data name="About_Project_QrCoder" xml:space="preserve">
     <value>二维码生成库（无线调试配对码，纯托管 PNG 输出）</value>

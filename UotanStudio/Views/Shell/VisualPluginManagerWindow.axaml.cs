@@ -15,8 +15,8 @@ using Ursa.Controls;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// Independent manager for portable JSON workflow templates, composite nodes and Lua script nodes.
-/// <para>面向可移植 JSON 工作流模板、复合节点与 Lua 脚本节点的独立管理窗口。</para>
+/// Independent manager for portable JSON workflow templates and composite nodes.
+/// <para>面向可移植 JSON 工作流模板与复合节点的独立管理窗口。</para>
 /// </summary>
 public partial class VisualPluginManagerWindow : Window
 {
@@ -43,16 +43,14 @@ public partial class VisualPluginManagerWindow : Window
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType(LanguageService.Instance.GetString("Plugin_Import"))
             {
-                Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json", "*.lua"]
+                Patterns = ["*.uotanplugin", "*.uotanplugin.json", "*.json"]
             }]
         });
         if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
         VisualPluginPackage package;
         try
         {
-            package = string.Equals(Path.GetExtension(path), ".lua", StringComparison.OrdinalIgnoreCase)
-                ? await BuildScriptPackageAsync(path)
-                : await VisualPluginFile.LoadAsync(path);
+            package = await VisualPluginFile.LoadAsync(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
                                        or ArgumentException)
@@ -62,18 +60,6 @@ public partial class VisualPluginManagerWindow : Window
         }
         if (await AskInstallConsentAsync(package) is not { } consent) return;
         await RunAsync(() => _manager.InstallPackageAsync(package, consent), "Plugin_Installed");
-    }
-
-    private static async Task<VisualPluginPackage> BuildScriptPackageAsync(string luaPath)
-    {
-        var script = await File.ReadAllTextAsync(luaPath);
-        if (script.Length > VisualPluginValidation.MaximumScriptLength)
-        {
-            throw new InvalidDataException(
-                $"Plugin script exceeds {VisualPluginValidation.MaximumScriptLength} characters.");
-        }
-        var name = Path.GetFileNameWithoutExtension(luaPath);
-        return VisualPluginPackageBuilder.CreateScript(name, VisualPluginPackageBuilder.NormalizeId(name), script);
     }
 
     private async Task<VisualPluginInstallConsent?> AskInstallConsentAsync(VisualPluginPackage package)
@@ -194,7 +180,7 @@ public partial class VisualPluginManagerWindow : Window
 
     private async Task SetEnabledAsync(bool enabled)
     {
-        if (Model.SelectedPlugin is not { Kind: VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode } registration) return;
+        if (Model.SelectedPlugin is not { Kind: VisualPluginKind.CompositeNode } registration) return;
         await RunAsync(() => _manager.SetEnabledAsync(registration.Id, enabled));
     }
 

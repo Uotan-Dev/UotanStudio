@@ -50,6 +50,60 @@ public class QcnDocumentTests
         return path;
     }
 
+    private static async Task<string> WriteTextAsync(string content)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"uotan-qcn-{Guid.NewGuid():N}.xqcn");
+        await File.WriteAllTextAsync(path, content, Encoding.Latin1, TestContext.Current.CancellationToken);
+        return path;
+    }
+
+    private static string Hex(ReadOnlySpan<byte> bytes)
+    {
+        var builder = new StringBuilder(bytes.Length * 3);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(bytes[i].ToString("X2"));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string XmlQcn(IReadOnlyList<byte[]> numbered, IReadOnlyList<byte[]> defaults, byte[]? property = null)
+    {
+        var builder = new StringBuilder();
+        builder.Append("<?xml version=\"1.0\" encoding=\"Windows-1252\" ?>\r\n\r\n");
+        builder.Append("<Storage Name='sample.xqcn'>\r\n");
+        builder.Append("  <Storage Name='00000000'>\r\n");
+        builder.Append("    <Storage Name='default'>\r\n");
+        builder.Append("      <Storage Name='NV_NUMBERED_ITEMS'>\r\n");
+        builder.Append("        <Stream Length='").Append(numbered.Sum(record => record.Length))
+            .Append("' Name='NV_ITEM_ARRAY' Value='").Append(Hex(numbered.SelectMany(record => record).ToArray())).Append("'/>\r\n");
+        builder.Append("      </Storage>\r\n");
+        if (property is not null)
+        {
+            builder.Append("      <Stream Length='").Append(property.Length)
+                .Append("' Name='Mobile_Property_Info' Value='").Append(Hex(property)).Append("'/>\r\n");
+        }
+
+        builder.Append("      <Stream Length='8' Name='Feature_Mask' Value='36 00 86 23 00 00 00 00'/>\r\n");
+        if (defaults.Count > 0)
+        {
+            builder.Append("      <Stream Length='").Append(defaults.Sum(record => record.Length))
+                .Append("' Name='NV_ITEM_ARRAY' Value='").Append(Hex(defaults.SelectMany(record => record).ToArray())).Append("'/>\r\n");
+        }
+
+        builder.Append("    </Storage>\r\n");
+        builder.Append("  </Storage>\r\n");
+        builder.Append("  <Stream Length='6' Name='File_Version' Value='02 00 00 00 00 00'/>\r\n");
+        builder.Append("</Storage>");
+        return builder.ToString();
+    }
+
     [Fact]
     public async Task ParseAsync_TwoNvItemArrayStreams_MergesAllRecords()
     {
@@ -254,5 +308,107 @@ public class QcnDocumentTests
         Assert.Equal([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF], mac.ToArray());
         Assert.Equal("AA:BB:CC:DD:EE:FF", QcnItemCodecs.DecodeMac(mac));
         Assert.False(QcnItemCodecs.TryEncodeMac("aa:bb:cc:dd:ee", mac));
+    }
+
+    [Fact]
+    public async Task ParseAsync_XmlQcn_DecodesAllStreamsAndRecords()
+    {
+        var info = new List<byte>();
+        info.AddRange(BitConverter.GetBytes(7u));
+        info.AddRange(BitConverter.GetBytes((ushort)0x2211));
+        info.Add(3);
+        info.Add(4);
+        AddLengthPrefixed(info, "MI-1.2");
+        AddLengthPrefixed(info, "QPST 2.7");
+        var path = await WriteTextAsync(XmlQcn(
+            [Record(85, 0, "123456"u8.ToArray()), Record(550, 2, [0x08, 0x4A, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81])],
+            [Record(0, 0, [0xAA])], info.ToArray()));
+        try
+        {
+            var document = await QcnReader.ParseAsync(path, TestContext.Current.CancellationToken);
+            Assert.Equal(3, document.Items.Count);
+            Assert.Equal(2, document.NvItemArrayStreamPaths.Count);
+            Assert.Equal([2, 0, 0], document.FileVersion);
+            Assert.NotNull(document.MobilePropertyInfo);
+            Assert.Equal(7u, document.MobilePropertyInfo!.Efs);
+            Assert.Equal(0x2211, document.MobilePropertyInfo.MobileModelNo);
+            Assert.Equal("MI-1.2", document.MobilePropertyInfo.SwVersion);
+            Assert.Equal("QPST 2.7", document.MobilePropertyInfo.QpstVersion);
+            Assert.Equal(85, document.Items[0].Id);
+            Assert.Equal("00000000/default/NV_NUMBERED_ITEMS/NV_ITEM_ARRAY", document.Items[0].SourceStreamPath);
+            Assert.Equal("123456", Encoding.ASCII.GetString(document.Items[0].Data, 0, 6));
+            Assert.Equal(550, document.Items[1].Id);
+            Assert.Equal(2, document.Items[1].Flags);
+            Assert.Equal("00000000/default/NV_ITEM_ARRAY", document.Items[2].SourceStreamPath);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task PatchAsync_XmlQcn_RewritesOnlyChangedHexValues()
+    {
+        var records = new List<byte[]>();
+        for (var i = 0; i < 3; i++)
+        {
+            records.Add(Record((ushort)(100 + i), 0, Enumerable.Range(0, 8).Select(j => (byte)(i + j)).ToArray()));
+        }
+
+        var path = await WriteTextAsync(XmlQcn(records, []));
+        var original = await File.ReadAllTextAsync(path, Encoding.Latin1, TestContext.Current.CancellationToken);
+        try
+        {
+            var document = await QcnReader.ParseAsync(path, TestContext.Current.CancellationToken);
+            var firstRecordTail = Hex(document.Items[0].Data)[3..];
+            document.Items[0].Data[0] = 0xEE;
+            document.Items[2].Data[7] = 0x77;
+            var patched = await QcnWriter.PatchAsync(path, document.Items, TestContext.Current.CancellationToken);
+            Assert.Equal(2, patched);
+
+            var text = await File.ReadAllTextAsync(path, Encoding.Latin1, TestContext.Current.CancellationToken);
+            Assert.Contains("Feature_Mask", text);
+            Assert.Contains("36 00 86 23 00 00 00 00", text);
+            Assert.NotEqual(original, text);
+            Assert.Contains(Hex(document.Items[1].Data), text);
+
+            var reparsed = await QcnReader.ParseAsync(path, TestContext.Current.CancellationToken);
+            Assert.Equal(0xEE, reparsed.Items[0].Data[0]);
+            Assert.Equal(0x77, reparsed.Items[2].Data[7]);
+            Assert.Equal(firstRecordTail, Hex(reparsed.Items[0].Data)[3..]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ParseAsync_MalformedXml_ThrowsInvalidFormat()
+    {
+        var path = await WriteTextAsync("<Storage Name='broken'><Stream Name='NV_ITEM_ARRAY' Length='1' Value='ZZ'/></Storage>");
+        try
+        {
+            await Assert.ThrowsAsync<InvalidQcnFormatException>(() => QcnReader.ParseAsync(path, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ParseAsync_XmlQcnWithLengthValueMismatch_ThrowsInvalidFormat()
+    {
+        var path = await WriteTextAsync("<Storage Name='broken'><Stream Name='NV_ITEM_ARRAY' Length='136' Value='88 00'/></Storage>");
+        try
+        {
+            await Assert.ThrowsAsync<InvalidQcnFormatException>(() => QcnReader.ParseAsync(path, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }

@@ -7,14 +7,47 @@ namespace UotanStudio.Comm.Protocols.Unisoc;
 /// </summary>
 public sealed class UnisocFlashImage
 {
-    internal UnisocFlashImage(string name, string partition, long length, PacEntry? entry, bool eraseOnly = false)
+    internal UnisocFlashImage(string name, string partition, long length, PacEntry? entry,
+        bool eraseOnly = false, string alias = "", string operation = "", long offset = 0,
+        long declaredSize = 0, int flashType = 0)
     {
         Name = name;
         Partition = partition;
         Length = length;
         Entry = entry;
         EraseOnly = eraseOnly;
+        Alias = alias;
+        Operation = operation;
+        Offset = offset;
+        DeclaredSize = declaredSize;
+        FlashType = flashType;
     }
+
+    /// <summary>Gets the scheme <c>IDAlias</c> the official product list shows, or an empty string when the scheme
+    /// declares none. <para>获取官方产品列表显示的 scheme <c>IDAlias</c>；scheme 未声明时为空字符串。</para></summary>
+    public string Alias { get; }
+
+    /// <summary>Gets the scheme <c>Type</c>, such as <c>CODE2</c> or <c>EraseFlash2</c>, or an empty string when the
+    /// scheme declares none. <para>获取 scheme 的 <c>Type</c>，例如 <c>CODE2</c> 或 <c>EraseFlash2</c>；scheme 未声明时为空字符串。</para></summary>
+    public string Operation { get; }
+
+    /// <summary>Gets the <c>Block/Base</c> offset the scheme declares for this entry, or <c>0</c> when it declares none.
+    /// <para>获取 scheme 为该条目声明的 <c>Block/Base</c> 偏移；未声明时为 <c>0</c>。</para></summary>
+    public long Offset { get; }
+
+    /// <summary>Gets the <c>Block/Size</c> the scheme declares, or <c>0</c> when it declares none or declares
+    /// <c>0x0</c>, which leaves the extent open-ended. <para>获取 scheme 声明的 <c>Block/Size</c>；未声明或声明为
+    /// <c>0x0</c>（表示范围开放）时为 <c>0</c>。</para></summary>
+    public long DeclaredSize { get; }
+
+    /// <summary>Gets the declared <c>FlashTypeID</c> of the package: <c>0</c> is Nor flash and <c>1</c> is Nand flash
+    /// per the official XML header. <para>获取包声明的 <c>FlashTypeID</c>：按官方 XML 头注释 <c>0</c> 为 Nor flash、
+    /// <c>1</c> 为 Nand flash。</para></summary>
+    public int FlashType { get; }
+
+    /// <summary>Gets the packaged file name the entry carries, or an empty string for an operation without a payload.
+    /// <para>获取条目携带的包内文件名；无负载的操作条目为空字符串。</para></summary>
+    public string PackagedFileName => Entry?.Name ?? string.Empty;
 
     /// <summary>Gets the scheme identifier of the image, taken from the <c>BMAConfig</c> scheme <c>ID</c>.
     /// <para>获取镜像的 scheme 标识，取自 <c>BMAConfig</c> scheme 的 <c>ID</c>。</para></summary>
@@ -58,13 +91,21 @@ public sealed class UnisocFlashPlan : IDisposable
     private readonly PacImage _image;
 
     private UnisocFlashPlan(string packagePath, PacImage image, SprdPacLoaderSet loaders,
-        IReadOnlyList<UnisocFlashImage> images)
+        IReadOnlyList<UnisocFlashImage> images, IReadOnlyList<SprdPacPartition> partitions)
     {
         PackagePath = packagePath;
         _image = image;
         Loaders = loaders;
         Images = images;
+        Partitions = partitions;
     }
+
+    /// <summary>Gets the partition table the package declares, in declaration order, each entry carrying the offset
+    /// derived by accumulating the declared sizes. The table describes the layout the official tool rebuilds on the
+    /// device, so these offsets are what the rebuilt table would use; the flash pass itself still addresses partitions
+    /// by name and never forces a position. <para>获取包声明的分区表，按声明顺序排列，每条带按声明大小累加推导出的偏移。
+    /// 该表描述官方工具在设备上重建的布局，因此这些偏移就是重建后使用的值；烧录流程本身仍按分区名寻址，绝不强制位置。</para></summary>
+    public IReadOnlyList<SprdPacPartition> Partitions { get; }
 
     /// <summary>Gets the package path the plan was built from. <para>获取计划来源的包路径。</para></summary>
     public string PackagePath { get; }
@@ -97,9 +138,9 @@ public sealed class UnisocFlashPlan : IDisposable
         try
         {
             var loaders = SprdPacLoaders.Resolve(image);
-            var steps = SprdPacLoaders.ResolveScheme(image);
+            var layout = SprdPacLoaders.ResolveLayout(image);
             var images = new List<UnisocFlashImage>();
-            foreach (var step in steps)
+            foreach (var step in layout.Steps)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (step.Entry is not { } entry)
@@ -109,16 +150,20 @@ public sealed class UnisocFlashPlan : IDisposable
                     // 只有擦除操作成为不含负载的计划条目；其它无负载步骤是官方工具在写入顺序之外的检查动作。
                     if (step.IsErase && step.Partition.Length > 0)
                     {
-                        images.Add(new UnisocFlashImage(step.Identifier, step.Partition, 0, null, eraseOnly: true));
+                        images.Add(new UnisocFlashImage(step.Identifier, step.Partition, 0, null,
+                            eraseOnly: true, step.Alias, step.Operation, step.BlockBase, step.BlockSize,
+                            layout.FlashType));
                     }
 
                     continue;
                 }
 
-                images.Add(new UnisocFlashImage(step.Identifier, step.Partition, entry.Length, entry));
+                images.Add(new UnisocFlashImage(step.Identifier, step.Partition, entry.Length, entry,
+                    eraseOnly: false, step.Alias, step.Operation, step.BlockBase, step.BlockSize,
+                    layout.FlashType));
             }
 
-            return new UnisocFlashPlan(packagePath, image, loaders, images);
+            return new UnisocFlashPlan(packagePath, image, loaders, images, layout.Partitions);
         }
         catch
         {

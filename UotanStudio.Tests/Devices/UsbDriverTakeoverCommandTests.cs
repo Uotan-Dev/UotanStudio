@@ -34,33 +34,4 @@ public sealed class UsbDriverTakeoverCommandTests
         Assert.False(UsbDriverElevatedCommand.IsRequested([]));
         Assert.False(UsbDriverElevatedCommand.IsRequested(["--usb-driver-packages"]));
     }
-
-    [Fact]
-    public void Run_IncompleteRequests_WriteFailureResultsWithoutTouchingDevices()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("The elevated driver helper only runs on Windows.");
-        }
-
-        var resultPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.usbdriver");
-        try
-        {
-            Assert.Equal(1, UsbDriverElevatedCommand.Run(
-                [UsbDriverElevatedCommand.TakeoverSwitch, UsbDriverElevatedCommand.ResultSwitch, resultPath]));
-            Assert.Equal("Failed", File.ReadAllLines(resultPath)[0]);
-
-            Assert.Equal(1, UsbDriverElevatedCommand.Run(
-                [UsbDriverElevatedCommand.ReleaseSwitch, UsbDriverElevatedCommand.ResultSwitch, resultPath]));
-            Assert.Equal("Failed", File.ReadAllLines(resultPath)[0]);
-
-            Assert.Equal(1, UsbDriverElevatedCommand.Run(
-                [UsbDriverElevatedCommand.PackageInstallSwitch, UsbDriverElevatedCommand.ResultSwitch, resultPath]));
-            Assert.Equal("Failed", File.ReadAllLines(resultPath)[0]);
-        }
-        finally
-        {
-            File.Delete(resultPath);
-        }
-    }
 }

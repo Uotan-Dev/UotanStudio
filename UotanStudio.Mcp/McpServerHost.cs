@@ -151,29 +151,34 @@ public sealed class McpServerHost
     public bool AllowFlash { get; }
 
     /// <summary>
-    /// Builds the complete tool list for the current configuration.
-    /// <para>按当前配置构建完整工具列表。</para>
-    /// Exposed for tests: the flashing tools must appear only when allowed.
-    /// <para>供测试使用：未授权时刷写类工具不得出现。</para>
+    /// Builds the MCP meta-tools exposed to clients. Internal actions are discoverable via
+    /// <c>search_actions</c> and invocable via <c>execute_action</c>.
+    /// <para>构建暴露给客户端的 MCP 元工具。内部动作可通过 <c>search_actions</c> 发现，并通过 <c>execute_action</c> 调用。</para>
     /// </summary>
-    /// <returns>Every tool registered for this host, in firmware, compression, device, delivery, OTA,
-    /// project, misc and environment order, with flashing tools appended only under <see cref="AllowFlash"/>.
-    /// <para>本次宿主注册的全部工具，顺序为固件、压缩、设备、交付、OTA、工程、杂项与环境，且仅在
-    /// <see cref="AllowFlash"/> 允许时追加刷写类工具。</para></returns>
-    public IReadOnlyList<McpServerTool> BuildTools()
-    {
-        var context = new PluginToolContext(Sandbox, DeviceManager, DeliveryTools, SigningKeys, AllowFlash);
-        var tools = new List<McpServerTool>();
-        foreach (var descriptor in PluginToolCatalog.All)
-        {
-            if (!descriptor.FlashGated || AllowFlash)
-            {
-                tools.Add(descriptor.Create(context));
-            }
-        }
+    /// <returns>The meta-tool list for the current host configuration. <para>当前宿主配置的元工具列表。</para></returns>
+    public IReadOnlyList<McpServerTool> BuildTools() => BuildMetaTools(BuildActionRegistry());
 
-        return tools;
+    /// <summary>
+    /// Builds the internal action registry for the current host configuration.
+    /// <para>为当前宿主配置构建内部动作注册表。</para>
+    /// </summary>
+    /// <returns>Action registry containing catalog actions and internal flow actions. <para>包含目录动作与内部流程动作的动作注册表。</para></returns>
+    internal McpActionRegistry BuildActionRegistry()
+    {
+        var artifacts = new McpArtifactStore(Sandbox);
+        var context = new PluginToolContext(Sandbox, DeviceManager, DeliveryTools, SigningKeys, AllowFlash, artifacts);
+        return new McpActionRegistry(context);
     }
+
+    /// <summary>
+    /// Builds meta-tools from a prepared action registry.
+    /// <para>从已准备的动作注册表构建元工具。</para>
+    /// </summary>
+    internal static IReadOnlyList<McpServerTool> BuildMetaTools(McpActionRegistry registry) =>
+    [
+        McpMetaToolFactory.CreateSearchActions(registry),
+        McpMetaToolFactory.CreateExecuteAction(registry, registry.Artifacts),
+    ];
 
     /// <summary>
     /// Builds the resource collection every transport shares, so a client can inspect containers,

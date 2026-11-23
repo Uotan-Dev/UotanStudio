@@ -113,15 +113,6 @@ internal static class NodeCatalogSeed
         CreatePluginDescriptor(package, "Composite",
             () => new CompositeNodeViewModel(package, validateExecution));
 
-    /// <summary>Builds the toolbox descriptor for one script-node package.<para>为单个脚本节点软件包构建工具箱描述符。</para></summary>
-    /// <param name="package">Script package supplying the Lua source and manifest.<para>提供 Lua 源码与清单的脚本软件包。</para></param>
-    /// <param name="validateExecution">Hook that returns validation errors before execution.<para>在执行前返回校验错误的回调。</para></param>
-    /// <returns>The descriptor naming the node type and its factory.<para>指明节点类型与其工厂的描述符。</para></returns>
-    internal static NodeDescriptor CreateScriptPluginDescriptor(VisualPluginPackage package,
-        Func<IReadOnlyList<string>>? validateExecution) =>
-        CreatePluginDescriptor(package, "Script",
-            () => new ScriptNodeViewModel(package, validateExecution));
-
     /// <summary>
     /// Builds a plugin descriptor with the same policy surface as a built-in node: a manifest declaring
     /// <see cref="NodeCapability.MutatesDevice"/> requires the run-time confirmation that built-in mutating nodes

@@ -699,6 +699,9 @@ Author: 暮间雾
   <data name="Flash_PartitionsLoaded" xml:space="preserve">
     <value>device partitions loaded</value>
   </data>
+  <data name="Flash_UnisocRemainingSpace" xml:space="preserve">
+    <value>rest of device</value>
+  </data>
   <data name="Flash_SwitchSlot" xml:space="preserve">
     <value>Switch Slot</value>
   </data>
@@ -2085,6 +2088,9 @@ Author: 暮间雾
   <data name="Explorer_OpenAsApk" xml:space="preserve">
     <value>Open as APK</value>
   </data>
+  <data name="Explorer_OpenAsApplication" xml:space="preserve">
+    <value>Open as Application Info</value>
+  </data>
   <data name="Explorer_OpenAsFirmware" xml:space="preserve">
     <value>Open in Firmware Info</value>
   </data>
@@ -2306,7 +2312,7 @@ Author: 暮间雾
     <value>Loading file, please wait…</value>
   </data>
   <data name="Dock_Apk_Busy" xml:space="preserve">
-    <value>Analyzing APK, please wait…</value>
+    <value>Analyzing application, please wait…</value>
   </data>
   <data name="FirmwareInfo_Title" xml:space="preserve">
     <value>Firmware Info</value>

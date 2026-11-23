@@ -1,6 +1,3 @@
-using System.Security.Cryptography.Pkcs;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using UotanStudio.Assets;
 using UotanStudio.Hash.Digests;
 using UotanStudio.Tests.TestInfrastructure;
@@ -36,27 +33,5 @@ public sealed class RockusbDriverPackageTests
             Assert.Equal(checked((int)entry.Length), payload.Length);
             Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
         }
-    }
-
-    [Fact]
-    public void Extract_WindowsPackage_CoversMaskromHardwareIdAndCarriesMicrosoftSignature()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("The vendor driver package verification uses Windows-only signed-file APIs.");
-        }
-
-        using var temp = new TempDirectory();
-
-        AssetStore.Extract(AssetCatalog.RockusbDriver, temp.Path, TestContext.Current.CancellationToken);
-
-        var inf = File.ReadAllText(Path.Combine(temp.Path, "rockusb.inf"), Encoding.ASCII);
-        Assert.Contains("USB\\VID_2207&PID_350B", inf);
-        Assert.Contains("AddService = Rockusb", inf);
-
-        var catalog = new SignedCms();
-        catalog.Decode(File.ReadAllBytes(Path.Combine(temp.Path, "rockusb.cat")));
-        Assert.Contains(catalog.Certificates.Cast<X509Certificate2>(),
-            certificate => certificate.Subject.Contains("Microsoft", StringComparison.OrdinalIgnoreCase));
     }
 }

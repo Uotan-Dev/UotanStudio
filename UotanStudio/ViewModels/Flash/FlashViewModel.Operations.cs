@@ -2023,6 +2023,11 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        // A PAC row keeps streaming from the package until the user points it somewhere else, so that choice is
+        // recorded here and the run only substitutes the image for rows in that set.
+        // PAC 行默认仍从包内流式读取，直到用户把它指向别处；因此该选择在此登记，运行时只替换集合内那些行的镜像。
+        var unisocRow = _unisocPackage && Partitions.Contains(entry);
+
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = _localizer.GetString(entry.Command == LoaderCommand
@@ -2045,6 +2050,10 @@ public sealed partial class FlashViewModel
         {
             entry.FilePath = path;
             entry.FileName = Path.GetFileName(path);
+            if (unisocRow)
+            {
+                _unisocExternalRows.Add(entry);
+            }
             var length = new FileInfo(path).Length;
             entry.Size = entry.Command == LoaderCommand
                 ? DescribeLoaderRowSize(path, length)
@@ -2057,6 +2066,15 @@ public sealed partial class FlashViewModel
         finally
         {
             _suppressSpecialFileRowCheck = false;
+        }
+
+        if (unisocRow)
+        {
+            // A PAC row writes its own replacement image at flash time, so it must not be folded into a generated
+            // package or checked as a loader/parameter row.
+            // PAC 行在烧录时写入自己的替换镜像，因此不得被并入生成包，也不按 loader/parameter 行做检查。
+            UpdateSpecialFileRowStatus(entry);
+            return;
         }
 
         if (!special)

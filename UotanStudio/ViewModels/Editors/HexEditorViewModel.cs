@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -14,7 +15,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <c>HexViewer</c> 控件），维护原始字节数组（编辑就地写回）、大小统计与脏状态，
 /// 保存时把字节数组写回原文件。</para>
 /// </summary>
-public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocument
+public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocument, ISearchableDocument, IHexSearchMatchLocator
 {
     /// <summary>
     /// Upper bound for a file kept in the in-memory byte array; larger files are reported as load failures.
@@ -82,6 +83,13 @@ public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocum
     /// <para>原始字节数组（HexViewer 绑定源；编辑就地写回，保存时整体写盘）。</para>
     /// </summary>
     [ObservableProperty] private byte[]? _rawBytes;
+
+    partial void OnRawBytesChanged(byte[]? value) => InvalidateSearchSnapshot();
+
+    private byte[]? _searchSource;
+    private HexSearchSnapshot? _searchSnapshot;
+
+    internal event Action<int, int>? SearchMatchLocated;
 
     /// <summary>
     /// Encoding name used for text-column decoding/input (default ASCII; shares the options list
@@ -178,6 +186,70 @@ public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocum
     }
 
     /// <summary>
+    /// Marks the document dirty after an in-place hex edit and invalidates the cached search text.
+    /// <para>HexViewer 就地编辑后置脏，并作废已缓存的搜索文本。</para>
+    /// </summary>
+    public void MarkModifiedByHexEdit()
+    {
+        IsDirty = true;
+        InvalidateSearchSnapshot();
+    }
+
+    private HexSearchSnapshot? EnsureSearchSnapshot()
+    {
+        if (RawBytes is null)
+        {
+            _searchSource = null;
+            _searchSnapshot = null;
+            return null;
+        }
+
+        if (_searchSnapshot is not null && ReferenceEquals(_searchSource, RawBytes))
+        {
+            return _searchSnapshot;
+        }
+
+        _searchSource = RawBytes;
+        _searchSnapshot = HexSearchText.Build(RawBytes);
+        return _searchSnapshot;
+    }
+
+    private void InvalidateSearchSnapshot()
+    {
+        _searchSource = null;
+        _searchSnapshot = null;
+        OnPropertyChanged(nameof(ISearchableDocument.SearchText));
+    }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => EnsureSearchSnapshot()?.Text;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => null;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => false;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) =>
+        throw new NotSupportedException("Hex bytes are read-only for text replacement.");
+
+    /// <inheritdoc/>
+    bool IHexSearchMatchLocator.TryRevealSearchMatch(int offset, int length)
+    {
+        if (EnsureSearchSnapshot() is not { } snapshot)
+        {
+            return false;
+        }
+
+        SearchMatchLocated?.Invoke(HexSearchText.ByteOffset(snapshot, offset), length);
+        return true;
+    }
+
+    /// <summary>
     /// Saves: writes the current byte array (including HexViewer in-place edits) back to the file.
     /// <para>保存：把当前字节数组（含 HexViewer 就地编辑）写回原文件。</para>
     /// </summary>
@@ -217,6 +289,7 @@ public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocum
     /// </summary>
     public void Cleanup()
     {
+        InvalidateSearchSnapshot();
         RawBytes = null;
         EncodingName = "ASCII";
         SizeDisplay = string.Empty;

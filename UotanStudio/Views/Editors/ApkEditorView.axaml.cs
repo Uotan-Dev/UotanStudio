@@ -10,9 +10,9 @@ using UotanStudio.ViewModels.Editors;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// APK metadata editor view: the main view shows the app icon, package name, version, SDK, ABIs
-/// and permission details.
-/// <para>APK 元数据编辑器视图：主视图展示应用图标、包名、版本、SDK、ABI 与权限等详细信息。</para>
+/// Application info editor view: the main view shows the app icon, package name, version, platform
+/// metadata and permission details for APK and HarmonyOS packages.
+/// <para>应用信息编辑器视图：主视图展示 APK 与 HarmonyOS 包的应用图标、包名、版本、平台信息与权限等详细信息。</para>
 /// </summary>
 public partial class ApkEditorView : UserControl
 {

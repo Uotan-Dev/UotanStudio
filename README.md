@@ -127,9 +127,9 @@ flowchart TD
 - Dock 工作区：项目资源管理器、打包设置、属性、输出/设备日志、终端、镜像管理，可停靠、可拖出
 - 编辑器：十六进制、文本/日志、文件管理、APK、ARSC、DEX、DTB、ELF、QCN、分区、清单、固件信息、Qualcomm 镜像
 - 工具窗口：烧录、文件与文件夹比较、校验器、密钥管理、APK 签名器、Boot 修补、插件管理器
-- 可视化编程：节点画布、工作流模板、复合节点、Lua 脚本节点、插件包导入与启停
+- 可视化编程：节点画布、工作流模板、复合节点、插件包导入与启停
 - MCP：`--mcp-headless` 以 stdio 运行无头服务器，`--mcp` 在 GUI 内启动伴随服务器，`--mcp-root <目录>` 限定路径沙箱，`--allow-flash` 显式放开刷写；设置页可开启仅监听 `127.0.0.1` 的 Streamable HTTP
-- 命令行：`--managed-device-shell <Adb|Hdc> <serial>` 在当前终端复用 server 通道执行交互 shell；直接传入文件路径可按文件关联打开
+- 命令行：`--managed-device-shell <Adb|Hdc> <serial>` 在当前终端复用 server 通道执行交互 shell；直接传入文件路径会打开对应工程或文档，已有实例时转发到该实例并退出
 
 ## 🐧 Linux 运行依赖
 

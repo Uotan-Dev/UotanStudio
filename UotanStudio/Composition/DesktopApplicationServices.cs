@@ -1,6 +1,5 @@
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services.Keys;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Composition;
@@ -12,9 +11,8 @@ namespace UotanStudio.Composition;
 /// </summary>
 internal sealed class DesktopApplicationServices : IDisposable
 {
-    private readonly DeviceMonitorService _monitor;
+    private readonly Lazy<DeviceMonitorService> _monitor;
     private readonly Func<DeviceViewModel?> _devicePanelAccessor;
-    private Task<IReadOnlyList<DetectedDevice>>? _initialScan;
     private bool _disposed;
 
     /// <summary>
@@ -22,7 +20,7 @@ internal sealed class DesktopApplicationServices : IDisposable
     /// and the default device-session accessor.
     /// <para>兼容入口：以应用级设备监视实例与默认设备会话访问器转发到显式构造。</para>
     /// </summary>
-    internal DesktopApplicationServices() : this(App.DeviceMonitor) { }
+    internal DesktopApplicationServices() : this(static () => App.DeviceMonitor, null) { }
 
     /// <summary>
     /// Explicit assembly: receives the application-scoped device monitor and an accessor resolving
@@ -32,25 +30,21 @@ internal sealed class DesktopApplicationServices : IDisposable
     /// <param name="monitor">The device monitor whose release ownership moves to this instance. <para>释放归属转移到本实例的设备监视器。</para></param>
     /// <param name="devicePanelAccessor">Accessor resolving the device session at release time; null falls back to the shared instance. <para>释放时解析设备会话的访问器；为 null 时沿用共享实例。</para></param>
     internal DesktopApplicationServices(DeviceMonitorService monitor, Func<DeviceViewModel?>? devicePanelAccessor = null)
+        : this(CaptureMonitor(monitor), devicePanelAccessor)
     {
-        _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+    }
+
+    private DesktopApplicationServices(Func<DeviceMonitorService> monitorAccessor,
+        Func<DeviceViewModel?>? devicePanelAccessor)
+    {
+        _monitor = new Lazy<DeviceMonitorService>(monitorAccessor);
         _devicePanelAccessor = devicePanelAccessor ?? (static () => DeviceViewModel.Instance);
     }
 
-    internal Task<IReadOnlyList<DetectedDevice>> StartAndScanAsync()
+    private static Func<DeviceMonitorService> CaptureMonitor(DeviceMonitorService monitor)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _initialScan ??= Task.Run(() =>
-        {
-            try { DebugBridgeIdentityService.EnsureDefaults(); }
-            catch (AggregateException ex)
-            {
-                foreach (var failure in ex.InnerExceptions)
-                    LogService.Instance.Write(LogLevel.Error, "Authentication", failure.ToString());
-            }
-            _monitor.Start();
-            return _monitor.Scan();
-        });
+        ArgumentNullException.ThrowIfNull(monitor);
+        return () => monitor;
     }
 
     /// <summary>
@@ -70,7 +64,12 @@ internal sealed class DesktopApplicationServices : IDisposable
             return true;
         }
 
-        var released = _monitor.ReleaseUsbOccupancy(timeout);
+        if (!_monitor.IsValueCreated)
+        {
+            return true;
+        }
+
+        var released = _monitor.Value.ReleaseUsbOccupancy(timeout);
         LogService.Instance.Write(LogLevel.Info, "Lifecycle",
             released
                 ? $"Device occupancy released before shutdown within {timeout.TotalMilliseconds:0} ms."
@@ -92,7 +91,13 @@ internal sealed class DesktopApplicationServices : IDisposable
         finally
         {
             try { _devicePanelAccessor()?.Dispose(); }
-            finally { _monitor.Dispose(); }
+            finally
+            {
+                if (_monitor.IsValueCreated)
+                {
+                    _monitor.Value.Dispose();
+                }
+            }
         }
     }
 

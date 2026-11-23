@@ -1296,6 +1296,36 @@
   <data name="Apk_HardeningNotDetected" xml:space="preserve">
     <value>Not detected</value>
   </data>
+  <data name="Apk_Placeholder" xml:space="preserve">
+    <value>APP</value>
+  </data>
+  <data name="Apk_HarmonyTargetApi" xml:space="preserve">
+    <value>Target API</value>
+  </data>
+  <data name="Apk_HarmonyCompatibleApi" xml:space="preserve">
+    <value>Compatible API</value>
+  </data>
+  <data name="Apk_HarmonyVendor" xml:space="preserve">
+    <value>Vendor</value>
+  </data>
+  <data name="Apk_HarmonyDeviceTypes" xml:space="preserve">
+    <value>Device types</value>
+  </data>
+  <data name="Apk_HarmonyAbilities" xml:space="preserve">
+    <value>Abilities</value>
+  </data>
+  <data name="Apk_HarmonyDetails" xml:space="preserve">
+    <value>Bundle / SDK</value>
+  </data>
+  <data name="Apk_HarmonyUnsigned" xml:space="preserve">
+    <value>Unsigned</value>
+  </data>
+  <data name="Apk_HarmonySignature" xml:space="preserve">
+    <value>Signed</value>
+  </data>
+  <data name="Apk_HarmonySignatureFormat" xml:space="preserve">
+    <value>{0} · {1} · {2} · {3}</value>
+  </data>
   <data name="MirrorProperty_Status" xml:space="preserve">
     <value>Session status</value>
   </data>

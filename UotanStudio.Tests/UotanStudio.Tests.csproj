@@ -34,6 +34,8 @@
     <ProjectReference Include="..\UotanStudio.Mirroring\UotanStudio.Mirroring.csproj" />
     <!-- Regex inference library under test (deterministic example-driven regex synthesis) -->
     <ProjectReference Include="..\UotanStudio.RegexInfer\UotanStudio.RegexInfer.csproj" />
+    <!-- Scripting library under test (sandboxed Jint execution and whitelist APIs). -->
+    <ProjectReference Include="..\UotanStudio.Scripting\UotanStudio.Scripting.csproj" />
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />

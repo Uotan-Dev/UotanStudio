@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 

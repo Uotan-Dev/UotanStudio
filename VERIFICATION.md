@@ -27,6 +27,8 @@
 - 紫光展锐刷写计划的选取范围已用真实 PAC 包核对：包内目录条目由 `type=1` 镜像、XML、FDL 与零长度操作条目组成；scheme 的 `Flag` 区分有负载的镜像步骤与无负载的操作步骤，scheme 选取的镜像集合与包内 `type=1` 条目集合相同，仅顺序不同，因此刷写计划按 scheme 声明顺序驱动，包目录顺序不参与。`flash_use` 在多数条目非零，不具选取力，未用于过滤。以上是文件级证据，写入设备仍未上真机。
 - 上述方案的语义已逐条落到本仓库实现：`Flag` 按第 0 位掩码判断是否需要负载，无负载步骤是擦除或检查操作，不携带镜像；`CheckFlag` 暴露为 `SprdPacSchemeStep.IsMandatory`，表示全选也不能清除，默认仍全选。scheme 由产品名经 `/BMAConfig/ProductList/Product[@name]/SchemeName` 选取，产品名取自 PAC 头的 `szPrdName`；仓库按 `PacImage.ProductName` 精确匹配，产品名缺失或匹配不唯一时回退到第一个携带 FDL 角色的 scheme。`Flag=0` 的操作步骤中以 `EraseFlash` 开头的展开为擦除计划条目与界面行，`PhaseCheck` 等检查类步骤不列入；擦除行不参与全选，勾选时先弹确认框，执行时按分区名擦除并沿用 NV 分区保护。
 - 紫光展锐厂商驱动包 `drivers/unisoc-spreadtrum`（13 个负载：`sprdadb`/`sprdvcom`/`sprdvmdm`/`rdavcom` 的 INF+CAT、`amd64__sprdvcom.sys`/`amd64__sprdvmdm.sys`/`amd64__rdavcom.sys`、`amd64__WdfCoInstaller01009.dll`、`amd64__winusbcoinstaller2.dll`）已随包，`compress-embedded-assets.cs --check` 报告 `manifest.tsv is up to date`。USB 树接线由 `UsbDriverInstallWiringTests` 覆盖（紫光下载口 `VID_1782&PID_4D00` 与 ADB 复合口 `VID_1782&PID_5A5B&MI_01` 经 `DriverPackageCatalog.FindMatch` 解析到该包并给出 `CanInstallDriver`，未匹配 ID、已绑定驱动、非 Windows 驱动信息三种情况保持隐藏）。本机无紫光实机，`sprdadb.inf`/`sprdvcom.inf` 的暂存与绑定未在真机验证。
+- 紫光展锐主网格的列数据来自两个独立来源，均已用真实 PAC 核对：`Product/FlashTypeID`（该包为 `1`，按官方 XML 头注释即 Nand flash）提供存储介质；scheme 每个 `File` 的 `IDAlias`/`Type`/`Block@id`/`Block/Base`/`Block/Size` 提供文件标签、命令、分区、偏移与大小，与官方 `MainPage.cpp` 的 `m_lstProductInfo` 填充一致（`FileID`←`szIDAlias`、`Base`←`arrBlock[j].llBase`、`Size`←`llSize`、`FileType`←`szType`，列名见 `DLoader.rc:818` 的 `IDS_PRODUCT_INFO_COLUMN`）。PAC 目录条目的 `Addr`/`AddrNum` 在真实包中全为 `0x0`，因此偏移只能取自 scheme。该包实测：`FlashTypeID=1`，39 个 `File` 各恰有 1 个 `Block`，`Base` 除两个加载器外全为 `0x0`，`Block/Size` 仅 `ProdNV=0xA00000` 与 `PhaseCheck=0x100000` 非零。镜像字节仍从 PAC 流式读取，不做解压；文件列显示 `PAC:<包内文件名>`，用户可为单行改选外部文件，运行时只替换该行的镜像来源。界面列显示未做人工验证（本机无紫光实机，且该页依赖真实设备端点）。
+- 紫光展锐主网格「偏移量」列按官方行为取分区名而不是字节偏移：`MainPage.cpp:611-617` 在 scheme 声明了分区表且 `Block@id` 非空时用 `szRepID` 覆盖 `llBase` 的显示，因为真实偏移由设备分区表决定、只有接入设备后才存在。真实包实测 39 个 `File` 中 `Block/Base` 仅两个加载器非零（`FDL=0x00005500`、`FDL2=0x9EFFFE00`），37 个为 `0x0`，而这些条目的 `Block@id` 全部有值，按官方规则代入后该列 39/39 行均有显示；PAC 目录条目的 `Addr` 全为 `0x0`，不参与。`Block/Size` 的 `0x0` 在官方列表里置空，故实现取 `Block/Size` 非零值、否则回退负载长度。设备侧真实分区偏移经 `UnisocFlasher.ResolvePartitionsAsync` 的 GPT/原生表解析，与本列显示无关。此后「读分区表」按钮在已加载 PAC 时不再整表替换，而是按 scheme 的 `Block@id` 与设备分区名匹配后只回填偏移列（大小列保留包内值），使偏移列显示设备真实字节偏移；未匹配的行保留 scheme 原值。匹配必须按分区名而非行名，因为负载行名是 scheme 标识（如 `BOOT`）而设备分区名为 `boot`。该回填要求设备已连 FDL2（`RequireStorage` 对非 FDL2 抛错），本机无紫光实机故未做端到端验证。 偏移量改为按包内分区表推导：XML `<Partitions>` 的 42 条 `Partition` 只有 `id` 与 `size`（注释写明 MB），无 offset 字段，官方 `PARTITION_T`（`BMAGlobal.h:145-151`）也只有 `szID`/`llSize`/`llGap`；官方把该表现场拼成 SPPT（`SettingsSheet.cpp:1193`，头 `"par:"`=0x3A726170、项 `"tbl:"`=0x3A6C6274）并以 `BSL_CMD_REPARTITION` 整表下发（`BootModeOpr.cpp:1138`），由设备重建后自行分配位置，因此 scheme 的 `Block/Base` 对镜像全为 0、官方界面用分区名覆盖该列。实现按声明顺序累加声明大小推导偏移，`0xFFFFFFFF`/`-1` 记为占满剩余空间且其后分区无可推导位置。真实包推导出 41 个有界分区合计 4,821,352,448 字节（4.49 GB，与 4 GiB 级 eMMC 相符）。该偏移仅用于界面显示，烧录仍按分区名寻址、不强制位置。重建逻辑本身未实现，未上真机。
 
 ## 性能
 
@@ -98,3 +100,14 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 - 除 win-x64 外的 RID 发布未在宿主全量上执行：riscv64 cross JIT 方案（官方 x64 `ILCompiler` 宿主包 + 自建 `libclrjit_unix_riscv64_x64.so`）尚未在 runner 上端到端跑通；`loongarch-publish.yml` 的 qemu 方案未执行过。release.yml 的 musl 两个 RID（alpine 容器发布）与 package.yml 的 MSIX/DMG/deb/rpm/apk/pacman 打包链均未在 runner 上运行。
 - CI `dotnet test --solution` 路径与 Runner 机器未实测；Satori GC 的延迟与吞吐特性只在合成负载测量，应用混合负载与长期运行未验证。
 - `CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
+
+## 冷启动性能（2026-11-23）
+
+- 测量口径：进程创建（`Process.StartTime`）→ 枚举到标题为 `UotanStudio` 的可见顶层窗口；`Process.MainWindowHandle` 统计的是启动完成后的主窗口，不能用于启动窗。
+- win-x64 NativeAOT（2026-11-16 构建，优化前）：启动窗 4502–4887 ms，主窗口 5034–5413 ms（各 3 次）。
+- win-x64 NativeAOT（2026-11-23 构建，优化后）：启动窗 353–584 ms（3 次），主窗口 5243–5622 ms。
+- Debug（优化后，含 `[cold-start]` 埋点）：进程创建→启动窗约 1862–1901 ms；其中运行时初始化约 255 ms、设置/迁移约 180 ms、Avalonia 平台初始化约 140 ms、App.axaml 加载约 560 ms（Debug JIT）、字体解压/启动窗构造约 490 ms、`Show` 约 140 ms。设备监视器构造（同步全量 USB 枚举约 4.15 s）已从 `App.Initialize` 后移到启动窗之后的扫描线程。
+- AOT 优化后分解（最快一次）：运行时初始化 52 ms、设置/迁移/日志/构建器 24 ms、Avalonia 平台初始化约 133 ms、App.axaml 加载 26 ms、DI 3 ms、字体/语言/启动窗构造 96 ms、`Show` 41 ms。
+- 200 ms 目标未达成：运行时初始化（52–274 ms，受冷缓存与安全软件影响）加 Avalonia 平台初始化（约 133–185 ms）已超过 200 ms，属于框架/平台下限。应用侧可移出的工作（设备枚举、格式注册、插件能力探测）已全部移出启动窗关键路径。
+- 单实例转发已端到端验证：已有主实例时第二个进程 304 ms 内以 0 退出，主实例日志确认打开被转发文件（`Properties - Refreshed for Hex document ... forwarded.img`）。
+- 设备枚举后移（2026-11-23，Debug）：启动阶段顺序变为 `ApplyingSettings → Services`，不再出现 `Scanning/DevicesFound` 等待；`Workspace` 97 ms、`Window` 2093 ms，监视器在 Shell 之后后台启动（启动窗 2.4 s 时扫描尚未开始），扫描在 `Ready` 后完成（0 台设备）。修复前 `Workspace` 阶段曾因 `AdbLogViewModel`/`ImageViewModel` 构造函数直接访问 `App.DeviceMonitor` 阻塞 1.76–3.55 s。

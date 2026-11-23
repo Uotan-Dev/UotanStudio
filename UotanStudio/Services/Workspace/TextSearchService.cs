@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace UotanStudio.Services.Workspace;
@@ -57,21 +56,17 @@ internal sealed record TextSearchOptions(string Pattern, string Replacement = ""
 internal sealed record TextSearchMatch(int Offset, int Length, string Value, string Replacement);
 
 /// <summary>
-/// Bounded, cancellable text matching without UI dependencies.
-/// <para>有界且可取消的文本匹配。</para>
+/// Cancellable text matching without UI dependencies and without artificial size or match-count caps.
+/// <para>可取消的文本匹配，不依赖 UI，也不设置人为的文本大小或匹配数量上限。</para>
 /// </summary>
 internal static class TextSearchService
 {
-    internal const int MaximumTextLength = 8 * 1024 * 1024;
-    internal const int MaximumMatches = 10000;
-
     private static CompiledSearch? _cachedSearch;
 
     internal static IReadOnlyList<TextSearchMatch> Find(string text, TextSearchOptions options,
         int start = 0, int? length = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (text.Length > MaximumTextLength) throw new IOException("Text exceeds the 8 MiB search limit.");
         var count = length ?? text.Length - start;
         if (start < 0 || start > text.Length || count < 0 || count > text.Length - start)
             throw new ArgumentOutOfRangeException(nameof(start));
@@ -83,19 +78,13 @@ internal static class TextSearchService
             return FindLiteral(text, options, start, end, cancellationToken);
         }
         var regex = GetCompiledRegex(options);
-        var clock = Stopwatch.StartNew();
         List<TextSearchMatch> matches = [];
-        long replacementLength = 0;
         for (var match = regex.Match(text, start); match.Success && match.Index <= end; match = match.NextMatch())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (clock.Elapsed > TimeSpan.FromSeconds(2)) throw new TimeoutException("Search exceeded its time limit.");
             if (match.Length > end - match.Index) continue;
-            if (matches.Count == MaximumMatches) throw new IOException("Search exceeds the 10000 match limit. Narrow the scope.");
             var replacement = options.UseRegex ? match.Result(options.Replacement) : options.Replacement;
             if (options.PreserveCase) replacement = PreserveCase(match.Value, replacement);
-            replacementLength += replacement.Length;
-            if (replacementLength > MaximumTextLength) throw new IOException("Replacement exceeds the 8 MiB text limit.");
             matches.Add(new(match.Index, match.Length, match.Value, replacement));
         }
         return matches;
@@ -125,7 +114,7 @@ internal static class TextSearchService
         if (options.WholeWord) pattern = @"(?<![\p{L}\p{N}\p{M}_])(?:" + pattern + @")(?![\p{L}\p{N}\p{M}_])";
         var flags = RegexOptions.CultureInvariant | RegexOptions.Multiline;
         if (!options.MatchCase) flags |= RegexOptions.IgnoreCase;
-        var regex = new Regex(pattern, flags, TimeSpan.FromMilliseconds(250));
+        var regex = new Regex(pattern, flags, Regex.InfiniteMatchTimeout);
         _cachedSearch = new CompiledSearch(options.Pattern, options.UseRegex, options.WholeWord, options.MatchCase, regex);
         return regex;
     }
@@ -134,9 +123,9 @@ internal static class TextSearchService
 
     /// <summary>
     /// Literal (non-regex, non-whole-word) search fast path. Matches the Regex path's
-    /// boundary, limit and timeout semantics via IndexOf instead of an interpreted Regex.
+    /// boundary and cancellation semantics via IndexOf instead of an interpreted Regex.
     /// <para>字面量（非正则、非整词）搜索快路径：用 IndexOf 保持与 Regex 路径一致的
-    /// 边界、限额与超时语义。</para>
+    /// 边界与取消语义。</para>
     /// </summary>
     /// <param name="text">
     /// Immutable text snapshot to scan.
@@ -165,9 +154,7 @@ internal static class TextSearchService
     private static List<TextSearchMatch> FindLiteral(string text, TextSearchOptions options,
         int start, int end, CancellationToken cancellationToken)
     {
-        var clock = Stopwatch.StartNew();
         List<TextSearchMatch> matches = [];
-        long replacementLength = 0;
         var comparison = options.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         var index = start;
         while (index <= end)
@@ -179,17 +166,13 @@ internal static class TextSearchService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (clock.Elapsed > TimeSpan.FromSeconds(2)) throw new TimeoutException("Search exceeded its time limit.");
             if (found + options.Pattern.Length > end)
             {
                 break;
             }
 
-            if (matches.Count == MaximumMatches) throw new IOException("Search exceeds the 10000 match limit. Narrow the scope.");
             var replacement = options.Replacement;
             if (options.PreserveCase) replacement = PreserveCase(text.AsSpan(found, options.Pattern.Length), replacement);
-            replacementLength += replacement.Length;
-            if (replacementLength > MaximumTextLength) throw new IOException("Replacement exceeds the 8 MiB text limit.");
             matches.Add(new(found, options.Pattern.Length, text.Substring(found, options.Pattern.Length), replacement));
             index = found + options.Pattern.Length;
         }
@@ -207,13 +190,9 @@ internal static class TextSearchService
                 || !text.AsSpan(match.Offset, match.Length).SequenceEqual(match.Value))
                 throw new IOException("The document changed after searching. Search again.");
             resultLength += (long)match.Offset - offset + match.Replacement.Length;
-            if (resultLength > MaximumTextLength)
-                throw new IOException("Replacement exceeds the 8 MiB text limit.");
             offset = match.Offset + match.Length;
         }
         resultLength += text.Length - offset;
-        if (resultLength > MaximumTextLength)
-            throw new IOException("Replacement exceeds the 8 MiB text limit.");
         if (matches.Count == 0)
         {
             return text;

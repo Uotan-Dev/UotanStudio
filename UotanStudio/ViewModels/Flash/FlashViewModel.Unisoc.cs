@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Comm.Protocols.Unisoc;
+using UotanStudio.Firmware.VendorFirmware.Pac;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Ui;
@@ -65,6 +66,11 @@ public sealed partial class FlashViewModel
     /// <summary>Whether the loaded package is a UNISOC PAC whose plan owns the grid rows.
     /// <para>已加载的包是否为其计划拥有网格行的紫光展锐 PAC。</para></summary>
     private bool _unisocPackage;
+
+    /// <summary>The PAC rows the user pointed at an external image file, so the run writes that file instead of the
+    /// packaged payload; cleared whenever the package is reloaded.
+    /// <para>用户指向外部镜像文件的 PAC 行，运行时就写入该文件而不是包内负载；包重新加载时清空。</para></summary>
+    private readonly HashSet<FlashPartitionEntry> _unisocExternalRows = [];
 
     /// <summary>Whether the selected endpoint answers as FDL2, which the storage actions require.
     /// <para>所选端点是否以 FDL2 应答；存储动作都要求该阶段。</para></summary>
@@ -225,6 +231,7 @@ public sealed partial class FlashViewModel
         }
 
         _unisocPackage = true;
+        _unisocExternalRows.Clear();
         Partitions.Apply(0, BuildUnisocPlanRows(plan));
         AppendLog($"{plan.Images.Count} " + _localizer.GetString("Flash_ImagesLoaded"));
     }
@@ -291,30 +298,149 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Builds one tickable grid row per plan entry in scheme order, each carrying its payload size; the row name stays
-    /// the plan entry name because the flash path matches ticked rows against that same name. An erase entry gets no
-    /// size and is flagged as destructive so select-all skips it and selecting it asks for confirmation.
-    /// <para>按 scheme 顺序为每个计划条目构建一行可勾选网格行并携带负载大小；行名沿用计划条目名，因为烧录路径
-    /// 以同一个名字匹配已勾选行。擦除条目没有大小并被标记为破坏性，因此全选跳过它，勾选它需要确认。</para>
+    /// Builds one tickable grid row per plan entry in scheme order, filling the main grid's columns from the scheme: the
+    /// storage medium comes from the product's <c>FlashTypeID</c>, the command from the step <c>Type</c>, the offset from
+    /// <c>Block/Base</c> and the size from <c>Block/Size</c> or the payload length. The file cell names the packaged
+    /// member as <c>PAC:&lt;name&gt;</c> and still lets the user point the row at an external image instead. The row name
+    /// stays the plan entry name because the flash path matches ticked rows against that same name. An erase entry is
+    /// flagged as destructive so select-all skips it and selecting it asks for confirmation.
+    /// <para>按 scheme 顺序为每个计划条目构建一行可勾选网格行，并用 scheme 填充主网格各列：存储介质取自产品的
+    /// <c>FlashTypeID</c>，命令取自步骤 <c>Type</c>，偏移取自 <c>Block/Base</c>，大小取自 <c>Block/Size</c> 或负载长度。
+    /// 文件列以 <c>PAC:&lt;名称&gt;</c> 命名包内成员，同时仍允许用户把该行改指外部镜像。行名沿用计划条目名，因为
+    /// 烧录路径以同一个名字匹配已勾选行。擦除条目被标记为破坏性，因此全选跳过它，勾选它需要确认。</para>
     /// </summary>
-    private static List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan)
+    private List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan)
     {
+        Dictionary<string, SprdPacPartition> declared = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var partition in plan.Partitions)
+        {
+            declared[partition.id] = partition;
+        }
+
         List<FlashPartitionEntry> rows = [];
         foreach (var image in plan.Images)
         {
+            var packaged = image.PackagedFileName;
             rows.Add(new FlashPartitionEntry
             {
                 IsScriptStep = false,
                 IsDestructiveErase = image.EraseOnly,
                 Name = image.Name,
-                Offset = string.Empty,
-                Size = image.EraseOnly ? string.Empty : FormatByteSize(image.Length),
-                AcceptsFile = false
+                StorageMedium = DescribeUnisocStorageMedium(image.FlashType),
+                Command = image.Operation,
+                Offset = DescribeUnisocOffset(image, declared),
+                Size = DescribeUnisocEntrySize(image),
+                FileName = packaged.Length > 0 ? FormatUnisocPackagedFileName(packaged) : string.Empty,
+                FilePath = packaged.Length > 0 ? plan.PackagePath : string.Empty,
+                AcceptsFile = true
             });
         }
 
         return rows;
     }
+
+    /// <summary>
+    /// Names the storage medium the package declares: the scheme's <c>FlashTypeID</c> is <c>1</c> for Nand flash and
+    /// <c>0</c> for Nor flash per the official XML header, and any other value is reported verbatim so an unknown
+    /// medium is never mislabelled as one of the two known ones.
+    /// <para>给出包声明的存储介质：按官方 XML 头注释，scheme 的 <c>FlashTypeID</c> 为 <c>1</c> 表示 Nand flash、
+    /// <c>0</c> 表示 Nor flash，其它取值按原样上报，绝不把未知介质错标为这两种之一。</para>
+    /// </summary>
+    /// <param name="flashType">The declared <c>FlashTypeID</c>. <para>声明的 <c>FlashTypeID</c>。</param>
+    /// <returns>The medium label. <para>介质标签。</para></returns>
+    private static string DescribeUnisocStorageMedium(int flashType) => flashType switch
+    {
+        0 => "Nor Flash",
+        1 => "Nand Flash",
+        _ => string.Format(CultureInfo.InvariantCulture, "FlashTypeID {0}", flashType)
+    };
+
+    /// <summary>
+    /// Describes the offset cell of one PAC row from the partition table the package declares. The package states only
+    /// partition names and sizes, so the position of each partition is what the official tool's rebuilt table would use:
+    /// the accumulated sizes of the partitions declared before it. A row whose partition appears in that table therefore
+    /// shows the derived byte offset; a row outside it falls back to the scheme <c>Block/Base</c>, and the two loader rows
+    /// keep their main-RAM addresses because they are loaded into RAM rather than written to a partition. Nothing here
+    /// forces a position at flash time — the flash pass still addresses partitions by name.
+    /// <para>从包声明的分区表描述一个 PAC 行的偏移列。包只给出分区名与大小，因此每个分区的位次就是官方工具重建表时使用的
+    /// 值：在它之前声明的分区大小之和。分区出现在该表中的行因此显示推导出的字节偏移；不在表中的行回退到 scheme 的
+    /// <c>Block/Base</c>，而两个加载器行保留其主存地址，因为它们被载入 RAM 而不是写入分区。此处的结果在烧录时不强制
+    /// 任何位置——烧录流程仍按分区名寻址。</para>
+    /// </summary>
+    /// <param name="image">The plan entry. <para>计划条目。</para></param>
+    /// <param name="declared">The declared partitions by identifier. <para>按标识索引的已声明分区。</para></param>
+    /// <returns>The derived offset, the scheme base, or an empty string when neither applies.
+    /// <para>推导出的偏移、scheme 基址；两者都不适用时为空字符串。</para></returns>
+    private string DescribeUnisocOffset(
+        UnisocFlashImage image, IReadOnlyDictionary<string, SprdPacPartition> declared)
+    {
+        if (image.Partition.Length > 0 && declared.TryGetValue(image.Partition, out var partition))
+        {
+            return partition.fillsRemainingSpace
+                ? FormatUnisocRemainingSpace()
+                : partition.offset is { } offset ? FormatUnisocBase(offset) : string.Empty;
+        }
+
+        if (image.Partition.Length > 0)
+        {
+            return image.Partition;
+        }
+
+        return image.Offset > 0 ? FormatUnisocBase(image.Offset) : string.Empty;
+    }
+
+    /// <summary>
+    /// Labels the partition that fills whatever the device has left. The package declares it as <c>0xFFFFFFFF</c>, so no
+    /// offset or size can be derived from package data alone and the cell says so instead of showing a wrong number.
+    /// <para>标注占满设备剩余空间的分区。包以 <c>0xFFFFFFFF</c> 声明它，因此无法仅凭包内数据推导偏移或大小，该单元格
+    /// 如实说明而不是显示一个错误数字。</para>
+    /// </summary>
+    /// <returns>The localized label. <para>本地化标签。</para></returns>
+    private string FormatUnisocRemainingSpace() =>
+        _localizer.GetString("Flash_UnisocRemainingSpace");
+
+    /// <summary>
+    /// Formats the scheme <c>Block/Base</c> the way the official product list shows it, as a hexadecimal literal.
+    /// <para>按官方产品列表的呈现方式把 scheme 的 <c>Block/Base</c> 格式化为十六进制字面量。</para>
+    /// </summary>
+    /// <param name="offset">The declared base. <para>声明的基址。</para></param>
+    /// <returns>The hexadecimal text. <para>十六进制文本。</returns>
+    private static string FormatUnisocBase(long offset) =>
+        string.Format(CultureInfo.InvariantCulture, "0x{0:X}", offset);
+
+    /// <summary>
+    /// Describes the size cell of one PAC row: the payload length when the entry carries one, otherwise the
+    /// <c>Block/Size</c> the scheme declares, so an erase operation still shows the extent it addresses while an
+    /// undeclared (<c>0x0</c>) extent stays blank exactly as the official list renders it.
+    /// <para>描述一个 PAC 行的大小列：条目携带负载时用负载长度，否则用 scheme 声明的 <c>Block/Size</c>，使擦除操作
+    /// 仍显示其寻址范围，而未声明（<c>0x0</c>）的范围保持空白，与官方列表的渲染一致。</para>
+    /// </summary>
+    /// <param name="image">The plan entry. <para>计划条目。</param>
+    /// <returns>The size text, or an empty string when no extent is known. <para>大小文本；范围未知时为空字符串。</returns>
+    private static string DescribeUnisocEntrySize(UnisocFlashImage image)
+    {
+        // The official list fills this cell from Block/Size and blanks a declared 0x0, which most images declare. That
+        // value is the extent the scheme addresses, so it wins when present; otherwise the payload length is the only
+        // real extent and is shown instead, and an operation with neither stays blank.
+        // 官方列表用 Block/Size 填该单元格并把声明的 0x0 置空，而多数镜像声明的正是 0x0。该值是 scheme 寻址的范围，
+        // 有值时优先；否则负载长度是唯一真实范围并据此显示，两者都没有的操作保持空白。
+        if (image.DeclaredSize > 0)
+        {
+            return FormatUnisocBase(image.DeclaredSize);
+        }
+
+        return image.EraseOnly ? string.Empty : FormatByteSize(image.Length);
+    }
+
+    /// <summary>
+    /// Renders the packaged file a row would write, prefixed so the cell reads as a package member rather than an
+    /// absolute path the user could try to open. <para>渲染该行将写入的包内文件，并加前缀使该单元格读作包成员而不是
+    /// 用户可以尝试打开的绝对路径。</para>
+    /// </summary>
+    /// <param name="fileName">The packaged file name. <para>包内文件名。</para></param>
+    /// <returns>The prefixed label. <para>带前缀的标签。</returns>
+    private static string FormatUnisocPackagedFileName(string fileName) =>
+        string.Format(CultureInfo.InvariantCulture, "PAC:{0}", fileName);
 
     /// <summary>
     /// Runs one PAC package against the endpoint after the typed confirmation: the plan's loaders bring the link to
@@ -407,6 +533,27 @@ public sealed partial class FlashViewModel
         var selected = Partitions
             .Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep)
             .Select(row => row.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        // A row the user pointed at an external file writes that file instead of the packaged payload; every other row
+        // keeps streaming straight out of the package. The dictionary is keyed by plan entry name, which is also the
+        // row name the flasher matches on.
+        // 用户指向外部文件的行写入该文件，而不是包内负载；其余行仍直接从包流式读取。字典以计划条目名为键，也正是
+        // 烧写器匹配所用的行名。
+        Dictionary<string, string> external = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Partitions)
+        {
+            if (!row.IsSelected || row.Name.Length == 0 || row.IsScriptStep || row.FilePath.Length == 0)
+            {
+                continue;
+            }
+
+            if (!_unisocExternalRows.Contains(row))
+            {
+                continue;
+            }
+
+            external[row.Name] = row.FilePath;
+        }
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         SetBusy(true);
@@ -422,7 +569,7 @@ public sealed partial class FlashViewModel
                 }
             });
             await App.DeviceMonitor.FlashUnisocAsync(device, PackagePath, options, selected, progress,
-                cancellation.Token).ConfigureAwait(true);
+                cancellation.Token, external).ConfigureAwait(true);
             UnisocStatusText = language.GetString("Flash_UnisocFlashDone");
             AppendLog(language.GetString("Flash_UnisocFlashDone"));
             await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);

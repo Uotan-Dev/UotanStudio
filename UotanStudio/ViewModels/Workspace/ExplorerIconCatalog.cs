@@ -93,7 +93,7 @@ public static class ExplorerIconCatalog
             ".prop" or ".rc" or ".te" or ".fsconfig" or ".fstab" or ".ini" or ".cfg" or ".conf" or ".toml" =>
                 new(AppIconKind.FileCog, ExplorerIconPalette.Document),
 
-            ".sh" or ".bash" or ".bat" or ".cmd" or ".ps1" or ".psm1" or ".py" or ".pl" or ".rb" or ".lua" =>
+            ".sh" or ".bash" or ".bat" or ".cmd" or ".ps1" or ".psm1" or ".py" or ".pl" or ".rb" =>
                 new(AppIconKind.Script, ExplorerIconPalette.Script),
 
             ".zip" or ".7z" or ".rar" => new(AppIconKind.Zip, ExplorerIconPalette.Archive),

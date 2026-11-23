@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core;
 
@@ -182,6 +183,93 @@ internal sealed record EnvPayload(
     IReadOnlyList<string> CompressionFormats);
 
 /// <summary>
+/// Reference to a large tool artifact stored inside the MCP sandbox.
+/// <para>存放在 MCP 沙箱内的大型工具产物引用。</para>
+/// </summary>
+/// <param name="Id">Stable artifact identifier. <para>稳定的工件标识符。</para></param>
+/// <param name="Path">Sandbox-relative or display path. <para>沙箱相对或展示路径。</para></param>
+/// <param name="SizeBytes">Artifact size in bytes. <para>工件字节大小。</para></param>
+/// <param name="Sha256">SHA-256 hex digest. <para>SHA-256 十六进制摘要。</para></param>
+/// <param name="Preview">Small human-readable preview. <para>小型可读预览。</para></param>
+internal sealed record ArtifactRef(
+    string Id,
+    string Path,
+    long SizeBytes,
+    string Sha256,
+    string? Preview);
+
+/// <summary>
+/// Search result entry for MCP action discovery.
+/// <para>MCP 动作发现的搜索结果条目。</para>
+/// </summary>
+internal sealed record McpActionSearchResult(
+    string Action,
+    string Domain,
+    string Summary,
+    bool ReadOnly,
+    bool Destructive,
+    bool FlashGated,
+    double Score,
+    string InputSchemaJson);
+
+/// <summary>
+/// Search response for <c>search_actions</c>.
+/// <para><c>search_actions</c> 的搜索响应。</para>
+/// </summary>
+internal sealed record McpActionSearchPayload(
+    string Query,
+    string? Domain,
+    int TotalMatches,
+    IReadOnlyList<McpActionSearchResult> Results,
+    IReadOnlyList<string> SuggestedDomains);
+
+/// <summary>
+/// Flash plan preview/report artifact reference payload.
+/// <para>刷写计划预览/报告工件引用负载。</para>
+/// </summary>
+internal sealed record FlashPlanPayload(
+    string PlanId,
+    string Status,
+    string Kind,
+    string? Target,
+    bool RequiresConfirmation,
+    bool AllowFlash,
+    ArtifactRef PlanArtifact,
+    ArtifactRef? ReportArtifact,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>
+/// Structured flash report payload.
+/// <para>结构化刷写报告负载。</para>
+/// </summary>
+internal sealed record FlashReportPayload(
+    string PlanId,
+    string Status,
+    bool Success,
+    string Summary,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExecutedAt,
+    ArtifactRef? ReportArtifact,
+    IReadOnlyList<string> Steps);
+
+/// <summary>
+/// Artifact envelope returned when a large action output is externalized.
+/// <para>大型动作输出被外部化时返回的工件信封。</para>
+/// </summary>
+internal sealed record ArtifactEnvelopePayload(
+    string Action,
+    ArtifactRef Artifact,
+    bool IsError);
+
+internal sealed record FlashGatePayload(string Action, bool FlashGated, bool Allowed, string RequiredAction);
+
+internal sealed record ArtifactContentPayload(ArtifactRef Artifact, string Content);
+internal sealed record ArtifactListPayload(IReadOnlyList<ArtifactRef> Artifacts);
+internal sealed record MacroInfoPayload(string Name, string Domain, string Summary, bool ReadOnly, bool Destructive, bool FlashGated, string SkillPath, IReadOnlyList<string> Steps);
+internal sealed record MacroListPayload(IReadOnlyList<MacroInfoPayload> Macros);
+internal sealed record MacroInvocationPayload(string Name, string SkillPath, IReadOnlyList<string> Steps, string InputJson, string Note);
+
+/// <summary>
 /// Source-generated JSON types for every tool payload crossing <see cref="ToolResult.Data"/>.
 /// <para><see cref="ToolResult.Data"/> 上所有工具负载的 source-gen JSON 类型。</para>
 /// </summary>
@@ -231,5 +319,20 @@ internal sealed record EnvPayload(
 [JsonSerializable(typeof(SuperPayloadConversionPayload))]
 [JsonSerializable(typeof(PreparedToolsPayload))]
 [JsonSerializable(typeof(EnvPayload))]
+[JsonSerializable(typeof(ArtifactRef))]
+[JsonSerializable(typeof(McpActionSearchResult))]
+[JsonSerializable(typeof(List<McpActionSearchResult>))]
+[JsonSerializable(typeof(McpActionSearchPayload))]
+[JsonSerializable(typeof(FlashPlanPayload))]
+[JsonSerializable(typeof(FlashReportPayload))]
+[JsonSerializable(typeof(FlashPlanActionFactory.FlashPlanRecord))]
+[JsonSerializable(typeof(FlashPlanActionFactory.FlashPlanIndex))]
+[JsonSerializable(typeof(ArtifactEnvelopePayload))]
+[JsonSerializable(typeof(FlashGatePayload))]
+[JsonSerializable(typeof(ArtifactContentPayload))]
+[JsonSerializable(typeof(ArtifactListPayload))]
+[JsonSerializable(typeof(MacroInfoPayload))]
+[JsonSerializable(typeof(MacroListPayload))]
+[JsonSerializable(typeof(MacroInvocationPayload))]
 [JsonSerializable(typeof(List<string>))]
 internal sealed partial class McpToolJsonContext : JsonSerializerContext;

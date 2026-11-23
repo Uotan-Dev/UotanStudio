@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>UotanStudio.Scripting</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pure managed ECMAScript interpreter; no native runtime and no CLR access by default. -->
+    <PackageReference Include="Jint" />
+  </ItemGroup>
+
+</Project>

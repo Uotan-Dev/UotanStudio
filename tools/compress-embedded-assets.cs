@@ -10,8 +10,8 @@ const int Level = 19;
 var arguments = args;
 var checkOnly = arguments.Contains("--check");
 var root = FindRepositoryRoot();
-var fontsSource = ReadOption("--fonts-source") ?? Path.Combine(root, "reference", "fonts-source");
-var driverSource = Path.Combine(root, "reference", "driver-pkg");
+var fontsSource = ReadOption("--fonts-source") ?? Path.Combine(root, "reference", "resource", "fonts-source");
+var driverSource = Path.Combine(root, "reference", "driver", "driver-pkg");
 var assetsRoot = Path.Combine(root, "UotanStudio.Assets", "Assets");
 var driversTarget = Path.Combine(assetsRoot, "drivers");
 

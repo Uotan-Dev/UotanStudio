@@ -21,7 +21,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>文档视图模型，承载文档编辑器的文本内容、语法语言、文件路径与脏状态，
 /// 并支持二进制文件的 16 进制查看与固件结构分析。</para>
 /// </summary>
-public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocument, ISearchableDocument
+public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocument, ISearchableDocument, IHexSearchMatchLocator
 {
     static FileViewModel()
     {
@@ -46,6 +46,13 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
     /// </summary>
     [ObservableProperty]
     private byte[]? _rawBytes;
+
+    private byte[]? _hexSearchSource;
+    private HexSearchSnapshot? _hexSearchSnapshot;
+
+    internal event Action<int, int>? HexSearchMatchLocated;
+
+    partial void OnRawBytesChanged(byte[]? value) => InvalidateHexSearchSnapshot();
 
     /// <summary>
     /// The text content of the editor.
@@ -118,6 +125,12 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
     /// </summary>
     [ObservableProperty]
     private bool _isBinary;
+
+    partial void OnIsBinaryChanged(bool value)
+    {
+        InvalidateHexSearchSnapshot();
+        OnPropertyChanged(nameof(ISearchableDocument.SupportsSearchReplacement));
+    }
 
     /// <summary>
     /// The open mode of the document; supplied by open-mode requests, controlling the chosen view.
@@ -532,7 +545,37 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
     /// Marks the document as modified; invoked by the hex viewer's byte-edit event.
     /// <para>标记文档为已修改；由 16 进制查看器的字节编辑事件调用。</para>
     /// </summary>
-    public void MarkModifiedByHexEdit() => IsDirty = true;
+    public void MarkModifiedByHexEdit()
+    {
+        IsDirty = true;
+        InvalidateHexSearchSnapshot();
+    }
+
+    private HexSearchSnapshot? EnsureHexSearchSnapshot()
+    {
+        if (!IsBinary || RawBytes is null)
+        {
+            _hexSearchSource = null;
+            _hexSearchSnapshot = null;
+            return null;
+        }
+
+        if (_hexSearchSnapshot is not null && ReferenceEquals(_hexSearchSource, RawBytes))
+        {
+            return _hexSearchSnapshot;
+        }
+
+        _hexSearchSource = RawBytes;
+        _hexSearchSnapshot = HexSearchText.Build(RawBytes);
+        return _hexSearchSnapshot;
+    }
+
+    private void InvalidateHexSearchSnapshot()
+    {
+        _hexSearchSource = null;
+        _hexSearchSnapshot = null;
+        OnPropertyChanged(nameof(ISearchableDocument.SearchText));
+    }
 
     /// <summary>
     /// TextEditor reference set by FileView on load, used to support clipboard operations.
@@ -541,7 +584,7 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
     internal AvaloniaEdit.TextEditor? Editor { get; set; }
 
     /// <inheritdoc/>
-    string? ISearchableDocument.SearchText => IsBinary ? null : Text;
+    string? ISearchableDocument.SearchText => IsBinary ? EnsureHexSearchSnapshot()?.Text : Text;
 
     /// <inheritdoc/>
     string? ISearchableDocument.FilePath => FilePath;
@@ -554,6 +597,18 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
 
     /// <inheritdoc/>
     void ISearchableDocument.ApplySearchText(string text) => Text = text;
+
+    /// <inheritdoc/>
+    bool IHexSearchMatchLocator.TryRevealSearchMatch(int offset, int length)
+    {
+        if (EnsureHexSearchSnapshot() is not { } snapshot)
+        {
+            return false;
+        }
+
+        HexSearchMatchLocated?.Invoke(HexSearchText.ByteOffset(snapshot, offset), length);
+        return true;
+    }
 
     /// <inheritdoc/>
     public void Cut() => Editor?.Cut();

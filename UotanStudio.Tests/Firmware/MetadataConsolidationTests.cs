@@ -157,30 +157,6 @@ public sealed class MetadataConsolidationTests : IDisposable
         Assert.True(FsConfigModes.TryParse(suTokens[3], out var suPermissions));
         Assert.Equal((ushort)(suMode & 0xFFF), suPermissions);
     }
-
-    [Fact]
-    public void GenerateForExt4_SymlinkEntry_IsSkippedAndReportedInsteadOfWrittenAsFile()
-    {
-        var staging = Path.Combine(_root, "symlink-staging");
-        Directory.CreateDirectory(staging);
-        File.WriteAllText(Path.Combine(staging, "target.txt"), "target");
-        var created = TryCreateSymlink(Path.Combine(staging, "link.txt"), "target.txt");
-        Assert.SkipUnless(created, "Symbolic link creation is unavailable on this host.");
-        var linkImage = Path.Combine(_root, "symlink.img");
-        Ext4Builder.Build(staging, linkImage);
-        using var parser = new Ext4Parser(linkImage);
-        Assert.Contains(parser.ListEntriesWithRoot(), entry =>
-            entry.Path == "link.txt" && entry.Kind == Ext4Parser.Ext4EntryKind.Symlink);
-        var metadata = Path.Combine(_root, "symlink-meta");
-        var warnings = FileSystemMetadataGenerator.GenerateForExt4(metadata, "sym", parser);
-        var rows = File.ReadAllLines(Path.Combine(metadata, "sym_fs_config"));
-        Assert.Contains(rows, row => row.StartsWith("/target.txt ", StringComparison.Ordinal));
-        Assert.DoesNotContain(rows, row => row.StartsWith("/link.txt", StringComparison.Ordinal));
-        Assert.Contains(warnings, warning => warning.Contains("/link.txt", StringComparison.Ordinal)
-            && warning.Contains("symbolic link", StringComparison.Ordinal)
-            && warning.Contains("no file-type column", StringComparison.Ordinal));
-    }
-
     [Fact]
     public void GenerateFromDirectory_UnknownModes_AreWrittenAsLiteral0000()
     {

@@ -245,13 +245,13 @@ public class FirmwareArchitectureGuardTests
     {
         if (!FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var repositoryRoot))
         {
-            Assert.Skip($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the firmware source tree is unavailable to this test host.");
+            Assert.Fail($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the firmware source tree is unavailable to this test host.");
         }
 
         var firmwareDirectory = Path.Combine(repositoryRoot!, "UotanStudio.Firmware");
         if (!Directory.Exists(firmwareDirectory))
         {
-            Assert.Skip($"Firmware source directory '{firmwareDirectory}' is missing; the library was not checked out next to the solution.");
+            Assert.Fail($"Firmware source directory '{firmwareDirectory}' is missing; the library was not checked out next to the solution.");
         }
 
         return firmwareDirectory;

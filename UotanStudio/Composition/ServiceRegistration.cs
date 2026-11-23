@@ -5,7 +5,6 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Mcp;
-using UotanStudio.Services.NativeBin;
 using UotanStudio.Services.Network;
 using UotanStudio.Services.PatchPackages;
 using UotanStudio.Services.Projects;
@@ -50,10 +49,12 @@ internal static class ServiceRegistration
     /// <param name="services">The collection receiving the registrations. <para>接收注册的服务集合。</para></param>
     /// <param name="monitor">The device monitor owned by the composition root. <para>由组合根持有的设备监视器。</para></param>
     /// <param name="windowService">The window service supplied to view models. <para>提供给视图模型的窗口服务。</para></param>
+    /// <param name="deferredMonitor">Factory used when no instance is supplied; it runs on the first resolution so the desktop can scan after the splash appears.
+    /// <para>未提供实例时使用的工厂；它在首次解析时运行，使桌面能在启动窗出现后再扫描。</para></param>
     /// <returns>The same collection, for chaining. <para>同一个服务集合，便于链式调用。</para></returns>
-    /// <exception cref="ArgumentNullException">Any argument is null. <para>任一参数为 null。</para></exception>
+    /// <exception cref="ArgumentNullException">Any required argument is null. <para>任一必需参数为 null。</para></exception>
     internal static IServiceCollection Register(IServiceCollection services,
-        DeviceMonitorService? monitor, IWindowService windowService)
+        DeviceMonitorService? monitor, IWindowService windowService, Func<DeviceMonitorService>? deferredMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(windowService);
@@ -79,6 +80,10 @@ internal static class ServiceRegistration
         if (monitor is not null)
         {
             services.AddSingleton<DeviceMonitorService>(_ => monitor);
+        }
+        else if (deferredMonitor is not null)
+        {
+            services.AddSingleton<DeviceMonitorService>(_ => deferredMonitor());
         }
         services.AddSingleton<IWindowService>(_ => windowService);
         services.AddSingleton<HttpClient>(_ => SharedHttpClient.Shared);

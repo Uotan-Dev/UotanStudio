@@ -88,6 +88,28 @@ public static class SprdPacLoaders
         return ParseScheme(image).Steps;
     }
 
+    /// <summary>
+    /// Resolves the official flashing sequence together with the storage medium the package declares, from the same
+    /// single parse of the <c>BMAConfig</c> document.
+    /// <para>从对 <c>BMAConfig</c> 文档的同一次解析中，同时解析官方刷写序列与包声明的存储介质。</para>
+    /// </summary>
+    /// <param name="image">The opened PAC package. <para>已打开的 PAC 包。</para></param>
+    /// <returns>The steps in declaration order and the <c>Product/FlashTypeID</c> value the scheme declares, or
+    /// <c>0</c> when it declares none, which the official XML header documents as Nor flash.
+    /// <para>按声明顺序的步骤，以及 scheme 声明的 <c>Product/FlashTypeID</c> 值；未声明时为 <c>0</c>，官方 XML 头注释
+    /// 将其记为 Nor flash。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="image"/> is <see langword="null"/>.
+    /// <para><paramref name="image"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The package carries no usable <c>BMAConfig</c> scheme, a step names an
+    /// identifier twice, or a payload step has no matching package entry.
+    /// <para>包内没有可用的 <c>BMAConfig</c> scheme、某步骤重复声明标识，或某个负载步骤在包内没有匹配条目。</para></exception>
+    public static SprdPacSchemeLayout ResolveLayout(PacImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        var scheme = ParseScheme(image);
+        return new SprdPacSchemeLayout(scheme.Steps, scheme.FlashType, scheme.Partitions);
+    }
+
     private static SprdPacScheme ParseScheme(PacImage image)
     {
         var candidates = image.Entries
@@ -155,7 +177,9 @@ public static class SprdPacLoaders
                 parsed = new SprdPacScheme(
                     Address(first[0]),
                     Address(second[0]),
-                    BuildSteps(image, files, candidate.Name));
+                    BuildSteps(image, files, candidate.Name),
+                    FlashTypeOf(document, image.ProductName),
+                    PartitionsOf(document, image.ProductName));
                 break;
             }
 
@@ -172,6 +196,153 @@ public static class SprdPacLoaders
 
         return parsed ?? throw new InvalidDataException(
             "No BMAConfig scheme in the PAC package declares the FDL loader addresses.");
+    }
+
+    /// <summary>
+    /// Reads the partition table the product declares and derives each partition's offset by accumulating the declared
+    /// sizes in declaration order, which is the layout the official tool rebuilds from this table. The table carries no
+    /// offset field — <c>Partition</c> has only <c>id</c> and <c>size</c> — so the accumulation is the only way to
+    /// express a position from package data alone; a size of <c>0xFFFFFFFF</c> or <c>-1</c> means "the rest of the
+    /// device", whose end only the device itself knows, so that partition and everything after it get no derivable end.
+    /// <para>读取产品声明的分区表，并按声明顺序累加声明大小推导每个分区的偏移，这正是官方工具据以重建的布局。该表没有
+    /// 偏移字段——<c>Partition</c> 只有 <c>id</c> 与 <c>size</c>——因此累加是仅凭包内数据表达位置的唯一方式；
+    /// <c>0xFFFFFFFF</c> 或 <c>-1</c> 表示「设备剩余空间」，其终点只有设备自己知道，因此该分区及其之后的分区没有可
+    /// 推导的终点。</para>
+    /// </summary>
+    /// <param name="document">The parsed <c>BMAConfig</c> document. <para>已解析的 <c>BMAConfig</c> 文档。</para></param>
+    /// <param name="productName">The product the package names. <para>包所命名的产品。</para></param>
+    /// <returns>The declared partitions in order, each with its derived offset in bytes; empty when the package
+    /// declares no table. <para>按顺序声明的分区，各带推导出的字节偏移；包未声明该表时为空。</para></returns>
+    private static IReadOnlyList<SprdPacPartition> PartitionsOf(XDocument document, string productName)
+    {
+        var productLists = document.Root?.Elements("ProductList").ToArray() ?? [];
+        if (productLists.Length != 1)
+        {
+            return [];
+        }
+
+        var declared = productLists[0].Elements("Product").ToArray();
+        var products = declared
+            .Where(product => string.Equals(
+                (string?)product.Attribute("name"), productName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (products.Length != 1 && declared.Length == 1)
+        {
+            products = declared;
+        }
+
+        if (products.Length != 1)
+        {
+            return [];
+        }
+
+        var tables = products[0].Elements("Partitions").ToArray();
+        if (tables.Length != 1)
+        {
+            return [];
+        }
+
+        var unit = PartitionUnitBytes(tables[0]);
+        List<SprdPacPartition> partitions = [];
+        long offset = 0;
+        var unbounded = false;
+        foreach (var element in tables[0].Elements("Partition"))
+        {
+            var id = ((string?)element.Attribute("id"))?.Trim() ?? string.Empty;
+            if (id.Length == 0)
+            {
+                continue;
+            }
+
+            var raw = ((string?)element.Attribute("size"))?.Trim() ?? string.Empty;
+            var fill = raw.Equals("0xFFFFFFFF", StringComparison.OrdinalIgnoreCase) ||
+                raw.Equals("-1", StringComparison.Ordinal);
+            var size = fill ? 0 : ParsePartitionSize(raw) * unit;
+            partitions.Add(new SprdPacPartition(id, unbounded || fill ? null : offset, size, fill));
+            if (fill)
+            {
+                unbounded = true;
+                continue;
+            }
+
+            offset = unchecked(offset + size);
+        }
+
+        return partitions.AsReadOnly();
+    }
+
+    private static long PartitionUnitBytes(XElement table)
+    {
+        var values = table.Attribute("unit");
+        if (values is null || !int.TryParse(values.Value.Trim(), NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture, out var unit))
+        {
+            return 1024 * 1024;
+        }
+
+        return unit switch
+        {
+            0 => 1024 * 1024,
+            1 => 512 * 1024,
+            2 => 1024,
+            _ => 1
+        };
+    }
+
+    private static long ParsePartitionSize(string raw)
+    {
+        if (raw.Length is < 1 or > 18)
+        {
+            return 0;
+        }
+
+        var hex = raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        return long.TryParse(hex ? raw[2..] : raw,
+            hex ? NumberStyles.AllowHexSpecifier : NumberStyles.None,
+            CultureInfo.InvariantCulture, out var size)
+            ? size
+            : 0;
+    }
+
+    private static int FlashTypeOf(XDocument document, string productName)
+    {
+        var productLists = document.Root?.Elements("ProductList").ToArray() ?? [];
+        if (productLists.Length != 1)
+        {
+            return 0;
+        }
+
+        var declared = productLists[0].Elements("Product").ToArray();
+
+        // The product named by the package header is the one the official tool reads, but a package whose name matches
+        // no product entry still declares exactly one medium through its single product element, so that value is used
+        // instead of reporting an unknown medium.
+        // 官方工具读取由包头命名的产品；但包名匹配不到产品条目时，其唯一的产品元素仍然声明了一个介质，因此用该值而
+        // 不是上报未知介质。
+        var products = declared
+            .Where(product => string.Equals(
+                (string?)product.Attribute("name"), productName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (products.Length != 1 && declared.Length == 1)
+        {
+            products = declared;
+        }
+
+        if (products.Length != 1)
+        {
+            return 0;
+        }
+
+        var values = products[0].Elements("FlashTypeID").ToArray();
+        if (values.Length != 1 || values[0].HasElements)
+        {
+            return 0;
+        }
+
+        return int.TryParse(values[0].Value.Trim(), NumberStyles.AllowLeadingSign,
+            CultureInfo.InvariantCulture, out var flashType)
+            ? flashType
+            : 0;
     }
 
     private static IEnumerable<XElement> schemesForProduct(XDocument document, string productName, string candidateName)
@@ -254,15 +425,12 @@ public static class SprdPacLoaders
 
             var partition = BlockIdentifier(file);
             var operation = OperationType(file);
-            if (carriesPayload)
-            {
-                var payload = UniquePayload(image, identifier);
-                steps.Add(new SprdPacSchemeStep(identifier, partition, payload, mandatory, operation));
-            }
-            else
-            {
-                steps.Add(new SprdPacSchemeStep(identifier, partition, null, mandatory, operation));
-            }
+            var alias = IdentifierAlias(file);
+            var blockBase = BlockValue(file, "Base");
+            var blockSize = BlockValue(file, "Size");
+            var payload = carriesPayload ? UniquePayload(image, identifier) : null;
+            steps.Add(new SprdPacSchemeStep(
+                identifier, partition, payload, mandatory, operation, alias, blockBase, blockSize));
         }
 
         return steps.AsReadOnly();
@@ -351,6 +519,40 @@ public static class SprdPacLoaders
 
         var target = blocks[0].Attribute("id");
         return target is null ? string.Empty : target.Value.Trim();
+    }
+
+    private static long BlockValue(XElement file, string name)
+    {
+        var blocks = file.Elements("Block").ToArray();
+        if (blocks.Length != 1)
+        {
+            return 0;
+        }
+
+        var values = blocks[0].Elements(name).ToArray();
+        if (values.Length != 1 || values[0].HasElements)
+        {
+            return 0;
+        }
+
+        var value = values[0].Value.Trim();
+        if (value.Length is < 1 or > 18)
+        {
+            return 0;
+        }
+
+        var hex = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        return long.TryParse(hex ? value[2..] : value,
+            hex ? NumberStyles.AllowHexSpecifier : NumberStyles.None,
+            CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
+    }
+
+    private static string IdentifierAlias(XElement file)
+    {
+        var aliases = file.Elements("IDAlias").ToArray();
+        return aliases.Length == 1 && !aliases[0].HasElements ? aliases[0].Value.Trim() : string.Empty;
     }
 
     private static PacEntry UniqueById(PacImage image, params string[] identifiers)
@@ -483,13 +685,36 @@ public sealed class SprdPacLoaderSet(
 /// <param name="operation">The scheme <c>Type</c> of the step, such as <c>EraseFlash2</c> or <c>CODE2</c>, or an empty
 /// string when the scheme declares none. <para>该步骤的 scheme <c>Type</c>，例如 <c>EraseFlash2</c> 或 <c>CODE2</c>；
 /// scheme 未声明时为<see cref="string.Empty"/>。</para></param>
+/// <param name="alias">The scheme <c>IDAlias</c>, which is the label the official product list shows, or an empty
+/// string when the scheme declares none. <para>scheme 的 <c>IDAlias</c>，即官方产品列表显示的标签；scheme 未声明时
+/// 为空字符串。</para></param>
+/// <param name="blockBase">The <c>Block/Base</c> offset the scheme declares, or <c>0</c> when it declares none.
+/// <para>scheme 声明的 <c>Block/Base</c> 偏移；未声明时为 <c>0</c>。</para></param>
+/// <param name="blockSize">The <c>Block/Size</c> the scheme declares, or <c>0</c> when it declares none or declares
+/// <c>0x0</c>. <para>scheme 声明的 <c>Block/Size</c>；未声明或声明为 <c>0x0</c> 时为 <c>0</c>。</para></param>
 public sealed class SprdPacSchemeStep(
     string identifier,
     string partition,
     PacEntry? entry,
     bool mandatory,
-    string operation)
+    string operation,
+    string alias = "",
+    long blockBase = 0,
+    long blockSize = 0)
 {
+    /// <summary>Gets the scheme <c>IDAlias</c> of the step, which is the label the official product list shows, or an
+    /// empty string when the scheme declares none. <para>获取该步骤的 scheme <c>IDAlias</c>，即官方产品列表显示的标签；
+    /// scheme 未声明时为空字符串。</para></summary>
+    public string Alias { get; } = alias;
+
+    /// <summary>Gets the <c>Block/Base</c> the scheme declares for this step, or <c>0</c> when it declares none.
+    /// <para>获取 scheme 为该步骤声明的 <c>Block/Base</c>；未声明时为 <c>0</c>。</para></summary>
+    public long BlockBase { get; } = blockBase;
+
+    /// <summary>Gets the <c>Block/Size</c> the scheme declares for this step, or <c>0</c> when it declares none.
+    /// <para>获取 scheme 为该步骤声明的 <c>Block/Size</c>；未声明时为 <c>0</c>。</para></summary>
+    public long BlockSize { get; } = blockSize;
+
     /// <summary>Gets the scheme identifier of the step. <para>获取该步骤的 scheme 标识。</para></summary>
     public string Identifier { get; } = identifier;
 
@@ -530,11 +755,64 @@ public sealed class SprdPacSchemeStep(
 /// <para>一个 PAC 包解析出的 scheme：两级加载器地址与官方刷写序列，由对 <c>BMAConfig</c> 文档的单次解析产出，
 /// 因此加载器与该序列不可能互相矛盾。</para>
 /// </summary>
-internal sealed class SprdPacScheme(uint first, uint second, IReadOnlyList<SprdPacSchemeStep> steps)
+internal sealed class SprdPacScheme(
+    uint first,
+    uint second,
+    IReadOnlyList<SprdPacSchemeStep> steps,
+    int flashType = 0,
+    IReadOnlyList<SprdPacPartition>? partitions = null)
 {
     internal uint First { get; } = first;
 
     internal uint Second { get; } = second;
 
     internal IReadOnlyList<SprdPacSchemeStep> Steps { get; } = steps;
+
+    internal int FlashType { get; } = flashType;
+
+    internal IReadOnlyList<SprdPacPartition> Partitions { get; } = partitions ?? [];
 }
+/// <summary>
+/// The layout one PAC scheme declares for the main grid: the official flashing sequence plus the storage medium the
+/// product entry names.
+/// <para>一份 PAC scheme 为主网格声明的布局：官方刷写序列，以及产品条目给出的存储介质。</para>
+/// </summary>
+/// <param name="steps">The scheme steps in declaration order, excluding the two loader roles.
+/// <para>按声明顺序的 scheme 步骤，不含两级加载器角色。</para></param>
+/// <param name="flashType">The declared <c>FlashTypeID</c>; <c>0</c> is Nor flash and <c>1</c> is Nand flash per the
+/// official XML header, and any other value is reported as declared without interpretation.
+/// <para>声明的 <c>FlashTypeID</c>；按官方 XML 头注释 <c>0</c> 为 Nor flash、<c>1</c> 为 Nand flash，其它取值按原样上报
+/// 而不作解释。</para></param>
+/// <param name="partitions">The partitions the product declares in order, each with the offset derived from the
+/// declared sizes, or <see langword="null"/> when the package declares no table.
+/// <para>产品按顺序声明的分区，各带按声明大小推导出的偏移；包未声明该表时为 <see langword="null"/>。</para></param>
+public sealed class SprdPacSchemeLayout(
+    IReadOnlyList<SprdPacSchemeStep> steps,
+    int flashType,
+    IReadOnlyList<SprdPacPartition>? partitions = null)
+{
+    /// <summary>Gets the partitions the product declares, in declaration order, each carrying the offset derived by
+    /// accumulating the declared sizes; empty when the package declares no partition table.
+    /// <para>获取产品声明的分区，按声明顺序排列，各带按声明大小累加推导出的偏移；包未声明分区表时为空。</para></summary>
+    public IReadOnlyList<SprdPacPartition> Partitions { get; } = partitions ?? [];
+
+    /// <summary>Gets the scheme steps in declaration order. <para>获取按声明顺序的 scheme 步骤。</para></summary>
+    public IReadOnlyList<SprdPacSchemeStep> Steps { get; } = steps;
+
+    /// <summary>Gets the declared <c>FlashTypeID</c> value. <para>获取声明的 <c>FlashTypeID</c> 值。</para></summary>
+    public int FlashType { get; } = flashType;
+}
+/// <summary>
+/// One partition of the table a PAC product declares: its identifier, the size the package states, and the offset
+/// derived by accumulating the sizes declared before it.
+/// <para>PAC 产品声明的一个分区：标识、包声明的大小，以及累加此前声明大小得到的偏移。</para>
+/// </summary>
+/// <param name="id">The partition identifier. <para>分区标识。</para></param>
+/// <param name="offset">The derived byte offset, or <see langword="null"/> when a preceding partition declared
+/// "the rest of the device" so no position can be derived from package data. <para>推导出的字节偏移；当某个前置分区声明
+/// 了「设备剩余空间」而无法仅凭包内数据推导位置时为 <see langword="null"/>。</para></param>
+/// <param name="size">The declared size in bytes, or <c>0</c> for the partition that fills the rest of the device.
+/// <para>声明的字节大小；占满设备剩余空间的分区为 <c>0</c>。</para></param>
+/// <param name="fillsRemainingSpace">Whether the package declares this partition as the rest of the device through
+/// <c>0xFFFFFFFF</c> or <c>-1</c>. <para>包是否以 <c>0xFFFFFFFF</c> 或 <c>-1</c> 把该分区声明为设备剩余空间。</para></param>
+public sealed record SprdPacPartition(string id, long? offset, long size, bool fillsRemainingSpace);

@@ -699,6 +699,9 @@
   <data name="Flash_PartitionsLoaded" xml:space="preserve">
     <value>个设备分区已加载</value>
   </data>
+  <data name="Flash_UnisocRemainingSpace" xml:space="preserve">
+    <value>设备剩余空间</value>
+  </data>
   <data name="Flash_SwitchSlot" xml:space="preserve">
     <value>切换槽位</value>
   </data>
@@ -2085,6 +2088,9 @@
   <data name="Explorer_OpenAsApk" xml:space="preserve">
     <value>以 APK 打开</value>
   </data>
+  <data name="Explorer_OpenAsApplication" xml:space="preserve">
+    <value>以应用信息打开</value>
+  </data>
   <data name="Explorer_OpenAsFirmware" xml:space="preserve">
     <value>在固件信息中打开</value>
   </data>
@@ -2306,7 +2312,7 @@
     <value>正在加载文件，请稍候…</value>
   </data>
   <data name="Dock_Apk_Busy" xml:space="preserve">
-    <value>正在分析 APK，请稍候…</value>
+    <value>正在分析应用，请稍候…</value>
   </data>
   <data name="FirmwareInfo_Title" xml:space="preserve">
     <value>固件信息</value>

@@ -1,6 +1,9 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
+using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.DeviceTree.Dt;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -173,6 +176,32 @@ public class AvbFooterVerificationTests
             Assert.Contains("AvbResignOptions", result.Summary, StringComparison.Ordinal);
             Assert.Contains("AvbFooterEditor", result.Summary, StringComparison.Ordinal);
             Assert.False(File.Exists(outputPath));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FormatDetector_DtboWithAvbFooter_DetectsDeviceTree()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "uotan-avb-dtbo-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var image = new byte[64 + AvbVBMetaImageHeader.Size + AvbFooter.Size];
+            BinaryPrimitives.WriteUInt32BigEndian(image, FdtConstants.DtboMagic);
+            var footer = BuildFooterImage(BuildVbmeta(algorithm: 0))[^AvbFooter.Size..];
+            footer.CopyTo(image, image.Length - AvbFooter.Size);
+            var path = Path.Combine(root, "dtbo.img");
+            File.WriteAllBytes(path, image);
+            FirmwareFormatRegistry.RegisterAll();
+
+            var detection = FormatDetector.DetectDetailed(path);
+
+            Assert.NotNull(detection);
+            Assert.Equal("Device Tree (DTB/DTBO)", detection.Handler.FormatName);
         }
         finally
         {

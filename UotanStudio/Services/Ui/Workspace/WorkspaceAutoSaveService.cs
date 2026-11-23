@@ -7,6 +7,7 @@ using Dock.Model.Core;
 using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
@@ -46,6 +47,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     /// <para>上次会话快照的轻量签名；无变化时跳过整轮 DTO 构建与序列化。</para>
     /// </summary>
     private string? _lastSessionSignature;
+    private Task? _deferredRestore;
 
     /// <summary>
     /// Computes a lightweight change signature of the session state: document paths, dock proportions
@@ -68,6 +70,9 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         foreach (var dock in WorkspaceSessionCapture.Docks(_workspace.Layout))
             sb.Append(dock.Id).Append(':').Append(dock.Proportion?.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-")
               .Append(':').Append(dock.ActiveId ?? "-").Append(';');
+        if (WorkspaceSessionCapture.ActiveWindow(_workspace.Layout, documents) is { } activeWindow)
+            sb.Append("a:").Append(activeWindow.Kind).Append(':').Append(activeWindow.Identity)
+              .Append(':').Append(activeWindow.DockId ?? "-").Append(';');
         foreach (var panel in WorkspacePanelService.Instance.CaptureVisibility().OrderBy(p => p.Key, StringComparer.Ordinal))
             sb.Append("p:").Append(panel.Key).Append('=').Append(panel.Value ? '1' : '0').Append(';');
         if (_mainWindow is { } window)
@@ -85,6 +90,37 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 .Append(':').Append(nodes.ShowMinimap ? '1' : '0');
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Chooses which saved windows are brought back at startup. An explicit launch document suppresses session
+    /// restore; otherwise a matching project restores everything, and any other case restores only windows that
+    /// survive project switches (log, QCN, compare and screen mirror) so they do not depend on the last project.
+    /// <para>选择启动时要恢复的窗口。存在显式启动文档时跳过会话恢复；匹配工程时恢复全部窗口；其余情况只恢复
+    /// 不随工程切换关闭的窗口（日志、QCN、对比与投屏），使它们不再依赖上次打开的工程。</para>
+    /// </summary>
+    /// <param name="savedDocuments">Documents from the session snapshot. <para>会话快照中的文档。</para></param>
+    /// <param name="currentProjectPath">Project already open at startup. <para>启动时已经打开的工程。</para></param>
+    /// <param name="savedProjectPath">Project recorded in the snapshot. <para>快照中记录的工程。</para></param>
+    /// <param name="hasStartupDocuments">Whether a launch document already populated the workspace.
+    /// <para>启动文档是否已经填充了工作区。</para></param>
+    /// <returns>The descriptors to restore, or <see langword="null"/> when none apply.
+    /// <para>要恢复的描述符；无需恢复时为 <see langword="null"/>。</para></returns>
+    internal static List<OpenDocumentDto>? SelectDocumentsForRestore(
+        IReadOnlyList<OpenDocumentDto> savedDocuments,
+        string? currentProjectPath,
+        string? savedProjectPath,
+        bool hasStartupDocuments)
+    {
+        if (hasStartupDocuments) return null;
+        var projectMatches = currentProjectPath is not null && string.Equals(currentProjectPath, savedProjectPath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        if (projectMatches) return [.. savedDocuments];
+
+        var sessionOnly = savedDocuments
+            .Where(d => DocumentOpenRegistry.ByKind(d.Kind) is { IsDocument: false })
+            .ToList();
+        return sessionOnly.Count > 0 ? sessionOnly : null;
     }
 
     internal Task InitializeAsync() => _disposed ? Task.CompletedTask : _initialization ??= RestoreAsync();
@@ -108,9 +144,24 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 if (snapshot is { Version: 1, Documents: not null, Panels: not null, Docks: not null })
                 {
                     var hasStartupDocuments = WorkspaceSessionCapture.Documents(_workspace.Layout, null).Count > 0;
-                    if (_projects.CurrentProjectPath is not null && !hasStartupDocuments && string.Equals(_projects.CurrentProjectPath, snapshot.ProjectPath,
-                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                        await _workspace.RestoreDocumentsAsync(snapshot.Documents, string.Empty);
+                    var documentsToRestore = SelectDocumentsForRestore(
+                        snapshot.Documents, _projects.CurrentProjectPath, snapshot.ProjectPath, hasStartupDocuments);
+                    if (documentsToRestore is { Count: > 0 })
+                    {
+                        var activeWindow = snapshot.ActiveWindow;
+                        var foregroundIsDock = string.Equals(activeWindow?.Kind, "Dock", StringComparison.Ordinal);
+                        var activeDescriptor = activeWindow is null ? null : DocumentOpenRegistry.ByKind(activeWindow.Kind);
+                        var identityComparison = activeDescriptor?.PathIsIdentifier == true
+                            ? StringComparison.Ordinal
+                            : OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                        var preferred = activeWindow is { Kind: { Length: > 0 } } && !foregroundIsDock
+                            && documentsToRestore.Any(d => string.Equals(d.RelativePath, activeWindow.Identity, identityComparison))
+                            ? activeWindow.Identity
+                            : null;
+                        await _workspace.RestoreDocumentsAsync(documentsToRestore, string.Empty, preferred,
+                            restoreForegroundDocument: !foregroundIsDock);
+                        _deferredRestore = _workspace.BackgroundRestore;
+                    }
                     if (_projects.CurrentProjectPath is null)
                         WorkspacePanelService.Instance.RestoreVisibility(snapshot.Panels);
                     if (_projects.NodeEditorVM is { } nodes)
@@ -132,6 +183,11 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                             && dock.VisibleDockables?.FirstOrDefault(d => d.Id == state.ActiveId) is { } active)
                             dock.ActiveDockable = active;
                     }
+                    if (snapshot.ActiveWindow is { } foreground)
+                    {
+                        _workspace.ActivateWindow(foreground.Kind, foreground.Identity, foreground.DockId);
+                        _workspace.UpdateDeferredRestoreForeground();
+                    }
                 }
             }
         }
@@ -144,6 +200,29 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (resetPlacement && _mainWindow is { } window)
         {
             _ = ShowPlacementResetNoticeAsync(window);
+        }
+    }
+
+    /// <summary>
+    /// Waits for the deferred background document restore to finish so a save captures the fully restored layout
+    /// instead of a partially populated one.
+    /// <para>等待后台延迟文档还原完成，使保存捕获完整还原后的布局，而不是只捕获了部分窗口的中间状态。</para>
+    /// </summary>
+    private async Task WaitForDeferredRestoreAsync()
+    {
+        var pending = _deferredRestore;
+        if (pending is null) return;
+        try
+        {
+            await pending;
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "AutoSave", $"Deferred restore wait failed: {ex.Message}");
+        }
+        finally
+        {
+            _deferredRestore = null;
         }
     }
 
@@ -253,6 +332,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (!_initialized || _projects.IsBusy) return;
         try
         {
+            await WaitForDeferredRestoreAsync();
             SaveWindowPlacement();
             var signature = ComputeSessionSignature();
             if (string.Equals(signature, _lastSessionSignature, StringComparison.Ordinal)) return;
@@ -263,7 +343,8 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 ProjectPath = _projects.CurrentProjectPath,
                 Panels = WorkspacePanelService.Instance.CaptureVisibility(),
                 Documents = documents,
-                Docks = WorkspaceSessionCapture.Docks(_workspace.Layout)
+                Docks = WorkspaceSessionCapture.Docks(_workspace.Layout),
+                ActiveWindow = WorkspaceSessionCapture.ActiveWindow(_workspace.Layout, documents)
             };
             if (_projects.NodeEditorVM is { } nodes)
             {

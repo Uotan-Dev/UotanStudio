@@ -495,9 +495,6 @@ Continue creating the project?</value>
   <data name="Plugin_Composite" xml:space="preserve">
     <value>Composite node</value>
   </data>
-  <data name="Plugin_Script" xml:space="preserve">
-    <value>Script node</value>
-  </data>
   <data name="Plugin_Enabled" xml:space="preserve">
     <value>Enabled</value>
   </data>
@@ -551,18 +548,6 @@ Continue creating the project?</value>
   </data>
   <data name="Plugin_GraphSaved" xml:space="preserve">
     <value>Composite-node graph saved</value>
-  </data>
-  <data name="Plugin_EditScript" xml:space="preserve">
-    <value>Edit Lua script</value>
-  </data>
-  <data name="Plugin_SaveScript" xml:space="preserve">
-    <value>Save plugin script</value>
-  </data>
-  <data name="Plugin_ExportScript" xml:space="preserve">
-    <value>Export Lua source…</value>
-  </data>
-  <data name="Plugin_ScriptSaved" xml:space="preserve">
-    <value>Script-node source saved</value>
   </data>
   <data name="Plugin_EditorUnavailable" xml:space="preserve">
     <value>The node editor is not available.</value>
@@ -963,8 +948,8 @@ Continue creating the project?</value>
   <data name="About_Project_IrihiLingua" xml:space="preserve">
     <value>Source generator turning resx files into strongly typed locale managers (build-time only, not shipped).</value>
   </data>
-  <data name="About_Project_LuaCSharp" xml:space="preserve">
-    <value>Lua interpreter and C# interop (script runtime for visual plugins).</value>
+  <data name="About_Project_Jint" xml:space="preserve">
+    <value>Managed ECMAScript interpreter used by the sandboxed script engine (no native runtime).</value>
   </data>
   <data name="About_Project_QrCoder" xml:space="preserve">
     <value>QR code generation library (wireless debugging pairing codes, managed PNG output).</value>

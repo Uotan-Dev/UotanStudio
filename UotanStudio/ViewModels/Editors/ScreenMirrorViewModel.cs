@@ -47,6 +47,14 @@ public partial class ScreenMirrorViewModel : Document, ITool
 
     private MirrorSessionFacade? _client;
     private DetectedDevice? _mirrorDevice;
+
+    /// <summary>
+    /// Stable device key of this mirror slot, persisted as the session identity so the tab can be restored.
+    /// Empty for the untargeted document.
+    /// <para>本投屏槽位的稳定设备键，作为会话标识持久化以便还原标签；无目标文档时为空。</para>
+    /// </summary>
+    [ObservableProperty] private string _deviceKey = string.Empty;
+
     private long _lastInputInjectionProbeTicks;
     private int _inputInjectionRecheckPending;
     private int _starting;

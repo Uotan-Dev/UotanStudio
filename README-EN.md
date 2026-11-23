@@ -127,9 +127,9 @@ Device-side capabilities surface in the device panel, USB tree view, device log,
 - Dock workspace: project explorer, packaging settings, properties, output and device logs, terminal, image management, all dockable and detachable
 - Editors: hex, text/log, file manager, APK, ARSC, DEX, DTB, ELF, QCN, partition, manifest, firmware info, Qualcomm image
 - Tool windows: flash, file and folder compare, checksum, key manager, APK signer, boot patch, plugin manager
-- Visual programming: node canvas, workflow templates, composite nodes, Lua script nodes, plugin package import and enable/disable
+- Visual programming: node canvas, workflow templates, composite nodes, plugin package import and enable/disable
 - MCP: `--mcp-headless` runs the stdio server without a GUI, `--mcp` starts the companion server next to the GUI, `--mcp-root <dir>` restricts the path sandbox, `--allow-flash` explicitly enables flashing; the settings page can expose Streamable HTTP on `127.0.0.1` only
-- Command line: `--managed-device-shell <Adb|Hdc> <serial>` runs an interactive shell through the existing server channel; passing file paths opens them through the registered file associations
+- Command line: `--managed-device-shell <Adb|Hdc> <serial>` runs an interactive shell through the existing server channel; passing file paths opens the matching project or document, and a running instance receives them instead of starting a second window
 
 ## ⚙️ Development
 

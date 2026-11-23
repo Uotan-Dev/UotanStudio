@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Logging;
@@ -29,6 +30,7 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        var startupWatch = Stopwatch.StartNew();
         if (Services.Devices.UsbDriverElevatedCommand.IsRequested(args))
         {
             return Services.Devices.UsbDriverElevatedCommand.Run(args);
@@ -44,10 +46,17 @@ sealed class Program
             return global::UotanStudio.DD.Writing.FlashJobChild.Run(args);
         }
 
+        var migrationWatch = Stopwatch.StartNew();
         Services.AppPaths.MigrateLegacyLocations();
+        var migrationMilliseconds = migrationWatch.ElapsedMilliseconds;
         var settings = Services.SettingsPersistenceService.Instance.LoadSettings();
+        var settingsMilliseconds = migrationWatch.ElapsedMilliseconds - migrationMilliseconds;
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         LogService.Instance.ConfigureFileLogging(Services.AppPaths.Logs);
+        LogService.Instance.Write(LogLevel.Debug, "Startup",
+            $"[cold-start] Program.Main entry +{ProcessStartOffsetMilliseconds()} ms from process creation; " +
+            $"log ready {startupWatch.ElapsedMilliseconds} ms after entry " +
+            $"(migrate {migrationMilliseconds} ms, settings {settingsMilliseconds} ms).");
         AppDomain.CurrentDomain.ProcessExit += (_, _) => LogService.Instance.FlushFileLog();
 
         if (args is ["--managed-device-shell", var protocolName, var serial])
@@ -96,6 +105,17 @@ sealed class Program
             }
         }
 
+        if (Mcp.McpCliRunner.IsRequested(args))
+        {
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            return Mcp.McpCliRunner.RunAsync(args, cts.Token).GetAwaiter().GetResult();
+        }
+
         if (Mcp.McpLauncher.IsHeadlessRequested(args))
         {
             using var cts = new CancellationTokenSource();
@@ -136,8 +156,45 @@ sealed class Program
         }
 
         App.StartupFiles = [.. args.Where(File.Exists)];
-        BuildAvaloniaApp(settings).StartWithClassicDesktopLifetime(args);
+
+        // A plain GUI launch joins the running desktop instance: the first process owns the per-user lock and
+        // receives later launches over a named pipe, so double-clicking a file opens it in the existing window.
+        // Companion MCP launches keep their own process because they own the client's stdio channel.
+        // <para>普通 GUI 启动加入正在运行的桌面实例：首个进程持有按用户锁并经命名管道接收后续启动，
+        // 因此双击文件会打开到现有窗口。MCP 伴随模式保持独立进程，因为它独占客户端的 stdio 通道。</para>
+        if (!Mcp.McpLauncher.IsCompanionRequested(args))
+        {
+            var relay = Services.Launch.DesktopInstanceRelay.Start(App.StartupFiles, App.StartupScreenMirrorSerial);
+            if (relay is null)
+            {
+                return 0;
+            }
+
+            App.PrimaryInstanceRelay = relay;
+        }
+
+        var appBuilder = BuildAvaloniaApp(settings);
+        LogService.Instance.Write(LogLevel.Debug, "Startup",
+            $"[cold-start] Program.Main builder configured at {startupWatch.ElapsedMilliseconds} ms.");
+        appBuilder.StartWithClassicDesktopLifetime(args);
         return 0;
+    }
+
+    /// <summary>
+    /// Returns how long the process has existed before the entry point ran, or -1 when the platform does not
+    /// allow reading the creation time. Used only by the cold-start diagnostics.
+    /// <para>返回入口点运行前进程已存在的时间；平台不允许读取创建时间时返回 -1。仅供冷启动诊断使用。</para>
+    /// </summary>
+    private static long ProcessStartOffsetMilliseconds()
+    {
+        try
+        {
+            return (long)(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return -1;
+        }
     }
 
     /// <summary>

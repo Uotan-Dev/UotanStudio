@@ -45,7 +45,7 @@
         <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}" VerticalAlignment="Center">
           <Grid>
             <Image Source="{Binding IconBitmap}" Stretch="Uniform" IsVisible="{Binding HasIcon}" />
-            <TextBlock Text="APK" FontSize="28" FontWeight="Bold" Opacity="0.35" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <TextBlock Text="{DynamicResource Apk_Placeholder}" FontSize="28" FontWeight="Bold" Opacity="0.35" HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding HasIcon, Converter={x:Static BoolConverters.Not}}" />
           </Grid>
         </Border>
@@ -58,8 +58,9 @@
           <Button Content="{DynamicResource Apk_Extract}" MinWidth="72" Click="OnExtractClick" HorizontalContentAlignment="Center" />
           <Button Content="{DynamicResource Apk_View}" MinWidth="72" Click="OnViewClick" HorizontalContentAlignment="Center" />
           <Button Content="{DynamicResource Apk_Install}" MinWidth="72" Click="OnInstallClick"
-                  IsEnabled="{Binding CanInstall}" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_Sign}" MinWidth="72" Click="OnSignClick" HorizontalContentAlignment="Center" />
+                  IsEnabled="{Binding CanInstall}" IsVisible="{Binding IsAndroidApplication}" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_Sign}" MinWidth="72" Click="OnSignClick"
+                  IsVisible="{Binding IsAndroidApplication}" HorizontalContentAlignment="Center" />
         </StackPanel>
       </Grid>
     </Border>
@@ -67,32 +68,68 @@
     <TabControl Margin="16,0,16,16">
       <TabItem Header="{DynamicResource Apk_General}">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="4,12">
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="{DynamicResource Apk_Size}" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding SizeDisplay}" />
-            </controls:ResponsiveFormRow>
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="{DynamicResource Apk_TargetSystem}" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding TargetSystemDisplay}" />
-            </controls:ResponsiveFormRow>
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="{DynamicResource Apk_MinimumSystem}" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding MinimumSystemDisplay}" />
-            </controls:ResponsiveFormRow>
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="{DynamicResource Apk_SigningStatus}" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding SigningStateDisplay}" />
-            </controls:ResponsiveFormRow>
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="{DynamicResource Apk_HardeningStatus}" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding HardeningStateDisplay}" />
-            </controls:ResponsiveFormRow>
-            <controls:ResponsiveFormRow Classes="info-row">
-              <TextBlock Classes="field-label" Text="ABI" />
-              <SelectableTextBlock Classes="field-value" Text="{Binding AbiDisplay}" />
-            </controls:ResponsiveFormRow>
-          </StackPanel>
+          <Grid>
+            <StackPanel Margin="4,12" IsVisible="{Binding IsAndroidApplication}">
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_Size}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding SizeDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_TargetSystem}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding TargetSystemDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_MinimumSystem}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding MinimumSystemDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_SigningStatus}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding SigningStateDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HardeningStatus}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding HardeningStateDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="ABI" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding AbiDisplay}" />
+              </controls:ResponsiveFormRow>
+            </StackPanel>
+            <StackPanel Margin="4,12" IsVisible="{Binding IsHarmonyApplication}">
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_Size}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding SizeDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyTargetApi}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding TargetSystemDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyCompatibleApi}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding MinimumSystemDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_SigningStatus}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding SigningStateDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyVendor}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding HardeningStateDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyDeviceTypes}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding AbiDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyAbilities}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding HarmonyAbilitiesDisplay}" />
+              </controls:ResponsiveFormRow>
+              <controls:ResponsiveFormRow Classes="info-row">
+                <TextBlock Classes="field-label" Text="{DynamicResource Apk_HarmonyDetails}" />
+                <SelectableTextBlock Classes="field-value" Text="{Binding HarmonyDetailsDisplay}" />
+              </controls:ResponsiveFormRow>
+            </StackPanel>
+          </Grid>
         </ScrollViewer>
       </TabItem>
       <TabItem Header="{DynamicResource Apk_Permissions}">

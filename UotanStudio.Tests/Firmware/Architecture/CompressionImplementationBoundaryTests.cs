@@ -155,7 +155,7 @@ public class CompressionImplementationBoundaryTests
     {
         if (!FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var repositoryRoot) || repositoryRoot is null)
         {
-            Assert.Skip($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the layered source tree is unavailable to this test host.");
+            Assert.Fail($"No UotanStudio.slnx found above AppContext.BaseDirectory '{AppContext.BaseDirectory}'; the layered source tree is unavailable to this test host.");
         }
 
         return repositoryRoot!;
@@ -178,7 +178,7 @@ public class CompressionImplementationBoundaryTests
         var compressDirectory = Path.Combine(repositoryRoot, CompressProjectDirectory);
         if (!Directory.Exists(compressDirectory))
         {
-            Assert.Skip($"Compression source directory '{compressDirectory}' is missing; the library was not checked out next to the solution.");
+            Assert.Fail($"Compression source directory '{compressDirectory}' is missing; the library was not checked out next to the solution.");
         }
 
         return FirmwareContextDependencyScanner

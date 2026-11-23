@@ -223,14 +223,8 @@ public sealed class VisualPluginManager
                 var package = pending[index];
                 if (!GetExternalNodeTypes(package).All(available.Contains)) continue;
                 if (!package.Manifest.Dependencies.All(dependency => available.Contains("VisualPlugin." + dependency.Id))) continue;
-                var descriptor = package.Kind switch
-                {
-                    VisualPluginKind.CompositeNode => NodeCatalogSeed.CreateCompositePluginDescriptor(
-                        package, () => GetExecutionErrors(package)),
-                    VisualPluginKind.ScriptNode => NodeCatalogSeed.CreateScriptPluginDescriptor(
-                        package, () => GetExecutionErrors(package)),
-                    _ => throw new InvalidOperationException("Only node packages can be registered in the toolbox.")
-                };
+                var descriptor = NodeCatalogSeed.CreateCompositePluginDescriptor(
+                    package, () => GetExecutionErrors(package));
                 _registry.RegisterNode(descriptor, package);
                 _registeredTypeKeys.Add(package.NodeTypeKey);
                 available.Add(package.NodeTypeKey);
@@ -361,44 +355,6 @@ public sealed class VisualPluginManager
         {
             _gate.Release();
         }
-    }
-
-    /// <summary>Builds and installs one script-node package from a <c>.lua</c> source file with the default local consent.
-    /// <para>以默认的本地同意选项由 <c>.lua</c> 源文件构建并安装一个脚本节点包。</para></summary>
-    /// <param name="luaPath">Path to the Lua source file.<para>Lua 源文件的路径。</para></param>
-    /// <param name="cancellationToken">Cancels the read and installation.
-    /// <para>取消读取与安装过程。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="luaPath"/> is null, empty, or whitespace.
-    /// <para><paramref name="luaPath"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="InvalidDataException">The script is empty, exceeds the package bound, or fails validation.
-    /// <para>脚本为空、超出包大小上限或未通过校验。</para></exception>
-    /// <returns>The registration describing the installed package.<para>描述已安装包的注册信息。</para></returns>
-    public Task<VisualPluginRegistration> InstallScriptAsync(string luaPath,
-        CancellationToken cancellationToken = default) =>
-        InstallScriptAsync(luaPath, consent: null, cancellationToken);
-
-    /// <summary>Builds and installs one script-node package from a <c>.lua</c> source file.
-    /// <para>由 <c>.lua</c> 源文件构建并安装一个脚本节点包。</para></summary>
-    /// <param name="luaPath">Path to the Lua source file.<para>Lua 源文件的路径。</para></param>
-    /// <param name="consent">Explicit install decision, or <see langword="null"/> for the default local consent that grants exactly the permissions the package declares.
-    /// <para>显式安装决定；为 <see langword="null"/> 时使用仅授予包已声明权限的默认本地同意。</para></param>
-    /// <param name="cancellationToken">Cancels the read and installation.
-    /// <para>取消读取与安装过程。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="luaPath"/> is null, empty, or whitespace.
-    /// <para><paramref name="luaPath"/> 为 null、空或仅空白。</para></exception>
-    /// <exception cref="InvalidDataException">The script is empty, exceeds the package bound, or fails validation.
-    /// <para>脚本为空、超出包大小上限或未通过校验。</para></exception>
-    /// <returns>The registration describing the installed package.<para>描述已安装包的注册信息。</para></returns>
-    public async Task<VisualPluginRegistration> InstallScriptAsync(string luaPath,
-        VisualPluginInstallConsent? consent, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(luaPath);
-        var script = await File.ReadAllTextAsync(luaPath, cancellationToken).ConfigureAwait(false);
-        if (script.Length > VisualPluginValidation.MaximumScriptLength)
-            throw new InvalidDataException($"Plugin script exceeds {VisualPluginValidation.MaximumScriptLength} characters.");
-        var name = Path.GetFileNameWithoutExtension(luaPath);
-        var package = VisualPluginPackageBuilder.CreateScript(name, VisualPluginPackageBuilder.NormalizeId(name), script);
-        return await InstallPackageAsync(package, consent, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Enables or disables an installed node package without modifying its portable content.
@@ -647,7 +603,7 @@ public sealed class VisualPluginManager
     }
 
     private static bool IsNodeKind(VisualPluginKind kind)
-        => kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode;
+        => kind is VisualPluginKind.CompositeNode;
 
     private static void DeleteDetachedSignature(string packagePath)
     {
@@ -1180,7 +1136,7 @@ public sealed class VisualPluginRegistration
     /// True when an enable action applies, otherwise false.
     /// <para>需要启用操作时为 true，否则为 false。</para>
     /// </value>
-    public bool ShowEnableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && !IsEnabled;
+    public bool ShowEnableAction => Kind is VisualPluginKind.CompositeNode && !IsEnabled;
     /// <summary>
     /// Whether an enabled node package can be disabled.
     /// <para>已启用的节点包是否可以禁用。</para>
@@ -1189,7 +1145,7 @@ public sealed class VisualPluginRegistration
     /// True when a disable action applies, otherwise false.
     /// <para>需要禁用操作时为 true，否则为 false。</para>
     /// </value>
-    public bool ShowDisableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && IsEnabled;
+    public bool ShowDisableAction => Kind is VisualPluginKind.CompositeNode && IsEnabled;
     /// <summary>
     /// Localized label describing the package kind.
     /// <para>描述包类型的本地化标签。</para>
@@ -1201,7 +1157,6 @@ public sealed class VisualPluginRegistration
     public string KindText => LanguageService.Instance.GetString(Kind switch
     {
         VisualPluginKind.WorkflowTemplate => "Plugin_Template",
-        VisualPluginKind.ScriptNode => "Plugin_Script",
         _ => "Plugin_Composite"
     });
     /// <summary>

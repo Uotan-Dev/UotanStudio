@@ -167,7 +167,6 @@ public class JarDexContainerTests : IDisposable
         Assert.True(DocumentFormatPolicy.IsJarExtension(".jar"));
         Assert.False(DocumentFormatPolicy.IsJarExtension(".dex"));
     }
-
     [Fact]
     public async Task Service_DisassembleAndRebuild_ContainerAware()
     {

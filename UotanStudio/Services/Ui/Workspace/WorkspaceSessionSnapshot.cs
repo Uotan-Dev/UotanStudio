@@ -14,6 +14,7 @@ internal sealed class WorkspaceSessionSnapshot
     public Dictionary<string, bool> Panels { get; set; } = [];
     public List<OpenDocumentDto> Documents { get; set; } = [];
     public List<WorkspaceDockState> Docks { get; set; } = [];
+    public WorkspaceActiveWindow? ActiveWindow { get; set; }
     public WorkflowSnapshot? DraftWorkflow { get; set; }
     public ProjectSettingsDto? DraftPackingSettings { get; set; }
     public double NodeZoom { get; set; } = 1;
@@ -27,16 +28,42 @@ internal sealed class WorkspaceDockState
     public string? ActiveId { get; set; }
 }
 
+/// <summary>
+/// Identity of the window that was in the foreground when the session was saved. Documents carry their kind and
+/// persisted path (or device key for a mirror); non-document docks carry their stable dock id.
+/// <para>保存会话时处于前台的窗口标识。文档记录种类与持久化路径（投屏为设备键）；非文档停靠面板记录稳定的 Dock Id。</para>
+/// </summary>
+internal sealed class WorkspaceActiveWindow
+{
+    /// <summary>The persisted document kind, or <c>Dock</c> for a tool pane. <para>持久化的文档种类，工具面板为 <c>Dock</c>。</para></summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>The document path/device key or the dockable id. <para>文档路径/设备键或停靠项 Id。</para></summary>
+    public string Identity { get; set; } = string.Empty;
+
+    /// <summary>The owning dock id for a tool pane, unused for documents. <para>工具面板所属的停靠区 Id，文档不使用。</para></summary>
+    public string? DockId { get; set; }
+}
+
 internal static class WorkspaceSessionCapture
 {
     /// <summary>
-    /// Whether the dockable is a document-style item (same scope as <see cref="Documents"/>).
-    /// <para>判定停靠项是否为文档型条目（与 <see cref="Documents"/> 的快照口径一致）。</para>
+    /// Whether the dockable is a document-style item that is bulk-closed on a project switch.
+    /// <para>判定停靠项是否为工程切换时批量关闭的文档型条目。</para>
     /// </summary>
     /// <param name="item">The dockable to test. <para>待判定的停靠项。</para></param>
     /// <returns>True when the item is a document. <para>该条目为文档时返回 true。</para></returns>
     internal static bool IsDocument(IDockable item) =>
         DocumentOpenRegistry.ByInstance(item)?.IsDocument == true;
+
+    /// <summary>
+    /// Whether the dockable is written to the workspace session, including log, QCN and mirror windows.
+    /// <para>判定停靠项是否写入工作区会话，包括日志、QCN 与投屏窗口。</para>
+    /// </summary>
+    /// <param name="item">The dockable to test. <para>待判定的停靠项。</para></param>
+    /// <returns>True when the item participates in session persistence. <para>该条目参与会话持久化时返回 true。</para></returns>
+    internal static bool IsPersisted(IDockable item) =>
+        DocumentOpenRegistry.ByInstance(item)?.PersistInSession == true;
 
     internal static IEnumerable<IDockable> Enumerate(IDockable? root)
     {
@@ -73,18 +100,19 @@ internal static class WorkspaceSessionCapture
         foreach (var item in Enumerate(root))
         {
             var descriptor = DocumentOpenRegistry.ByInstance(item);
-            if (descriptor is not { IsDocument: true } || descriptor.GetPath is not { } getPath)
+            if (descriptor is not { PersistInSession: true } || descriptor.GetPath is not { } getPath)
             {
                 continue;
             }
 
             var kind = descriptor.Kind;
             var path = getPath(item);
-            if (kind != "Compare" && string.IsNullOrWhiteSpace(path)) continue;
+            if (!descriptor.AllowEmptyPath && string.IsNullOrWhiteSpace(path)) continue;
             result.Add(new()
             {
                 Kind = kind,
-                RelativePath = path is null ? string.Empty
+                RelativePath = descriptor.PathIsIdentifier ? path ?? string.Empty
+                    : path is null ? string.Empty
                     : rootDirectory is null ? Path.GetFullPath(path)
                     : Path.GetRelativePath(rootDirectory, Path.GetFullPath(path)),
                 OpenMode = item is FileViewModel text ? (int)text.OpenMode : 0,
@@ -94,6 +122,32 @@ internal static class WorkspaceSessionCapture
             });
         }
         return result;
+    }
+
+    /// <summary>
+    /// Captures the foreground window: an active persisted document wins, otherwise the active non-document dock
+    /// with a stable id is recorded so tool panes can be focused again on restore.
+    /// <para>捕获前台窗口：优先取活动的持久化文档；否则记录带稳定 Id 的非文档停靠面板，以便还原时重新聚焦。</para>
+    /// </summary>
+    /// <param name="root">The dock layout root. <para>停靠布局根。</para></param>
+    /// <param name="documents">The already captured document list. <para>已捕获的文档列表。</para></param>
+    /// <returns>The active window identity, or null when nothing can be identified. <para>活动窗口标识；无法识别时为 null。</para></returns>
+    internal static WorkspaceActiveWindow? ActiveWindow(IDockable? root, IReadOnlyList<OpenDocumentDto> documents)
+    {
+        if (documents.FirstOrDefault(d => d.IsActive) is { } active)
+        {
+            return new() { Kind = active.Kind, Identity = active.RelativePath };
+        }
+
+        foreach (var dock in Enumerate(root).OfType<IDock>())
+        {
+            if (dock.ActiveDockable is { } item && item is not IDock && !string.IsNullOrEmpty(item.Id))
+            {
+                return new() { Kind = "Dock", Identity = item.Id, DockId = dock.Id };
+            }
+        }
+
+        return null;
     }
 
     internal static List<WorkspaceDockState> Docks(IDockable? root) => [.. Enumerate(root)

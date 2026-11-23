@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
-using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;

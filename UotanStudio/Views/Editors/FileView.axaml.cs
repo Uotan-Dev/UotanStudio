@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
@@ -13,6 +14,8 @@ public partial class FileView : UserControl
     private readonly EditorOwnerBinding<FileViewModel> _editorOwner =
         new(static model => model.Editor, static (model, editor) => model.Editor = editor);
 
+    private FileViewModel? _hexSearchDocument;
+
     /// <summary>
     /// Creates the file document view and initializes its components.
     /// <para>构造文件文档视图并初始化组件。</para>
@@ -26,9 +29,48 @@ public partial class FileView : UserControl
             hex.BytesEdited += OnHexBytesEdited;
         }
 
+        DataContextChanged += OnDataContextChanged;
         Loaded += (_, _) => UpdateEditorOwner();
         Unloaded += (_, _) => UpdateEditorOwner(detach: true);
-        DataContextChanged += (_, _) => UpdateEditorOwner();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        BindHexSearchDocument(null);
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        UpdateEditorOwner();
+        BindHexSearchDocument(DataContext as FileViewModel);
+    }
+
+    private void BindHexSearchDocument(FileViewModel? document)
+    {
+        if (ReferenceEquals(_hexSearchDocument, document))
+        {
+            return;
+        }
+
+        if (_hexSearchDocument is not null)
+        {
+            _hexSearchDocument.HexSearchMatchLocated -= OnHexSearchMatchLocated;
+        }
+
+        _hexSearchDocument = document;
+        if (_hexSearchDocument is not null)
+        {
+            _hexSearchDocument.HexSearchMatchLocated += OnHexSearchMatchLocated;
+        }
+    }
+
+    private void OnHexSearchMatchLocated(int offset, int length)
+    {
+        if (this.FindControl<HexViewer>("HexEditor") is { } viewer)
+        {
+            viewer.RevealMatch(offset, length);
+        }
     }
 
     private void UpdateEditorOwner(bool detach = false)

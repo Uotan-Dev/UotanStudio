@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
@@ -13,6 +12,7 @@ public class ErofsInodeModelEquivalenceTests
 {
     private const int BlockSize = 4096;
     private const int BlockSizeBits = 12;
+    private const ulong PinnedBuildTime = 1_700_000_000UL;
 
     [Theory]
     [InlineData("flat")]
@@ -227,16 +227,21 @@ public class ErofsInodeModelEquivalenceTests
         Assert.Equal(1, narrowChunk.ChunkFormatBlkBits);
     }
 
-    private static ErofsOptions CreateOptions(string variant) => variant switch
+    private static ErofsOptions CreateOptions(string variant)
     {
-        "flat" => new ErofsOptions { Compress = false },
-        "compressed" => new ErofsOptions { Compress = true, UseCompactedIndexes = true },
-        "full-index" => new ErofsOptions { Compress = true, UseCompactedIndexes = false },
-        "tailpacked" => new ErofsOptions { Compress = true, CompressedTailPacking = true },
-        "fragmented" => new ErofsOptions { Compress = true, Fragments = true, AllFilesAsFragments = true },
-        "wide-ownership" => new ErofsOptions { Compress = false, ForceUid = 70_000, ForceGid = 70_001 },
-        _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown EROFS inode model equivalence variant."),
-    };
+        var options = variant switch
+        {
+            "flat" => new ErofsOptions { Compress = false },
+            "compressed" => new ErofsOptions { Compress = true, UseCompactedIndexes = true },
+            "full-index" => new ErofsOptions { Compress = true, UseCompactedIndexes = false },
+            "tailpacked" => new ErofsOptions { Compress = true, CompressedTailPacking = true },
+            "fragmented" => new ErofsOptions { Compress = true, Fragments = true, AllFilesAsFragments = true },
+            "wide-ownership" => new ErofsOptions { Compress = false, ForceUid = 70_000, ForceGid = 70_001 },
+            _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown EROFS inode model equivalence variant."),
+        };
+        options.BuildTime = PinnedBuildTime;
+        return options;
+    }
 
     private static void WriteTree(TempDirectory temp)
     {
@@ -253,6 +258,20 @@ public class ErofsInodeModelEquivalenceTests
         temp.WriteBytes("dir/nested.bin", binary);
         temp.Write("dir/sub/inner.txt", "inner content\n");
         temp.WriteBytes("dir/aligned.bin", new byte[2 * BlockSize]);
+
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        foreach (var file in Directory.EnumerateFiles(temp.Path, "*", SearchOption.AllDirectories))
+        {
+            File.SetLastWriteTimeUtc(file, pinned);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(temp.Path, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(path => path.Length))
+        {
+            Directory.SetLastWriteTimeUtc(directory, pinned);
+        }
+
+        Directory.SetLastWriteTimeUtc(temp.Path, pinned);
     }
 
     private static void AssertOnDiskFieldsEqual(ulong nid, InodeRecordOracle flat, ErofsInode unified)
