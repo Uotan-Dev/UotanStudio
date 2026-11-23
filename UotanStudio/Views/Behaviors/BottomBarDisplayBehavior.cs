@@ -47,14 +47,13 @@ public static partial class BottomBarDisplayBehavior
         private TabControl? _tabControl;
         private Control? _tabStrip;
         private bool _applying;
-        private bool _recenterPosted;
+        private bool _recentering;
 
         internal State(TabbedPage owner)
         {
             _owner = owner;
             CaptureManagedPages();
             _owner.AttachedToVisualTree += OnAttachedToVisualTree;
-            _owner.SizeChanged += OnOwnerSizeChanged;
             _owner.DetachedFromVisualTree += OnDetachedFromVisualTree;
         }
 
@@ -271,7 +270,7 @@ public static partial class BottomBarDisplayBehavior
             }
 
             _tabControl.ContainerPrepared -= OnContainerPrepared;
-            _tabControl.SizeChanged -= OnTabControlSizeChanged;
+            _tabControl.LayoutUpdated -= OnTabControlLayoutUpdated;
             _tabControl = null;
             _tabStrip = null;
         }
@@ -289,24 +288,21 @@ public static partial class BottomBarDisplayBehavior
             if (_tabControl is not null)
             {
                 _tabControl.ContainerPrepared -= OnContainerPrepared;
-                _tabControl.SizeChanged -= OnTabControlSizeChanged;
+                _tabControl.LayoutUpdated -= OnTabControlLayoutUpdated;
             }
 
             _tabControl = tabControl;
             if (_tabControl is not null)
             {
                 _tabControl.ContainerPrepared += OnContainerPrepared;
-                _tabControl.SizeChanged += OnTabControlSizeChanged;
+                _tabControl.LayoutUpdated += OnTabControlLayoutUpdated;
             }
 
             ApplyContainerVisibility();
         }
 
-        private void OnOwnerSizeChanged(object? sender, SizeChangedEventArgs e) =>
-            PostRecenter();
-
-        private void OnTabControlSizeChanged(object? sender, SizeChangedEventArgs e) =>
-            PostRecenter();
+        private void OnTabControlLayoutUpdated(object? sender, EventArgs e) =>
+            RecenterVisibleTabs();
 
         private void OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
         {
@@ -318,7 +314,7 @@ public static partial class BottomBarDisplayBehavior
             }
 
             UpdateTabStripVisibility();
-            PostRecenter();
+            RecenterVisibleTabs();
         }
 
         private void ApplyContainerVisibility()
@@ -340,7 +336,7 @@ public static partial class BottomBarDisplayBehavior
             }
 
             UpdateTabStripVisibility();
-            PostRecenter();
+            RecenterVisibleTabs();
         }
 
         private static void ConfigureTabItem(TabItem tabItem, bool visible)
@@ -356,27 +352,25 @@ public static partial class BottomBarDisplayBehavior
             tabItem.VerticalContentAlignment = VerticalAlignment.Center;
         }
 
-        private void PostRecenter()
+        private void RecenterVisibleTabs()
         {
-            if (_recenterPosted)
+            if (_tabControl is null || _recentering)
             {
                 return;
             }
 
-            _recenterPosted = true;
-            if (_tabStrip is not null)
+            _recentering = true;
+            try
             {
-                _tabStrip.Opacity = 0;
+                RecenterVisibleTabsCore();
             }
-
-            Dispatcher.UIThread.Post(() =>
+            finally
             {
-                _recenterPosted = false;
-                RecenterVisibleTabs();
-            }, DispatcherPriority.Loaded);
+                _recentering = false;
+            }
         }
 
-        private void RecenterVisibleTabs()
+        private void RecenterVisibleTabsCore()
         {
             if (_tabControl is null)
             {
@@ -389,7 +383,6 @@ public static partial class BottomBarDisplayBehavior
                 if (_tabControl.ContainerFromIndex(index) is TabItem { Content: Page page } tabItem
                     && KeyForPage(page) is { } key)
                 {
-                    tabItem.RenderTransform = null;
                     tabs[key] = tabItem;
                 }
             }
@@ -416,18 +409,16 @@ public static partial class BottomBarDisplayBehavior
                 }
 
                 var desiredX = left + (index * (TabWidth + TabSpacing));
-                var offset = desiredX - origin.X;
+                var offset = desiredX - (origin.X - CurrentOffset(tab));
                 if (Math.Abs(offset) > 0.1)
                 {
                     tab.RenderTransform = new TranslateTransform(offset, 0);
                 }
             }
-
-            if (_tabStrip is not null)
-            {
-                _tabStrip.Opacity = 1;
-            }
         }
+
+        private static double CurrentOffset(TabItem tab) =>
+            tab.RenderTransform is TranslateTransform { X: var x } ? x : 0;
 
         private void UpdateTabStripVisibility()
         {
