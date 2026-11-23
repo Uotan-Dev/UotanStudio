@@ -55,9 +55,27 @@ internal sealed record DocumentOpenDescriptor
     /// <value>The action called with the document instance, or null. <para>以文档实例调用的操作，或为 null。</para></value>
     public Action<object>? Cleanup { get; init; }
 
-    /// <summary>Whether the document participates in session capture. <para>是否计入会话文档捕获。</para></summary>
-    /// <value>True when an instance is captured as a session document. <para>实例作为会话文档被捕获时为真。</para></value>
+    /// <summary>Whether the dockable is a closable document tab, used when clearing documents on a project switch.
+    /// <para>停靠项是否为可关闭的文档标签，供工程切换时清理文档使用。</para></summary>
+    /// <value>True when an instance is a document tab subject to bulk close. <para>实例属于批量关闭的文档标签时为真。</para></value>
     public bool IsDocument { get; init; } = true;
+
+    /// <summary>Whether an open instance is written to the workspace session snapshot. Log, QCN and screen-mirror
+    /// windows are persisted even though they are not bulk-closed with project documents.
+    /// <para>已打开实例是否写入工作区会话快照。日志、QCN 与投屏窗口即使不随工程文档批量关闭，也纳入持久化。</para></summary>
+    /// <value>True by default; set <see langword="false"/> for transient dockables. <para>默认为真；瞬时停靠项可设为 <see langword="false"/>。</para></value>
+    public bool PersistInSession { get; init; } = true;
+
+    /// <summary>Whether the captured identity may be empty, as for the untargeted screen mirror and compare tabs.
+    /// <para>捕获到的标识是否可以为空，例如无目标投屏与对比标签。</para></summary>
+    /// <value>True when an empty path still identifies the window. <para>空路径仍能唯一标识窗口时为真。</para></value>
+    public bool AllowEmptyPath { get; init; }
+
+    /// <summary>Whether the captured path is an opaque identifier rather than a file path. Screen-mirror slots store
+    /// their device key this way and must not be normalized or made relative.
+    /// <para>捕获的路径是否为不透明标识而非文件路径。投屏槽位以此保存设备键，不得规范化或转成相对路径。</para></summary>
+    /// <value>True when the path is stored verbatim. <para>路径逐字保存时为真。</para></value>
+    public bool PathIsIdentifier { get; init; }
 
     /// <summary>Whether at most one instance of this document kind exists. <para>同类文档是否全局单实例。</para></summary>
     /// <value>True when a single instance is enforced. <para>强制单实例时为真。</para></value>

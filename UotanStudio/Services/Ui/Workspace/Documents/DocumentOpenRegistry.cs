@@ -268,14 +268,18 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(CompareViewModel),
             GetPath = _ => null,
             Cleanup = vm => ((CompareViewModel)vm).Cleanup(),
+            AllowEmptyPath = true,
         },
         new()
         {
             Kind = "ScreenMirror",
             ViewModelType = typeof(ScreenMirrorViewModel),
-            GetPath = _ => null,
+            Open = static (w, r) => { w.OpenScreenMirrorDocument(r.Serial, r.Activate); return Task.CompletedTask; },
+            GetPath = vm => ((ScreenMirrorViewModel)vm).DeviceKey,
             Cleanup = vm => { try { ((ScreenMirrorViewModel)vm).Cleanup(); } catch { } },
             IsDocument = false,
+            AllowEmptyPath = true,
+            PathIsIdentifier = true,
             Singleton = false,
         },
     ];

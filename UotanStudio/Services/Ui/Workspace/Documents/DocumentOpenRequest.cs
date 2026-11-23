@@ -30,6 +30,12 @@ internal sealed record DocumentOpenRequest
     /// <value>The device serial, or null. <para>设备序列号，或为 null。</para></value>
     public string? Serial { get; init; }
 
+    /// <summary>Whether opening should activate the document; background session restore passes <see langword="false"/>
+    /// so deferred windows do not steal focus from the foreground window.
+    /// <para>打开时是否激活文档；后台会话还原传入 <see langword="false"/>，避免延迟窗口抢走前台窗口的焦点。</para></summary>
+    /// <value><see langword="true"/> for normal user-driven opens. <para>用户主动打开时为 <see langword="true"/>。</para></value>
+    public bool Activate { get; init; } = true;
+
     /// <summary>The payload for object-handoff documents such as node projects. <para>对象交接类文档（如节点工程）的负载。</para></summary>
     /// <value>The handed-off object, or null. <para>交接的对象，或为 null。</para></value>
     public object? Payload { get; init; }

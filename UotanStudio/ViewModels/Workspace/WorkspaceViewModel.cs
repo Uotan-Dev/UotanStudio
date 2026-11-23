@@ -7,6 +7,7 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.UiAbstractions;
@@ -28,6 +29,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
     private CompareViewModel? _compareDocument;
+    private Task? _backgroundRestore;
+    private int _restoreGeneration;
+    private IDockable? _restoreForeground;
+
+    /// <summary>
+    /// Completion of the deferred document restore. The foreground window is restored before this task is created;
+    /// persistence waits for it before rewriting the session so a partially restored layout is not captured.
+    /// <para>延迟文档还原的完成任务。前台窗口会先于该任务还原；持久化在重写会话前等待它，避免捕获部分还原的布局。</para>
+    /// </summary>
+    internal Task? BackgroundRestore => _backgroundRestore;
+
     internal ProjectExplorerViewModel? ProjectExplorer => (_factory as IWorkspaceDockFactory)?.ProjectExplorer as ProjectExplorerViewModel;
     /// <summary>
     /// Exposes the concrete workspace factory for project-lifecycle document cleanup.
@@ -136,6 +148,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// untargeted document slot. <para>稳定的设备序列号或连接键；null 或空白选择无目标的文档槽位。</para></param>
     /// <returns>The screen-mirror document, or null if the layout is unavailable. <para>投屏文档；布局未就绪时为 null。</para></returns>
     public ScreenMirrorViewModel? OpenScreenMirrorDocument(string? deviceKey = null)
+        => OpenScreenMirrorDocument(deviceKey, activate: true);
+
+    internal ScreenMirrorViewModel? OpenScreenMirrorDocument(string? deviceKey, bool activate)
     {
         var key = string.IsNullOrWhiteSpace(deviceKey) ? string.Empty : deviceKey.Trim();
         PruneClosedScreenMirrorDocuments();
@@ -151,6 +166,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             document = new ScreenMirrorViewModel
             {
                 Id = key.Length == 0 ? "ScreenMirrorDocument" : $"ScreenMirrorDocument:{key}",
+                DeviceKey = key,
                 Title = key.Length == 0
                     ? LanguageService.Instance.GetString("Tab_ScreenMirror")
                     : string.Format(LanguageService.Instance.GetString("Tab_ScreenMirrorDevice"), key),
@@ -160,7 +176,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             _screenMirrorDocuments[key] = document;
         }
 
-        FocusDocument(document);
+        if (activate)
+        {
+            FocusDocument(document);
+        }
+
         return document;
     }
 
@@ -741,7 +761,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="dto">The document descriptor. <para>文档描述符。</para></param>
     /// <param name="rootDir">The project root directory. <para>工程根目录（用于拼接绝对路径）。</para></param>
-    public async Task RestoreOpenDocumentAsync(UotanStudio.Pipeline.Projects.OpenDocumentDto dto, string rootDir)
+    public Task RestoreOpenDocumentAsync(UotanStudio.Pipeline.Projects.OpenDocumentDto dto, string rootDir)
+        => RestoreOpenDocumentAsync(dto, rootDir, activate: true);
+
+    internal async Task RestoreOpenDocumentAsync(UotanStudio.Pipeline.Projects.OpenDocumentDto dto, string rootDir, bool activate)
     {
         if (dto.Kind == "Compare")
         {
@@ -756,14 +779,35 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                         await compare.AddComparisonPathAsync(path);
             return;
         }
-        var fullPath = Path.Combine(rootDir, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(fullPath))
+
+        var descriptor = DocumentOpenRegistry.ByKind(dto.Kind);
+        if (descriptor?.Open is not { } open)
         {
             return;
         }
 
-        var descriptor = DocumentOpenRegistry.ByKind(dto.Kind);
-        if (descriptor?.Open is not { } open)
+        if (descriptor.PathIsIdentifier)
+        {
+            try
+            {
+                await open(this, new DocumentOpenRequest
+                {
+                    Path = dto.RelativePath,
+                    Serial = dto.RelativePath,
+                    Activate = activate
+                });
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Workspace",
+                    $"Failed to restore window '{dto.RelativePath}' ({dto.Kind}): {ex.Message}");
+            }
+
+            return;
+        }
+
+        var fullPath = Path.Combine(rootDir, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(fullPath))
         {
             return;
         }
@@ -777,7 +821,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             await open(this, new DocumentOpenRequest
             {
                 Path = fullPath,
-                Mode = mode
+                Mode = mode,
+                Activate = activate
             });
         }
         catch (Exception ex)
@@ -787,21 +832,176 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
     }
 
-    internal async Task RestoreDocumentsAsync(IEnumerable<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents, string rootDir)
+    /// <summary>
+    /// Restores the recorded foreground window synchronously, then opens every other window at background
+    /// dispatcher priority so decompilation, firmware parsing and similar heavy loads never block the UI.
+    /// <para>同步还原记录的前台窗口，随后以后台调度优先级打开其余窗口，使反编译、固件解析等重负载不阻塞界面。</para>
+    /// </summary>
+    /// <param name="documents">The persisted document descriptors. <para>持久化的文档描述符。</para></param>
+    /// <param name="rootDir">The project root used to resolve relative paths. <para>用于解析相对路径的工程根目录。</para></param>
+    /// <param name="foregroundIdentity">Optional persisted identity of the foreground document; falls back to
+    /// the descriptor's active flag. <para>前台文档的持久化标识；缺省时回退到描述符的活动标记。</para></param>
+    /// <param name="restoreForegroundDocument">Whether one document must be restored synchronously; set to
+    /// <see langword="false"/> when a tool pane was foreground so every document is deferred.
+    /// <para>是否需要同步还原一个文档；前台为工具面板时传 <see langword="false"/>，让所有文档都延迟打开。</para></param>
+    /// <returns>Completion of the foreground restore; deferred documents continue in the background.
+    /// <para>前台窗口还原的完成任务；其余文档在后台继续还原。</para></returns>
+    internal Task RestoreDocumentsAsync(
+        IEnumerable<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents,
+        string rootDir,
+        string? foregroundIdentity = null,
+        bool restoreForegroundDocument = true)
     {
         var snapshot = documents.ToList();
-        foreach (var document in snapshot)
+        if (snapshot.Count == 0)
         {
-            await RestoreOpenDocumentAsync(document, rootDir);
-            // Yield to the dispatcher between documents so input and rendering stay responsive
-            // while a solution with many restored editors is opening.
-            // 在文档之间让步给调度器，保证恢复大量编辑器时输入与渲染仍然可响应。
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
-                () => { }, Avalonia.Threading.DispatcherPriority.Background);
+            _backgroundRestore = null;
+            return Task.CompletedTask;
         }
-        if (snapshot.LastOrDefault(d => d.IsActive) is { } active)
-            await RestoreOpenDocumentAsync(active, rootDir);
+
+        _backgroundRestore = null;
+        if (!restoreForegroundDocument)
+        {
+            var deferredGeneration = Interlocked.Increment(ref _restoreGeneration);
+            _restoreForeground = FindActiveDockable();
+            _backgroundRestore = RestoreDeferredAsync(snapshot, rootDir, deferredGeneration);
+            return Task.CompletedTask;
+        }
+
+        var preferred = foregroundIdentity is null ? null
+            : snapshot.FirstOrDefault(d => string.Equals(d.RelativePath, foregroundIdentity, StringComparison.Ordinal));
+        var foreground = preferred ?? snapshot.LastOrDefault(d => d.IsActive) ?? snapshot[0];
+        return RestoreForegroundThenDeferAsync(snapshot, foreground, rootDir);
     }
+
+    private async Task RestoreForegroundThenDeferAsync(
+        List<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents,
+        UotanStudio.Pipeline.Projects.OpenDocumentDto foreground,
+        string rootDir)
+    {
+        await RestoreOpenDocumentAsync(foreground, rootDir, activate: true);
+        var generation = Interlocked.Increment(ref _restoreGeneration);
+        var deferred = documents.Where(d => !ReferenceEquals(d, foreground)).ToList();
+        _restoreForeground = FindActiveDockable();
+        _backgroundRestore = deferred.Count == 0
+            ? Task.CompletedTask
+            : RestoreDeferredAsync(deferred, rootDir, generation);
+    }
+
+    private async Task RestoreDeferredAsync(
+        List<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents,
+        string rootDir,
+        int generation)
+    {
+        foreach (var document in documents)
+        {
+            if (generation != Volatile.Read(ref _restoreGeneration))
+            {
+                return;
+            }
+
+            try
+            {
+                Task? load = null;
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+                    new Action(() => load = RestoreOpenDocumentAsync(document, rootDir, activate: false)),
+                    Avalonia.Threading.DispatcherPriority.Background);
+                if (load is not null)
+                {
+                    await load.ConfigureAwait(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Workspace",
+                    $"Deferred restore of '{document.RelativePath}' ({document.Kind}) failed: {ex.Message}");
+            }
+
+            var foreground = Volatile.Read(ref _restoreForeground);
+            if (foreground is not null && generation == Volatile.Read(ref _restoreGeneration))
+            {
+                Reactivate(foreground);
+            }
+        }
+    }
+
+    private IDockable? FindActiveDockable()
+        => WorkspaceSessionCapture.Enumerate(Layout).OfType<IDock>()
+            .Select(dock => dock.ActiveDockable)
+            .FirstOrDefault(item => item is not null && item is not IDock && WorkspaceSessionCapture.IsPersisted(item));
+
+    private void Reactivate(IDockable dockable)
+    {
+        if (dockable.Owner is not IDock owner || owner.VisibleDockables?.Contains(dockable) != true)
+        {
+            return;
+        }
+
+        owner.ActiveDockable = dockable;
+        _factory.SetActiveDockable(dockable);
+        if (_factory.FindRoot(dockable) is { } root)
+        {
+            _factory.SetFocusedDockable(root, dockable);
+        }
+    }
+
+    internal void ActivateDockableById(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        if (WorkspaceSessionCapture.Enumerate(Layout).FirstOrDefault(d => d.Id == id) is { } dockable)
+        {
+            Reactivate(dockable);
+        }
+    }
+
+    /// <summary>
+    /// Focuses the window recorded as foreground in the session snapshot. Documents are matched by their persisted
+    /// identity (path or mirror device key); tool panes by their stable dock id within the recorded dock.
+    /// <para>聚焦会话快照中记录的前台窗口。文档按持久化标识（路径或投屏设备键）匹配，工具面板按记录停靠区内的稳定 Dock Id 匹配。</para>
+    /// </summary>
+    /// <param name="kind">The persisted window kind, or <c>Dock</c> for a tool pane. <para>持久化的窗口种类，工具面板为 <c>Dock</c>。</para></param>
+    /// <param name="identity">The persisted document path/device key or the dockable id. <para>持久化的文档路径/设备键或停靠项 Id。</para></param>
+    /// <param name="dockId">The owning dock id for a tool pane; ignored for documents. <para>工具面板所属的停靠区 Id；文档忽略此值。</para></param>
+    internal void ActivateWindow(string kind, string identity, string? dockId)
+    {
+        if (string.Equals(kind, "Dock", StringComparison.Ordinal))
+        {
+            if (string.IsNullOrEmpty(identity)) return;
+
+            var docks = WorkspaceSessionCapture.Enumerate(Layout).OfType<IDock>().ToList();
+            var targetDock = dockId is null ? null : docks.FirstOrDefault(d => d.Id == dockId);
+            var dockable = (targetDock?.VisibleDockables ?? docks.SelectMany(d => d.VisibleDockables ?? []))
+                .FirstOrDefault(d => d.Id == identity);
+            if (dockable is null) return;
+            if (targetDock is not null) targetDock.ActiveDockable = dockable;
+            Reactivate(dockable);
+            return;
+        }
+
+        var descriptor = DocumentOpenRegistry.ByKind(kind);
+        if (descriptor?.GetPath is not { } getPath) return;
+        if (string.IsNullOrEmpty(identity) && !descriptor.AllowEmptyPath) return;
+        var comparison = descriptor.PathIsIdentifier ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var document = WorkspaceSessionCapture.Enumerate(Layout)
+            .FirstOrDefault(d => ReferenceEquals(DocumentOpenRegistry.ByInstance(d), descriptor)
+                && string.Equals(getPath(d) ?? string.Empty, identity, comparison));
+        if (document is not null) Reactivate(document);
+    }
+
+    /// <summary>
+    /// Re-reads the window that should stay in front while deferred documents continue to open. Called after the
+    /// persisted foreground is applied so a deferred editor cannot pull focus back to itself.
+    /// <para>在延迟文档继续打开期间重新读取应保持前台的窗口。应用持久化前台窗口后调用，避免延迟编辑器把焦点抢回自身。</para>
+    /// </summary>
+    internal void UpdateDeferredRestoreForeground()
+    {
+        if (_backgroundRestore is not null)
+        {
+            Volatile.Write(ref _restoreForeground, FindActiveDockable());
+        }
+    }
+
+    internal void CancelBackgroundRestore() => Interlocked.Increment(ref _restoreGeneration);
 
     internal async Task OpenPartitionAsync(string path)
     {
@@ -844,6 +1044,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        CancelBackgroundRestore();
         CloseDocumentsForShutdown();
         ProjectExplorer?.Dispose();
         if (_factory is IWorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
