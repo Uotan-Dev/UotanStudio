@@ -43,9 +43,25 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     /// <param name="source">The dockable being split. <para>正在分栏的源停靠项。</para></param>
     /// <param name="target">The target dock receiving the split. <para>接收分栏的目标停靠区。</para></param>
     /// <param name="operation">The requested split direction. <para>请求的分栏方向。</para></param>
-    /// <returns><c>true</c> when the source is a document or the target is a document dock; otherwise <c>false</c>. <para>当源项为文档或目标为文档停靠区时返回 <c>true</c>，否则返回 <c>false</c>。</para></returns>
+    /// <returns>
+    /// <c>true</c> when the source is a document; <c>false</c> for a tool, so re-docking a tool pane keeps
+    /// it a tool pane.
+    /// <para>源项为文档时返回 <c>true</c>；源项为工具时返回 <c>false</c>，使工具面板重新停靠后仍是工具面板。</para>
+    /// </returns>
+    /// <remarks>
+    /// <see cref="Tool"/> implements <see cref="IDocument"/>, so the tool cases must be tested first: a
+    /// <c>source is IDocument</c> probe is true for every tool and silently turns a re-docked tool pane
+    /// into a document pane.
+    /// <para><see cref="Tool"/> 同时实现 <see cref="IDocument"/>，因此必须先判定工具：
+    /// <c>source is IDocument</c> 对任何工具都为真，会把重新停靠的工具面板变成文档面板。</para>
+    /// </remarks>
     public bool UseDocumentDock(IDockable source, IDock target, DockOperation operation)
-        => source is IDocument || target is IDocumentDock;
+        => source switch
+        {
+            ITool or IToolDock => false,
+            IDocument or IDocumentDock => true,
+            _ => target is IDocumentDock
+        };
 
     /// <inheritdoc/>
     public override IDocumentDock CreateDocumentDock()
