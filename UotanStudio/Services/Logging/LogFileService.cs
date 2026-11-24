@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -28,6 +29,12 @@ public static class LogFileService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     });
+    internal static readonly byte[] HeaderBytes = Encoding.UTF8.GetBytes(Header);
+    private static readonly JsonWriterOptions WriterOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+    internal static JsonWriterOptions JsonWriterOptions => WriterOptions;
 
     /// <summary>Recognizes logs from a bounded text-file header.<para>从有界文本文件头识别日志。</para></summary>
     /// <param name="header">Leading bytes of the file.<para>文件起始字节。</para></param>
@@ -49,16 +56,29 @@ public static class LogFileService
     /// <param name="cancellationToken">Token cancelling the write.<para>取消写入的令牌。</para></param>
     public static async Task WriteAsync(Stream stream, IEnumerable<ILogLine> entries, CancellationToken cancellationToken = default)
     {
-        using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
-        await writer.WriteLineAsync(Header.AsMemory(), cancellationToken).ConfigureAwait(false);
-        foreach (var entry in entries)
+        cancellationToken.ThrowIfCancellationRequested();
+        var writer = PipeWriter.Create(stream, new StreamPipeWriterOptions(leaveOpen: true));
+        WriteBytes(writer, HeaderBytes);
+        WriteBytes(writer, "\n"u8);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var record = new LogFileRecord(entry.Text, entry.Level, [.. entry.Columns]);
-            await writer.WriteLineAsync(JsonSerializer.Serialize(record, JsonContext.LogFileRecord).AsMemory(), cancellationToken)
-                .ConfigureAwait(false);
+            using (var json = new Utf8JsonWriter(writer, JsonWriterOptions))
+            {
+                foreach (var entry in entries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Serialize(json, entry);
+                    json.Flush();
+                    WriteBytes(writer, "\n"u8);
+                    json.Reset();
+                }
+            }
+            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
-        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        finally
+        {
+            writer.Complete();
+        }
     }
 
     /// <summary>Serializes one entry as a single JSON Line record.<para>把一条条目序列化为一行 JSON 记录。</para></summary>
@@ -69,6 +89,20 @@ public static class LogFileService
         var record = new LogFileRecord(line.Text, line.Level, [.. line.Columns]);
         return JsonSerializer.Serialize(record, JsonContext.LogFileRecord);
     }
+
+    internal static void Serialize(Utf8JsonWriter writer, ILogLine line)
+    {
+        var record = new LogFileRecord(line.Text, line.Level, [.. line.Columns]);
+        JsonSerializer.Serialize(writer, record, JsonContext.LogFileRecord);
+    }
+
+    internal static void WriteBytes(PipeWriter writer, ReadOnlySpan<byte> bytes)
+    {
+        bytes.CopyTo(writer.GetSpan(bytes.Length));
+        writer.Advance(bytes.Length);
+    }
+
+    internal static void Flush(PipeWriter writer) => writer.FlushAsync().GetAwaiter().GetResult();
 
     /// <summary>Reads exported logs, logcat text or project logs without live-cache eviction.<para>读取导出日志、logcat 或项目日志，不执行实时缓存淘汰。</para></summary>
     /// <param name="path">File to read.<para>要读取的文件。</para></param>
