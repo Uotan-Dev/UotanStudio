@@ -273,13 +273,8 @@ public static class Adler32
                 var weightedSums = Avx512BW.MultiplyAddAdjacent(block, Weight512);
                 var weighted = Avx512BW.MultiplyAddAdjacent(weightedSums.AsInt16(), Ones16_512);
 
-                var bytes = 0u;
-                var weights = 0u;
-                for (var lane = 0; lane < Vector512<int>.Count; lane++)
-                {
-                    bytes += (uint)plain.GetElement(lane);
-                    weights += (uint)weighted.GetElement(lane);
-                }
+                var bytes = (uint)Vector512.Sum(plain);
+                var weights = (uint)Vector512.Sum(weighted);
 
                 b += (uint)Vector512BlockBytes * a + weights;
                 a += bytes;
@@ -323,13 +318,8 @@ public static class Adler32
                 var weightedSums = Avx2.MultiplyAddAdjacent(block, Weight256);
                 var weighted = Avx2.MultiplyAddAdjacent(weightedSums.AsInt16(), Ones16_256);
 
-                var bytes = 0u;
-                var weights = 0u;
-                for (var lane = 0; lane < Vector256<int>.Count; lane++)
-                {
-                    bytes += (uint)plain.GetElement(lane);
-                    weights += (uint)weighted.GetElement(lane);
-                }
+                var bytes = (uint)Vector256.Sum(plain);
+                var weights = (uint)Vector256.Sum(weighted);
 
                 b += (uint)VectorBlockBytes * a + weights;
                 a += bytes;
@@ -384,12 +374,8 @@ public static class Adler32
                     Sse2.MultiplyAddAdjacent(Ssse3.MultiplyAddAdjacent(low, WeightLow), Ones16),
                     Sse2.MultiplyAddAdjacent(Ssse3.MultiplyAddAdjacent(high, WeightHigh), Ones16));
 
-                var weighted = (uint)(
-                    weightedSums.GetElement(0) + weightedSums.GetElement(1)
-                    + weightedSums.GetElement(2) + weightedSums.GetElement(3));
-                var bytes = (uint)(
-                    byteSums.GetElement(0) + byteSums.GetElement(1)
-                    + byteSums.GetElement(2) + byteSums.GetElement(3));
+                var weighted = (uint)Vector128.Sum(weightedSums);
+                var bytes = (uint)Vector128.Sum(byteSums);
 
                 b += (uint)VectorBlockBytes * a + weighted;
                 a += bytes;
@@ -499,9 +485,7 @@ public static class Adler32
             Vector128.Add(productLowLow, productLowHigh),
             Vector128.Add(productHighLow, productHighHigh));
 
-        weighted = weightedSums.GetElement(0) + weightedSums.GetElement(1)
-            + weightedSums.GetElement(2) + weightedSums.GetElement(3);
-        return byteSums.GetElement(0) + byteSums.GetElement(1)
-            + byteSums.GetElement(2) + byteSums.GetElement(3);
+        weighted = (uint)Vector128.Sum(weightedSums);
+        return (uint)Vector128.Sum(byteSums);
     }
 }

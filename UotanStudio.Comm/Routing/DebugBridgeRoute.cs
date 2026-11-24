@@ -346,6 +346,7 @@ public static class DebugBridgeRoute
         }
 
         var (error, linkedCancellationRequested) = await ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         if (linkedCancellationRequested)
         {
             throw new OperationCanceledException(cancellationToken);
@@ -440,37 +441,44 @@ public static class DebugBridgeRoute
         return DebugBridgeProbeOutcome.Listening;
     }
 
-    /// <summary>Connects once without translating failures: the raw socket error plus whether the
-    /// linked 3-second deadline or caller token fired.
-    /// <para>只建立一次连接且不翻译故障：返回原始 socket 错误，以及内部 3 秒截止时间或调用方令牌是否已触发。</para></summary>
+    /// <summary>Connects once with the .NET 11 cancellable socket API and reports the raw socket error
+    /// plus whether the linked 3-second deadline fired.
+    /// <para>使用 .NET 11 可取消 socket API 只建立一次连接，并返回原始 socket 错误以及内部 3 秒截止时间是否已触发。</para></summary>
     private static async Task<(SocketError Error, bool LinkedCancellationRequested)> ConnectAsync(
         string host, int port, CancellationToken cancellationToken)
     {
-        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-        using var args = new SocketAsyncEventArgs
-        {
-            RemoteEndPoint = IPAddress.TryParse(host, out var address)
-                ? new IPEndPoint(address, port) : new DnsEndPoint(host, port)
-        };
-        var completion = new TaskCompletionSource<SocketError>(TaskCreationOptions.RunContinuationsAsynchronously);
-        args.Completed += (_, result) => completion.TrySetResult(result.SocketError);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(3));
-        using var cancellation = timeout.Token.Register(() => Socket.CancelConnectAsync(args));
-        if (timeout.IsCancellationRequested)
+        return await ConnectAsync(host, port, timeout.Token, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<(SocketError Error, bool LinkedCancellationRequested)> ConnectAsync(
+        string host, int port, CancellationToken deadlineToken, CancellationToken cancellationToken)
+    {
+        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        EndPoint endpoint = IPAddress.TryParse(host, out var address)
+            ? new IPEndPoint(address, port)
+            : new DnsEndPoint(host, port);
+        try
         {
+            await socket.ConnectAsync(endpoint, deadlineToken).ConfigureAwait(false);
+            return (SocketError.Success, deadlineToken.IsCancellationRequested);
+        }
+        catch (OperationCanceledException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             return (SocketError.OperationAborted, true);
         }
-        if (!socket.ConnectAsync(args))
+        catch (SocketException exception)
         {
-            completion.TrySetResult(args.SocketError);
+            if (deadlineToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return (SocketError.OperationAborted, true);
+            }
+
+            return (exception.SocketErrorCode, false);
         }
-        if (timeout.IsCancellationRequested)
-        {
-            Socket.CancelConnectAsync(args);
-        }
-        var error = await completion.Task.ConfigureAwait(false);
-        return (error, timeout.IsCancellationRequested);
     }
 
     /// <summary>
