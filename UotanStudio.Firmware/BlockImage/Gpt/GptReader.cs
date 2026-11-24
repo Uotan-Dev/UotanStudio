@@ -150,7 +150,8 @@ public static partial class GptReader
             {
                 throw new InvalidDataException("The GPT partition array CRC is invalid.");
             }
-            var ordered = _entries.OrderBy(entry => entry.FirstLba).ToArray();
+            var ordered = _entries.ToArray();
+            Array.Sort(ordered, static (left, right) => left.FirstLba.CompareTo(right.FirstLba));
             for (var index = 1; index < ordered.Length; index++)
             {
                 if (ordered[index].FirstLba <= ordered[index - 1].LastLba)

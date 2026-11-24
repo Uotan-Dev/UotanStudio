@@ -313,6 +313,7 @@ public static class MetadataReader
         {
             return;
         }
+        list.EnsureCapacity(checked((int)desc.NumEntries));
         for (uint i = 0; i < desc.NumEntries; i++)
         {
             var offset = checked((int)((ulong)desc.Offset + ((ulong)i * desc.EntrySize)));

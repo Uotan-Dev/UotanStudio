@@ -7,6 +7,8 @@ public sealed class MetadataBuilder
 {
     private readonly List<Partition> _partitions = [];
     private readonly List<LpMetadataPartitionGroup> _groups = [];
+    private readonly HashSet<string> _partitionNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _groupNames = new(StringComparer.Ordinal);
     private LpMetadataBlockDevice _blockDevice;
     private LpMetadataGeometry _geometry;
     private ulong _nextLinearSector;
@@ -97,8 +99,10 @@ public sealed class MetadataBuilder
         if (!LpMetadata.HasOnlyPartitionNameChars(name))
             throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(name));
         ValidateName(groupName, "group", nameof(groupName));
-        if (_partitions.Any(p => p.Name == name))
+        if (_partitionNames.Contains(name))
+        {
             throw new ArgumentException("Partition name already exists.", nameof(name));
+        }
         MetadataReader.ValidateGeometry(_geometry);
         var sectors = AlignUp(sizeInBytes, _geometry.LogicalBlockSize) / MetadataFormat.LP_SECTOR_SIZE;
         var deviceSectors = _blockDevice.Size / MetadataFormat.LP_SECTOR_SIZE;
@@ -111,9 +115,10 @@ public sealed class MetadataBuilder
             TargetData = _nextLinearSector,
             TargetSource = 0
         };
-        _nextLinearSector = checked(_nextLinearSector + sectors);
-
         var partition = new Partition(name, groupName, attributes, extent);
+        var nextLinearSector = checked(_nextLinearSector + sectors);
+        _partitionNames.Add(name);
+        _nextLinearSector = nextLinearSector;
         _partitions.Add(partition);
     }
 
@@ -128,14 +133,18 @@ public sealed class MetadataBuilder
     public void AddGroup(string name, ulong maximumSize, uint flags = 0)
     {
         ValidateName(name, "group", nameof(name));
-        if (_groups.Any(g => g.NameString == name))
+        if (_groupNames.Contains(name))
+        {
             throw new ArgumentException("Group name already exists.", nameof(name));
-        _groups.Add(new LpMetadataPartitionGroup
+        }
+        var group = new LpMetadataPartitionGroup
         {
             Name = Encoding.UTF8.GetBytes(name),
             Flags = flags,
             MaximumSize = maximumSize
-        });
+        };
+        _groupNames.Add(name);
+        _groups.Add(group);
     }
 
     /// <summary>Exports the built metadata.<para>导出构建的元数据。</para></summary>
@@ -148,22 +157,31 @@ public sealed class MetadataBuilder
     public LpMetadata Build()
     {
         MetadataReader.ValidateGeometry(_geometry);
-        if (_groups.All(g => g.NameString != "default"))
+        var hasDefaultGroup = _groupNames.Contains("default");
+        var groups = new List<LpMetadataPartitionGroup>(checked(_groups.Count + (hasDefaultGroup ? 0 : 1)));
+        if (!hasDefaultGroup)
         {
-            _groups.Insert(0, new LpMetadataPartitionGroup
+            groups.Add(new LpMetadataPartitionGroup
             {
                 Name = Encoding.UTF8.GetBytes("default"),
                 Flags = 0,
                 MaximumSize = 0
             });
         }
+        groups.AddRange(_groups);
+
+        var extentCount = 0;
+        foreach (var partition in _partitions)
+        {
+            extentCount = checked(extentCount + partition.Extents.Count);
+        }
 
         var metadata = new LpMetadata
         {
             Geometry = _geometry,
-            Partitions = [],
-            Extents = [],
-            Groups = [.. _groups],
+            Partitions = new List<LpMetadataPartition>(checked(_partitions.Count)),
+            Extents = new List<LpMetadataExtent>(checked(extentCount)),
+            Groups = groups,
             BlockDevices = [_blockDevice]
         };
 
