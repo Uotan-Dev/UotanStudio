@@ -32,6 +32,11 @@ public class SolutionMembershipGuardTests
     private static bool IsBuildOrReferencePath(string path)
     {
         return path.StartsWith("reference/", StringComparison.Ordinal)
+            // tools/ holds standalone diagnostic hosts (for example tools/unisoc-probe) that are deliberately
+            // outside the product solution and its test set; they are run with `dotnet run --project` only.
+            // tools/ 下是刻意置于产品解决方案与测试集之外的独立诊断宿主（如 tools/unisoc-probe），仅通过
+            // `dotnet run --project` 运行。
+            || path.StartsWith("tools/", StringComparison.Ordinal)
             || path.Contains("/bin/", StringComparison.Ordinal)
             || path.Contains("/obj/", StringComparison.Ordinal)
             || path.Contains("/artifacts/", StringComparison.Ordinal);
