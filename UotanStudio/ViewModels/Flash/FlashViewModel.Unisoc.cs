@@ -462,6 +462,12 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        // Freeze the exact target before either dialog: the dialogs and the flash must name and act on the same
+        // device even if the selection changes while a confirmation is open.
+        // 在任一对话框之前冻结精确目标：即使确认期间选择发生变化，对话框与刷写也必须指向同一台设备。
+        var frozenDeviceKey = device.Key;
+        var frozenIdentity = $"{device.DisplayName} · [{frozenDeviceKey}]";
+
         if (TopLevel.GetTopLevel(Surface) is not Window owner)
         {
             return;
@@ -492,7 +498,7 @@ public sealed partial class FlashViewModel
                     Title = language.GetString("Flash_UnisocFlash"),
                     Detail = language.GetString("Flash_UnisocWipeConfirmDetail"),
                     ConfirmWord = UnisocFlashOptions.WipeConfirmationPhrase,
-                    DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+                    DeviceIdentifier = frozenIdentity
                 }).ConfigureAwait(true);
             }
             finally
@@ -520,7 +526,7 @@ public sealed partial class FlashViewModel
                 Title = language.GetString("Flash_UnisocFlash"),
                 Detail = language.GetString("Flash_UnisocFlashConfirmDetail"),
                 ConfirmWord = UnisocFlashOptions.ConfirmationPhrase,
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+                DeviceIdentifier = frozenIdentity
             }).ConfigureAwait(true);
         }
         finally
@@ -529,6 +535,13 @@ public sealed partial class FlashViewModel
         }
 
         if (!confirmed) return;
+
+        if (SelectedDevice is not { Key: var currentKey } ||
+            !string.Equals(currentKey, frozenDeviceKey, StringComparison.Ordinal))
+        {
+            AppendLog(_localizer.GetString("Flash_PackageChanged"));
+            return;
+        }
 
         var selected = Partitions
             .Where(row => row.IsSelected && row.Name.Length > 0 && !row.IsScriptStep)

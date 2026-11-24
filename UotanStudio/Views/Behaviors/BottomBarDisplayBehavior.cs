@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -48,6 +49,7 @@ public static partial class BottomBarDisplayBehavior
         private Control? _tabStrip;
         private bool _applying;
         private bool _recentering;
+        private bool _recenterPosted;
 
         internal State(TabbedPage owner)
         {
@@ -301,8 +303,13 @@ public static partial class BottomBarDisplayBehavior
             ApplyContainerVisibility();
         }
 
+        // LayoutUpdated runs inside the layout pass. Writing RenderTransform or Width there re-enters the
+        // layout system while it is still arranging, which some backends (X11/Wayland compositing) sample
+        // as a half-applied frame. Only record the request and run the pass afterwards.
+        // <para>LayoutUpdated 在布局过程中运行。此时写入 RenderTransform 或 Width 会在排布尚未结束时重入
+        // 布局系统，某些后端（X11/Wayland 合成）会把它当作半应用的帧采样出来。这里只记录请求，事后再执行。</para>
         private void OnTabControlLayoutUpdated(object? sender, EventArgs e) =>
-            RecenterVisibleTabs();
+            RequestRecenter();
 
         private void OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
         {
@@ -314,7 +321,7 @@ public static partial class BottomBarDisplayBehavior
             }
 
             UpdateTabStripVisibility();
-            RecenterVisibleTabs();
+            RequestRecenter();
         }
 
         private void ApplyContainerVisibility()
@@ -336,20 +343,53 @@ public static partial class BottomBarDisplayBehavior
             }
 
             UpdateTabStripVisibility();
-            RecenterVisibleTabs();
+            RequestRecenter();
         }
 
+        // Idempotent by construction: ContainerPrepared and ApplyContainerVisibility both land here, and on
+        // Linux a prepared container can be re-prepared after a reveal. Assigning an unchanged value still
+        // invalidates the layout, so compare first to keep the strip from re-measuring on every pass.
+        // <para>天然幂等：ContainerPrepared 与 ApplyContainerVisibility 都会走到这里，而 Linux 上容器可能在
+        // 揭示后被重新准备。写入相同值同样会让布局失效，因此先比较，避免页签条每趟都重新测量。</para>
         private static void ConfigureTabItem(TabItem tabItem, bool visible)
         {
             var width = visible ? TabWidth : 0;
-            tabItem.Width = width;
-            tabItem.MinWidth = width;
-            tabItem.MaxWidth = width;
-            tabItem.Opacity = visible ? 1 : 0;
-            tabItem.IsHitTestVisible = visible;
-            tabItem.HorizontalAlignment = HorizontalAlignment.Center;
-            tabItem.HorizontalContentAlignment = HorizontalAlignment.Center;
-            tabItem.VerticalContentAlignment = VerticalAlignment.Center;
+            SetIfChanged(tabItem, Control.WidthProperty, width);
+            SetIfChanged(tabItem, Control.MinWidthProperty, width);
+            SetIfChanged(tabItem, Control.MaxWidthProperty, width);
+            SetIfChanged(tabItem, Visual.OpacityProperty, visible ? 1d : 0d);
+            SetIfChanged(tabItem, InputElement.IsHitTestVisibleProperty, visible);
+            SetIfChanged(tabItem, Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            SetIfChanged(tabItem, ContentControl.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
+            SetIfChanged(tabItem, ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center);
+        }
+
+        private static void SetIfChanged<T>(AvaloniaObject target, StyledProperty<T> property, T value)
+        {
+            if (!EqualityComparer<T>.Default.Equals(target.GetValue(property), value))
+            {
+                target.SetValue(property, value);
+            }
+        }
+
+        // Coalesces every recenter request raised during one layout/apply cycle into a single deferred pass.
+        // The pass runs at Loaded priority, i.e. after the layout that asked for it has been committed, so the
+        // tab strip is never observed with an offset that a later pass is about to replace.
+        // <para>把一次布局/应用周期内所有重排请求合并成一趟延迟执行。该趟在 Loaded 优先级运行，也就是在
+        // 请求它的那次布局提交之后，因此不会把页签条暴露在一个随后会被替换的偏移上。</para>
+        private void RequestRecenter()
+        {
+            if (_tabControl is null || _recentering || _recenterPosted)
+            {
+                return;
+            }
+
+            _recenterPosted = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _recenterPosted = false;
+                RecenterVisibleTabs();
+            }, DispatcherPriority.Loaded);
         }
 
         private void RecenterVisibleTabs()
@@ -398,22 +438,41 @@ public static partial class BottomBarDisplayBehavior
             }
 
             var stripWidth = (visibleTabs.Length * TabWidth) + ((visibleTabs.Length - 1) * TabSpacing);
-            var availableWidth = TopLevel.GetTopLevel(_owner)?.ClientSize.Width ?? _owner.Bounds.Width;
+
+            // Measure the pure layout position for each tab. Bounds is a layout result and therefore never
+            // contains the RenderTransform applied below, so every pass computes the same absolute offset from
+            // the same input. Translating first and then compensating for the stored transform made the result
+            // depend on whether the point mapping already folded that transform in; any mismatch there turns
+            // each pass into a small extra shift, so the strip drifts instead of settling and the drawn
+            // items separate from the layout-anchored selection pipe.
+            // <para>为每个页签测量纯布局位置。Bounds 是布局结果，永远不含下面写入的 RenderTransform，
+            // 因此每趟都由同一输入算出同一绝对偏移。此前先平移再补偿已存变换，使结果取决于点映射是否
+            // 已把该变换折入；两者不一致时每趟都会多平移一点，页签条于是漂移而不收敛，绘制内容也随之
+            // 与按布局位置锚定的选中指示条分离。</para>
+            var stripPanel = visibleTabs[0].GetVisualParent() as Control ?? _tabControl;
+            var availableWidth = stripPanel.Bounds.Width;
+            if (availableWidth <= 0)
+            {
+                availableWidth = _tabControl.Bounds.Width;
+            }
+
             var left = Math.Max(0, (availableWidth - stripWidth) / 2);
             for (var index = 0; index < visibleTabs.Length; index++)
             {
                 var tab = visibleTabs[index];
-                if (tab.TranslatePoint(default, _tabControl) is not { } origin)
+                var desiredX = left + (index * (TabWidth + TabSpacing));
+                var offset = desiredX - tab.Bounds.X;
+
+                // A recenter pass must be idempotent: assigning an equal Transform still creates a new instance
+                // and invalidates the visual, which schedules another layout and repeats the cycle.
+                // <para>重排趟必须幂等：写入相等的 Transform 同样是新实例，会让视觉失效并再次排布，
+                // 从而把这一趟无限重复下去。</para>
+                if (Math.Abs(offset - CurrentOffset(tab)) <= 0.1)
                 {
                     continue;
                 }
 
-                var desiredX = left + (index * (TabWidth + TabSpacing));
-                var offset = desiredX - (origin.X - CurrentOffset(tab));
-                if (Math.Abs(offset) > 0.1)
-                {
-                    tab.RenderTransform = new TranslateTransform(offset, 0);
-                }
+                tab.RenderTransform = Math.Abs(offset) <= 0.1 ? null : new TranslateTransform(offset, 0);
             }
         }
 

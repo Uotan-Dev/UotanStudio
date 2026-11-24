@@ -183,12 +183,28 @@ public partial class DeviceViewModel
     /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
     private async Task EnrichMtkInfoAsync(DeviceInfo device)
     {
-        if (!ShouldQueryMtkIdentity(device.Device.State, device.HasMtkInfo))
+        var endpoint = device.Device;
+        if (device.HasMtkInfo)
         {
             return;
         }
 
-        var endpoint = device.Device;
+        // The arrival pipeline already handshook this target and captured its identity. Reuse that result before
+        // any state-gated re-query: a vendor-VCOM preloader has no brom/preloader descriptor state, so the
+        // descriptor gate alone would silently skip a device whose identity is already in hand.
+        // 到达流水线已完成握手并捕获身份，优先复用该结果，不再做受状态门控的二次查询：
+        // 厂商 VCOM preloader 没有 brom/preloader 描述符状态，仅靠状态门控会漏掉身份已在手的设备。
+        if (App.DeviceMonitor.GetMtkHandshakeInfo(endpoint) is { } handshaken)
+        {
+            device.SetMtkInfo(handshaken);
+            return;
+        }
+
+        if (!ShouldQueryMtkIdentity(endpoint.State, hasMtkInfo: false))
+        {
+            return;
+        }
+
         try
         {
             using var timeout = new CancellationTokenSource(MtkIdentityTimeoutMs);
