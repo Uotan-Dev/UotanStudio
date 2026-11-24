@@ -11,6 +11,32 @@ internal static class FlashSuperEmptySparse
 
     internal static void Build(PreparedSuperEmpty prepared, string outputPath, CancellationToken ct)
     {
+        using var sparse = BuildModel(prepared, ct);
+        try
+        {
+            using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            sparse.WriteToStream(output);
+            output.Flush(flushToDisk: true);
+            ct.ThrowIfCancellationRequested();
+        }
+        catch
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Builds the sparse model of the physical empty Super image in memory. Metadata segments are copied into
+    /// RAW chunks and all remaining space is a zero FILL chunk, so no full-size sparse file has to be staged on disk.
+    /// <para>在内存中构建物理空 Super 镜像的稀疏模型。元数据段复制为 RAW 块，其余空间为零 FILL 块，
+    /// 因此无需在磁盘上暂存整份稀疏镜像。</para>
+    /// </summary>
+    /// <param name="prepared">Validated metadata. <para>已校验的元数据。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The sparse model owned by the caller. <para>由调用方拥有的稀疏模型。</para></returns>
+    internal static SparseFile BuildModel(PreparedSuperEmpty prepared, CancellationToken ct)
+    {
         if (prepared.DeviceSize <= 0 || prepared.DeviceSize % BlockSize != 0)
             throw new InvalidDataException("The Super capacity must be a multiple of 4096 bytes.");
         using var source = new MemoryStream(prepared.MetadataImage, writable: false);
@@ -29,9 +55,9 @@ internal static class FlashSuperEmptySparse
             segments.Add((MetadataReader.GetBackupMetadataOffset(metadata.Geometry, (ulong)prepared.DeviceSize, slot), paddedTable));
         }
 
+        var sparse = new SparseFile(BlockSize, prepared.DeviceSize);
         try
         {
-            using var sparse = new SparseFile(BlockSize, prepared.DeviceSize);
             long position = 0;
             foreach (var (offset, bytes) in segments.OrderBy(segment => segment.Offset))
             {
@@ -44,14 +70,11 @@ internal static class FlashSuperEmptySparse
             }
             if (position < prepared.DeviceSize) sparse.AddFillChunk(0, prepared.DeviceSize - position);
             ct.ThrowIfCancellationRequested();
-            using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            sparse.WriteToStream(output);
-            output.Flush(flushToDisk: true);
-            ct.ThrowIfCancellationRequested();
+            return sparse;
         }
         catch
         {
-            if (File.Exists(outputPath)) File.Delete(outputPath);
+            sparse.Dispose();
             throw;
         }
     }

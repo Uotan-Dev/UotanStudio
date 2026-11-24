@@ -95,40 +95,28 @@ public static class FlashSuperEmptyService
         if (session.GetPartitionSizeLong("super") != prepared.DeviceSize)
             throw new InvalidDataException("The device Super size does not match super_empty metadata.");
 
-        var directory = Directory.CreateTempSubdirectory("uotan-super-empty-").FullName;
-        try
+        using var sparse = FlashSuperEmptySparse.BuildModel(prepared, ct);
+        var maxDownload = session.GetMaxDownloadSize();
+        using var image = new UotanStudio.Firmware.BlockImage.Sparse.IO.SparseContainerReadStream(sparse);
+        if (image.Length <= maxDownload)
         {
-            var image = Path.Combine(directory, "physical-super.sparse");
-            FlashSuperEmptySparse.Build(prepared, image, ct);
-            var maxDownload = session.GetMaxDownloadSize();
-            IReadOnlyList<string> chunks;
-            if (new FileInfo(image).Length <= maxDownload)
-            {
-                chunks = [image];
-            }
-            else
-            {
-                SparseImageConverter.ResparseImage(image, Path.Combine(directory, "chunk_{0}.sparse"), maxDownload);
-                chunks = [.. Directory.GetFiles(directory, "chunk_*.sparse")
-                    .OrderBy(path => int.Parse(Path.GetFileNameWithoutExtension(path)["chunk_".Length..],
-                        System.Globalization.CultureInfo.InvariantCulture))];
-                if (chunks.Count == 0) throw new InvalidDataException("Super image resparse produced no chunks.");
-            }
+            session.FlashPartition("super", image, image.Length,
+                cancellationToken: ct, resolveSlot: false,
+                options: FlashPartitionOptions.NoPreflight).ThrowIfFailed();
+            return;
+        }
 
-            foreach (var chunk in chunks)
+        var chunkCount = 0;
+        SparseImageConverter.ResparseModelToStreams(sparse, maxDownload,
+            (chunk, length) =>
             {
                 ct.ThrowIfCancellationRequested();
-                using var input = File.OpenRead(chunk);
-                session.FlashPartition("super", input, input.Length,
+                session.FlashPartition("super", chunk, length,
                     cancellationToken: ct, resolveSlot: false,
                     options: FlashPartitionOptions.NoPreflight).ThrowIfFailed();
-            }
-        }
-        finally
-        {
-            try { Directory.Delete(directory, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+                chunkCount++;
+            },
+            cancellationToken: ct);
+        if (chunkCount == 0) throw new InvalidDataException("Super image resparse produced no chunks.");
     }
 }
