@@ -84,9 +84,9 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>
     /// Detects the active A/B slot from an already-read GPT snapshot by testing the slot-active
-    /// attribute bit (bit 6) of the <c>boot_a</c> and <c>boot_b</c> partitions
+    /// attribute bit (bit 50, bit 2 of attribute byte 6) of the <c>boot_a</c> and <c>boot_b</c> partitions
     /// <para>从已读取的 GPT 快照检测活动 A/B 槽位：测试 <c>boot_a</c> 与 <c>boot_b</c> 分区的
-    /// 槽位活动属性位（第 6 位）。</para>
+    /// 槽位活动属性位（第 50 位，即属性第 6 字节的 bit 2）。</para>
     /// </summary>
     /// <param name="snapshot">A snapshot already read from this protocol.
     /// <para>已从本协议读取的快照。</para></param>
@@ -97,7 +97,7 @@ public sealed partial class FirehoseProtocol
     public static string? DetectActiveSlot(FirehoseGptSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        const ulong SlotActiveAttribute = 1UL << 6;
+        const ulong SlotActiveAttribute = 1UL << 50;
         foreach (var (name, slot) in new[] { ("boot_a", "a"), ("boot_b", "b") })
         {
             var partition = snapshot.Table.Partitions.FirstOrDefault(entry =>
