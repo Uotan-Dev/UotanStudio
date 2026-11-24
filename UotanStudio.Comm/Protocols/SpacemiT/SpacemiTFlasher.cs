@@ -1028,12 +1028,12 @@ public sealed class SpacemiTFlasher
     /// <summary>
     /// Flashes an oversized sparse image by reparsing it into self-contained sparse chunks
     /// (absolute block addressing, matching the vendor flasher's SparseImageSplitter output
-    /// shape) under <c>%TEMP%</c>, then flashing each chunk; the device's sparse writer
-    /// resolves every chunk's absolute offsets against the partition start. The temporary
-    /// chunk directory is removed afterwards.
+    /// shape) and streaming each chunk straight to the device; no chunk is materialized on disk,
+    /// so a size-limited <c>%TEMP%</c> can no longer abort a large transfer. The device's sparse
+    /// writer resolves every chunk's absolute offsets against the partition start.
     /// <para>把超过 max-download-size 的 sparse 镜像重切为自包含稀疏分片（绝对块寻址，与厂商
-    /// 烧录器 SparseImageSplitter 的产出形态一致）到 <c>%TEMP%</c> 下并逐片烧写；设备端 sparse
-    /// 写入器按分区起始解析每个分片的绝对偏移。临时分片目录随后删除。</para>
+    /// 烧录器 SparseImageSplitter 的产出形态一致）并把每片直接流式送到设备；不在磁盘上生成任何分片，
+    /// 因此受大小限制的 <c>%TEMP%</c> 不会再中断大镜像传输。设备端 sparse 写入器按分区起始解析每个分片的绝对偏移。</para>
     /// </summary>
     private void FlashResparseChunks(
         FastbootSession session,
@@ -1046,48 +1046,33 @@ public sealed class SpacemiTFlasher
     {
         Report(progress, "flash-partition", partition,
             $"sparse image exceeds max-download-size {maxDownload}; reparsing into chunks");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"uotan-spacemit-sparse-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDirectory);
-        try
-        {
-            SparseImageConverter.ResparseImage(imagePath, Path.Combine(tempDirectory, "chunk_{0}.sparse"), maxDownload);
-            var chunks = Directory.GetFiles(tempDirectory, "chunk_*.sparse")
-                .OrderBy(path => int.TryParse(
-                    Path.GetFileNameWithoutExtension(path).AsSpan("chunk_".Length),
-                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ? index : int.MaxValue,
-                    Comparer<int>.Default)
-                .ToList();
-            if (chunks.Count == 0)
-            {
-                throw new FastbootException(FastbootResponseState.Fail,
-                    $"sparse image '{Path.GetFileName(imagePath)}' produced no reparse chunks");
-            }
-
-            var totalBytes = chunks.Sum(path => new FileInfo(path).Length);
-            long sentBytes = 0;
-            for (var index = 0; index < chunks.Count; index++)
+        using var sparseFile = UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReader.FromImageFile(imagePath);
+        var totalChunks = 0;
+        var totalBytes = 0L;
+        var sentBytes = 0L;
+        var chunkCount = 0;
+        SparseImageConverter.ResparseModelToStreams(
+            sparseFile, maxDownload,
+            (chunk, chunkLength) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                using var chunk = File.OpenRead(chunks[index]);
-                var chunkLength = chunk.Length;
+                var index = chunkCount;
                 Report(progress, "flash-partition", partition,
-                    $"uploading chunk {index + 1}/{chunks.Count} ({chunkLength} bytes)");
-                session.DownloadData(chunk, chunkLength, CreateByteProgress(progress, "flash-partition", partition, totalBytes), timeout, cancellationToken)
+                    $"uploading chunk {index + 1}/{totalChunks} ({chunkLength} bytes)");
+                session.DownloadData(chunk, chunkLength,
+                        CreateByteProgress(progress, "flash-partition", partition, totalBytes), timeout, cancellationToken)
                     .ThrowIfFailed();
                 session.ExecuteCommand(FastbootConstants.CommandFlash + partition).ThrowIfFailed();
                 sentBytes += chunkLength;
+                chunkCount++;
                 Report(progress, "flash-partition", partition, $"chunk done, {sentBytes}/{totalBytes} bytes");
-            }
-        }
-        finally
+            },
+            onPlan: (count, bytes) => { totalChunks = count; totalBytes = bytes; },
+            cancellationToken);
+        if (totalChunks == 0)
         {
-            try
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-            catch (IOException)
-            {
-            }
+            throw new FastbootException(FastbootResponseState.Fail,
+                $"sparse image '{Path.GetFileName(imagePath)}' produced no reparse chunks");
         }
     }
 
