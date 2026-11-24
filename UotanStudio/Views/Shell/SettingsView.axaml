@@ -442,13 +442,20 @@
                                 <TextBlock Text="{DynamicResource Settings_AdbServer}" Classes="settings-label" />
                                 <TextBlock Text="{Binding AdbServerStatus}" Classes="settings-description" />
                             </StackPanel>
-                            <Button Grid.Column="1" Classes="settings-action"
-                                    Command="{Binding StopAdbServerCommand}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <icons:StopCircleStroke Width="14" Height="14" />
-                                    <TextBlock Text="{DynamicResource Settings_StopAdbServer}" />
-                                </StackPanel>
-                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding AdbServerActionStatus}" Classes="settings-value"
+                                           VerticalAlignment="Center" TextAlignment="Right"
+                                           MaxWidth="280"
+                                           IsVisible="{Binding AdbServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                <Button Classes="settings-action"
+                                        Command="{Binding StopAdbServerCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <icons:StopCircleStroke Width="14" Height="14" />
+                                        <TextBlock Text="{DynamicResource Settings_StopAdbServer}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
 
                         <Border Classes="settings-row-divider" />
@@ -458,20 +465,21 @@
                                 <TextBlock Text="{DynamicResource Settings_HdcServer}" Classes="settings-label" />
                                 <TextBlock Text="{Binding HdcServerStatus}" Classes="settings-description" />
                             </StackPanel>
-                            <Button Grid.Column="1" Classes="settings-action"
-                                    Command="{Binding StopHdcServerCommand}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <icons:StopCircleStroke Width="14" Height="14" />
-                                    <TextBlock Text="{DynamicResource Settings_StopHdcServer}" />
-                                </StackPanel>
-                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding HdcServerActionStatus}" Classes="settings-value"
+                                           VerticalAlignment="Center" TextAlignment="Right"
+                                           MaxWidth="280"
+                                           IsVisible="{Binding HdcServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                <Button Classes="settings-action"
+                                        Command="{Binding StopHdcServerCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <icons:StopCircleStroke Width="14" Height="14" />
+                                        <TextBlock Text="{DynamicResource Settings_StopHdcServer}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
-
-                        <Border Classes="settings-row-divider"
-                                IsVisible="{Binding ServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
-                        <TextBlock Text="{Binding ServerActionStatus}" Classes="settings-value"
-                                   IsVisible="{Binding ServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}"
-                                   HorizontalAlignment="Right" TextAlignment="Right" Margin="20,10,20,12" />
                     </StackPanel>
                 </Border>
 
