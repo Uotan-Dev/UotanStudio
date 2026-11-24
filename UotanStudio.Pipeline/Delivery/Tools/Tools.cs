@@ -81,20 +81,17 @@ public sealed class DeliveryToolService(HttpClient client, string cacheDirectory
     /// <para>贯穿下载、归档解压与文件复制的取消令牌。</para></param>
     public async Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
+        var hasZstFiles = plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase));
+        var recoveryOnlyZst = plan.Recovery && !plan.PackPayload && !plan.PackSuper && hasZstFiles;
+        var needsLinuxZstd = plan.PackSuper && plan.OrganizeDirectory && plan.Super.Zstd || recoveryOnlyZst;
         var platforms = new List<(string Name, DeliveryToolPackage Package)>();
         if (plan.Windows) platforms.Add(("Windows", Windows));
         if (plan.Linux) platforms.Add(("Linux", Linux));
         if (plan.MacOS) platforms.Add(("macOS", MacOS));
-        if (plan.PackSuper && plan.OrganizeDirectory && plan.Super.Zstd && !plan.Linux)
+        if (needsLinuxZstd && !plan.Linux)
             platforms.Add(("Linux", Linux));
-        await PreparePlatformsAsync(platforms, directory, plan, progress, token).ConfigureAwait(false);
-        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper
-            && plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))
-            && !platforms.Any(p => p.Name == "Linux"))
-            platforms.Add(("Linux", Linux));
-        if ((plan.PackSuper && plan.OrganizeDirectory && plan.Super.Zstd)
-            || (plan.Recovery && !plan.PackPayload && !plan.PackSuper
-                && plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase))))
+        await PreparePlatformsAsync(platforms, directory, plan, hasZstFiles, progress, token).ConfigureAwait(false);
+        if (needsLinuxZstd)
         {
             (string Source, string Name)[] mappings = [("zstd-arm64", "zstd"), ("zstd-arm64", "zstd-arm64"),
                 ("zstd", "zstd-x86_64"), ("zstd-loong64", "zstd-loong64")];
@@ -138,21 +135,27 @@ public sealed class DeliveryToolService(HttpClient client, string cacheDirectory
     /// <para>每个平台开始启动时收到一条 <c>Delivery_ProgressTools</c> 上报，交错的上报里 <c>Detail</c> 仍只点名一个平台。</para></param>
     /// <param name="token">Cancellation token threaded through every platform entry.
     /// <para>贯穿每个平台条目的取消令牌。</para></param>
-    internal async Task PreparePlatformsAsync(IReadOnlyList<(string Name, DeliveryToolPackage Package)> platforms,
+    internal Task PreparePlatformsAsync(IReadOnlyList<(string Name, DeliveryToolPackage Package)> platforms,
         string directory, DeliveryPlan plan, IProgress<DeliveryProgress>? progress, CancellationToken token)
+        => PreparePlatformsAsync(platforms, directory, plan,
+            plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)), progress, token);
+
+    private async Task PreparePlatformsAsync(IReadOnlyList<(string Name, DeliveryToolPackage Package)> platforms,
+        string directory, DeliveryPlan plan, bool hasZstFiles, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         using var gate = new SemaphoreSlim(MaximumConcurrentPlatforms, MaximumConcurrentPlatforms);
         var entries = new Task[platforms.Count];
         for (var index = 0; index < platforms.Count; index++)
         {
-            entries[index] = PreparePlatformAsync(platforms[index].Name, platforms[index].Package, directory, plan, progress, gate, token);
+            entries[index] = PreparePlatformAsync(platforms[index].Name, platforms[index].Package, directory, plan,
+                hasZstFiles, progress, gate, token);
         }
 
         await Task.WhenAll(entries).ConfigureAwait(false);
     }
 
     private async Task PreparePlatformAsync(string name, DeliveryToolPackage package, string directory, DeliveryPlan plan,
-        IProgress<DeliveryProgress>? progress, SemaphoreSlim gate, CancellationToken token)
+        bool hasZstFiles, IProgress<DeliveryProgress>? progress, SemaphoreSlim gate, CancellationToken token)
     {
         await gate.WaitAsync(token).ConfigureAwait(false);
         try
@@ -163,7 +166,7 @@ public sealed class DeliveryToolService(HttpClient client, string cacheDirectory
             await ExtractAsync(archive, package.Prefix, target, token).ConfigureAwait(false);
             if (!File.Exists(Path.Combine(target, name == "Windows" ? "fastboot.exe" : "fastboot")))
                 throw new InvalidDataException("Tool archive does not contain fastboot.");
-            if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
+            if (hasZstFiles)
                 await PrepareZstdAsync(name, target, plan, progress, token).ConfigureAwait(false);
             TrimPlatformTools(name, target);
         }
