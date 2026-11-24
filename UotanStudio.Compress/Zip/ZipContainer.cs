@@ -207,12 +207,23 @@ public static class ZipContainer
                 "A ZIP entry path cannot contain a drive letter or stream separator.", nameof(entryName));
         }
 
-        if (normalized[0] == '/'
-            || normalized.Split('/').Any(static part => part.Length == 0 || part is "." or ".."))
+        if (normalized[0] == '/')
         {
             throw new ArgumentException(
                 "A ZIP entry path must be relative and cannot contain empty, '.' or '..' segments.",
                 nameof(entryName));
+        }
+
+        var source = normalized.AsSpan();
+        foreach (var range in source.Split('/'))
+        {
+            var segment = source[range];
+            if (segment.IsEmpty || segment.SequenceEqual(".") || segment.SequenceEqual(".."))
+            {
+                throw new ArgumentException(
+                    "A ZIP entry path must be relative and cannot contain empty, '.' or '..' segments.",
+                    nameof(entryName));
+            }
         }
 
         return normalized;

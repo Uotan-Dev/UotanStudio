@@ -32,14 +32,7 @@ internal static class Lzma2Encoder
     /// <para>以 <c>0x00</c> 结束标记收尾的 LZMA2 原始字节。</para></returns>
     public static byte[] Encode(byte[] data, uint dictionarySize = DefaultDictionarySize, int? maxDegreeOfParallelism = null)
     {
-
-        var windowStarts = new List<int>();
-        for (var pos = 0; pos < data.Length; pos += UncompressedChunkMax)
-        {
-            windowStarts.Add(pos);
-        }
-
-        var windowCount = windowStarts.Count;
+        var windowCount = data.Length == 0 ? 0 : 1 + (data.Length - 1) / UncompressedChunkMax;
         var compressed = new PooledWriteStream?[windowCount];
         var dop = Parallelism.Resolve(maxDegreeOfParallelism, windowCount);
 
@@ -54,7 +47,7 @@ internal static class Lzma2Encoder
                     () => CreateEncoder(dictionarySize),
                     (i, _, encoder) =>
                     {
-                        var start = windowStarts[i];
+                        var start = i * UncompressedChunkMax;
                         var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
                         compressed[i] = Lzma1Compress(encoder, data, start, chunkSize);
                         return encoder;
@@ -66,7 +59,7 @@ internal static class Lzma2Encoder
                 Encoder? encoder = null;
                 for (var i = 0; i < windowCount; i++)
                 {
-                    var start = windowStarts[i];
+                    var start = i * UncompressedChunkMax;
                     var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
                     compressed[i] = Lzma1Compress(encoder ??= CreateEncoder(dictionarySize), data, start, chunkSize);
                 }
@@ -77,7 +70,7 @@ internal static class Lzma2Encoder
 
             for (var i = 0; i < windowCount; i++)
             {
-                var start = windowStarts[i];
+                var start = i * UncompressedChunkMax;
                 var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
                 var result = compressed[i]!;
 

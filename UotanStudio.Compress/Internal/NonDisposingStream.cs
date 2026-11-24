@@ -34,6 +34,15 @@ public sealed class NonDisposingStream(Stream inner) : Stream
     /// <inheritdoc />
     public override void WriteByte(byte value) => _inner.WriteByte(value);
     /// <inheritdoc />
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        => _inner.ReadAsync(buffer, cancellationToken);
+    /// <inheritdoc />
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        => _inner.WriteAsync(buffer, cancellationToken);
+    /// <inheritdoc />
+    public override Task FlushAsync(CancellationToken cancellationToken = default)
+        => _inner.FlushAsync(cancellationToken);
+    /// <inheritdoc />
     public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
     /// <inheritdoc />
     public override void SetLength(long value) => _inner.SetLength(value);

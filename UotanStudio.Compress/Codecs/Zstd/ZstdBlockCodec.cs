@@ -302,7 +302,12 @@ public static class ZstdBlockCodec
                     case OperationStatus.Done:
                         if (consumed == source.Length)
                         {
-                            var result = new byte[written];
+                            if (written == buffer.Length)
+                            {
+                                return buffer;
+                            }
+
+                            var result = GC.AllocateUninitializedArray<byte>(written);
                             buffer.AsSpan(0, written).CopyTo(result);
                             return result;
                         }
@@ -321,13 +326,8 @@ public static class ZstdBlockCodec
                         buffer = grown;
                         break;
                     case OperationStatus.NeedMoreData:
-                        if (consumed == 0)
-                        {
-                            throw new CompressionException(
-                                "ZSTD block decompression failed: the frame is truncated. ZSTD 块解压失败：帧被截断。");
-                        }
-
-                        break;
+                        throw new CompressionException(
+                            "ZSTD block decompression failed: the frame is truncated. ZSTD 块解压失败：帧被截断。");
                     case OperationStatus.InvalidData:
                         throw new CompressionException(
                             "ZSTD block decompression failed: the frame is malformed. ZSTD 块解压失败：帧无效。");

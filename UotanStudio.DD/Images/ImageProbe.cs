@@ -74,16 +74,46 @@ public static class ImageProbe
     /// <para>未找到或找到多个文件条目。</para></exception>
     internal static ZipArchiveEntry SelectSingleEntry(ZipArchive archive)
     {
-        var entries = archive.Entries.Where(entry => !entry.FullName.EndsWith('/')).ToArray();
-        if (entries.Length != 1)
+        const int MaximumNamesInError = 3;
+        const int MaximumNameCharacters = 96;
+        ZipArchiveEntry? selected = null;
+        List<string>? names = null;
+        var fileEntryCount = 0;
+        foreach (var entry in archive.Entries)
         {
-            var names = entries.Length == 0
-                ? "none"
-                : string.Join(", ", entries.Select(entry => entry.FullName));
-            throw new FlashException(
-                $"A ZIP image must contain exactly one file entry, but the archive contains {entries.Length} ({names}).");
+            if (entry.FullName.EndsWith('/'))
+            {
+                continue;
+            }
+
+            fileEntryCount = checked(fileEntryCount + 1);
+            if (selected is null)
+            {
+                selected = entry;
+                continue;
+            }
+
+            names ??= [TruncateName(selected.FullName, MaximumNameCharacters)];
+            if (names.Count < MaximumNamesInError)
+            {
+                names.Add(TruncateName(entry.FullName, MaximumNameCharacters));
+            }
         }
 
-        return entries[0];
+        if (selected is not null && fileEntryCount == 1)
+        {
+            return selected;
+        }
+
+        var description = names is null
+            ? "none"
+            : names.Count == fileEntryCount
+                ? string.Join(", ", names)
+                : $"{string.Join(", ", names)} ({fileEntryCount - names.Count} more)";
+        throw new FlashException(
+            $"A ZIP image must contain exactly one file entry, but the archive contains {fileEntryCount} ({description}).");
+
+        static string TruncateName(string name, int maximumCharacters)
+            => name.Length <= maximumCharacters ? name : name[..maximumCharacters] + "...";
     }
 }
