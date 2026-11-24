@@ -500,11 +500,44 @@ public sealed partial class DeviceMonitorService
     /// <para>总等待预算；为零时首次占用即失败。</para></param>
     /// <param name="wait">Delay applied between attempts; the policy never sleeps itself.
     /// <para>两次尝试之间的延迟；策略自身不休眠。</para></param>
+    /// <param name="releaseStaleOwner">Stops this host's own leftover holder once; may be <see langword="null"/>.
+    /// <para>停止本宿主遗留的持有者一次；可为 <see langword="null"/>。</para></param>
     /// <returns>The value returned by <paramref name="acquire"/>. <para><paramref name="acquire"/> 返回的值。</para></returns>
     /// <exception cref="IOException">The endpoint stayed leased for the whole budget.
     /// <para>端点在整个预算内保持占用。</para></exception>
     internal static TValue AcquireForMirror<TValue>(Func<TValue> acquire, TimeSpan timeout, Action<TimeSpan> wait,
         Action? releaseStaleOwner = null)
+        => AcquireWithBusyRetry(acquire, timeout, wait, releaseStaleOwner,
+            "The device endpoint is busy: another operation still holds it, such as a device-details "
+            + "refresh, a root probe, a log capture or a file transfer. Wait for it to finish, close the "
+            + "log capture if it is open, and start mirroring again. "
+            + "设备端点正被其它操作占用（如设备详情刷新、root 探测、日志抓取或文件传输）；请等待其结束，"
+            + "如有日志抓取请先停止，然后重新投屏。");
+
+    /// <summary>
+    /// Runs one exclusive acquisition, retrying only while another live lease still holds the endpoint.
+    /// Short host-side readers (a getvar batch, a property probe) release their lease in well under a second;
+    /// waiting for them turns a spurious busy rejection into a successful operation.
+    /// <para>执行一次独占取得，仅当另一个存活租约仍占用端点时重试。宿主侧的短暂读取（getvar 批次、属性探测）
+    /// 在一秒内即释放租约；等待它们可把偶发的占用拒绝变为成功。</para>
+    /// </summary>
+    /// <typeparam name="TValue">Result of a successful acquisition.
+    /// <para>成功取得的结果。</para></typeparam>
+    /// <param name="acquire">The exclusive acquisition to run; failures other than a busy endpoint propagate.
+    /// <para>要执行的独占取得；除端点占用外的失败照常抛出。</para></param>
+    /// <param name="timeout">Total wait budget; zero fails immediately on the first busy rejection.
+    /// <para>总等待预算；为零时首次占用即失败。</para></param>
+    /// <param name="wait">Delay applied between attempts; the policy never sleeps itself.
+    /// <para>两次尝试之间的延迟；策略自身不休眠。</para></param>
+    /// <param name="releaseStaleOwner">Stops this host's own leftover holder once; may be <see langword="null"/>.
+    /// <para>停止本宿主遗留的持有者一次；可为 <see langword="null"/>。</para></param>
+    /// <param name="busyMessage">Actionable message returned when the endpoint stays busy for the whole budget.
+    /// <para>端点在整个预算内持续占用时返回的可操作消息。</para></param>
+    /// <returns>The value returned by <paramref name="acquire"/>. <para><paramref name="acquire"/> 返回的值。</para></returns>
+    /// <exception cref="IOException">The endpoint stayed leased for the whole budget.
+    /// <para>端点在整个预算内保持占用。</para></exception>
+    internal static TValue AcquireWithBusyRetry<TValue>(Func<TValue> acquire, TimeSpan timeout, Action<TimeSpan> wait,
+        Action? releaseStaleOwner, string busyMessage)
     {
         ArgumentNullException.ThrowIfNull(acquire);
         ArgumentNullException.ThrowIfNull(wait);
@@ -529,12 +562,7 @@ public sealed partial class DeviceMonitorService
             }
             catch (DeviceEndpointBusyException busy)
             {
-                throw new IOException(
-                    "The device endpoint is busy: another operation still holds it, such as a device-details "
-                    + "refresh, a root probe, a log capture or a file transfer. Wait for it to finish, close the "
-                    + "log capture if it is open, and start mirroring again. "
-                    + "设备端点正被其它操作占用（如设备详情刷新、root 探测、日志抓取或文件传输）；请等待其结束，"
-                    + "如有日志抓取请先停止，然后重新投屏。", busy);
+                throw new IOException(busyMessage, busy);
             }
         }
     }

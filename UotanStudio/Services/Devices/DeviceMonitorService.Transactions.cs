@@ -12,6 +12,13 @@ public sealed partial class DeviceMonitorService
 {
     private const int UsbInventoryCacheMilliseconds = 500;
 
+    /// <summary>
+    /// How long a Fastboot operation waits for another host-side reader (for example the device-info getvar
+    /// batch) to release the exclusive USB endpoint before reporting a busy error.
+    /// <para>Fastboot 操作在报告端点占用前等待其它宿主侧读取（如设备信息 getvar 批次）释放独占 USB 端点的时长。</para>
+    /// </summary>
+    private static readonly TimeSpan FastbootFlashLeaseWaitTimeout = TimeSpan.FromSeconds(5);
+
     private readonly Lock _usbInventoryLock = new();
     private UsbDeviceInfo[]? _usbInventory;
     private long _usbInventoryTimestamp;
@@ -239,10 +246,17 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Fastboot)
             throw new ArgumentException("A Fastboot target is required.", nameof(device));
-        var lease = device.Key.StartsWith("fastboot-tcp:", StringComparison.Ordinal) ||
-            device.Key.StartsWith("fastboot-udp:", StringComparison.Ordinal)
-                ? OpenDirectNetworkFastbootLease(device)
-                : LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken);
+        var lease = AcquireWithBusyRetry(
+            () => device.Key.StartsWith("fastboot-tcp:", StringComparison.Ordinal) ||
+                device.Key.StartsWith("fastboot-udp:", StringComparison.Ordinal)
+                    ? OpenDirectNetworkFastbootLease(device)
+                    : LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken),
+            FastbootFlashLeaseWaitTimeout,
+            delay => Thread.Sleep(delay),
+            releaseStaleOwner: null,
+            "The device endpoint is busy: another operation (such as a Fastboot device-info read) still holds it. "
+            + "Wait for that operation to finish and retry. "
+            + "设备端点正被其它操作占用（如 Fastboot 设备信息读取）；请等待该操作完成后重试。");
         try
         {
             if (!lease.TryGetSession<FastbootSession>(out var session))
