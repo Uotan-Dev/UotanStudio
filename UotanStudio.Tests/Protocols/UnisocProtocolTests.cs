@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Hash.Crc16Xmodem;
 using UotanStudio.Hash.Sums;
@@ -49,6 +49,30 @@ public class UnisocProtocolTests
         parser.Append(frame);
         Assert.Equal(UnisocParseStatus.Frame, parser.TryRead(UnisocChecksumKind.Sum, true, out var parsed));
         Assert.Equal(payload, parsed.Payload);
+    }
+
+    [Fact]
+    public void Parser_AppendAtExactFrameLimit_DoesNotThrow()
+    {
+        var parser = new UnisocFrameParser();
+        var block = new byte[4096];
+        for (var sent = 0; sent < UnisocConstants.MaximumEncodedFrame; sent += block.Length)
+        {
+            parser.Append(block.AsSpan(0, Math.Min(block.Length, UnisocConstants.MaximumEncodedFrame - sent)));
+        }
+    }
+
+    [Fact]
+    public void Parser_AppendBeyondFrameLimit_Throws()
+    {
+        var parser = new UnisocFrameParser();
+        var block = new byte[4096];
+        for (var sent = 0; sent < UnisocConstants.MaximumEncodedFrame; sent += block.Length)
+        {
+            parser.Append(block.AsSpan(0, Math.Min(block.Length, UnisocConstants.MaximumEncodedFrame - sent)));
+        }
+
+        Assert.Throws<UnisocProtocolException>(() => parser.Append([0x7E]));
     }
 
     [Fact]
@@ -114,6 +138,21 @@ public class UnisocProtocolTests
         Assert.Equal("SPRD3", session.Identity.Version is { } version
             ? System.Text.Encoding.ASCII.GetString(version).TrimEnd('\0')
             : string.Empty);
+    }
+
+    [Fact]
+    public async Task Open_CapturedBootRomWireFrame_IdentifiesOpenBootRom()
+    {
+        // Exact reply captured from the iPlay40 (T1020S) BootROM: a CRC16-framed SPRD3 version reply.
+        var transport = new FakeTransport();
+        transport.EnqueueRaw(Convert.FromHexString("7E00810006535052443300570A7E"));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+
+        using var session = await UnisocDeviceSession.OpenAsync(transport, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(UnisocBootStage.BootRom, session.Stage);
+        Assert.False(session.Identity.SecureBoot);
+        Assert.Equal("SPRD3", System.Text.Encoding.ASCII.GetString(session.Identity.Version!).TrimEnd('\0'));
     }
 
     [Fact]
@@ -199,6 +238,47 @@ public class UnisocProtocolTests
         Assert.Single(mids);
         Assert.Equal(loader, mids[0]);
         Assert.Contains(transport.WrittenTypes(), type => type == (ushort)UnisocCommand.ExecData);
+    }
+
+    [Fact]
+    public async Task UploadFdl1_StreamPositionedPastStart_DeclaresOnlyRemainingBytes()
+    {
+        var transport = new FakeTransport();
+        transport.Enqueue(broker => broker.Reply(0x81, "SPRD3\0"u8.ToArray(), UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        using var session = await UnisocDeviceSession.OpenAsync(transport, null, TestContext.Current.CancellationToken);
+
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x81, "FDL1 loader"u8.ToArray(), UnisocChecksumKind.Sum));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Sum));
+
+        var loader = new byte[] { 0x11, 0xA5 };
+        var stream = new MemoryStream(loader);
+        stream.Position = 1;
+        await session.UploadFdl1Async(stream, 0x40004000, TestContext.Current.CancellationToken);
+
+        var starts = transport.WrittenFrames(UnisocCommand.StartData);
+        Assert.Equal(1u, BinaryPrimitives.ReadUInt32BigEndian(starts[0].AsSpan(4)));
+        var mids = transport.WrittenFrames(UnisocCommand.MidstData);
+        Assert.Equal(new byte[] { 0xA5 }, mids[0]);
+    }
+
+    [Fact]
+    public async Task UploadFdl1_AddressPlusSizeBeyondRam_IsRejectedBeforeAnyFrame()
+    {
+        var transport = new FakeTransport();
+        transport.Enqueue(broker => broker.Reply(0x81, "SPRD3\0"u8.ToArray(), UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        using var session = await UnisocDeviceSession.OpenAsync(transport, null, TestContext.Current.CancellationToken);
+
+        var loader = new byte[512];
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            session.UploadFdl1Async(new MemoryStream(loader), 0xFFFFFF00, TestContext.Current.CancellationToken));
+        Assert.Empty(transport.WrittenFrames(UnisocCommand.StartData));
+        Assert.Equal(UnisocBootStage.BootRom, session.Stage);
     }
 
     [Fact]
@@ -406,11 +486,17 @@ public class UnisocProtocolTests
     {
         private readonly List<Action<DeviceBroker>> _replies = [];
         private readonly List<byte[]> _writes = [];
+        private readonly Queue<byte[]> _rawReplies = new();
         private byte[]? _pending;
 
         public bool IsDisposed { get; private set; }
 
         public void Enqueue(Action<DeviceBroker> reply) => _replies.Add(reply);
+
+        public void EnqueueRaw(byte[] bytes)
+        {
+            _rawReplies.Enqueue(bytes);
+        }
 
         public IReadOnlyList<byte[]> WrittenFrames(UnisocCommand command) =>
             _writes.Where(frame => frame.Length >= 4 &&
@@ -449,6 +535,10 @@ public class UnisocProtocolTests
             {
                 source = pending;
                 _pending = null;
+            }
+            else if (_rawReplies.Count > 0)
+            {
+                source = _rawReplies.Dequeue();
             }
             else if (_replies.Count > 0)
             {

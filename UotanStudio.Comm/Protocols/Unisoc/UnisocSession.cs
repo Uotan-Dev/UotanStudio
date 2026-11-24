@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
 
@@ -173,7 +173,21 @@ internal class UnisocSession : IDisposable
         }
 
         var frame = UnisocFrames.EncodeCommand(command, payload.Span, _checksumKind, _transcode);
-        await _transport.WriteAsync(frame, cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
+        try
+        {
+            await _transport.WriteAsync(frame, cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Fault();
+            throw;
+        }
+        catch
+        {
+            Fault();
+            throw;
+        }
+
         return await ReceiveReplyAsync(timeoutMilliseconds, cancellationToken).ConfigureAwait(false);
     }
 
@@ -193,7 +207,16 @@ internal class UnisocSession : IDisposable
         var deadline = Stopwatch.GetTimestamp() + timeoutMilliseconds * Stopwatch.Frequency / 1000;
         while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                Fault();
+                throw;
+            }
+
             var remainingMs = (int)((deadline - Stopwatch.GetTimestamp()) * 1000 / Stopwatch.Frequency);
             if (remainingMs <= 0)
             {
@@ -201,8 +224,23 @@ internal class UnisocSession : IDisposable
                 throw new UnisocProtocolException("The Unisoc link timed out waiting for a reply.");
             }
 
-            var read = await _transport.ReadAsync(_receiveBuffer.AsMemory(0, ReceiveChunkSize), cancellationToken,
-                remainingMs).ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await _transport.ReadAsync(_receiveBuffer.AsMemory(0, ReceiveChunkSize), cancellationToken,
+                    remainingMs).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                Fault();
+                throw;
+            }
+            catch
+            {
+                Fault();
+                throw;
+            }
+
             if (read <= 0)
             {
                 Fault();
@@ -275,13 +313,30 @@ internal class UnisocSession : IDisposable
             {
                 await _transport.WriteAsync(bytes, cancellationToken, timeoutMilliseconds).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                Fault();
+                throw;
+            }
+            catch
+            {
+                Fault();
+                throw;
+            }
             finally
             {
                 _checksumKind = previousKind;
             }
         }
 
-        var (frame, _) = await CollectReplyAsync(kind, timeoutMilliseconds, cancellationToken).ConfigureAwait(false);
+        var (frame, malformed) = await CollectReplyAsync(kind, timeoutMilliseconds, cancellationToken)
+            .ConfigureAwait(false);
+        if (malformed)
+        {
+            Fault();
+            throw new UnisocProtocolException("The Unisoc link delivered a malformed frame during probing.");
+        }
+
         return frame;
     }
 
@@ -341,7 +396,16 @@ internal class UnisocSession : IDisposable
                 return (frame, false);
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                Fault();
+                throw;
+            }
+
             var remainingMs = (int)((deadline - Stopwatch.GetTimestamp()) * 1000 / Stopwatch.Frequency);
             if (remainingMs <= 0)
             {

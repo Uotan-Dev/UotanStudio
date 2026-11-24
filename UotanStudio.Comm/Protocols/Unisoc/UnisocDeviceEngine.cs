@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
 
@@ -89,10 +89,23 @@ internal sealed class UnisocDeviceEngine : UnisocSession
 
     private async Task<UnisocDeviceIdentity> IdentifyAsync(CancellationToken cancellationToken)
     {
-        await Transport.WriteAsync(UnisocFrames.EncodeCheckBaud(1), cancellationToken, Options.EntryProbeTimeoutMs)
-            .ConfigureAwait(false);
-        (UnisocFrame? crcReply, bool crcMalformed) = await CollectReplyAsync(UnisocChecksumKind.Crc16,
-            Options.EntryProbeTimeoutMs, cancellationToken).ConfigureAwait(false);
+        // The official tool repeats CHECK_BAUD on a silent/failed exchange instead of concluding after one probe.
+        // Re-send the bare header each attempt and re-parse with both algorithms, because a device that has just
+        // re-enumerated may only answer on the second or third line.
+        UnisocFrame? crcReply = null;
+        var crcMalformed = false;
+        for (var attempt = 0; attempt < Options.CheckBaudRetries && crcReply is null && !crcMalformed; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // The write budget must be the full command timeout, not the short reply budget: a CDC/VCOM port
+            // that has just enumerated can take longer than the reply window to accept the first byte, and a
+            // write timeout here faults the session and prevents any silent retry.
+            await Transport.WriteAsync(UnisocFrames.EncodeCheckBaud(1), cancellationToken, Options.CommandTimeoutMs)
+                .ConfigureAwait(false);
+            (crcReply, crcMalformed) = await CollectReplyAsync(UnisocChecksumKind.Crc16,
+                Options.EntryProbeTimeoutMs, cancellationToken).ConfigureAwait(false);
+        }
+
         if (crcReply is { } crcFrame)
         {
             if ((UnisocReply)crcFrame.Type == UnisocReply.Version)
@@ -164,7 +177,9 @@ internal sealed class UnisocDeviceEngine : UnisocSession
 
     private async Task<UnisocDeviceIdentity?> TrySilentHandshakeAsync(CancellationToken cancellationToken)
     {
-        await SendCommandAsync(UnisocCommand.Connect, ReadOnlyMemory<byte>.Empty, Options.EntryProbeTimeoutMs, cancellationToken)
+        // Same write/reply budget split as the CHECK_BAUD probe: give the port the full command timeout to
+        // accept the CONNECT bytes while keeping the short reply window for the silent-link handshake.
+        await SendCommandAsync(UnisocCommand.Connect, ReadOnlyMemory<byte>.Empty, Options.CommandTimeoutMs, cancellationToken)
             .ConfigureAwait(false);
         (UnisocFrame? ackFrame, bool _) = await CollectReplyAsync(UnisocChecksumKind.Sum, Options.EntryProbeTimeoutMs,
             cancellationToken).ConfigureAwait(false);
@@ -225,8 +240,9 @@ internal sealed class UnisocDeviceEngine : UnisocSession
     /// under the additive checksum.
     /// <para>从 Boot ROM 连接上传并执行一级加载器。成功后链路以加性校验与 FDL1 通信。</para>
     /// </summary>
-    /// <param name="loader">Readable loader image; the session reads it chunk by chunk and never materializes it.
-    /// <para>可读的加载器镜像；会话逐块读取，不做物化。</para></param>
+    /// <param name="loader">Readable loader image; the session transfers the bytes from its current position and
+    /// never materializes it.
+    /// <para>可读的加载器镜像；会话从当前位置开始逐块传输，不做物化。</para></param>
     /// <param name="address">RAM load address confirmed by the package scheme or the user.
     /// <para>由包 scheme 或用户确认的 RAM 加载地址。</para></param>
     /// <param name="cancellationToken">Cancels the upload. <para>取消上传。</para></param>
@@ -316,11 +332,17 @@ internal sealed class UnisocDeviceEngine : UnisocSession
                 "The loader stream must be seekable so the declared size is known.", nameof(loader));
         }
 
-        var size = loader.Length;
+        var size = loader.Length - loader.Position;
         if (size is < 1 or > 32 * 1024 * 1024)
         {
             throw new ArgumentOutOfRangeException(nameof(loader), size,
-                "A loader image must be between one byte and 32 MiB.");
+                "A loader image must have between one byte and 32 MiB remaining from its current position.");
+        }
+
+        if ((ulong)address + (ulong)size > 0x1_0000_0000UL)
+        {
+            throw new ArgumentOutOfRangeException(nameof(address), address,
+                "The loader image would extend past the 32-bit RAM boundary.");
         }
 
         SetChecksumKind(kind);

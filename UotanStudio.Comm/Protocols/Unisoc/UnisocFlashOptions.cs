@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Comm.Protocols.Unisoc;
+namespace UotanStudio.Comm.Protocols.Unisoc;
 
 /// <summary>
 /// What happens to each partition's existing contents before it is written.
@@ -49,6 +49,11 @@ public sealed record UnisocFlashOptions
     /// <para>整存储擦除额外必须携带的精确短语。</para></summary>
     public const string WipeConfirmationPhrase = "WIPE";
 
+    /// <summary>The exact phrase a partition-table rebuild must carry; this operation destroys the table and all
+    /// partition boundaries.
+    /// <para>重建分区表必须携带的精确短语；该操作会销毁分区表和所有分区边界。</para></summary>
+    public const string RepartitionConfirmationPhrase = "REPARTITION";
+
     /// <summary>Gets the erase mode. <para>获取擦除模式。</para></summary>
     public UnisocFlashMode Mode { get; init; } = UnisocFlashMode.PartitionErase;
 
@@ -65,6 +70,14 @@ public sealed record UnisocFlashOptions
     /// <see cref="WipeConfirmationPhrase"/>.
     /// <para><see cref="UnisocFlashMode.FullErase"/> 要求的擦除确认；必须等于 <see cref="WipeConfirmationPhrase"/>。</para></summary>
     public string? WipeConfirmation { get; init; }
+
+    /// <summary>Gets the separate confirmation for rebuilding the partition table. It destroys every partition
+    /// boundary and is refused unless it equals <see cref="RepartitionConfirmationPhrase"/>.
+    /// <para>重建分区表的单独确认；该操作销毁所有分区边界，必须等于 <see cref="RepartitionConfirmationPhrase"/> 才会执行。</para></summary>
+    public string? RepartitionConfirmation { get; init; }
+
+    /// <summary>Gets whether the plan's ExtTable should be applied. <para>获取是否应用计划的 ExtTable。</para></summary>
+    public bool ApplyRepartition { get; init; }
 
     /// <summary>
     /// Validates the options and returns the confirmed flash phrase for the destructive calls.

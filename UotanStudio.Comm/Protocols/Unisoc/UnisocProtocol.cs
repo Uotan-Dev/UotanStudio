@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Comm.Protocols.Unisoc;
+namespace UotanStudio.Comm.Protocols.Unisoc;
 
 /// <summary>
 /// Vendor and wire constants of the UNISOC (Spreadtrum) BSL download protocol: the download serial pair, the HDLC
@@ -74,9 +74,12 @@ internal static class UnisocConstants
     /// <para>boot ROM 执行应答之后、开始第一级 FDL 握手前的默认等待。</para></summary>
     public const int Fdl1StartDelayMs = 500;
 
-    /// <summary>Default probe budget of the first CHECK_BAUD exchange on an unidentified link.
-    /// <para>未识别链路上第一次 CHECK_BAUD 交互的默认探测预算。</para></summary>
-    public const int EntryProbeTimeoutMs = 500;
+    /// <summary>Default probe budget of one CHECK_BAUD exchange on an unidentified link. The official tool's
+    /// BMTimeout.ini default is 1000 ms; a 500 ms window is too short for a Boot ROM that is still settling after
+    /// enumeration.
+    /// <para>未识别链路上单次 CHECK_BAUD 交互的默认探测预算。官方 BMTimeout.ini 默认 1000 ms；500 ms 对刚完成枚举、
+    /// 尚未稳定的 Boot ROM 过短。</para></summary>
+    public const int EntryProbeTimeoutMs = 1000;
 
     /// <summary>How many times the FDL handshake repeats CHECK_BAUD before giving up.
     /// <para>FDL 握手在放弃前重复 CHECK_BAUD 的次数。</para></summary>
@@ -122,8 +125,12 @@ public enum UnisocCommand : ushort
     /// <summary>Erases flash by address or by partition name. <para>按地址或分区名擦除闪存。</para></summary>
     EraseFlash = 0x0A,
 
-    /// <summary>Rebuilds the partition table from a record list. <para>按记录表重建分区。</para></summary>
+    /// <summary>Rebuilds the partition table from an ExtTable sent beforehand. <para>按预先下发的 ExtTable 重建分区表。</para></summary>
     Repartition = 0x0B,
+
+    /// <summary>Sends the vendor ExtTable (partition type/alias/size records) before a repartition.
+    /// <para>在重分区前下发厂商 ExtTable（分区类型/别名/大小记录）。</para></summary>
+    SendExtTable = 0x14,
 
     /// <summary>Reads the flash type. <para>读取闪存类型。</para></summary>
     ReadFlashType = 0x0C,
@@ -309,11 +316,98 @@ public enum UnisocReply : ushort
     /// <para>分区不兼容；FDL2 在收到其不需要的执行命令时也可能返回。</para></summary>
     IncompatiblePartition = 0x96,
 
-    /// <summary>Signature verification failed. <para>签名校验失败。</para></summary>
-    SignVerifyError = 0xA6,
+    /// <summary>Unknown device. <para>未知设备。</para></summary>
+    UnknownDevice = 0x97,
+
+    /// <summary>Invalid device size. <para>设备容量非法。</para></summary>
+    InvalidDeviceSize = 0x98,
+
+    /// <summary>Illegal SDRAM configuration. <para>非法的 SDRAM 配置。</para></summary>
+    IllegalSdram = 0x99,
+
+    /// <summary>Wrong SDRAM parameter. <para>SDRAM 参数错误。</para></summary>
+    WrongSdramParameter = 0x9A,
+
+    /// <summary>Flash information reply. <para>闪存信息应答。</para></summary>
+    ReadFlashInfo = 0x9B,
+
+    /// <summary>NOR sector size reply. <para>NOR 扇区大小应答。</para></summary>
+    ReadSectorSize = 0x9C,
+
+    /// <summary>Flash type reply. <para>闪存类型应答。</para></summary>
+    ReadFlashType = 0x9D,
+
+    /// <summary>Flash UID reply. <para>闪存 UID 应答。</para></summary>
+    ReadFlashUid = 0x9E,
+
+    /// <summary>SoftSIM EID reply. <para>SoftSIM EID 应答。</para></summary>
+    ReadSoftsimEid = 0x9F,
+
+    /// <summary>Checksum error while downloading fixed NV. <para>下载固定 NV 时校验和错误。</para></summary>
+    ChecksumError = 0xA0,
+
+    /// <summary>Checksum mismatch. <para>校验和不匹配。</para></summary>
+    ChecksumDiff = 0xA1,
+
+    /// <summary>Write error. <para>写入错误。</para></summary>
+    WriteError = 0xA2,
+
+    /// <summary>Chip ID does not match. <para>芯片 ID 不匹配。</para></summary>
+    ChipIdNotMatch = 0xA3,
+
+    /// <summary>Flash configuration error. <para>闪存配置错误。</para></summary>
+    FlashConfigError = 0xA4,
+
+    /// <summary>Download STL size error. <para>下载 STL 大小错误。</para></summary>
+    DownStlSizeError = 0xA5,
+
+    /// <summary>Phone is rooted. <para>设备已 root。</para></summary>
+    PhoneIsRooted = 0xA7,
+
+    /// <summary>Security data verification error. <para>安全数据校验错误。</para></summary>
+    SecVerifyError = 0xAA,
 
     /// <summary>Chip UID reply. <para>芯片 UID 应答。</para></summary>
     ReadChipUid = 0xAB,
+
+    /// <summary>Flash write is not enabled. <para>闪存写入未启用。</para></summary>
+    NotEnableWriteFlash = 0xAC,
+
+    /// <summary>Enabling secure boot failed. <para>启用安全启动失败。</para></summary>
+    EnableSecureBootError = 0xAD,
+
+    /// <summary>Identification started. <para>识别已开始。</para></summary>
+    IdentifyStart = 0xAE,
+
+    /// <summary>Identification finished. <para>识别已结束。</para></summary>
+    IdentifyEnd = 0xAF,
+
+    /// <summary>CU reference reply. <para>CU 参考值应答。</para></summary>
+    ReadCuRef = 0xB0,
+
+    /// <summary>Reference information reply. <para>参考信息应答。</para></summary>
+    ReadRefInfo = 0xB1,
+
+    /// <summary>Customized dummy reply. <para>自定义占位应答。</para></summary>
+    CustomDummy = 0xB2,
+
+    /// <summary>Flash write protection reply. <para>闪存写保护应答。</para></summary>
+    FlashWrittenProtection = 0xB3,
+
+    /// <summary>Flash initialization failed. <para>闪存初始化失败。</para></summary>
+    FlashInitializingFail = 0xB4,
+
+    /// <summary>RF transceiver type reply. <para>RF 收发器类型应答。</para></summary>
+    RfTransceiverType = 0xB5,
+
+    /// <summary>DDR check error. <para>DDR 检查错误。</para></summary>
+    DdrCheckError = 0xB6,
+
+    /// <summary>Self-refresh error. <para>自刷新错误。</para></summary>
+    SelfRefreshError = 0xB7,
+
+    /// <summary>NAND block information reply. <para>NAND 块信息应答。</para></summary>
+    ReadNandBlockInfo = 0xB8,
 
     /// <summary>Partition table reply. <para>分区表应答。</para></summary>
     ReadPartition = 0xBA,

@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Comm.Protocols.Unisoc;
+namespace UotanStudio.Comm.Protocols.Unisoc;
 
 /// <summary>
 /// Public UNISOC download-session facade over an opened download link (the vendor download serial port

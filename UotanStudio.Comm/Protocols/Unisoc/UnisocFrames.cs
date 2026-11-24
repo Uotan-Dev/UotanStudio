@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Hash.Crc16Xmodem;
@@ -169,14 +169,15 @@ internal sealed class UnisocFrameParser
             _length = 0;
         }
 
-        if (_length + data.Length > _buffer.Length)
+        var required = _length + data.Length;
+        if (required > _buffer.Length)
         {
-            var newSize = Math.Max(_buffer.Length * 2, _length + data.Length);
-            if (newSize > UnisocConstants.MaximumEncodedFrame)
+            if (required > UnisocConstants.MaximumEncodedFrame)
             {
                 throw new UnisocProtocolException("The receive buffer outgrew the largest legal BSL frame.");
             }
 
+            var newSize = Math.Min(Math.Max(_buffer.Length * 2, required), UnisocConstants.MaximumEncodedFrame);
             Array.Resize(ref _buffer, newSize);
         }
 
@@ -412,10 +413,30 @@ internal sealed class UnisocSerialTransport(SerialTransport serial) : IUnisocTra
     /// <param name="timeoutMilliseconds">Read timeout, or <see langword="null"/> for the transport default.
     /// <para>读取超时；<see langword="null"/> 表示使用传输默认值。</para></param>
     /// <returns>Bytes received, zero on timeout. <para>收到的字节数；超时为零。</para></returns>
-    public Task<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken,
+    public async Task<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken,
         int? timeoutMilliseconds = null)
-        => serial.ReadAsync(buffer.ToArray(), 0, buffer.Length,
-            timeoutMilliseconds ?? UnisocConstants.DefaultCommandTimeoutMs, cancellationToken);
+    {
+        try
+        {
+            // SerialTransport fills a byte[]; Memory<byte>.ToArray() would make a copy that is discarded here,
+            // so read into a temporary array and copy the received bytes back into the caller's buffer.
+            var received = new byte[buffer.Length];
+            var count = await serial.ReadAsync(received, 0, received.Length,
+                timeoutMilliseconds ?? UnisocConstants.DefaultCommandTimeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+            received.AsSpan(0, count).CopyTo(buffer.Span);
+            return count;
+        }
+        catch (TimeoutException)
+        {
+            // IUnisocTransport reports a silent link as zero bytes; throwing here would fault the session and
+            // defeat the official CHECK_BAUD silent-retry line. A genuine disconnect (IOException) or
+            // cancellation still propagates so the session faults as designed.
+            // IUnisocTransport 以零字节表示静默链路；此处抛异常会使会话失效，破坏官方 CHECK_BAUD 静默重试线。
+            // 真正的断连（IOException）或取消仍向上抛出，使会话按设计失效。
+            return 0;
+        }
+    }
 
     /// <summary>Disposes the underlying serial port. <para>释放底层串口。</para></summary>
     public void Dispose() => serial.Dispose();

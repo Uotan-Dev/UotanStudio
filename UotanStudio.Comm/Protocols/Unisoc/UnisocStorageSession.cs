@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BlockImage.Gpt;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
@@ -24,6 +24,30 @@ public sealed class UnisocStorageSession
     internal UnisocStorageSession(UnisocDeviceEngine session)
     {
         _session = session;
+    }
+
+    /// <summary>
+    /// Applies a serialized vendor ExtTable and rebuilds the device partition table. This destroys every partition
+    /// boundary, so callers must have obtained an explicit confirmation and a full backup first.
+    /// <para>下发厂商 ExtTable 并重建设备分区表。该操作销毁所有分区边界，调用方必须已获得显式确认并完成完整备份。</para>
+    /// </summary>
+    /// <param name="extTable">The serialized ExtTable bytes from the PAC scheme. <para>来自 PAC scheme 的 ExtTable 字节。</para></param>
+    /// <param name="cancellationToken">Cancels the exchange. <para>取消本次交互。</para></param>
+    /// <exception cref="UnisocProtocolException">The device refused; the session has faulted.
+    /// <para>设备拒绝；会话已失效。</para></exception>
+    public async Task RepartitionAsync(byte[] extTable, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(extTable);
+        if (extTable.Length is < 4 or > 1024 * 1024)
+        {
+            throw new ArgumentOutOfRangeException(nameof(extTable), extTable.Length,
+                "An ExtTable must be between 4 bytes and 1 MiB.");
+        }
+
+        await _session.SendAndExpectAckAsync(UnisocCommand.SendExtTable, extTable,
+            _session.EraseTimeoutMs, cancellationToken).ConfigureAwait(false);
+        await _session.SendAndExpectAckAsync(UnisocCommand.Repartition, ReadOnlyMemory<byte>.Empty,
+            _session.EraseTimeoutMs, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -165,7 +189,7 @@ public sealed class UnisocStorageSession
         CancellationToken cancellationToken)
     {
         ValidateRange(name, offset, length);
-        if (offset + length > 0x1_0000_0000L)
+        if (offset > 0x1_0000_0000L - length)
         {
             throw new ArgumentOutOfRangeException(nameof(length), "The read range exceeds the 32-bit address space.");
         }
@@ -280,14 +304,15 @@ public sealed class UnisocStorageSession
         Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken cancellationToken)
     {
         ValidateName(name);
-        if (offset < 0 || length < 0 || offset + length > 0x1_0000_0000L)
+        if (offset < 0 || length < 0 || offset > 0x1_0000_0000L - length)
         {
             throw new ArgumentOutOfRangeException(nameof(length), "The read range exceeds the 32-bit address space.");
         }
 
-        var mode64 = offset + length > uint.MaxValue;
+        var end = offset + length;
+        var mode64 = end > uint.MaxValue;
         await _session.SendAndExpectAckAsync(UnisocCommand.ReadStart,
-            SelectPacket(name, (ulong)(offset + length), mode64), _session.CommandTimeoutMs, cancellationToken)
+            SelectPacket(name, (ulong)end, mode64), _session.CommandTimeoutMs, cancellationToken)
             .ConfigureAwait(false);
 
         var buffer = new byte[_session.StorageBlockSize];
