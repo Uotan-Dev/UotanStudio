@@ -8,10 +8,11 @@
 | --- | --- | --- |
 | Windows x64，Debug / Release | 2026-11-16 | 全量 9562 用例，9532 通过，0 失败，30 跳过；两配置构建 0 警告 0 错误；format whitespace/style 均零退出码 |
 | Windows x64，Debug（发射内核批次） | 2026-11-21 | 全量 6421 用例（测试集精简后），6415 通过，5 失败（`AirPlayReceiverSessionTests` 全部为 Windows 保留端口段撞上 `RtspPort=0` 临时端口的 bind WSAEACCES，环境问题非回归），1 跳过；format whitespace/style 均零退出码；AOT 发布通过且 `UotanStudio.Hash` 零新告警 |
+| Windows x64，Debug（C# 15/.NET 11 优化批次） | 2026-11-24 | restore、Debug 全量构建成功，0 警告 0 错误；format whitespace/style 均零退出码；全量 6643 用例，6643 通过，0 失败，0 跳过；NativeAOT win-x64 self-contained 发布成功，告警集合与未修改 HEAD 基线完全相同 |
 | Linux ARM64，Debug | 2026-11-12 | 全量 9334 用例，9304 通过，0 失败，30 跳过；构建 0 警告 0 错误 |
 | RISC-V（SpacemiT X60），Debug | 2026-11-12 | 全量 9334 用例，9287 通过，11 失败，36 跳过；失败均为平台环境缺口 |
 
-- NativeAOT win-x64 发布在 2026-11-21 批次已可完成（此前记录的 `ilc` NullReferenceException 不再复现）；发布告警仅第三方 IL2104/IL3053 基线与 SATORI002，`UotanStudio.Hash` 未产生新的裁剪/AOT 警告。
+- NativeAOT win-x64 发布在 2026-11-21 批次已可完成（此前记录的 `ilc` NullReferenceException 不再复现）。2026-11-24 在同一机器、同一发布命令下对照 detached HEAD `6ed78b74` 与优化工作树：两侧均为 39 条告警，代码分布为 `IL2104`×7、`IL3053`×4、`IL2026`×27、`SATORI002`×1，规范化路径后逐行比较多出 0 条、缺少 0 条；`UotanStudio.Hash` 未产生新的裁剪/AOT 警告。
 - Linux ARM64 的 SIMD 内核在 AdvSIMD、SVE、SVE2 硬件上执行，`Vector<T>` 宽度为 128 位。
 - RISC-V 当前 SDK 的 Roslyn 编译存在多核/R2R 冻结缺陷。测试环境使用 `DOTNET_ReadyToRun=0`、`DOTNET_PROCESSOR_COUNT=4`、`DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`，并关闭构建期裁剪分析器与 Roslyn 分析器。11 个失败中 10 个疑与 SkiaSharp 相关；`skiasharp.nativeassets.linux` 自 3.119.0 起即含 `runtimes/linux-riscv64/native/libSkiaSharp.so`（4.157.0 要求 `GLIBC_2.38`），故这 10 个失败的根因需按新版依赖重跑复核。
 
@@ -47,6 +48,41 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 - ZLinq 同作业对照：`PclusterBlockSum` 46.10→10.51 µs，分配 64 KB→0；`FieldDuplicateGuard` 476.30→162.14 µs，分配 1.55 MB→0.11 MB；`InterfaceRelocation` 耗时 318.93→441.46 µs，分配 1.216 MB→0.480 MB。
 - EROFS 打包写数据并行化后，1408 个 4 KB 文件加 1 MB 大文件的 zstd 构建 2587.7–2810.6 ms→1668.8–1789.6 ms，约 1.55×；同规模 lz4 2923.7→1837.6 ms。六次构建镜像 SHA-256 一致。
 - 当前 HotPath 基线：`ErofsCompressedExtract` 2649.4 µs/8.32 MB、`Ext4MetadataWalk` 244.8 µs/938 KB、`DeliveryShaChecksumLoop` 44572.9 µs/1.08 MB、`ByteEquivalenceScan` 8202.1 µs/64.5 KB。
+
+C# 15/.NET 11 优化前后（2026-11-24）：Windows x64、Ryzen 7 8845HS、.NET 11.0.0、BenchmarkDotNet 0.15.8、Release、`Short`、`InProcessEmit`、`MemoryDiagnoser`，3 次预热、3 次实际迭代；基线为 detached HEAD `6ed78b74`，两侧使用完全相同的基准源码与固定随机种子 42。基准串行执行，未与构建或测试并行。`Short` 样本量小，以下作为前后筛选值，不作为长期稳态保证。
+
+| 场景 | 基线均值 / 分配 | 优化后均值 / 分配 | 变化 |
+| --- | --- | --- | --- |
+| Adler32，64 B | 23.135 ns / 0 B | 4.146 ns / 0 B | 耗时约 −82.1% |
+| Adler32，65536 B | 18.5359 µs / 0 B | 2.381496 µs / 0 B | 耗时约 −87.1% |
+| LP Metadata，1 分区 | 440.0 ns / 2.49 KB | 453.6 ns / 2.38 KB | 耗时在误差范围内，分配约 −4.4% |
+| LP Metadata，256 分区 | 158.9102 µs / 155.9 KB | 45.8925 µs / 137.47 KB | 耗时约 −71.1%，分配约 −11.8% |
+| Zstd 解压，1024 B | 242.6 ns / 2.05 KB | 184.1 ns / 1.02 KB | 耗时约 −24.1%，分配约 −50.2% |
+| Zstd 解压，1 MiB | 267.824 µs / 2049.46 KB | 95.5228 µs / 1024.67 KB | 耗时约 −64.3%，分配约 −50.0% |
+| 日志导出，1 条 | 1.332 µs / 6.8 KB | 563.4 ns / 1.5 KB | 耗时约 −57.7%，分配约 −77.9% |
+| 日志导出，256 条 | 204.145 µs / 403.09 KB | 188.5097 µs / 389.41 KB | 耗时约 −7.7% 但误差较大，分配约 −3.4% |
+
+### C# 15/.NET 11 特性适配（2026-11-24）
+
+| 位置 | 采用项与理由 | 性能假设与证据 |
+| --- | --- | --- |
+| `UotanStudio.Hash/Adler32/Adler32.cs` | 各 SIMD 宽度的水平归约改用 `Vector128/256/512<T>.Sum`，保持块大小、Nmax 窗口、非零 seed、标量尾和溢出契约 | 减少逐 lane 提取；上方 64 B/65536 B 基准分别约 −82.1%/−87.1%，标量、禁用 AVX2/AVX512、禁用全部硬件内建路径各 35/0/0 |
+| `UotanStudio.Compress/Internal/Lzma2Encoder.cs` | 用固定分块长度直接计算窗口起点，删除只保存索引的 `List<int>` | 减少一次列表分配与写入；无独立基准，保留窗口边界字节稳定与解码测试 |
+| `UotanStudio.Compress/Codecs/Zstd/ZstdBlockCodec.cs` | 精确填满时直接返回原缓冲，短结果使用 `GC.AllocateUninitializedArray<byte>`；截断帧在部分消费后明确失败 | 减少短输出清零与重复缓冲；1024 B/1 MiB 基准分配约减半，未知内容大小的单段与非单段帧、拼接帧、截断尾帧均有测试 |
+| `UotanStudio.Compress/Zip/ZipContainer.cs` | 使用 `ReadOnlySpan<char>.Split(char)` 与 `SpanSplitEnumerator<char>` 校验路径段 | 避免路径分段字符串分配；无独立基准，合法/非法路径边界测试通过 |
+| `UotanStudio.Compress/Internal/NonDisposingStream.cs` | 直接转发 `Stream` 的 `Memory<byte>`/`ReadOnlyMemory<byte>` 异步重载与可取消 `FlushAsync` | 避免异步数组路径的额外桥接；测试用计数流验证数据、重载选择和令牌透传，未测吞吐 |
+| `UotanStudio.Firmware/BlockImage/Lp/MetadataReader.cs`、`MetadataBuilder.cs` | descriptor 完整校验后 `EnsureCapacity`；名称查重改用 `HashSet<T>`；构建前 checked 计数并预留表容量 | 消除重复名称扫描的 O(n²) 成本与多次扩容；256 分区基准耗时约 −71.1%、分配约 −11.8%，golden SHA-256 不变 |
+| `UotanStudio.Firmware/BlockImage/Gpt/GptReader.cs` | 仅对 entries 副本 `Array.Sort` 检查重叠，移除 LINQ 排序管道 | 减少排序分配并保持 image order；重叠/反序非重叠测试通过，未测大分区表耗时 |
+| `UotanStudio.DD/Images/ImageProbe.cs` | 单遍统计 ZIP 文件条目并限制诊断名称数量与长度 | 消除二次枚举并限制异常消息分配；计数、长名称截断测试通过，未测大型 ZIP |
+| `UotanStudio.Comm/Routing/DebugBridgeRoute.cs` | 用 .NET 11 `Socket.ConnectAsync(EndPoint, CancellationToken)` 替换手工 SAEA/TCS/取消注册 | 降低连接探针实现与分配复杂度；实时 loopback、缓存、拒绝重试、调用方取消和 deadline 映射 9/0/0，未测吞吐 |
+| `UotanStudio.Net/Agc/AgcClient.cs` | 六个 JSON 解析入口接受 `ReadOnlyMemory<byte>`，数组热路径直接 `JsonDocument.Parse`，Span 入口保持兼容 | 避免 Span 入口为 JSON 文档复制整包；非零 offset、周边哨兵字节、畸形 JSON/UTF-8 测试通过，未测真实 AGC 网络吞吐 |
+| `UotanStudio.Net/Http/HttpDownload.cs` | 32 个镜像源测速共用 `ArrayPool<byte>` 租借的 64 KiB 缓冲 | 减少每轮镜像探测的固定大数组分配；超时、取消、重试与发布语义不变，未测真实网络吞吐 |
+| `UotanStudio/Services/Logging/LogFileService.cs`、`LogFileSink.cs` | `Utf8JsonWriter` 直接写 UTF-8 NDJSON，配合 `PipeWriter`、源生成 JSON、`Utf8JsonWriter.Reset` 连续输出多个根值 | 移除 JSON 中间字符串和重复 UTF-8 编码；1 条日志耗时约 −57.7%、分配约 −77.9%，256 条分配约 −3.4%；golden、Unicode/转义/空枚举、预取消不写入、多记录 sink 均有测试 |
+| `UotanStudio.Pipeline/Delivery/Tools/Tools.cs` | 首次 await 前判定 zstd 需求，统一准备目标平台；同时补齐 Recovery-only Linux zstd 暂存遗漏 | 避免按不完整平台集合重复执行异步准备；定向测试通过，未测完整交付耗时 |
+| `UotanStudio.Scripting/Apis/ScriptApis.cs` | 模拟 API 的手写 JSON 改为具体 record 与 `JsonSerializerContext` 源生成 | 降低字符串拼接分配并适合 NativeAOT；字段、转义、Unicode、NUL 与字符串桥测试通过，未测脚本吞吐 |
+| `UotanStudio.Mcp/Tools/McpMetaToolFactory.cs` | 构造时缓存规范化 `SearchIndex`，查询只规范化一次，结果列表按目录容量预留 | 避免每次搜索重复规范化全部 action；golden 排序/分数、limit、domain fallback 测试通过，未测大目录搜索耗时 |
+
+本批次未采用的语言/BCL 特性：union 类型、closed/extension/indexer 语法与 labeled break 没有不改变公共契约的合适落点；`Enumerable.Join` 的 full join、ZIP CRC 新入口、AES Key Wrap/X25519、随机数新 API 等没有对应的现有业务路径；`AssetBundle` 当前仅 15 项，冻结集合的构建与查找收益不足，保留原实现。附件中的集合表达式 `with(capacity: ...)`/`with(comparer: ...)` 在 SDK 11.0.100/C# 15.0.0 的前置、后置形式均编译失败；`Process.StartSuspended`、`Vector*.Concat`、`Utf8JsonWriter.Reset(JsonWriterOptions)` 不存在。新增 Stream 类型只确认三种，AES Key Wrap 的增量是 RFC 5649 padded 形态，均未为满足清单而改造生产代码。
 
 设备链路（真机）：
 
@@ -99,6 +135,7 @@ GC 测量（2026-11-07，Release，16 逻辑 CPU，合成分配负载）：
 - MSIX 打包、macOS .app 打包与打包态安装冒烟未验证；AppPaths 首跑迁移仅经单元测试覆盖，真实升级路径未实测。HAP 签名与 AGC 编排未经真实账号流量验证；真机装机链路未验证（交接文档 `HAP_SIGNING_HANDOFF.md`）。
 - 除 win-x64 外的 RID 发布未在宿主全量上执行：riscv64 cross JIT 方案（官方 x64 `ILCompiler` 宿主包 + 自建 `libclrjit_unix_riscv64_x64.so`）尚未在 runner 上端到端跑通；`loongarch-publish.yml` 的 qemu 方案未执行过。release.yml 的 musl 两个 RID（alpine 容器发布）与 package.yml 的 MSIX/DMG/deb/rpm/apk/pacman 打包链均未在 runner 上运行。
 - CI `dotnet test --solution` 路径与 Runner 机器未实测；Satori GC 的延迟与吞吐特性只在合成负载测量，应用混合负载与长期运行未验证。
+- C# 15/.NET 11 批次未执行真机、GPU、原生文件系统挂载或发布产物启动冒烟；NativeAOT 仅证明发布成功。基准因 BenchmarkDotNet 0.15.8 的进程外工具链不识别 `net11.0` runtime moniker 而使用 InProcess，且 `Short` 只有 3 次实际迭代，不能替代长期稳态或 AOT 性能测量。`DebugBridgeRoute` 的公共 3 秒墙钟截止、跨 OS connect backlog 行为与 `LogFileSink` 的 64 KiB flush 阈值没有独立可观察验证。
 - `CommTrace.Write` 的零分配只在类型层面成立，未做分配量基准。
 
 ## 冷启动性能（2026-11-23）
