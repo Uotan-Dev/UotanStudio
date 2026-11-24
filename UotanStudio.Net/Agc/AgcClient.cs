@@ -74,7 +74,7 @@ public static class AgcClient
         var url = $"{AuthOrigin}/authrouter/auth/api/temptoken/check?tempToken={Uri.EscapeDataString(tempToken)}" +
             "&site=CN&version=1.0.0&appid=" + LoginAppId;
         var body = await ReadAsync(client, new Uri(url), cancellationToken).ConfigureAwait(false);
-        return ParseTokenResponse(body) ?? throw new InvalidCredentialException(
+        return ParseTokenResponse(body.AsMemory()) ?? throw new InvalidCredentialException(
             "The token exchange response carries no access token. 令牌交换响应不含访问令牌。");
     }
 
@@ -96,7 +96,7 @@ public static class AgcClient
             new Uri($"{AuthOrigin}/authrouter/auth/api/jwToken/check"),
             cancellationToken,
             accessToken).ConfigureAwait(false);
-        return ParseTokenResponse(body) ?? throw new InvalidCredentialException(
+        return ParseTokenResponse(body.AsMemory()) ?? throw new InvalidCredentialException(
             "The token check response carries no access token. 令牌复核响应不含访问令牌。");
     }
 
@@ -112,7 +112,7 @@ public static class AgcClient
         var body = await SendAsync(client, HttpMethod.Get,
             new Uri($"{ApiOrigin}/api/ups/user-permission-service/v1/user-team-list"),
             context, null, cancellationToken).ConfigureAwait(false);
-        return ParseTeams(body.RawBody);
+        return ParseTeams(body.RawBody.AsMemory());
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ public static class AgcClient
         var body = await SendAsync(client, HttpMethod.Get,
             new Uri($"{ApiOrigin}/api/cps/device-manage/v1/device/list?encodeFlag=0&start={start}&pageSize={pageSize}"),
             context, null, cancellationToken).ConfigureAwait(false);
-        return ParseDevices(body.RawBody);
+        return ParseDevices(body.RawBody.AsMemory());
     }
 
     /// <summary>
@@ -169,7 +169,7 @@ public static class AgcClient
         var body = await SendAsync(client, HttpMethod.Get,
             new Uri($"{ApiOrigin}/api/cps/harmony-cert-manage/v1/cert/list"),
             context, null, cancellationToken).ConfigureAwait(false);
-        return ParseCertificates(body.RawBody);
+        return ParseCertificates(body.RawBody.AsMemory());
     }
 
     /// <summary>
@@ -242,9 +242,9 @@ public static class AgcClient
         var body = await SendAsync(client, HttpMethod.Post,
             new Uri($"{ApiOrigin}/api/amis/app-manage/v1/objects/url/reapply"),
             context, payload, cancellationToken).ConfigureAwait(false);
-        return FindStringValue(body.RawBody, "reapplyUrl")
-            ?? FindStringValue(body.RawBody, "signedUrl")
-            ?? FindStringValue(body.RawBody, "url");
+        return FindStringValue(body.RawBody.AsMemory(), "reapplyUrl")
+            ?? FindStringValue(body.RawBody.AsMemory(), "signedUrl")
+            ?? FindStringValue(body.RawBody.AsMemory(), "url");
     }
 
     /// <summary>
@@ -278,13 +278,31 @@ public static class AgcClient
     /// </summary>
     /// <param name="body">Response body bytes. <para>响应体字节。</para></param>
     /// <returns>The parsed envelope. <para>解析后的信封。</para></returns>
-    /// <exception cref="InvalidDataException">The body is not JSON or carries no envelope.
-    /// <para>响应体不是 JSON 或不含信封。</para></exception>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    /// <exception cref="InvalidDataException">The body carries no envelope.
+    /// <para>响应体不含信封。</para></exception>
     /// <exception cref="AgcServiceException">The envelope reports a non-zero code.
     /// <para>信封报告非零码。</para></exception>
     public static AgcRet ParseEnvelope(ReadOnlySpan<byte> body)
+        => ParseEnvelope(body.ToArray().AsMemory());
+
+    /// <summary>
+    /// Parses the AGC envelope directly from a memory slice without copying the response body.
+    /// <para>直接从内存切片解析 AGC 信封，不复制响应体。</para>
+    /// </summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <returns>The parsed envelope. <para>解析后的信封。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    /// <exception cref="InvalidDataException">The body carries no envelope.
+    /// <para>响应体不含信封。</para></exception>
+    /// <exception cref="AgcServiceException">The envelope reports a non-zero code.
+    /// <para>信封报告非零码。</para></exception>
+    internal static AgcRet ParseEnvelope(ReadOnlyMemory<byte> body)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("ret", out var ret))
         {
@@ -314,8 +332,18 @@ public static class AgcClient
     /// <param name="body">Response body bytes. <para>响应体字节。</para></param>
     /// <returns>Teams found by key search. <para>按键搜索找到的团队。</para></returns>
     public static IReadOnlyList<AgcTeam> ParseTeams(ReadOnlySpan<byte> body)
+        => ParseTeams(body.ToArray().AsMemory());
+
+    /// <summary>Parses the team list directly from a memory slice without copying the response body.
+    /// <para>直接从内存切片解析团队列表，不复制响应体。</para></summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <returns>Teams found by key search. <para>按键搜索找到的团队。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    internal static IReadOnlyList<AgcTeam> ParseTeams(ReadOnlyMemory<byte> body)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         var teams = new List<AgcTeam>();
         CollectObjects(document.RootElement, static element => element.TryGetProperty("teamId", out _), element =>
         {
@@ -342,8 +370,18 @@ public static class AgcClient
     /// <param name="body">Response body bytes. <para>响应体字节。</para></param>
     /// <returns>Devices found by key search. <para>按键搜索找到的设备。</para></returns>
     public static IReadOnlyList<AgcDevice> ParseDevices(ReadOnlySpan<byte> body)
+        => ParseDevices(body.ToArray().AsMemory());
+
+    /// <summary>Parses the device list directly from a memory slice without copying the response body.
+    /// <para>直接从内存切片解析设备列表，不复制响应体。</para></summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <returns>Devices found by key search. <para>按键搜索找到的设备。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    internal static IReadOnlyList<AgcDevice> ParseDevices(ReadOnlyMemory<byte> body)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         var devices = new List<AgcDevice>();
         CollectObjects(document.RootElement, static element => element.TryGetProperty("udid", out _), element =>
         {
@@ -366,8 +404,18 @@ public static class AgcClient
     /// <param name="body">Response body bytes. <para>响应体字节。</para></param>
     /// <returns>Certificates found by key search. <para>按键搜索找到的证书。</para></returns>
     public static IReadOnlyList<AgcCertificate> ParseCertificates(ReadOnlySpan<byte> body)
+        => ParseCertificates(body.ToArray().AsMemory());
+
+    /// <summary>Parses the certificate list directly from a memory slice without copying the response body.
+    /// <para>直接从内存切片解析证书列表，不复制响应体。</para></summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <returns>Certificates found by key search. <para>按键搜索找到的证书。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    internal static IReadOnlyList<AgcCertificate> ParseCertificates(ReadOnlyMemory<byte> body)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         var certificates = new List<AgcCertificate>();
         CollectObjects(document.RootElement, static element => element.TryGetProperty("certId", out _), element =>
         {
@@ -392,8 +440,20 @@ public static class AgcClient
     /// <param name="body">Response body bytes. <para>响应体字节。</para></param>
     /// <returns>The session identity or <see langword="null"/>. <para>会话身份或 <see langword="null"/>。</para></returns>
     public static AgcSession? ParseTokenResponse(ReadOnlySpan<byte> body)
+        => ParseTokenResponse(body.ToArray().AsMemory());
+
+    /// <summary>
+    /// Parses a token response directly from a memory slice without copying the response body.
+    /// <para>直接从内存切片解析令牌响应，不复制响应体。</para>
+    /// </summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <returns>The session identity or <see langword="null"/>. <para>会话身份或 <see langword="null"/>。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    internal static AgcSession? ParseTokenResponse(ReadOnlyMemory<byte> body)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         string? accessToken = null;
         string? userId = null;
         string? userName = null;
@@ -423,8 +483,19 @@ public static class AgcClient
     /// <param name="key">Key to search. <para>搜索的键。</para></param>
     /// <returns>The string value or <see langword="null"/>. <para>字符串值或 <see langword="null"/>。</para></returns>
     public static string? FindStringValue(ReadOnlySpan<byte> body, string key)
+        => FindStringValue(body.ToArray().AsMemory(), key);
+
+    /// <summary>Searches a memory slice directly for the first string value under the given key without
+    /// copying the response body. <para>直接在内存切片中按键搜索首个字符串值，不复制响应体。</para></summary>
+    /// <param name="body">Response body bytes or a slice of a larger buffer.
+    /// <para>响应体字节或更大缓冲区中的切片。</para></param>
+    /// <param name="key">Key to search. <para>搜索的键。</para></param>
+    /// <returns>The string value or <see langword="null"/>. <para>字符串值或 <see langword="null"/>。</para></returns>
+    /// <exception cref="JsonException">The body is not valid JSON or UTF-8.
+    /// <para>响应体不是有效 JSON 或 UTF-8。</para></exception>
+    internal static string? FindStringValue(ReadOnlyMemory<byte> body, string key)
     {
-        using var document = JsonDocument.Parse(body.ToArray());
+        using var document = JsonDocument.Parse(body);
         return TryFindString(document.RootElement, key, out var value) ? value : null;
     }
 
@@ -558,7 +629,7 @@ public static class AgcClient
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var body = await ReadBoundedAsync(stream, MaximumResponseBytes, cancellationToken).ConfigureAwait(false);
-        var ret = ParseEnvelope(body);
+        var ret = ParseEnvelope(body.AsMemory());
         return new AgcRawResponse(ret, body);
     }
 

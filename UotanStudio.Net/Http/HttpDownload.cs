@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net;
 using System.Net.Http.Headers;
 using UotanStudio.Net.GitHub;
@@ -54,6 +55,7 @@ public static class HttpDownload
     ];
 
     private const int SpeedProbeBytes = 256 * 1024;
+    private const int SpeedProbeBufferBytes = 64 * 1024;
     private static readonly TimeSpan SpeedProbeTimeout = TimeSpan.FromSeconds(5);
 
     private const int TransferBufferBytes = 1024 * 1024;
@@ -163,18 +165,26 @@ public static class HttpDownload
                     request.Headers.Range = new RangeHeaderValue(0, SpeedProbeBytes - 1);
                     using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                     response.EnsureSuccessStatusCode();
-                    var buffer = new byte[64 * 1024];
-                    long readTotal = 0;
-                    await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-                    while (readTotal < SpeedProbeBytes)
+                    var buffer = ArrayPool<byte>.Shared.Rent(SpeedProbeBufferBytes);
+                    try
                     {
-                        var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, SpeedProbeBytes - readTotal)), timeout.Token).ConfigureAwait(false);
-                        if (read == 0) break;
-                        readTotal += read;
-                    }
+                        long readTotal = 0;
+                        await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+                        while (readTotal < SpeedProbeBytes)
+                        {
+                            var requested = (int)Math.Min(SpeedProbeBufferBytes, SpeedProbeBytes - readTotal);
+                            var read = await input.ReadAsync(buffer.AsMemory(0, requested), timeout.Token).ConfigureAwait(false);
+                            if (read == 0) break;
+                            readTotal += read;
+                        }
 
-                    stopwatch.Stop();
-                    return (Index: index, Source: source, Score: stopwatch.Elapsed.Ticks + (readTotal > 0 ? 0 : TimeSpan.TicksPerDay));
+                        stopwatch.Stop();
+                        return (Index: index, Source: source, Score: stopwatch.Elapsed.Ticks + (readTotal > 0 ? 0 : TimeSpan.TicksPerDay));
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer);
+                    }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
