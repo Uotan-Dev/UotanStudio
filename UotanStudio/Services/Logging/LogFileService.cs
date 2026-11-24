@@ -1,4 +1,4 @@
-using System.IO.Pipelines;
+using System.Buffers;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -57,28 +57,42 @@ public static class LogFileService
     public static async Task WriteAsync(Stream stream, IEnumerable<ILogLine> entries, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var writer = PipeWriter.Create(stream, new StreamPipeWriterOptions(leaveOpen: true));
-        WriteBytes(writer, HeaderBytes);
-        WriteBytes(writer, "\n"u8);
-        try
+        await stream.WriteAsync(HeaderBytes, cancellationToken).ConfigureAwait(false);
+        await stream.WriteAsync(LineBreak, cancellationToken).ConfigureAwait(false);
+        var buffer = new ArrayBufferWriter<byte>(1024);
+        foreach (var entry in entries)
         {
-            using (var json = new Utf8JsonWriter(writer, JsonWriterOptions))
-            {
-                foreach (var entry in entries)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    Serialize(json, entry);
-                    json.Flush();
-                    WriteBytes(writer, "\n"u8);
-                    json.Reset();
-                }
-            }
-            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var written = SerializeRecord(buffer, entry);
+            await stream.WriteAsync(written, cancellationToken).ConfigureAwait(false);
+            await stream.WriteAsync(LineBreak, cancellationToken).ConfigureAwait(false);
         }
-        finally
+
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Serializes one record into the reusable buffer and returns exactly the bytes it wrote.
+    /// <para>把一条记录序列化进可复用缓冲区，并返回它恰好写出的字节。</para>
+    /// </summary>
+    /// <remarks>
+    /// Each record gets its own writer over a buffer this method owns. Sharing one <see cref="Utf8JsonWriter"/>
+    /// across records and then interleaving raw span writes with its own <see cref="IBufferWriter{T}"/> calls
+    /// leaves the writer's pending bytes and the sink's buffered bytes out of step, which showed up as duplicated
+    /// records and NUL-filled gaps on large entries. A per-record writer has no such shared state.
+    /// <para>每条记录都在本方法自有的缓冲区上新建写入器。跨记录共享一个 <see cref="Utf8JsonWriter"/>，
+    /// 再把它自己的 <see cref="IBufferWriter{T}"/> 调用与裸 span 写入交织，会让写入器的待写字节与接收端的缓冲
+    /// 字节错位；大条目上表现为记录重复和 NUL 空洞。每条记录一个写入器就没有这种共享状态。</para>
+    /// </remarks>
+    internal static ReadOnlyMemory<byte> SerializeRecord(ArrayBufferWriter<byte> buffer, ILogLine line)
+    {
+        buffer.Clear();
+        using (var json = new Utf8JsonWriter(buffer, JsonWriterOptions))
         {
-            writer.Complete();
+            Serialize(json, line);
         }
+
+        return buffer.WrittenMemory;
     }
 
     /// <summary>Serializes one entry as a single JSON Line record.<para>把一条条目序列化为一行 JSON 记录。</para></summary>
@@ -96,13 +110,9 @@ public static class LogFileService
         JsonSerializer.Serialize(writer, record, JsonContext.LogFileRecord);
     }
 
-    internal static void WriteBytes(PipeWriter writer, ReadOnlySpan<byte> bytes)
-    {
-        bytes.CopyTo(writer.GetSpan(bytes.Length));
-        writer.Advance(bytes.Length);
-    }
-
-    internal static void Flush(PipeWriter writer) => writer.FlushAsync().GetAwaiter().GetResult();
+    /// <summary>The JSON Lines record separator: a single LF, independent of the platform.
+    /// <para>JSON Lines 的记录分隔符：单个 LF，与平台无关。</para></summary>
+    internal static ReadOnlyMemory<byte> LineBreak { get; } = "\n"u8.ToArray();
 
     /// <summary>Reads exported logs, logcat text or project logs without live-cache eviction.<para>读取导出日志、logcat 或项目日志，不执行实时缓存淘汰。</para></summary>
     /// <param name="path">File to read.<para>要读取的文件。</para></param>

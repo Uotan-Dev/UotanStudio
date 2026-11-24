@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using UotanStudio.Services;
@@ -88,6 +89,30 @@ public sealed class Net11LogFileTests : IDisposable
         Assert.NotNull(text);
         Assert.Equal(LogFileService.MaximumEntryCharacters, text.Length);
         Assert.EndsWith(" ... [truncated]", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Append_OversizedEntries_KeepRecordBoundariesAndReleaseTheHandle()
+    {
+        var oversized = new string('x', LogFileService.MaximumEntryCharacters + 32);
+        for (var iteration = 0; iteration < 40; iteration++)
+        {
+            var directory = Path.Combine(_temp.Path, "round" + iteration.ToString("D2", CultureInfo.InvariantCulture));
+            var sink = new LogFileSink(directory);
+            sink.Append(new LogEntry(new DateTime(2026, 1, 2, 3, 4, 5, 6), LogLevel.Info, "source", "plain"));
+            sink.Append(new LogEntry(new DateTime(2026, 1, 2, 3, 4, 7, 8), LogLevel.Error, "source", oversized));
+            sink.Flush();
+            sink.Dispose();
+
+            var path = Assert.Single(Directory.GetFiles(directory, "*.log"));
+            var bytes = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
+
+            Assert.Equal(3, bytes.Count(b => b == (byte)'\n'));
+            Assert.Equal(-1, Array.IndexOf(bytes, (byte)0));
+
+            using var probe = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            Assert.True(probe.Length > 0);
+        }
     }
 
     private sealed record TestLogLine(string Text, LogLevel? Level, IReadOnlyList<LogTextColumn> Columns) : ILogLine;

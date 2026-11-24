@@ -1,7 +1,6 @@
+using System.Buffers;
 using System.Globalization;
-using System.IO.Pipelines;
 using System.Text;
-using System.Text.Json;
 
 namespace UotanStudio.Services.Logging;
 
@@ -17,9 +16,8 @@ internal sealed class LogFileSink : IDisposable
     private const string TruncationMarker = " ... [truncated]";
 
     private readonly Lock _gate = new();
+    private readonly ArrayBufferWriter<byte> _recordBuffer = new(4096);
     private FileStream? _stream;
-    private PipeWriter? _writer;
-    private Utf8JsonWriter? _json;
     private long _fileBytes;
     private long _flushedBytes;
     private bool _disposed;
@@ -40,10 +38,8 @@ internal sealed class LogFileSink : IDisposable
         var path = Path.Combine(directory, prefix + ".log");
         _stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read, 65536,
             FileOptions.SequentialScan);
-        _writer = PipeWriter.Create(_stream, new StreamPipeWriterOptions(leaveOpen: true));
-        _json = new Utf8JsonWriter(_writer, LogFileService.JsonWriterOptions);
-        LogFileService.WriteBytes(_writer, LogFileService.HeaderBytes);
-        LogFileService.WriteBytes(_writer, "\n"u8);
+        _stream.Write(LogFileService.HeaderBytes);
+        _stream.Write(LogFileService.LineBreak.Span);
         _fileBytes = Encoding.UTF8.GetByteCount(LogFileService.Header) + 1;
     }
 
@@ -56,7 +52,7 @@ internal sealed class LogFileSink : IDisposable
     {
         lock (_gate)
         {
-            if (_disposed || _writer is null || _json is null)
+            if (_disposed || _stream is null)
             {
                 return;
             }
@@ -70,15 +66,13 @@ internal sealed class LogFileSink : IDisposable
                         TruncationMarker);
                 }
 
-                var committed = _json.BytesCommitted;
-                LogFileService.Serialize(_json, new LogFileRecord(text, entry.Level, []));
-                _json.Flush();
-                LogFileService.WriteBytes(_writer, "\n"u8);
-                _fileBytes += _json.BytesCommitted - committed + 1;
-                _json.Reset();
+                var record = LogFileService.SerializeRecord(_recordBuffer, new LogFileRecord(text, entry.Level, []));
+                _stream.Write(record.Span);
+                _stream.Write(LogFileService.LineBreak.Span);
+                _fileBytes += record.Length + 1;
                 if (_fileBytes - _flushedBytes >= FlushThresholdBytes)
                 {
-                    LogFileService.Flush(_writer);
+                    _stream.Flush();
                     _flushedBytes = _fileBytes;
                 }
             }
@@ -98,15 +92,14 @@ internal sealed class LogFileSink : IDisposable
     {
         lock (_gate)
         {
-            if (_writer is null)
+            if (_stream is null)
             {
                 return;
             }
 
             try
             {
-                _json?.Flush();
-                LogFileService.Flush(_writer);
+                _stream.Flush();
                 _flushedBytes = _fileBytes;
             }
             catch
@@ -124,11 +117,7 @@ internal sealed class LogFileSink : IDisposable
         {
             try
             {
-                _json?.Flush();
-                if (_writer is not null)
-                {
-                    LogFileService.Flush(_writer);
-                }
+                _stream?.Flush();
             }
             catch
             {
@@ -146,28 +135,8 @@ internal sealed class LogFileSink : IDisposable
 
     private void DisposeWriterLocked()
     {
-        var json = _json;
-        var writer = _writer;
         var stream = _stream;
-        _json = null;
-        _writer = null;
         _stream = null;
-        try
-        {
-            json?.Dispose();
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            writer?.Complete();
-        }
-        catch
-        {
-        }
-
         try
         {
             stream?.Dispose();
