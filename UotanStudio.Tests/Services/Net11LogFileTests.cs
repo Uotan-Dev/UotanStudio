@@ -26,11 +26,11 @@ public sealed class Net11LogFileTests : IDisposable
 
         await LogFileService.WriteAsync(stream, entries, TestContext.Current.CancellationToken);
 
-        const string expected = """
+        var expected = """
             # UotanStudio Log 1
             {"text":"quote \"value\" \\ 中文 <tag>\nnext","level":"Warn","columns":[{"text":"tag","documentLength":4,"width":8,"isPriority":true,"trimMiddle":false}]}
             {"text":"plain","columns":[]}
-            """ + "\n";
+            """.ReplaceLineEndings("\n") + "\n";
         var bytes = stream.ToArray();
         Assert.Equal(expected, Encoding.UTF8.GetString(bytes));
         Assert.True(stream.CanWrite);
