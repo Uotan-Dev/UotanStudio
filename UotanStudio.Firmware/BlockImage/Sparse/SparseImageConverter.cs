@@ -503,9 +503,70 @@ public static class SparseImageConverter
     /// <para>逻辑块数为 <c>0</c> 的镜像不会写出任何输出文件。</para>
     /// </remarks>
     public static void ResparseImage(string inputFile, string outputPattern, long maxFileSize)
+        => ResparseImageCore(inputFile, maxFileSize,
+            (index, piece) =>
+            {
+                var outPath = outputPattern.Contains("{0}", StringComparison.Ordinal)
+                    ? string.Format(outputPattern, index)
+                    : $"{outputPattern}.{index:D2}";
+                using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
+                piece.WriteToStream(fs, sparse: true);
+            }, null, CancellationToken.None);
+
+    /// <summary>
+    /// Re-splits a sparse image but keeps only one output piece on disk at a time: a piece is written, handed to
+    /// <paramref name="consume"/>, and deleted before the next piece is built. This caps temporary disk usage at
+    /// one download-sized piece, so flashing an oversized image does not require the whole image to fit in a
+    /// size-limited temporary directory such as a Linux tmpfs.
+    /// <para>重新切分稀疏镜像，但磁盘上同一时刻只保留一个输出分片：写出后交给 <paramref name="consume"/>，
+    /// 随后在构建下一片前删除。这样临时磁盘占用被限制为一个下载大小的分片，刷写超大镜像时无需让整个镜像
+    /// 都装进受大小限制的临时目录（例如 Linux 的 tmpfs）。</para>
+    /// </summary>
+    /// <param name="inputFile">Path of the sparse image to split. <para>待切分的稀疏镜像路径。</para></param>
+    /// <param name="outputPath">Path of the single piece file, overwritten for every piece.
+    /// <para>单一分片文件路径，每片都会覆盖它。</para></param>
+    /// <param name="maxFileSize">Hard ceiling in bytes for each piece, headers included.
+    /// <para>每片（含头部）的字节硬上限。</para></param>
+    /// <param name="consume">Called once per piece while it exists on disk; the piece is deleted afterwards.
+    /// <para>每片存在于磁盘时调用一次；返回后该片被删除。</para></param>
+    /// <param name="onPlan">Receives the piece count and total sparse bytes before any piece is emitted, so
+    /// callers can report accurate progress; may be <see langword="null"/>.
+    /// <para>在写出任何分片前接收分片数与稀疏总字节数，便于调用方准确上报进度；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Checked between pieces and during upload. <para>分片之间及上传期间检查。</para></param>
+    /// <exception cref="ArgumentException">A path is blank. <para>路径为空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxFileSize"/> cannot hold one block plus headers.
+    /// <para><paramref name="maxFileSize"/> 不足以容纳一个数据块及头部。</para></exception>
+    public static void ResparseImageStreaming(string inputFile, string outputPath, long maxFileSize,
+        Action<string> consume, Action<int, long>? onPlan = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(outputPath);
+        ArgumentNullException.ThrowIfNull(consume);
+        ResparseImageCore(inputFile, maxFileSize,
+            (_, piece) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using (var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
+                {
+                    piece.WriteToStream(fs, sparse: true);
+                }
+
+                try
+                {
+                    consume(outputPath);
+                }
+                finally
+                {
+                    try { File.Delete(outputPath); } catch { }
+                }
+            },
+            onPlan, cancellationToken);
+    }
+
+    private static void ResparseImageCore(string inputFile, long maxFileSize,
+        Action<int, SparseFile> emitPiece, Action<int, long>? onPlan,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(inputFile);
-        ArgumentException.ThrowIfNullOrEmpty(outputPattern);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileSize, 1);
 
         using var sparseFile = SparseReader.FromImageFile(inputFile);
@@ -546,6 +607,51 @@ public static class SparseImageConverter
             }
         }
 
+        if (onPlan is not null)
+        {
+            var planCount = 0;
+            var planBytes = 0L;
+            var planLen = 0L;
+            uint planEnd = 0;
+            void AddPlanBytes(WorkItem item)
+            {
+                var gap = item.StartBlock > planEnd ? SparseFormat.ChunkHeaderSize : 0;
+                var data = ChunkHelper.GetDiskSize(item.Source.Header.ChunkType, item.Blocks,
+                    sparseFile.Header.ChunkHeaderSize, blockSize) - sparseFile.Header.ChunkHeaderSize;
+                planLen += gap + sparseFile.Header.ChunkHeaderSize + data;
+                planEnd = checked(item.StartBlock + item.Blocks);
+            }
+            void FlushPlan()
+            {
+                planCount++;
+                var trailingSkip = planEnd < sparseFile.Header.TotalBlocks ? sparseFile.Header.ChunkHeaderSize : 0;
+                planBytes += SparseFormat.SparseHeaderSize + planLen + trailingSkip;
+                planLen = 0;
+                planEnd = 0;
+            }
+            foreach (var item in work)
+            {
+                var gap = item.StartBlock > planEnd ? SparseFormat.ChunkHeaderSize : 0;
+                var data = ChunkHelper.GetDiskSize(item.Source.Header.ChunkType, item.Blocks,
+                    sparseFile.Header.ChunkHeaderSize, blockSize) - sparseFile.Header.ChunkHeaderSize;
+                var cost = gap + sparseFile.Header.ChunkHeaderSize + data;
+                if (planLen > 0 && planLen + cost > usable)
+                {
+                    FlushPlan();
+                    AddPlanBytes(item);
+                }
+                else
+                {
+                    AddPlanBytes(item);
+                }
+            }
+            if (planLen > 0)
+            {
+                FlushPlan();
+            }
+            onPlan(planCount, planBytes);
+        }
+
         var pieceIndex = 0;
         var pieceItems = new List<WorkItem>();
         long pieceFileLen = 0;
@@ -558,7 +664,6 @@ public static class SparseImageConverter
                 return;
             }
 
-            var outPath = outputPattern.Contains("{0}", StringComparison.Ordinal) ? string.Format(outputPattern, pieceIndex) : $"{outputPattern}.{pieceIndex:D2}";
             var piece = new SparseFile(blockSize, totalLength);
             foreach (var item in pieceItems)
             {
@@ -578,8 +683,7 @@ public static class SparseImageConverter
                 }
             }
 
-            using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
-            piece.WriteToStream(fs, sparse: true);
+            emitPiece(pieceIndex, piece);
             pieceIndex++;
             pieceItems.Clear();
             pieceFileLen = 0;
@@ -588,6 +692,7 @@ public static class SparseImageConverter
 
         foreach (var item in work)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var gapHeader = item.StartBlock > lastEndBlock ? (long)SparseFormat.ChunkHeaderSize : 0;
             var dataBytes = (ChunkType)item.Source.Header.ChunkType == ChunkType.Fill
                 ? (long)sizeof(uint)

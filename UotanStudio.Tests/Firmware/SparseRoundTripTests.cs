@@ -450,6 +450,52 @@ public class SparseRoundTripTests
         }
     }
 
+    [Fact]
+    public void ResparseImageStreaming_DeletesEachPieceAfterConsumption_AndReassembles()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 10);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 11));
+        sparse.AddFillChunk(0x5A5A5A5A, BlockSize * 3);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 4, 29));
+
+        using var temp = new TempDirectory();
+        var input = temp.WriteBytes("input.img", []);
+        using (var fs = File.Create(input))
+        {
+            sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        byte[] expected;
+        using (var rawMs = new MemoryStream())
+        {
+            sparse.WriteRawToStream(rawMs);
+            expected = rawMs.ToArray();
+        }
+
+        var partition = new byte[BlockSize * 10];
+        var piecePath = Path.Combine(temp.Path, "chunk.sparse");
+        var pieceCount = 0;
+        var plannedCount = 0;
+        var plannedBytes = 0L;
+        var uploadedBytes = 0L;
+        SparseImageConverter.ResparseImageStreaming(input, piecePath, BlockSize * 4,
+            piece =>
+            {
+                Assert.True(File.Exists(piece));
+                uploadedBytes += new FileInfo(piece).Length;
+                ApplyPiece(piece, partition);
+                pieceCount++;
+            },
+            (count, bytes) => { plannedCount = count; plannedBytes = bytes; },
+            TestContext.Current.CancellationToken);
+
+        Assert.True(pieceCount >= 2);
+        Assert.Equal(pieceCount, plannedCount);
+        Assert.Equal(uploadedBytes, plannedBytes);
+        Assert.False(File.Exists(piecePath));
+        Assert.Equal(expected, partition);
+    }
+
     /// <summary>
     /// Simulates the bootloader consuming resparse pieces: for each piece in order, RAW/FILL
     /// chunks are written into a partition buffer at their absolute block addresses, and
@@ -466,34 +512,40 @@ public class SparseRoundTripTests
         var partition = new byte[partitionSize];
         foreach (var piece in pieces)
         {
-            using var sparse = SparseReader.FromImageFile(piece);
-            foreach (var chunk in sparse.Chunks)
+            ApplyPiece(piece, partition);
+        }
+
+        return partition;
+    }
+
+    private static void ApplyPiece(string piece, byte[] partition)
+    {
+        using var sparse = SparseReader.FromImageFile(piece);
+        foreach (var chunk in sparse.Chunks)
+        {
+            switch ((ChunkType)chunk.Header.ChunkType)
             {
-                switch ((ChunkType)chunk.Header.ChunkType)
-                {
-                    case ChunkType.Raw when chunk.DataProvider is not null:
+                case ChunkType.Raw when chunk.DataProvider is not null:
+                    {
+                        var dst = partition.AsSpan((int)(chunk.StartBlock * BlockSize));
+                        var filled = 0;
+                        while (filled < chunk.Header.ChunkSize * BlockSize)
                         {
-                            var dst = partition.AsSpan((int)(chunk.StartBlock * BlockSize));
-                            var filled = 0;
-                            while (filled < chunk.Header.ChunkSize * BlockSize)
+                            var read = chunk.DataProvider.Read(filled, dst[filled..]);
+                            if (read <= 0)
                             {
-                                var read = chunk.DataProvider.Read(filled, dst[filled..]);
-                                if (read <= 0)
-                                {
-                                    break;
-                                }
-                                filled += read;
+                                break;
                             }
-                            Assert.Equal((long)chunk.Header.ChunkSize * BlockSize, filled);
-                            break;
+                            filled += read;
                         }
-                    case ChunkType.Fill:
-                        SparseFill.Fill(partition.AsSpan((int)(chunk.StartBlock * BlockSize), (int)(chunk.Header.ChunkSize * BlockSize)), chunk.FillValue);
+                        Assert.Equal((long)chunk.Header.ChunkSize * BlockSize, filled);
                         break;
-                }
+                    }
+                case ChunkType.Fill:
+                    SparseFill.Fill(partition.AsSpan((int)(chunk.StartBlock * BlockSize), (int)(chunk.Header.ChunkSize * BlockSize)), chunk.FillValue);
+                    break;
             }
         }
-        return partition;
     }
 
     private static byte[] BuildBytes(uint length, int factor)

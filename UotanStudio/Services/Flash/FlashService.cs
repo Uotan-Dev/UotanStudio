@@ -504,36 +504,34 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, partition, 4, FlashLogText.Get("Flash_Progress_SplittingSparse"));
-            UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ResparseImage(
-                sparsePath, Path.Combine(tempDir, "chunk_{0}.sparse"), maxDownloadSize);
-
-            var chunks = Directory.GetFiles(tempDir, "chunk_*.sparse")
-                .OrderBy(c => int.TryParse(
-                    Path.GetFileNameWithoutExtension(c).AsSpan("chunk_".Length),
-                    System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : int.MaxValue)
-                .ToArray();
-
-            var totalBytes = chunks.Sum(c => new FileInfo(c).Length);
+            var chunkPath = Path.Combine(tempDir, "chunk.sparse");
+            var totalChunks = 0;
+            var totalBytes = 0L;
             var bytesDone = 0L;
-            for (var i = 0; i < chunks.Length; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                using var chunk = File.OpenRead(chunks[i]);
-                var chunkLength = chunk.Length;
-                var index = i;
-                var chunkBase = bytesDone;
-                var chunkProgress = new SynchronousFlashProgress(written =>
-                    Report(progress, partition,
-                        totalBytes > 0 ? (int)Math.Min(100, (chunkBase + written) * 100L / totalBytes) : 0,
-                        FlashLogText.Format("Flash_Progress_UploadingChunk", index + 1, chunks.Length)));
-                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct, resolveSlot: false,
-                    options: FlashPartitionOptions.PreparedSparseChunks);
-                chunkResponse.ThrowIfFailed();
-                bytesDone += chunkLength;
-            }
+            var chunkCount = 0;
+            UotanStudio.Firmware.BlockImage.Sparse.SparseImageConverter.ResparseImageStreaming(
+                sparsePath, chunkPath, maxDownloadSize,
+                chunk =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    using var chunkStream = File.OpenRead(chunk);
+                    var chunkLength = chunkStream.Length;
+                    var chunkBase = bytesDone;
+                    var index = chunkCount;
+                    var chunkProgress = new SynchronousFlashProgress(written =>
+                        Report(progress, partition,
+                            totalBytes > 0 ? (int)Math.Min(100, (chunkBase + written) * 100L / totalBytes) : 0,
+                            FlashLogText.Format("Flash_Progress_UploadingChunk", index + 1, totalChunks)));
+                    var chunkResponse = session.FlashPartition(partition, chunkStream, chunkLength, chunkProgress, ct,
+                        resolveSlot: false, options: FlashPartitionOptions.PreparedSparseChunks);
+                    chunkResponse.ThrowIfFailed();
+                    bytesDone += chunkLength;
+                    chunkCount++;
+                },
+                onPlan: (count, bytes) => { totalChunks = count; totalBytes = bytes; },
+                ct);
 
-            return FlashLogText.Format("Flash_Result_FlashedSparseChunks", partition, totalBytes, chunks.Length);
+            return FlashLogText.Format("Flash_Result_FlashedSparseChunks", partition, totalBytes, chunkCount);
         }
         finally
         {
