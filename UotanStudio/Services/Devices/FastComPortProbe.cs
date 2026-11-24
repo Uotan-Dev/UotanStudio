@@ -1,17 +1,15 @@
 using UotanStudio.Comm.Transports.Serial;
+using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 namespace UotanStudio.Services.Devices;
 
 /// <summary>
-/// Watches the system serial-port list and handshakes a MediaTek preloader the moment its COM port appears.
-/// A preloader that enumerates as a USB-to-serial adapter accepts the complemented boot handshake for only a
-/// few seconds, and a full USB inventory walk takes longer than that; <see cref="SerialTransport.GetAvailablePorts"/>
-/// answers in well under a millisecond, so this is the only watcher that can meet the window.
-/// <para>监视系统串口列表，并在联发科 preloader 的 COM 口出现的瞬间握手。枚举为 USB 转串口适配器的 preloader
-/// 只在数秒内接受反码 boot 握手，而整棵 USB 清单遍历比这更慢；<see cref="SerialTransport.GetAvailablePorts"/>
-/// 在毫秒以内答复，因此这是唯一能赶上该窗口的监视方式。</para>
+/// Watches the system serial-port list and reports the moment a boot-protocol COM port appears. The actual
+/// handshake is dispatched by the arrival pipeline using the protocol classified from the PnP hardware id.
+/// <para>监视系统串口列表，并在启动协议 COM 口出现的瞬间上报。实际握手由到达流水线根据 PnP 硬件 ID
+/// 分类出的协议分派。</para>
 /// </summary>
-internal sealed class MtkComPortProbe : IDisposable
+internal sealed class FastComPortProbe : IDisposable
 {
     /// <summary>Scan cadence. Fast enough to catch the window, cheap enough to run continuously.</summary>
     /// <para>扫描节奏。快到足以赶上窗口，又便宜到可以持续运行。</para>
@@ -25,7 +23,7 @@ internal sealed class MtkComPortProbe : IDisposable
     private Task? _loop;
     private bool _disposed;
 
-    internal MtkComPortProbe(Action<string> onPortArrived, Action<Exception>? onError = null)
+    internal FastComPortProbe(Action<string> onPortArrived, Action<Exception>? onError = null)
     {
         _onPortArrived = onPortArrived ?? throw new ArgumentNullException(nameof(onPortArrived));
         _onError = onError;
@@ -85,6 +83,15 @@ internal sealed class MtkComPortProbe : IDisposable
                     }
 
                     if (!isNew)
+                    {
+                        continue;
+                    }
+
+                    // Only claim ports the read-only PnP tree classifies as a known boot protocol. An unrelated
+                    // serial device stays free; a classified one keeps its own protocol when submitted downstream.
+                    // 只认领只读 PnP 树判定为已知启动协议的端口。无关串口保持原样；已分类端口在下游保留自己的协议。
+                    if (OperatingSystem.IsWindows() &&
+                        FastBootPortEnumerator.ClassifyPort(port) is null)
                     {
                         continue;
                     }

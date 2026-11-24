@@ -5,6 +5,7 @@ using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Devices.Services;
@@ -33,6 +34,15 @@ public sealed partial class DeviceController
     /// <para>该控制器组装时未提供通信套件。</para></exception>
     public IReadOnlyList<UsbDeviceInfo> EnumerateUsb(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null)
         => RequiredKit.EnumerateUsbDevices(apiKind, filter);
+
+    /// <summary>Lists serial ports bound to any protocol the canonical classifier recognises, read from the
+    /// read-only PnP tree. <para>列出 PnP 只读树中绑定到通用分类器可识别协议的串口。</para></summary>
+    /// <returns>The boot ports with their classified protocol tokens.
+    /// <para>带通用协议名的启动端口列表。</para></returns>
+    public IReadOnlyList<FastBootPort> EnumerateFastBootPorts()
+        => OperatingSystem.IsWindows()
+            ? UotanStudio.Comm.Transports.Usb.Backend.Windows.FastBootPortEnumerator.Enumerate()
+            : [];
 
     /// <summary>Monitors raw USB additions and removals.<para>监视原始 USB 新增与移除。</para></summary>
     /// <param name="onChanged">Callback receiving each batch of device changes.

@@ -25,6 +25,43 @@ public static class UsbProtocolClassifier
     private const ushort UnisocDownloadPid = 0x4D00;
 
     /// <summary>
+    /// Classifies a device-interface path by the VID/PID embedded in it, using the same bootrom tables as
+    /// <see cref="Classify(UsbDeviceInfo)"/>. Fast arrival watchers get the path before any inventory exists, so
+    /// this is the single place that decides which protocol a bare path belongs to.
+    /// <para>按设备接口路径中嵌入的 VID/PID 分类，使用与 <see cref="Classify(UsbDeviceInfo)"/> 相同的 bootrom 表。
+    /// 快速到达监视器在任何清单之前就拿到路径，因此这里是判定裸路径协议的唯一位置。</para>
+    /// </summary>
+    /// <param name="devicePath">The device-interface path carrying <c>vid_xxxx</c> and <c>pid_xxxx</c>.
+    /// <para>带有 <c>vid_xxxx</c> 与 <c>pid_xxxx</c> 的设备接口路径。</para></param>
+    /// <returns>The protocol name, or <see langword="null"/> when the path names no known boot protocol.
+    /// <para>协议名；路径不指向任何已知启动协议时为 <see langword="null"/>。</para></returns>
+    public static string? ClassifyPath(string? devicePath)
+    {
+        if (string.IsNullOrWhiteSpace(devicePath))
+        {
+            return null;
+        }
+
+        var vid = ReadHexSegment(devicePath, "vid_");
+        var pid = ReadHexSegment(devicePath, "pid_");
+        return ClassifyBootrom(vid, pid);
+    }
+
+    private static ushort ReadHexSegment(string path, string marker)
+    {
+        var start = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (start < 0 || start + marker.Length + 4 > path.Length ||
+            !ushort.TryParse(path.AsSpan(start + marker.Length, 4),
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var value))
+        {
+            return 0;
+        }
+
+        return value;
+    }
+
+    /// <summary>
     /// Classifies the device as <c>edl</c>, <c>mtk</c>, <c>rkdl</c>, <c>sunxi</c>, <c>unisoc</c> or <c>tegra</c> from
     /// its bootrom VID/PID pair, otherwise from the first interface matching a known debug-bridge triple.
     /// <para>先按 bootrom 的 VID/PID 对把设备分类为 <c>edl</c>、<c>mtk</c>、<c>rkdl</c>、<c>sunxi</c>、<c>unisoc</c> 或 <c>tegra</c>，否则按首个匹配已知调试桥三元组的接口分类。</para>

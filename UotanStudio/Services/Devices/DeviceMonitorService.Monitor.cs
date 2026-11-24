@@ -9,6 +9,9 @@ public sealed partial class DeviceMonitorService
 {
     private static readonly TimeSpan DebugBridgeMonitorShutdownTimeout = TimeSpan.FromSeconds(2);
 
+    /// <summary>Coordinates the 3s classification-plus-handshake path for every device-arrival signal.</summary>
+    private readonly DeviceArrivalPipeline _arrivalPipeline;
+
     private Action<IReadOnlyList<UsbDeviceChange>>? _usbTopologyHandler;
     private Timer? _debounce;
     private CancellationTokenSource? _debugBridgeMonitorLifetime;
@@ -98,6 +101,7 @@ public sealed partial class DeviceMonitorService
     private DeviceMonitorService()
     {
         _controller = Comm.Devices.Services.DeviceControllerFactory.CreateDefault();
+        _arrivalPipeline = new DeviceArrivalPipeline(BuildArrivalWork, OnArrivalResult, OnArrivalFault);
         // Open by stable key instead of the snapshot-based path: a transient preloader must be handshaken before
         // the debounced inventory refresh can classify it, and OpenLeaseByKeyAsync opens the exact device directly.
         // 按稳定键开租约，而非走基于快照的路径：短暂 preloader 必须在去抖动清单刷新完成前完成握手，
@@ -192,7 +196,8 @@ public sealed partial class DeviceMonitorService
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
-        StartMtkComPortProbe();
+        SubmitAlreadyPresentBootPorts();
+        StartFastComPortProbe();
 
         Action<IReadOnlyList<UsbDeviceChange>> handler = changes =>
         {
@@ -437,6 +442,7 @@ public sealed partial class DeviceMonitorService
         _comPortProbe = null;
         _mtkConnections.Dispose();
         _edlConnections.Dispose();
+        _arrivalPipeline.Dispose();
         DisposeSharedAdbSessions();
         _controller.Dispose();
     }

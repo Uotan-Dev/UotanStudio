@@ -21,6 +21,10 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>The baud rate of the MTK preloader VCOM port. <para>MTK preloader VCOM 端口的波特率。</para></summary>
     private const int AutomaticMtkBaudRate = 115200;
+
+    /// <summary>Line speed used by the automatic Unisoc arrival-path handshake; the vendor download default.
+    /// <para>紫光自动到达路径握手使用的线路速度；厂商下载默认值。</para></summary>
+    private const int AutomaticUnisocBaudRate = 115200;
     private static readonly TimeSpan ScanLockWait = TimeSpan.FromMilliseconds(250);
     private readonly Lock _scanLock = new();
     private readonly Lock _scheduledEdlProbesGate = new();
@@ -110,7 +114,9 @@ public sealed partial class DeviceMonitorService
                 }
             }
 
-            _ = ProbeEdlStageInBackgroundAsync(device);
+            _ = _arrivalPipeline.Submit(new DeviceArrival(
+                device.Key, DeviceProtocolKind.Edl, ArrivalQuality.Inventoried,
+                NeedsHandshake(DeviceProtocolKind.Edl), null));
         }
     }
 
@@ -404,7 +410,31 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Mtk => "mtk",
         DeviceProtocolKind.Sunxi => "sunxi",
         DeviceProtocolKind.Unisoc => "unisoc",
+        DeviceProtocolKind.Tegra => "tegra",
+        DeviceProtocolKind.Diagnostic => "diag",
+        DeviceProtocolKind.Ios => "apple",
         _ => string.Empty
+    };
+
+    /// <summary>
+    /// Maps a canonical protocol token back to its device kind. The string is produced by the shared Comm
+    /// classifier, so no vendor id or protocol name is special-cased in the arrival paths.
+    /// <para>把通用分类器给出的协议名映射回设备类型；字符串来自 Comm 分类器，到达路径不再特殊处理任何厂商或协议。</para>
+    /// </summary>
+    internal static DeviceProtocolKind? ProtocolKindFromToken(string? token) => token switch
+    {
+        "adb" => DeviceProtocolKind.Adb,
+        "hdc" => DeviceProtocolKind.Hdc,
+        "fastboot" => DeviceProtocolKind.Fastboot,
+        "edl" => DeviceProtocolKind.Edl,
+        "rkdl" => DeviceProtocolKind.Rkdl,
+        "mtk" => DeviceProtocolKind.Mtk,
+        "sunxi" => DeviceProtocolKind.Sunxi,
+        "unisoc" => DeviceProtocolKind.Unisoc,
+        "tegra" => DeviceProtocolKind.Tegra,
+        "diag" => DeviceProtocolKind.Diagnostic,
+        "apple" => DeviceProtocolKind.Ios,
+        _ => null
     };
 
     internal static string? PhysicalUsbId(UsbDeviceInfo info, string? serial)

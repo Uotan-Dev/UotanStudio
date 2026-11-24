@@ -2,7 +2,9 @@ using System.Globalization;
 using System.IO.Ports;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -208,6 +210,117 @@ public sealed partial class DeviceController
     }
 
     /// <summary>
+    /// Handshakes a UNISOC download endpoint from an OS arrival path without any inventory walk. A serial-bound
+    /// download gadget publishes its BSL protocol on a CDC/VCOM pipe for only a few seconds, so the exact arrival
+    /// path is opened as a serial port first; a WinUSB-bound node falls back to the exact USB key.
+    /// <para>从操作系统到达路径握手紫光下载端点，不做清单遍历。串口绑定的下载设备在数秒窗口内于 CDC/VCOM 管道
+    /// 提供 BSL 协议，因此先以串口打开精确到达路径；WinUSB 绑定的节点回落到精确 USB 键。</para>
+    /// </summary>
+    /// <param name="devicePath">Exact device-interface path from the arrival broadcast.
+    /// <para>到达广播携带的精确设备接口路径。</para></param>
+    /// <param name="baudRate">Serial line speed. <para>串口线路速度。</para></param>
+    /// <param name="cancellationToken">Cancels the open and handshake. <para>取消打开与握手。</para></param>
+    /// <returns>The lease holding the handshaken session, or <see langword="null"/> when no shape answers.
+    /// <para>持有已握手会话的租约；所有形态都无应答时为 <see langword="null"/>。</para></returns>
+    public async Task<DeviceLease?> HandshakeUnisocArrivalPathAsync(string devicePath, int baudRate = 115200,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(devicePath);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var serial = MtkSerialPortFallback.TryOpenConnected(devicePath, baudRate);
+        if (serial is not null)
+        {
+            // Match the vendor tool's channel clear before CHECK_BAUD: discard stale bytes left by the boot
+            // ROM's arrival banner or a previous probe so the stage parser sees the device's fresh version reply.
+            serial.Reset();
+            var lease = await BuildUnisocSerialLeaseAsync(devicePath, serial, cancellationToken)
+                .ConfigureAwait(false);
+            if (lease is not null)
+            {
+                return lease;
+            }
+        }
+
+        return await OpenLeaseByKeyAsync(BuildArrivalKey(devicePath), DeviceSessionKind.Unisoc, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<DeviceLease?> BuildUnisocSerialLeaseAsync(string devicePath, SerialTransport serial,
+        CancellationToken cancellationToken)
+    {
+        var (vid, pid) = TryParsePathVidPid(devicePath);
+        var endpoint = new DeviceEndpoint
+        {
+            Source = UsbDiscoverySource.SourceName,
+            Transport = "Serial",
+            Address = devicePath,
+            DisplayName = devicePath,
+            Serial = devicePath,
+            Route = "direct-usb",
+            Protocol = "unisoc",
+            RouteEpoch = DebugBridgeRoute.Current.Epoch,
+            Usb = new UsbEndpointDetails(UsbApiKind.Native, devicePath, vid, pid, null, null, null)
+        };
+
+        lock (_gate)
+        {
+            ValidateRouteForOpen(endpoint);
+            if (!_leased.Add(endpoint.Id))
+            {
+                serial.Dispose();
+                throw new DeviceEndpointBusyException(endpoint);
+            }
+        }
+
+        IAsyncDisposable transport = new OwnedDeviceTransport<SerialTransport>(serial);
+        try
+        {
+            if (!_factories.TryGetValue(DeviceSessionKind.Unisoc, out var factory))
+            {
+                throw new NotSupportedException("No session factory is registered for Unisoc sessions.");
+            }
+
+            // A download gadget answers CHECK_BAUD for only ~2 s. The default handshake budget (10 x 1000 ms)
+            // exceeds that window, so the fast arrival path uses a tight profile: one short probe per algorithm
+            // and a short FDL1 start delay, all inside the arrival pipeline's 2.8 s work slice.
+            // 下载设备只在约 2 秒内应答 CHECK_BAUD，默认握手预算（10×1000ms）会超出窗口。快速到达路径因此使用
+            // 紧凑参数：每种校验只做一次短探测并缩短 FDL1 启动等待，全部落在到达流水线 2.8 秒工作片内。
+            var fastOptions = new UnisocSessionOptions(
+                CommandTimeoutMs: 500,
+                Fdl1StartDelayMs: 100,
+                EntryProbeTimeoutMs: 250,
+                CheckBaudRetries: 2);
+            var session = factory is UnisocDeviceSessionFactory unisocFactory
+                ? await unisocFactory.CreateWithOptionsAsync(endpoint, transport, fastOptions, cancellationToken)
+                    .ConfigureAwait(false)
+                : await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
+            DeviceLease? lease = null;
+            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!));
+            lock (_gate)
+            {
+                _openLeases[endpoint.Id] = lease;
+            }
+
+            return lease;
+        }
+        catch
+        {
+            try
+            {
+                await transport.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Release(endpoint.Id, null);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Wraps an already-opened serial transport in an MTK lease and runs the boot handshake on it.
     /// <para>把已打开的串口传输包装为 MTK 租约，并在其上执行 boot 握手。</para>
     /// </summary>
@@ -240,19 +353,45 @@ public sealed partial class DeviceController
         ArgumentException.ThrowIfNullOrWhiteSpace(portName);
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
-        var serial = new SerialTransport(portName, baudRate, Parity.None, 8, StopBits.One, Handshake.None);
-        try
+        var serial = OpenMtkVcomPort(portName, baudRate);
+        if (serial is null)
         {
-            await serial.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            serial.Dispose();
-            throw;
+            return null;
         }
 
         return await BuildSerialLeaseCoreAsync(portName, portName, serial, vid: 0, pid: 0, usb: null,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a named MTK VCOM port with the same bounded retries and no flow control as the topology-resolved
+    /// fallback, so an already-present port is not lost to a single transient exclusive-handle failure.
+    /// <para>以与拓扑解析回退相同的有界重试和无流控设置打开指定的 MTK VCOM 端口，
+    /// 使启动前已存在的端口不会因一次独占句柄的瞬时失败而丢失。</para>
+    /// </summary>
+    private static SerialTransport? OpenMtkVcomPort(string portName, int baudRate)
+    {
+        for (var attempt = 1; attempt <= 4; attempt++)
+        {
+            var serial = new SerialTransport(portName, baudRate, Parity.None, 8, StopBits.One, Handshake.None);
+            try
+            {
+                serial.Connect();
+                return serial;
+            }
+            catch
+            {
+                serial.Dispose();
+                if (attempt == 4)
+                {
+                    return null;
+                }
+
+                Thread.Sleep(150);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

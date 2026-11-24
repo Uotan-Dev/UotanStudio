@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services;
+using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -8,6 +9,15 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     private readonly MtkConnectionCache _mtkConnections;
+
+    /// <summary>
+    /// Identities captured during automatic MTK handshakes, kept after the transient port closes so the details
+    /// page can display what was already read without another handshake on a vanished endpoint.
+    /// <para>自动 MTK 握手期间捕获的身份；短暂端口消失后仍保留，使详情页无需在已消失端点上再次握手即可展示
+    /// 已经读到的数据。</para>
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, MtkDeviceInfo> _mtkHandshakeIdentities =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Ensures the lease-generation liveness probe is installed before a parked MTK lease is reused, so a
@@ -40,6 +50,53 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// Returns the MTK identity already captured by the automatic handshake, or <see langword="null"/> when no
+    /// live handshaken session covers this endpoint. Reading it exchanges no bytes with the device.
+    /// <para>返回自动握手已捕获的 MTK 身份；没有覆盖该端点的在线握手会话时返回 <see langword="null"/>。
+    /// 该读取不与设备交换任何字节。</para>
+    /// </summary>
+    internal MtkDeviceInfo? GetMtkHandshakeInfo(DetectedDevice device)
+    {
+        if (_mtkHandshakeIdentities.TryGetValue(device.Key, out var captured))
+        {
+            return captured;
+        }
+
+        // A startup handshake is keyed by the bare COM port while the device row uses its USB key. Bridge them
+        // through the PnP-reported VID/PID of that port, matching the same evidence the startup scan used.
+        // 启动握手以裸 COM 口为键，而设备行使用 USB 键。通过 PnP 上报的该端口 VID/PID 桥接，
+        // 与启动扫描采用相同的证据。
+        if (OperatingSystem.IsWindows() && device.VendorId != 0)
+        {
+            try
+            {
+                foreach (var port in _controller.EnumerateFastBootPorts())
+                {
+                    if (port.VendorId == device.VendorId && port.ProductId == device.ProductId &&
+                        _mtkHandshakeIdentities.TryGetValue(port.PortName, out var fromPort))
+                    {
+                        _mtkHandshakeIdentities[device.Key] = fromPort;
+                        return fromPort;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                    $"MTK identity port match failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        if (_mtkConnections.GetParkedDeviceInfo(device) is { } parked)
+        {
+            _mtkHandshakeIdentities[device.Key] = parked;
+            return parked;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Handles an OS arrival path: when it names a MediaTek download port, handshakes it immediately over that
     /// exact path. This runs before any inventory pass, which is the only way to meet a preloader's few-second
     /// window; the handler must therefore return at once and let the work run in the background.
@@ -48,50 +105,26 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     private void OnUsbArrivalPath(string devicePath)
     {
-        if (!LooksLikeMediaTekDownloadPath(devicePath))
+        // The canonical Comm classifier is the only vendor/protocol authority. A path that names no known
+        // boot protocol stays untouched for its own discovery path instead of being forced into MTK.
+        // 通用 Comm 分类器是厂商与协议的唯一判定入口；不指向已知启动协议的路径保持原样，
+        // 交给自己的发现路径，而不会被强推成 MTK。
+        var token = UsbProtocolClassifier.ClassifyPath(devicePath);
+        var protocol = ProtocolKindFromToken(token);
+        if (protocol is null)
         {
             return;
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-            $"MTK arrival path observed: '{devicePath}'.");
-
-        lock (_scheduledMtkHandshakesGate)
-        {
-            if (!_scheduledMtkHandshakes.Add(devicePath))
-            {
-                return;
-            }
-        }
-
-        _ = HandshakeArrivalPathInBackgroundAsync(devicePath);
-    }
-
-    /// <summary>
-    /// Reports whether an arrival path names a MediaTek download port by its firmware vendor id and one of the
-    /// documented product ids. The check is pure string work so it costs nothing on the OS message thread.
-    /// <para>按固件厂商 ID 与已记载的产品 ID 判断到达路径是否指向联发科下载端口。该判断是纯字符串操作，
-    /// 在操作系统消息线程上不产生开销。</para>
-    /// </summary>
-    internal static bool LooksLikeMediaTekDownloadPath(string devicePath)
-    {
-        if (string.IsNullOrWhiteSpace(devicePath))
-        {
-            return false;
-        }
-
-        if (devicePath.IndexOf("vid_0e8d", StringComparison.OrdinalIgnoreCase) < 0)
-        {
-            return false;
-        }
-
-        return devicePath.Contains("pid_0003", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_2000", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_2001", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_201d", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_20ff", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_3000", StringComparison.OrdinalIgnoreCase)
-            || devicePath.Contains("pid_6000", StringComparison.OrdinalIgnoreCase);
+            $"{protocol.Value} arrival path observed: '{devicePath}'.");
+        _ = _arrivalPipeline.Submit(new DeviceArrival(
+            devicePath,
+            protocol,
+            ArrivalQuality.ArrivalPath,
+            NeedsHandshake(protocol.Value),
+            null,
+            devicePath));
     }
 
     private async Task HandshakeArrivalPathInBackgroundAsync(string devicePath)
@@ -126,7 +159,7 @@ public sealed partial class DeviceMonitorService
             }
         }
     }
-    private MtkComPortProbe? _comPortProbe;
+    private FastComPortProbe? _comPortProbe;
 
     /// <summary>
     /// Starts the serial-port watcher, which handshakes a VCOM preloader the moment its port appears. This is the
@@ -134,7 +167,7 @@ public sealed partial class DeviceMonitorService
     /// <para>启动串口监视器，在 VCOM preloader 端口出现的瞬间握手。这是唯一能赶上数秒窗口的监视方式：
     /// 整棵 USB 清单遍历比该窗口更慢。</para>
     /// </summary>
-    private void StartMtkComPortProbe()
+    private void StartFastComPortProbe()
     {
         lock (_sync)
         {
@@ -149,7 +182,7 @@ public sealed partial class DeviceMonitorService
             }
         }
 
-        var probe = new MtkComPortProbe(
+        var probe = new FastComPortProbe(
             OnComPortArrived,
             ex => LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
                 $"MTK COM port probe callback failed: {ex.GetType().Name}: {ex.Message}"));
@@ -166,7 +199,43 @@ public sealed partial class DeviceMonitorService
 
         probe.Start();
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-            "MTK COM port watcher started; a VCOM preloader is handshaken as soon as its port appears.");
+            "Fast boot COM port watcher started; a classified boot port is submitted as soon as it appears.");
+    }
+
+    /// <summary>
+    /// Handshakes MediaTek boot VCOM ports that were already present when the monitor started. Vendor VCOM
+    /// bindings hide these endpoints from the USB inventory, so the PnP hardware ids are the only way to find
+    /// them; unrelated serial devices are never probed.
+    /// <para>握手监视器启动时已存在的联发科启动 VCOM 端口。厂商 VCOM 绑定使这些端点不出现在 USB 清单中，
+    /// 因此 PnP 硬件 ID 是唯一的识别途径；无关串口设备绝不探测。</para>
+    /// </summary>
+    private void SubmitAlreadyPresentBootPorts()
+    {
+        IReadOnlyList<UotanStudio.Comm.Transports.Usb.Backend.Windows.FastBootPort> bootPorts;
+        try
+        {
+            bootPorts = _controller.EnumerateFastBootPorts();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Fast boot port enumeration failed: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        foreach (var port in bootPorts)
+        {
+            var protocol = ProtocolKindFromToken(port.Protocol);
+            if (protocol is null || !NeedsHandshake(protocol.Value))
+            {
+                continue;
+            }
+
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                $"{protocol.Value} boot port '{port.PortName}' ({port.VendorId:X4}:{port.ProductId:X4}) was already present at startup; submitting handshake.");
+            _ = _arrivalPipeline.Submit(new DeviceArrival(
+                port.PortName, protocol, ArrivalQuality.ComPort, true, null, port.PortName));
+        }
     }
 
     /// <summary>
@@ -177,7 +246,7 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     private void OnComPortArrived(string port)
     {
-        _ = HandshakeComPortInBackgroundAsync(port);
+        OnComPortArrivedForPipeline(port);
     }
 
     /// <summary>
@@ -229,17 +298,9 @@ public sealed partial class DeviceMonitorService
             return;
         }
 
-        lock (_scheduledMtkHandshakesGate)
-        {
-            if (!_scheduledMtkHandshakes.Add(info.DeviceKey))
-            {
-                return;
-            }
-        }
-
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-            $"MTK arrival: starting immediate boot handshake for '{info.DeviceKey}' ({info.VendorId:X4}:{info.ProductId:X4}).");
-        _ = HandshakeArrivalInBackgroundAsync(info);
+            $"MTK arrival: submitting descriptor for '{info.DeviceKey}' ({info.VendorId:X4}:{info.ProductId:X4}).");
+        OnDeviceArrived(info, ArrivalQuality.Descriptor);
     }
 
     /// <summary>
@@ -389,7 +450,16 @@ public sealed partial class DeviceMonitorService
                 }
             }
 
-            _ = HandshakeMtkInBackgroundAsync(device);
+            if (device.Endpoint?.UsbInfo is { } info)
+            {
+                OnDeviceArrived(info, ArrivalQuality.Inventoried);
+            }
+            else
+            {
+                _ = _arrivalPipeline.Submit(new DeviceArrival(
+                    device.Key, DeviceProtocolKind.Mtk, ArrivalQuality.Inventoried,
+                    NeedsHandshake(DeviceProtocolKind.Mtk), null));
+            }
         }
     }
 

@@ -8,6 +8,7 @@ using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Backend.Unisoc;
 using UotanStudio.Comm.Transports.Usb.Backend.Windows;
 using UotanStudio.Comm.Transports.Usb.Core;
 
@@ -107,13 +108,66 @@ internal sealed class CommDeviceTransportOpener(
             filter.InterfaceProtocol == usb.InterfaceProtocol)
         {
             DebugBridgeSessionOpener.RequireDirectUsb(usb.InterfaceClass, usb.InterfaceSubClass, usb.InterfaceProtocol, endpoint.Serial);
+
+            // MTK-style serial-first ordering for Unisoc: when the platform bound the download gadget to a
+            // serial driver, the BSL protocol runs on that CDC/VCOM pipe. Opening the native interface first
+            // makes a serial-bound gadget re-enumerate and take its COM port down with it, so resolve the PnP
+            // binding first and use the serial port when one exists. A WinUSB-bound node publishes no port and
+            // therefore still falls through to the native open below.
+            if (string.Equals(endpoint.Protocol, "unisoc", StringComparison.OrdinalIgnoreCase))
+            {
+                var resolvedPort = UnisocSerialPortFallback.TryResolvePortName(usb.Path);
+                UsbTrace.LogFormatted(
+                    $"UNISOC opener: serial-first resolution for '{usb.Path}' -> '{resolvedPort ?? "(none)"}'.");
+                if (resolvedPort is null)
+                {
+                    // No serial binding at this instant: a serial-bound gadget can still be mid re-enumeration.
+                    // Wait briefly and resolve again before falling through to a native open that would disturb it.
+                    Thread.Sleep(150);
+                    resolvedPort = UnisocSerialPortFallback.TryResolvePortName(usb.Path);
+                    UsbTrace.LogFormatted(
+                        $"UNISOC opener: serial-first re-resolution -> '{resolvedPort ?? "(none)"}'.");
+                }
+
+                var serialBinding = UnisocSerialPortFallback.HasSerialBinding(usb.Path);
+                var serialFirst = resolvedPort is null
+                    ? null
+                    : UnisocSerialPortFallback.TryOpenConnected(usb.Path);
+                if (serialFirst is not null)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        serialFirst.Dispose();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    return new OwnedDeviceTransport<SerialTransport>(serialFirst);
+                }
+
+                if (serialBinding)
+                {
+                    // The official/serial driver owns this endpoint: no WinUSB interface exists. A native open
+                    // would fail repeatedly and reset a device whose download window is only a few seconds.
+                    // Fail closed with a precise error rather than disturbing the gadget.
+                    UsbTrace.LogFormatted(
+                        $"UNISOC opener: serial driver owns '{usb.Path}' but port '{resolvedPort ?? "(none)"}' could not be opened; refusing native open.");
+                    throw new IOException(
+                        $"The Unisoc download endpoint is bound to a serial driver but its COM port '{resolvedPort}' could not be opened.");
+                }
+            }
+
+            UsbTrace.LogFormatted(
+                $"UNISOC opener: falling through to native open for '{usb.Path}' after serial-first miss.");
             var session = OpenNativeSessionWithRetry(endpoint, usb, cancellationToken);
             if (session is null)
             {
                 if (string.Equals(endpoint.Protocol, "edl", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(endpoint.Protocol, "unisoc", StringComparison.OrdinalIgnoreCase))
                 {
-                    var serial = EdlSerialPortFallback.TryOpenConnected(usb.Path);
+                    // A serial-bound Unisoc download gadget exposes the BSL protocol over its CDC/VCOM pipe.
+                    // Use the Unisoc-specific fallback with MTK-style bounded open retries so the handle just
+                    // released by a previous attempt does not make a healthy device look unopenable.
+                    var serial = UnisocSerialPortFallback.TryOpenConnected(usb.Path);
                     if (serial is not null)
                     {
                         if (cancellationToken.IsCancellationRequested)

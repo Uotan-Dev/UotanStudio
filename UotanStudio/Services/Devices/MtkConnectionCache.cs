@@ -541,6 +541,54 @@ internal sealed class MtkConnectionCache(
         }
     }
 
+    /// <summary>
+    /// Returns the identity a parked handshake already captured, without opening a session or exchanging bytes.
+    /// <para>返回已暂存握手捕获的身份，不打开会话、不交换任何字节。</para>
+    /// </summary>
+    internal MtkDeviceInfo? GetParkedDeviceInfo(DetectedDevice device)
+    {
+        var info = device.Endpoint?.UsbInfo;
+        string? portName = null;
+        if (info is not null)
+        {
+            try { portName = portResolver?.Invoke(info); }
+            catch (Exception) { portName = null; }
+        }
+
+        List<DeviceLease> candidates = [];
+        lock (_gate)
+        {
+            if (_entries.TryGetValue(device.Key, out var direct) && direct.Parked is { } directLease)
+            {
+                candidates.Add(directLease);
+            }
+
+            foreach (var (key, entry) in _entries)
+            {
+                if (entry.Parked is not { } parked || candidates.Contains(parked))
+                {
+                    continue;
+                }
+
+                if (Covers(parked, key, info, portName, Volatile.Read(ref entry.ParkedAtMilliseconds)))
+                {
+                    candidates.Add(parked);
+                }
+            }
+        }
+
+        foreach (var lease in candidates)
+        {
+            if (LeaseIsLive(lease) && lease.TryGetSession<MtkSession>(out var session) &&
+                session.DeviceInfo is { } identity)
+            {
+                return identity;
+            }
+        }
+
+        return null;
+    }
+
     private MtkSession RequireSession(DeviceLease lease)
         => lease.TryGetSession<MtkSession>(out var session)
             ? session : throw new IOException("The endpoint has no MTK session.");

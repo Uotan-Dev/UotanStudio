@@ -238,19 +238,25 @@ internal sealed class UnisocDeviceSessionFactory : IDeviceSessionFactory
 {
     public DeviceSessionKind Kind => DeviceSessionKind.Unisoc;
 
-    public async Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
+    public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
         CancellationToken cancellationToken)
+        => CreateWithOptionsAsync(endpoint, transport, null, cancellationToken);
+
+    /// <summary>Opens with explicit session options, used by the fast arrival path to fit a short download window.
+    /// <para>用显式会话选项打开，供快速到达路径在短暂下载窗口内完成握手。</para></summary>
+    internal async Task<object> CreateWithOptionsAsync(DeviceEndpoint endpoint, IAsyncDisposable transport,
+        UnisocSessionOptions? options, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         LeasedTransport.RequireProtocol(endpoint, "unisoc");
         if (LeasedTransport.TryUnwrap<SerialTransport>(transport, out var serial))
         {
-            return await UnisocDeviceSession.OpenAsync(new UnisocSerialTransport(serial), null, cancellationToken)
+            return await UnisocDeviceSession.OpenAsync(new UnisocSerialTransport(serial), options, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
-        return await UnisocDeviceSession.OpenAsync(new UnisocUsbTransport(usb), null, cancellationToken)
+        return await UnisocDeviceSession.OpenAsync(new UnisocUsbTransport(usb), options, cancellationToken)
             .ConfigureAwait(false);
     }
 }
