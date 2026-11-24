@@ -12,13 +12,15 @@ namespace UotanStudio.Mcp.Tools;
 /// </summary>
 internal static class McpMetaToolFactory
 {
-    internal static McpServerTool CreateSearchActions(McpActionRegistry registry) =>
-        McpServerTool.Create(
+    internal static McpServerTool CreateSearchActions(McpActionRegistry registry)
+    {
+        var index = new SearchIndex(registry.Actions);
+        return McpServerTool.Create(
             ([Description("Natural-language or keyword query describing the desired capability.")] string query,
              [Description("Optional domain filter: parse, unpack, repack, modify, flash, verify, flow, device, project, env, misc.")] string? domain,
              [Description("Maximum results to return (1-10). Default 5.")] int? limit,
              CancellationToken cancellationToken) => ToolGuard.RunAsync(
-                _ => Task.FromResult(Search(registry, query, domain, limit)), cancellationToken),
+                _ => Task.FromResult(index.Search(query, domain, limit)), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "search_actions",
@@ -26,6 +28,7 @@ internal static class McpMetaToolFactory
                 ReadOnly = true,
                 Destructive = false
             });
+    }
 
     internal static McpServerTool CreateExecuteAction(McpActionRegistry registry, McpArtifactStore artifacts) =>
         McpServerTool.Create(
@@ -107,93 +110,106 @@ internal static class McpMetaToolFactory
         return sb.Length == 0 ? "action" : sb.ToString();
     }
 
-    private static ToolResult Search(McpActionRegistry registry, string query, string? domain, int? limit)
+    internal sealed class SearchIndex(IReadOnlyList<McpActionDescriptor> actions)
     {
-        var q = (query ?? string.Empty).Trim();
-        var max = Math.Clamp(limit ?? 5, 1, 10);
-        var tokens = Tokenize(q);
-        var domainFilter = string.IsNullOrWhiteSpace(domain) ? null : domain.Trim();
-
-        var scored = new List<(McpActionDescriptor Action, double Score)>();
-        foreach (var a in registry.Actions)
+        private readonly SearchAction[] _actions = actions.Select(static action =>
         {
-            if (domainFilter is not null && !a.Domain.Equals(domainFilter, StringComparison.OrdinalIgnoreCase))
+            var name = action.Action;
+            var normalizedName = name.ToLowerInvariant();
+            var domain = action.Domain;
+            var summary = action.Summary ?? string.Empty;
+            return new SearchAction(action, name.Split('_', StringSplitOptions.RemoveEmptyEntries),
+                summary, $"{normalizedName} {domain.ToLowerInvariant()} {summary.ToLowerInvariant()}");
+        }).ToArray();
+
+        internal ToolResult Search(string query, string? domain, int? limit)
+        {
+            var q = (query ?? string.Empty).Trim();
+            var normalizedQuery = q.ToLowerInvariant();
+            var max = Math.Clamp(limit ?? 5, 1, 10);
+            var tokens = Tokenize(normalizedQuery);
+            var domainFilter = string.IsNullOrWhiteSpace(domain) ? null : domain.Trim();
+
+            var scored = new List<(McpActionDescriptor Action, double Score)>(_actions.Length);
+            foreach (var action in _actions)
             {
-                continue;
+                if (domainFilter is not null && !action.Descriptor.Domain.Equals(domainFilter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var score = Score(action, q, normalizedQuery, tokens);
+                if (score > 0 || domainFilter is not null && tokens.Count == 0)
+                {
+                    scored.Add((action.Descriptor, score > 0 ? score : 0.1));
+                }
             }
 
-            var score = Score(a, q, tokens);
-            if (score > 0 || domainFilter is not null && tokens.Count == 0)
+            if (scored.Count == 0 && domainFilter is null)
             {
-                scored.Add((a, score > 0 ? score : 0.1));
+                foreach (var action in _actions)
+                {
+                    var score = Score(action, q, normalizedQuery, tokens);
+                    if (score > 0) scored.Add((action.Descriptor, score));
+                }
             }
+
+            var results = scored
+                .OrderByDescending(x => x.Score)
+                .ThenBy(x => x.Action.Action, StringComparer.OrdinalIgnoreCase)
+                .Take(max)
+                .Select(x => new McpActionSearchResult(
+                    x.Action.Action, x.Action.Domain, x.Action.Summary,
+                    x.Action.ReadOnly, x.Action.Destructive, x.Action.FlashGated,
+                    Math.Round(x.Score, 4), x.Action.InputSchema.GetRawText()))
+                .ToList();
+
+            return new ToolResult(true,
+                results.Count == 0 ? $"No actions matched '{q}'." : $"Found {scored.Count} action(s); returning top {results.Count}.",
+                ToolJson.Data(new McpActionSearchPayload(q, domainFilter, scored.Count, results, SuggestDomains(_actions, tokens))));
         }
 
-        if (scored.Count == 0 && domainFilter is null)
+        private static double Score(SearchAction action, string query, string normalizedQuery, List<string> tokens)
         {
-            foreach (var a in registry.Actions)
+            if (tokens.Count == 0) return 0;
+            double score = 0;
+            var descriptor = action.Descriptor;
+            var name = descriptor.Action;
+            var summary = action.Summary;
+            var domain = descriptor.Domain;
+
+            if (name.Equals(query, StringComparison.OrdinalIgnoreCase)) score += 100;
+            if (action.Haystack.Contains(normalizedQuery, StringComparison.Ordinal)) score += 20;
+
+            foreach (var token in tokens)
             {
-                var score = Score(a, q, tokens);
-                if (score > 0) scored.Add((a, score));
+                if (name.Equals(token, StringComparison.OrdinalIgnoreCase)) score += 30;
+                else if (name.Contains(token, StringComparison.OrdinalIgnoreCase)) score += 12;
+                if (domain.Equals(token, StringComparison.OrdinalIgnoreCase)) score += 10;
+                else if (domain.Contains(token, StringComparison.OrdinalIgnoreCase)) score += 4;
+                if (summary.Contains(token, StringComparison.OrdinalIgnoreCase)) score += 6;
+                foreach (var part in action.NameParts)
+                {
+                    if (part.Equals(token, StringComparison.OrdinalIgnoreCase)) score += 8;
+                    else if (part.StartsWith(token, StringComparison.OrdinalIgnoreCase)) score += 3;
+                }
             }
+
+            if (tokens.Any(t => t is "flash" or "刷写" or "write") && domain == "flash") score += 5;
+            if (tokens.Any(t => t is "unpack" or "extract" or "解包") && name.Contains("unpack", StringComparison.OrdinalIgnoreCase)) score += 8;
+            if (tokens.Any(t => t is "pack" or "repack" or "打包") && name.Contains("pack", StringComparison.OrdinalIgnoreCase)) score += 8;
+            if (tokens.Any(t => t is "verify" or "校验" or "check") && (domain == "verify" || name.Contains("verify", StringComparison.OrdinalIgnoreCase))) score += 6;
+            return score;
         }
-
-        var results = scored
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.Action.Action, StringComparer.OrdinalIgnoreCase)
-            .Take(max)
-            .Select(x => new McpActionSearchResult(
-                x.Action.Action, x.Action.Domain, x.Action.Summary,
-                x.Action.ReadOnly, x.Action.Destructive, x.Action.FlashGated,
-                Math.Round(x.Score, 4), x.Action.InputSchema.GetRawText()))
-            .ToList();
-
-        return new ToolResult(true,
-            results.Count == 0 ? $"No actions matched '{q}'." : $"Found {scored.Count} action(s); returning top {results.Count}.",
-            ToolJson.Data(new McpActionSearchPayload(q, domainFilter, scored.Count, results, SuggestDomains(registry, q))));
     }
 
-    private static double Score(McpActionDescriptor a, string query, List<string> tokens)
+    private sealed record SearchAction(McpActionDescriptor Descriptor, string[] NameParts, string Summary, string Haystack);
+
+    private static List<string> Tokenize(string normalizedQuery)
     {
-        if (tokens.Count == 0) return 0;
-        double score = 0;
-        var name = a.Action;
-        var summary = a.Summary ?? string.Empty;
-        var domain = a.Domain;
-        var haystack = $"{name} {domain} {summary}".ToLowerInvariant();
-
-        if (name.Equals(query, StringComparison.OrdinalIgnoreCase)) score += 100;
-        if (haystack.Contains(query.ToLowerInvariant(), StringComparison.Ordinal)) score += 20;
-
-        foreach (var t in tokens)
-        {
-            if (name.Equals(t, StringComparison.OrdinalIgnoreCase)) score += 30;
-            else if (name.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 12;
-            if (domain.Equals(t, StringComparison.OrdinalIgnoreCase)) score += 10;
-            else if (domain.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 4;
-            if (summary.Contains(t, StringComparison.OrdinalIgnoreCase)) score += 6;
-            // split action name by underscore
-            foreach (var part in name.Split('_', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (part.Equals(t, StringComparison.OrdinalIgnoreCase)) score += 8;
-                else if (part.StartsWith(t, StringComparison.OrdinalIgnoreCase)) score += 3;
-            }
-        }
-
-        // small boosts for exact domain intent
-        if (tokens.Any(t => t is "flash" or "刷写" or "write") && a.Domain == "flash") score += 5;
-        if (tokens.Any(t => t is "unpack" or "extract" or "解包") && a.Action.Contains("unpack", StringComparison.OrdinalIgnoreCase)) score += 8;
-        if (tokens.Any(t => t is "pack" or "repack" or "打包") && a.Action.Contains("pack", StringComparison.OrdinalIgnoreCase)) score += 8;
-        if (tokens.Any(t => t is "verify" or "校验" or "check") && (a.Domain == "verify" || a.Action.Contains("verify", StringComparison.OrdinalIgnoreCase))) score += 6;
-        return score;
-    }
-
-    private static List<string> Tokenize(string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return [];
-        var normalized = query.ToLowerInvariant();
-        var sb = new StringBuilder(normalized.Length);
-        foreach (var c in normalized)
+        if (string.IsNullOrWhiteSpace(normalizedQuery)) return [];
+        var sb = new StringBuilder(normalizedQuery.Length);
+        foreach (var c in normalizedQuery)
         {
             sb.Append(char.IsLetterOrDigit(c) || c == '_' || c > 127 ? c : ' ');
         }
@@ -205,8 +221,19 @@ internal static class McpMetaToolFactory
 
     private static IReadOnlyList<string> SuggestDomains(McpActionRegistry registry, string query)
     {
-        var tokens = Tokenize(query);
+        var tokens = Tokenize(query.ToLowerInvariant());
         return registry.Actions.Select(a => a.Domain).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(d => (Domain: d, Score: tokens.Count == 0 ? 0 : tokens.Sum(t => d.Contains(t, StringComparison.OrdinalIgnoreCase) ? 1 : 0)))
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Domain)
+            .Take(3)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> SuggestDomains(IReadOnlyList<SearchAction> actions, List<string> tokens)
+    {
+        return actions.Select(a => a.Descriptor.Domain).Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(d => (Domain: d, Score: tokens.Count == 0 ? 0 : tokens.Sum(t => d.Contains(t, StringComparison.OrdinalIgnoreCase) ? 1 : 0)))
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)

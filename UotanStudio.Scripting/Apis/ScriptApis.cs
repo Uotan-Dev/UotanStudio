@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace UotanStudio.Scripting.Apis;
 
@@ -160,20 +161,20 @@ public sealed class CollectingLogSink : ILogSink
 public sealed class SimulatedFastbootScriptApi : IFastbootScriptApi
 {
     /// <inheritdoc/>
-    public string Flash(string partition, string imagePath) =>
-        $"{{\"ok\":true,\"partition\":\"{JsonText.Escape(partition)}\",\"imagePath\":\"{JsonText.Escape(imagePath)}\"}}";
+    public string Flash(string partition, string imagePath) => JsonSerializer.Serialize(
+        new SimulatedFlashResult(true, partition, imagePath), ScriptApiJsonContext.Default.SimulatedFlashResult);
 
     /// <inheritdoc/>
-    public string Reboot(string mode) =>
-        $"{{\"ok\":true,\"mode\":\"{JsonText.Escape(mode)}\"}}";
+    public string Reboot(string mode) => JsonSerializer.Serialize(
+        new SimulatedRebootResult(true, mode), ScriptApiJsonContext.Default.SimulatedRebootResult);
 
     /// <inheritdoc/>
-    public string GetVar(string name) =>
-        $"{{\"name\":\"{JsonText.Escape(name)}\",\"value\":\"simulated\"}}";
+    public string GetVar(string name) => JsonSerializer.Serialize(
+        new SimulatedVariableResult(name, "simulated"), ScriptApiJsonContext.Default.SimulatedVariableResult);
 
     /// <inheritdoc/>
-    public string SetActiveSlot(string slot) =>
-        $"{{\"ok\":true,\"slot\":\"{JsonText.Escape(slot)}\"}}";
+    public string SetActiveSlot(string slot) => JsonSerializer.Serialize(
+        new SimulatedSlotResult(true, slot), ScriptApiJsonContext.Default.SimulatedSlotResult);
 }
 
 /// <summary>
@@ -183,16 +184,19 @@ public sealed class SimulatedFastbootScriptApi : IFastbootScriptApi
 public sealed class SimulatedImageScriptApi : IImageScriptApi
 {
     /// <inheritdoc/>
-    public string ParsePayload(string path) =>
-        $"{{\"path\":\"{JsonText.Escape(path)}\",\"partitions\":[{{\"name\":\"boot\",\"size\":1048576}}]}}";
+    public string ParsePayload(string path) => JsonSerializer.Serialize(
+        new SimulatedPayloadResult(path, [new SimulatedPartitionResult("boot", 1048576)]),
+        ScriptApiJsonContext.Default.SimulatedPayloadResult);
 
     /// <inheritdoc/>
-    public string ParseSuper(string path) =>
-        $"{{\"path\":\"{JsonText.Escape(path)}\",\"partitions\":[{{\"name\":\"system\",\"size\":268435456}}]}}";
+    public string ParseSuper(string path) => JsonSerializer.Serialize(
+        new SimulatedSuperResult(path, [new SimulatedPartitionResult("system", 268435456)]),
+        ScriptApiJsonContext.Default.SimulatedSuperResult);
 
     /// <inheritdoc/>
-    public string GetPartitionInfo(string path, string partition) =>
-        $"{{\"path\":\"{JsonText.Escape(path)}\",\"partition\":\"{JsonText.Escape(partition)}\",\"offset\":0,\"size\":1048576}}";
+    public string GetPartitionInfo(string path, string partition) => JsonSerializer.Serialize(
+        new SimulatedPartitionInfoResult(path, partition, 0, 1048576),
+        ScriptApiJsonContext.Default.SimulatedPartitionInfoResult);
 }
 
 /// <summary>
@@ -225,10 +229,31 @@ public sealed class NoOpUiScriptApi : IUiScriptApi
     }
 
     /// <inheritdoc/>
-    public string ShowPanel(string descriptionJson) => "{\"accepted\":true,\"elements\":0}";
+    public string ShowPanel(string descriptionJson) => JsonSerializer.Serialize(
+        new SimulatedPanelResult(true, 0), ScriptApiJsonContext.Default.SimulatedPanelResult);
 }
 
-internal static class JsonText
-{
-    internal static string Escape(string value) => JsonEncodedText.Encode(value).ToString();
-}
+internal sealed record SimulatedFlashResult(bool Ok, string Partition, string ImagePath);
+internal sealed record SimulatedRebootResult(bool Ok, string Mode);
+internal sealed record SimulatedVariableResult(string Name, string Value);
+internal sealed record SimulatedSlotResult(bool Ok, string Slot);
+internal sealed record SimulatedPartitionResult(string Name, long Size);
+internal sealed record SimulatedPayloadResult(string Path, SimulatedPartitionResult[] Partitions);
+internal sealed record SimulatedSuperResult(string Path, SimulatedPartitionResult[] Partitions);
+internal sealed record SimulatedPartitionInfoResult(string Path, string Partition, long Offset, long Size);
+internal sealed record SimulatedPanelResult(bool Accepted, int Elements);
+
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    GenerationMode = JsonSourceGenerationMode.Serialization)]
+[JsonSerializable(typeof(SimulatedFlashResult))]
+[JsonSerializable(typeof(SimulatedRebootResult))]
+[JsonSerializable(typeof(SimulatedVariableResult))]
+[JsonSerializable(typeof(SimulatedSlotResult))]
+[JsonSerializable(typeof(SimulatedPartitionResult))]
+[JsonSerializable(typeof(SimulatedPayloadResult))]
+[JsonSerializable(typeof(SimulatedSuperResult))]
+[JsonSerializable(typeof(SimulatedPartitionInfoResult))]
+[JsonSerializable(typeof(SimulatedPanelResult))]
+internal sealed partial class ScriptApiJsonContext : JsonSerializerContext;
