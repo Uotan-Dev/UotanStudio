@@ -49,17 +49,23 @@ internal static class SparseWriter
         }
     }
 
-    private static void WriteToStreamCore(SparseFile sparseFile, Stream stream, bool includeCrc,
-        List<SparseChunk> temporaryChunks, SparseWriteOptions? options, CancellationToken cancellationToken)
+    internal readonly record struct SparseWritePlan(
+        List<SparseChunk> FinalChunks, SparseHeader Header, bool NeedsTrailingSkip, uint SumBlocks);
+
+    /// <summary>
+    /// Derives the exact chunk list and header a sparse container write will emit, without writing bytes.
+    /// Shared by the push writer and the pull stream so both produce byte-identical containers.
+    /// <para>推导稀疏容器写出时将要发出的精确块列表与头部，而不写任何字节。供推式写入器与拉式流共用，
+    /// 保证两者产出逐字节一致的容器。</para>
+    /// </summary>
+    internal static SparseWritePlan Prepare(SparseFile sparseFile, SparseWriteOptions? options, bool includeCrc,
+        List<SparseChunk> temporaryChunks)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         var chunks = sparseFile.Chunks;
         var finalChunks = new List<SparseChunk>(chunks.Count + 10);
         uint currentBlock = 0;
-
         foreach (var chunk in chunks)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             if (chunk.StartBlock > currentBlock)
             {
                 var gapBlocks = chunk.StartBlock - currentBlock;
@@ -73,7 +79,8 @@ internal static class SparseWriter
             }
             if ((ChunkType)chunk.Header.ChunkType == ChunkType.Raw)
             {
-                AddSplitRawChunks(finalChunks, temporaryChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize, options?.MaxRawChunkBlocks);
+                AddSplitRawChunks(finalChunks, temporaryChunks, chunk, sparseFile.Header.BlockSize,
+                    sparseFile.Header.ChunkHeaderSize, options?.MaxRawChunkBlocks);
             }
             else
             {
@@ -91,18 +98,21 @@ internal static class SparseWriter
             declaredBlocks = checked((uint)(((declaredBlocks + (ulong)alignment - 1) / alignment) * alignment));
         }
         var needsTrailingSkip = declaredBlocks > sumBlocks;
-
         var totalChunks = (uint)finalChunks.Count;
-        if (needsTrailingSkip)
-        {
-            totalChunks++;
-        }
-        if (includeCrc)
-        {
-            totalChunks++;
-        }
-
+        if (needsTrailingSkip) totalChunks++;
+        if (includeCrc) totalChunks++;
         outHeader = outHeader with { TotalChunks = totalChunks, TotalBlocks = declaredBlocks };
+        return new SparseWritePlan(finalChunks, outHeader, needsTrailingSkip, sumBlocks);
+    }
+
+    private static void WriteToStreamCore(SparseFile sparseFile, Stream stream, bool includeCrc,
+        List<SparseChunk> temporaryChunks, SparseWriteOptions? options, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var plan = Prepare(sparseFile, options, includeCrc, temporaryChunks);
+        var finalChunks = plan.FinalChunks;
+        var outHeader = plan.Header;
+        var needsTrailingSkip = plan.NeedsTrailingSkip;
 
         var headerData = new byte[SparseFormat.SparseHeaderSize];
         outHeader.WriteTo(headerData);
@@ -212,7 +222,7 @@ internal static class SparseWriter
 
             if (needsTrailingSkip)
             {
-                var trailingBlocks = outHeader.TotalBlocks - sumBlocks;
+                var trailingBlocks = outHeader.TotalBlocks - plan.SumBlocks;
                 var trailingHeader = new ChunkHeader
                 {
                     ChunkType = (ushort)ChunkType.DontCare,

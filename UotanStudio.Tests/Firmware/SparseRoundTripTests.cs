@@ -1,3 +1,4 @@
+using System;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
@@ -451,6 +452,78 @@ public class SparseRoundTripTests
     }
 
     [Fact]
+    public void WriteModelToSparseStream_MatchesSparseWriterByteForByte()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 12);
+        sparse.AddDontCareChunk(BlockSize * 1);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 17), 2);
+        sparse.AddFillChunk(0xDEADBEEF, BlockSize * 4);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 4, 31), 7);
+
+        using var expected = new MemoryStream();
+        sparse.WriteToStream(expected, sparse: true, includeCrc: false,
+            cancellationToken: TestContext.Current.CancellationToken);
+        using var actual = new MemoryStream();
+        SparseImageConverter.WriteModelToSparseStream(sparse, actual);
+
+        Assert.Equal(expected.ToArray(), actual.ToArray());
+    }
+
+    [Fact]
+    public void ResparseModelToStreams_StreamsSparseAndRawModels_WithoutTempFiles()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 10);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 11));
+        sparse.AddFillChunk(0x5A5A5A5A, BlockSize * 3);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 4, 29));
+
+        using var temp = new TempDirectory();
+        var rawPath = Path.Combine(temp.Path, "raw.img");
+        using (var raw = new MemoryStream())
+        {
+            sparse.WriteRawToStream(raw);
+            File.WriteAllBytes(rawPath, raw.ToArray());
+        }
+
+        var sparsePath = Path.Combine(temp.Path, "source.sparse");
+        using (var fs = File.Create(sparsePath))
+        {
+            sparse.WriteToStream(fs, sparse: true, cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        foreach (var model in new[]
+        {
+            UotanStudio.Firmware.BlockImage.Sparse.IO.SparseReader.FromImageFile(sparsePath),
+            SparseImageConverter.BuildSparseModelFromRawFile(rawPath, BlockSize, TestContext.Current.CancellationToken)
+        })
+        {
+            using (model)
+            {
+                var partition = new byte[BlockSize * 10];
+                var pieceCount = 0;
+                var uploadedBytes = 0L;
+                var plannedBytes = 0L;
+                SparseImageConverter.ResparseModelToStreams(model, BlockSize * 4,
+                    (stream, length) =>
+                    {
+                        using var buffer = new MemoryStream();
+                        stream.CopyTo(buffer);
+                        Assert.Equal(length, buffer.Length);
+                        uploadedBytes += buffer.Length;
+                        ApplyPieceBytes(buffer.ToArray(), partition);
+                        pieceCount++;
+                    },
+                    (_, bytes) => plannedBytes = bytes,
+                    TestContext.Current.CancellationToken);
+
+                Assert.True(pieceCount >= 2);
+                Assert.Equal(plannedBytes, uploadedBytes);
+                Assert.Equal(BuildBytes(BlockSize * 3, 11), partition[..(int)(BlockSize * 3)]);
+            }
+        }
+    }
+
+    [Fact]
     public void ResparseImageStreaming_DeletesEachPieceAfterConsumption_AndReassembles()
     {
         using var sparse = new SparseFile(BlockSize, BlockSize * 10);
@@ -521,6 +594,18 @@ public class SparseRoundTripTests
     private static void ApplyPiece(string piece, byte[] partition)
     {
         using var sparse = SparseReader.FromImageFile(piece);
+        ApplyChunks(sparse, partition);
+    }
+
+    private static void ApplyPieceBytes(byte[] bytes, byte[] partition)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var sparse = SparseReader.FromStream(stream);
+        ApplyChunks(sparse, partition);
+    }
+
+    private static void ApplyChunks(SparseFile sparse, byte[] partition)
+    {
         foreach (var chunk in sparse.Chunks)
         {
             switch ((ChunkType)chunk.Header.ChunkType)

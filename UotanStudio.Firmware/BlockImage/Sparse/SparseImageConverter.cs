@@ -503,7 +503,10 @@ public static class SparseImageConverter
     /// <para>逻辑块数为 <c>0</c> 的镜像不会写出任何输出文件。</para>
     /// </remarks>
     public static void ResparseImage(string inputFile, string outputPattern, long maxFileSize)
-        => ResparseImageCore(inputFile, maxFileSize,
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inputFile);
+        using var sparseFile = SparseReader.FromImageFile(inputFile);
+        ResparseModelCore(sparseFile, maxFileSize,
             (index, piece) =>
             {
                 var outPath = outputPattern.Contains("{0}", StringComparison.Ordinal)
@@ -512,6 +515,7 @@ public static class SparseImageConverter
                 using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
                 piece.WriteToStream(fs, sparse: true);
             }, null, CancellationToken.None);
+    }
 
     /// <summary>
     /// Re-splits a sparse image but keeps only one output piece on disk at a time: a piece is written, handed to
@@ -539,9 +543,11 @@ public static class SparseImageConverter
     public static void ResparseImageStreaming(string inputFile, string outputPath, long maxFileSize,
         Action<string> consume, Action<int, long>? onPlan = null, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(inputFile);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
         ArgumentNullException.ThrowIfNull(consume);
-        ResparseImageCore(inputFile, maxFileSize,
+        using var sparseFile = SparseReader.FromImageFile(inputFile);
+        ResparseModelCore(sparseFile, maxFileSize,
             (_, piece) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -562,14 +568,208 @@ public static class SparseImageConverter
             onPlan, cancellationToken);
     }
 
-    private static void ResparseImageCore(string inputFile, long maxFileSize,
+    /// <summary>
+    /// Re-splits a sparse image and streams each piece to <paramref name="consume"/> as a read-only
+    /// <see cref="Stream"/>; no piece is written to disk and the caller's buffer bounds memory use.
+    /// <para>重新切分稀疏镜像，并把每片作为只读 <see cref="Stream"/> 交给 <paramref name="consume"/>；
+    /// 不落盘任何分片，调用方的缓冲区即为内存占用上界。</para>
+    /// </summary>
+    /// <param name="inputFile">Path of the sparse image to split. <para>待切分的稀疏镜像路径。</para></param>
+    /// <param name="maxFileSize">Hard ceiling in bytes for each piece, headers included.
+    /// <para>每片（含头部）的字节硬上限。</para></param>
+    /// <param name="consume">Receives each piece stream and its exact byte length; the stream is disposed after the callback.
+    /// <para>接收每片流及其精确字节长度；回调结束后流会被释放。</para></param>
+    /// <param name="onPlan">Receives the piece count and total sparse bytes before any piece is emitted.
+    /// <para>在写出任何分片前接收分片数与稀疏总字节数。</para></param>
+    /// <param name="cancellationToken">Checked between pieces. <para>分片之间检查。</para></param>
+    /// <exception cref="ArgumentException">The path is blank. <para>路径为空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxFileSize"/> cannot hold one block plus headers.
+    /// <para><paramref name="maxFileSize"/> 不足以容纳一个数据块及头部。</para></exception>
+    public static void ResparseImageToStreams(string inputFile, long maxFileSize,
+        Action<Stream, long> consume, Action<int, long>? onPlan = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inputFile);
+        using var sparseFile = SparseReader.FromImageFile(inputFile);
+        ResparseModelToStreams(sparseFile, maxFileSize, consume, onPlan, cancellationToken);
+    }
+
+    /// <summary>
+    /// Re-splits an in-memory sparse model and streams each piece as a read-only <see cref="Stream"/>;
+    /// no piece is written to disk and RAW payloads stay lazy over their original source.
+    /// <para>重新切分内存中的稀疏模型，并把每片作为只读 <see cref="Stream"/> 输出；不落盘任何分片，
+    /// RAW 载荷保持对其原始源的惰性引用。</para>
+    /// </summary>
+    /// <param name="sparseFile">The model to split; it stays owned by the caller. <para>待切分模型；所有权仍归调用方。</para></param>
+    /// <param name="maxFileSize">Hard ceiling in bytes for each piece. <para>每片的字节硬上限。</para></param>
+    /// <param name="consume">Receives each piece stream and its exact byte length. <para>接收每片流及其精确字节长度。</para></param>
+    /// <param name="onPlan">Receives the piece count and total sparse bytes before emission. <para>写出前接收分片数与总字节数。</para></param>
+    /// <param name="cancellationToken">Checked between pieces. <para>分片之间检查。</para></param>
+    public static void ResparseModelToStreams(SparseFile sparseFile, long maxFileSize,
+        Action<Stream, long> consume, Action<int, long>? onPlan = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sparseFile);
+        ArgumentNullException.ThrowIfNull(consume);
+        ResparseModelCore(sparseFile, maxFileSize,
+            (_, piece) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var stream = new SparseContainerReadStream(piece);
+                consume(stream, stream.Length);
+            },
+            onPlan, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes a sparse model into the exact Android sparse-container byte sequence using the bounded
+    /// pull stream; byte-for-byte equivalent to <see cref="SparseFile.WriteToStream"/> with <c>sparse: true</c>.
+    /// <para>用有界拉式流把稀疏模型写成精确的 Android 稀疏容器字节序列；与 <c>sparse: true</c> 的
+    /// <see cref="SparseFile.WriteToStream"/> 逐字节等价。</para>
+    /// </summary>
+    /// <param name="sparseFile">Model to render. <para>要渲染的模型。</para></param>
+    /// <param name="destination">Writable destination stream. <para>可写目标流。</para></param>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.
+    /// <para>某参数为 <see langword="null"/>。</para></exception>
+    public static void WriteModelToSparseStream(SparseFile sparseFile, Stream destination)
+    {
+        ArgumentNullException.ThrowIfNull(sparseFile);
+        ArgumentNullException.ThrowIfNull(destination);
+        using var source = new SparseContainerReadStream(sparseFile);
+        source.CopyTo(destination);
+    }
+
+    /// <summary>
+    /// Lazily classifies a raw image file into a sparse model without writing an intermediate sparse file.
+    /// Zero and uniform-fill runs become DONT_CARE/FILL chunks; RAW ranges reference the original file
+    /// through <see cref="FileDataProvider"/>, so memory stays bounded by the classification window.
+    /// <para>把原始镜像惰性分类为稀疏模型，不写任何中间稀疏文件。零段与均匀填充段转换为 DONT_CARE/FILL 块；
+    /// RAW 区间通过 <see cref="FileDataProvider"/> 引用原文件，因此内存占用由分类窗口界定。</para>
+    /// </summary>
+    /// <param name="filePath">Raw image path. <para>原始镜像路径。</para></param>
+    /// <param name="blockSize">Sparse logical block size. <para>稀疏逻辑块大小。</para></param>
+    /// <param name="cancellationToken">Checked between blocks. <para>逐块检查。</para></param>
+    /// <returns>The lazy sparse model; the caller owns and must dispose it. <para>惰性稀疏模型；调用方拥有并须释放。</para></returns>
+    public static SparseFile BuildSparseModelFromRawFile(string filePath, uint blockSize = 4096,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        if (blockSize == 0 || blockSize % 4 != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(blockSize),
+                "Sparse block size must be a positive multiple of 4 per the Android sparse format.");
+        }
+
+        var totalLength = new FileInfo(filePath).Length;
+        var totalBlocks = (uint)((totalLength + blockSize - 1) / blockSize);
+        var sparseFile = new SparseFile(blockSize, totalLength);
+        if (totalBlocks == 0)
+        {
+            return sparseFile;
+        }
+
+        const uint ClassifyWindowBytes = 4 * 1024 * 1024;
+        var windowBlocks = Math.Max(1U, ClassifyWindowBytes / blockSize);
+        var windowBytes = checked(windowBlocks * blockSize);
+        var buffer = ArrayPool<byte>.Shared.Rent((int)windowBytes);
+        try
+        {
+            using var input = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                1 << 16, FileOptions.SequentialScan);
+            const byte KindZero = 1, KindFill = 2, KindRaw = 3;
+            byte kind = 0;
+            var fillValue = 0u;
+            var startBlock = 0u;
+            var startByte = 0L;
+            var blocks = 0u;
+
+            void Flush()
+            {
+                if (kind == 0 || blocks == 0) return;
+                switch (kind)
+                {
+                    case KindZero:
+                        sparseFile.AddDontCareChunk(checked(blocks * blockSize), startBlock);
+                        break;
+                    case KindFill:
+                        sparseFile.AddFillChunk(fillValue, checked(blocks * blockSize), startBlock);
+                        break;
+                    default:
+                        sparseFile.AddRawChunk(new FileDataProvider(filePath, startByte, checked(blocks * blockSize)),
+                            blocks, startBlock);
+                        break;
+                }
+                kind = 0;
+                fillValue = 0;
+                blocks = 0;
+            }
+
+            for (var windowStart = 0U; windowStart < totalBlocks;)
+            {
+                var windowCount = (uint)Math.Min(windowBlocks, totalBlocks - windowStart);
+                var windowLength = (int)Math.Min(windowBytes, totalLength - (long)windowStart * blockSize);
+                input.ReadExactly(buffer, 0, windowLength);
+                if (windowLength < (int)windowBytes)
+                {
+                    Array.Clear(buffer, windowLength, (int)windowBytes - windowLength);
+                }
+
+                for (var offset = 0U; offset < windowCount; offset++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var block = windowStart + offset;
+                    var thisBlockBytes = (int)Math.Min(blockSize, totalLength - (long)block * blockSize);
+                    var blockSpan = buffer.AsSpan((int)offset * (int)blockSize, (int)blockSize);
+                    byte nextKind;
+                    var nextFill = 0u;
+                    if (IsZeroBlock(blockSpan))
+                    {
+                        nextKind = KindZero;
+                    }
+                    else if (thisBlockBytes == (int)blockSize && IsUniformFill(blockSpan, out nextFill))
+                    {
+                        nextKind = KindFill;
+                    }
+                    else
+                    {
+                        nextKind = KindRaw;
+                    }
+
+                    if (kind != 0 && (nextKind != kind || (nextKind == KindFill && nextFill != fillValue)))
+                    {
+                        Flush();
+                    }
+                    if (kind == 0)
+                    {
+                        kind = nextKind;
+                        fillValue = nextFill;
+                        startBlock = block;
+                        startByte = (long)block * blockSize;
+                    }
+                    blocks++;
+                }
+                windowStart += windowCount;
+            }
+            Flush();
+            cancellationToken.ThrowIfCancellationRequested();
+            return sparseFile;
+        }
+        catch
+        {
+            sparseFile.Dispose();
+            throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void ResparseModelCore(SparseFile sparseFile, long maxFileSize,
         Action<int, SparseFile> emitPiece, Action<int, long>? onPlan,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrEmpty(inputFile);
+        ArgumentNullException.ThrowIfNull(sparseFile);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileSize, 1);
 
-        using var sparseFile = SparseReader.FromImageFile(inputFile);
         var blockSize = sparseFile.Header.BlockSize;
         var blockBytes = (long)blockSize;
         var totalLength = checked((long)sparseFile.Header.TotalBlocks * blockBytes);
