@@ -269,8 +269,18 @@ sealed class Program
     /// </summary>
     /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
     /// <returns>The builder with the Linux windowing backend configured.<para>配置了 Linux 窗口后端的构建器。</para></returns>
+#pragma warning disable AVALONIA_WAYLAND_FORCE_CSD // 客户端自绘装饰在 Avalonia 12 中标记为实验性，这里按需启用。
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static AppBuilder UseLinuxWayland(AppBuilder builder) => builder.UseWaylandWithFallback();
+    private static AppBuilder UseLinuxWayland(AppBuilder builder) =>
+        builder
+            // 拒绝服务端装饰（zxdg_decoration_manager_v1）协商，改用 Avalonia 自绘装饰，
+            // 与 X11 的 EnableDrawnDecorations 保持一致，避免 KWin 等合成器强制加一层标题栏。
+            // Suppress server-side decoration negotiation (zxdg_decoration_manager_v1) and rely on Avalonia's
+            // drawn decorations instead, matching X11's EnableDrawnDecorations so compositors such as KWin
+            // cannot force an extra titlebar.
+            .With(new WaylandPlatformOptions { ForceDrawnDecorations = true })
+            .UseWaylandWithFallback();
+#pragma warning restore AVALONIA_WAYLAND_FORCE_CSD
 
     /// <summary>
     /// Applies the persisted rendering backend and composition mode to the platform options, falling back to
@@ -349,6 +359,7 @@ sealed class Program
     /// <param name="usePartialPresentation">Whether to enable EGL partial presentation.
     /// <para>是否启用 EGL 局部呈现。</para></param>
     /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
+#pragma warning disable AVALONIA_X11_CSD // 客户端自绘装饰在 Avalonia 12 中标记为实验性，这里按需启用。
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static AppBuilder ApplyX11Rendering(
         AppBuilder builder,
@@ -356,22 +367,28 @@ sealed class Program
         bool useXShmFramebuffer,
         bool usePartialPresentation)
     {
-        var renderingModes = X11RenderingModes(backend);
-        if (renderingModes is null && !useXShmFramebuffer && !usePartialPresentation)
+        var options = new X11PlatformOptions
         {
-            return builder;
-        }
+            // 让 Avalonia 在 X11 上自绘窗口装饰（边框与缩放热区），使 ExtendClientAreaToDecorationsHint 生效。
+            // 不开启时装饰完全交给窗口管理器：窗口管理器另画一层标题栏，形成双层标题栏；
+            // 改用 BorderOnly 去掉系统标题栏后，又因为没有自绘缩放热区而无法拖动缩放。
+            // Let Avalonia draw window decorations (border and resize grips) on X11 so that
+            // ExtendClientAreaToDecorationsHint takes effect. Without it the decorations are fully owned by
+            // the window manager, which adds a second titlebar; switching to BorderOnly removes that titlebar
+            // but leaves no resize grips, so the window can no longer be resized.
+            EnableDrawnDecorations = true,
+        };
 
-        var options = new X11PlatformOptions();
-        if (renderingModes is { } modes)
+        if (X11RenderingModes(backend) is { } renderingModes)
         {
-            options.RenderingMode = modes;
+            options.RenderingMode = renderingModes;
         }
 
         options.UseXShmFramebuffer = useXShmFramebuffer;
         options.UsePartialPresentation = usePartialPresentation;
         return builder.With(options);
     }
+#pragma warning restore AVALONIA_X11_CSD
 
     /// <summary>
     /// Applies the Avalonia.Native rendering option used by macOS.

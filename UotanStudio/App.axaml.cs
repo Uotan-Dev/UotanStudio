@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Chrome;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -97,6 +98,7 @@ public partial class App : Application
         LogStartupMark("App.Initialize container built");
         ServiceHub.Initialize(services);
         AccentPalette.Install(this);
+        InstallWindowRounding();
         LogStartupMark("App.Initialize completed");
         WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
             static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));
@@ -772,6 +774,49 @@ public partial class App : Application
                 : main.WorkspaceVM.OpenCompareDocument();
             return compare is { } document ? operation(document) : Task.CompletedTask;
         });
+
+    /// <summary>
+    /// Applies rounded window corners on Linux, where drawn decorations replace the window manager frame.
+    /// <para>在 Linux 上为窗口启用圆角：自绘装饰取代窗口管理器边框后，原生圆角随之消失。</para>
+    /// </summary>
+    /// <remarks>
+    /// Only Linux is affected: Windows and macOS keep their native window frames, which already round the
+    /// corners themselves. The transparency hint is applied via an application-level style so that native
+    /// X11/Wayland surfaces request an alpha channel before window creation; when the compositor does not
+    /// grant transparency, <see cref="Views.Behaviors.WindowRoundingBehavior"/> falls back to square corners.
+    /// <para>仅 Linux 需要处理：Windows 与 macOS 保留原生窗口边框，圆角由系统自行绘制。透明提示通过应用级样式
+    /// 在原生窗口创建前声明，使 X11/Wayland 表面请求 alpha 通道；若合成器未授予透明表面，
+    /// <see cref="Views.Behaviors.WindowRoundingBehavior"/> 会自动回退直角。</para>
+    /// </remarks>
+    private void InstallWindowRounding()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var transparencyStyle = new Style(x => x.OfType<Window>());
+        transparencyStyle.Setters.Add(new Setter(
+            TopLevel.TransparencyLevelHintProperty,
+            new[] { WindowTransparencyLevel.Transparent, WindowTransparencyLevel.None }));
+        Styles.Add(transparencyStyle);
+
+        var borderRoundingStyle = new Style(x => x
+            .OfType<Window>()
+            .Class(Views.Behaviors.WindowRoundingBehavior.RoundedClassName)
+            .Descendant()
+            .OfType<WindowDrawnDecorations>()
+            .Template()
+            .OfType<Border>()
+            .Name("PART_WindowBorder"));
+        borderRoundingStyle.Setters.Add(new Setter(
+            Border.CornerRadiusProperty,
+            new CornerRadius(Views.Behaviors.WindowRoundingBehavior.CornerRadius)));
+        Styles.Add(borderRoundingStyle);
+
+        Window.WindowOpenedEvent.AddClassHandler<Window>(
+            static (window, _) => Views.Behaviors.WindowRoundingBehavior.Attach(window));
+    }
 
     private void ApplyTheme(ThemeMode themeMode)
     {

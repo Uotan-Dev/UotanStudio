@@ -40,6 +40,13 @@
 		<KeyBinding Gesture="Shift+F5" Command="{Binding MenuVM.StopWorkflowCommand}" />
 	</Window.KeyBindings>
 	<DockPanel>
+		<!-- 这里不要设 Background：Windows/macOS 依赖顶栏空白处穿透到下层标题栏，
+		     由系统以 HTCAPTION 处理拖动；一旦设了背景，Grid 自己成为命中目标，拖动就失效。
+		     Linux 需要命中测试才能收到双击，那一处背景在 MainWindow.axaml.cs 里按平台补上。
+		     Do not set Background here: on Windows/macOS the empty title bar area must fall through to the
+		     underlying title bar so the system can treat it as HTCAPTION and drag the window. Setting a
+		     background makes the Grid the hit-test target and breaks dragging. Linux needs hit-testing for
+		     the double-click gesture, so its background is applied per-platform in MainWindow.axaml.cs. -->
 		<Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="32">
 		<Grid x:Name="TitleBarControls" ColumnDefinitions="Auto,Auto,*,Auto"
 			  Margin="{OnPlatform Default='0,0,136,0', macOS='80,0,0,0'}">
