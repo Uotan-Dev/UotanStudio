@@ -11,8 +11,17 @@
              x:Class="UotanStudio.Views.Editors.FileManagerEditorView"
              x:DataType="viewmodels:FileManagerEditorViewModel">
   <UserControl.Resources>
-    <imaging:Bitmap x:Key="FolderIcon">avares://UotanStudio/Assets/folder.png</imaging:Bitmap>
-    <imaging:Bitmap x:Key="FileIcon">avares://UotanStudio/Assets/file.png</imaging:Bitmap>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+          <x:Double x:Key="FileManagerEntryIconOpacity">1</x:Double>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <x:Double x:Key="FileManagerEntryIconOpacity">0.8</x:Double>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <imaging:Bitmap x:Key="FolderIcon">avares://UotanStudio/Assets/folder.png</imaging:Bitmap>
+      <imaging:Bitmap x:Key="FileIcon">avares://UotanStudio/Assets/file.png</imaging:Bitmap>
     <!-- 列表与网格视图沿用现有彩色位图图标，只放大尺寸；目录树改用下方 TreeView 模板里的空心文件夹图标。 -->
     <!-- The list and grid views keep the existing coloured bitmap icons and only grow in size; the
          directory tree uses the outline folder icon in the TreeView template below. -->
@@ -43,6 +52,7 @@
                    TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
       </Grid>
     </DataTemplate>
+    </ResourceDictionary>
   </UserControl.Resources>
   <UserControl.Styles>
     <Style Selector="Button.Small, ToggleButton.Small">
@@ -98,6 +108,7 @@
     </Style>
     <Style Selector="Image.entry-icon">
       <Setter Property="Source" Value="{StaticResource FileIcon}" />
+      <Setter Property="Opacity" Value="{DynamicResource FileManagerEntryIconOpacity}" />
     </Style>
     <Style Selector="Image.entry-icon.directory">
       <Setter Property="Source" Value="{StaticResource FolderIcon}" />
