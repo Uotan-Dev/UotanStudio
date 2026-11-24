@@ -647,43 +647,69 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         => _activeCompositionLabelKey ??= RenderingRuntimeProbe.DetectActiveCompositionLabelKey();
 
     private bool _stoppingServer;
-    private string _serverActionKey = "Settings_ServerActionNone";
-    private string? _serverActionError;
+    private string _adbServerActionKey = "Settings_ServerActionNone";
+    private string? _adbServerActionError;
+    private string _hdcServerActionKey = "Settings_ServerActionNone";
+    private string? _hdcServerActionError;
+    private CancellationTokenSource? _adbServerActionCts;
+    private CancellationTokenSource? _hdcServerActionCts;
 
-    /// <summary>Localized result of the explicit server stop action.
-    /// <para>显式停止服务器操作的本地化结果。</para>
+    /// <summary>Localized result of the explicit ADB server stop action, rendered to the left of its button.
+    /// <para>显式停止 ADB 服务器操作的本地化结果，显示在对应停止按钮左侧。</para>
     /// </summary>
-    public string ServerActionStatus => _serverActionKey == "Settings_ServerActionNone" ? string.Empty : _serverActionError is null
-        ? LanguageService.Instance.GetString(_serverActionKey)
-        : string.Format(LanguageService.Instance.GetString(_serverActionKey), _serverActionError);
+    public string AdbServerActionStatus => FormatServerActionStatus(_adbServerActionKey, _adbServerActionError);
+
+    /// <summary>Localized result of the explicit HDC server stop action, rendered to the left of its button.
+    /// <para>显式停止 HDC 服务器操作的本地化结果，显示在对应停止按钮左侧。</para>
+    /// </summary>
+    public string HdcServerActionStatus => FormatServerActionStatus(_hdcServerActionKey, _hdcServerActionError);
+
+    private static string FormatServerActionStatus(string key, string? error)
+        => key == "Settings_ServerActionNone"
+            ? string.Empty
+            : error is null
+                ? LanguageService.Instance.GetString(key)
+                : string.Format(LanguageService.Instance.GetString(key), error);
 
     private bool CanStopServer() => !_stoppingServer;
 
     [RelayCommand(CanExecute = nameof(CanStopServer))]
     private Task StopAdbServerAsync(CancellationToken cancellationToken)
-        => StopServerAsync(App.DeviceMonitor.StopAdbServerAsync, cancellationToken);
+        => StopServerAsync(ServerStopTarget.Adb, App.DeviceMonitor.StopAdbServerAsync, cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanStopServer))]
     private Task StopHdcServerAsync(CancellationToken cancellationToken)
-        => StopServerAsync(App.DeviceMonitor.StopHdcServerAsync, cancellationToken);
+        => StopServerAsync(ServerStopTarget.Hdc, App.DeviceMonitor.StopHdcServerAsync, cancellationToken);
 
-    private async Task StopServerAsync(Func<CancellationToken, Task> stop, CancellationToken cancellationToken)
+    /// <summary>How long the outcome of a stop action stays visible before it is cleared automatically.
+    /// <para>停止操作的结果在自动清除前保持可见的时长。</para>
+    /// </summary>
+    private static readonly TimeSpan ServerActionStatusLifetime = TimeSpan.FromSeconds(10);
+
+    /// <summary>Protocol whose server is being stopped, used to route the inline status text.
+    /// <para>被停止服务器的协议，用于定位对应的行内状态文字。</para>
+    /// </summary>
+    private enum ServerStopTarget
+    {
+        Adb,
+        Hdc
+    }
+
+    private async Task StopServerAsync(
+        ServerStopTarget target, Func<CancellationToken, Task> stop, CancellationToken cancellationToken)
     {
         _stoppingServer = true;
         StopAdbServerCommand.NotifyCanExecuteChanged();
         StopHdcServerCommand.NotifyCanExecuteChanged();
-        _serverActionKey = "Settings_ServerStopping";
-        _serverActionError = null;
-        OnPropertyChanged(nameof(ServerActionStatus));
+        SetServerActionStatus(target, "Settings_ServerStopping", null);
         try
         {
             await stop(cancellationToken);
-            _serverActionKey = "Settings_ServerStopped";
+            SetServerActionStatus(target, "Settings_ServerStopped", null);
         }
         catch (Exception ex)
         {
-            _serverActionKey = "Settings_ServerStopFailed";
-            _serverActionError = UserError.Describe(ex);
+            SetServerActionStatus(target, "Settings_ServerStopFailed", UserError.Describe(ex));
         }
         finally
         {
@@ -691,7 +717,69 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _stoppingServer = false;
             StopAdbServerCommand.NotifyCanExecuteChanged();
             StopHdcServerCommand.NotifyCanExecuteChanged();
-            OnPropertyChanged(nameof(ServerActionStatus));
+        }
+
+        // Keep the outcome readable for a moment, then clear it so the row returns to its idle look.
+        // <para>让结果短暂可读，随后清除，使该行恢复空闲外观。</para>
+        ScheduleServerActionStatusClear(target);
+    }
+
+    private void SetServerActionStatus(ServerStopTarget target, string key, string? error)
+    {
+        if (target == ServerStopTarget.Adb)
+        {
+            _adbServerActionKey = key;
+            _adbServerActionError = error;
+            OnPropertyChanged(nameof(AdbServerActionStatus));
+        }
+        else
+        {
+            _hdcServerActionKey = key;
+            _hdcServerActionError = error;
+            OnPropertyChanged(nameof(HdcServerActionStatus));
+        }
+    }
+
+    private void ScheduleServerActionStatusClear(ServerStopTarget target)
+    {
+        var previous = target == ServerStopTarget.Adb ? _adbServerActionCts : _hdcServerActionCts;
+        previous?.Cancel();
+        previous?.Dispose();
+
+        var cts = new CancellationTokenSource();
+        if (target == ServerStopTarget.Adb)
+        {
+            _adbServerActionCts = cts;
+        }
+        else
+        {
+            _hdcServerActionCts = cts;
+        }
+
+        _ = ClearServerActionStatusAfterDelayAsync(target, cts.Token);
+    }
+
+    private async Task ClearServerActionStatusAfterDelayAsync(ServerStopTarget target, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(ServerActionStatusLifetime, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        // Property notifications must reach the UI thread even if the stop command ran off it.
+        // <para>即使停止命令在 UI 线程之外执行，属性通知也必须回到 UI 线程。</para>
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            SetServerActionStatus(target, "Settings_ServerActionNone", null);
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => SetServerActionStatus(target, "Settings_ServerActionNone", null));
         }
     }
 
@@ -1288,7 +1376,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LanguagePreviewText));
-        OnPropertyChanged(nameof(ServerActionStatus));
+        OnPropertyChanged(nameof(AdbServerActionStatus));
+        OnPropertyChanged(nameof(HdcServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
         OnPropertyChanged(nameof(FileAssociationSortLabel));
@@ -1480,6 +1569,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             _saveCts?.Cancel();
             _saveCts?.Dispose();
+            _adbServerActionCts?.Cancel();
+            _adbServerActionCts?.Dispose();
+            _adbServerActionCts = null;
+            _hdcServerActionCts?.Cancel();
+            _hdcServerActionCts?.Dispose();
+            _hdcServerActionCts = null;
             LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         }
 

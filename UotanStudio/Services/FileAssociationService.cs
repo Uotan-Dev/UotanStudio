@@ -45,7 +45,7 @@ public static partial class FileAssociationService
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz", ".app", ".sin",
         ".mpk", ".cpb", ".ntpi",
         // Android / HarmonyOS app & system metadata/config
-        ".apk", ".hap", ".hsp", ".dex", ".arsc", ".prop", ".rc",
+        ".apk", ".hap", ".dex", ".arsc", ".prop", ".rc",
         // Device logs
         ".logcat"
     ];
@@ -58,7 +58,7 @@ public static partial class FileAssociationService
     [
         ".img", ".br", ".dtb", ".dtbo", ".dts", ".dtsi", ".qcn",
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz",
-        ".app", ".hap", ".hsp", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
+        ".app", ".hap", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
     ];
 
     [LibraryImport("advapi32.dll", EntryPoint = "RegCreateKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
