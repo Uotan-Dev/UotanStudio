@@ -4,6 +4,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
 using Avalonia.Styling;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
@@ -46,6 +47,22 @@ public partial class MainWindow : Window
         }
         DeviceSelector.DataContextChanged += (_, _) => BindDeviceSelector();
         BindDeviceSelector();
+
+        // Linux 上装饰由 Avalonia 自绘，X11 后端会把标题栏上的按下直接转成窗口移动，事件到不了应用层，
+        // 双击最大化因此失效；这里在自绘顶栏上补回该手势。Windows/macOS 由系统处理，无需干预。
+        // On Linux the decorations are app-drawn and the X11 backend turns a title bar press into a window
+        // move before managed code sees it, so double-click-to-maximise is lost; restore it on our own top bar.
+        // Windows and macOS handle this in the system frame, so they are left alone.
+        if (OperatingSystem.IsLinux())
+        {
+            // 顶栏空白处原本不参与命中测试，事件会穿透到下层。Linux 需要它自己接收双击，
+            // 因此只在这里补上背景；Windows/macOS 必须保持穿透，否则系统拿不到 HTCAPTION 拖动。
+            // The empty title bar area is normally not hit-testable and lets presses fall through. Linux
+            // needs it to receive the double-click itself, so the background is added only here; Windows
+            // and macOS must keep falling through or the system never sees the HTCAPTION drag.
+            TitleBar.Background = Brushes.Transparent;
+            Views.Behaviors.WindowTitleBarBehavior.Attach(this, TitleBar);
+        }
         Closed += (_, _) =>
         {
             CloseChildWindows();
