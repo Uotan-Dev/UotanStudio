@@ -450,6 +450,40 @@ public class PacFormatHandlerTests
     }
 
     [Fact]
+    public void Open_EntryRangeBeyondImage_IsRejected()
+    {
+        var package = BuildPac(("boot.img", [1, 2, 3]));
+        BinaryPrimitives.WriteUInt32LittleEndian(package.AsSpan(SprdHead.Size + 1540), uint.MaxValue);
+        var path = Path.Combine(CreateTempDir(), "out-of-range.pac");
+        try
+        {
+            File.WriteAllBytes(path, package);
+            Assert.Throws<InvalidDataException>(() => PacImage.Open(path));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Open_EntryOffsetBeyondImage_IsRejected()
+    {
+        var package = BuildPac(("boot.img", [1, 2, 3]));
+        BinaryPrimitives.WriteUInt32LittleEndian(package.AsSpan(SprdHead.Size + 1552), uint.MaxValue);
+        var path = Path.Combine(CreateTempDir(), "out-of-range-offset.pac");
+        try
+        {
+            File.WriteAllBytes(path, package);
+            Assert.Throws<InvalidDataException>(() => PacImage.Open(path));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Detect_BadMagic_IsNotPac()
     {
         FirmwareFormatRegistry.RegisterAll();

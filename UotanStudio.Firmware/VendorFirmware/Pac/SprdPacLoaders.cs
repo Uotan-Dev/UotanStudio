@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Globalization;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -107,7 +109,90 @@ public static class SprdPacLoaders
     {
         ArgumentNullException.ThrowIfNull(image);
         var scheme = ParseScheme(image);
-        return new SprdPacSchemeLayout(scheme.Steps, scheme.FlashType, scheme.Partitions);
+        return new SprdPacSchemeLayout(scheme.Steps, scheme.FlashType, scheme.Partitions, scheme.ExtTable);
+    }
+
+    private static byte[]? BuildExtTable(XDocument document, string productName)
+    {
+        // The official tool serializes the ExtTable as: 32-bit table count, one 12-byte header per table
+        // (4-byte tag, 32-bit data offset, 32-bit data size), then each table's data records.
+        var product = document.Root?.Elements("ProductList").Elements("Product")
+            .FirstOrDefault(p => string.Equals((string?)p.Attribute("name"), productName, StringComparison.OrdinalIgnoreCase));
+        var ext = product?.Element("ExtTable");
+        if (ext is null)
+        {
+            return null;
+        }
+
+        var groups = ext.Elements("PartitionType").ToArray();
+        if (groups.Length == 0 || groups.Length > 16)
+        {
+            throw new InvalidDataException("The PAC ExtTable must declare 1 to 16 partition-type tables.");
+        }
+
+        const int headerSize = 12;
+        const int recordSize = 152; // 2 * 36 UTF-16 code units + DWORD size + DWORD type = 152 bytes
+        var headers = new byte[groups.Length * headerSize];
+        var records = new List<byte>();
+        var dataOffset = 4 + headers.Length;
+        for (var i = 0; i < groups.Length; i++)
+        {
+            var group = groups[i];
+            var tag = ((string?)group.Attribute("tag") ?? string.Empty).Trim();
+            var tagBytes = Encoding.ASCII.GetBytes(tag);
+            Array.Copy(tagBytes, 0, headers, i * headerSize, Math.Min(4, tagBytes.Length));
+            var parts = group.Elements("Partition").ToArray();
+            if (parts.Length > 4096)
+            {
+                throw new InvalidDataException("A PAC ExtTable type declares too many partitions.");
+            }
+
+            BinaryPrimitives.WriteUInt32LittleEndian(headers.AsSpan(i * headerSize + 4), (uint)dataOffset);
+            BinaryPrimitives.WriteUInt32LittleEndian(headers.AsSpan(i * headerSize + 8), (uint)(parts.Length * recordSize));
+            foreach (var part in parts)
+            {
+                var record = new byte[recordSize];
+                WriteExtName(record.AsSpan(0, 72), (string?)part.Attribute("id"));
+                WriteExtName(record.AsSpan(72, 72), (string?)part.Attribute("id2"));
+                var rawSize = ((string?)part.Attribute("size"))?.Trim() ?? string.Empty;
+                uint size = 0;
+                if (rawSize.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    uint.TryParse(rawSize[2..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out size);
+                }
+                else if (rawSize.Length > 0)
+                {
+                    uint.TryParse(rawSize, NumberStyles.None, CultureInfo.InvariantCulture, out size);
+                }
+
+                BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(144), size);
+                var rawType = ((string?)part.Attribute("type"))?.Trim() ?? string.Empty;
+                record[148] = rawType.Length > 0 && char.IsDigit(rawType[0]) ? (byte)(rawType[0] - '0') : (byte)0;
+                records.AddRange(record);
+            }
+
+            dataOffset += parts.Length * recordSize;
+        }
+
+        var table = new byte[dataOffset];
+        BinaryPrimitives.WriteUInt32LittleEndian(table, (uint)groups.Length);
+        headers.CopyTo(table, 4);
+        records.CopyTo(table, 4 + headers.Length);
+        return table;
+    }
+
+    private static void WriteExtName(Span<byte> target, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        var limit = Math.Min(36, value.Length);
+        for (var i = 0; i < limit; i++)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(target.Slice(i * 2, 2), value[i]);
+        }
     }
 
     private static SprdPacScheme ParseScheme(PacImage image)
@@ -179,7 +264,8 @@ public static class SprdPacLoaders
                     Address(second[0]),
                     BuildSteps(image, files, candidate.Name),
                     FlashTypeOf(document, image.ProductName),
-                    PartitionsOf(document, image.ProductName));
+                    PartitionsOf(document, image.ProductName),
+                    BuildExtTable(document, image.ProductName));
                 break;
             }
 
@@ -257,7 +343,7 @@ public static class SprdPacLoaders
             var raw = ((string?)element.Attribute("size"))?.Trim() ?? string.Empty;
             var fill = raw.Equals("0xFFFFFFFF", StringComparison.OrdinalIgnoreCase) ||
                 raw.Equals("-1", StringComparison.Ordinal);
-            var size = fill ? 0 : ParsePartitionSize(raw) * unit;
+            var size = fill ? 0 : checked(ParsePartitionSize(raw) * unit);
             partitions.Add(new SprdPacPartition(id, unbounded || fill ? null : offset, size, fill));
             if (fill)
             {
@@ -265,7 +351,7 @@ public static class SprdPacLoaders
                 continue;
             }
 
-            offset = unchecked(offset + size);
+            offset = checked(offset + size);
         }
 
         return partitions.AsReadOnly();
@@ -277,6 +363,11 @@ public static class SprdPacLoaders
         if (values is null || !int.TryParse(values.Value.Trim(), NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture, out var unit))
         {
+            // Real vendor PACs omit the attribute and declare "size unit is MBytes" in the XML comment, so a
+            // missing or unparseable unit is read as 1 MiB. This table is display-only; the flash pass addresses
+            // partitions by name, so this choice never changes what is written to the device.
+            // 真实厂商 PAC 省略该属性并在 XML 注释里声明「size unit is MBytes」，因此缺失或无法解析时按 1 MiB 读取。
+            // 该表仅用于显示；刷写按分区名寻址，所以这一选择不会改变写入设备的内容。
             return 1024 * 1024;
         }
 
@@ -760,7 +851,8 @@ internal sealed class SprdPacScheme(
     uint second,
     IReadOnlyList<SprdPacSchemeStep> steps,
     int flashType = 0,
-    IReadOnlyList<SprdPacPartition>? partitions = null)
+    IReadOnlyList<SprdPacPartition>? partitions = null,
+    byte[]? extTable = null)
 {
     internal uint First { get; } = first;
 
@@ -771,6 +863,8 @@ internal sealed class SprdPacScheme(
     internal int FlashType { get; } = flashType;
 
     internal IReadOnlyList<SprdPacPartition> Partitions { get; } = partitions ?? [];
+
+    internal byte[]? ExtTable { get; } = extTable;
 }
 /// <summary>
 /// The layout one PAC scheme declares for the main grid: the official flashing sequence plus the storage medium the
@@ -786,10 +880,14 @@ internal sealed class SprdPacScheme(
 /// <param name="partitions">The partitions the product declares in order, each with the offset derived from the
 /// declared sizes, or <see langword="null"/> when the package declares no table.
 /// <para>产品按顺序声明的分区，各带按声明大小推导出的偏移；包未声明该表时为 <see langword="null"/>。</para></param>
+/// <param name="extTable">Serialized vendor ExtTable from the product's <c>ExtTable/PartitionType</c> declaration,
+/// or <see langword="null"/> when none is declared.
+/// <para>产品 <c>ExtTable/PartitionType</c> 声明序列化后的厂商 ExtTable；未声明时为 <see langword="null"/>。</para></param>
 public sealed class SprdPacSchemeLayout(
     IReadOnlyList<SprdPacSchemeStep> steps,
     int flashType,
-    IReadOnlyList<SprdPacPartition>? partitions = null)
+    IReadOnlyList<SprdPacPartition>? partitions = null,
+    byte[]? extTable = null)
 {
     /// <summary>Gets the partitions the product declares, in declaration order, each carrying the offset derived by
     /// accumulating the declared sizes; empty when the package declares no partition table.
@@ -801,6 +899,13 @@ public sealed class SprdPacSchemeLayout(
 
     /// <summary>Gets the declared <c>FlashTypeID</c> value. <para>获取声明的 <c>FlashTypeID</c> 值。</para></summary>
     public int FlashType { get; } = flashType;
+
+    /// <summary>Gets the serialized ExtTable from the product's <c>ExtTable/PartitionType</c> declaration, or
+    /// <see langword="null"/> when the package declares none. The bytes follow the official layout: a 32-bit
+    /// table count, one 12-byte header per table, then the partition records.
+    /// <para>获取产品 <c>ExtTable/PartitionType</c> 声明序列化后的 ExtTable；包未声明时为 <see langword="null"/>。字节
+    /// 采用官方布局：32 位表计数、每表一个 12 字节头、随后是分区记录。</para></summary>
+    public byte[]? ExtTable { get; } = extTable;
 }
 /// <summary>
 /// One partition of the table a PAC product declares: its identifier, the size the package states, and the offset

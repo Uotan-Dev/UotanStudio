@@ -9,7 +9,7 @@ public sealed class UnisocFlashImage
 {
     internal UnisocFlashImage(string name, string partition, long length, PacEntry? entry,
         bool eraseOnly = false, string alias = "", string operation = "", long offset = 0,
-        long declaredSize = 0, int flashType = 0)
+        long declaredSize = 0, int flashType = 0, bool mandatory = false)
     {
         Name = name;
         Partition = partition;
@@ -21,6 +21,7 @@ public sealed class UnisocFlashImage
         Offset = offset;
         DeclaredSize = declaredSize;
         FlashType = flashType;
+        IsMandatory = mandatory;
     }
 
     /// <summary>Gets the scheme <c>IDAlias</c> the official product list shows, or an empty string when the scheme
@@ -60,6 +61,11 @@ public sealed class UnisocFlashImage
     /// <summary>Gets the image length in bytes. <para>获取镜像长度（字节）。</para></summary>
     public long Length { get; }
 
+    /// <summary>Gets whether the scheme marks this image as mandatory (<c>CheckFlag=1</c>): the official tool forces
+    /// it selected and refuses the download when it is missing.
+    /// <para>获取 scheme 是否把该镜像标为必须执行（<c>CheckFlag=1</c>）：官方工具强制勾选它，缺失时拒绝下载。</para></summary>
+    public bool IsMandatory { get; }
+
     /// <summary>Gets whether the entry erases its partition instead of writing a payload; such an entry carries no
     /// image bytes and never reaches <see cref="UnisocFlashPlan.OpenImage"/>.
     /// <para>获取该条目是否擦除其分区而不是写入负载；这类条目不含镜像字节，永远不进入
@@ -91,13 +97,14 @@ public sealed class UnisocFlashPlan : IDisposable
     private readonly PacImage _image;
 
     private UnisocFlashPlan(string packagePath, PacImage image, SprdPacLoaderSet loaders,
-        IReadOnlyList<UnisocFlashImage> images, IReadOnlyList<SprdPacPartition> partitions)
+        IReadOnlyList<UnisocFlashImage> images, IReadOnlyList<SprdPacPartition> partitions, byte[]? extTable = null)
     {
         PackagePath = packagePath;
         _image = image;
         Loaders = loaders;
         Images = images;
         Partitions = partitions;
+        ExtTable = extTable;
     }
 
     /// <summary>Gets the partition table the package declares, in declaration order, each entry carrying the offset
@@ -109,6 +116,11 @@ public sealed class UnisocFlashPlan : IDisposable
 
     /// <summary>Gets the package path the plan was built from. <para>获取计划来源的包路径。</para></summary>
     public string PackagePath { get; }
+
+    /// <summary>Gets the serialized vendor ExtTable the package declares for repartitioning, or
+    /// <see langword="null"/> when the package declares none.
+    /// <para>获取包为重建分区表声明的厂商 ExtTable 字节；包未声明时为 <see langword="null"/>。</para></summary>
+    public byte[]? ExtTable { get; }
 
     /// <summary>Gets the confirmed two-stage loader set. <para>获取确认的两级加载器集合。</para></summary>
     public SprdPacLoaderSet Loaders { get; }
@@ -134,6 +146,7 @@ public sealed class UnisocFlashPlan : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(packagePath);
         cancellationToken.ThrowIfCancellationRequested();
+        PacImage.ValidateCrc(packagePath, cancellationToken);
         var image = PacImage.Open(packagePath);
         try
         {
@@ -152,7 +165,7 @@ public sealed class UnisocFlashPlan : IDisposable
                     {
                         images.Add(new UnisocFlashImage(step.Identifier, step.Partition, 0, null,
                             eraseOnly: true, step.Alias, step.Operation, step.BlockBase, step.BlockSize,
-                            layout.FlashType));
+                            layout.FlashType, step.IsMandatory));
                     }
 
                     continue;
@@ -160,10 +173,10 @@ public sealed class UnisocFlashPlan : IDisposable
 
                 images.Add(new UnisocFlashImage(step.Identifier, step.Partition, entry.Length, entry,
                     eraseOnly: false, step.Alias, step.Operation, step.BlockBase, step.BlockSize,
-                    layout.FlashType));
+                    layout.FlashType, step.IsMandatory));
             }
 
-            return new UnisocFlashPlan(packagePath, image, loaders, images, layout.Partitions);
+            return new UnisocFlashPlan(packagePath, image, loaders, images, layout.Partitions, layout.ExtTable);
         }
         catch
         {
@@ -193,11 +206,23 @@ public sealed class UnisocFlashPlan : IDisposable
         return _image.OpenEntryStream(entry);
     }
 
-    /// <summary>Opens the bounded stream of one loader or image entry directly.
-    /// <para>直接打开一个加载器或镜像条目的有界流。</para></summary>
-    /// <param name="entry">An entry of this package. <para>本包中的条目。</para></param>
+    /// <summary>Opens the bounded stream of one of the plan's two loader entries, for tools that drive the
+    /// two-stage handshake without executing a flash plan.
+    /// <para>直接打开本计划两个加载器条目之一的有界流，供不执行刷写计划、只驱动两级握手的工具使用。</para></summary>
+    /// <param name="entry">A loader entry of this package. <para>本包中的一个加载器条目。</para></param>
     /// <returns>The read-only stream positioned at the entry start.
     /// <para>定位在条目起点的只读流。</para></returns>
+    public Stream OpenLoader(PacEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!ReferenceEquals(entry, Loaders.FirstStage) && !ReferenceEquals(entry, Loaders.SecondStage))
+        {
+            throw new ArgumentException("The entry is not one of the plan's loader entries.", nameof(entry));
+        }
+
+        return _image.OpenEntryStream(entry);
+    }
+
     internal Stream OpenEntry(PacEntry entry) => _image.OpenEntryStream(entry);
 
     /// <summary>Releases the underlying package. <para>释放底层包。</para></summary>

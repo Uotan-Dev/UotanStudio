@@ -78,8 +78,7 @@ public sealed class UnisocFlasher
         }
 
         var records = await storage.ReadPartitionTableAsync(cancellationToken).ConfigureAwait(false);
-        return [.. records.Where(record => !record.IsRemaining)
-            .Select(record => new UnisocPartitionTarget(record.Name, null, null, record.SizeValue))];
+        return [.. records.Select(record => new UnisocPartitionTarget(record.Name, null, null, record.SizeValue))];
     }
 
     /// <summary>
@@ -114,12 +113,16 @@ public sealed class UnisocFlasher
         var confirmation = options.Validate();
         cancellationToken.ThrowIfCancellationRequested();
 
-        await EnsureFdl2Async(plan, cancellationToken).ConfigureAwait(false);
-        var storage = RequireStorage();
-        var targets = await ResolvePartitionsAsync(cancellationToken).ConfigureAwait(false);
-        var targetsByName = targets
-            .GroupBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        // A repartition destroys the whole table; require its own exact phrase before any device I/O.
+        // 重建分区表会销毁整张表；在任何设备 I/O 之前要求独立的精确确认短语。
+        var applyRepartition = options.ApplyRepartition && plan.ExtTable is not null;
+        if (applyRepartition &&
+            !string.Equals(options.RepartitionConfirmation, UnisocFlashOptions.RepartitionConfirmationPhrase,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The repartition request is not confirmed with the exact phrase.");
+        }
+
         var selected = selectedNames is null
             ? plan.Images.Select(image => image.Name).ToArray()
             : [.. selectedNames];
@@ -129,6 +132,63 @@ public sealed class UnisocFlasher
             return;
         }
 
+        // Preflight every selected row's replacement file before any device action: an erase followed by a
+        // missing-file Skip would otherwise destroy the partition without writing anything in return.
+        // 在任何设备动作之前预检所有选中行的替换文件：否则先擦除再因文件缺失 Skip 会破坏分区却不写入。
+        var preflight = new Dictionary<string, FileStream>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var image in plan.Images)
+            {
+                if (image.EraseOnly || !selected.Contains(image.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (externalImages is not null &&
+                    externalImages.TryGetValue(image.Name, out var chosenPath) && chosenPath.Length > 0)
+                {
+                    if (!File.Exists(chosenPath))
+                    {
+                        throw new FileNotFoundException(
+                            $"The chosen image file '{chosenPath}' for '{image.Name}' does not exist.", chosenPath);
+                    }
+
+                    preflight[image.Name] = OpenExternalImage(chosenPath);
+                }
+            }
+
+            await EnsureFdl2Async(plan, cancellationToken).ConfigureAwait(false);
+            var storage = RequireStorage();
+            if (applyRepartition)
+            {
+                await storage.RepartitionAsync(plan.ExtTable!, cancellationToken).ConfigureAwait(false);
+            }
+
+            var targets = await ResolvePartitionsAsync(cancellationToken).ConfigureAwait(false);
+            var targetsByName = targets
+                .GroupBy(target => target.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+            await ExecutePassAsync(storage, plan, options, selected, targetsByName, targets, confirmation, preflight,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var stream in preflight.Values)
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        Report(new UnisocFlashProgress(UnisocFlashPhase.Done, null, 0, 0));
+    }
+
+    private async Task ExecutePassAsync(UnisocStorageSession storage, UnisocFlashPlan plan,
+        UnisocFlashOptions options, string[] selected,
+        Dictionary<string, UnisocPartitionTarget> targetsByName, IReadOnlyList<UnisocPartitionTarget> targets,
+        string confirmation, Dictionary<string, FileStream> preflight, CancellationToken cancellationToken)
+    {
         if (options.Mode == UnisocFlashMode.FullErase)
         {
             foreach (var target in targets)
@@ -193,24 +253,22 @@ public sealed class UnisocFlasher
                     .ConfigureAwait(false);
             }
 
-            var external = externalImages is not null &&
-                externalImages.TryGetValue(image.Name, out var chosenPath) && chosenPath.Length > 0
-                ? chosenPath
-                : null;
-            if (external is not null && !File.Exists(external))
+            Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, 0, image.Length));
+            long length;
+            if (preflight.TryGetValue(image.Name, out var externalStream))
             {
-                Report(new UnisocFlashProgress(UnisocFlashPhase.Skip, image.Name, 0, image.Length,
-                    $"The chosen image file '{external}' does not exist."));
-                continue;
+                length = externalStream.Length;
+                await storage.WritePartitionAsync(image.Name, externalStream, length, confirmation,
+                    cancellationToken, new ReportingProgress(this, image.Name, length)).ConfigureAwait(false);
+            }
+            else
+            {
+                length = image.Length;
+                await using var packaged = plan.OpenImage(image);
+                await storage.WritePartitionAsync(image.Name, packaged, length, confirmation,
+                    cancellationToken, new ReportingProgress(this, image.Name, length)).ConfigureAwait(false);
             }
 
-            Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, 0, image.Length));
-            await using var source = external is null
-                ? plan.OpenImage(image)
-                : OpenExternalImage(external);
-            var length = external is null ? image.Length : source.Length;
-            await storage.WritePartitionAsync(image.Name, source, length, confirmation,
-                cancellationToken, new ReportingProgress(this, image.Name, length)).ConfigureAwait(false);
             Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, image.Name, length, length));
         }
 

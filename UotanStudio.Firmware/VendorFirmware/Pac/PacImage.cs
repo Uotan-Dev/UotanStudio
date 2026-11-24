@@ -41,6 +41,29 @@ public sealed class PacImage : IDisposable
     /// <para>每个声明的目录行对应一个不可变条目。</para></value>
     public IReadOnlyList<PacEntry> Entries { get; }
 
+    /// <summary>
+    /// Verifies the package header and data CRC against the values stored in the PAC image. The scan is streamed
+    /// with bounded buffers and rejects a package whose declared size falls outside the physical file.
+    /// <para>校验 PAC 镜像的头部与数据 CRC 是否与存储值一致。扫描使用有界缓冲流式进行，声明大小落在物理文件之外的包会被拒绝。</para>
+    /// </summary>
+    /// <param name="path">Path of the PAC image. <para>PAC 镜像路径。</para></param>
+    /// <param name="cancellationToken">Cancels the scan. <para>取消扫描。</para></param>
+    /// <exception cref="InvalidDataException">The header or data CRC does not match the stored value.
+    /// <para>头部或数据 CRC 与存储值不一致。</para></exception>
+    public static void ValidateCrc(string path, CancellationToken cancellationToken = default)
+    {
+        var (headOk, dataOk) = PacExtractor.Check(path, cancellationToken);
+        if (!headOk)
+        {
+            throw new InvalidDataException("The PAC header CRC does not match the stored value.");
+        }
+
+        if (!dataOk)
+        {
+            throw new InvalidDataException("The PAC data CRC does not match the stored value.");
+        }
+    }
+
     /// <summary>Opens a PAC package and validates its header and directory table.
     /// <para>打开 PAC 包并校验其头部与目录表。</para></summary>
     /// <param name="path">Path of the PAC image; must be an existing readable file.
@@ -60,7 +83,8 @@ public sealed class PacImage : IDisposable
         try
         {
             var head = SprdHead.Read(file);
-            ValidateHeader(head, file.Length);
+            var fileLength = file.Length;
+            ValidateHeader(head, fileLength);
             var entries = new List<PacEntry>((int)head.FileCount);
             for (var i = 0; i < head.FileCount; i++)
             {
@@ -70,12 +94,19 @@ public sealed class PacImage : IDisposable
                     throw new InvalidDataException("unexpected struct size");
                 }
 
+                var length = ((long)fileRecord.SizeHigh << 32) | fileRecord.Size;
+                var offset = ((long)fileRecord.OffsetHigh << 32) | fileRecord.PacOffset;
+                if (offset < 0 || length < 0 || offset > fileLength || length > fileLength - offset)
+                {
+                    throw new InvalidDataException("entry range falls outside the image");
+                }
+
                 entries.Add(new PacEntry(
                     fileRecord.GetId(),
                     fileRecord.GetName(),
                     (PacFileType)fileRecord.Type,
-                    ((long)fileRecord.SizeHigh << 32) | fileRecord.Size,
-                    ((long)fileRecord.OffsetHigh << 32) | fileRecord.PacOffset,
+                    length,
+                    offset,
                     fileRecord.AddrNum,
                     [.. fileRecord.Addr]));
             }

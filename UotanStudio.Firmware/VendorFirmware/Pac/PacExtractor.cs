@@ -206,31 +206,53 @@ internal static class PacExtractor
         var calculatedHeadCrc = Crc16Arc.Compute(headForCrc, 0);
         var headOk = head.HeadCrc == calculatedHeadCrc;
 
-        long totalSize = head.PacSize;
-        if (totalSize < SprdHead.Size || totalSize > fs.Length)
+        // PacSize is the low 32 bits of the declared size. Real multi-gigabyte vendor PACs wrap this field, and
+        // a synthetic above-4-GiB layout may store extra bytes after the wrapped region. Enumerate the candidate
+        // sizes that fit the physical file and let the stored DataCrc decide which one is the true package end;
+        // the running CRC is captured at each candidate boundary in one streaming pass.
+        // PacSize 是声明大小的低 32 位。真实多 GB 厂商 PAC 会回绕该字段，合成的 4GiB 以上布局还可能在回绕区之后
+        // 追加字节。枚举能放进物理文件的候选大小，用存储的数据 CRC 判定真正的包尾；一次流式扫描在每个候选边界
+        // 记录累计 CRC。
+        if (head.PacSize < SprdHead.Size || head.PacSize > fs.Length)
         {
             throw new InvalidDataException("PAC declared size is outside the physical file.");
         }
 
-        fs.Seek(SprdHead.Size, SeekOrigin.Begin);
-        ushort calculatedDataCrc = 0;
+        var candidates = new List<long>();
+        for (long size = head.PacSize; size <= fs.Length; size += 0x1_0000_0000L)
+        {
+            candidates.Add(size);
+        }
+
+        var matched = new bool[candidates.Count];
+        var crc = (ushort)0;
         var buffer = new byte[ChunkSize];
-        long totalRead = 0;
-        var dataSize = totalSize - SprdHead.Size;
-        while (totalRead < dataSize)
+        fs.Seek(SprdHead.Size, SeekOrigin.Begin);
+        var candidateIndex = 0;
+        var dataEnd = candidates[0];
+        while (fs.Position < dataEnd && candidateIndex < candidates.Count)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var toRead = (int)Math.Min(ChunkSize, dataSize - totalRead);
+            var toRead = (int)Math.Min(buffer.Length, dataEnd - fs.Position);
             var read = fs.Read(buffer, 0, toRead);
             if (read == 0)
             {
-                throw new EndOfStreamException("PAC data ended before the declared package size.");
+                break;
             }
-            calculatedDataCrc = Crc16Arc.Compute(buffer.AsSpan(0, read), calculatedDataCrc);
-            totalRead += read;
+
+            crc = Crc16Arc.Compute(buffer.AsSpan(0, read), crc);
+            if (fs.Position == dataEnd)
+            {
+                matched[candidateIndex] = crc == head.DataCrc;
+                candidateIndex++;
+                if (candidateIndex < candidates.Count)
+                {
+                    dataEnd = candidates[candidateIndex];
+                }
+            }
         }
 
-        return (headOk, head.DataCrc == calculatedDataCrc);
+        return (headOk, matched.Any(match => match));
     }
 
     private static StringComparison PathComparison =>

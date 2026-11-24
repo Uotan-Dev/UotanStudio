@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Firmware.VendorFirmware.Pac;
+using UotanStudio.Hash.Crc16Arc;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
 
@@ -333,6 +334,49 @@ public class UnisocFlashTests : IDisposable
     }
 
     [Fact]
+    public void Load_CorruptDataCrc_IsRejectedBeforeAnyDeviceIo()
+    {
+        var path = WritePackage([
+            new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+            new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+            new PackageEntry("XML", "scheme.xml", SchemeXml("0x00005500", "0x9EFFFE00", "BOOT")),
+            new PackageEntry("BOOT", "boot.img", PackagePayload(16)),
+        ]);
+        var bytes = File.ReadAllBytes(path);
+        bytes[2124] ^= 0xFF;
+        File.WriteAllBytes(path, bytes);
+
+        Assert.Throws<InvalidDataException>(() => UnisocFlashPlan.Load(path, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void Load_MandatorySchemeStep_IsCarriedIntoPlan()
+    {
+        var xml = Encoding.ASCII.GetBytes("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <BMAConfig>
+              <SchemeList>
+                <Scheme>
+                  <File><ID>FDL</ID><Block><Base>0x00005500</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+                  <File><ID>FDL2</ID><Block><Base>0x9EFFFE00</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+                  <File><ID>BOOT</ID><Block id="boot"><Base>0x0</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+                </Scheme>
+              </SchemeList>
+            </BMAConfig>
+            """);
+        var path = WritePackage([
+            new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+            new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+            new PackageEntry("XML", "scheme.xml", xml),
+            new PackageEntry("BOOT", "boot.img", PackagePayload(16)),
+        ]);
+
+        using var plan = UnisocFlashPlan.Load(path, TestContext.Current.CancellationToken);
+
+        Assert.True(plan.Images.Single(image => image.Name == "BOOT").IsMandatory);
+    }
+
+    [Fact]
     public void Options_FullEraseWithoutWipePhrase_IsRefusedBeforeAnyIo()
     {
         var options = new UnisocFlashOptions
@@ -570,6 +614,68 @@ public class UnisocFlashTests : IDisposable
     }
 
     [Fact]
+    public void ResolveLayout_MissingPartitionUnit_UsesMegabytePerVendorPac()
+    {
+        var path = WritePackage(
+            [
+                new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+                new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+                new PackageEntry("XML", "scheme.xml", PartitionTableXmlWithoutUnit()),
+                new PackageEntry("BOOT", "boot.img", PackagePayload(16)),
+            ],
+            "ums512_1h10");
+
+        using var package = PacImage.Open(path);
+        var layout = SprdPacLoaders.ResolveLayout(package);
+
+        Assert.Equal(0L, layout.Partitions[0].offset);
+        Assert.Equal(5L * 1024 * 1024, layout.Partitions[1].offset);
+        Assert.Equal(5L * 1024 * 1024, layout.Partitions[0].size);
+    }
+
+    [Fact]
+    public void ResolveLayout_InvalidPartitionUnit_UsesMegabytePerVendorPac()
+    {
+        var path = WritePackage(
+            [
+                new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+                new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+                new PackageEntry("XML", "scheme.xml", PartitionTableXmlWithUnit("abc")),
+                new PackageEntry("BOOT", "boot.img", PackagePayload(16)),
+            ],
+            "ums512_1h10");
+
+        using var package = PacImage.Open(path);
+        var layout = SprdPacLoaders.ResolveLayout(package);
+
+        Assert.Equal(5L * 1024 * 1024, layout.Partitions[1].offset);
+    }
+
+    private static byte[] PartitionTableXmlWithoutUnit() => PartitionTableXmlWithUnit(null);
+
+    private static byte[] PartitionTableXmlWithUnit(string? unit) => Encoding.ASCII.GetBytes($"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <BMAConfig>
+          <ProductList>
+            <Product name="ums512_1h10">
+              <SchemeName>ums512_1h10</SchemeName>
+              <FlashTypeID>1</FlashTypeID>
+              <Partitions{(unit is null ? string.Empty : $" unit=\"{unit}\"")}>
+                <Partition id="one" size="5"/>
+                <Partition id="two" size="7"/>
+              </Partitions>
+            </Product>
+          </ProductList>
+          <SchemeList>
+            <Scheme name="ums512_1h10">
+              <File><ID>FDL</ID><Block><Base>0x00005500</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+              <File><ID>FDL2</ID><Block><Base>0x9EFFFE00</Base></Block><Flag>1</Flag><CheckFlag>1</CheckFlag></File>
+            </Scheme>
+          </SchemeList>
+        </BMAConfig>
+        """);
+
+    [Fact]
     public void ResolveLayout_NoPartitionTable_ReportsNoPartitions()
     {
         var path = WritePackage([
@@ -592,7 +698,7 @@ public class UnisocFlashTests : IDisposable
             <Product name="ums512_1h10">
               <SchemeName>ums512_1h10</SchemeName>
               <FlashTypeID>1</FlashTypeID>
-              <Partitions>
+              <Partitions unit="0">
                 <Partition id="prodnv" size="10"/>
                 <Partition id="miscdata" size="1"/>
                 <Partition id="super" size="4100"/>
@@ -626,7 +732,7 @@ public class UnisocFlashTests : IDisposable
         var headerSize = 2124;
         var entrySize = 2580;
         var payloadOffset = headerSize + entries.Count * entrySize;
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
         var header = new byte[headerSize];
         if (productName is not null)
         {
@@ -657,6 +763,7 @@ public class UnisocFlashTests : IDisposable
             stream.Write(entry.Payload);
         }
 
+        WritePacCrcs(stream, header, payloadOffset);
         _files.Add(path);
         return path;
     }
@@ -678,7 +785,7 @@ public class UnisocFlashTests : IDisposable
         var headerSize = 2124;
         var entrySize = 2580;
         var payloadOffset = headerSize + entries.Count * entrySize;
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
         var header = new byte[headerSize];
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(48), (uint)(payloadOffset + entries.Sum(entry => entry.Payload.Length)));
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(1076), (uint)entries.Count);
@@ -718,8 +825,37 @@ public class UnisocFlashTests : IDisposable
             stream.Write(entry.HighOffset ? entry.Payload : new byte[entry.Payload.Length]);
         }
 
+        WritePacCrcs(stream, header, payloadOffset);
         _files.Add(path);
         return path;
+    }
+
+    private static void WritePacCrcs(FileStream stream, byte[] header, int payloadOffset)
+    {
+        var headCrc = Crc16Arc.Compute(header.AsSpan(0, 2120), 0);
+        var declaredSize = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(48));
+        var dataSize = declaredSize - 2124u;
+        stream.Position = 2124;
+        var buffer = new byte[1024 * 1024];
+        ushort dataCrc = 0;
+        long remaining = dataSize;
+        while (remaining > 0)
+        {
+            var chunk = (int)Math.Min(buffer.Length, remaining);
+            var read = stream.Read(buffer, 0, chunk);
+            if (read == 0)
+            {
+                throw new EndOfStreamException();
+            }
+
+            dataCrc = Crc16Arc.Compute(buffer.AsSpan(0, read), dataCrc);
+            remaining -= read;
+        }
+
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2120), headCrc);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2122), dataCrc);
+        stream.Position = 2120;
+        stream.Write(header, 2120, 4);
     }
 
     private static void WriteUtf16(Span<byte> destination, string value)
