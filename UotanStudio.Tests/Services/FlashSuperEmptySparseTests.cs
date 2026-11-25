@@ -1,6 +1,5 @@
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
-using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;

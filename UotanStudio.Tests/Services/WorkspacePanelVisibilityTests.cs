@@ -1,7 +1,6 @@
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Workspace;
 using Xunit;

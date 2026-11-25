@@ -1,4 +1,3 @@
-using System;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.DataProviders;
