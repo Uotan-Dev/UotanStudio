@@ -674,9 +674,10 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             CancelButton.IsEnabled = true;
             CancelButton.Content = LanguageService.Instance.GetString("Editor_Cancel");
             ResetProgressStats();
-            ReportProgress(UserError.Describe(ex), 0);
+            var detail = ProjectCreationErrorText(ex);
+            ReportProgress(detail, 0);
             await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
-                UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+                detail, Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {
@@ -690,6 +691,10 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             StopBusy();
         }
     }
+
+    private static string ProjectCreationErrorText(Exception exception) => exception is UserFacingSummaryException
+        ? exception.Message
+        : UserError.Describe(exception);
 
     private async Task<bool> ConfirmCreationSpaceAsync(NewProjectFormResult form)
     {

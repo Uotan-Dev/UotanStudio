@@ -88,6 +88,14 @@ internal partial class ImageViewModel
                 }
 
                 var format = await Task.Run(() => ImageInputService.DetectFormat(destination));
+                var kind = ImageInputService.ParseFormatLabel(format);
+                if (!ImageInputService.SupportsUnpack(destination, kind))
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "Images",
+                        $"Imported file is not unpackable and was not added to the image list: {destination}");
+                    continue;
+                }
+
                 imported.Add(new ImageEntryViewModel
                 {
                     DisplayName = Path.GetFileName(destination),

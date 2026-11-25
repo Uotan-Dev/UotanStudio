@@ -333,9 +333,7 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
-                if (!outputMode && !(ImageInputService.ContainsFileSystem(file)
-                    || ImageInputService.IsBootFamilyFormat(kind)
-                    || kind is ImageFormatKind.UpdateBin or ImageFormatKind.Cpb))
+                if (!outputMode && !ImageInputService.SupportsUnpack(file, kind))
                 {
                     continue;
                 }

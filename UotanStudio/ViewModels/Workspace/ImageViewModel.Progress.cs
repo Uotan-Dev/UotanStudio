@@ -1,4 +1,3 @@
-using System.Globalization;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Services;
 using UotanStudio.Services.Ui;

@@ -415,6 +415,20 @@ internal sealed class ImageInputService
         or ImageFormatKind.RkResource;
 
     /// <summary>
+    /// Decides whether an image is accepted by the unpack-mode image list: a recognizable format that either
+    /// carries a filesystem, belongs to the boot family, or is a HarmonyOS update.bin / Coolpad container.
+    /// <para>判断镜像是否可进入解包模式镜像列表：格式可识别，且携带文件系统、属于 boot 系列，
+    /// 或为 HarmonyOS update.bin / 酷派容器。</para>
+    /// </summary>
+    /// <param name="path">Absolute path of the image to classify. <para>待分类镜像的绝对路径。</para></param>
+    /// <param name="format">Already-probed format identity. <para>已探测出的格式标识。</para></param>
+    /// <returns><see langword="true"/> when the image supports unpacking. <para>镜像支持解包时为 <see langword="true"/>。</para></returns>
+    internal static bool SupportsUnpack(string path, ImageFormatKind format) => format is not ImageFormatKind.Unknown
+        && (ContainsFileSystem(path)
+            || IsBootFamilyFormat(format)
+            || format is ImageFormatKind.UpdateBin or ImageFormatKind.Cpb);
+
+    /// <summary>
     /// Decides whether an established label string names a boot-family format after it is parsed back
     /// into a format identity.
     /// <para>判定既有格式标签字符串在还原为格式标识后是否属于 boot 系列。</para>
