@@ -1,4 +1,3 @@
-using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services.Ui.Workspace;

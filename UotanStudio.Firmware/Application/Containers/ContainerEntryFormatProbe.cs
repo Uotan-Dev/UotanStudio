@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 
 namespace UotanStudio.Firmware.Application.Containers;
