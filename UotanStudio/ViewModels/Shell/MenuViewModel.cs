@@ -377,6 +377,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 ContainerKind.Payload => "payload",
                 ContainerKind.Zip => "zip",
                 ContainerKind.UpdateBin => "update.bin",
+                ContainerKind.Vendor => "container",
                 _ => "raw"
             }, byteProgress: window.BeginByteProgress(_localizer.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             if (container is null) throw new IOException("Container import failed.");

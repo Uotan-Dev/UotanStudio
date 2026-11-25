@@ -64,7 +64,10 @@ internal sealed class PacFormatHandler : IFormatHandler, IRepackMetadataProvider
             var summary = $"SPRD PAC: {entries.Count} files";
             return Task.FromResult(FirmwareOpResult.Ok(summary,
                 entries: [.. entries.Select(e => e.Name).Where(n => !string.IsNullOrEmpty(n))],
-                metadata: new Dictionary<string, string> { ["FileCount"] = entries.Count.ToString() }));
+                metadata: new Dictionary<string, string> { ["FileCount"] = entries.Count.ToString() },
+                components: [.. entries
+                    .Where(e => !string.IsNullOrEmpty(e.Name))
+                    .Select(e => FirmwareComponent.Of(e.Name, e.Size))]));
         }
         catch (Exception ex)
         {

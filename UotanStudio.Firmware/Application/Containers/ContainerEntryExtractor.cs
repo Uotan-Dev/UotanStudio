@@ -19,8 +19,8 @@ public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IR
 }
 
 /// <summary>
-/// Extracts selected entries from a container into an explicit output directory, preserving the legacy output-next-to-container behavior when none is given. Super partitions are stream-cropped by LP extents, payload partitions through PayloadParser.ExtractAsync, ZIP members by entry path, and HarmonyOS update.bin components through the registered update.bin handler.
-/// <para>把容器中选定的条目解包到显式输出目录，未指定时保留“输出到容器旁”的既有行为。Super 分区按 LP extent 流式裁剪，payload 分区经 PayloadParser.ExtractAsync，ZIP 成员按条目路径流式解出，HarmonyOS update.bin 组件经已注册的 update.bin 处理器解出。</para>
+/// Extracts selected entries from a container into an explicit output directory, preserving the legacy output-next-to-container behavior when none is given. Super partitions are stream-cropped by LP extents, payload partitions through PayloadParser.ExtractAsync, ZIP members by entry path, HarmonyOS update.bin components through the registered update.bin handler, and vendor or archive packages through the format handler that accepted them.
+/// <para>把容器中选定的条目解包到显式输出目录，未指定时保留“输出到容器旁”的既有行为。Super 分区按 LP extent 流式裁剪，payload 分区经 PayloadParser.ExtractAsync，ZIP 成员按条目路径流式解出，HarmonyOS update.bin 组件经已注册的 update.bin 处理器解出，厂商或归档包则经接受该文件的格式处理器解出。</para>
 /// </summary>
 public static class ContainerEntryExtractor
 {
@@ -65,6 +65,7 @@ public static class ContainerEntryExtractor
             ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false),
             ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
             ContainerKind.UpdateBin => await ExtractUpdateBinAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
+            ContainerKind.Vendor => await ExtractVendorAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
             _ => ContainerExtractionResult.Empty
         };
     }
@@ -272,6 +273,90 @@ public static class ContainerEntryExtractor
             {
                 bytes.Report(((long)(totalBytes * clamped / 100), totalBytes));
             }
+        }
+    }
+
+    /// <summary>
+    /// Extracts selected entries from a vendor or archive package through the format handler that accepted it:
+    /// <see cref="UnpackOptions.SelectedEntries"/> carries the selection, and each written file is reported back
+    /// under the entry name the handler produced.
+    /// <para>经接受该文件的格式处理器，从厂商包或归档包解出选定条目：勾选内容由
+    /// <see cref="UnpackOptions.SelectedEntries"/> 承载，处理器写出的每个文件按其产出的条目名回报。</para>
+    /// </summary>
+    /// <param name="containerPath">The vendor or archive package path. <para>厂商包或归档包路径。</para></param>
+    /// <param name="selectedNames">Selected entry names as listed by the analyzer. <para>分析器列出的选定条目名。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="outputDirectory">Output directory. <para>输出目录。</para></param>
+    /// <param name="progress">0-100 percent progress. <para>0-100 百分比进度。</para></param>
+    /// <param name="byteProgress">Cumulative processed bytes and total. <para>累计已处理字节与总量。</para></param>
+    /// <param name="maximumOutputBytes">Decompressed output byte budget. <para>解压输出字节上限。</para></param>
+    /// <returns>The extraction result, empty when no handler claims the package. <para>提取结果；没有处理器接受该包时为空。</para></returns>
+    private static async Task<ContainerExtractionResult> ExtractVendorAsync(
+        string containerPath, IReadOnlyList<string> selectedNames, CancellationToken cancellationToken,
+        string outputDirectory, IProgress<double>? progress,
+        IProgress<(long Processed, long Total)>? byteProgress, long maximumOutputBytes)
+    {
+        var handler = FormatDetector.Detect(containerPath);
+        if (handler is null)
+        {
+            return ContainerExtractionResult.Empty;
+        }
+
+        var names = new HashSet<string>(selectedNames, StringComparer.OrdinalIgnoreCase);
+        var options = new UnpackOptions
+        {
+            SelectedEntries = [.. names],
+            Overwrite = true,
+            MaximumOutputBytes = maximumOutputBytes,
+            Progress = progress is null && byteProgress is null
+                ? null
+                : new ContainerUnpackProgress(progress, byteProgress)
+        };
+
+        progress?.Report(0);
+        var unpacked = await handler.UnpackAsync(containerPath, outputDirectory, options, cancellationToken)
+            .ConfigureAwait(false);
+        if (!unpacked.Success)
+        {
+            throw new InvalidDataException(unpacked.Summary);
+        }
+
+        progress?.Report(100);
+
+        var reported = unpacked.Entries.Count > 0 ? unpacked.Entries : [.. names];
+        List<string> outputNames = new(reported.Count);
+        List<string> outputPaths = new(reported.Count);
+        foreach (var name in reported)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = Path.Combine(outputDirectory, SanitizeFileName(Path.GetFileName(name.Replace('\\', '/'))));
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            outputNames.Add(name);
+            outputPaths.Add(path);
+        }
+
+        return new ContainerExtractionResult(outputNames, outputPaths);
+    }
+
+    /// <summary>
+    /// Maps a handler's percentage reports onto the container extractor's percent and byte sinks; the byte
+    /// sink reports the percentage itself because a vendor handler does not expose its own totals.
+    /// <para>把处理器的百分比报告映射到容器提取器的百分比与字节输出槽；厂商处理器不暴露自身总量，
+    /// 因此字节槽直接回报百分比。</para>
+    /// </summary>
+    private sealed class ContainerUnpackProgress(
+        IProgress<double>? percent,
+        IProgress<(long Processed, long Total)>? bytes) : IFirmwareProgress
+    {
+        public void Report(double percentValue, string message)
+        {
+            var clamped = Math.Clamp(percentValue, 0, 100);
+            percent?.Report(clamped);
+            bytes?.Report(((long)clamped, 100));
         }
     }
 

@@ -165,6 +165,9 @@
   <data name="NewProject_GroupZipImages" xml:space="preserve">
     <value>压缩包内镜像 — {0}</value>
   </data>
+  <data name="NewProject_GroupVendorEntries" xml:space="preserve">
+    <value>包内条目 — {0}</value>
+  </data>
   <data name="NewProject_BrowseLocation" xml:space="preserve">
     <value>选择项目位置</value>
   </data>

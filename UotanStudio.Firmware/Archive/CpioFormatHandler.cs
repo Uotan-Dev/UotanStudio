@@ -28,6 +28,10 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         return Task.CompletedTask;
     }
 
+    /// <summary>Leading bytes read from one member when a listing probes its content type.</summary>
+    /// <para>列表探测成员内容类型时从单个成员读取的起始字节数。</para>
+    private const int ProbeEntryPrefixBytes = 64 * 1024;
+
     private readonly CpioArchive _archive = new();
     private readonly CpioExtractor _extractor = new();
 
@@ -49,7 +53,8 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
     /// CPIO, TAR and supported compressed CPIO suffixes; <see cref="CanHandle"/> probes compressed candidates.
     /// <para>包含 CPIO、TAR 及受支持的压缩 CPIO 后缀；压缩候选文件由 <see cref="CanHandle"/> 探测内容。</para>
     /// </value>
-    public IReadOnlyList<string> FileExtensions { get; } = ["cpio", "tar", "gz", "xz", "zst", "lz4", "bz2", "lzma", "lzo"];
+    public IReadOnlyList<string> FileExtensions { get; } =
+        ["cpio", "tar", "gz", "xz", "zst", "lz4", "bz2", "lzma", "lzo", "tgz", "tbz2", "tbz", "txz", "tzst"];
 
     /// <summary>
     /// Determines whether this handler can process the given file.
@@ -88,6 +93,29 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
             || extension.Equals(".tar", StringComparison.OrdinalIgnoreCase))
         {
             return true;
+        }
+
+        if (extension.Equals(".tgz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tbz2", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tbz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".txz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tzst", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (extension.Equals(".gz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".xz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bz2", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".zst", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".lz4", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".lzma", StringComparison.OrdinalIgnoreCase))
+        {
+            var baseExtension = Path.GetExtension(Path.GetFileNameWithoutExtension(filePath));
+            if (baseExtension.Equals(".tar", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         try
@@ -132,6 +160,132 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Reads the leading bytes of the requested members in one bounded pass and names each content type, so a
+    /// listing can show what every inner file actually is without extracting it. Compressed archives are decoded
+    /// through the same path as extraction.
+    /// <para>单次有界遍历读取所请求成员的起始字节并给出各自的内容类型，使列表无需解包即可显示每个内部文件是什么。
+    /// 压缩归档经与解包相同的路径解码。</para>
+    /// </summary>
+    /// <summary>
+    /// Names one member's content type with the same short-label rules the container listing uses, so archive
+    /// entries and container entries never disagree on a format name.
+    /// <para>用容器列表相同的短标签规则给出成员内容类型，避免归档条目与容器条目在格式名上不一致。</para>
+    /// </summary>
+    /// <param name="header">Leading member bytes. <para>成员起始字节。</para></param>
+    /// <param name="entryName">Member name used for the extension fallback. <para>用于扩展名回退的成员名。</para></param>
+    /// <returns>The label, or <see langword="null"/>. <para>标签，或 <see langword="null"/>。</para></returns>
+    private static string? DescribeEntryFormat(ReadOnlySpan<byte> header, string entryName)
+    {
+        if (header.Length >= 0x438 + 2 && header[0x438] == 0x53 && header[0x439] == 0xEF)
+        {
+            return "ext4";
+        }
+
+        if (header.Length >= 4 && header[0] == 0x10 && header[1] == 0x20 && header[2] == 0xF5 && header[3] == 0xF2)
+        {
+            return "f2fs";
+        }
+
+        if (header.Length >= 4 && header[0] == (byte)'E' && header[1] == (byte)'R' && header[2] == (byte)'O' && header[3] == (byte)'F'
+            && header.Length >= 5 && header[4] == (byte)'S')
+        {
+            return "erofs";
+        }
+
+        if (header.Length >= 4 && header[0] == (byte)'h' && header[1] == (byte)'s' && header[2] == (byte)'q' && header[3] == (byte)'s')
+        {
+            return "squashfs";
+        }
+
+        if (header.Length >= 8 && header.Slice(0, 8).SequenceEqual("ANDROID!"u8))
+        {
+            return "boot";
+        }
+
+        if (header.Length >= 8 && header.Slice(0, 8).SequenceEqual("VNDRBOOT"u8))
+        {
+            return "vendor_boot";
+        }
+
+        if (header.Length >= 4 && header.Slice(0, 4).SequenceEqual("CrAU"u8))
+        {
+            return "payload";
+        }
+
+        if (header.Length >= 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header) == BlockImage.Sparse.SparseFormat.SparseHeaderMagic)
+        {
+            return "sparse";
+        }
+
+        var extension = Path.GetExtension(entryName);
+        return extension.Length > 1 ? extension[1..].ToLowerInvariant() : null;
+    }
+
+    /// <param name="filePath">Archive file to inspect. <para>待检查的归档文件。</para></param>
+    /// <param name="entryNames">Member names to probe; empty yields an empty result. <para>待探测的成员名；为空时返回空结果。</para></param>
+    /// <param name="cancellationToken">Cancel token checked between members. <para>在成员之间检查的取消令牌。</para></param>
+    /// <returns>A map from member name to a probed type label; members that cannot be read are omitted.
+    /// <para>成员名到探测类型标签的映射；无法读取的成员会被省略。</para></returns>
+    public Dictionary<string, string> ProbeEntryFormats(string filePath, IReadOnlyCollection<string> entryNames,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var wanted = new HashSet<string>(entryNames.Where(name => !string.IsNullOrWhiteSpace(name)), StringComparer.Ordinal);
+        if (wanted.Count == 0 || !File.Exists(filePath))
+        {
+            return result;
+        }
+
+        try
+        {
+            using var source = OpenArchiveForRead(filePath, cancellationToken, out _);
+            foreach (var entry in _archive.ReadEntriesStreaming(source))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!wanted.Contains(entry.Name))
+                {
+                    continue;
+                }
+
+                var take = (int)Math.Min(ProbeEntryPrefixBytes, Math.Max(0, entry.DataLength));
+                if (take > 0)
+                {
+                    var buffer = new byte[take];
+                    var read = 0;
+                    if (entry.DataStream is { } stream)
+                    {
+                        while (read < take)
+                        {
+                            var count = stream.Read(buffer, read, take - read);
+                            if (count <= 0)
+                            {
+                                break;
+                            }
+
+                            read += count;
+                        }
+                    }
+
+                    if (read > 0 && DescribeEntryFormat(buffer.AsSpan(0, read), entry.Name) is { } label)
+                    {
+                        result[entry.Name] = label;
+                    }
+                }
+
+                if (result.Count >= wanted.Count)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+        }
+
+        return result;
     }
 
     /// <summary>Reads format metadata without unpacking.<para>读取格式元数据（不解包）。</para></summary>
@@ -215,7 +369,13 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var extractOptions = new ExtractOptions { Overwrite = options?.Overwrite ?? true, CancellationToken = cancellationToken };
+                var selected = options?.CreateSelectedEntrySet();
+                var extractOptions = new ExtractOptions
+                {
+                    Overwrite = options?.Overwrite ?? true,
+                    CancellationToken = cancellationToken,
+                    IncludePatterns = selected is null ? [] : [.. selected]
+                };
                 IReadOnlyList<string> entries;
                 using (var fs = OpenArchiveForRead(filePath, cancellationToken, out var compression))
                 {

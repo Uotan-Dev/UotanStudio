@@ -23,11 +23,31 @@ public sealed partial class CpioFormatHandler
     private const int MaximumEntries = 65536;
     private const int MaximumNameLength = 4096;
 
+    /// <summary>
+    /// Compression suffixes accepted on an archive that is wrapped in a single compression stream.
+    /// <para>单层压缩流包裹的归档所接受的压缩后缀。</para>
+    /// </summary>
+    private static readonly string[] CompressedArchiveSuffixes = [".gz", ".xz", ".zst", ".lz4", ".bz2", ".lzma", ".lzo"];
+
+    /// <summary>
+    /// Archive base names that may carry a compression suffix. <c>tgz</c>/<c>tbz2</c>/<c>txz</c>/<c>tzst</c>
+    /// are the short spellings of the same containers.
+    /// <para>可带压缩后缀的归档基础名。<c>tgz</c>/<c>tbz2</c>/<c>txz</c>/<c>tzst</c>
+    /// 是同类容器的简写形式。</para>
+    /// </summary>
+    private static readonly string[] CompressedArchiveBaseNames = ["cpio", "tar"];
+
     private static bool IsCompressedCpioPath(string path)
     {
         var name = Path.GetFileName(path);
-        return new[] { ".gz", ".xz", ".zst", ".lz4", ".bz2", ".lzma", ".lzo" }
-            .Any(suffix => name.EndsWith(".cpio" + suffix, StringComparison.OrdinalIgnoreCase));
+        if (new[] { ".tgz", ".tbz2", ".tbz", ".txz", ".tzst" }
+            .Any(shortForm => name.EndsWith(shortForm, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return CompressedArchiveBaseNames.Any(baseName => CompressedArchiveSuffixes
+            .Any(suffix => name.EndsWith("." + baseName + suffix, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static CompressionFormat DetectCpioCompression(Stream source)
@@ -45,7 +65,7 @@ public sealed partial class CpioFormatHandler
         {
             return false;
         }
-        using var probe = new CpioPrefixProbe();
+        using var probe = new ArchivePrefixProbe();
         try
         {
             CompressionService.Decompress(source, probe, compression, MaximumArchiveBytes);
@@ -61,19 +81,27 @@ public sealed partial class CpioFormatHandler
         try
         {
             var format = new CpioArchiveReader().DetectFormat(head);
-            return format is ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii
-                or ArchiveFormat.OldAscii or ArchiveFormat.Binary;
+            if (format is ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii
+                or ArchiveFormat.OldAscii or ArchiveFormat.Binary)
+            {
+                return true;
+            }
         }
         catch (Exception ex) when (ex is InvalidDataException or ArchiveException)
         {
-            return false;
         }
+
+        return LooksLikeTarHeader(probe.ToArray());
     }
 
-    private sealed class CpioPrefixProbe : Stream
+    /// <summary>Leading bytes kept from a decompressed archive so its framing can be identified.</summary>
+    /// <para>从解压后的归档保留的起始字节数，用于识别其封装形式。</para>
+    private const int ArchivePrefixBytes = 1024;
+
+    private sealed class ArchivePrefixProbe : Stream
     {
-        private readonly MemoryStream _prefix = new(6);
-        public bool IsComplete => _prefix.Length == 6;
+        private readonly MemoryStream _prefix = new(ArchivePrefixBytes);
+        public bool IsComplete => _prefix.Length >= ArchivePrefixBytes;
         public override bool CanRead => false;
         public override bool CanSeek => false;
         public override bool CanWrite => true;
@@ -83,17 +111,39 @@ public sealed partial class CpioFormatHandler
         public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
         public override void Write(ReadOnlySpan<byte> buffer)
         {
-            var length = (int)Math.Min(6 - _prefix.Length, buffer.Length);
+            var length = (int)Math.Min(ArchivePrefixBytes - _prefix.Length, buffer.Length);
             _prefix.Write(buffer[..length]);
             if (IsComplete)
             {
-                throw new InvalidDataException("CPIO prefix probe is complete.");
+                throw new InvalidDataException("Archive prefix probe is complete.");
             }
         }
         public override void Flush() { }
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Recognizes a POSIX/TAR member header in a decompressed prefix: the <c>ustar</c> marker sits at offset
+    /// 257, and a legacy header carries a valid octal checksum field.
+    /// <para>在解压后的前缀中识别 POSIX/TAR 成员头：<c>ustar</c> 标记位于偏移 257，
+    /// 老式头则携带合法的八进制校验和字段。</para>
+    /// </summary>
+    /// <param name="prefix">Decompressed leading bytes. <para>解压后的起始字节。</para></param>
+    /// <returns><see langword="true"/> when the bytes look like a TAR header. <para>字节看起来是 TAR 头时为 <see langword="true"/>。</para></returns>
+    private static bool LooksLikeTarHeader(ReadOnlySpan<byte> prefix)
+    {
+        if (prefix.Length >= 262)
+        {
+            var marker = System.Text.Encoding.ASCII.GetString(prefix.Slice(257, 5));
+            if (marker is "ustar")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private FileStream OpenArchiveForRead(string path, CancellationToken cancellationToken,

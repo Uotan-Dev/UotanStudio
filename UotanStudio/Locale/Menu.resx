@@ -165,6 +165,9 @@ Continue creating the project?</value>
   <data name="NewProject_GroupZipImages" xml:space="preserve">
     <value>images in archive — {0}</value>
   </data>
+  <data name="NewProject_GroupVendorEntries" xml:space="preserve">
+    <value>package entries — {0}</value>
+  </data>
   <data name="NewProject_BrowseLocation" xml:space="preserve">
     <value>Select project location</value>
   </data>

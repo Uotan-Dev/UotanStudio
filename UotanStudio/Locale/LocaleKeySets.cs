@@ -1888,6 +1888,7 @@ internal static class LocaleKeySets
         "NewProject_GroupSuperPartitions",
         "NewProject_GroupPayloadPartitions",
         "NewProject_GroupZipImages",
+    "NewProject_GroupVendorEntries",
         "NewProject_BrowseLocation",
         "NewProject_BrowseImages",
         "NewProject_SelectFolder",

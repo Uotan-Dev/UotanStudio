@@ -393,13 +393,13 @@ public partial class NewProjectWindow : Window, INewProjectDialog
                 .Where(group => group.Count() > 1)
                 .Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : [];
-        List<NewProjectImageEntry> entries = [new(containerPath, ContainerFormatLabel(structure.Kind))];
+        List<NewProjectImageEntry> entries = [new(containerPath, ContainerFormatLabel(structure))];
         entries.AddRange(structure.Entries.Select(entry =>
         {
             var fileName = Path.GetFileName(entry.Name.Replace('\\', '/'));
             var displayName = structure.Kind == ContainerKind.Zip && !entry.FromPayload && !duplicateZipNames.Contains(fileName)
                 ? fileName : entry.Name;
-            return new NewProjectImageEntry(entry.Name, entry.Format, containerPath, entry.FromPayload, displayName, entry.PayloadMemberPath);
+            return new NewProjectImageEntry(entry.Name, EntryFormatLabel(entry), containerPath, entry.FromPayload, displayName, entry.PayloadMemberPath);
         }));
         _images = [.. entries];
         foreach (var image in _images) image.PropertyChanged += OnImageSelectionChanged;
@@ -408,13 +408,36 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         UpdateSelectAll();
     }
 
-    /// <summary>Format text shown on the container row; update.bin keeps its dotted package name.
-    /// <para>容器行显示的格式文本；update.bin 保留带点的包名。</para></summary>
-    private static string ContainerFormatLabel(ContainerKind kind) => kind switch
+    /// <summary>Format text shown on the container row; update.bin keeps its dotted package name and a vendor
+    /// or archive container shows its own short label.
+    /// <para>容器行显示的格式文本；update.bin 保留带点的包名，厂商或归档容器显示自身短标签。</para></summary>
+    /// <param name="structure">Analyzed container structure. <para>已分析的容器结构。</para></param>
+    /// <returns>The format column text. <para>格式列文本。</para></returns>
+    private static string ContainerFormatLabel(ContainerStructure structure) => structure.Kind switch
     {
         ContainerKind.UpdateBin => "update.bin",
-        _ => kind.ToString().ToLowerInvariant()
+        ContainerKind.Vendor => structure.VendorLabel ?? "container",
+        _ => structure.Kind.ToString().ToLowerInvariant()
     };
+
+    /// <summary>
+    /// Format text shown on an inner entry row: the probed content type when one was identified, falling back
+    /// to the format the analyzer reported for the entry.
+    /// <para>内部条目行显示的格式文本：识别出内容类型时用探测结果，否则回退到分析器为该条目上报的格式。</para>
+    /// </summary>
+    /// <param name="entry">Inner container entry. <para>容器内部条目。</para></param>
+    /// <returns>The format column text. <para>格式列文本。</para></returns>
+    private static string EntryFormatLabel(ContainerEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.InnerFormat))
+        {
+            return entry.Format;
+        }
+
+        return string.Equals(entry.InnerFormat, entry.Format, StringComparison.OrdinalIgnoreCase)
+            ? entry.Format
+            : $"{entry.Format} · {entry.InnerFormat}";
+    }
 
     /// <summary>
     /// Splits selected container entries into ZIP members (only for ZIP containers) and partition-style names
@@ -444,6 +467,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             ContainerKind.Super => string.Format(LanguageService.Instance.GetString("NewProject_GroupSuperPartitions"), name),
             ContainerKind.Payload => string.Format(LanguageService.Instance.GetString("NewProject_GroupPayloadPartitions"), name),
             ContainerKind.Zip => string.Format(LanguageService.Instance.GetString("NewProject_GroupZipImages"), name),
+            ContainerKind.Vendor => string.Format(LanguageService.Instance.GetString("NewProject_GroupVendorEntries"), name),
             _ => name
         };
     }

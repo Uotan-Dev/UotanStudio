@@ -1,8 +1,8 @@
 namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
-/// Container kind: none / super / payload.bin / ZIP archive / HarmonyOS update.bin.
-/// <para>容器类型：无 / super / payload.bin / ZIP 归档 / HarmonyOS update.bin。</para>
+/// Container kind: none / super / payload.bin / ZIP archive / HarmonyOS update.bin / vendor package.
+/// <para>容器类型：无 / super / payload.bin / ZIP 归档 / HarmonyOS update.bin / 厂商包。</para>
 /// </summary>
 public enum ContainerKind
 {
@@ -19,7 +19,18 @@ public enum ContainerKind
     Zip,
 
     /// <summary>HarmonyOS update.bin package (L1/L2 component table). <para>HarmonyOS update.bin 升级包（L1/L2 组件表）。</para></summary>
-    UpdateBin
+    UpdateBin,
+
+    /// <summary>
+    /// Vendor or archive container resolved through a registered format handler (PAC, OPS/OFP/OZIP, CPB,
+    /// QSB, MPK, NB0, RKFW/RKAF, DZ/KDZ, NTPI, Amlogic, Allwinner, update.app, CPIO/TAR and their
+    /// compressed variants). Inner entries are enumerated from the handler's metadata and extracted
+    /// through the handler itself.
+    /// <para>经已注册格式处理器解析的厂商或归档容器（PAC、OPS/OFP/OZIP、CPB、QSB、MPK、NB0、
+    /// RKFW/RKAF、DZ/KDZ、NTPI、Amlogic、全志、update.app、CPIO/TAR 及其压缩变体）。
+    /// 内部条目由处理器元数据枚举，并经处理器自身提取。</para>
+    /// </summary>
+    Vendor
 }
 
 /// <summary>
@@ -59,6 +70,18 @@ public sealed record ContainerEntry(
     /// <para>所属 Payload 成员的 ZIP 路径；条目并非来自内嵌 Payload 时为 <see langword="null"/>。</para>
     /// </value>
     public string? PayloadMemberPath { get; init; }
+
+    /// <summary>
+    /// Content format reported for the entry bytes beyond its container position, when one was probed.
+    /// <para>在容器位置之外探测到的条目内容格式；未探测时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <value>
+    /// A short type label such as <c>ext4</c>, <c>erofs</c>, <c>boot</c> or <c>payload</c>, or
+    /// <see langword="null"/> when the entry bytes were not identified.
+    /// <para>诸如 <c>ext4</c>、<c>erofs</c>、<c>boot</c> 或 <c>payload</c> 的短类型标签；
+    /// 条目字节未被识别时为 <see langword="null"/>。</para>
+    /// </value>
+    public string? InnerFormat { get; init; }
 }
 
 /// <summary>
@@ -75,4 +98,16 @@ public sealed record ContainerStructure(
     /// <value>A shared instance with <see cref="ContainerKind.None"/> and an empty entry list.
     /// <para>共享实例，类型为 <see cref="ContainerKind.None"/> 且条目列表为空。</para></value>
     public static ContainerStructure Empty { get; } = new(ContainerKind.None, []);
+
+    /// <summary>
+    /// Display label of the vendor or archive format resolved by the analyzer, for the container row.
+    /// <para>分析器解析出的厂商或归档格式显示标签，用于容器行。</para>
+    /// </summary>
+    /// <value>
+    /// A short lower-case label such as <c>pac</c> or <c>tgz</c>; <see langword="null"/> when the
+    /// result is not a <see cref="ContainerKind.Vendor"/> structure or the label was not captured.
+    /// <para>诸如 <c>pac</c> 或 <c>tgz</c> 的短小写标签；结果不是
+    /// <see cref="ContainerKind.Vendor"/> 结构或未捕获标签时为 <see langword="null"/>。</para>
+    /// </value>
+    public string? VendorLabel { get; init; }
 }
