@@ -401,13 +401,21 @@ internal sealed class UdevHotplugMonitor : IDisposable
         }
     }
 
+    /// <summary>
+    /// Mirrors the kernel <c>struct sockaddr_nl</c> layout exactly: <c>nl_family</c>,
+    /// <c>nl_pad</c>, <c>nl_pid</c>, <c>nl_groups</c>. A zero <c>Pid</c> asks the kernel to pick a
+    /// unique port id; <c>Groups</c> is the multicast group bitmask to subscribe to.
+    /// <para>严格镜像内核 <c>struct sockaddr_nl</c> 的布局：<c>nl_family</c>、<c>nl_pad</c>、
+    /// <c>nl_pid</c>、<c>nl_groups</c>。<c>Pid</c> 为零表示由内核自动分配唯一的端口 ID；
+    /// <c>Groups</c> 是要订阅的多播组位掩码。</para>
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct SockaddrNetlink
     {
         public ushort Family;
         public ushort Padding;
-        public uint Groups;
         public uint Pid;
+        public uint Groups;
 
         public const int Size = 12;
 
@@ -416,6 +424,7 @@ internal sealed class UdevHotplugMonitor : IDisposable
         public static SockaddrNetlink FromGroups(uint groups) => new()
         {
             Family = AfNetlink,
+            Pid = 0,
             Groups = groups
         };
     }

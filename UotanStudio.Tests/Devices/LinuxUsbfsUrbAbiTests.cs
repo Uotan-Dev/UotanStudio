@@ -97,6 +97,26 @@ public sealed class LinuxUsbfsUrbAbiTests
     }
 
     [Fact]
+    public void SockaddrNetlink_FieldOffsets_MatchKernelSockaddrNlLayout()
+    {
+        Assert.Equal(0, (int)Marshal.OffsetOf<UdevHotplugMonitor.SockaddrNetlink>(nameof(UdevHotplugMonitor.SockaddrNetlink.Family)));
+        Assert.Equal(2, (int)Marshal.OffsetOf<UdevHotplugMonitor.SockaddrNetlink>(nameof(UdevHotplugMonitor.SockaddrNetlink.Padding)));
+        Assert.Equal(4, (int)Marshal.OffsetOf<UdevHotplugMonitor.SockaddrNetlink>(nameof(UdevHotplugMonitor.SockaddrNetlink.Pid)));
+        Assert.Equal(8, (int)Marshal.OffsetOf<UdevHotplugMonitor.SockaddrNetlink>(nameof(UdevHotplugMonitor.SockaddrNetlink.Groups)));
+        Assert.Equal(UdevHotplugMonitor.SockaddrNetlink.Size, Marshal.SizeOf<UdevHotplugMonitor.SockaddrNetlink>());
+    }
+
+    [Fact]
+    public void FromGroups_GroupMask_SetsAutoAssignedPidAndGroupSubscription()
+    {
+        var address = UdevHotplugMonitor.SockaddrNetlink.FromGroups(1);
+
+        Assert.Equal(16, address.Family);
+        Assert.Equal(0u, address.Pid);
+        Assert.Equal(1u, address.Groups);
+    }
+
+    [Fact]
     public void IsInterfaceDirectoryName_SysfsInterfaceAndDeviceNames_ClassifiesCorrectly()
     {
         Assert.True(LinuxSysfsTopology.IsInterfaceDirectoryName("1-5.3:1.0"));
