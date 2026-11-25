@@ -5,9 +5,10 @@ using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using UotanStudio.Models;
@@ -41,6 +42,14 @@ public static partial class BottomBarDisplayBehavior
         private const double TabWidth = 132;
         private const double TabSpacing = 4;
 
+        private static readonly ITemplate<Panel?> CenteredStripPanelTemplate =
+            new FuncTemplate<Panel?>(() => new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Spacing = TabSpacing
+            });
+
         private readonly TabbedPage _owner;
         private readonly List<DisplayPreferenceItem> _items = [];
         private Page[] _managedPages = [];
@@ -48,13 +57,12 @@ public static partial class BottomBarDisplayBehavior
         private TabControl? _tabControl;
         private Control? _tabStrip;
         private bool _applying;
-        private bool _recentering;
-        private bool _recenterPosted;
 
         internal State(TabbedPage owner)
         {
             _owner = owner;
             CaptureManagedPages();
+            _owner.TemplateApplied += OnTemplateApplied;
             _owner.AttachedToVisualTree += OnAttachedToVisualTree;
             _owner.DetachedFromVisualTree += OnDetachedFromVisualTree;
         }
@@ -185,7 +193,10 @@ public static partial class BottomBarDisplayBehavior
                 _applying = false;
             }
 
-            Dispatcher.UIThread.Post(AttachTabControl, DispatcherPriority.Loaded);
+            if (_tabControl is null)
+            {
+                Dispatcher.UIThread.Post(AttachTabControl, DispatcherPriority.Loaded);
+            }
         }
 
         private void ReleaseTabItemMetadata()
@@ -261,6 +272,14 @@ public static partial class BottomBarDisplayBehavior
             _ => null
         };
 
+        private void OnTemplateApplied(object? sender, TemplateAppliedEventArgs e)
+        {
+            if (e.NameScope.Find<TabControl>("PART_TabControl") is { } tabControl)
+            {
+                AttachTabControl(tabControl);
+            }
+        }
+
         private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e) =>
             Dispatcher.UIThread.Post(AttachTabControl, DispatcherPriority.Loaded);
 
@@ -272,7 +291,6 @@ public static partial class BottomBarDisplayBehavior
             }
 
             _tabControl.ContainerPrepared -= OnContainerPrepared;
-            _tabControl.LayoutUpdated -= OnTabControlLayoutUpdated;
             _tabControl = null;
             _tabStrip = null;
         }
@@ -281,6 +299,11 @@ public static partial class BottomBarDisplayBehavior
         {
             var tabControl = _owner.GetVisualDescendants().OfType<TabControl>().FirstOrDefault(item => item.Name == "PART_TabControl")
                 ?? _owner.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+            AttachTabControl(tabControl);
+        }
+
+        private void AttachTabControl(TabControl? tabControl)
+        {
             if (ReferenceEquals(tabControl, _tabControl))
             {
                 ApplyContainerVisibility();
@@ -290,26 +313,27 @@ public static partial class BottomBarDisplayBehavior
             if (_tabControl is not null)
             {
                 _tabControl.ContainerPrepared -= OnContainerPrepared;
-                _tabControl.LayoutUpdated -= OnTabControlLayoutUpdated;
             }
 
             _tabControl = tabControl;
             if (_tabControl is not null)
             {
+                // Center visible tabs through the layout panel itself rather than shifting them after layout
+                // with a deferred RenderTransform. A deferred transform lets one frame render with the new
+                // layout Bounds still paired with the previous transform, producing a visible left/right jump
+                // whenever entries are toggled rapidly in Settings.
+                // <para>直接通过布局面板本身让可见页签居中，而不是在布局完成后用延迟 RenderTransform 平移。
+                // 延迟变换会让一帧在新布局 Bounds 下仍沿用旧变换，在设置页快速开关入口时造成左右闪现抽搐。</para>
+                if (!ReferenceEquals(_tabControl.ItemsPanel, CenteredStripPanelTemplate))
+                {
+                    _tabControl.ItemsPanel = CenteredStripPanelTemplate;
+                }
+
                 _tabControl.ContainerPrepared += OnContainerPrepared;
-                _tabControl.LayoutUpdated += OnTabControlLayoutUpdated;
             }
 
             ApplyContainerVisibility();
         }
-
-        // LayoutUpdated runs inside the layout pass. Writing RenderTransform or Width there re-enters the
-        // layout system while it is still arranging, which some backends (X11/Wayland compositing) sample
-        // as a half-applied frame. Only record the request and run the pass afterwards.
-        // <para>LayoutUpdated 在布局过程中运行。此时写入 RenderTransform 或 Width 会在排布尚未结束时重入
-        // 布局系统，某些后端（X11/Wayland 合成）会把它当作半应用的帧采样出来。这里只记录请求，事后再执行。</para>
-        private void OnTabControlLayoutUpdated(object? sender, EventArgs e) =>
-            RequestRecenter();
 
         private void OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
         {
@@ -317,11 +341,10 @@ public static partial class BottomBarDisplayBehavior
             {
                 var visible = _items.Any(item => item.Key == key && item.IsVisible);
                 ConfigureTabItem(tabItem, visible);
-                tabItem.IsVisible = visible;
+                SetIfChanged(tabItem, Visual.IsVisibleProperty, visible);
             }
 
             UpdateTabStripVisibility();
-            RequestRecenter();
         }
 
         private void ApplyContainerVisibility()
@@ -338,12 +361,11 @@ public static partial class BottomBarDisplayBehavior
                 {
                     var visible = _items.Any(item => item.Key == key && item.IsVisible);
                     ConfigureTabItem(tabItem, visible);
-                    tabItem.IsVisible = visible;
+                    SetIfChanged(tabItem, Visual.IsVisibleProperty, visible);
                 }
             }
 
             UpdateTabStripVisibility();
-            RequestRecenter();
         }
 
         // Idempotent by construction: ContainerPrepared and ApplyContainerVisibility both land here, and on
@@ -372,113 +394,6 @@ public static partial class BottomBarDisplayBehavior
             }
         }
 
-        // Coalesces every recenter request raised during one layout/apply cycle into a single deferred pass.
-        // The pass runs at Loaded priority, i.e. after the layout that asked for it has been committed, so the
-        // tab strip is never observed with an offset that a later pass is about to replace.
-        // <para>把一次布局/应用周期内所有重排请求合并成一趟延迟执行。该趟在 Loaded 优先级运行，也就是在
-        // 请求它的那次布局提交之后，因此不会把页签条暴露在一个随后会被替换的偏移上。</para>
-        private void RequestRecenter()
-        {
-            if (_tabControl is null || _recentering || _recenterPosted)
-            {
-                return;
-            }
-
-            _recenterPosted = true;
-            Dispatcher.UIThread.Post(() =>
-            {
-                _recenterPosted = false;
-                RecenterVisibleTabs();
-            }, DispatcherPriority.Loaded);
-        }
-
-        private void RecenterVisibleTabs()
-        {
-            if (_tabControl is null || _recentering)
-            {
-                return;
-            }
-
-            _recentering = true;
-            try
-            {
-                RecenterVisibleTabsCore();
-            }
-            finally
-            {
-                _recentering = false;
-            }
-        }
-
-        private void RecenterVisibleTabsCore()
-        {
-            if (_tabControl is null)
-            {
-                return;
-            }
-
-            var tabs = new Dictionary<string, TabItem>(StringComparer.Ordinal);
-            for (var index = 0; index < _tabControl.ItemCount; index++)
-            {
-                if (_tabControl.ContainerFromIndex(index) is TabItem { Content: Page page } tabItem
-                    && KeyForPage(page) is { } key)
-                {
-                    tabs[key] = tabItem;
-                }
-            }
-
-            var visibleTabs = _items
-                .Where(item => item.IsVisible)
-                .Select(item => tabs.GetValueOrDefault(item.Key))
-                .OfType<TabItem>()
-                .ToArray();
-            if (visibleTabs.Length == 0)
-            {
-                return;
-            }
-
-            var stripWidth = (visibleTabs.Length * TabWidth) + ((visibleTabs.Length - 1) * TabSpacing);
-
-            // Measure the pure layout position for each tab. Bounds is a layout result and therefore never
-            // contains the RenderTransform applied below, so every pass computes the same absolute offset from
-            // the same input. Translating first and then compensating for the stored transform made the result
-            // depend on whether the point mapping already folded that transform in; any mismatch there turns
-            // each pass into a small extra shift, so the strip drifts instead of settling and the drawn
-            // items separate from the layout-anchored selection pipe.
-            // <para>为每个页签测量纯布局位置。Bounds 是布局结果，永远不含下面写入的 RenderTransform，
-            // 因此每趟都由同一输入算出同一绝对偏移。此前先平移再补偿已存变换，使结果取决于点映射是否
-            // 已把该变换折入；两者不一致时每趟都会多平移一点，页签条于是漂移而不收敛，绘制内容也随之
-            // 与按布局位置锚定的选中指示条分离。</para>
-            var stripPanel = visibleTabs[0].GetVisualParent() as Control ?? _tabControl;
-            var availableWidth = stripPanel.Bounds.Width;
-            if (availableWidth <= 0)
-            {
-                availableWidth = _tabControl.Bounds.Width;
-            }
-
-            var left = Math.Max(0, (availableWidth - stripWidth) / 2);
-            for (var index = 0; index < visibleTabs.Length; index++)
-            {
-                var tab = visibleTabs[index];
-                var desiredX = left + (index * (TabWidth + TabSpacing));
-                var offset = desiredX - tab.Bounds.X;
-
-                // A recenter pass must be idempotent: assigning an equal Transform still creates a new instance
-                // and invalidates the visual, which schedules another layout and repeats the cycle.
-                // <para>重排趟必须幂等：写入相等的 Transform 同样是新实例，会让视觉失效并再次排布，
-                // 从而把这一趟无限重复下去。</para>
-                if (Math.Abs(offset - CurrentOffset(tab)) <= 0.1)
-                {
-                    continue;
-                }
-
-                tab.RenderTransform = Math.Abs(offset) <= 0.1 ? null : new TranslateTransform(offset, 0);
-            }
-        }
-
-        private static double CurrentOffset(TabItem tab) =>
-            tab.RenderTransform is TranslateTransform { X: var x } ? x : 0;
-
         private void UpdateTabStripVisibility()
         {
             var visibleCount = _items.Count(item => item.IsVisible);
@@ -486,10 +401,15 @@ public static partial class BottomBarDisplayBehavior
                 .GetVisualDescendants()
                 .OfType<ItemsPresenter>()
                 .FirstOrDefault(item => item.Name == "PART_ItemsPresenter");
+            if (presenter is not null)
+            {
+                SetIfChanged(presenter, Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            }
+
             _tabStrip = presenter?.GetVisualParent() as Control;
             if (_tabStrip is not null)
             {
-                _tabStrip.IsVisible = visibleCount > 1;
+                SetIfChanged(_tabStrip, Visual.IsVisibleProperty, visibleCount > 1);
             }
         }
     }
