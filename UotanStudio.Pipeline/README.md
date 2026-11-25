@@ -1,6 +1,6 @@
 # UotanStudio.Pipeline
 
-工程／解决方案生命周期与交付产出类库，面向 .NET 10，启用 NativeAOT 兼容分析。引用 `UotanStudio.Hash`、`UotanStudio.Compress`、`UotanStudio.Assets`、`UotanStudio.Firmware` 与 `UotanStudio.Net`，不依赖 Avalonia、Dock、Nodify、Comm 或桌面全局状态。
+工程／解决方案生命周期与交付产出类库，面向 .NET 11，启用 NativeAOT 兼容分析。引用 `UotanStudio.Hash`、`UotanStudio.Compress`、`UotanStudio.Assets`、`UotanStudio.Firmware` 与 `UotanStudio.Net`，不依赖 Avalonia、Dock、Nodify、Comm 或桌面全局状态。
 
 命名空间按源码分组：`Projects/` 承载工程会话、`.uotan`／`.uotanfw`／`.uotannode` 持久化、方案快照、Scheme 与 VisualPlugins（`UotanStudio.Pipeline.Projects`，含 `.Schemes` 与 `.Interactions`）；`Delivery/` 承载交付计划校验与 Super／Payload／Recovery、DAT/BR、脚本、ZIP 包、校验和与交付工具准备（`UotanStudio.Pipeline.Delivery`）。程序集为 `UotanStudio.Pipeline`，不提供类型转发，调用方直接引用本库。
 
