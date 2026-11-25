@@ -533,6 +533,24 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
         }
     }
 
+    /// <summary>
+    /// Releases the underlying device handle while leaving the direction gates alive.
+    /// <para>释放底层设备句柄，但保持各方向门闩存活。</para>
+    /// </summary>
+    /// <remarks>
+    /// In-flight reads, writes and control transfers — including protocol message loops that
+    /// outlive a failed handshake — acquire and release these gates concurrently with disposal.
+    /// The gates never expose <see cref="SemaphoreSlim.AvailableWaitHandle"/>, so disposing them
+    /// only turns a normal transport failure into an <see cref="ObjectDisposedException"/> on a
+    /// concurrent <c>Release()</c> and mislabels the real I/O error. They are managed objects with
+    /// no unmanaged handle until that property is observed, so the garbage collector reclaims them
+    /// with the session.
+    /// <para>在途的读、写与控制传输（包括比失败握手更晚结束的协议消息循环）会与释放并发地获取和
+    /// 归还这些门闩。它们从不暴露 <see cref="SemaphoreSlim.AvailableWaitHandle"/>，因此释放它们
+    /// 只会把正常的传输故障在并发 <c>Release()</c> 处变成 <see cref="ObjectDisposedException"/>，
+    /// 掩盖真正的 I/O 错误。在未观察该属性前它们没有非托管句柄，属于可随会话一同被垃圾回收的
+    /// 托管对象。</para>
+    /// </remarks>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -552,9 +570,6 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
             _controlGate.Release();
             _writeGate.Release();
             _readGate.Release();
-            _readGate.Dispose();
-            _writeGate.Dispose();
-            _controlGate.Dispose();
         }
     }
 
