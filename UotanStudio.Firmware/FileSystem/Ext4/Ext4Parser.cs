@@ -83,7 +83,6 @@ public sealed class Ext4Parser : IDisposable
     private Ext4BlockGroup[] _groups = [];
     private int _blockSize;
     private int _inodeSize;
-    private long _inodeTableOffset;
     private byte[] _inodeBuffer = [];
     private readonly Dictionary<string, Ext4FileEntry> _entries = new(StringComparer.Ordinal);
     private bool _walked;
@@ -312,12 +311,6 @@ public sealed class Ext4Parser : IDisposable
             _stream.ReadExactly(gdtBytes.AsSpan(0, count * descSize));
             for (var i = 0; i < count; i++)
                 _groups[first + i] = Ext4BlockGroup.FromBytes(gdtBytes.AsSpan(i * descSize, descSize), descSize);
-        }
-
-        _inodeTableOffset = checked((long)_groups[0].InodeTable * _blockSize);
-        if (_inodeTableOffset < 0 || _inodeTableOffset >= _stream.Length)
-        {
-            throw new FileSystemCorruptedException("ext4 inode table lies outside the image bounds.");
         }
 
         if ((_superblock.FeatureCompat & 0x4) != 0 && (_superblock.FeatureIncompat & 0x4) != 0)
@@ -900,7 +893,20 @@ public sealed class Ext4Parser : IDisposable
             throw new FileSystemCorruptedException($"ext4 inode number {inodeNumber} is out of range (1..{_superblock.InodesCount}).");
         }
 
-        var offset = checked(_inodeTableOffset + ((long)inodeNumber - 1) * _inodeSize);
+        var group = (int)(((long)inodeNumber - 1) / _superblock.InodesPerGroup);
+        if (group >= _groups.Length)
+        {
+            throw new FileSystemCorruptedException(
+                $"ext4 inode number {inodeNumber} maps outside the {_groups.Length} block groups.");
+        }
+
+        var localIndex = ((long)inodeNumber - 1) % _superblock.InodesPerGroup;
+        var offset = checked((long)_groups[group].InodeTable * _blockSize + localIndex * _inodeSize);
+        if (offset < 0 || offset > _stream.Length - _inodeSize)
+        {
+            throw new FileSystemCorruptedException(
+                $"ext4 inode table for inode {inodeNumber} lies outside the image bounds.");
+        }
 
         ReadExactlyAt(offset, _inodeBuffer);
         return Ext4Inode.FromBytes(_inodeBuffer, _inodeSize);
