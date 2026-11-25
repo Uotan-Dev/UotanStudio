@@ -1,11 +1,12 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:themes="using:UotanStudio.Themes">
-    <!-- Document tab strip styles: default single row (32px), mouse wheel down expands to multiple rows,
-         mouse wheel up collapses to a single row, and indicator bar aligns flush with document top divider. -->
-    <!-- 文档标签栏样式：默认单行显示（32px），鼠标滚轮向下滚动展开为多行，
-         滚轮向上滚动收起为单行，并消除指示条与文档顶部水平分割线之间的空隙。 -->
+    <!-- Document tab strip styles: default single row (32px), mouse wheel down or toggle button expands to multiple rows,
+         mouse wheel up or toggle button collapses to a single row, and indicator bar aligns flush with document top divider. -->
+    <!-- 文档标签栏样式：默认单行显示（32px），鼠标滚轮向下滚动或点击右侧按钮展开为多行，
+         滚轮向上滚动或点击右侧按钮收起为单行，并消除指示条与文档顶部水平分割线之间的空隙。 -->
     <Style Selector="dock|DocumentTabStrip">
         <Setter Property="themes:DocumentTabStripWheelHandler.EnableWheelExpand" Value="True" />
         <Setter Property="MouseWheelScrollOrientation" Value="Vertical" />
@@ -16,19 +17,20 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <ContentPresenter Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                    <ContentPresenter Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4"
                                       Content="{TemplateBinding TopContent}"
                                       ContentTemplate="{TemplateBinding TopContentTemplate}" />
                     <ContentPresenter Grid.Row="1" Grid.Column="0"
                                       Content="{TemplateBinding LeftContent}"
                                       ContentTemplate="{TemplateBinding LeftContentTemplate}" />
-                    <ContentPresenter Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                    <ContentPresenter Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4"
                                       Content="{TemplateBinding BottomContent}"
                                       ContentTemplate="{TemplateBinding BottomContentTemplate}" />
                     <ContentPresenter Grid.Row="1" Grid.Column="2"
@@ -63,9 +65,71 @@
                         <ContentControl Name="PART_CreateButtonHost" IsHitTestVisible="False" />
                         <Panel Name="PART_TrailingFill" IsHitTestVisible="False" />
                     </Panel>
+                    <Button Name="PART_ExpandToggleButton"
+                            Grid.Row="1"
+                            Grid.Column="3"
+                            Focusable="False"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Center">
+                        <Panel Width="14" Height="14">
+                            <icons:ChevronDown Name="PART_ExpandIcon" Width="14" Height="14" />
+                            <icons:ChevronUp Name="PART_CollapseIcon" Width="14" Height="14" />
+                        </Panel>
+                    </Button>
                 </Grid>
             </ControlTemplate>
         </Setter>
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip /template/ Button#PART_ExpandToggleButton">
+        <Setter Property="IsVisible" Value="False" />
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="2,4,4,4" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="ToolTip.Tip" Value="{DynamicResource Dock_ExpandTabs}" />
+        <Setter Property="AutomationProperties.Name" Value="{DynamicResource Dock_ExpandTabs}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal] /template/ Button#PART_ExpandToggleButton">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip /template/ Button#PART_ExpandToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ButtonDefaultBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource ButtonDefaultPrimaryForeground}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip /template/ Button#PART_ExpandToggleButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ButtonDefaultBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource ButtonDefaultPrimaryForeground}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip.expanded /template/ Button#PART_ExpandToggleButton">
+        <Setter Property="ToolTip.Tip" Value="{DynamicResource Dock_CollapseTabs}" />
+        <Setter Property="AutomationProperties.Name" Value="{DynamicResource Dock_CollapseTabs}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip /template/ icons|ChevronDown#PART_ExpandIcon">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip /template/ icons|ChevronUp#PART_CollapseIcon">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip.expanded /template/ icons|ChevronDown#PART_ExpandIcon">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip.expanded /template/ icons|ChevronUp#PART_CollapseIcon">
+        <Setter Property="IsVisible" Value="True" />
     </Style>
 
     <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal]">

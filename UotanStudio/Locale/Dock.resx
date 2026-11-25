@@ -66,6 +66,12 @@
   <data name="Dock_Documents" xml:space="preserve">
     <value>Documents</value>
   </data>
+  <data name="Dock_ExpandTabs" xml:space="preserve">
+    <value>Expand tabs</value>
+  </data>
+  <data name="Dock_CollapseTabs" xml:space="preserve">
+    <value>Collapse tabs</value>
+  </data>
   <data name="FindReplace_Title" xml:space="preserve">
     <value>Find and Replace</value>
   </data>

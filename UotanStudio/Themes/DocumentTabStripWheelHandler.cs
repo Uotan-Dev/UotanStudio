@@ -12,13 +12,15 @@ using Dock.Model.Core;
 namespace UotanStudio.Themes;
 
 /// <summary>
-/// Provides mouse wheel expansion behavior for <see cref="DocumentTabStrip"/>,
-/// expanding to multiple rows on wheel down and collapsing to a single row on wheel up.
-/// <para>为 <see cref="DocumentTabStrip"/> 提供鼠标滚轮展开行为：
-/// 滚轮向下滚动时展开为多行，向上滚动时收起为单行。</para>
+/// Provides mouse wheel and toggle-button expansion behavior for <see cref="DocumentTabStrip"/>,
+/// expanding to multiple rows on wheel down or toggle click and collapsing to a single row on wheel up or toggle click.
+/// <para>为 <see cref="DocumentTabStrip"/> 提供鼠标滚轮与按钮展开行为：
+/// 滚轮向下滚动或点击按钮时展开为多行，向上滚动或再次点击按钮时收起为单行。</para>
 /// </summary>
 public static partial class DocumentTabStripWheelHandler
 {
+    private const string ExpandToggleButtonName = "PART_ExpandToggleButton";
+
     static DocumentTabStripWheelHandler()
     {
         EnableWheelExpandProperty.Changed.AddClassHandler<DocumentTabStrip>(OnEnableWheelExpandChanged);
@@ -47,14 +49,86 @@ public static partial class DocumentTabStripWheelHandler
         if (args.NewValue is true)
         {
             strip.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
+            strip.AddHandler(Button.ClickEvent, OnExpandToggleButtonClick, RoutingStrategies.Bubble);
             strip.AttachedToVisualTree += OnStripAttachedToVisualTree;
             ResetPanelMaxWidth(strip);
         }
         else
         {
             strip.RemoveHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged);
+            strip.RemoveHandler(Button.ClickEvent, OnExpandToggleButtonClick);
             strip.AttachedToVisualTree -= OnStripAttachedToVisualTree;
         }
+    }
+
+    private static void OnExpandToggleButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not DocumentTabStrip strip || strip.Orientation != Avalonia.Layout.Orientation.Horizontal)
+        {
+            return;
+        }
+
+        if (e.Source is not Button { Name: ExpandToggleButtonName })
+        {
+            return;
+        }
+
+        ToggleExpanded(strip);
+        e.Handled = true;
+    }
+
+    private static void ToggleExpanded(DocumentTabStrip strip)
+    {
+        if (GetIsExpanded(strip))
+        {
+            Collapse(strip);
+        }
+        else
+        {
+            Expand(strip);
+        }
+    }
+
+    private static void Expand(DocumentTabStrip strip)
+    {
+        if (!GetIsExpanded(strip))
+        {
+            SetIsExpanded(strip, true);
+            strip.Classes.Set("expanded", true);
+        }
+    }
+
+    private static void Collapse(DocumentTabStrip strip)
+    {
+        if (!GetIsExpanded(strip))
+        {
+            return;
+        }
+
+        MoveSelectedDocumentToFirstRowEnd(strip);
+
+        SetIsExpanded(strip, false);
+        strip.Classes.Set("expanded", false);
+
+        var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
+        if (scrollViewer != null)
+        {
+            scrollViewer.Offset = new Vector(0, 0);
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (scrollViewer != null)
+            {
+                scrollViewer.Offset = new Vector(0, 0);
+            }
+
+            var selected = strip.SelectedItem;
+            if (selected != null && strip.ContainerFromItem(selected) is Control ctrl)
+            {
+                ctrl.BringIntoView();
+            }
+        }, DispatcherPriority.Loaded);
     }
 
     private static void OnStripAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -89,12 +163,7 @@ public static partial class DocumentTabStripWheelHandler
 
         if (e.Delta.Y < -0.1)
         {
-            if (!GetIsExpanded(strip))
-            {
-                SetIsExpanded(strip, true);
-                strip.Classes.Set("expanded", true);
-            }
-
+            Expand(strip);
             e.Handled = true;
         }
         else if (e.Delta.Y > 0.1)
@@ -107,29 +176,7 @@ public static partial class DocumentTabStripWheelHandler
                     return;
                 }
 
-                MoveSelectedDocumentToFirstRowEnd(strip);
-
-                SetIsExpanded(strip, false);
-                strip.Classes.Set("expanded", false);
-
-                if (scrollViewer != null)
-                {
-                    scrollViewer.Offset = new Vector(0, 0);
-                }
-
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (scrollViewer != null)
-                    {
-                        scrollViewer.Offset = new Vector(0, 0);
-                    }
-
-                    var selected = strip.SelectedItem;
-                    if (selected != null && strip.ContainerFromItem(selected) is Control ctrl)
-                    {
-                        ctrl.BringIntoView();
-                    }
-                }, DispatcherPriority.Loaded);
+                Collapse(strip);
             }
 
             e.Handled = true;

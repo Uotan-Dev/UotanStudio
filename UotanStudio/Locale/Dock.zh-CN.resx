@@ -66,6 +66,12 @@
   <data name="Dock_Documents" xml:space="preserve">
     <value>文档</value>
   </data>
+  <data name="Dock_ExpandTabs" xml:space="preserve">
+    <value>展开标签栏</value>
+  </data>
+  <data name="Dock_CollapseTabs" xml:space="preserve">
+    <value>收起标签栏</value>
+  </data>
   <data name="FindReplace_Title" xml:space="preserve">
     <value>查找与替换</value>
   </data>

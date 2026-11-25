@@ -2186,6 +2186,8 @@ internal static class LocaleKeySets
         "Dock_ProjectExplorer",
         "Dock_Properties",
         "Dock_Documents",
+        "Dock_ExpandTabs",
+        "Dock_CollapseTabs",
         "FindReplace_Title",
         "FindReplace_Find",
         "FindReplace_FindPlaceholder",
