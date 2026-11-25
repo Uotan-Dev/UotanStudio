@@ -48,7 +48,10 @@ public static class AccentPalette
         "DataGridRowPointeroverBackground",
         "DataGridRowSelectedBackground",
         "DataGridRowSelectedPointeroverBackground",
-        "DataGridColumnHeaderPointeroverBackground"
+        "DataGridColumnHeaderPointeroverBackground",
+        "CaptionButtonClosePointeroverBackground",
+        "CaptionButtonClosePressedBackground",
+        "CaptionButtonCloseForeground"
     ];
 
     /// <summary>

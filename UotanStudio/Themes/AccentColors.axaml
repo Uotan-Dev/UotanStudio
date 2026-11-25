@@ -38,7 +38,10 @@
 
             <!-- 悬浮文字/图标色（Semi 没有专门的悬浮前景键，由 Themes/AccentControls.axaml 的样式引用）。 -->
             <!-- Hover text/icon colour (Semi has no hover-foreground key; Themes/AccentControls.axaml styles use it). -->
-            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CaptionButtonClosePointeroverBackground" Color="#E81123" />
+            <SolidColorBrush x:Key="CaptionButtonClosePressedBackground" Color="#C50F1F" />
+            <SolidColorBrush x:Key="CaptionButtonCloseForeground" Color="#FFFFFF" />
 
             <!-- 节点画布：暖白内容区 + 深红标题区，保持节点文字与端口信息清晰可读。 -->
             <!-- Node canvas: warm-white content with a deep-red header so node text and port details stay legible. -->
@@ -105,7 +108,10 @@
             <StaticResource x:Key="HyperlinkButtonVisitedForeground" ResourceKey="SemiColorLink" />
             <StaticResource x:Key="HyperlinkButtonDisabledForeground" ResourceKey="SemiColorPrimaryDisabled" />
 
-            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CaptionButtonClosePointeroverBackground" Color="#E81123" />
+            <SolidColorBrush x:Key="CaptionButtonClosePressedBackground" Color="#C50F1F" />
+            <SolidColorBrush x:Key="CaptionButtonCloseForeground" Color="#FFFFFF" />
 
             <!-- 深色节点画布：压低表面与标题亮度，并使用浅色前景避免红底上的文字发糊。 -->
             <!-- Dark node canvas: darker surfaces and header, with light foregrounds for clear contrast. -->

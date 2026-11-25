@@ -99,6 +99,7 @@
                     <Button Name="PART_ExpandToggleButton"
                             Grid.Row="1"
                             Grid.Column="3"
+                            Classes="tab-strip-expand-toggle"
                             Focusable="False"
                             VerticalAlignment="Top"
                             HorizontalAlignment="Center">
