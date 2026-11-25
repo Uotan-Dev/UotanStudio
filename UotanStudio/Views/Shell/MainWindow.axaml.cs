@@ -4,6 +4,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using UotanStudio.ViewModels.Devices;
@@ -129,6 +130,16 @@ public partial class MainWindow : Window
         if (_selectorDevices is not null)
             _selectorDevices.CollectionChanged += OnSelectorDevicesChanged;
         RefreshDeviceSelectorItems();
+    }
+
+    private void OnWindowEntryClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string key } item || item.IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        item.IsChecked = DataContext is MainViewModel shell && shell.MenuVM.WorkspacePanels.IsPanelVisible(key);
     }
 
     private void OnSelectorDevicesChanged(object? sender, NotifyCollectionChangedEventArgs e) => RefreshDeviceSelectorItems();

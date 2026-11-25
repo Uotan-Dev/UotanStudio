@@ -293,7 +293,8 @@ public sealed partial class WorkspacePanelService : ObservableObject
         }
 
         UpdateHost(entry);
-        if (entry.Dockable.Factory is not { } factory)
+        var factory = entry.Dockable.Factory ?? entry.RegisteredHost?.Factory;
+        if (factory is null)
         {
             return;
         }
