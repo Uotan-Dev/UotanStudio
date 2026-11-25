@@ -9,6 +9,11 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ImageView"
              x:DataType="viewmodels:ImageViewModel">
+    <UserControl.Styles>
+        <Style Selector="controls|JustifiedWrapPanel > Button">
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
     <Grid RowDefinitions="*,Auto">
         <ursa:LoadingContainer Grid.Row="0" Name="ImageBusyContainer"
                                IsLoading="{Binding IsOperating}"
@@ -230,9 +235,9 @@
                              HorizontalAlignment="Stretch"
                              CornerRadius="4" />
                 <Grid IsEnabled="{Binding CanOperate}">
-                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                               IsVisible="{Binding IsUnpackMode}">
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                                                 IsVisible="{Binding IsUnpackMode}">
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding ExtractSelectedCommand}"
                                 ToolTip.Tip="{DynamicResource ImageView_ExtractHint}">
@@ -243,7 +248,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding FlashSelectedCommand}"
                                 ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
@@ -254,11 +259,11 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                    </WrapPanel>
+                    </controls:JustifiedWrapPanel>
 
-                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                               IsVisible="{Binding IsPackMode}">
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                                                 IsVisible="{Binding IsPackMode}">
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding SynthesizeImgCommand}">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
@@ -268,7 +273,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding SynthesizeFatCommand}"
                                 ToolTip.Tip="{DynamicResource ImageView_SynthesizeFatHint}">
@@ -279,7 +284,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding SynthesizeBrCommand}">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
@@ -289,7 +294,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding SynthesizeDatCommand}"
                                 ToolTip.Tip="{DynamicResource ImageView_DatHint}">
@@ -300,11 +305,11 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                    </WrapPanel>
+                    </controls:JustifiedWrapPanel>
 
-                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                               IsVisible="{Binding IsOutputMode}">
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                                                 IsVisible="{Binding IsOutputMode}">
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Command="{Binding FlashSelectedCommand}"
                                 ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
@@ -315,7 +320,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                        <Button HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                 Click="OnPackRomClick">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
@@ -325,7 +330,7 @@
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>
                         </Button>
-                    </WrapPanel>
+                    </controls:JustifiedWrapPanel>
                 </Grid>
             </StackPanel>
         </Border>

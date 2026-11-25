@@ -12,6 +12,11 @@
              x:DataType="vm:ScreenMirrorViewModel"
              x:Class="UotanStudio.Views.Editors.ScreenMirrorView"
              Focusable="True">
+  <UserControl.Styles>
+    <Style Selector="controls|JustifiedWrapPanel > Button">
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <controls:EditorErrorBanner Grid.Row="0"
                                 Message="{Binding ErrorMessage, Mode=TwoWay}" />
@@ -49,8 +54,8 @@
             Background="{DynamicResource CardBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
-      <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+      <controls:JustifiedWrapPanel MinItemWidth="96" ItemSpacing="6" LineSpacing="6">
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnBackClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_Back}"
@@ -62,7 +67,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnHomeClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_Home}"
@@ -74,7 +79,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnRecentsClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_Recents}"
@@ -86,7 +91,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPowerClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_Power}"
@@ -98,7 +103,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnVolumeDownClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_VolumeDown}"
@@ -110,7 +115,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnVolumeUpClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_VolumeUp}"
@@ -122,7 +127,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPushClipboardClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_PushClipboard}"
@@ -134,7 +139,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+        <Button Padding="6,4" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPullClipboardClick"
                 ToolTip.Tip="{DynamicResource ScreenMirror_PullClipboard}"
@@ -146,7 +151,7 @@
                        VerticalAlignment="Center" MaxLines="2" />
           </Grid>
         </Button>
-      </WrapPanel>
+      </controls:JustifiedWrapPanel>
     </Border>
   </Grid>
 </UserControl>

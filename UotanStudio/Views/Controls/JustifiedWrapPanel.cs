@@ -10,6 +10,7 @@ namespace UotanStudio.Views.Controls;
 public sealed partial class JustifiedWrapPanel : Panel
 {
     private readonly List<RowLayout> _rows = [];
+    private readonly List<Control> _visibleChildren = [];
     private double[] _requiredWidths = [];
 
     static JustifiedWrapPanel()
@@ -49,8 +50,17 @@ public sealed partial class JustifiedWrapPanel : Panel
     protected override Size MeasureOverride(Size availableSize)
     {
         _rows.Clear();
+        _visibleChildren.Clear();
 
-        if (Children.Count == 0)
+        foreach (var child in Children)
+        {
+            if (child.IsVisible)
+            {
+                _visibleChildren.Add(child);
+            }
+        }
+
+        if (_visibleChildren.Count == 0)
         {
             return default;
         }
@@ -58,19 +68,19 @@ public sealed partial class JustifiedWrapPanel : Panel
         var itemSpacing = Math.Max(0, ItemSpacing);
         var lineSpacing = Math.Max(0, LineSpacing);
         var minItemWidth = Math.Max(1, MinItemWidth);
-        EnsureRequiredWidthCapacity();
+        EnsureRequiredWidthCapacity(_visibleChildren.Count);
 
-        for (var index = 0; index < Children.Count; index++)
+        for (var index = 0; index < _visibleChildren.Count; index++)
         {
-            var child = Children[index];
+            var child = _visibleChildren[index];
             child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             _requiredWidths[index] = Math.Max(minItemWidth, child.DesiredSize.Width);
         }
 
         if (!double.IsFinite(availableSize.Width))
         {
-            var widths = _requiredWidths[..Children.Count];
-            var rowHeight = Children.Max(child => child.DesiredSize.Height);
+            var widths = _requiredWidths[.._visibleChildren.Count];
+            var rowHeight = _visibleChildren.Max(child => child.DesiredSize.Height);
             _rows.Add(new RowLayout(0, widths, rowHeight));
             return new Size(widths.Sum() + itemSpacing * Math.Max(0, widths.Length - 1), rowHeight);
         }
@@ -91,7 +101,7 @@ public sealed partial class JustifiedWrapPanel : Panel
             var x = 0d;
             for (var column = 0; column < row.Widths.Length; column++)
             {
-                Children[row.StartIndex + column].Arrange(new Rect(x, y, row.Widths[column], row.Height));
+                _visibleChildren[row.StartIndex + column].Arrange(new Rect(x, y, row.Widths[column], row.Height));
                 x += row.Widths[column] + itemSpacing;
             }
 
@@ -103,18 +113,22 @@ public sealed partial class JustifiedWrapPanel : Panel
 
     private double BuildMeasuredRows(double availableWidth, double itemSpacing, double lineSpacing)
     {
+        var visibleCount = _visibleChildren.Count;
         if (EqualColumns)
         {
             var minItemWidth = Math.Max(1, MinItemWidth);
             var maxColumns = Math.Max(1, (int)Math.Floor((availableWidth + itemSpacing) / (minItemWidth + itemSpacing)));
+            var rowCount = (visibleCount + maxColumns - 1) / maxColumns;
+            var gridColumns = (visibleCount + rowCount - 1) / rowCount;
             var totalHeight = 0d;
 
-            for (var index = 0; index < Children.Count; index += maxColumns)
+            for (var index = 0; index < visibleCount; index += gridColumns)
             {
-                var count = Math.Min(maxColumns, Children.Count - index);
-                totalHeight = AddEqualMeasuredRow(
+                var count = Math.Min(gridColumns, visibleCount - index);
+                totalHeight = AddGridAlignedRow(
                     index,
                     count,
+                    gridColumns,
                     availableWidth,
                     itemSpacing,
                     lineSpacing,
@@ -128,7 +142,7 @@ public sealed partial class JustifiedWrapPanel : Panel
         var rowStart = 0;
         var rowWidth = 0d;
 
-        for (var index = 0; index < Children.Count; index++)
+        for (var index = 0; index < visibleCount; index++)
         {
             var requiredWidth = _requiredWidths[index];
             var proposedWidth = index == rowStart
@@ -155,36 +169,49 @@ public sealed partial class JustifiedWrapPanel : Panel
 
         return AddMeasuredRow(
             rowStart,
-            Children.Count - rowStart,
+            visibleCount - rowStart,
             availableWidth,
             itemSpacing,
             lineSpacing,
             totalHeightFallback);
     }
 
-    private double AddEqualMeasuredRow(
+    private double AddGridAlignedRow(
         int startIndex,
         int count,
+        int gridColumns,
         double availableWidth,
         double itemSpacing,
         double lineSpacing,
         double totalHeight)
     {
         var widths = new double[count];
-        var gapWidth = itemSpacing * Math.Max(0, count - 1);
-        var contentWidth = Math.Max(0, availableWidth - gapWidth);
-        var itemWidth = count > 0 ? contentWidth / count : 0d;
+        var gridGapWidth = itemSpacing * Math.Max(0, gridColumns - 1);
+        var gridContentWidth = Math.Max(0, availableWidth - gridGapWidth);
+        var columnWidth = gridColumns > 0 ? gridContentWidth / gridColumns : 0d;
 
-        for (var column = 0; column < count; column++)
+        if (count == gridColumns)
         {
-            widths[column] = itemWidth;
+            for (var i = 0; i < count; i++)
+            {
+                widths[i] = columnWidth;
+            }
+        }
+        else if (count > 0)
+        {
+            var spans = ComputeColumnSpans(startIndex, count, gridColumns);
+            for (var i = 0; i < count; i++)
+            {
+                var span = spans[i];
+                widths[i] = span * columnWidth + (span - 1) * itemSpacing;
+            }
         }
 
         var rowHeight = 0d;
-        for (var column = 0; column < count; column++)
+        for (var i = 0; i < count; i++)
         {
-            var child = Children[startIndex + column];
-            child.Measure(new Size(widths[column], double.PositiveInfinity));
+            var child = _visibleChildren[startIndex + i];
+            child.Measure(new Size(widths[i], double.PositiveInfinity));
             rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
         }
 
@@ -195,6 +222,40 @@ public sealed partial class JustifiedWrapPanel : Panel
 
         _rows.Add(new RowLayout(startIndex, widths, rowHeight));
         return totalHeight + rowHeight;
+    }
+
+    private int[] ComputeColumnSpans(int startIndex, int count, int gridColumns)
+    {
+        var spans = new int[count];
+        var baseSpan = gridColumns / count;
+        var remainder = gridColumns % count;
+
+        for (var i = 0; i < count; i++)
+        {
+            spans[i] = baseSpan;
+        }
+
+        if (remainder > 0)
+        {
+            var order = new int[count];
+            for (var i = 0; i < count; i++)
+            {
+                order[i] = i;
+            }
+
+            Array.Sort(order, (a, b) =>
+            {
+                var widthComparison = _requiredWidths[startIndex + b].CompareTo(_requiredWidths[startIndex + a]);
+                return widthComparison != 0 ? widthComparison : a.CompareTo(b);
+            });
+
+            for (var i = 0; i < remainder; i++)
+            {
+                spans[order[i]]++;
+            }
+        }
+
+        return spans;
     }
 
     private double AddMeasuredRow(
@@ -239,7 +300,7 @@ public sealed partial class JustifiedWrapPanel : Panel
         var rowHeight = 0d;
         for (var column = 0; column < count; column++)
         {
-            var child = Children[startIndex + column];
+            var child = _visibleChildren[startIndex + column];
             child.Measure(new Size(widths[column], double.PositiveInfinity));
             rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
         }
@@ -253,11 +314,11 @@ public sealed partial class JustifiedWrapPanel : Panel
         return totalHeight + rowHeight;
     }
 
-    private void EnsureRequiredWidthCapacity()
+    private void EnsureRequiredWidthCapacity(int count)
     {
-        if (_requiredWidths.Length != Children.Count)
+        if (_requiredWidths.Length < count)
         {
-            _requiredWidths = new double[Children.Count];
+            _requiredWidths = new double[count];
         }
     }
 
