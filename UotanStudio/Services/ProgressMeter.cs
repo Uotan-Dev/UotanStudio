@@ -99,6 +99,34 @@ public sealed class ProgressMeter
         }
     }
 
+    /// <summary>
+    /// Latest measured speed in bytes or items per second; <c>null</c> when not computable.
+    /// <para>最近一次测得的每秒字节数或条目数；无法计算时为 <c>null</c>。</para>
+    /// </summary>
+    /// <value>The sliding-window throughput, or <c>null</c> when samples are insufficient.
+    /// <para>滑动窗口吞吐；样本不足时为 <c>null</c>。</para></value>
+    public double? CurrentSpeed
+    {
+        get
+        {
+            lock (_gate) return ComputeSpeed();
+        }
+    }
+
+    /// <summary>
+    /// Whether the latest samples were reported as item counts instead of bytes, which decides how
+    /// the speed value is rendered.
+    /// <para>最近样本是按条目数还是按字节上报，用于决定速度文本的呈现方式。</para>
+    /// </summary>
+    /// <value><c>true</c> for item-mode samples; otherwise <c>false</c>. <para>条目模式样本为 <c>true</c>，否则为 <c>false</c>。</para></value>
+    public bool IsItemMode
+    {
+        get
+        {
+            lock (_gate) return _itemMode;
+        }
+    }
+
     /// <summary>Estimated remaining time at the current speed; <c>null</c> when not estimable. <para>按当前速度估算的剩余时间；无法估算时为 <c>null</c>。</para></summary>
     /// <value>The projected time left, or <c>null</c> when not estimable. <para>预计剩余时间，无法估算时为 <c>null</c>。</para></value>
     public TimeSpan? EstimatedRemaining

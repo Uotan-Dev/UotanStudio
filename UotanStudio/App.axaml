@@ -5,6 +5,7 @@
              xmlns:converters="using:UotanStudio.Converters"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
              xmlns:devices="using:UotanStudio.ViewModels.Devices"
+             xmlns:ui="using:UotanStudio.UiAbstractions"
              xmlns:dock="using:Dock.Avalonia.Controls"
              x:Class="UotanStudio.App"
              Name="UotanStudio"
@@ -22,6 +23,45 @@
             <converters:AssetImageConverter x:Key="AssetImageConverter" />
             <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
             <converters:LogFilterDisplayConverter x:Key="LogFilterDisplayConverter" />
+            <!-- 忙碌转圈下方的分层按组换行模板：主状态分组与遥测分组分两层独立排布，避免遥测数字波动导致主状态频繁换行跳动。 -->
+            <DataTemplate x:Key="BusyMessageTemplate" x:DataType="ui:BusyMessageModel">
+                <StackPanel Spacing="4" Margin="20,0" HorizontalAlignment="Center">
+                    <ItemsControl ItemsSource="{Binding PrimaryGroups}" MaxWidth="360"
+                                  HorizontalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Stretch"
+                                           ItemsAlignment="Center"
+                                           ItemSpacing="8" LineSpacing="4" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" FontSize="12" MaxWidth="340"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding MetricGroups}" MaxWidth="360"
+                                  HorizontalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Stretch"
+                                           ItemsAlignment="Center"
+                                           ItemSpacing="8" LineSpacing="4" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" FontSize="12" Opacity="0.75"
+                                           MaxWidth="340" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 

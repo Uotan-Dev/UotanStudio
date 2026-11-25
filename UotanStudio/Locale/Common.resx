@@ -2720,8 +2720,11 @@ You can also use “Add Folder” in the toolbar or type a path in a column.</va
   <data name="Progress_ItemsStatsNoEta" xml:space="preserve">
     <value>{0} / {1} items · {2}</value>
   </data>
-  <data name="Progress_StatusPercent" xml:space="preserve">
-    <value>{0} · {1:0.#}%</value>
+  <data name="Progress_BusyEta" xml:space="preserve">
+    <value>{0} left</value>
+  </data>
+  <data name="Image_BusyProcessing" xml:space="preserve">
+    <value>Processing {0}</value>
   </data>
   <data name="Image_FsStageFile" xml:space="preserve">
     <value>{0}: {1}</value>
