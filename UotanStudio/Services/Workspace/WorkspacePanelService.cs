@@ -282,6 +282,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
             {
                 _terminals?.ShowWithoutActivate();
             }
+            if (_panels.GetValueOrDefault(WorkspaceLog) is { } bottomEntry
+                && bottomEntry.RegisteredHost.Factory is { } bottomFactory)
+            {
+                EnsureHostMounted(bottomFactory, bottomEntry.RegisteredHost);
+            }
             RefreshTerminalVisibility();
             return;
         }
@@ -293,7 +298,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
         }
 
         UpdateHost(entry);
-        var factory = entry.Dockable.Factory ?? entry.RegisteredHost?.Factory;
+        var factory = entry.Dockable.Factory ?? entry.RegisteredHost.Factory;
         if (factory is null)
         {
             return;
@@ -312,6 +317,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
             factory.AddDockable(entry.Host ?? entry.RegisteredHost, entry.Dockable);
         }
 
+        if (entry.Dockable.Owner is IDock activeHost)
+        {
+            EnsureHostMounted(factory, activeHost);
+        }
+
         if (activate && entry.Dockable.Owner is IDock)
         {
             factory.SetActiveDockable(entry.Dockable);
@@ -321,7 +331,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
             }
         }
 
-        SetVisibleState(key, true);
+        SetVisibleState(key, IsPanelVisible(key));
     }
 
     /// <summary>
@@ -459,6 +469,67 @@ public sealed partial class WorkspacePanelService : ObservableObject
         }
     }
 
+    private void EnsureHostMounted(IFactory factory, IDock host)
+    {
+        var root = FindRoot(factory, host);
+        if (root is null || factory.FindDockable(root, d => ReferenceEquals(d, host)) is not null)
+        {
+            return;
+        }
+
+        if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceMainLayout", StringComparison.Ordinal))
+            is not IProportionalDock mainLayout)
+        {
+            return;
+        }
+
+        var leftPane = _panels.GetValueOrDefault(ProjectExplorer)?.RegisteredHost;
+        if (ReferenceEquals(host, leftPane))
+        {
+            SyncLeftPane(leftPane, factory, mainLayout, isShowing: true);
+            return;
+        }
+
+        var bottomPane = _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost;
+        if (ReferenceEquals(host, bottomPane))
+        {
+            if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceCenterColumn", StringComparison.Ordinal))
+                is IProportionalDock centerCol)
+            {
+                SyncBottomPane(bottomPane, centerCol, factory, isShowing: true);
+            }
+            return;
+        }
+
+        var rightPaneTop = _panels.GetValueOrDefault(ImagesView)?.RegisteredHost;
+        var rightPane = _panels.GetValueOrDefault(Properties)?.RegisteredHost;
+        if (ReferenceEquals(host, rightPaneTop) || ReferenceEquals(host, rightPane))
+        {
+            var rightCol = (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceRightColumn", StringComparison.Ordinal))
+                ?? rightPaneTop?.Owner
+                ?? rightPane?.Owner) as IProportionalDock;
+            SyncRightColumn(rightCol, rightPaneTop, rightPane, factory, mainLayout, isShowing: true);
+        }
+    }
+
+    private IRootDock? FindRoot(IFactory factory, IDock host)
+    {
+        if (factory.FindRoot(host, static _ => true) is { } hostRoot)
+        {
+            return hostRoot;
+        }
+
+        foreach (var entry in _panels.Values)
+        {
+            if (factory.FindRoot(entry.RegisteredHost, static _ => true) is { } root)
+            {
+                return root;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Syncs the project explorer host with the front of <paramref name="mainLayout"/>: a host holding no
     /// dockables is removed together with its trailing splitter, and a showing host is re-inserted at the front.
@@ -493,9 +564,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
             else if (isShowing && !mainList.Contains(leftPane))
             {
                 mainList.Insert(0, leftPane);
-                mainList.Insert(1, new ProportionalDockSplitter());
+                mainList.Insert(1, new ProportionalDockSplitter { Owner = mainLayout, Factory = factory });
                 leftPane.Proportion = 0.15;
                 leftPane.Owner = mainLayout;
+                leftPane.Factory = factory;
                 mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
             }
         }
@@ -547,7 +619,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
                     {
                         if (mainList.Count > 0 && mainList[^1] is not IProportionalDockSplitter)
                         {
-                            mainList.Add(new ProportionalDockSplitter());
+                            mainList.Add(new ProportionalDockSplitter { Owner = mainLayout, Factory = factory });
                         }
                         mainList.Add(rightCol);
                         rightCol.Proportion = 0.15;
@@ -558,28 +630,33 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 if (mainList.Contains(rightCol))
                 {
                     rightCol.Owner = mainLayout;
+                    rightCol.Factory = factory;
 
                     if (topVisible && bottomVisible)
                     {
                         rightPaneTop.Owner = rightCol;
+                        rightPaneTop.Factory = factory;
                         rightPane.Owner = rightCol;
+                        rightPane.Factory = factory;
                         rightPaneTop.Proportion = double.NaN;
                         rightPane.Proportion = 0.35;
                         rightCol.VisibleDockables = factory.CreateList<IDockable>(
                             rightPaneTop,
-                            new ProportionalDockSplitter(),
+                            new ProportionalDockSplitter { Owner = rightCol, Factory = factory },
                             rightPane
                         );
                     }
                     else if (topVisible)
                     {
                         rightPaneTop.Owner = rightCol;
+                        rightPaneTop.Factory = factory;
                         rightPaneTop.Proportion = double.NaN;
                         rightCol.VisibleDockables = factory.CreateList<IDockable>(rightPaneTop);
                     }
                     else
                     {
                         rightPane.Owner = rightCol;
+                        rightPane.Factory = factory;
                         rightPane.Proportion = double.NaN;
                         rightCol.VisibleDockables = factory.CreateList<IDockable>(rightPane);
                     }
@@ -623,11 +700,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
             {
                 if (centerList.Count > 0 && centerList[^1] is not IProportionalDockSplitter)
                 {
-                    centerList.Add(new ProportionalDockSplitter());
+                    centerList.Add(new ProportionalDockSplitter { Owner = centerCol, Factory = factory });
                 }
                 centerList.Add(bottomPane);
                 bottomPane.Proportion = 0.25;
                 bottomPane.Owner = centerCol;
+                bottomPane.Factory = factory;
                 centerCol.VisibleDockables = factory.CreateList(centerList.ToArray());
             }
         }
