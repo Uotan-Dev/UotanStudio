@@ -30,8 +30,8 @@ internal static class DocumentOpenRegistry
             MenuOrder = 5,
             IconKind = AppIconKind.FileCode,
             Open = static (w, r) => r.Mode == EditorOpenMode.Auto
-                ? w.OpenDocumentAsync(r.Path!, EditorOpenMode.Auto)
-                : w.OpenTextAsync(r.Path!, r.Mode),
+                ? w.OpenDocumentAsync(r.Path!, EditorOpenMode.Auto, r.Activate)
+                : w.OpenTextAsync(r.Path!, r.Mode, r.Activate),
             GetPath = vm => ((FileViewModel)vm).FilePath,
             Cleanup = vm => { try { ((FileViewModel)vm).Cleanup(); } catch { } },
         },
@@ -44,7 +44,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 1,
             IconKind = AppIconKind.File,
             Probe = static r => IsElfHeader(ProbeHeader(r)),
-            Open = static (w, r) => w.OpenElfAsync(r.Path!),
+            Open = static (w, r) => w.OpenElfAsync(r.Path!, r.Activate),
             GetPath = vm => ((ElfInfoViewModel)vm).FilePath,
             Cleanup = vm => ((ElfInfoViewModel)vm).Cleanup(),
         },
@@ -56,7 +56,7 @@ internal static class DocumentOpenRegistry
             LocaleKey = "Explorer_OpenAsQualcomm",
             MenuOrder = 2,
             IconKind = AppIconKind.Chip,
-            Open = static (w, r) => w.OpenQualcommAsync(r.Path!),
+            Open = static (w, r) => w.OpenQualcommAsync(r.Path!, r.Activate),
             GetPath = vm => ((QualcommImageViewModel)vm).FilePath,
             Cleanup = vm => ((QualcommImageViewModel)vm).Cleanup(),
         },
@@ -69,7 +69,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 3,
             IconKind = AppIconKind.RadioTower,
             Probe = static r => DocumentFormatPolicy.IsQcnExtension(Path.GetExtension(r.Path ?? string.Empty)),
-            Open = static (w, r) => w.OpenQcnAsync(r.Path!),
+            Open = static (w, r) => w.OpenQcnAsync(r.Path!, r.Activate),
             GetPath = vm => ((QcnEditorViewModel)vm).FilePath,
             IsDocument = false,
         },
@@ -82,7 +82,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 4,
             IconKind = AppIconKind.HardDisk,
             Probe = static r => IsPartitionPath(r.Path),
-            Open = static (w, r) => w.OpenPartitionAsync(r.Path!),
+            Open = static (w, r) => w.OpenPartitionAsync(r.Path!, r.Activate),
             GetPath = vm => ((PartitionEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((PartitionEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -95,7 +95,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 6,
             IconKind = AppIconKind.Script,
             Probe = static r => IsLogExtension(Path.GetExtension(r.Path ?? string.Empty)),
-            Open = static (w, r) => w.OpenLogAsync(r.Path!),
+            Open = static (w, r) => w.OpenLogAsync(r.Path!, r.Activate),
             GetPath = vm => ((LogEditorViewModel)vm).FilePath,
             Cleanup = vm => ((LogEditorViewModel)vm).Cleanup(),
             IsDocument = false,
@@ -109,7 +109,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 7,
             IconKind = AppIconKind.CodeBraces,
             Probe = static r => DocumentFormatPolicy.IsKnownBinaryExtension(Path.GetExtension(r.Path ?? string.Empty)),
-            Open = static (w, r) => w.OpenHexAsync(r.Path!),
+            Open = static (w, r) => w.OpenHexAsync(r.Path!, r.Activate),
             GetPath = vm => ((HexEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((HexEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -126,7 +126,7 @@ internal static class DocumentOpenRegistry
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
                 return DocumentFormatPolicy.IsDtbExtension(ext) || DocumentFormatPolicy.IsDtbMagic(ProbeHeader(r));
             },
-            Open = static (w, r) => w.OpenDtbAsync(r.Path!),
+            Open = static (w, r) => w.OpenDtbAsync(r.Path!, r.Activate),
             GetPath = vm => ((DtbEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((DtbEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -144,7 +144,7 @@ internal static class DocumentOpenRegistry
                 return DocumentFormatPolicy.IsDexExtension(ext) || DocumentFormatPolicy.IsJarExtension(ext)
                     || DocumentFormatPolicy.IsDexMagic(ProbeHeader(r));
             },
-            Open = static (w, r) => w.OpenDexAsync(r.Path!),
+            Open = static (w, r) => w.OpenDexAsync(r.Path!, r.Activate),
             GetPath = vm => ((DexEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((DexEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -157,7 +157,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 10,
             IconKind = AppIconKind.FileXml,
             Probe = static r => UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(ProbeHeader(r)),
-            Open = static (w, r) => w.OpenManifestAsync(r.Path!),
+            Open = static (w, r) => w.OpenManifestAsync(r.Path!, r.Activate),
             GetPath = vm => ((ManifestEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((ManifestEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -170,7 +170,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 11,
             IconKind = AppIconKind.Database,
             Probe = static r => DocumentFormatPolicy.IsArscExtension(Path.GetExtension(r.Path ?? string.Empty)),
-            Open = static (w, r) => w.OpenArscAsync(r.Path!),
+            Open = static (w, r) => w.OpenArscAsync(r.Path!, r.Activate),
             GetPath = vm => ((ArscEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((ArscEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -183,7 +183,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 12,
             IconKind = AppIconKind.Android,
             Probe = static r => DocumentFormatPolicy.IsApplicationPackage(r.Path),
-            Open = static (w, r) => w.OpenApkAsync(r.Path!),
+            Open = static (w, r) => w.OpenApkAsync(r.Path!, r.Activate),
             GetPath = vm => ((ApkEditorViewModel)vm).FilePath,
         },
         new()
@@ -199,7 +199,7 @@ internal static class DocumentOpenRegistry
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
                 return DocumentFormatPolicy.IsFirmwareExtension(ext) || DocumentFormatPolicy.IsFirmwareMagic(ProbeHeader(r));
             },
-            Open = static (w, r) => w.OpenFirmwareAsync(r.Path!, r.Detection),
+            Open = static (w, r) => w.OpenFirmwareAsync(r.Path!, r.Detection, r.Activate),
             GetPath = vm => ((FirmwareInfoViewModel)vm).FilePath,
             Cleanup = vm => { try { ((FirmwareInfoViewModel)vm).Cleanup(); } catch { } },
         },
@@ -217,7 +217,7 @@ internal static class DocumentOpenRegistry
                 return DocumentFormatPolicy.IsFilesystemImageExtension(ext) || DocumentFormatPolicy.IsCpioArchiveExtension(ext)
                     || UotanStudio.Firmware.Archive.Browsing.ArchiveBrowser.SupportsPath(r.Path ?? string.Empty);
             },
-            Open = static (w, r) => w.OpenFileSystemAsync(r.Path!),
+            Open = static (w, r) => w.OpenFileSystemAsync(r.Path!, r.Activate),
             GetPath = vm => ((FileManagerEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((FileManagerEditorViewModel)vm).Cleanup(); } catch { } },
         },
@@ -231,7 +231,7 @@ internal static class DocumentOpenRegistry
             IconKind = AppIconKind.File,
             Probe = static r => DocumentFormatPolicy.IsRockchipConfigExtension(Path.GetExtension(r.Path ?? string.Empty))
                 && DocumentFormatPolicy.IsRockchipConfigHeader(ProbeHeader(r)),
-            Open = static (w, r) => w.OpenRockchipConfigAsync(r.Path!),
+            Open = static (w, r) => w.OpenRockchipConfigAsync(r.Path!, r.Activate),
             GetPath = vm => ((RockchipConfigEditorViewModel)vm).FilePath,
             Cleanup = vm => ((RockchipConfigEditorViewModel)vm).Cleanup(),
         },
@@ -245,7 +245,7 @@ internal static class DocumentOpenRegistry
             IconKind = AppIconKind.Image,
             Probe = static r => ImageFileCatalog.HasImageExtension(r.Path)
                 || ImageFileCatalog.IsDecodableImageHeader(ProbeHeader(r)),
-            Open = static (w, r) => w.OpenImageAsync(r.Path!),
+            Open = static (w, r) => w.OpenImageAsync(r.Path!, r.Activate),
             GetPath = vm => ((ImageViewerViewModel)vm).FilePath,
             Cleanup = vm => ((ImageViewerViewModel)vm).Cleanup(),
         },
@@ -258,7 +258,7 @@ internal static class DocumentOpenRegistry
             MenuOrder = 17,
             IconKind = AppIconKind.Image,
             Probe = static r => LogoPartitionFormat.IsLogoPartitionHeader(ProbeHeader(r)),
-            Open = static (w, r) => w.OpenLogoPartitionAsync(r.Path!),
+            Open = static (w, r) => w.OpenLogoPartitionAsync(r.Path!, r.Activate),
             GetPath = vm => ((LogoPartitionViewModel)vm).FilePath,
             Cleanup = vm => ((LogoPartitionViewModel)vm).Cleanup(),
         },

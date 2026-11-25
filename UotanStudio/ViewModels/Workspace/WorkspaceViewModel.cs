@@ -31,6 +31,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private CompareViewModel? _compareDocument;
     private Task? _backgroundRestore;
     private int _restoreGeneration;
+
+    /// <summary>
+    /// The window that was in front before a deferred restore started. Deferred documents are opened without
+    /// activation, so it only needs to be restored once, after the last deferred document is in place.
+    /// <para>延迟还原开始前处于前台的窗口。延迟文档打开时都不激活，因此只需在最后一个延迟文档就位后恢复一次。</para>
+    /// </summary>
     private IDockable? _restoreForeground;
 
     /// <summary>
@@ -77,7 +83,16 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
     /// </summary>
     /// <returns>The compare document, or null if the layout is unavailable. <para>对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenCompareDocument()
+    public CompareViewModel? OpenCompareDocument() => OpenCompareDocument(activate: true);
+
+    /// <summary>
+    /// Opens or focuses the compare document, optionally without touching the foreground window.
+    /// <para>打开或聚焦对比文档；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="activate">Whether the compare document becomes the foreground window.
+    /// <para>对比文档是否成为前台窗口。</para></param>
+    /// <returns>The compare document, or null if the layout is unavailable. <para>对比文档；布局未就绪时为 null。</para></returns>
+    public CompareViewModel? OpenCompareDocument(bool activate)
     {
         if (_compareDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_compareDocument) != true)
         {
@@ -96,12 +111,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             _factory.AddDockable(documentDock, _compareDocument);
         }
 
-        _factory.SetActiveDockable(_compareDocument);
-        if (_factory.FindRoot(_compareDocument) is { } root)
+        if (activate)
         {
-            _factory.SetFocusedDockable(root, _compareDocument);
+            _factory.SetActiveDockable(_compareDocument);
+            if (_factory.FindRoot(_compareDocument) is { } root)
+            {
+                _factory.SetFocusedDockable(root, _compareDocument);
+            }
+
+            WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
         }
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+
         return _compareDocument;
     }
 
@@ -110,7 +130,16 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在工作区文档区新建一个对比文档，不复用已有实例。</para>
     /// </summary>
     /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenNewCompareDocument()
+    public CompareViewModel? OpenNewCompareDocument() => OpenNewCompareDocument(activate: true);
+
+    /// <summary>
+    /// Opens a new compare document, optionally without touching the foreground window.
+    /// <para>新建对比文档；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="activate">Whether the compare document becomes the foreground window.
+    /// <para>对比文档是否成为前台窗口。</para></param>
+    /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
+    public CompareViewModel? OpenNewCompareDocument(bool activate)
     {
         var documentDock = FindDocumentsPane();
         if (documentDock is null)
@@ -125,13 +154,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             CanClose = true
         };
         _factory.AddDockable(documentDock, document);
-        _factory.SetActiveDockable(document);
-        if (_factory.FindRoot(document) is { } root)
+        if (activate)
         {
-            _factory.SetFocusedDockable(root, document);
+            _factory.SetActiveDockable(document);
+            if (_factory.FindRoot(document) is { } root)
+            {
+                _factory.SetFocusedDockable(root, document);
+            }
+
+            WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
         }
 
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
         return document;
     }
 
@@ -250,7 +283,18 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <param name="path">The path of the document file to open.<para>要打开的文档文件路径。</para></param>
     /// <param name="mode">The requested open mode; default <c>Auto</c> decided by file type+extension.
     /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para></param>
-    public async Task OpenDocumentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
+    public Task OpenDocumentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
+        => OpenDocumentAsync(path, mode, activate: true);
+
+    /// <summary>
+    /// Opens the resolved document; when <paramref name="activate"/> is false the foreground window is left untouched.
+    /// <para>打开解析后的文档；<paramref name="activate"/> 为 false 时不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="mode">The requested open mode. <para>请求的打开方式。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the open. <para>打开完成的完成任务。</para></returns>
+    internal async Task OpenDocumentAsync(string path, EditorOpenMode mode, bool activate)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -286,12 +330,13 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             {
                 Path = path,
                 Mode = mode,
-                Detection = detection
+                Detection = detection,
+                Activate = activate
             });
             return;
         }
 
-        await OpenTextAsync(path, mode);
+        await OpenTextAsync(path, mode, activate);
     }
 
     /// <summary>
@@ -303,7 +348,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="path">The document file path. <para>文档文件路径。</para></param>
     /// <param name="mode">The resolved open mode. <para>解析后的打开方式。</para></param>
-    internal async Task OpenTextAsync(string path, EditorOpenMode mode)
+    internal Task OpenTextAsync(string path, EditorOpenMode mode) => OpenTextAsync(path, mode, activate: true);
+
+    /// <summary>
+    /// Opens or focuses a document through the text fallback path; when <paramref name="activate"/> is false
+    /// the document is added without changing the foreground window.
+    /// <para>以文本兜底路径打开或聚焦文档；<paramref name="activate"/> 为 false 时加入文档但不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document file path. <para>文档文件路径。</para></param>
+    /// <param name="mode">The resolved open mode. <para>解析后的打开方式。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenTextAsync(string path, EditorOpenMode mode, bool activate)
     {
         var documentDock = FindDocumentsPane();
         if (documentDock is null)
@@ -326,7 +381,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 await existing.LoadContentAsync(fullPath, mode);
             }
 
-            ActivateDockable(existing, documentDock);
+            if (activate)
+            {
+                ActivateDockable(existing, documentDock);
+            }
+
             return;
         }
 
@@ -338,8 +397,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             OpenMode = mode
         };
 
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
+        AddDocument(documentDock, document, activate);
 
         await document.LoadContentAsync(fullPath, mode);
 
@@ -353,7 +411,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// Opens or focuses an offline log document.
     /// <para>打开或聚焦离线日志文档。</para>
     /// </summary>
-    public async Task OpenLogAsync(string path)
+    public Task OpenLogAsync(string path) => OpenLogAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses an offline log document, optionally without touching the foreground window.
+    /// <para>打开或聚焦离线日志文档；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The log file path. <para>日志文件路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenLogAsync(string path, bool activate)
     {
         var documentDock = FindDocumentsPane();
         if (documentDock is null || string.IsNullOrWhiteSpace(path)) return;
@@ -363,12 +429,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             string.Equals(document.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
-            ActivateDockable(existing, documentDock);
+            if (activate)
+            {
+                ActivateDockable(existing, documentDock);
+            }
+
             return;
         }
         var document = new LogEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath };
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
+        AddDocument(documentDock, document, activate);
         await document.LoadAsync(fullPath);
     }
 
@@ -382,10 +451,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the DTB file to open.
     /// <para>要打开的 DTB 文件路径。</para>
     /// </param>
-    public Task OpenDtbAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenDtbAsync(string path) => OpenDtbAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenDtbAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new DtbEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given DEX file in the DEX dual-pane editor in the document area: focuses it if
@@ -397,27 +476,57 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the DEX file to open.
     /// <para>要打开的 DEX 文件路径。</para>
     /// </param>
-    public Task OpenDexAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenDexAsync(string path) => OpenDexAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenDexAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new DexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>Opens or activates an ELF information document for the supplied file.
     /// <para>为给定文件打开或激活 ELF 信息文档。</para>
     /// </summary>
-    public Task OpenElfAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenElfAsync(string path) => OpenElfAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenElfAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ElfInfoViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>Opens or activates Qualcomm static image analysis for a local file.
     /// <para>为本地文件打开或激活 Qualcomm 镜像静态分析。</para></summary>
     /// <param name="path">Local image path. <para>本地镜像路径。</para></param>
     /// <returns>Completes when analysis has loaded. <para>分析加载完成后结束。</para></returns>
-    public Task OpenQualcommAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenQualcommAsync(string path) => OpenQualcommAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenQualcommAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new QualcommImageViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given QCN file in the structured QCN editor in the document area: focuses it if
@@ -429,10 +538,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the QCN file to open.
     /// <para>要打开的 QCN 文件路径。</para>
     /// </param>
-    public Task OpenQcnAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenQcnAsync(string path) => OpenQcnAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenQcnAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new QcnEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given RKDevTool download-list configuration in the read-only configuration browser:
@@ -442,14 +561,24 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="path">Path of the configuration file.<para>配置文件路径。</para></param>
     /// <returns>Completes when the document has loaded.<para>文档载入完成后结束。</para></returns>
-    public Task OpenRockchipConfigAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenRockchipConfigAsync(string path) => OpenRockchipConfigAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenRockchipConfigAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new RockchipConfigEditorViewModel
         {
             Title = Path.GetFileName(fullPath),
             FilePath = fullPath
         },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given AXML file in the Manifest editor in the document area: focuses it if already
@@ -461,10 +590,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the AXML file to open.
     /// <para>要打开的 AXML 文件路径。</para>
     /// </param>
-    public Task OpenManifestAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenManifestAsync(string path) => OpenManifestAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenManifestAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ManifestEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given resources.arsc file in the ARSC resource-table editor in the document area:
@@ -476,10 +615,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the ARSC file to open.
     /// <para>要打开的 ARSC 文件路径。</para>
     /// </param>
-    public Task OpenArscAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenArscAsync(string path) => OpenArscAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenArscAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ArscEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given binary file in the Hex editor in the document area: focuses it if already
@@ -491,10 +640,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the binary file to open.
     /// <para>要打开的二进制文件路径。</para>
     /// </param>
-    public Task OpenHexAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenHexAsync(string path) => OpenHexAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenHexAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new HexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given APK file in the APK metadata editor in the document area: focuses it if already
@@ -506,10 +665,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the APK file to open.
     /// <para>要打开的 APK 文件路径。</para>
     /// </param>
-    public Task OpenApkAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenApkAsync(string path) => OpenApkAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenApkAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ApkEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens or focuses a picture in the image viewer: the document reads its attributes through the
@@ -517,10 +686,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在图片查看器中打开或聚焦图片：文档经 SIMD 编解码门面读取属性并发布到属性面板。</para>
     /// </summary>
     /// <param name="path">Picture file path.<para>图片文件路径。</para></param>
-    public Task OpenImageAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenImageAsync(string path) => OpenImageAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenImageAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ImageViewerViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens or focuses a logo/splash partition in the logo partition workbench, which lists the
@@ -528,10 +707,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在 Logo 分区工作台中打开或聚焦 Logo/splash 分区，列出内嵌图片并提供预览、提取与相关分区打开。</para>
     /// </summary>
     /// <param name="path">Logo partition file path.<para>Logo 分区文件路径。</para></param>
-    public Task OpenLogoPartitionAsync(string path) => OpenOrActivateDocumentAsync(
+    public Task OpenLogoPartitionAsync(string path) => OpenLogoPartitionAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens or focuses the document for <paramref name="path"/>; when <paramref name="activate"/> is false it is
+    /// added to the document area without becoming the foreground window.
+    /// <para>打开或聚焦 <paramref name="path"/> 对应的文档；<paramref name="activate"/> 为 false 时加入文档区但不成为前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load. <para>载入完成的完成任务。</para></returns>
+    internal Task OpenLogoPartitionAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new LogoPartitionViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
-        static (document, fullPath) => document.LoadAsync(fullPath));
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
 
     /// <summary>
     /// Opens the given firmware file in the firmware metadata panel in the document area: focuses it if
@@ -543,7 +732,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the firmware file to open.
     /// <para>要打开的固件文件路径。</para>
     /// </param>
-    public async Task OpenFirmwareAsync(string path, FormatDetectionResult? detection = null)
+    public Task OpenFirmwareAsync(string path, FormatDetectionResult? detection = null)
+        => OpenFirmwareAsync(path, detection, activate: true);
+
+    /// <summary>
+    /// Opens a firmware file in the metadata panel, optionally without touching the foreground window.
+    /// <para>在元数据面板打开固件文件；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The firmware path. <para>固件路径。</para></param>
+    /// <param name="detection">An already resolved detection result. <para>已完成的格式检测结果。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenFirmwareAsync(string path, FormatDetectionResult? detection, bool activate)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -564,7 +763,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         if (existing is not null)
         {
-            ActivateDockable(existing, documentDock);
+            if (activate)
+            {
+                ActivateDockable(existing, documentDock);
+            }
+
             return;
         }
 
@@ -574,8 +777,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             FilePath = fullPath
         };
 
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
+        AddDocument(documentDock, document, activate);
 
         try
         {
@@ -597,7 +799,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 documentDock.ActiveDockable = documentDock.VisibleDockables?.FirstOrDefault();
             }
 
-            await OpenHexAsync(path);
+            await OpenHexAsync(path, activate);
             return;
         }
 
@@ -618,7 +820,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// The path of the image file to open.
     /// <para>要打开的镜像文件路径。</para>
     /// </param>
-    public async Task OpenFileSystemAsync(string path)
+    public Task OpenFileSystemAsync(string path) => OpenFileSystemAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens a filesystem image, optionally without touching the foreground window.
+    /// <para>打开文件系统镜像；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The image path. <para>镜像路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenFileSystemAsync(string path, bool activate)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -639,7 +849,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         if (existing is not null)
         {
-            ActivateDockable(existing, documentDock);
+            if (activate)
+            {
+                ActivateDockable(existing, documentDock);
+            }
+
             return;
         }
 
@@ -649,8 +863,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             FilePath = fullPath
         };
 
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
+        AddDocument(documentDock, document, activate);
 
         try
         {
@@ -666,9 +879,24 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Opens a typed document and refreshes its properties after loading only while it remains active.</summary>
-    internal async Task OpenOrActivateDocumentAsync<TDocument>(string path,
+    internal Task OpenOrActivateDocumentAsync<TDocument>(string path,
         Func<TDocument, string?> getPath, Func<string, TDocument> create,
         Func<TDocument, string, Task> load) where TDocument : class, IDockable
+        => OpenOrActivateDocumentAsync(path, getPath, create, load, activate: true);
+
+    /// <summary>
+    /// Opens a typed document; when <paramref name="activate"/> is false it is added to the document area
+    /// without changing the foreground window.
+    /// <para>打开一个具体类型的文档；<paramref name="activate"/> 为 false 时加入文档区但不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The document path. <para>文档路径。</para></param>
+    /// <param name="getPath">Reads the dedup key from an existing document. <para>从已打开文档读取去重键。</para></param>
+    /// <param name="create">Creates the document. <para>创建文档。</para></param>
+    /// <param name="load">Loads the document from its path. <para>按路径载入文档。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenOrActivateDocumentAsync<TDocument>(string path,
+        Func<TDocument, string?> getPath, Func<string, TDocument> create,
+        Func<TDocument, string, Task> load, bool activate) where TDocument : class, IDockable
     {
         if (string.IsNullOrWhiteSpace(path)) return;
         var documentDock = FindDocumentsPane();
@@ -679,12 +907,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             string.Equals(getPath(document), fullPath, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
-            ActivateDockable(existing, documentDock);
+            if (activate)
+            {
+                ActivateDockable(existing, documentDock);
+            }
+
             return;
         }
         var document = create(fullPath);
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
+        AddDocument(documentDock, document, activate);
         await load(document, fullPath);
         if (ReferenceEquals(documentDock.ActiveDockable, document))
             Services.Ui.Workspace.DocumentNotifications.Publish(document);
@@ -771,8 +1002,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             var hasLiveCompare = _compareDocument?.Owner is IDock owner
                 && owner.VisibleDockables?.Contains(_compareDocument) == true;
             var compare = !hasLiveCompare || _compareDocument!.IsEmptyDocument
-                ? OpenCompareDocument()
-                : OpenNewCompareDocument();
+                ? OpenCompareDocument(activate)
+                : OpenNewCompareDocument(activate);
             if (compare is not null)
                 foreach (var path in new[] { dto.CompareLeftPath, dto.CompareRightPath })
                     if (!string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path)))
@@ -864,7 +1095,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         {
             var deferredGeneration = Interlocked.Increment(ref _restoreGeneration);
             _restoreForeground = FindActiveDockable();
-            _backgroundRestore = RestoreDeferredAsync(snapshot, rootDir, deferredGeneration);
+            _backgroundRestore = RestoreDeferredOnceAsync(snapshot, rootDir, deferredGeneration);
             return Task.CompletedTask;
         }
 
@@ -885,7 +1116,33 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         _restoreForeground = FindActiveDockable();
         _backgroundRestore = deferred.Count == 0
             ? Task.CompletedTask
-            : RestoreDeferredAsync(deferred, rootDir, generation);
+            : RestoreDeferredOnceAsync(deferred, rootDir, generation);
+    }
+
+    /// <summary>
+    /// Opens every deferred document at background priority and restores the saved foreground window once at the
+    /// end, so the restore produces a single focus change instead of one per document.
+    /// <para>以后台优先级打开每个延迟文档，并在结束时只恢复一次保存的前台窗口，使还原只产生一次焦点变化，而不是每个文档一次。</para>
+    /// </summary>
+    /// <param name="documents">Deferred descriptors. <para>延迟的文档描述符。</para></param>
+    /// <param name="rootDir">Project root. <para>工程根目录。</para></param>
+    /// <param name="generation">Restore generation guarding cancellation. <para>用于取消守卫的还原世代号。</para></param>
+    /// <returns>Completion of the deferred restore. <para>延迟还原的完成任务。</para></returns>
+    private async Task RestoreDeferredOnceAsync(
+        List<UotanStudio.Pipeline.Projects.OpenDocumentDto> documents,
+        string rootDir,
+        int generation)
+    {
+        await RestoreDeferredAsync(documents, rootDir, generation);
+        if (generation != Volatile.Read(ref _restoreGeneration))
+        {
+            return;
+        }
+
+        if (Volatile.Read(ref _restoreForeground) is { } foreground)
+        {
+            Reactivate(foreground);
+        }
     }
 
     private async Task RestoreDeferredAsync(
@@ -915,12 +1172,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             {
                 LogService.Instance.Write(LogLevel.Error, "Workspace",
                     $"Deferred restore of '{document.RelativePath}' ({document.Kind}) failed: {ex.Message}");
-            }
-
-            var foreground = Volatile.Read(ref _restoreForeground);
-            if (foreground is not null && generation == Volatile.Read(ref _restoreGeneration))
-            {
-                Reactivate(foreground);
             }
         }
     }
@@ -989,9 +1240,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Re-reads the window that should stay in front while deferred documents continue to open. Called after the
-    /// persisted foreground is applied so a deferred editor cannot pull focus back to itself.
-    /// <para>在延迟文档继续打开期间重新读取应保持前台的窗口。应用持久化前台窗口后调用，避免延迟编辑器把焦点抢回自身。</para>
+    /// Re-reads the window that must be in front once the deferred restore finishes. Called after the persisted
+    /// foreground is applied so the last deferred document cannot become the visible tab.
+    /// <para>重新读取延迟还原结束后应处于前台的窗口。应用持久化前台窗口后调用，避免最后一个延迟文档成为可见标签。</para>
     /// </summary>
     internal void UpdateDeferredRestoreForeground()
     {
@@ -1003,7 +1254,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
     internal void CancelBackgroundRestore() => Interlocked.Increment(ref _restoreGeneration);
 
-    internal async Task OpenPartitionAsync(string path)
+    internal Task OpenPartitionAsync(string path) => OpenPartitionAsync(path, activate: true);
+
+    /// <summary>
+    /// Opens a partition editor, optionally without touching the foreground window.
+    /// <para>打开分区编辑器；可选择不改动前台窗口。</para>
+    /// </summary>
+    /// <param name="path">The partition path. <para>分区路径。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    internal async Task OpenPartitionAsync(string path, bool activate)
     {
         var dock = FindDocumentsPanePublic();
         if (dock is null) return;
@@ -1012,10 +1271,18 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         if (document is null)
         {
             document = new PartitionEditorViewModel { Title = Path.GetFileName(path) };
-            _factory.AddDockable(dock, document);
+            AddDocument(dock, document, activate);
             await document.LoadAsync(path);
         }
-        ActivateDockable(document, dock);
+        else if (activate)
+        {
+            ActivateDockable(document, dock);
+        }
+
+        if (activate)
+        {
+            Services.Ui.Workspace.DocumentNotifications.Publish(document);
+        }
     }
 
     private TDocument? FindOpenDocument<TDocument>(Func<TDocument, bool> predicate)
@@ -1023,6 +1290,23 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         => Services.Ui.Workspace.WorkspaceSessionCapture.Enumerate(Layout)
             .OfType<TDocument>()
             .FirstOrDefault(predicate);
+
+    /// <summary>
+    /// Adds a document to the document area without changing the foreground window when
+    /// <paramref name="activate"/> is false, so a background session restore cannot pull focus.
+    /// <para>把文档加入文档区；<paramref name="activate"/> 为 false 时不改动前台窗口，使后台会话还原无法抢走焦点。</para>
+    /// </summary>
+    /// <param name="documentDock">The document area. <para>文档区。</para></param>
+    /// <param name="document">The document to add. <para>要加入的文档。</para></param>
+    /// <param name="activate">Whether the document becomes active. <para>文档是否成为活动项。</para></param>
+    private void AddDocument(DocumentDock documentDock, IDockable document, bool activate)
+    {
+        _factory.AddDockable(documentDock, document);
+        if (activate)
+        {
+            documentDock.ActiveDockable = document;
+        }
+    }
 
     private void ActivateDockable(IDockable dockable, IDock fallbackDock)
     {
