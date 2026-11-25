@@ -72,6 +72,12 @@
   <data name="Dock_CollapseTabs" xml:space="preserve">
     <value>Collapse tabs</value>
   </data>
+  <data name="Dock_PinTab" xml:space="preserve">
+    <value>Pin tab</value>
+  </data>
+  <data name="Dock_UnpinTab" xml:space="preserve">
+    <value>Unpin tab</value>
+  </data>
   <data name="FindReplace_Title" xml:space="preserve">
     <value>Find and Replace</value>
   </data>

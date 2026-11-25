@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -12,14 +15,21 @@ using Dock.Model.Core;
 namespace UotanStudio.Themes;
 
 /// <summary>
-/// Provides mouse wheel and toggle-button expansion behavior for <see cref="DocumentTabStrip"/>,
-/// expanding to multiple rows on wheel down or toggle click and collapsing to a single row on wheel up or toggle click.
-/// <para>为 <see cref="DocumentTabStrip"/> 提供鼠标滚轮与按钮展开行为：
-/// 滚轮向下滚动或点击按钮时展开为多行，向上滚动或再次点击按钮时收起为单行。</para>
+/// Provides mouse wheel, toggle-button expansion, and VS-style tab pinning behavior for <see cref="DocumentTabStrip"/>:
+/// expands to multiple rows on wheel down or toggle click, collapses to a single row while keeping the active tab in the
+/// first row, and pins selected tabs to the leading edge of the strip.
+/// <para>为 <see cref="DocumentTabStrip"/> 提供鼠标滚轮、按钮展开以及类似 Visual Studio 的标签固定行为：
+/// 滚轮向下滚动或点击右侧按钮时展开为多行，收起时将当前活动标签重排至第一行，并支持将单个标签固定到最前端。</para>
 /// </summary>
 public static partial class DocumentTabStripWheelHandler
 {
     private const string ExpandToggleButtonName = "PART_ExpandToggleButton";
+    private const string PinTabButtonName = "PART_PinTabButton";
+    private const double DefaultSingleRowHeight = 26.0;
+    private const double MaxExpandedHeightCap = 500.0;
+    private const double OverflowTolerance = 2.0;
+
+    private static readonly ConditionalWeakTable<IDockable, StrongBox<bool>> PinnedTabs = [];
 
     static DocumentTabStripWheelHandler()
     {
@@ -44,37 +54,181 @@ public static partial class DocumentTabStripWheelHandler
     [GeneratedAttachedProperty(DefaultValue = false)]
     public static partial bool GetIsExpanded(DocumentTabStrip element);
 
+    /// <summary>
+    /// Returns whether the specified document dockable is pinned to the leading edge of its tab strip.
+    /// <para>返回指定文档停靠项是否已固定到标签栏最前端。</para>
+    /// </summary>
+    /// <param name="dockable">The target dockable.<para>目标停靠项。</para></param>
+    /// <returns>True when the dockable is pinned; otherwise, false.<para>已固定返回 true；否则返回 false。</para></returns>
+    public static bool IsTabPinned(IDockable? dockable)
+        => dockable is not null && PinnedTabs.TryGetValue(dockable, out var state) && state.Value;
+
+    /// <summary>
+    /// Pins or unpins a document dockable in the specified tab strip and moves it to the pinned or unpinned boundary.
+    /// <para>在指定标签栏中固定或取消固定文档停靠项，并将其移动到固定区末尾或非固定区首位。</para>
+    /// </summary>
+    /// <param name="strip">The owning document tab strip.<para>所属文档标签栏。</para></param>
+    /// <param name="dockable">The dockable to pin or unpin.<para>要固定或取消固定的停靠项。</para></param>
+    /// <param name="isPinned">True to pin to the leading edge; false to unpin.<para>为 true 固定到最前；为 false 取消固定。</para></param>
+    public static void SetTabPinned(DocumentTabStrip strip, IDockable dockable, bool isPinned)
+    {
+        ArgumentNullException.ThrowIfNull(strip);
+        ArgumentNullException.ThrowIfNull(dockable);
+
+        var currentlyPinned = IsTabPinned(dockable);
+        if (currentlyPinned == isPinned)
+        {
+            SyncTabPinnedClass(strip, dockable, isPinned);
+            return;
+        }
+
+        PinnedTabs.GetOrCreateValue(dockable).Value = isPinned;
+
+        var dock = (strip.DataContext as IDock) ?? (dockable.Owner as IDock);
+        if (dock?.VisibleDockables is { } visibleDockables && visibleDockables.Count > 1)
+        {
+            var currentIndex = visibleDockables.IndexOf(dockable);
+            if (currentIndex >= 0)
+            {
+                var pinnedCountBefore = 0;
+                for (var i = 0; i < visibleDockables.Count; i++)
+                {
+                    var item = visibleDockables[i];
+                    if (ReferenceEquals(item, dockable))
+                    {
+                        continue;
+                    }
+
+                    if (IsTabPinned(item))
+                    {
+                        pinnedCountBefore++;
+                    }
+                }
+
+                var targetIndex = Math.Clamp(pinnedCountBefore, 0, visibleDockables.Count - 1);
+                if (targetIndex != currentIndex)
+                {
+                    MoveDockable(strip, dock, visibleDockables, dockable, currentIndex, targetIndex);
+                }
+            }
+        }
+
+        SyncTabPinnedClass(strip, dockable, isPinned);
+        SchedulePostLayoutSync(strip);
+    }
+
+    /// <summary>
+    /// Toggles the pinned state of a document dockable in the specified tab strip.
+    /// <para>切换指定标签栏中文档停靠项的固定状态。</para>
+    /// </summary>
+    /// <param name="strip">The owning document tab strip.<para>所属文档标签栏。</para></param>
+    /// <param name="dockable">The dockable whose pinned state should be toggled.<para>要切换固定状态的停靠项。</para></param>
+    public static void ToggleTabPinned(DocumentTabStrip strip, IDockable dockable)
+        => SetTabPinned(strip, dockable, !IsTabPinned(dockable));
+
     private static void OnEnableWheelExpandChanged(DocumentTabStrip strip, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.NewValue is true)
         {
             strip.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
-            strip.AddHandler(Button.ClickEvent, OnExpandToggleButtonClick, RoutingStrategies.Bubble);
+            strip.AddHandler(Button.ClickEvent, OnStripButtonClick, RoutingStrategies.Bubble);
             strip.AttachedToVisualTree += OnStripAttachedToVisualTree;
+            strip.LayoutUpdated += OnStripLayoutUpdated;
+            strip.SelectionChanged += OnStripSelectionChanged;
+            strip.SizeChanged += OnStripSizeChanged;
+            strip.ContainerPrepared += OnStripContainerPrepared;
             ResetPanelMaxWidth(strip);
         }
         else
         {
             strip.RemoveHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged);
-            strip.RemoveHandler(Button.ClickEvent, OnExpandToggleButtonClick);
+            strip.RemoveHandler(Button.ClickEvent, OnStripButtonClick);
             strip.AttachedToVisualTree -= OnStripAttachedToVisualTree;
+            strip.LayoutUpdated -= OnStripLayoutUpdated;
+            strip.SelectionChanged -= OnStripSelectionChanged;
+            strip.SizeChanged -= OnStripSizeChanged;
+            strip.ContainerPrepared -= OnStripContainerPrepared;
         }
     }
 
-    private static void OnExpandToggleButtonClick(object? sender, RoutedEventArgs e)
+    private static void OnStripContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container is DocumentTabStripItem item)
+        {
+            item.Classes.Set("pinned", e.Container.DataContext is IDockable dockable && IsTabPinned(dockable));
+        }
+    }
+
+    private static void OnStripButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not DocumentTabStrip strip)
+        {
+            return;
+        }
+
+        if (e.Source is Button { Name: ExpandToggleButtonName })
+        {
+            if (strip.Orientation == Avalonia.Layout.Orientation.Horizontal)
+            {
+                ToggleExpanded(strip);
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (e.Source is Button { Name: PinTabButtonName } pinButton)
+        {
+            var tabItem = pinButton.FindAncestorOfType<DocumentTabStripItem>();
+            if (tabItem?.DataContext is IDockable dockable)
+            {
+                ToggleTabPinned(strip, dockable);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private static void OnStripSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not DocumentTabStrip strip
+            || strip.Orientation != Avalonia.Layout.Orientation.Horizontal
+            || GetIsExpanded(strip))
+        {
+            return;
+        }
+
+        ScheduleCollapsedSelectionEnsureVisible(strip);
+    }
+
+    private static void OnStripSizeChanged(object? sender, SizeChangedEventArgs e)
     {
         if (sender is not DocumentTabStrip strip || strip.Orientation != Avalonia.Layout.Orientation.Horizontal)
         {
             return;
         }
 
-        if (e.Source is not Button { Name: ExpandToggleButtonName })
+        if (GetIsExpanded(strip))
+        {
+            UpdateExpandedMaxHeight(strip);
+        }
+        else
+        {
+            ScheduleCollapsedSelectionEnsureVisible(strip);
+        }
+    }
+
+    private static void OnStripLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (sender is not DocumentTabStrip strip || strip.Orientation != Avalonia.Layout.Orientation.Horizontal)
         {
             return;
         }
 
-        ToggleExpanded(strip);
-        e.Handled = true;
+        UpdateOverflowState(strip);
+        if (GetIsExpanded(strip))
+        {
+            UpdateExpandedMaxHeight(strip);
+        }
     }
 
     private static void ToggleExpanded(DocumentTabStrip strip)
@@ -83,7 +237,7 @@ public static partial class DocumentTabStripWheelHandler
         {
             Collapse(strip);
         }
-        else
+        else if (HasOverflow(strip))
         {
             Expand(strip);
         }
@@ -95,6 +249,7 @@ public static partial class DocumentTabStripWheelHandler
         {
             SetIsExpanded(strip, true);
             strip.Classes.Set("expanded", true);
+            UpdateExpandedMaxHeight(strip);
         }
     }
 
@@ -113,22 +268,11 @@ public static partial class DocumentTabStripWheelHandler
         var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
         if (scrollViewer != null)
         {
+            scrollViewer.ClearValue(Layoutable.MaxHeightProperty);
             scrollViewer.Offset = new Vector(0, 0);
         }
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (scrollViewer != null)
-            {
-                scrollViewer.Offset = new Vector(0, 0);
-            }
-
-            var selected = strip.SelectedItem;
-            if (selected != null && strip.ContainerFromItem(selected) is Control ctrl)
-            {
-                ctrl.BringIntoView();
-            }
-        }, DispatcherPriority.Loaded);
+        SchedulePostLayoutSync(strip);
     }
 
     private static void OnStripAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -136,6 +280,7 @@ public static partial class DocumentTabStripWheelHandler
         if (sender is DocumentTabStrip strip)
         {
             ResetPanelMaxWidth(strip);
+            UpdateOverflowState(strip);
         }
     }
 
@@ -163,8 +308,11 @@ public static partial class DocumentTabStripWheelHandler
 
         if (e.Delta.Y < -0.1)
         {
-            Expand(strip);
-            e.Handled = true;
+            if (!GetIsExpanded(strip) && HasOverflow(strip))
+            {
+                Expand(strip);
+                e.Handled = true;
+            }
         }
         else if (e.Delta.Y > 0.1)
         {
@@ -177,9 +325,113 @@ public static partial class DocumentTabStripWheelHandler
                 }
 
                 Collapse(strip);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private static bool HasOverflow(DocumentTabStrip strip)
+    {
+        var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
+        if (scrollViewer == null)
+        {
+            return false;
+        }
+
+        var rowHeight = GetSingleRowHeight(strip);
+        return scrollViewer.Extent.Height > rowHeight + OverflowTolerance;
+    }
+
+    private static void UpdateOverflowState(DocumentTabStrip strip)
+    {
+        var hasOverflow = HasOverflow(strip);
+        strip.Classes.Set("has-overflow", hasOverflow);
+
+        if (!hasOverflow && GetIsExpanded(strip))
+        {
+            Collapse(strip);
+        }
+    }
+
+    private static double GetSingleRowHeight(DocumentTabStrip strip)
+    {
+        if (strip.TryFindResource("DocumentTabStripMinHeight", strip.ActualThemeVariant, out var resource)
+            && resource is double height
+            && height > 0)
+        {
+            return height;
+        }
+
+        return DefaultSingleRowHeight;
+    }
+
+    private static void UpdateExpandedMaxHeight(DocumentTabStrip strip)
+    {
+        var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
+        if (scrollViewer == null)
+        {
+            return;
+        }
+
+        var rowHeight = GetSingleRowHeight(strip);
+        var hostHeight = strip.FindAncestorOfType<DocumentControl>()?.Bounds.Height ?? 0;
+        var capAligned = Math.Max(rowHeight * 2, Math.Floor(MaxExpandedHeightCap / rowHeight) * rowHeight);
+        double targetMaxHeight;
+
+        if (hostHeight > rowHeight * 2)
+        {
+            var hostBudget = Math.Floor(hostHeight * 0.4 / rowHeight) * rowHeight;
+            targetMaxHeight = Math.Clamp(hostBudget, rowHeight * 2, capAligned);
+        }
+        else
+        {
+            targetMaxHeight = Math.Min(rowHeight * 8, capAligned);
+        }
+
+        if (Math.Abs(scrollViewer.MaxHeight - targetMaxHeight) > 0.5)
+        {
+            scrollViewer.MaxHeight = targetMaxHeight;
+        }
+    }
+
+    private static void ScheduleCollapsedSelectionEnsureVisible(DocumentTabStrip strip)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (GetIsExpanded(strip) || strip.Orientation != Avalonia.Layout.Orientation.Horizontal)
+            {
+                return;
             }
 
-            e.Handled = true;
+            MoveSelectedDocumentToFirstRowEnd(strip);
+
+            var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
+            if (scrollViewer != null && scrollViewer.Offset.Y > 0.5)
+            {
+                scrollViewer.Offset = new Vector(0, 0);
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private static void SchedulePostLayoutSync(DocumentTabStrip strip)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
+            if (!GetIsExpanded(strip) && scrollViewer != null)
+            {
+                scrollViewer.Offset = new Vector(0, 0);
+            }
+
+            UpdateOverflowState(strip);
+        }, DispatcherPriority.Loaded);
+    }
+
+    private static void SyncTabPinnedClass(DocumentTabStrip strip, IDockable dockable, bool isPinned)
+    {
+        if (strip.ContainerFromItem(dockable) is DocumentTabStripItem item)
+        {
+            item.Classes.Set("pinned", isPinned);
         }
     }
 
@@ -208,6 +460,16 @@ public static partial class DocumentTabStripWheelHandler
             return;
         }
 
+        var selectedIsPinned = IsTabPinned(selectedDockable);
+        var pinnedCount = 0;
+        for (var i = 0; i < visibleDockables.Count; i++)
+        {
+            if (IsTabPinned(visibleDockables[i]))
+            {
+                pinnedCount++;
+            }
+        }
+
         var wrapPanel = strip.FindDescendantOfType<WrapPanel>();
         var scrollViewer = strip.FindDescendantOfType<ScrollViewer>();
         var availableWidth = wrapPanel?.Bounds.Width ?? 0;
@@ -231,8 +493,10 @@ public static partial class DocumentTabStripWheelHandler
             selectedWidth = 100.0;
         }
 
+        var minTargetIndex = selectedIsPinned ? 0 : pinnedCount;
+        var maxTargetIndex = selectedIsPinned ? Math.Max(0, pinnedCount - 1) : visibleDockables.Count - 1;
         var accumulatedWidth = 0.0;
-        var targetIndex = 0;
+        var targetIndex = minTargetIndex;
 
         for (var i = 0; i < visibleDockables.Count; i++)
         {
@@ -253,10 +517,13 @@ public static partial class DocumentTabStripWheelHandler
                 : itemContainer.DesiredSize.Width)
                 + itemContainer.Margin.Left + itemContainer.Margin.Right;
 
-            if (accumulatedWidth + itemWidth + selectedWidth <= availableWidth - 1.0)
+            if (accumulatedWidth + itemWidth + selectedWidth <= availableWidth - 2.0)
             {
                 accumulatedWidth += itemWidth;
-                targetIndex = i + 1;
+                if (i + 1 >= minTargetIndex)
+                {
+                    targetIndex = i + 1;
+                }
             }
             else
             {
@@ -264,26 +531,43 @@ public static partial class DocumentTabStripWheelHandler
             }
         }
 
+        targetIndex = Math.Clamp(targetIndex, minTargetIndex, maxTargetIndex);
+
         if (targetIndex != currentIndex)
         {
-            try
-            {
-                if (visibleDockables is ObservableCollection<IDockable> observableCollection)
-                {
-                    observableCollection.Move(currentIndex, targetIndex);
-                }
-                else
-                {
-                    visibleDockables.RemoveAt(currentIndex);
-                    visibleDockables.Insert(targetIndex, selectedDockable);
-                }
+            MoveDockable(strip, dock, visibleDockables, selectedDockable, currentIndex, targetIndex);
+        }
+    }
 
-                dock.ActiveDockable = selectedDockable;
-                strip.SelectedItem = selectedDockable;
-            }
-            catch
+    private static void MoveDockable(
+        DocumentTabStrip strip,
+        IDock dock,
+        IList<IDockable> visibleDockables,
+        IDockable dockable,
+        int currentIndex,
+        int targetIndex)
+    {
+        try
+        {
+            var wasActive = ReferenceEquals(dock.ActiveDockable, dockable);
+            if (visibleDockables is ObservableCollection<IDockable> observableCollection)
             {
+                observableCollection.Move(currentIndex, targetIndex);
             }
+            else
+            {
+                visibleDockables.RemoveAt(currentIndex);
+                visibleDockables.Insert(targetIndex, dockable);
+            }
+
+            if (wasActive)
+            {
+                dock.ActiveDockable = dockable;
+                strip.SelectedItem = dockable;
+            }
+        }
+        catch
+        {
         }
     }
 }

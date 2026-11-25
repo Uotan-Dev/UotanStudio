@@ -72,6 +72,12 @@
   <data name="Dock_CollapseTabs" xml:space="preserve">
     <value>收起标签栏</value>
   </data>
+  <data name="Dock_PinTab" xml:space="preserve">
+    <value>固定标签</value>
+  </data>
+  <data name="Dock_UnpinTab" xml:space="preserve">
+    <value>取消固定</value>
+  </data>
   <data name="FindReplace_Title" xml:space="preserve">
     <value>查找与替换</value>
   </data>

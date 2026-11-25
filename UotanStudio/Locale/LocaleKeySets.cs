@@ -2188,6 +2188,8 @@ internal static class LocaleKeySets
         "Dock_Documents",
         "Dock_ExpandTabs",
         "Dock_CollapseTabs",
+        "Dock_PinTab",
+        "Dock_UnpinTab",
         "FindReplace_Title",
         "FindReplace_Find",
         "FindReplace_FindPlaceholder",

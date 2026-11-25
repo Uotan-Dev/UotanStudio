@@ -1,12 +1,43 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:core="using:Dock.Model.Core"
         xmlns:dock="using:Dock.Avalonia.Controls"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:themes="using:UotanStudio.Themes">
-    <!-- Document tab strip styles: default single row (32px), mouse wheel down or toggle button expands to multiple rows,
+    <Styles.Resources>
+        <x:Double x:Key="DocumentTabStripMinHeight">26</x:Double>
+        <x:Double x:Key="DocumentTabStripItemMinHeight">26</x:Double>
+        <Thickness x:Key="DocumentTabStripItemPadding">8,0,6,0</Thickness>
+    </Styles.Resources>
+
+    <!-- Document tab strip styles: compact single row (26px), mouse wheel down or toggle button expands to multiple rows,
          mouse wheel up or toggle button collapses to a single row, and indicator bar aligns flush with document top divider. -->
-    <!-- 文档标签栏样式：默认单行显示（32px），鼠标滚轮向下滚动或点击右侧按钮展开为多行，
+    <!-- 文档标签栏样式：紧凑单行显示（26px），鼠标滚轮向下滚动或点击右侧按钮展开为多行，
          滚轮向上滚动或点击右侧按钮收起为单行，并消除指示条与文档顶部水平分割线之间的空隙。 -->
+    <Style Selector="dock|DocumentControl">
+        <Setter Property="CloseTemplate">
+            <DataTemplate x:DataType="core:IDockable">
+                <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <Button Name="PART_PinTabButton"
+                            Classes="doc-tab-action pin"
+                            Focusable="False">
+                        <icons:Pin Width="12" Height="12" />
+                    </Button>
+                    <Button Name="PART_CloseTabButton"
+                            Classes="doc-tab-action close"
+                            Focusable="False"
+                            IsVisible="{Binding CanClose}"
+                            Command="{Binding Factory.CloseDockable}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{DynamicResource DockMenu_Close}"
+                            AutomationProperties.Name="{DynamicResource DockMenu_Close}">
+                        <icons:Close Width="12" Height="12" />
+                    </Button>
+                </StackPanel>
+            </DataTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="dock|DocumentTabStrip">
         <Setter Property="themes:DocumentTabStripWheelHandler.EnableWheelExpand" Value="True" />
         <Setter Property="MouseWheelScrollOrientation" Value="Vertical" />
@@ -83,12 +114,12 @@
 
     <Style Selector="dock|DocumentTabStrip /template/ Button#PART_ExpandToggleButton">
         <Setter Property="IsVisible" Value="False" />
-        <Setter Property="Width" Value="24" />
-        <Setter Property="Height" Value="24" />
+        <Setter Property="Width" Value="22" />
+        <Setter Property="Height" Value="22" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Margin" Value="2,4,4,4" />
+        <Setter Property="Margin" Value="2,2,4,2" />
         <Setter Property="CornerRadius" Value="4" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -97,7 +128,11 @@
         <Setter Property="AutomationProperties.Name" Value="{DynamicResource Dock_ExpandTabs}" />
     </Style>
 
-    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal] /template/ Button#PART_ExpandToggleButton">
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal].has-overflow /template/ Button#PART_ExpandToggleButton">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal].expanded /template/ Button#PART_ExpandToggleButton">
         <Setter Property="IsVisible" Value="True" />
     </Style>
 
@@ -148,23 +183,73 @@
         </Setter>
     </Style>
 
-    <!-- 默认单行状态：最大高度限制为单行（32px），必须指定 [Orientation=Horizontal] 以精确覆盖 Semi 默认样式 -->
-    <!-- Default single-row state: max height capped at 1 row (32px), with [Orientation=Horizontal] to override Semi theme. -->
+    <!-- 默认单行状态：最大高度限制为单行（26px），必须指定 [Orientation=Horizontal] 以精确覆盖 Semi 默认样式 -->
+    <!-- Default single-row state: max height capped at 1 row (26px), with [Orientation=Horizontal] to override Semi theme. -->
     <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal] /template/ ScrollViewer#PART_ScrollViewer">
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
         <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
         <Setter Property="MaxHeight" Value="{DynamicResource DocumentTabStripMinHeight}" />
     </Style>
 
-    <!-- 滚轮向下滚动展开的多行状态：解除单行高度限制（最大 500px），展示所有折行标签 -->
-    <!-- Expanded multi-row state on wheel down: unconstrained max height (500px) displaying all wrapped rows. -->
+    <!-- 滚轮向下滚动展开的多行状态：具体最大高度由 DocumentTabStripWheelHandler 按容器高度与行高整数倍动态计算 -->
+    <!-- Expanded multi-row state: max height is computed dynamically by DocumentTabStripWheelHandler as an integer row multiple. -->
     <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal].expanded /template/ ScrollViewer#PART_ScrollViewer">
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
         <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-        <Setter Property="MaxHeight" Value="500" />
     </Style>
 
     <Style Selector="dock|DocumentTabStripItem">
         <Setter Property="MinHeight" Value="{DynamicResource DocumentTabStripMinHeight}" />
+        <Setter Property="Height" Value="{DynamicResource DocumentTabStripMinHeight}" />
+        <Setter Property="Padding" Value="{DynamicResource DocumentTabStripItemPadding}" />
+    </Style>
+
+    <!-- 文档标签行内操作按钮（固定 / 关闭）：默认隐藏不占视觉干扰，悬浮到对应标签时显示；已固定标签的固定按钮常显。 -->
+    <!-- Inline document tab action buttons (pin / close): hidden at rest, revealed on tab hover; pinned tabs keep pin visible. -->
+    <Style Selector="dock|DocumentTabStripItem Button.doc-tab-action">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem Button.doc-tab-action.pin">
+        <Setter Property="ToolTip.Tip" Value="{DynamicResource Dock_PinTab}" />
+        <Setter Property="AutomationProperties.Name" Value="{DynamicResource Dock_PinTab}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem:pointerover Button.doc-tab-action, dock|DocumentTabStripItem:selected Button.doc-tab-action">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem.pinned Button.doc-tab-action.pin">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="IsHitTestVisible" Value="True" />
+        <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimary}" />
+        <Setter Property="ToolTip.Tip" Value="{DynamicResource Dock_UnpinTab}" />
+        <Setter Property="AutomationProperties.Name" Value="{DynamicResource Dock_UnpinTab}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem Button.doc-tab-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ButtonDefaultBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource ButtonDefaultPrimaryForeground}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem Button.doc-tab-action:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ButtonDefaultBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource ButtonDefaultPrimaryForeground}" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem.pinned Button.doc-tab-action.pin:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ButtonDefaultBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimary}" />
     </Style>
 </Styles>
