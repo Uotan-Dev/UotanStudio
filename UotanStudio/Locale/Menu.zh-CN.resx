@@ -100,7 +100,7 @@
     <value>完全解包</value>
   </data>
   <data name="NewProject_MergeMyPartitions" xml:space="preserve">
-    <value>合并my_分区到system</value>
+    <value>合并 my 分区到 system</value>
   </data>
   <data name="NewProject_MergeMyPartitionsTip" xml:space="preserve">
     <value>解包完成后把 my_* 分区目录树并入 system，并对分区自带的 file_contexts 与 fs_config 改基；合并成功后移除对应的 my_* 镜像。需要同时勾选“解包为镜像”和“完全解包”，且所选内容里的 system 与同槽位 my_* 分区成对；system_a 只并入 my_product_a，不动 my_product_b。</value>
