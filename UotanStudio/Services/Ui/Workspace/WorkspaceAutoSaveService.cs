@@ -3,6 +3,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Projects;
@@ -123,6 +124,33 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         return sessionOnly.Count > 0 ? sessionOnly : null;
     }
 
+    /// <summary>
+    /// Decides whether a proportion read from the session snapshot still leaves room for the pane's
+    /// siblings along the split axis. A collapsed pane is recorded as <c>0</c> and its surviving
+    /// sibling as <c>1</c>; restoring that pair keeps the sibling pinned to the whole axis and the
+    /// document pane invisible, so such a value is dropped and the layout default applies.
+    /// <para>判定会话快照中的比例是否仍为同级项留出空间。被折叠的面板记为 <c>0</c>，存活的同级记为
+    /// <c>1</c>；还原这一对会把同级钉满整轴、使文档区不可见，因此丢弃该值并沿用布局默认比例。</para>
+    /// </summary>
+    /// <param name="dock">The dock receiving the persisted proportion. <para>接收持久化比例的停靠区。</para></param>
+    /// <param name="proportion">The persisted proportion. <para>持久化比例。</para></param>
+    /// <returns>
+    /// <see langword="true"/> when another pane shares the axis; <see langword="false"/> when the saved
+    /// value would starve it.
+    /// <para>同级项共用该轴时为 <see langword="true"/>；保存值会挤掉同级项时为 <see langword="false"/>。</para>
+    /// </returns>
+    internal static bool LeavesRoomForSiblings(IDockable dock, double proportion)
+    {
+        ArgumentNullException.ThrowIfNull(dock);
+        if (dock.Owner is not IDock { VisibleDockables: { } siblings })
+        {
+            return true;
+        }
+
+        var sharesAxis = siblings.Any(sibling => !ReferenceEquals(sibling, dock) && sibling is not ISplitter);
+        return !sharesAxis || proportion < 1.0;
+    }
+
     internal Task InitializeAsync() => _disposed ? Task.CompletedTask : _initialization ??= RestoreAsync();
 
     internal void AttachMainWindow(Window window)
@@ -178,7 +206,8 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                     {
                         var dock = docks.FirstOrDefault(d => d.Id == state.Id);
                         if (dock is null) continue;
-                        if (state.Proportion is > 0 and <= 1) dock.Proportion = state.Proportion.Value;
+                        if (state.Proportion is > 0 and <= 1 && LeavesRoomForSiblings(dock, state.Proportion.Value))
+                            dock.Proportion = state.Proportion.Value;
                         if (_projects.CurrentProjectPath is null && !string.IsNullOrEmpty(state.ActiveId)
                             && dock.VisibleDockables?.FirstOrDefault(d => d.Id == state.ActiveId) is { } active)
                             dock.ActiveDockable = active;

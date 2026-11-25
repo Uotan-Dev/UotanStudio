@@ -69,7 +69,8 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
-            IsCollapsable = true,
+            // See CreateLayout: an empty document pane keeps its space, it does not retire itself.
+            IsCollapsable = false,
             EnableGlobalDocking = false,
             Proportion = double.NaN,
             ActiveDockable = null,
@@ -123,6 +124,12 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
+            // An empty document pane is the workspace's resting state, not a pane to retire: with
+            // IsCollapsable left at its default the proportional layout collapses the zero-height
+            // dock and hands the whole centre column to the neighbouring bottom tool dock, so the
+            // blank placeholder never shows. The pane only becomes collapsable once splitting
+            // produces a second document dock.
+            IsCollapsable = false,
             EnableGlobalDocking = false,
             Proportion = double.NaN,
             ActiveDockable = null,
