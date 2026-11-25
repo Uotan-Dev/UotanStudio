@@ -201,13 +201,7 @@ public sealed partial class DeviceController
             token.ThrowIfCancellationRequested();
             session = await factory.CreateAsync(endpoint, transport, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!), generation);
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-            return lease;
+            return RegisterLease(endpoint, transport, session, endpoint.Id, generation);
         }
         catch
         {

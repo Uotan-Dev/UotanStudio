@@ -45,14 +45,7 @@ public sealed partial class DeviceController
             }
 
             var session = await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(id, lease!), generation);
-            lock (_gate)
-            {
-                _openLeases[id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, transport, session, id, generation);
         }
         catch
         {
@@ -134,7 +127,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 usb.Dispose();
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
@@ -147,14 +140,7 @@ public sealed partial class DeviceController
             }
 
             var session = await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!), CurrentGenerationFor(info));
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, transport, session, endpoint.Id, CurrentGenerationFor(info));
         }
         catch
         {
@@ -270,7 +256,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 serial.Dispose();
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
@@ -296,14 +282,7 @@ public sealed partial class DeviceController
                 ? await unisocFactory.CreateWithOptionsAsync(endpoint, transport, fastOptions, cancellationToken)
                     .ConfigureAwait(false)
                 : await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!));
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, transport, session, endpoint.Id, generation: null);
         }
         catch
         {
@@ -424,7 +403,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 serial.Dispose();
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
@@ -439,14 +418,7 @@ public sealed partial class DeviceController
             var session = (MtkSession)await factory.CreateAsync(endpoint, transport, cancellationToken)
                 .ConfigureAwait(false);
             await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!));
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, transport, session, endpoint.Id, generation: null);
         }
         catch
         {
@@ -543,7 +515,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 serial.Dispose();
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
@@ -558,15 +530,7 @@ public sealed partial class DeviceController
             var session = await factory.CreateAsync(endpoint, transport, cancellationToken).ConfigureAwait(false);
             var handshake = (MtkSession)session;
             await handshake.InitializeAsync(cancellationToken).ConfigureAwait(false);
-            DeviceLease? lease = null;
-            lease = new DeviceLease(endpoint, transport, session, () => Release(endpoint.Id, lease!),
-                CurrentGenerationFor(info));
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, transport, session, endpoint.Id, CurrentGenerationFor(info));
         }
         catch
         {

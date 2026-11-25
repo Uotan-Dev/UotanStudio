@@ -78,7 +78,8 @@ public sealed partial class DeviceMonitorService
         try
         {
             var target = RequireReadyHdcTarget(device);
-            var opened = AcquireForMirror(() => OpenHdcLease(target), () => ReleaseMirrorEndpointHolders(target));
+            var opened = AcquireForMirrorOnController(() => OpenHdcLease(target),
+                () => ReleaseMirrorEndpointHolders(target));
             if (opened is null)
             {
                 throw new ArgumentException("An HDC target is required. 需要 HDC 目标。", nameof(device));

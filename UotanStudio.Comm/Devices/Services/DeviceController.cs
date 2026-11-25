@@ -32,6 +32,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     private readonly Dictionary<DeviceEndpointId, long> _placeholderSince = [];
     private readonly Dictionary<DeviceEndpointId, DeviceLease> _openLeases = [];
     private readonly Dictionary<string, ulong> _transportGenerations = [];
+    private readonly Dictionary<DeviceEndpointId, EndpointAvailability> _availability = [];
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)>? _modeProjection;
     private (ulong Sum, ulong Xor, int Count) _modeProjectionDigest;
@@ -122,6 +123,59 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(properties);
         Properties.Store(PropertyCacheKey(endpoint), properties);
+    }
+
+    /// <summary>
+    /// Captures the release-generation counter for <paramref name="id"/>. A caller rejected with
+    /// <see cref="DeviceEndpointBusyException"/> captures this value and waits with
+    /// <see cref="WaitForRelease(DeviceEndpointId, long, TimeSpan)"/>; a release between the rejection and the wait
+    /// advances the counter, so the wait completes immediately instead of missing the wake-up.
+    /// <para>取得 <paramref name="id"/> 的释放代数值。被 <see cref="DeviceEndpointBusyException"/> 拒绝的调用方
+    /// 记录此值并经 <see cref="WaitForRelease(DeviceEndpointId, long, TimeSpan)"/> 等待；拒绝与等待之间的释放
+    /// 会推进代数，使等待立即完成而不丢失唤醒。</para>
+    /// </summary>
+    public long ReleaseGeneration(DeviceEndpointId id)
+    {
+        lock (_gate)
+        {
+            return AvailabilityForLocked(id).CurrentGeneration;
+        }
+    }
+
+    /// <summary>
+    /// Blocks until the endpoint's release generation differs from <paramref name="observedGeneration"/> or
+    /// <paramref name="timeout"/> expires. No controller state is held while blocked. The generation check and
+    /// wait registration are atomic with respect to <see cref="Release"/>.
+    /// <para>阻塞直到端点释放代数与 <paramref name="observedGeneration"/> 不同或 <paramref name="timeout"/>
+    /// 到期。阻塞期间不持有控制器状态；代数检查与等待注册对 <see cref="Release"/> 是原子的。</para>
+    /// </summary>
+    /// <param name="id">Endpoint whose release is awaited.
+    /// <para>等待其释放的端点。</para></param>
+    /// <param name="observedGeneration">Generation captured at rejection.
+    /// <para>拒绝时记录的代数。</para></param>
+    /// <param name="timeout">Maximum wait.<para>最长等待时间。</para></param>
+    /// <returns><see langword="true"/> when a release was observed.
+    /// <para>观察到释放时为 <see langword="true"/>。</para></returns>
+    public bool WaitForRelease(DeviceEndpointId id, long observedGeneration, TimeSpan timeout)
+    {
+        EndpointAvailability availability;
+        lock (_gate)
+        {
+            availability = AvailabilityForLocked(id);
+        }
+
+        return availability.WaitForChange(observedGeneration, timeout);
+    }
+
+    private EndpointAvailability AvailabilityForLocked(DeviceEndpointId id)
+    {
+        if (!_availability.TryGetValue(id, out var availability))
+        {
+            availability = new EndpointAvailability();
+            _availability[id] = availability;
+        }
+
+        return availability;
     }
 
     internal DeviceController(IEnumerable<IDeviceDiscoverySource> sources, IDeviceTransportOpener opener)
@@ -301,15 +355,10 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         }
 
         var (endpoint, transport, generation) = opened;
-        DeviceLease? lease = null;
         try
         {
             ThrowIfDisposed();
-            lease = new DeviceLease(endpoint, transport, session: null, () => Release(id, lease!), generation);
-            lock (_gate)
-            {
-                _openLeases[id] = lease;
-            }
+            var lease = RegisterLease(endpoint, transport, session: null, id, generation);
 
             CommTrace.Debug("lease",
                 $"leased {endpoint.Protocol}/{endpoint.Route} {endpoint.Address} (generation {(generation.HasValue ? generation.Value.ToString() : "none")}).");
@@ -352,20 +401,13 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             ValidateRouteForOpen(endpoint);
             if (!_leased.Add(endpoint.Id) && !ReclaimStalePlaceholderLocked(endpoint.Id, endpoint))
             {
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
-        DeviceLease? lease = null;
         try
         {
-            lease = new DeviceLease(endpoint, NoopTransport.Instance, session, () => Release(endpoint.Id, lease!));
-            lock (_gate)
-            {
-                _openLeases[endpoint.Id] = lease;
-            }
-
-            return lease;
+            return RegisterLease(endpoint, NoopTransport.Instance, session, endpoint.Id, generation: null);
         }
         catch
         {
@@ -378,6 +420,28 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     {
         public static readonly NoopTransport Instance = new();
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Creates a lease and registers it in the open-lease table. The caller must have reserved the endpoint
+    /// before calling. Shared by every open/reconnect path to keep the release handshake identical for direct
+    /// USB, serial and adopted server sessions. Waiters use the release generation captured at rejection, so a
+    /// new reservation does not need to mutate any waiter state here.
+    /// <para>创建租约并登记到活动租约表。调用方调用前必须已占用端点。所有打开/重连路径共用本方法，使直连 USB、
+    /// 串口和纳入管理的 server 会话使用完全相同的释放握手。等待方使用拒绝时捕获的释放代数，因此新占用无需在此
+    /// 改动任何等待方状态。</para>
+    /// </summary>
+    private DeviceLease RegisterLease(DeviceEndpoint endpoint, IAsyncDisposable transport, object? session,
+        DeviceEndpointId id, TransportGeneration? generation)
+    {
+        DeviceLease? lease = null;
+        lease = new DeviceLease(endpoint, transport, session, () => Release(id, lease!), generation);
+        lock (_gate)
+        {
+            _openLeases[id] = lease;
+        }
+
+        return lease;
     }
 
     private async Task<(DeviceEndpoint Endpoint, IAsyncDisposable Transport, TransportGeneration? Generation)> OpenTransportAsync(
@@ -399,7 +463,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             ValidateRouteForOpen(endpoint);
             if (!_leased.Add(id) && !ReclaimStalePlaceholderLocked(id, endpoint))
             {
-                throw new DeviceEndpointBusyException(endpoint);
+                throw new DeviceEndpointBusyException(endpoint, AvailabilityForLocked(endpoint.Id).CurrentGeneration);
             }
         }
 
@@ -799,6 +863,22 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Notifies waiters that an endpoint reservation was returned. Called outside <c>_gate</c> so no waiter is
+    /// completed while controller state is locked.
+    /// <para>通知等待方端点占用已归还。在 <c>_gate</c> 外调用，避免在持有控制器锁时完成等待方。</para>
+    /// </summary>
+    internal void SignalEndpointRelease(DeviceEndpointId id)
+    {
+        EndpointAvailability? availability;
+        lock (_gate)
+        {
+            availability = _availability.GetValueOrDefault(id);
+        }
+
+        availability?.SignalRelease();
+    }
+
+    /// <summary>
     /// Returns one endpoint reservation. The reservation is cleared only when no newer lease has taken
     /// over the endpoint: forced detach (device removal, vanished server) removes the lease from the
     /// open-lease table first while the <c>_leased</c> entry stays as a releasing placeholder until that
@@ -837,6 +917,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         if (returned)
         {
             CommTrace.Debug("lease", $"released reservation for {id.Source}/{id.Transport} {id.Address}.");
+            SignalEndpointRelease(id);
         }
         else if (detached)
         {

@@ -23,8 +23,14 @@ public sealed class DeviceEndpointBusyException : InvalidOperationException
     /// </summary>
     /// <param name="endpointId">Identity of the endpoint that stayed reserved.
     /// <para>保持占用的端点身份。</para></param>
-    public DeviceEndpointBusyException(DeviceEndpointId endpointId)
-        : base(DefaultMessage) => EndpointId = endpointId;
+    /// <param name="releaseGeneration">Release generation observed when the open was rejected.
+    /// <para>拒绝开启时观察到的释放代数。</para></param>
+    public DeviceEndpointBusyException(DeviceEndpointId endpointId, long releaseGeneration = 0)
+        : base(DefaultMessage)
+    {
+        EndpointId = endpointId;
+        ReleaseGeneration = releaseGeneration;
+    }
 
     /// <summary>
     /// Creates the exception for a known endpoint and keeps it for diagnostics.
@@ -32,14 +38,17 @@ public sealed class DeviceEndpointBusyException : InvalidOperationException
     /// </summary>
     /// <param name="endpoint">The endpoint that stayed reserved; must not be <see langword="null"/>.
     /// <para>保持占用的端点；不得为 <see langword="null"/>。</para></param>
+    /// <param name="releaseGeneration">Release generation observed when the open was rejected.
+    /// <para>拒绝开启时观察到的释放代数。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is <see langword="null"/>.
     /// <para><paramref name="endpoint"/> 为 <see langword="null"/>。</para></exception>
-    public DeviceEndpointBusyException(DeviceEndpoint endpoint)
+    public DeviceEndpointBusyException(DeviceEndpoint endpoint, long releaseGeneration = 0)
         : base(DefaultMessage)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         Endpoint = endpoint;
         EndpointId = endpoint.Id;
+        ReleaseGeneration = releaseGeneration;
     }
 
     /// <summary>
@@ -57,4 +66,13 @@ public sealed class DeviceEndpointBusyException : InvalidOperationException
     /// <value>The leased endpoint, or <see langword="null"/> when only the identity was known.
     /// <para>被占用的端点；只知道身份时为 <see langword="null"/>。</para></value>
     public DeviceEndpoint? Endpoint { get; }
+
+    /// <summary>
+    /// Release generation captured at rejection time. A waiter that observes this value can detect a release
+    /// that happens before its wait is registered.
+    /// <para>拒绝时记录的释放代数。等待方观察此值即可发现等待注册前已经发生的释放。</para>
+    /// </summary>
+    /// <value>The observed generation, or zero when the thrower did not supply one.
+    /// <para>观察到的代数；抛出方未提供时为零。</para></value>
+    public long ReleaseGeneration { get; }
 }

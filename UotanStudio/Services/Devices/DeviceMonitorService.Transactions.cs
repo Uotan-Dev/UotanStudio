@@ -253,6 +253,7 @@ public sealed partial class DeviceMonitorService
                     : LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken),
             FastbootFlashLeaseWaitTimeout,
             delay => Thread.Sleep(delay),
+            _controller,
             releaseStaleOwner: null,
             "The device endpoint is busy: another operation (such as a Fastboot device-info read) still holds it. "
             + "Wait for that operation to finish and retry. "

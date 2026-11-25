@@ -134,6 +134,45 @@ public sealed class DeviceEndpointBusyTests
     }
 
     [Fact]
+    public async Task WaitForRelease_ReleaseBetweenCaptureAndWait_CompletesImmediately()
+    {
+        await using var controller = new DeviceController([new Source("usb", [Usb])], new RecordingOpener());
+        var snapshot = await controller.RefreshAsync(TestContext.Current.CancellationToken);
+        var endpoint = Assert.Single(snapshot.Endpoints);
+        var held = await controller.OpenAsync(snapshot, endpoint.Id, TestContext.Current.CancellationToken);
+        var generation = controller.ReleaseGeneration(endpoint.Id);
+
+        await held.DisposeAsync();
+
+        Assert.True(controller.WaitForRelease(endpoint.Id, generation, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task WaitForRelease_WhileLeaseHeld_TimesOutThenWakesOnDispose()
+    {
+        await using var controller = new DeviceController([new Source("usb", [Usb])], new RecordingOpener());
+        var snapshot = await controller.RefreshAsync(TestContext.Current.CancellationToken);
+        var endpoint = Assert.Single(snapshot.Endpoints);
+        var held = await controller.OpenAsync(snapshot, endpoint.Id, TestContext.Current.CancellationToken);
+        var generation = controller.ReleaseGeneration(endpoint.Id);
+
+        Assert.False(controller.WaitForRelease(endpoint.Id, generation, TimeSpan.FromMilliseconds(30)));
+
+        await held.DisposeAsync();
+        Assert.True(controller.WaitForRelease(endpoint.Id, generation, TimeSpan.FromMilliseconds(100)));
+    }
+
+    [Fact]
+    public void BusyException_CarriesReleaseGenerationObservedAtRejection()
+    {
+        var id = new DeviceEndpointId("usb", "Native", "exact-key");
+        var exception = new DeviceEndpointBusyException(id, 42);
+
+        Assert.Equal(id, exception.EndpointId);
+        Assert.Equal(42, exception.ReleaseGeneration);
+    }
+
+    [Fact]
     public void IsSamePhysicalTarget_AdbAndHdcInterfacesOfOneDevice_ReturnsTrue()
     {
         var adb = new DetectedDevice

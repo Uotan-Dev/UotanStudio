@@ -323,6 +323,19 @@ public sealed partial class DeviceMonitorService
         }
     }
 
+    /// <summary>
+    /// Mirror acquisition that waits on this monitor's controller release signal instead of sleeping blindly.
+    /// <para>投屏取得：等待本监视器控制器的释放信号，而非盲目休眠。</para>
+    /// </summary>
+    internal TValue AcquireForMirrorOnController<TValue>(Func<TValue> acquire, Action releaseStaleOwner)
+        => AcquireWithBusyRetry(acquire, MirrorLeaseWaitTimeout, delay => Thread.Sleep(delay), _controller,
+            releaseStaleOwner,
+            "The device endpoint is busy: another operation still holds it, such as a device-details "
+            + "refresh, a root probe, a log capture or a file transfer. Wait for it to finish, close the "
+            + "log capture if it is open, and start mirroring again. "
+            + "设备端点正被其它操作占用（如设备详情刷新、root 探测、日志抓取或文件传输）；请等待其结束，"
+            + "如有日志抓取请先停止，然后重新投屏。");
+
     private DeviceLease LeaseEndpoint(DetectedDevice device, bool useAdbServer = false,
         DeviceSessionKind? sessionKind = null, CancellationToken cancellationToken = default)
     {
@@ -472,24 +485,6 @@ public sealed partial class DeviceMonitorService
         => AcquireForMirror(acquire, MirrorLeaseWaitTimeout, delay => Thread.Sleep(delay), releaseStaleOwner: null);
 
     /// <summary>
-    /// Runs one exclusive acquisition and, on the first busy rejection, stops the mirror session this host still
-    /// tracks for the device before waiting for any other holder. A closed or replaced mirror document can leave
-    /// its endpoint reservation behind, and that reservation is indistinguishable from an unrelated operation
-    /// until the host reclaims it.
-    /// <para>执行一次独占取得，并在首次被占用时先停止本宿主仍为该设备跟踪的投屏会话，再等待其他持有者。
-    /// 已关闭或被替换的投屏文档可能遗留端点占用，而该占用在宿主回收之前与其它操作的占用无法区分。</para>
-    /// </summary>
-    /// <typeparam name="TValue">Result of a successful acquisition. <para>成功取得的结果。</para></typeparam>
-    /// <param name="acquire">The exclusive acquisition to run. <para>要执行的独占取得。</para></param>
-    /// <param name="releaseStaleOwner">Stops this host's own leftover holder; invoked at most once.
-    /// <para>停止本宿主遗留的持有者；最多调用一次。</para></param>
-    /// <returns>The value returned by <paramref name="acquire"/>. <para><paramref name="acquire"/> 返回的值。</para></returns>
-    /// <exception cref="IOException">The endpoint stayed leased beyond <see cref="MirrorLeaseWaitTimeout"/>.
-    /// <para>端点被占用超过 <see cref="MirrorLeaseWaitTimeout"/>。</para></exception>
-    internal static TValue AcquireForMirror<TValue>(Func<TValue> acquire, Action releaseStaleOwner)
-        => AcquireForMirror(acquire, MirrorLeaseWaitTimeout, delay => Thread.Sleep(delay), releaseStaleOwner);
-
-    /// <summary>
     /// Runs one exclusive acquisition with an explicit wait policy, so the retry contract is testable without
     /// waiting in real time.
     /// <para>以显式等待策略执行一次独占取得，使重试契约无需真实等待即可测试。</para>
@@ -538,6 +533,22 @@ public sealed partial class DeviceMonitorService
     /// <para>端点在整个预算内保持占用。</para></exception>
     internal static TValue AcquireWithBusyRetry<TValue>(Func<TValue> acquire, TimeSpan timeout, Action<TimeSpan> wait,
         Action? releaseStaleOwner, string busyMessage)
+        => AcquireCore(acquire, timeout, wait, null, releaseStaleOwner, busyMessage);
+
+    /// <summary>
+    /// Busy retry that waits on the controller's release signal instead of sleeping blindly. A release that
+    /// happened between the rejected open and this wait is detected through the generation stamped on the
+    /// exception, so no wake-up is lost. The supplied <paramref name="wait"/> remains a bounded fallback for a
+    /// missed signal.
+    /// <para>等待控制器释放信号而非盲目休眠的忙重试。拒绝开租约与等待之间发生的释放通过异常携带的代数检测，
+    /// 不会丢失唤醒；提供的 <paramref name="wait"/> 仍作为信号丢失时的有界兜底。</para>
+    /// </summary>
+    internal static TValue AcquireWithBusyRetry<TValue>(Func<TValue> acquire, TimeSpan timeout, Action<TimeSpan> wait,
+        DeviceController controller, Action? releaseStaleOwner, string busyMessage)
+        => AcquireCore(acquire, timeout, wait, controller, releaseStaleOwner, busyMessage);
+
+    private static TValue AcquireCore<TValue>(Func<TValue> acquire, TimeSpan timeout, Action<TimeSpan> wait,
+        DeviceController? controller, Action? releaseStaleOwner, string busyMessage)
     {
         ArgumentNullException.ThrowIfNull(acquire);
         ArgumentNullException.ThrowIfNull(wait);
@@ -555,9 +566,17 @@ public sealed partial class DeviceMonitorService
                 reclaimed = true;
                 releaseStaleOwner!();
             }
-            catch (DeviceEndpointBusyException) when (stopwatch.Elapsed < timeout)
+            catch (DeviceEndpointBusyException busy) when (stopwatch.Elapsed < timeout)
             {
-                wait(TimeSpan.FromMilliseconds(delayMs));
+                var remaining = timeout - stopwatch.Elapsed;
+                var delay = TimeSpan.FromMilliseconds(Math.Min(delayMs, remaining.TotalMilliseconds));
+                var released = controller is not null
+                    && controller.WaitForRelease(busy.EndpointId, busy.ReleaseGeneration, delay);
+                if (!released)
+                {
+                    wait(delay);
+                }
+
                 delayMs = Math.Min(delayMs * 2, MirrorLeaseMaximumRetryDelayMs);
             }
             catch (DeviceEndpointBusyException busy)

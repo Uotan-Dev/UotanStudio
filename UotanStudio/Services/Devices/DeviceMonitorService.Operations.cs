@@ -199,7 +199,8 @@ public sealed partial class DeviceMonitorService
             return StartMirrorOverSharedSession(device, jarPath, options);
         }
 
-        var (lease, session) = AcquireForMirror(() => LeaseAdb(device, CancellationToken.None),
+        var (lease, session) = AcquireForMirrorOnController(
+            () => LeaseAdb(device, CancellationToken.None),
             () => ReleaseMirrorEndpointHolders(device));
         if (session.UsesServer)
         {

@@ -268,13 +268,22 @@ public sealed partial class DeviceController
     private void ReleaseServerLease(DeviceLease lease)
     {
         var endpoint = lease.Endpoint;
+        var released = false;
         lock (_gate)
         {
             if (_openLeases.TryGetValue(endpoint.Id, out var current) && ReferenceEquals(current, lease))
             {
                 _openLeases.Remove(endpoint.Id);
-                _leased.Remove(endpoint.Id);
+                released = _leased.Remove(endpoint.Id);
             }
+        }
+
+        // Server routes own no exclusive USB handle, so the reservation is returned immediately as before.
+        // Signal waiters outside the gate; a teardown that hangs must not hold the endpoint hostage.
+        // server 路由不持有独占 USB 句柄，因此仍按原样立即归还占用。在锁外通知等待方；拆除挂起时不会一直占用端点。
+        if (released)
+        {
+            SignalEndpointRelease(endpoint.Id);
         }
 
         _ = Task.Run(async () =>

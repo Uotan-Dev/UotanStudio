@@ -12,6 +12,47 @@ happens inside this project. Hosts must not open sockets, serial ports or USB ha
 themselves; they consume `DeviceController`/`DeviceLease`, the `Contracts` façades and the
 public protocol client classes. `Transports/Usb/Backend` interop is never a host surface.
 
+### Endpoint, lease and session ownership
+
+There are three distinct ownership levels; confusing them is the usual source of
+spurious `DeviceEndpointBusyException`:
+
+1. **Endpoint reservation** — `DeviceController._leased`, one owner per
+   `DeviceEndpointId`. `OpenTransportAsync`, `OpenLeaseByKeyAsync`, `AdoptSession` and
+   the serial/VCOM paths reserve it under `_gate`; an already-reserved endpoint is
+   rejected instead of preempted. A detached lease keeps a short releasing placeholder
+   until its transport is actually torn down, so a replacement cannot open while the old
+   handle is alive.
+2. **Lease** — `DeviceLease` owns the opened transport, the boxed protocol session and
+   a per-lease `DeviceCommandDispatcher`. It tears down streams → command pool →
+   protocol farewell → session → transport → endpoint reservation exactly once. All
+   `new DeviceLease(...)` construction and registration goes through
+   `DeviceController.RegisterLease`, which keeps the release handshake identical across
+   direct USB, serial and adopted server routes.
+3. **Session pool** — host-side consumers may share one multiplexing session over a
+   single exclusive lease (ADB streams, HDC channels, parked MTK/EDL connections).
+   Borrow a pooled session instead of opening a competing lease; the last borrower
+   releases the lease. Streaming work (logcat, scrcpy, syslog) never goes through the
+   command pool.
+
+### Waiting for a busy endpoint
+
+`DeviceEndpointBusyException` carries the release generation observed at rejection.
+`DeviceController.WaitForRelease(id, generation, timeout)` blocks without holding
+controller state and completes as soon as the reservation is actually returned; a
+release between the rejected open and the wait is detected through the generation, so
+no wake-up is lost. Hosts use this in `AcquireWithBusyRetry` instead of sleeping for a
+fixed polling interval; the delay remains a bounded fallback only.
+
+### Command pool status
+
+`DeviceCommandDispatcher` is FIFO and strictly serial **per lease**, but the current
+host submits discrete commands directly to protocol sessions, not through
+`EnqueueAsync`. Cross-operation serialisation comes from exclusive endpoint leases;
+serialisation inside one connection comes from the protocol session's own locks. Do not
+assume a single global command queue exists. `EnqueueAsync` is an optional facility for
+callers that need sequential submission on one lease.
+
 ## Layers
 
 Dependencies point downward only. `Contracts` and `Routing` are zero-dependency
