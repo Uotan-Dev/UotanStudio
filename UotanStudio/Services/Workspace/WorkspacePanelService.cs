@@ -7,7 +7,6 @@ using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Terminal;
 using UotanStudio.Services.Ui.Workspace;
-using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Services.Workspace;
 
@@ -338,7 +337,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
 
         SetVisibleState(key, true);
         SyncDockHierarchy(isShowing: true);
-        CloseEmptiedWindows(previousOwner);
 
         if (activate && host.Factory is { } factory && factory.FindRoot(entry.Dockable, static _ => true) is { } root)
         {
@@ -392,24 +390,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
         entry.Dockable.Owner = null;
         SetVisibleState(key, false);
         SyncDockHierarchy(isShowing: false);
-        CloseEmptiedWindows(currentOwner);
-    }
-
-    /// <summary>
-    /// Retires the floating window that the panel left behind. Showing or hiding a panel edits its host's
-    /// visible list directly instead of going through the factory, so a panel that was floating in its own
-    /// window leaves that window empty.
-    /// <para>回收面板遗留的浮动窗口。显示或隐藏面板会直接改写所属停靠区的可见列表而不经过工厂，
-    /// 因此曾经浮动在独立窗口中的面板会留下一个空窗口。</para>
-    /// </summary>
-    /// <param name="dock">The dock the panel was removed from. <para>面板被移出的停靠区。</para></param>
-    private static void CloseEmptiedWindows(IDock? dock)
-    {
-        if (dock?.Factory is { } factory)
-        {
-            DockWindowLifetime.CloseEmptiedWindows(factory,
-                factory.FindRoot(dock, static _ => true));
-        }
     }
 
     /// <summary>

@@ -22,7 +22,7 @@ public sealed class WorkspaceDockWindowLifetimeTests
         var root = BuildLayout(factory);
 
         var leftPane = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
-        Assert.False(leftPane.IsCollapsable);
+        Assert.True(leftPane.IsCollapsable);
 
         factory.FloatDockable(leftPane);
         var floatingRoot = Assert.Single(root.Windows!).Layout;
@@ -38,67 +38,17 @@ public sealed class WorkspaceDockWindowLifetimeTests
         Assert.Contains(WorkspaceSessionCapture.Enumerate(root), d => d.Id == "LeftPane");
     }
 
-    [Fact]
-    public void CloseEmptiedWindows_PanelRemovedOutsideTheFactory_RetiresItsFloatingWindow()
-    {
-        var factory = new HeadlessWorkspaceDockFactory();
-        var root = BuildLayout(factory);
-
-        var leftPane = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
-        factory.FloatDockable(leftPane);
-        Assert.Single(root.Windows!);
-
-        foreach (var item in WorkspaceSessionCapture.Enumerate(root.Windows![0].Layout).OfType<IDock>().ToList())
-        {
-            while (item.VisibleDockables is { Count: > 0 } contents)
-            {
-                contents.Remove(contents[^1]);
-            }
-        }
-
-        DockWindowLifetime.CloseEmptiedWindows(factory, root);
-
-        Assert.Empty(root.Windows!);
-    }
-
-    [Fact]
-    public void FindWindowOwnerRoot_FromAFloatingLayout_ResolvesTheMainRoot()
-    {
-        var factory = new HeadlessWorkspaceDockFactory();
-        var root = BuildLayout(factory);
-
-        var leftPane = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
-        factory.FloatDockable(leftPane);
-        var floatingRoot = Assert.IsAssignableFrom<IRootDock>(root.Windows![0].Layout);
-
-        Assert.Same(root, DockWindowLifetime.FindWindowOwnerRoot(floatingRoot));
-    }
-
-    [Fact]
-    public void MoveDockable_FloatingWindowThatStillHasContent_IsKept()
-    {
-        var factory = new HeadlessWorkspaceDockFactory();
-        var root = BuildLayout(factory);
-
-        var toolDock = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
-        factory.FloatDockable(toolDock);
-
-        Assert.Single(root.Windows!);
-    }
-
     private static IRootDock BuildLayout(WorkspaceDockFactory factory)
     {
         var toolDock = new ToolDock
         {
             Id = "LeftPane",
-            IsCollapsable = false,
             VisibleDockables = factory.CreateList<IDockable>(new Tool { Id = "ToolA" })
         };
         toolDock.ActiveDockable = toolDock.VisibleDockables![0];
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
-            IsCollapsable = false,
             VisibleDockables = factory.CreateList<IDockable>(new Document { Id = "Doc1" })
         };
         documentDock.ActiveDockable = documentDock.VisibleDockables![0];

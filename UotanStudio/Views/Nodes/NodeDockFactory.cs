@@ -4,7 +4,6 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
-using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -53,7 +52,6 @@ public class NodeDockFactory : Factory
         {
             Id = "NodeCanvasPane",
             Title = LanguageService.Instance.GetString("Node_Canvas"),
-            IsCollapsable = false,
             Proportion = double.NaN,
             ActiveDockable = nodeCanvas,
             VisibleDockables = CreateList<IDockable>(nodeCanvas)
@@ -146,7 +144,12 @@ public class NodeDockFactory : Factory
         base.InitLayout(layout);
     }
 
-    private static HostWindow CreateHostWindow()
+    /// <summary>
+    /// Creates the native window that hosts a floating dock window.
+    /// <para>创建承载浮动停靠窗口的原生窗口。</para>
+    /// </summary>
+    /// <returns>The host window for a floating layout. <para>浮动布局的宿主窗口。</para></returns>
+    protected virtual IHostWindow CreateHostWindow()
     {
         var options = new DockManagerOptions { IsDockingEnabled = true };
         return new HostWindow(options);
@@ -158,71 +161,4 @@ public class NodeDockFactory : Factory
         return new ManagedHostWindow(options);
     }
 
-    /// <inheritdoc/>
-    public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable? targetDockable)
-    {
-        var root = FindRoot(targetDock, _ => true) ?? FindRoot(sourceDock, _ => true);
-        base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
-        DockWindowLifetime.CloseEmptiedWindows(this, root);
-    }
-
-    /// <inheritdoc/>
-    public override void SplitToDock(IDock dock, IDockable dockable, DockOperation operation)
-    {
-        var root = FindRoot(dock, _ => true);
-        base.SplitToDock(dock, dockable, operation);
-        DockWindowLifetime.CloseEmptiedWindows(this, root);
-    }
-
-    /// <summary>
-    /// Closes a dockable panel with safe removal.
-    /// <para>关闭可停靠面板，安全移除。</para>
-    /// </summary>
-    /// <param name="dockable">
-    /// The dockable to close.
-    /// <para>要关闭的可停靠面板。</para>
-    /// </param>
-    public override void CloseDockable(IDockable? dockable)
-    {
-        if (dockable == null || !dockable.CanClose)
-        {
-            return;
-        }
-
-        try
-        {
-            SafeRemoveDockable(dockable);
-        }
-        catch
-        {
-
-        }
-    }
-
-    private void SafeRemoveDockable(IDockable dockable)
-    {
-        try
-        {
-            if (dockable?.Owner is IDock dock && dock.VisibleDockables != null)
-            {
-                var list = new List<IDockable>(dock.VisibleDockables);
-                if (list.Contains(dockable))
-                {
-                    list.Remove(dockable);
-                    dock.VisibleDockables = CreateList(list.ToArray());
-
-                    if (dock.ActiveDockable == dockable)
-                    {
-                        dock.ActiveDockable = list.Count > 0 ? list[0] : null;
-                    }
-                }
-            }
-
-            dockable?.Owner = null;
-        }
-        catch
-        {
-
-        }
-    }
 }
