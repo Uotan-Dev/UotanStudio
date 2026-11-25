@@ -87,6 +87,8 @@ internal sealed class UsbApiRegistry
         var registry = new UsbApiRegistry();
         registry.Register(NativeUsbApiProvider.ApiNameConst, () => new NativeUsbApiProvider());
         registry.Register(LibUsbApiProvider.ApiNameConst, () => new LibUsbApiProvider());
+        registry.Register(AndroidUsbApiProvider.ApiNameConst, () => new AndroidUsbApiProvider());
+        registry.Register(HarmonyUsbApiProvider.ApiNameConst, () => new HarmonyUsbApiProvider());
         return registry;
     }
 

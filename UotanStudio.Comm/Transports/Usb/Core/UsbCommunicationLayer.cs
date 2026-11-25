@@ -675,6 +675,12 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         {
             return Configuration.UsbBackend;
         }
+
+        if (PlatformDetection.IsHarmonyOs)
+        {
+            return UsbApiKind.Auto;
+        }
+
         return RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ||
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
             RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
@@ -688,12 +694,20 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端名称
     /// （Windows/Linux/macOS 均为原生；见 <see cref="PreferredAutoApiKind"/>）。</para>
     /// </summary>
-    private string? PreferredAutoApiName() => PreferredAutoApiKind() switch
+    private string? PreferredAutoApiName()
     {
-        UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
-        UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
-        _ => null
-    };
+        if (PlatformDetection.IsHarmonyOs)
+        {
+            return HarmonyUsbApiProvider.ApiNameConst;
+        }
+
+        return PreferredAutoApiKind() switch
+        {
+            UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
+            UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
+            _ => null
+        };
+    }
 
     /// <summary>
     /// Returns a compact diagnostic summary of the last enumeration on the current platform, exposing per-backend observability state so a device-less environment can assert that enumeration actually ran instead of silently returning empty.

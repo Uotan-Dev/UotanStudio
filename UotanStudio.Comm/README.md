@@ -27,6 +27,26 @@ leaves that every upper layer may reference.
 | Inventory | `Devices/Discovery` | Separate USB and server discovery sources; exact endpoint identity and reported state. |
 | Controller | `Devices/Services` | Snapshot generation, exact route opening, key-based leases (`OpenLeaseByKeyAsync`), adopted server-session leases (`AdoptSession`), and exclusive endpoint leases. |
 
+## USB API providers
+
+USB discovery, session opening and hot-plug registration go through registered providers
+(`Transports/Usb/Providers/`); hosts pick a backend with `UsbApiKind` (`UsbCommunicationLayer.RegisterProvider`
+for custom ones):
+
+| Provider | `UsbApiKind` | Backends | Platform gate | Notes |
+| --- | --- | --- | --- | --- |
+| `NativeUsbApiProvider` | `Native` | winusb, linux-usbfs, macos-iokit (classic + IOUSBHost) | Windows/Linux/macOS | Default on Windows/Linux/macOS (`Auto`). |
+| `LibUsbApiProvider` | `LibUsbDotNet` | libusb (opt-in) | Requires an external runtime (see below) | Bulk/interrupt via libusb transfer API; hot-plug callbacks on Linux/macOS. |
+| `AndroidUsbApiProvider` | `LibUsbDotNet` | OTG via libusb | `OperatingSystem.IsAndroid()` | Enable OTG USB on Android; needs `libusb-1.0.so.0`/`libusb-1.0.so` resolvable on the device. |
+| `HarmonyUsbApiProvider` | `LibUsbDotNet` | OHOS via libusb | RID contains `ohos`/`harmony` | Default for HarmonyOS via `Auto`; needs a libusb runtime on the device. |
+
+Runtime requirements for libusb-based providers (`AndroidUsbApiProvider`, `HarmonyUsbApiProvider`):
+place a compatible libusb next to the application or call
+`UsbCommunicationLayer.SetLibusbLibraryPath(path)` (supported file names: `libusb-1.0.so.0`,
+`libusb-1.0.so` on Android/OHOS, `libusb-1.0.dylib`, `libusb-1.0.0.dylib`, `libusb-1.0.dll`).
+On Android/OHOS there is no native hot-plug; discovery runs through the polling monitor
+(`UsbDeviceMonitor`).
+
 `DeviceEndpointId` includes the discovery source, transport and address. A
 physical USB association requires unique, verified identity evidence; matching
 VID/PID or enumeration order is not sufficient. ADB and HDC server

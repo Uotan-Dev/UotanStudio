@@ -17,15 +17,15 @@
 
 ## ✨ Features
 
-- 🍀 Cross-platform: Windows, Linux and macOS on x64, ARM64, LoongArch64 and RVA23
+- 🍀 Cross-platform: Windows, Linux and macOS
 - 📦 Firmware parsing and rebuilding: file systems, partitions, OTA, boot images and vendor packages
 - 🔌 Device communication: ADB, HDC, Fastboot, Qualcomm EDL, MediaTek, Rockchip RKDL and Allwinner Sunxi (FEL/FES) over USB/TCP/UDP/serial
 - 🛠 Visual programming: node canvas, workflow templates, script nodes and plugin packages
 - 🤖 Embedded MCP server: companion mode inside the GUI and a headless mode for AI clients to invoke firmware and device capabilities
-- 🖥 Screen mirroring: scrcpy protocol with GPU presentation and a CPU bitmap fallback
+- 🖥 Screen mirroring: scrcpy protocol with GPU acceleration
 - 🌍 Multilingual UI: Simplified Chinese and English
 - 🚫 No ads, no telemetry: parsing, packaging and flashing all run locally; the network is used only to download external tools on demand
-- ⚡ NativeAOT publishing: self-contained output that needs no .NET runtime on the target machine, with Satori GC replacing the default GC at publish time, except on riscv64 and LoongArch64 which keep the default GC
+- ⚡ NativeAOT publishing: self-contained output that needs no .NET runtime on the target machine
 
 ## 🧩 Architecture
 
@@ -74,32 +74,18 @@ flowchart TD
  Tests -.-> Host
 ```
 
-- `UotanStudio.Hash` and `UotanStudio.Net` are the lowest leaves; `UotanStudio.Compress` depends only on `Hash` and provides general-purpose compression plus ZIP/container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Media` depends on no other business project.
-- `UotanStudio.Assets` depends only on `Hash` and `Compress` and is the single home of every shipped binary asset (fonts, OpenHarmony capture libraries, vendor driver packages, the delivery updater and the magic rule table); `Firmware`, `Comm`, `Mirroring`, `Pipeline` and the host read them through `AssetCatalog`/`AssetStore`, and no project embeds resources of its own.
-- Vendor Windows drivers ship as `drivers/<packageId>` bundles; the settings page driver installer materializes them through `AssetStore` and stages them into the driver store.
-- The test host really references every project except `UotanStudio.Desktop`; the diagram draws one representative dashed edge for it.
-- `UotanStudio.Comm` owns every device access path (USB handles, sockets, serial ports, adb/HDC server protocols); the host only consumes `DeviceController`/`DeviceLease` and the protocol clients.
-- `UotanStudio.Pipeline` may use the firmware layer but never references host UI or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
-- `UotanStudio.Mirroring` references only `UotanStudio.Comm`, while `UotanStudio.Media` keeps zero Comm dependencies and consumes frames through the decoding factory.
-- `UotanStudio.Net` is the leaf library for downloads, GitHub mirrors and release/version queries; it references no other project.
-- `UotanStudio.Benchmarks` is a BenchmarkDotNet console app included in the `.slnx` build and CI gates; benchmarks still run separately in Release.
-
 ## 📦 Firmware formats
-
-Detection follows the handler list published by `FirmwareFormatRegistry.RegisterAll()`: extension candidates are always confirmed by a content check.
 
 | Area | Formats |
 | --- | --- |
 | Archives and compression | ZIP, CPIO; Brotli, Bzip2, Deflate, Gzip, LZ4, LZO, LZMA, XZ, Zlib, Zstd (the compression algorithms and container codecs are provided by `UotanStudio.Compress`) |
-| File systems | ext4, EROFS, F2FS, SquashFS, ROMFS, FAT12/16/32, exFAT (ext4, EROFS and F2FS support building from scratch and rebuilding) |
+| File systems | ext4, EROFS, F2FS, SquashFS, ROMFS, FAT12/16/32, exFAT |
 | Partitions and block devices | GPT, Android LP (`super`), sparse images, partition editor with per-partition read and write |
 | OTA and deltas | `payload.bin`, `.transfer.list` + `.new.dat`/`.new.dat.br` + `.patch.dat`, care_map |
 | Boot and security | boot / recovery / vendor_boot / dtbo parsing and repacking, AVB descriptor verification and signing, hashtree and FEC construction, SELinux policy parsing, boot patch footprint analysis |
 | Android metadata | `resources.arsc`, binary XML, DEX decompilation and Smali, OAT/VDEX, APK parsing and repacking, v1/v2/v3 signing with JKS key stores, QCN modem configuration |
 | Device tree and executables | DTB/DTS editing, ELF inspection, Qualcomm images and PBT |
 | Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG and RKBOOT/RKLOADER loaders, Amlogic DZ/KDZ, Allwinner IMAGEWTY, MediaTek, Sony SIN, NTPi, NB0 |
-
-Firmware images, ZIP files, payloads, file system images and device responses are all treated as untrusted input: offsets, lengths, entry counts, decompressed sizes and block counts are bounded and overflow-checked, and every publish goes through a temporary directory plus verification and atomic replacement.
 
 ## 🔌 Device communication
 
@@ -111,8 +97,6 @@ Firmware images, ZIP files, payloads, file system images and device responses ar
 - **Rockchip RKDL**: BootROM USB protocol, fail-closed geometry checks, transfer and flashing
 - **Native USB**: interface selection by exact physical path, with libusb natives bundled per RID
 
-Device-side capabilities surface in the device panel, USB tree view, device log, QR pairing window, mirroring window and the embedded terminal.
-
 ## 🚀 Delivery packaging and scripts
 
 - `DeliveryPlan` is the input contract for the delivery backend; the mutual exclusion between Super, Payload, Recovery and pure-script modes lives in the single validation path.
@@ -120,7 +104,7 @@ Device-side capabilities surface in the device panel, USB tree view, device log,
 - Recovery scripts use the verified Edify capabilities supplied by the source package (`block_image_verify`, `block_image_update`, `package_extract_file`, `file_getprop`); shell commands are never presented as recovery scripts.
 - Windows bat, Linux/macOS shell and recovery scripts share one file-orchestration result; compressed images are decompressed by the script before being handed to fastboot.
 - Publishing uses temporary directories, checksums and atomic replacement, so an existing output survives a failed run.
-- Tool preparation downloads the pinned platform-tools and zstd for each target platform and verifies their SHA-256 (riscv64 zstd binaries are out of scope).
+- Tool preparation downloads the pinned platform-tools and zstd for each target platform and verifies their SHA-256.
 
 ## 🖥 Workspace and automation
 
@@ -157,15 +141,6 @@ Benchmarks run on their own:
 ```bash
 dotnet run -c Release --project UotanStudio.Benchmarks -- --filter <BenchmarkName>
 ```
-
-## 🐧 Linux runtime dependencies
-
-Linux archives are self-contained directories, but rendering depends on system fonts and a few system libraries (verified on Deepin 23.1 loongarch64):
-
-- **fonts-inter** (required): the default UI theme uses the Inter composite font; without it the first text render throws `Could not create glyphTypeface`. Debian/Ubuntu/Deepin: `sudo apt-get install -y fonts-inter`; Fedora: `sudo dnf install -y inter-fonts`; Arch: `sudo pacman -S inter-font`. Any font package resolving the `Inter` family name works.
-- **System libraries** (present on every desktop distro): `fontconfig`, `freetype`, `expat`, `libstdc++`, `zlib`, and for the X11 backend `libX11`/`libXcursor`/`libXi`/`libXrandr`/`libXrender`/`libEGL`/`libGL`.
-- **SkiaSharp native library**: all four glibc RIDs (`linux-x64`, `linux-arm64`, `linux-loongarch64`, `linux-riscv64`) get an official `libSkiaSharp.so` from `skiasharp.nativeassets.linux` 4.157.0, which lands in the publish output through normal NuGet RID asset resolution; no manual copy or source build is involved. The 4.157.0 `linux-riscv64` and `linux-loongarch64` builds require `GLIBC_2.38`, so older-glibc distributions need a newer system or `3.119.x` (its `linux-riscv64` build only needs `GLIBC_2.27`; `linux-loongarch64` still needs `GLIBC_2.38`).
-- Every package contains `Linux-DEPENDS.txt` listing these dependencies and install commands.
 
 ## 🧾 License and notes
 

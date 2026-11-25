@@ -274,41 +274,59 @@
 						<TextBlock Text="{DynamicResource Menu_Window}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_WindowProjectExplorer}"
+							  Tag="ProjectExplorer"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectExplorerVisible, Mode=OneWay}"
+							  Click="OnWindowEntryClick"
 							  Command="{Binding MenuVM.ToggleProjectExplorerCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowProjectSetting}"
+							  Tag="ProjectSetting"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectSettingVisible, Mode=OneWay}"
+							  Click="OnWindowEntryClick"
 							  Command="{Binding MenuVM.ToggleProjectSettingCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowPlugins}"
+							  Tag="PatchTool"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.PluginToolVisible, Mode=OneWay}"
+							  Click="OnWindowEntryClick"
 							  Command="{Binding MenuVM.TogglePluginToolCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowImages}"
+							  Tag="ImagesView"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"
+							  Click="OnWindowEntryClick"
 							  Command="{Binding MenuVM.ToggleImagesViewCommand}" />
 					<MenuItem Header="{DynamicResource Dock_AiAssistant}"
+					          Tag="AiAssistant"
 					          IsVisible="{x:Static app:AppFeatures.AiAssistantEnabled}"
 					          ToggleType="CheckBox"
 					          IsChecked="{Binding MenuVM.WorkspacePanels.AiAssistantVisible, Mode=OneWay}"
+					          Click="OnWindowEntryClick"
 					          Command="{Binding MenuVM.ToggleAiAssistantCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowProperties}"
+					     Tag="Properties"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.PropertiesVisible, Mode=OneWay}"
+					     Click="OnWindowEntryClick"
 					     Command="{Binding MenuVM.TogglePropertiesCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowWorkspaceLog}"
+					     Tag="WorkspaceLog"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.WorkspaceLogVisible, Mode=OneWay}"
+					     Click="OnWindowEntryClick"
 					     Command="{Binding MenuVM.ToggleWorkspaceLogCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowAdbLog}"
+					     Tag="AdbLog"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.AdbLogVisible, Mode=OneWay}"
+					     Click="OnWindowEntryClick"
 					     Command="{Binding MenuVM.ToggleAdbLogCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowTerminal}"
+					     Tag="Terminal"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.TerminalVisible, Mode=OneWay}"
+					     Click="OnWindowEntryClick"
 					     Command="{Binding MenuVM.ToggleTerminalCommand}" />
 				</MenuItem>
 
