@@ -560,69 +560,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
-    /// <summary>
-    /// Removes the floating windows whose layout no longer holds any tool or document. Dock removes a
-    /// window only when the emptied dock is collapsable; the workspace panes are created with
-    /// <c>IsCollapsable = false</c>, so dragging a pane out and docking it again leaves the emptied pane
-    /// inside the window's own root and the window stays on screen as an empty frame.
-    /// <para>移除布局中已不再包含任何工具或文档的浮动窗口。Dock 仅在空停靠区可折叠时才回收窗口，
-    /// 而工作区面板以 <c>IsCollapsable = false</c> 创建，因此把面板拖出再停靠回去后，被清空的面板会留在
-    /// 窗口自己的根里，窗口就以空框形式留在屏幕上。</para>
-    /// </summary>
-    /// <param name="root">The layout root touched by the operation. <para>本次操作涉及的布局根。</para></param>
-    private void CloseEmptiedWindows(IRootDock? root)
-    {
-        if (FindWindowOwnerRoot(root) is not { Windows: { Count: > 0 } windows })
-        {
-            return;
-        }
-
-        foreach (var window in windows.ToList())
-        {
-            if (window.Layout is null || ContainsToolOrDocument(window.Layout))
-            {
-                continue;
-            }
-
-            RemoveWindow(window);
-        }
-    }
-
-    /// <summary>
-    /// Resolves the root that owns the floating-window registrations for a layout root. An operation
-    /// that starts inside a floating window resolves to that window's detached root, whose window list
-    /// is empty; walking up to the main-window root reaches every window the workspace tracks.
-    /// <para>解析布局根所归属的浮动窗口登记根。源自浮动窗口内的操作会解析到该窗口的独立根，其窗口列表为空；
-    /// 上溯到主窗体根才能覆盖工作区跟踪的全部窗口。</para>
-    /// </summary>
-    /// <param name="root">The layout root resolved from the operation. <para>由操作解析出的布局根。</para></param>
-    /// <returns>The owning root, or <see langword="null"/> when none is reachable. <para>归属根；不可达时为 <see langword="null"/>。</para></returns>
-    private static IRootDock? FindWindowOwnerRoot(IRootDock? root)
-    {
-        IRootDock? current = root;
-        var visited = new HashSet<IRootDock>(ReferenceEqualityComparer.Instance);
-        while (current is not null && visited.Add(current))
-        {
-            if (current.Window?.Owner is IRootDock parent)
-            {
-                current = parent;
-                continue;
-            }
-
-            return current;
-        }
-
-        return current;
-    }
-
-    /// <summary>
-    /// Whether the layout still holds at least one tool or document.
-    /// <para>判定布局中是否仍至少包含一个工具或文档。</para>
-    /// </summary>
-    /// <param name="layout">The layout to inspect. <para>待检查的布局。</para></param>
-    /// <returns>True when a tool or document remains. <para>仍有工具或文档时返回 true。</para></returns>
-    private static bool ContainsToolOrDocument(IDockable layout)
-        => WorkspaceSessionCapture.Enumerate(layout).Any(static item => item is ITool or IDocument);
+    private void CloseEmptiedWindows(IRootDock? root) => DockWindowLifetime.CloseEmptiedWindows(this, root);
 
     private IToolDock? ResolveTargetToolDock(IDockable dockable, IRootDock root)
     {

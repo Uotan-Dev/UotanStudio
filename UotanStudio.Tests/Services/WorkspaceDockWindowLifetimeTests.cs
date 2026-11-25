@@ -39,6 +39,42 @@ public sealed class WorkspaceDockWindowLifetimeTests
     }
 
     [Fact]
+    public void CloseEmptiedWindows_PanelRemovedOutsideTheFactory_RetiresItsFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+
+        var leftPane = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
+        factory.FloatDockable(leftPane);
+        Assert.Single(root.Windows!);
+
+        foreach (var item in WorkspaceSessionCapture.Enumerate(root.Windows![0].Layout).OfType<IDock>().ToList())
+        {
+            while (item.VisibleDockables is { Count: > 0 } contents)
+            {
+                contents.Remove(contents[^1]);
+            }
+        }
+
+        DockWindowLifetime.CloseEmptiedWindows(factory, root);
+
+        Assert.Empty(root.Windows!);
+    }
+
+    [Fact]
+    public void FindWindowOwnerRoot_FromAFloatingLayout_ResolvesTheMainRoot()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+
+        var leftPane = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "LeftPane"));
+        factory.FloatDockable(leftPane);
+        var floatingRoot = Assert.IsAssignableFrom<IRootDock>(root.Windows![0].Layout);
+
+        Assert.Same(root, DockWindowLifetime.FindWindowOwnerRoot(floatingRoot));
+    }
+
+    [Fact]
     public void MoveDockable_FloatingWindowThatStillHasContent_IsKept()
     {
         var factory = new HeadlessWorkspaceDockFactory();

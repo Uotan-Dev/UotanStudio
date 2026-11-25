@@ -4,6 +4,7 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
+using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -155,6 +156,22 @@ public class NodeDockFactory : Factory
     {
         var options = new DockManagerOptions { IsDockingEnabled = true };
         return new ManagedHostWindow(options);
+    }
+
+    /// <inheritdoc/>
+    public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable? targetDockable)
+    {
+        var root = FindRoot(targetDock, _ => true) ?? FindRoot(sourceDock, _ => true);
+        base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
+        DockWindowLifetime.CloseEmptiedWindows(this, root);
+    }
+
+    /// <inheritdoc/>
+    public override void SplitToDock(IDock dock, IDockable dockable, DockOperation operation)
+    {
+        var root = FindRoot(dock, _ => true);
+        base.SplitToDock(dock, dockable, operation);
+        DockWindowLifetime.CloseEmptiedWindows(this, root);
     }
 
     /// <summary>
