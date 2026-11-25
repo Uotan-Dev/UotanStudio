@@ -58,40 +58,58 @@ public partial class NewProjectWindow : Window, INewProjectDialog
     /// <returns>A task that completes when the modal form closes. <para>模态表单关闭后完成的任务。</para></returns>
     public Task ShowDialogAsync() => DialogService.GetOwnerWindow() is { } owner ? ShowDialog(owner) : Task.CompletedTask;
 
-    /// <summary><para>滑动窗口计量器：统计「已处理/总量 · 速度 · 剩余时间」。</para>
-    /// Sliding-window meter for the "processed/total · speed · eta" stats line.</summary>
+    /// <summary><para>滑动窗口计量器：统计速度与剩余时间。</para>
+    /// Sliding-window meter for the speed and remaining-time statistics.</summary>
     private readonly ProgressMeter _meter = new();
+
+    /// <summary><para>转圈下方的分组负载：批次序号、阶段文本、速度与剩余时间。</para>
+    /// Grouped payload shown under the spinner: batch position, stage text, speed and remaining time.</summary>
+    private readonly BusyMessageModel _busy = new();
+
     private int _progressGeneration;
 
     /// <summary>Updates operation status on the UI thread.
     /// <para>在 UI 线程更新操作状态。</para>
     /// </summary>
-    public void ReportProgress(string status, double? percent = null, (long Processed, long Total)? bytes = null, string? statistics = null)
+    public void ReportProgress(string status, double? percent = null, (long Processed, long Total)? bytes = null,
+        BusyMessageModel? groups = null, int index = 0, int total = 0)
     {
-        ProgressPanel.IsVisible = true;
         if (bytes is { Total: > 0 } measured) percent = measured.Processed * 100.0 / measured.Total;
         percent = percent is { } value && double.IsFinite(value) && value >= 0 ? Math.Clamp(value, 0, 100) : null;
-        MainBusyContainer.LoadingMessage = status;
-        MainBusyContainer.IsLoading = true;
+        OperationProgress.IsVisible = true;
         OperationProgress.IsIndeterminate = percent is null;
         OperationProgress.Value = percent ?? 0;
-        OperationStats.Text = statistics ?? string.Empty;
-        if (bytes is { } sample)
-        {
-            _meter.Report(sample.Processed, sample.Total);
-
-            OperationStats.Text = _meter.FormatStats(_meter.EstimatedRemaining is null
-                ? LanguageService.Instance.GetString("Progress_StatsNoEta")
-                : LanguageService.Instance.GetString("Progress_Stats"));
-        }
+        MainBusyContainer.IsLoading = true;
+        UpdateBusyGroups(status, bytes, groups, index, total);
     }
 
-    /// <summary>Clears samples and the stats text on stage transitions. <para>阶段切换时清空样本与统计文本。</para></summary>
+    /// <summary>Rebuilds the spinner groups, preferring a caller-composed payload over local composition.
+    /// <para>重建转圈分组；调用方已合成时优先使用其负载，否则本地合成。</para>
+    /// </summary>
+    private void UpdateBusyGroups(string status, (long Processed, long Total)? bytes, BusyMessageModel? groups,
+        int index, int total)
+    {
+        if (bytes is { } sample) _meter.Report(sample.Processed, sample.Total);
+        if (groups is not null) _busy.CopyFrom(groups);
+        else _busy.Update(status, _meter, index, total);
+    }
+
+    /// <summary>Clears samples and the spinner groups on stage transitions. <para>阶段切换时清空样本与转圈分组。</para></summary>
     public void ResetProgressStats()
     {
         _progressGeneration++;
         _meter.Reset();
-        OperationStats.Text = string.Empty;
+        _busy.Clear();
+    }
+
+    /// <summary>Hides the busy overlay together with the progress bar once an operation ends.
+    /// <para>操作结束时连同进度条一起隐藏忙碌遮罩。</para>
+    /// </summary>
+    private void StopBusy()
+    {
+        MainBusyContainer.IsLoading = false;
+        OperationProgress.IsVisible = false;
+        _busy.Clear();
     }
 
     /// <summary>Begins one byte-counted stage; late callbacks from earlier stages are discarded.
@@ -157,6 +175,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         IEnumerable<string>? reservedNames)
     {
         InitializeComponent();
+        MainBusyContainer.LoadingMessage = _busy;
 
         Title = LanguageService.Instance.GetString(mode == NewProjectWindowMode.Solution
             ? "Menu_NewSolution"
@@ -275,7 +294,6 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         _isAnalyzing = true;
         UpdateCreateEnabled();
         MainBusyContainer.IsLoading = true;
-        ProgressPanel.IsVisible = true;
         ResetProgressStats();
         ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
         var generation = ++_analysisGeneration;
@@ -315,8 +333,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             {
                 _isAnalyzing = false;
                 UpdateCreateEnabled();
-                ProgressPanel.IsVisible = false;
-                MainBusyContainer.IsLoading = false;
+                StopBusy();
             }
             ImagePicker.IsEnabled = true;
         }
@@ -350,8 +367,8 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         var single = images.Length == 1 ? images[0].FilePath : null;
         _isAnalyzing = single is not null;
         UpdateCreateEnabled();
-        ProgressPanel.IsVisible = _isAnalyzing;
-        MainBusyContainer.IsLoading = _isAnalyzing;
+        if (_isAnalyzing) MainBusyContainer.IsLoading = true;
+        else StopBusy();
         if (single is null) return;
         ResetProgressStats();
         ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
@@ -371,8 +388,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             {
                 _isAnalyzing = false;
                 UpdateCreateEnabled();
-                ProgressPanel.IsVisible = false;
-                MainBusyContainer.IsLoading = false;
+                StopBusy();
             }
         }
     }
@@ -627,15 +643,14 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         FormContent.IsEnabled = false;
         CancelButton.IsEnabled = true;
         MainBusyContainer.IsLoading = true;
-        ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
         ResetProgressStats();
+        ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
         try
         {
             if (!await ConfirmCreationSpaceAsync(Result))
             {
                 Result = null;
-                ProgressPanel.IsVisible = false;
-                MainBusyContainer.IsLoading = false;
+                StopBusy();
                 return;
             }
             ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
@@ -672,7 +687,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
             CancelButton.Content = LanguageService.Instance.GetString("Editor_Cancel");
             _creationCancellation?.Dispose();
             _creationCancellation = null;
-            MainBusyContainer.IsLoading = false;
+            StopBusy();
         }
     }
 

@@ -48,8 +48,9 @@ internal partial class ImageViewModel
         for (var i = 0; i < selectedImages.Count; i++)
         {
             var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] " +
-                string.Format(LanguageService.Instance.GetString("ImageView_Deleting"), image.DisplayName);
+            ReportBusyPosition(i + 1, selectedImages.Count);
+            StatusText = string.Format(LanguageService.Instance.GetString("ImageView_Deleting"),
+                image.DisplayName);
             await DeleteImageAsync(image);
             ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
             ReportItemStatistics(i + 1, selectedImages.Count);
@@ -203,6 +204,8 @@ internal partial class ImageViewModel
         if (partitions.Count == 0)
         {
             LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize super aborted: no raw/sparse images in project  合成 super 中止：项目中无 raw/sparse 镜像");
+            await ShowPromptAsync(LanguageService.Instance.GetString("ImageView_NoSelection"),
+                Ursa.Controls.MessageBoxIcon.Warning);
             return;
         }
 
@@ -223,6 +226,7 @@ internal partial class ImageViewModel
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
                 StatusText = LanguageService.Instance.GetString("UserError_SuperFailed");
                 ProgressPercent = 0;
+                await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);
                 return;
             }
 
@@ -244,6 +248,7 @@ internal partial class ImageViewModel
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
             StatusText = UserError.Describe(ex, "UserError_SuperFailed");
             ProgressPercent = 0;
+            await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -311,6 +316,7 @@ internal partial class ImageViewModel
         if (entries.Count == 0)
         {
             LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: no flashable images selected  选中文件刷入中止：未勾选可刷写镜像");
+            await ShowPromptAsync(LanguageService.Instance.GetString("ImageView_NoSelection"));
             return;
         }
 
@@ -319,9 +325,9 @@ internal partial class ImageViewModel
         {
             var progress = new Progress<FlashProgress>(fp =>
             {
-                var percent = Math.Clamp(fp.Percent, 0, 100);
-                ProgressPercent = percent;
-                StatusText = $"[{percent}%] {fp.Status}";
+                ProgressPercent = Math.Clamp(fp.Percent, 0, 100);
+                StatusText = SplitBatchPrefix(fp.Status, out var index, out var total);
+                if (total > 0) ReportBusyPosition(index, total);
             });
             var result = await BatchFlashService.FlashSelectedAsync(device, entries, progress, CancellationToken.None).ConfigureAwait(true);
             if (result.Success)
@@ -330,12 +336,15 @@ internal partial class ImageViewModel
             }
             StatusText = result.Summary;
             LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Warn, "Images", result.Summary);
+            if (!result.Success)
+                await ShowPromptAsync(result.Summary, Ursa.Controls.MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
             ProgressPercent = 0;
             StatusText = UserError.Describe(ex, "UserError_FlashFailed");
             LogService.Instance.Write(LogLevel.Error, "Images", $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}");
+            await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 

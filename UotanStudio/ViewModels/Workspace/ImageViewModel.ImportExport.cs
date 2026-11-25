@@ -101,6 +101,8 @@ internal partial class ImageViewModel
             {
                 StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
                 committed = true;
+                if (progress is null && byteProgress is null)
+                    await ShowPromptAsync(StatusText);
                 return;
             }
 
@@ -146,6 +148,7 @@ internal partial class ImageViewModel
             StatusText = UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Import failed: {ex.Message}  导入失败：{ex.Message}");
             if (progress is not null || byteProgress is not null) throw;
+            await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);
         }
         finally
         {
@@ -323,6 +326,7 @@ internal partial class ImageViewModel
         IsOperating = true;
         StatusText = image.DisplayName;
         var generation = _progressGeneration;
+        Exception? failure = null;
         try
         {
             var total = new FileInfo(source).Length;
@@ -338,9 +342,12 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
+            failure = ex;
             StatusText = UserError.Describe(ex);
             LogService.Instance.Write(LogLevel.Error, "Images", $"Export failed: {ex.Message}  导出失败：{ex.Message}");
         }
         finally { IsOperating = false; }
+        if (failure is not null)
+            await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);
     }
 }

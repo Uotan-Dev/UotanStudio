@@ -75,9 +75,15 @@ public interface INewProjectDialog
     /// <param name="status">The localized status text. <para>本地化状态文本。</para></param>
     /// <param name="percent">The explicit percentage, or null for indeterminate progress. <para>显式百分比；为 null 时显示不确定进度。</para></param>
     /// <param name="bytes">The optional byte sample used for speed and remaining-time statistics. <para>可选的字节样本，用于速度与剩余时间统计。</para></param>
-    /// <param name="statistics">The statistics line override, or null to keep the computed text. <para>统计行覆盖文本；为 null 时保留计算文本。</para></param>
+    /// <param name="groups">The busy groups reported by a caller that already composes them (the image panel), or null
+    /// to compose them from <paramref name="status"/> and <paramref name="bytes"/>.
+    /// <para>由已完成合成的调用方（镜像面板）上报的忙碌分组；为 null 时用
+    /// <paramref name="status"/> 与 <paramref name="bytes"/> 自行合成。</para></param>
+    /// <param name="index">One-based batch position for the "[x/x]" group; ignored unless <paramref name="total"/> is positive.
+    /// <para>「[x/x]」分组的批次序号（从 1 开始）；仅当 <paramref name="total"/> 为正时使用。</para></param>
+    /// <param name="total">Batch size; 0 hides the position group. <para>批次总数；为 0 时隐藏序号分组。</para></param>
     void ReportProgress(string status, double? percent = null, (long Processed, long Total)? bytes = null,
-        string? statistics = null);
+        BusyMessageModel? groups = null, int index = 0, int total = 0);
 
     /// <summary>
     /// Shows the form modally against the current owner window; no-op when no owner is available.

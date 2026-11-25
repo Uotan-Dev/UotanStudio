@@ -15,16 +15,6 @@ internal partial class ImageViewModel
 {
     private readonly ProgressMeter _meter = new();
 
-    /// <summary><para>进度统计行：已处理/总量 · 速度 · 剩余时间，解包与打包共用。</para>
-    /// Progress stats line shared by unpack and pack: processed/total · speed · eta.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasProgressStats))]
-    private string _progressStats = string.Empty;
-
-    /// <summary><para>获取当前是否有可显示的进度统计行。</para>
-    /// Gets whether a progress stats line is currently available to display.</summary>
-    public bool HasProgressStats => ProgressStats.Length > 0;
-
     /// <summary>
     /// Extracts the clicked entry or checked entries.
     /// <para>提取右键条目或勾选条目。</para>
@@ -96,6 +86,7 @@ internal partial class ImageViewModel
         if (entries.Count == 0)
         {
             StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
+            await ShowPromptAsync(StatusText);
             return;
         }
 
@@ -116,7 +107,9 @@ internal partial class ImageViewModel
             for (var index = 0; index < requests.Length; index++)
             {
                 var (entry, paths) = requests[index];
-                StatusText = $"[{index + 1}/{requests.Length}] {operation}: {entry.DisplayName}";
+                ReportBusyPosition(index + 1, requests.Length);
+                StatusText = string.Format(LanguageService.Instance.GetString("Image_BusyProcessing"),
+                    entry.DisplayName);
 
                 var itemProgress = CreateItemProgress(index, requests.Length);
                 try
@@ -192,9 +185,13 @@ internal partial class ImageViewModel
                     }
                 }
             }
+            // 结果汇总不再显示在面板上（进度区只保留进度条），因此写入统一日志作为唯一可见记录；有失败时弹窗提醒。
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
+            LogService.Instance.Write(failed > 0 ? LogLevel.Warn : LogLevel.Info, "Images", StatusText);
         }
         finally { IsOperating = false; }
+        if (failed > 0)
+            await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Warning);
     }
 
     /// <summary>Maps item progress into a batch slice, preserving the dynamic queue's completion cap.</summary>
@@ -355,7 +352,6 @@ internal partial class ImageViewModel
         var failed = 0;
         ProgressPercent = 0;
         _meter.Reset();
-        ProgressStats = string.Empty;
         try
         {
             var queue = new Queue<ImageEntryViewModel>(entries);
@@ -370,6 +366,7 @@ internal partial class ImageViewModel
                 var entry = queue.Dequeue();
                 var source = context.ResolvePath(entry.RelativePath) ?? string.Empty;
                 if (!processed.Add(source)) continue;
+                ReportBusyPosition(done + 1, total);
                 StatusText = string.Format(LanguageService.Instance.GetString("Image_FsStageFile"),
                     LanguageService.Instance.GetString("Image_FsExtracting"), entry.DisplayName);
 
@@ -408,7 +405,9 @@ internal partial class ImageViewModel
                     if (_fileSystemStage is null) ProgressPercent = (double)done / total * 100;
                 }
             }
+            // 结果汇总只写入统一日志；面板进度区不再显示文字结果。
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, 0);
+            LogService.Instance.Write(failed > 0 ? LogLevel.Warn : LogLevel.Info, "Images", StatusText);
         }
         finally { IsOperating = false; }
         if (failed > 0) throw new IOException(StatusText);

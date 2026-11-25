@@ -12,16 +12,12 @@
     <Grid RowDefinitions="*,Auto">
         <ursa:LoadingContainer Grid.Row="0" Name="ImageBusyContainer"
                                IsLoading="{Binding IsOperating}"
-                               LoadingMessage="{DynamicResource ImageView_Processing}">
+                               LoadingMessage="{Binding Busy}"
+                               LoadingMessageTemplate="{StaticResource BusyMessageTemplate}">
             <ursa:LoadingContainer.Indicator>
                 <ursa:LoadingIcon Classes="Large"
                                   IsLoading="{Binding $parent[ursa:LoadingContainer].IsLoading, Mode=TwoWay}" />
             </ursa:LoadingContainer.Indicator>
-            <ursa:LoadingContainer.LoadingMessageTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" />
-                </DataTemplate>
-            </ursa:LoadingContainer.LoadingMessageTemplate>
             <Grid RowDefinitions="Auto,Auto,*" IsEnabled="{Binding CanOperate}">
                 <Grid Grid.Row="0" Margin="5,5" ColumnDefinitions="28,*,28">
                     <Button Grid.Column="0"
@@ -222,127 +218,115 @@
         <!-- 底部按钮区 -->
         <Border Grid.Row="1" Name="ImageOperationFooter" Padding="6" Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <StackPanel>
-                <StackPanel Spacing="5">
-                    <StackPanel Spacing="5"
-                                IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Text="{Binding ProgressStats}"
-                                   FontSize="11"
-                                   Margin="0,2,0,0"
-                                   Opacity="0.75"
-                                   TextTrimming="CharacterEllipsis"
-                                   IsVisible="{Binding HasProgressStats}" />
-                        <ProgressBar Minimum="0"
-                                     Maximum="100"
-                                     FontSize="12"
-                                     ShowProgressText="True"
-                                     Value="{Binding ProgressPercent}"
-                                     Height="20"
-                                     HorizontalAlignment="Stretch"
-                                     CornerRadius="4" />
-                        <TextBlock Text="{Binding StatusText}"
-                                   FontSize="11"
-                                   TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                    <Grid IsEnabled="{Binding CanOperate}">
-                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                                                       IsVisible="{Binding IsUnpackMode}">
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding ExtractSelectedCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_ExtractHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:FileDownload Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_ExtractSelected}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding FlashSelectedCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                        </WrapPanel>
+            <StackPanel Spacing="5">
+                <!-- 进度条常驻显示；动态进度文字统一显示在转圈遮罩下方。 -->
+                <ProgressBar Minimum="0"
+                             Maximum="100"
+                             FontSize="12"
+                             ShowProgressText="True"
+                             Value="{Binding ProgressPercent}"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}"
+                             Height="20"
+                             HorizontalAlignment="Stretch"
+                             CornerRadius="4" />
+                <Grid IsEnabled="{Binding CanOperate}">
+                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
+                               IsVisible="{Binding IsUnpackMode}">
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding ExtractSelectedCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_ExtractHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:FileDownload Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_ExtractSelected}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding FlashSelectedCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                    </WrapPanel>
 
-                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                                                       IsVisible="{Binding IsPackMode}">
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeImgCommand}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:ImageAdd Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeImg}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeFatCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_SynthesizeFatHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:HardDiskStorage Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeFat}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeBrCommand}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeBr}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeDatCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_DatHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:FileCopy Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                        </WrapPanel>
+                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
+                               IsVisible="{Binding IsPackMode}">
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding SynthesizeImgCommand}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:ImageAdd Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeImg}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding SynthesizeFatCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_SynthesizeFatHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:HardDiskStorage Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeFat}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding SynthesizeBrCommand}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeBr}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding SynthesizeDatCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_DatHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:FileCopy Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                    </WrapPanel>
 
-                        <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
-                                                       IsVisible="{Binding IsOutputMode}">
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding FlashSelectedCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Click="OnPackRomClick">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackRom}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                        </WrapPanel>
-                    </Grid>
-                </StackPanel>
+                    <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6"
+                               IsVisible="{Binding IsOutputMode}">
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding FlashSelectedCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Click="OnPackRomClick">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackRom}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                    </WrapPanel>
+                </Grid>
             </StackPanel>
         </Border>
     </Grid>

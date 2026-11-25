@@ -97,7 +97,6 @@ internal partial class ImageViewModel
         var generation = _progressGeneration;
         ProgressPercent = -1;
         _meter.Reset();
-        ProgressStats = string.Empty;
         try
         {
             StatusText = string.Format(LanguageService.Instance.GetString("Image_ConvertStage"),

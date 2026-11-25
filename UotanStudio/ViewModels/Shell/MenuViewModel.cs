@@ -351,15 +351,25 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private static async Task UnpackWithCreationProgressAsync(ImageViewModel images,
         IReadOnlyList<ImageEntryViewModel> entries, bool fully, INewProjectDialog window, CancellationToken cancellationToken = default)
     {
+        // 镜像面板已把状态、速度与剩余时间合成为分组，这里直接转发同一份负载，
+        // 使新建工程窗口的转圈下方文字与镜像面板完全一致。
+        void Push() => window.ReportProgress(images.StatusText, images.ProgressPercent, groups: images.Busy);
         void Update(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
-            if (args.PropertyName is nameof(images.StatusText) or nameof(images.ProgressPercent) or nameof(images.ProgressStats))
-                window.ReportProgress(images.StatusText, images.ProgressPercent, statistics: images.ProgressStats);
+            if (args.PropertyName == nameof(images.ProgressPercent))
+                Push();
         }
+        void UpdateGroups(object? sender, EventArgs args) => Push();
+
         window.ResetProgressStats();
         images.PropertyChanged += Update;
+        images.Busy.Updated += UpdateGroups;
         try { await images.UnpackFromProjectCreationAsync(entries, fully, cancellationToken); }
-        finally { images.PropertyChanged -= Update; }
+        finally
+        {
+            images.PropertyChanged -= Update;
+            images.Busy.Updated -= UpdateGroups;
+        }
     }
 
     private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, INewProjectDialog window, CancellationToken cancellationToken = default)
@@ -478,10 +488,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var partition = Path.GetFileName(Path.TrimEndingDirectorySeparator(tree));
+                // 每个分区开始前重置采样，避免把上一个分区的速度/剩余时间带到本分区。
                 window.ResetProgressStats();
                 window.ReportProgress(
                     string.Format(_localizer.GetString("NewProject_MergingMyPartitions"), partition),
-                    done * 100.0 / myTrees.Count);
+                    done * 100.0 / myTrees.Count, index: done + 1, total: myTrees.Count);
                 var result = await service.MergeAsync(tree, systemTree, configDirectory: null,
                     new MyPartitionMergeOptions
                     {
