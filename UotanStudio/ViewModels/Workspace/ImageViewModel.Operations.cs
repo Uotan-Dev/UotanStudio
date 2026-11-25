@@ -1,6 +1,6 @@
 using Avalonia.Platform.Storage;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services;
@@ -144,6 +144,10 @@ internal partial class ImageViewModel
                             continue;
                         }
                         var byteProgress = CreateFileSystemProgress(entry.DisplayName);
+                        var allowUnsigned = await ConfirmUnsignedAvbRepackAsync(entry, paths);
+                        using var avbScope = allowUnsigned
+                            ? RepackMetadata.UsePackingOverrides(new Dictionary<string, string> { ["AllowUnsignedAvbRepack"] = "1" })
+                            : null;
                         var result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel, byteProgress));
                         if (result.Success) succeeded++;
                         else failed++;
@@ -192,6 +196,30 @@ internal partial class ImageViewModel
         finally { IsOperating = false; }
         if (failed > 0)
             await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Warning);
+    }
+
+    /// <summary>
+    /// Asks the user before rebuilding an AVB-signed boot directory as an unsigned image. Returns
+    /// <see langword="false"/> when the directory has no AVB footer or the user declines.
+    /// <para>重建带 AVB 签名的 boot 目录前询问用户；目录无 AVB footer 或用户取消时返回 <see langword="false"/>。</para>
+    /// </summary>
+    private static async Task<bool> ConfirmUnsignedAvbRepackAsync(ImageEntryViewModel entry, ImageOperationPaths paths)
+    {
+        if (!Directory.Exists(paths.UnpackedDirectory)) return false;
+        var metadata = RepackMetadata.Read(paths.UnpackedDirectory);
+        if (metadata is null || metadata.CanPackDirectory)
+        {
+            return false;
+        }
+
+        if (metadata.Configuration["footer"] is null) return false;
+        if (TopLevelExtensions.GetTopLevel() is not Avalonia.Controls.Window owner) return false;
+        var language = LanguageService.Instance;
+        return await DialogService.ConfirmAsync(owner,
+            language.GetString("Image_AvbUnsignedRepackTitle"),
+            string.Format(language.GetString("Image_AvbUnsignedRepackMessage"), entry.DisplayName),
+            language.GetString("Image_ExtractOverwrite"),
+            language.GetString("Image_ExtractSkip"));
     }
 
     /// <summary>Maps item progress into a batch slice, preserving the dynamic queue's completion cap.</summary>
@@ -410,7 +438,7 @@ internal partial class ImageViewModel
             LogService.Instance.Write(failed > 0 ? LogLevel.Warn : LogLevel.Info, "Images", StatusText);
         }
         finally { IsOperating = false; }
-        if (failed > 0) throw new IOException(StatusText);
+        if (failed > 0) throw new UserFacingSummaryException(StatusText);
     }
 
     /// <summary>

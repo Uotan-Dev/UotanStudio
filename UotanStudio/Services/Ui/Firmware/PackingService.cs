@@ -81,7 +81,11 @@ internal static class PackingService
 
             if (metadata is not null)
             {
-                if (!metadata.CanPackDirectory) return FirmwareOperationResult.Fail(metadata.PackingNotes);
+                var allowUnsignedAvb = RepackMetadata.PackingOverrides is { } avbOverrides
+                    && avbOverrides.TryGetValue("AllowUnsignedAvbRepack", out var avbValue)
+                    && string.Equals(avbValue, "1", StringComparison.Ordinal);
+                if (!metadata.CanPackDirectory && !allowUnsignedAvb)
+                    return FirmwareOperationResult.Fail(metadata.PackingNotes);
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
                 var reportsOwnBytes = metadata.FormatName is "EXT4" or "EROFS" or "F2FS";

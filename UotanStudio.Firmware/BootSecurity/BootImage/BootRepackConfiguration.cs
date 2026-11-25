@@ -12,6 +12,8 @@ namespace UotanStudio.Firmware.BootSecurity.BootImage;
 
 internal sealed class BootRepackConfiguration
 {
+    internal const string AllowUnsignedAvbRepackKey = "AllowUnsignedAvbRepack";
+
     public string Magic { get; set; } = string.Empty;
     public BootImageHeader? Header { get; set; }
     public VendorBootHeader? VendorHeader { get; set; }
@@ -90,7 +92,10 @@ internal sealed class BootRepackConfiguration
             throw new InvalidDataException("Missing Boot repack metadata.");
         var configuration = metadata.Configuration.Deserialize(BootRepackJsonContext.Default.BootRepackConfiguration)
             ?? throw new InvalidDataException("Missing Boot configuration.");
-        if (configuration.Footer is not null)
+        var allowUnsignedAvb = RepackMetadata.PackingOverrides is { } overrides
+            && overrides.TryGetValue(AllowUnsignedAvbRepackKey, out var value)
+            && string.Equals(value, "1", StringComparison.Ordinal);
+        if (configuration.Footer is not null && !allowUnsignedAvb)
             throw new InvalidDataException(
                 "The source boot image carries an AVB footer; rebuilding this directory would drop the footer and its vbmeta and can break verified boot. Use an AVB-aware re-signing workflow.");
         if (Path.GetFullPath(outputPath).Equals(Path.GetFullPath(Path.Combine(directory, RepackMetadata.FileName)),

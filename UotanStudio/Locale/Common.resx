@@ -1602,6 +1602,14 @@ Author: 暮间雾
   <data name="Image_OperationSummary" xml:space="preserve">
     <value>Succeeded: {0}; failed: {1}; skipped: {2}. See the log for details.</value>
   </data>
+  <data name="Image_AvbUnsignedRepackTitle" xml:space="preserve">
+    <value>Repack signed image</value>
+  </data>
+  <data name="Image_AvbUnsignedRepackMessage" xml:space="preserve">
+    <value>{0} carries an AVB signature (footer and vbmeta). Repacking will produce an unsigned image without that verified-boot data; the device may fail to boot or fail integrity checks.
+
+Continue anyway?</value>
+  </data>
   <data name="Dialog_UnsavedTitle" xml:space="preserve">
     <value>Unsaved Changes</value>
   </data>

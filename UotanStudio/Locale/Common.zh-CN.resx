@@ -1635,6 +1635,14 @@
   <data name="Image_OperationSummary" xml:space="preserve">
     <value>成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</value>
   </data>
+  <data name="Image_AvbUnsignedRepackTitle" xml:space="preserve">
+    <value>重打包已签名镜像</value>
+  </data>
+  <data name="Image_AvbUnsignedRepackMessage" xml:space="preserve">
+    <value>{0} 带有 AVB 签名（footer 与 vbmeta）。重新打包将输出未签名镜像，丢弃这些验证启动数据，设备可能无法启动或无法通过完整性校验。
+
+确认仍要继续吗？</value>
+  </data>
   <data name="ImageView_PackMode" xml:space="preserve">
     <value>打包</value>
   </data>
