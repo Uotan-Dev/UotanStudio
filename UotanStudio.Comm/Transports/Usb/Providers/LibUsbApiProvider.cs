@@ -5,7 +5,7 @@ using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
 namespace UotanStudio.Comm.Transports.Usb.Providers;
 
-internal sealed class LibUsbApiProvider : UsbApiProviderBase
+internal class LibUsbApiProvider : UsbApiProviderBase
 {
     private readonly Lock _runtimeGate = new();
     private int _runtimeRevision = -1;
