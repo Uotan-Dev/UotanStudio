@@ -26,22 +26,22 @@
     <PackageVersion Include="Irihi.Ursa" Version="2.3.1" />
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.3.1" />
     <PackageVersion Include="Irihi.Lingua" Version="1.1.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Abstractions" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Bmp" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Color.Icc" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Gif" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Heif" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Ico" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Jbig2" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg.GainMap" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg2000" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Png" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Pnm" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Qoi" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Tiff" Version="2.0.0" />
-    <PackageVersion Include="Sdcb.SimdCodecs.Webp" Version="2.0.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Abstractions" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Bmp" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Color.Icc" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Gif" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Heif" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Ico" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jbig2" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg.GainMap" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Jpeg2000" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Png" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Pnm" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Qoi" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Tiff" Version="2.1.0" />
+    <PackageVersion Include="Sdcb.SimdCodecs.Webp" Version="2.1.0" />
     <PackageVersion Include="Semi.Avalonia" Version="12.1.0.2" />
     <PackageVersion Include="Semi.Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.2" />
