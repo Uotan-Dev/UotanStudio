@@ -228,10 +228,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     [ObservableProperty]
     private bool _terminalVisible = true;
 
-    private IProportionalDock? _mainLayout;
-    private IProportionalDock? _centerColumn;
-    private IProportionalDock? _rightColumn;
-
     /// <summary>
     /// Registers a workspace panel with its host dock and syncs the initial visibility.
     /// Re-registering the same key overwrites the previous entry (idempotent, safe when the
@@ -244,9 +240,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="visible">Whether initially visible. <para>初始是否可见。</para></param>
     public void Register(string key, IDockable dockable, IDock host, bool visible)
     {
-        _mainLayout = null;
-        _centerColumn = null;
-        _rightColumn = null;
         if (key == AdbLog && GetEntry(key)?.Dockable is IDisposable previous &&
             !ReferenceEquals(previous, dockable))
             previous.Dispose();
@@ -271,10 +264,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     public void Show(string key) => Show(key, activate: true);
 
     /// <summary>
-    /// Shows a specified panel; when activate is false the entry is only re-added to its host
-    /// dock's visible list without changing the active one, so restoring visibility keeps focus.
-    /// <para>显示指定停靠项；activate 为 false 时仅把它加回所属停靠区的可见列表而不改变激活项，
-    /// 恢复可见状态不会切换焦点。</para>
+    /// Shows a specified panel; when activate is false the entry is only restored without changing the
+    /// active dockable, so restoring visibility keeps focus.
+    /// <para>显示指定停靠项；activate 为 false 时仅恢复可见状态而不切换激活项，恢复可见状态不会切换焦点。</para>
     /// </summary>
     /// <param name="key">Panel key. <para>停靠项键。</para></param>
     /// <param name="activate">Whether to also make it the active panel. <para>是否同时设为激活项。</para></param>
@@ -291,64 +283,51 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 _terminals?.ShowWithoutActivate();
             }
             RefreshTerminalVisibility();
-            SyncDockHierarchy(isShowing: true);
             return;
         }
+
         var entry = GetEntry(key);
-        UpdateHost(entry);
         if (entry is null)
         {
             return;
         }
 
-        if (entry.Dockable.Owner is IDock currentOwner && currentOwner.VisibleDockables?.Contains(entry.Dockable) == true)
+        UpdateHost(entry);
+        if (entry.Dockable.Factory is not { } factory)
         {
-            if (activate && !ReferenceEquals(currentOwner.ActiveDockable, entry.Dockable))
-            {
-                currentOwner.ActiveDockable = entry.Dockable;
-            }
-            SetVisibleState(key, true);
-            SyncDockHierarchy(isShowing: true);
             return;
         }
 
-        var host = (entry.Host is IToolDock ? entry.Host : null) ?? entry.RegisteredHost;
-
-        var previousOwner = entry.Dockable.Owner as IDock;
-        if (previousOwner is not null && !ReferenceEquals(previousOwner, host))
+        // A panel the dock is holding after a hide sits in the root's HiddenDockables and restoring it
+        // returns it to the pane it came from. A panel that was never hidden has no such entry, so it
+        // goes to its registered tool dock instead.
+        var hidden = factory.FindRoot(entry.Dockable, static _ => true)?.HiddenDockables;
+        if (hidden?.Contains(entry.Dockable) == true)
         {
-            previousOwner.VisibleDockables?.Remove(entry.Dockable);
-            if (ReferenceEquals(previousOwner.ActiveDockable, entry.Dockable))
+            factory.RestoreDockable(entry.Dockable);
+        }
+        else if (entry.Dockable.Owner is not IDock)
+        {
+            factory.AddDockable(entry.Host ?? entry.RegisteredHost, entry.Dockable);
+        }
+
+        if (activate && entry.Dockable.Owner is IDock)
+        {
+            factory.SetActiveDockable(entry.Dockable);
+            if (factory.FindRoot(entry.Dockable, static _ => true) is { } root)
             {
-                previousOwner.ActiveDockable = previousOwner.VisibleDockables?.FirstOrDefault();
+                factory.SetFocusedDockable(root, entry.Dockable);
             }
         }
 
-        if (host.VisibleDockables is { } list && !list.Contains(entry.Dockable))
-        {
-            list.Add(entry.Dockable);
-        }
-
-        entry.Dockable.Owner = host;
-        if (activate || host.ActiveDockable is null)
-        {
-            host.ActiveDockable = entry.Dockable;
-        }
-
         SetVisibleState(key, true);
-        SyncDockHierarchy(isShowing: true);
-
-        if (activate && host.Factory is { } factory && factory.FindRoot(entry.Dockable, static _ => true) is { } root)
-        {
-            factory.SetActiveDockable(entry.Dockable);
-            factory.SetFocusedDockable(root, entry.Dockable);
-        }
     }
 
     /// <summary>
-    /// Hides a specified panel: removes it from its host dock's visible list; when it was the
-    /// active panel, the first remaining panel becomes active instead.
-    /// <para>隐藏指定停靠项：从所属停靠区的可见列表移除；若它当前为激活项，则改为激活余下的第一个。</para>
+    /// Hides a specified panel; the dock keeps it in <c>HiddenDockables</c> together with the pane it
+    /// came from, so showing it again returns it to the same position.
+    /// <para>隐藏指定停靠项；Dock 会把它连同来源停靠区一起记录在 <c>HiddenDockables</c> 中，
+    /// 再次显示时会回到原位置。</para>
     /// </summary>
     /// <param name="key">Panel key. <para>停靠项键。</para></param>
     public void Hide(string key)
@@ -357,9 +336,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
         {
             _terminals?.Hide();
             RefreshTerminalVisibility();
-            SyncDockHierarchy(isShowing: false);
             return;
         }
+
         var entry = GetEntry(key);
         if (entry is null)
         {
@@ -367,29 +346,8 @@ public sealed partial class WorkspacePanelService : ObservableObject
         }
 
         UpdateHost(entry);
-        var currentOwner = entry.Dockable.Owner as IDock;
-        if (currentOwner?.VisibleDockables is { } currentList && currentList.Contains(entry.Dockable))
-        {
-            currentList.Remove(entry.Dockable);
-            if (ReferenceEquals(currentOwner.ActiveDockable, entry.Dockable))
-            {
-                currentOwner.ActiveDockable = currentList.FirstOrDefault();
-            }
-        }
-
-        var host = entry.Host;
-        if (host is not null && !ReferenceEquals(host, currentOwner) && host.VisibleDockables is { } hostList && hostList.Contains(entry.Dockable))
-        {
-            hostList.Remove(entry.Dockable);
-            if (ReferenceEquals(host.ActiveDockable, entry.Dockable))
-            {
-                host.ActiveDockable = hostList.FirstOrDefault();
-            }
-        }
-
-        entry.Dockable.Owner = null;
+        entry.Dockable.Factory?.HideDockable(entry.Dockable);
         SetVisibleState(key, false);
-        SyncDockHierarchy(isShowing: false);
     }
 
     /// <summary>
@@ -437,7 +395,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
             SetVisibleState(key, isVisible);
         }
         RefreshTerminalVisibility();
-        SyncDockHierarchy(isShowing: false);
     }
 
     private PanelEntry? GetEntry(string key) => _panels.TryGetValue(key, out var entry) ? entry : null;
@@ -499,45 +456,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 TerminalVisible = value;
                 break;
         }
-    }
-
-    private void SyncDockHierarchy(bool isShowing)
-    {
-        var leftPane = _panels.GetValueOrDefault(ProjectExplorer)?.RegisteredHost;
-        var bottomPane = _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost;
-        var rightPaneTop = _panels.GetValueOrDefault(ImagesView)?.RegisteredHost;
-        var rightPane = _panels.GetValueOrDefault(Properties)?.RegisteredHost;
-
-        var sampleHost = rightPaneTop ?? rightPane ?? leftPane ?? bottomPane;
-        if (sampleHost?.Factory is not { } factory)
-        {
-            return;
-        }
-
-        var root = factory.FindRoot(sampleHost, static _ => true);
-        if (root is null)
-        {
-            return;
-        }
-
-        _mainLayout ??= factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceMainLayout", StringComparison.Ordinal)) as IProportionalDock;
-        _centerColumn ??= factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceCenterColumn", StringComparison.Ordinal)) as IProportionalDock;
-        _rightColumn ??= (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceRightColumn", StringComparison.Ordinal))
-            ?? rightPaneTop?.Owner
-            ?? rightPane?.Owner) as IProportionalDock;
-
-        var mainLayout = _mainLayout;
-        var centerCol = _centerColumn;
-        var rightCol = _rightColumn;
-
-        if (mainLayout is null || centerCol is null)
-        {
-            return;
-        }
-
-        SyncLeftPane(leftPane, factory, mainLayout, isShowing);
-        SyncRightColumn(rightCol, rightPaneTop, rightPane, factory, mainLayout, isShowing);
-        SyncBottomPane(bottomPane, centerCol, factory, isShowing);
     }
 
     /// <summary>
