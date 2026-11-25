@@ -1,6 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:chrome="using:Avalonia.Controls.Chrome">
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:iri="https://irihi.tech/shared"
+        xmlns:u="https://irihi.tech/ursa">
     <!-- 按钮与分段单选的状态补丁：Semi 只为悬浮/选中提供底色键，没有悬浮前景键，
          这里把普通主色悬浮（以及按下）按钮的文字与图标统一成纯白，配合主色底使用；
          文档标签行内操作按钮、标签栏展开按钮以及窗口标题栏按钮使用各自的中性/关闭底色，不套用主色悬浮前景。 -->
@@ -73,5 +75,12 @@
     </Style>
     <Style Selector="RadioButton.segment:checked /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+    </Style>
+
+    <!-- 未保存修改提示框：只让「保存」保持主色实心，「放弃修改」与「取消」同为中性按钮。 -->
+    <!-- Unsaved-changes prompt: only "Save" keeps the accent solid fill; "Discard" matches the neutral "Cancel". -->
+    <Style Selector="u|MessageBoxWindow.unsaved-changes-dialog /template/ Button#PART_NoButton">
+        <Setter Property="Theme" Value="{DynamicResource {x:Type Button}}" />
+        <Setter Property="iri:ClassHelper.Classes" Value="Tertiary" />
     </Style>
 </Styles>

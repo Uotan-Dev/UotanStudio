@@ -54,6 +54,13 @@ public sealed record DangerousConfirmRequest
 /// </summary>
 internal static class DialogService
 {
+    /// <summary>
+    /// Style class carried by the unsaved-changes prompt so the shared message window can style its
+    /// "Discard" button as a neutral action while "Save" keeps the accent fill.
+    /// <para>未保存修改提示框携带的样式类：共享消息窗口据此把「放弃修改」画成中性按钮，只让「保存」保留主色实心。</para>
+    /// </summary>
+    internal const string UnsavedChangesDialogClass = "unsaved-changes-dialog";
+
     internal static Window? GetOwnerWindow() =>
         Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
             ? desktop.Windows.FirstOrDefault(window => window.IsActive) ?? desktop.MainWindow
@@ -67,6 +74,9 @@ internal static class DialogService
             MessageBoxIcon.Warning, MessageBoxButton.YesNoCancel);
         dialog.Resources["STRING_MENU_DIALOG_YES"] = language.GetString("Menu_Save");
         dialog.Resources["STRING_MENU_DIALOG_NO"] = language.GetString("Dialog_DiscardChanges");
+        // 本提示只让「保存」保持主色实心，「放弃修改」按中性按钮显示，见 Themes/AccentControls.axaml。
+        // Only "Save" keeps the accent solid fill here; "Discard" renders as a neutral button (Themes/AccentControls.axaml).
+        dialog.Classes.Add(UnsavedChangesDialogClass);
         return dialog.ShowDialog<MessageBoxResult>(owner);
     }
 
