@@ -67,7 +67,9 @@ public sealed partial class MtkSession
             throw new MtkProtocolException("The Legacy DRAM resource is too short for its parameter prefix.");
         }
         await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
-        if (emi.Version == 0 || (emi.Version is 0xF or 0x10 or 0x11 or 0x14 or 0x15 && DeviceInfo!.HardwareCode != 0x8127))
+        if (emi.Version == 0
+            || (emi.Version is 0xF or 0x10 or 0x11 or 0x12 or 0x13 or 0x14 or 0x15
+                && DeviceInfo!.HardwareCode != 0x8127))
         {
             var size = new byte[4];
             BinaryPrimitives.WriteUInt32BigEndian(size, (uint)length);

@@ -437,7 +437,54 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
     private static MtkStorageRegionKind XFlashRegionKind(MtkXFlashStorageKind family, MtkXFlashStorageRegion region) =>
         region.RequiresAuthenticatedAccess ? MtkStorageRegionKind.Rpmb
             : family == MtkXFlashStorageKind.Ufs ? MtkStorageRegionKind.UfsLogicalUnit
-            : region.PartitionId == 8 ? MtkStorageRegionKind.EmmcUser : MtkStorageRegionKind.Unknown;
+            : EmmcPartitionKind(region.RequiresAuthenticatedAccess, region.PartitionId);
+
+    /// <summary>
+    /// Resolves an eMMC area identity from the wire part identifier the vendor enumeration defines.
+    /// <para>依据厂商枚举定义的线协议分区标识，解析 eMMC 区域身份。</para>
+    /// </summary>
+    /// <remarks>
+    /// The enumeration numbers boot1, boot2, RPMB, GP1..GP4 and user consecutively, so leaving any of them
+    /// unknown makes the cross-generation capability snapshot disagree with what the protocol can address.
+    /// <para>该枚举把 boot1、boot2、RPMB、GP1..GP4 与 user 连续编号，任一项留作未知都会让跨代能力快照
+    /// 与协议实际可寻址范围不符。</para>
+    /// </remarks>
+    /// <param name="authenticated">Whether the region needs an authenticated exchange.
+    /// <para>该区域是否需要认证交换。</para></param>
+    /// <param name="partitionId">The reported wire part identifier. <para>上报的线协议分区标识。</para></param>
+    /// <returns>The mapped identity, or <see cref="MtkStorageRegionKind.Unknown"/> for an unnumbered part.
+    /// <para>映射后的身份；未编号分区为 <see cref="MtkStorageRegionKind.Unknown"/>。</para></returns>
+    private static MtkStorageRegionKind EmmcPartitionKind(bool authenticated, uint partitionId) =>
+        authenticated ? MtkStorageRegionKind.Rpmb : partitionId switch
+        {
+            1 => MtkStorageRegionKind.EmmcBoot1,
+            2 => MtkStorageRegionKind.EmmcBoot2,
+            4 or 5 or 6 or 7 => MtkStorageRegionKind.EmmcGeneralPurpose,
+            8 => MtkStorageRegionKind.EmmcUser,
+            _ => MtkStorageRegionKind.Unknown
+        };
+
+    /// <summary>
+    /// Names an eMMC area from the same wire identifier the identity mapping uses.
+    /// <para>使用与身份映射相同的线协议标识为 eMMC 区域命名。</para>
+    /// </summary>
+    /// <param name="authenticated">Whether the region needs an authenticated exchange.
+    /// <para>该区域是否需要认证交换。</para></param>
+    /// <param name="partitionId">The reported wire part identifier. <para>上报的线协议分区标识。</para></param>
+    /// <param name="fallbackPrefix">The prefix for an unnumbered part. <para>未编号分区的前缀。</para></param>
+    /// <returns>The canonical or synthesized region name. <para>规范名称或合成的区域名称。</para></returns>
+    private static string EmmcPartitionName(bool authenticated, uint partitionId, string fallbackPrefix) =>
+        authenticated ? "EMMC-RPMB" : partitionId switch
+        {
+            1 => "EMMC-BOOT1",
+            2 => "EMMC-BOOT2",
+            4 => "EMMC-GP1",
+            5 => "EMMC-GP2",
+            6 => "EMMC-GP3",
+            7 => "EMMC-GP4",
+            8 => "EMMC-USER",
+            _ => $"{fallbackPrefix}-{partitionId}"
+        };
 
     private static string XFlashRegionName(MtkXFlashStorageKind family, MtkXFlashStorageRegion region) =>
         family switch
@@ -484,10 +531,9 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
     {
         MtkXFlashStorageKind.Emmc => [.. storage.Regions.Select(region => new MtkStorageRegionCapability
         {
-            Kind = region.RequiresAuthenticatedAccess ? MtkStorageRegionKind.Rpmb
-                : region.PartitionId == 8 ? MtkStorageRegionKind.EmmcUser : MtkStorageRegionKind.Unknown,
-            CanonicalName = region.RequiresAuthenticatedAccess ? "EMMC-RPMB"
-                : region.PartitionId == 8 ? "EMMC-USER" : $"LEGACY-EMMC-PARTITION-{region.PartitionId}",
+            Kind = EmmcPartitionKind(region.RequiresAuthenticatedAccess, (uint)region.PartitionId),
+            CanonicalName = EmmcPartitionName(region.RequiresAuthenticatedAccess, (uint)region.PartitionId,
+                "LEGACY-EMMC-PARTITION"),
             PhysicalIdentifier = region.PartitionId,
             CapacityBytes = region.CapacityBytes,
             ReadSupport = OrdinarySupport(region.RequiresAuthenticatedAccess, region.CapacityBytes),
