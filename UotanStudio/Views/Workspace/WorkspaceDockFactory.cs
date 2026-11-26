@@ -632,16 +632,16 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         if (isPinned)
         {
             var targetHost = unpinDock ?? ResolveTargetToolDockForUnpin(dockable, rootDock);
-            if (targetHost is not null && !IsFloatingRoot(rootDock))
-            {
-                EnsureToolDockAlignment(targetHost);
-                WorkspacePanelService.Instance.EnsureHostMounted(this, rootDock, targetHost);
-            }
-
             base.PinDockableCore(dockable, rootDock, targetHost);
 
             if (dockable.Owner is IToolDock restoredDock)
             {
+                if (!IsFloatingRoot(rootDock))
+                {
+                    WorkspacePanelService.Instance.EnsureHostMounted(this, rootDock, restoredDock);
+                    restoredDock.Alignment = ResolvePinAlignment(restoredDock, rootDock);
+                }
+
                 restoredDock.IsEmpty = false;
                 SetActiveDockable(dockable);
                 SetFocusedDockable(rootDock, dockable);
@@ -653,7 +653,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
 
         if (dockable.Owner is IToolDock sourceToolDock)
         {
-            EnsureToolDockAlignment(sourceToolDock);
+            sourceToolDock.Alignment = ResolvePinAlignment(sourceToolDock, rootDock);
             if (dockable.OriginalOwner is not IToolDock originalTool || originalTool.Alignment != sourceToolDock.Alignment)
             {
                 dockable.OriginalOwner = null;
@@ -664,8 +664,22 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
-    private IToolDock? ResolveTargetToolDockForUnpin(IDockable dockable, IRootDock rootDock)
+    private static IToolDock? ResolveTargetToolDockForUnpin(IDockable dockable, IRootDock rootDock)
     {
+        if (dockable.Owner is IToolDock currentDock
+            && !ReferenceEquals(currentDock, rootDock.PinnedDock)
+            && ContainsInDockTree(rootDock, currentDock))
+        {
+            return currentDock;
+        }
+
+        if (dockable.OriginalOwner is IToolDock originalDock
+            && !ReferenceEquals(originalDock, rootDock.PinnedDock)
+            && ContainsInDockTree(rootDock, originalDock))
+        {
+            return originalDock;
+        }
+
         if (WorkspacePanelService.Instance.FindRegisteredToolHost(dockable) is IToolDock registeredHost)
         {
             return registeredHost;
@@ -677,27 +691,74 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             return bottomHost;
         }
 
-        if (dockable.OriginalOwner is IToolDock originalHost)
+        if (dockable.OriginalOwner is IToolDock fallbackOriginal)
         {
-            return originalHost;
+            return fallbackOriginal;
         }
 
         return null;
     }
 
-    private static void EnsureToolDockAlignment(IToolDock toolDock)
+    private static Alignment ResolvePinAlignment(IToolDock toolDock, IRootDock rootDock)
     {
-        if (toolDock.Alignment != Alignment.Unset)
+        var current = (IDockable)toolDock;
+        Alignment? verticalFallback = null;
+
+        while (current.Owner is IDock parent)
         {
-            return;
+            if (parent is IProportionalDock { VisibleDockables: { Count: > 1 } children } proportional)
+            {
+                var currentIndex = children.IndexOf(current);
+                var documentIndex = FindDocumentBranchIndex(children);
+                if (currentIndex >= 0 && documentIndex >= 0 && currentIndex != documentIndex)
+                {
+                    if (proportional.Orientation == Orientation.Horizontal)
+                    {
+                        return currentIndex < documentIndex ? Alignment.Left : Alignment.Right;
+                    }
+
+                    // Prefer left/right over top: tools placed above the document area pin to the left edge.
+                    verticalFallback ??= currentIndex > documentIndex ? Alignment.Bottom : Alignment.Left;
+                }
+            }
+
+            if (ReferenceEquals(parent, rootDock))
+            {
+                break;
+            }
+
+            current = parent;
         }
 
-        toolDock.Alignment = toolDock.Id switch
+        if (verticalFallback is { } vertical)
+        {
+            return vertical;
+        }
+
+        if (toolDock.Alignment is Alignment.Right or Alignment.Bottom)
+        {
+            return toolDock.Alignment;
+        }
+
+        return toolDock.Id switch
         {
             "RightPaneTop" or "RightPane" => Alignment.Right,
             "BottomPane" => Alignment.Bottom,
             _ => Alignment.Left
         };
+    }
+
+    private static int FindDocumentBranchIndex(IList<IDockable> children)
+    {
+        for (var i = 0; i < children.Count; i++)
+        {
+            if (IsDocumentHost(children[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>

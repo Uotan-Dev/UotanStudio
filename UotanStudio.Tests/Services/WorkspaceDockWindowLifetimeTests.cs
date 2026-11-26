@@ -431,6 +431,79 @@ public sealed class WorkspaceDockWindowLifetimeTests : IDisposable
     }
 
     [Fact]
+    public void PinDockable_ToolAboveDocumentArea_PinsToLeftInsteadOfTop()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var documentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var topTool = new Tool { Id = "TopSplitTool", CanPin = true };
+        var topToolDock = new ToolDock
+        {
+            Id = "TopSplitPane",
+            Alignment = Alignment.Top,
+            ActiveDockable = topTool,
+            VisibleDockables = factory.CreateList<IDockable>(topTool)
+        };
+        factory.SplitToDock(documentsPane, topToolDock, DockOperation.Top);
+
+        factory.PinDockable(topTool);
+
+        Assert.True(root.TopPinnedDockables is null or { Count: 0 });
+        Assert.NotNull(root.LeftPinnedDockables);
+        Assert.Contains(topTool, root.LeftPinnedDockables!);
+    }
+
+    [Fact]
+    public void PinDockable_ToolMovedToRightOfDocumentArea_PinsToRightEdge()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var documentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var movedTool = new Tool { Id = "MovedRightTool", CanPin = true };
+        var rightSplitDock = new ToolDock
+        {
+            Id = "MovedRightPane",
+            Alignment = Alignment.Bottom,
+            ActiveDockable = movedTool,
+            VisibleDockables = factory.CreateList<IDockable>(movedTool)
+        };
+        factory.SplitToDock(documentsPane, rightSplitDock, DockOperation.Right);
+
+        factory.PinDockable(movedTool);
+
+        Assert.True(root.BottomPinnedDockables is null or { Count: 0 });
+        Assert.True(root.TopPinnedDockables is null or { Count: 0 });
+        Assert.NotNull(root.RightPinnedDockables);
+        Assert.Contains(movedTool, root.RightPinnedDockables!);
+    }
+
+    [Fact]
+    public void UnpinDockable_RightToolMovedToCenterThenPinned_RestoresVisiblyInLayoutTree()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out _);
+        var documentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+
+        var dockManager = new DockManager(new DockService());
+        Assert.True(dockManager.ValidateTool(images, documentsPane, DragAction.Move, DockOperation.Top, bExecute: true));
+
+        var centerToolDock = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+        Assert.Contains(WorkspaceSessionCapture.Enumerate(root), d => ReferenceEquals(d, centerToolDock));
+
+        factory.PinDockable(images);
+        Assert.True(factory.IsDockablePinned(images));
+        Assert.Contains(images, root.LeftPinnedDockables!);
+
+        factory.UnpinDockable(images);
+
+        Assert.False(factory.IsDockablePinned(images));
+        Assert.Same(centerToolDock, images.Owner);
+        Assert.Contains(images, centerToolDock.VisibleDockables!);
+        Assert.Contains(WorkspaceSessionCapture.Enumerate(root), d => ReferenceEquals(d, images));
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+    }
+
+    [Fact]
     public void RightColumn_FloatBothAndDockBack_RemountsRightColumnAndPanels()
     {
         var factory = new HeadlessWorkspaceDockFactory();
