@@ -221,22 +221,83 @@ public class NodeDockFactory : Factory, IDockReturnFactory
     /// <inheritdoc/>
     protected override void PinDockableCore(IDockable dockable, IRootDock rootDock, IToolDock? unpinDock)
     {
-        if (!IsDockablePinned(dockable, rootDock) && IsFloatingRoot(rootDock))
+        var isPinned = IsDockablePinned(dockable, rootDock);
+        if (!isPinned && IsFloatingRoot(rootDock))
         {
             return;
         }
 
-        if (dockable.Owner is IToolDock sourceToolDock && sourceToolDock.Alignment == Alignment.Unset)
+        if (!isPinned && dockable.Owner is IToolDock sourceToolDock)
         {
-            sourceToolDock.Alignment = sourceToolDock.Id switch
+            sourceToolDock.Alignment = ResolvePinAlignment(sourceToolDock, rootDock);
+            if (dockable.OriginalOwner is not IToolDock originalTool || originalTool.Alignment != sourceToolDock.Alignment)
             {
-                "NodeRightPane" => Alignment.Right,
-                "NodeBottomPane" => Alignment.Bottom,
-                _ => Alignment.Left
-            };
+                dockable.OriginalOwner = null;
+            }
         }
 
         base.PinDockableCore(dockable, rootDock, unpinDock);
+    }
+
+    private static Alignment ResolvePinAlignment(IToolDock toolDock, IRootDock rootDock)
+    {
+        var current = (IDockable)toolDock;
+        Alignment? verticalFallback = null;
+
+        while (current.Owner is IDock parent)
+        {
+            if (parent is IProportionalDock { VisibleDockables: { Count: > 1 } children } proportional)
+            {
+                var currentIndex = children.IndexOf(current);
+                var documentIndex = FindDocumentBranchIndex(children);
+                if (currentIndex >= 0 && documentIndex >= 0 && currentIndex != documentIndex)
+                {
+                    if (proportional.Orientation == Orientation.Horizontal)
+                    {
+                        return currentIndex < documentIndex ? Alignment.Left : Alignment.Right;
+                    }
+
+                    verticalFallback ??= currentIndex > documentIndex ? Alignment.Bottom : Alignment.Left;
+                }
+            }
+
+            if (ReferenceEquals(parent, rootDock))
+            {
+                break;
+            }
+
+            current = parent;
+        }
+
+        if (verticalFallback is { } vertical)
+        {
+            return vertical;
+        }
+
+        if (toolDock.Alignment is Alignment.Right or Alignment.Bottom)
+        {
+            return toolDock.Alignment;
+        }
+
+        return toolDock.Id switch
+        {
+            "NodeRightPane" => Alignment.Right,
+            "NodeBottomPane" => Alignment.Bottom,
+            _ => Alignment.Left
+        };
+    }
+
+    private static int FindDocumentBranchIndex(IList<IDockable> children)
+    {
+        for (var i = 0; i < children.Count; i++)
+        {
+            if (FindInDockTree<IDocumentDock>(children[i]) is not null)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private bool IsFloatingRoot(IRootDock? root)
