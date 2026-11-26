@@ -15,9 +15,39 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
         internal IDock Host { get; set; } = host;
     }
 
+    private IDock _defaultHost = defaultHost;
     private readonly List<Entry> _entries = [];
     private int _nextId;
     private bool _disposed;
+
+    internal void ReattachToDefaultHost(IDock newDefaultHost)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _defaultHost = newDefaultHost;
+        if (_entries.Count == 0)
+        {
+            CreateTerminal(activate: false);
+            return;
+        }
+
+        foreach (var entry in _entries)
+        {
+            entry.Model.OriginalOwner = null;
+            entry.Host = _defaultHost;
+            if (_defaultHost.VisibleDockables?.Contains(entry.Model) != true)
+            {
+                _defaultHost.VisibleDockables?.Add(entry.Model);
+            }
+
+            entry.Model.Owner = _defaultHost;
+        }
+
+        WorkspacePanelService.Instance.RefreshTerminalVisibility();
+    }
 
     internal bool IsVisible => _entries.Any(entry => GetHost(entry).VisibleDockables?.Contains(entry.Model) == true);
 
@@ -43,7 +73,7 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
     private TerminalViewModel Create(TerminalProfile? profile, DetectedDevice? deviceShell, IDock? host, bool activate)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        host ??= defaultHost;
+        host ??= _defaultHost;
         var model = new TerminalViewModel(++_nextId, profile,
             source => CreateTerminal(source.CloneProfile, GetHost(_entries.Single(entry => entry.Model == source))),
             factory.CloseDockable, deviceShell);
@@ -108,7 +138,7 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
             {
                 var mainRoot = floatingWindow.Owner as IRootDock;
                 WorkspacePanelService.CloseFloatingWindow(factory, mainRoot, floatingWindow);
-                entry.Host = defaultHost;
+                entry.Host = _defaultHost;
                 entry.Model.Owner = null;
             }
         }

@@ -25,7 +25,11 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     internal ProjectExplorerViewModel? ProjectExplorer => _projectExplorer;
 
     object? IWorkspaceDockFactory.ProjectExplorer => _projectExplorer;
+    private PluginToolViewModel? _pluginTool;
+    private AiAssistantViewModel? _aiAssistant;
     private PropertiesViewModel? _properties;
+    private WorkspaceLogViewModel? _output;
+    private AdbLogViewModel? _adbLog;
     private TerminalDockService? _terminals;
     private IRootDock? _mainRoot;
     private readonly HashSet<IDockable> _closingDocuments = [];
@@ -84,45 +88,164 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     }
 
     public override IRootDock CreateLayout()
+        => BuildDefaultLayout(reuseExistingPanels: false, openDocuments: null, activeDocument: null);
+
+    /// <inheritdoc/>
+    public IRootDock ResetToDefaultLayout(IRootDock? currentLayout)
+    {
+        List<IDockable> openDocuments = [];
+        IDockable? activeDocument = null;
+
+        if (currentLayout is not null)
+        {
+            openDocuments = WorkspaceSessionCapture.Enumerate(currentLayout)
+                .Where(IsPreservedDocument)
+                .Distinct()
+                .ToList();
+
+            if (currentLayout.FocusedDockable is { } focused && IsPreservedDocument(focused))
+            {
+                activeDocument = focused;
+            }
+            else if (FindInDockTree<IDocumentDock>(currentLayout)?.ActiveDockable is { } active
+                && IsPreservedDocument(active))
+            {
+                activeDocument = active;
+            }
+            else
+            {
+                activeDocument = openDocuments.FirstOrDefault();
+            }
+
+            ReleaseDockablePresentations(currentLayout);
+            HidePreviewingDockables(currentLayout);
+
+            if (currentLayout.Windows is { Count: > 0 } windows)
+            {
+                foreach (var window in windows.ToList())
+                {
+                    if (window.Layout is { } floatingLayout)
+                    {
+                        ReleaseDockablePresentations(floatingLayout);
+                    }
+
+                    CloseWindow(window);
+                    if (currentLayout.Windows.Contains(window))
+                    {
+                        RemoveWindow(window);
+                    }
+                }
+            }
+        }
+
+        var resetRoot = BuildDefaultLayout(reuseExistingPanels: true, openDocuments, activeDocument);
+        InitLayout(resetRoot);
+        WorkspacePanelService.Instance.OnDockContentsChanged();
+        return resetRoot;
+    }
+
+    private static bool IsPreservedDocument(IDockable item)
+        => item is IDocument
+            && item is not TerminalViewModel
+            && WorkspacePanelService.Instance.FindRegisteredToolHost(item) is null;
+
+    private IRootDock BuildDefaultLayout(
+        bool reuseExistingPanels,
+        IReadOnlyList<IDockable>? openDocuments,
+        IDockable? activeDocument)
     {
         var projectSetting = ProjectSettingViewModel.EnsureInstance();
         projectSetting.Id = "ProjectSetting";
         projectSetting.CanClose = true;
+        projectSetting.OriginalOwner = null;
 
-        var pluginTool = new PluginToolViewModel
-        {
-            Id = WorkspacePanelService.PluginTool,
-            CanClose = true
-        };
+        var pluginTool = reuseExistingPanels && _pluginTool is not null
+            ? _pluginTool
+            : _pluginTool = new PluginToolViewModel
+            {
+                Id = WorkspacePanelService.PluginTool,
+                CanClose = true
+            };
+        pluginTool.OriginalOwner = null;
 
-        _projectExplorer?.Dispose();
-        var projectExplorer = _projectExplorer = new ProjectExplorerViewModel
+        ProjectExplorerViewModel projectExplorer;
+        if (reuseExistingPanels && _projectExplorer is not null)
         {
-            Id = "ProjectExplorer",
-            CanClose = true
-        };
+            projectExplorer = _projectExplorer;
+        }
+        else
+        {
+            _projectExplorer?.Dispose();
+            projectExplorer = _projectExplorer = new ProjectExplorerViewModel
+            {
+                Id = "ProjectExplorer",
+                CanClose = true
+            };
+        }
+
+        projectExplorer.OriginalOwner = null;
 
         var imagesView = ImageViewModel.EnsureInstance();
         imagesView.Id = "ImagesView";
         imagesView.CanClose = true;
+        imagesView.OriginalOwner = null;
 
-        var aiAssistant = AppFeatures.AiAssistantEnabled ? new AiAssistantViewModel(_aiSettings) : null;
+        var aiAssistant = AppFeatures.AiAssistantEnabled
+            ? (reuseExistingPanels && _aiAssistant is not null
+                ? _aiAssistant
+                : _aiAssistant = new AiAssistantViewModel(_aiSettings))
+            : null;
+        if (aiAssistant is not null)
+        {
+            aiAssistant.OriginalOwner = null;
+        }
 
-        var properties = _properties = new PropertiesViewModel
+        var properties = reuseExistingPanels && _properties is not null
+            ? _properties
+            : _properties = new PropertiesViewModel
+            {
+                Id = "Properties",
+                CanClose = true
+            };
+        properties.OriginalOwner = null;
+
+        var output = reuseExistingPanels && _output is not null
+            ? _output
+            : _output = new WorkspaceLogViewModel
+            {
+                Id = "Output",
+                CanClose = true
+            };
+        output.OriginalOwner = null;
+
+        AdbLogViewModel adbLog;
+        var initializeAdbLog = false;
+        if (reuseExistingPanels && _adbLog is not null)
         {
-            Id = "Properties",
-            CanClose = true
-        };
-        var output = new WorkspaceLogViewModel
+            adbLog = _adbLog;
+        }
+        else
         {
-            Id = "Output",
-            CanClose = true
-        };
-        var adbLog = new AdbLogViewModel
+            adbLog = _adbLog = new AdbLogViewModel
+            {
+                Id = "AdbLog",
+                CanClose = true
+            };
+            initializeAdbLog = true;
+        }
+
+        adbLog.OriginalOwner = null;
+
+        var documentItems = CreateList<IDockable>();
+        if (openDocuments is not null)
         {
-            Id = "AdbLog",
-            CanClose = true
-        };
+            foreach (var doc in openDocuments)
+            {
+                doc.OriginalOwner = null;
+                documentItems.Add(doc);
+            }
+        }
+
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
@@ -134,8 +257,10 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             IsCollapsable = false,
             EnableGlobalDocking = false,
             Proportion = double.NaN,
-            ActiveDockable = null,
-            VisibleDockables = CreateList<IDockable>(),
+            ActiveDockable = activeDocument is not null && documentItems.Contains(activeDocument)
+                ? activeDocument
+                : documentItems.FirstOrDefault(),
+            VisibleDockables = documentItems,
             EmptyContent = CreateEmptyDocumentContent()
         };
 
@@ -244,9 +369,21 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);
         panels.RegisterLocalizedTitle(documentDock, "Dock_Documents");
-        panels.RegisterTerminals(_terminals = new TerminalDockService(this, bottomTools));
-        _terminals.CreateTerminal(activate: false);
-        adbLog.Initialize();
+        if (reuseExistingPanels && _terminals is not null)
+        {
+            _terminals.ReattachToDefaultHost(bottomTools);
+            panels.RegisterTerminals(_terminals);
+        }
+        else
+        {
+            panels.RegisterTerminals(_terminals = new TerminalDockService(this, bottomTools));
+            _terminals.CreateTerminal(activate: false);
+        }
+
+        if (initializeAdbLog)
+        {
+            adbLog.Initialize();
+        }
 
         return rootDock;
     }
@@ -692,7 +829,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             var keepAsTool = dockable is ITool && (dockable is not IDocument || sourceDock is IToolDock);
             IDock? targetDock = keepAsTool
-                ? ResolveTargetToolDock(dockable, mainRoot) ?? WorkspacePanelService.Instance.FindBottomToolHost()
+                ? ResolveTargetToolDock(dockable, mainRoot) ?? FindOwnedBottomToolHost()
                 : FindInDockTree<IDocumentDock>(mainRoot);
 
             if (targetDock is null && keepAsTool)
@@ -746,6 +883,12 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         SyncDocumentDocks(mainRoot);
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
+
+    private IDock? FindOwnedBottomToolHost()
+        => WorkspacePanelService.Instance.FindBottomToolHost() is { } host
+            && ReferenceEquals(host.Factory, this)
+            ? host
+            : null;
 
     private IRootDock? ResolveMainRoot(IDockWindow floatingWindow)
     {

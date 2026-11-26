@@ -1956,6 +1956,7 @@ internal static class LocaleKeySets
         "Menu_WindowWorkspaceLog",
         "Menu_WindowAdbLog",
         "Menu_WindowTerminal",
+        "Menu_WindowResetLayout",
         "Menu_FlashTools",
         "Menu_FirmwareTools",
         "Menu_DeviceManager",

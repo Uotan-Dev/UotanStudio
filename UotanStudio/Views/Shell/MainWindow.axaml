@@ -328,6 +328,9 @@
 					     IsChecked="{Binding MenuVM.WorkspacePanels.TerminalVisible, Mode=OneWay}"
 					     Click="OnWindowEntryClick"
 					     Command="{Binding MenuVM.ToggleTerminalCommand}" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_WindowResetLayout}"
+					     Command="{Binding MenuVM.ResetWorkspaceLayoutCommand}" />
 				</MenuItem>
 
 				<!-- 工具 / Tools -->

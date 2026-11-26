@@ -1339,6 +1339,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void ToggleTerminal() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Terminal);
 
     /// <summary>
+    /// Resets the workspace dock layout back to the application's default initial layout.
+    /// <para>将工作区停靠布局强制还原为软件默认的初始布局状态。</para>
+    /// </summary>
+    [RelayCommand]
+    private void ResetWorkspaceLayout() => WorkspaceVM?.ResetLayout();
+
+    /// <summary>
     /// Opens the device manager window, bringing it to the foreground if already open.
     /// <para>打开设备管理器窗口；窗口已打开时前置聚焦。</para>
     /// </summary>

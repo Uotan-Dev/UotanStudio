@@ -360,6 +360,9 @@ Continue creating the project?</value>
   <data name="Menu_WindowTerminal" xml:space="preserve">
     <value>Terminal</value>
   </data>
+  <data name="Menu_WindowResetLayout" xml:space="preserve">
+    <value>Reset to Default Layout</value>
+  </data>
   <data name="Menu_FlashTools" xml:space="preserve">
     <value>Flash Tools</value>
   </data>

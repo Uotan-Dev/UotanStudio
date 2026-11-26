@@ -79,6 +79,25 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Resets the workspace dock layout back to its initial default arrangement, closing floating windows,
+    /// restoring default panel visibility and proportions, and keeping open documents in the main document pane.
+    /// <para>将工作区停靠布局强制还原为软件默认初始状态：关闭浮动窗口、恢复各面板默认可见性与比例，并将已打开文档保留在主文档区。</para>
+    /// </summary>
+    public void ResetLayout()
+    {
+        if (DockFactory is not { } factory)
+        {
+            return;
+        }
+
+        Layout = factory.ResetToDefaultLayout(Layout);
+        if (FindDocumentsPane() is { } documentsPane)
+        {
+            EnsureDocumentDockSubscribed(documentsPane);
+        }
+    }
+
+    /// <summary>
     /// Opens or focuses the compare document, reusing its instance until closed, and navigates to the workspace.
     /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
     /// </summary>

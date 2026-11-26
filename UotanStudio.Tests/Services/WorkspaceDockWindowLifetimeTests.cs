@@ -367,6 +367,61 @@ public sealed class WorkspaceDockWindowLifetimeTests
     }
 
     [Fact]
+    public void ResetToDefaultLayout_ClosesFloatingWindowsUnpinsRestoresProportionsAndKeepsDocuments()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+        var mainDocumentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var doc1 = new Document { Id = "Doc1" };
+        factory.AddDockable(mainDocumentsPane, doc1);
+
+        factory.FloatDockable(doc1);
+        factory.PinDockable(images);
+        WorkspacePanelService.Instance.Hide(WorkspacePanelService.Properties);
+        Assert.Single(root.Windows!);
+        Assert.True(factory.IsDockablePinned(images));
+        Assert.False(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+
+        var resetRoot = factory.ResetToDefaultLayout(root);
+        try
+        {
+            Assert.Empty(root.Windows!);
+            Assert.True(resetRoot.Windows is null or { Count: 0 });
+            Assert.True(resetRoot.LeftPinnedDockables is null or { Count: 0 });
+            Assert.True(resetRoot.RightPinnedDockables is null or { Count: 0 });
+            Assert.True(resetRoot.BottomPinnedDockables is null or { Count: 0 });
+
+            var resetDocumentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(resetRoot, d => d.Id == "DocumentsPane"));
+            Assert.Contains(doc1, resetDocumentsPane.VisibleDockables!);
+            Assert.Same(resetDocumentsPane, doc1.Owner);
+
+            var leftPane = Assert.IsAssignableFrom<IToolDock>(factory.FindDockable(resetRoot, d => d.Id == "LeftPane"));
+            var rightTop = Assert.IsAssignableFrom<IToolDock>(factory.FindDockable(resetRoot, d => d.Id == "RightPaneTop"));
+            var rightBottom = Assert.IsAssignableFrom<IToolDock>(factory.FindDockable(resetRoot, d => d.Id == "RightPane"));
+            var bottomPane = Assert.IsAssignableFrom<IToolDock>(factory.FindDockable(resetRoot, d => d.Id == "BottomPane"));
+            Assert.Equal(Alignment.Left, leftPane.Alignment);
+            Assert.Equal(0.15, leftPane.Proportion);
+            Assert.Equal(Alignment.Right, rightTop.Alignment);
+            Assert.Equal(Alignment.Right, rightBottom.Alignment);
+            Assert.Equal(0.35, rightBottom.Proportion);
+            Assert.Equal(Alignment.Bottom, bottomPane.Alignment);
+            Assert.Equal(0.25, bottomPane.Proportion);
+
+            Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ProjectExplorer));
+            Assert.False(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ProjectSetting));
+            Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+            Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+            Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.WorkspaceLog));
+            Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.AdbLog));
+        }
+        finally
+        {
+            factory.DisposeTerminal();
+            factory.ProjectExplorer?.Dispose();
+        }
+    }
+
+    [Fact]
     public void RightColumn_FloatBothAndDockBack_RemountsRightColumnAndPanels()
     {
         var factory = new HeadlessWorkspaceDockFactory();

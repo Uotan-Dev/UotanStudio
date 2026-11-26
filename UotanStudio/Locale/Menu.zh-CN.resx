@@ -360,6 +360,9 @@
   <data name="Menu_WindowTerminal" xml:space="preserve">
     <value>终端</value>
   </data>
+  <data name="Menu_WindowResetLayout" xml:space="preserve">
+    <value>还原初始布局</value>
+  </data>
   <data name="Menu_FlashTools" xml:space="preserve">
     <value>烧录工具</value>
   </data>
