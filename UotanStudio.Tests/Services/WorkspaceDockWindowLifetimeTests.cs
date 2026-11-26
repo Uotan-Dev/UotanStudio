@@ -1,3 +1,4 @@
+using Dock.Model;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
@@ -126,6 +127,88 @@ public sealed class WorkspaceDockWindowLifetimeTests
         Assert.Empty(root.Windows!);
         Assert.Contains(dual, documentsPane.VisibleDockables!);
         Assert.Same(documentsPane, dual.Owner);
+    }
+
+    [Fact]
+    public void FloatDockable_Document_UsesUnownedWindowMode()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+
+        var doc1 = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "Doc1"));
+
+        factory.FloatDockable(doc1);
+
+        var floatingWindow = Assert.Single(root.Windows!);
+        Assert.Equal(DockWindowOwnerMode.None, floatingWindow.OwnerMode);
+    }
+
+    [Fact]
+    public void FloatDockable_Tool_KeepsDefaultOwnerMode()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+
+        var toolA = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "ToolA"));
+
+        factory.FloatDockable(toolA);
+
+        var floatingWindow = Assert.Single(root.Windows!);
+        Assert.Equal(DockWindowOwnerMode.Default, floatingWindow.OwnerMode);
+    }
+
+    [Fact]
+    public void MoveDockable_LastDocumentDraggedBackToMainWindow_ClosesEmptiedFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var mainDocumentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var doc1 = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "Doc1"));
+
+        factory.FloatDockable(doc1);
+        Assert.Single(root.Windows!);
+        var floatingDocumentDock = Assert.IsAssignableFrom<IDocumentDock>(doc1.Owner);
+
+        factory.MoveDockable(floatingDocumentDock, mainDocumentsPane, doc1, mainDocumentsPane.ActiveDockable);
+
+        Assert.Empty(root.Windows!);
+        Assert.Contains(doc1, mainDocumentsPane.VisibleDockables!);
+        Assert.Same(mainDocumentsPane, doc1.Owner);
+    }
+
+    [Fact]
+    public void SplitToDock_LastDocumentSplitBackToMainWindow_ClosesEmptiedFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var mainDocumentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var doc1 = Assert.IsAssignableFrom<IDocument>(factory.FindDockable(root, d => d.Id == "Doc1"));
+        var doc2 = new Document { Id = "Doc2" };
+        factory.AddDockable(mainDocumentsPane, doc2);
+
+        factory.FloatDockable(doc1);
+        Assert.Single(root.Windows!);
+
+        var dockManager = new DockManager(new DockService());
+        Assert.True(dockManager.ValidateDocument(doc1, mainDocumentsPane, DragAction.Move, DockOperation.Right, bExecute: true));
+
+        Assert.Empty(root.Windows!);
+        Assert.Contains(WorkspaceSessionCapture.Enumerate(root), d => ReferenceEquals(d, doc1));
+    }
+
+    [Fact]
+    public void RemoveDockable_LastDocumentClosedInFloatingWindow_ClosesEmptiedFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var doc1 = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "Doc1"));
+
+        factory.FloatDockable(doc1);
+        Assert.Single(root.Windows!);
+
+        factory.RemoveDockable(doc1, collapse: true);
+
+        Assert.Empty(root.Windows!);
     }
 
     [Fact]

@@ -427,7 +427,8 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         var previousOwner = dockable?.Owner as IDock;
-        var root = (previousOwner is not null ? FindRoot(previousOwner, _ => true) : null)
+        var previousRoot = previousOwner is not null ? FindRoot(previousOwner, _ => true) : null;
+        var root = previousRoot
             ?? (dockable is not null ? FindRoot(dockable, _ => true) : null);
         if (dockable is not null)
         {
@@ -446,6 +447,12 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         SyncDocumentDocks(root);
+        if (previousRoot is not null && !ReferenceEquals(previousRoot, root))
+        {
+            SyncDocumentDocks(previousRoot);
+        }
+
+        CloseFloatingWindowIfEmpty(previousRoot);
     }
 
     /// <summary>
@@ -606,14 +613,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         SetActiveDockable(dockable);
         SetFocusedDockable(mainRoot, dockable);
 
-        if (!HasVisibleLeafDockables(floatingWindow.Layout))
-        {
-            CloseWindow(floatingWindow);
-            if (mainRoot.Windows?.Contains(floatingWindow) == true)
-            {
-                RemoveWindow(floatingWindow);
-            }
-        }
+        CloseFloatingWindowIfEmpty(sourceRoot);
 
         SyncDocumentDocks(mainRoot);
         WorkspacePanelService.Instance.OnDockContentsChanged();
@@ -659,10 +659,11 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     /// <inheritdoc/>
     public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable? targetDockable)
     {
-        var root = FindRoot(targetDock, _ => true) ?? FindRoot(sourceDock, _ => true);
+        var sourceRoot = FindRoot(sourceDock, _ => true);
+        var targetRoot = FindRoot(targetDock, _ => true);
         if (sourceDock is IDocumentDock && !ReferenceEquals(sourceDock, targetDock))
         {
-            UpdateDocumentDockCollapsibility(root);
+            UpdateDocumentDockCollapsibility(sourceRoot);
         }
 
         if (!ReferenceEquals(sourceDock, targetDock))
@@ -671,17 +672,35 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
-        SyncDocumentDocks(root);
+        SyncDocumentDocks(targetRoot);
+        if (sourceRoot is not null && !ReferenceEquals(sourceRoot, targetRoot))
+        {
+            SyncDocumentDocks(sourceRoot);
+        }
+
+        CloseFloatingWindowIfEmpty(sourceRoot);
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
     /// <inheritdoc/>
     public override void SplitToDock(IDock dock, IDockable dockable, DockOperation operation)
     {
-        var root = FindRoot(dock, _ => true);
+        var sourceRoot = dockable.Owner is IDock sourceDock ? FindRoot(sourceDock, _ => true) : null;
+        var targetRoot = FindRoot(dock, _ => true);
+        if (dockable.Owner is IDocumentDock)
+        {
+            UpdateDocumentDockCollapsibility(sourceRoot);
+        }
+
         ReleaseDockablePresentations(dockable);
         base.SplitToDock(dock, dockable, operation);
-        SyncDocumentDocks(root);
+        SyncDocumentDocks(targetRoot);
+        if (sourceRoot is not null && !ReferenceEquals(sourceRoot, targetRoot))
+        {
+            SyncDocumentDocks(sourceRoot);
+        }
+
+        CloseFloatingWindowIfEmpty(sourceRoot);
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
@@ -694,6 +713,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         if (dockable is IDocument && !_floatingFromToolDock && dockable.Owner is not IToolDock)
         {
             var documentDock = CreateDocumentDock();
+            documentDock.IsCollapsable = true;
             documentDock.DockGroup = dockable.DockGroup;
             if (dockable.Owner is IDocumentDock sourceDocumentDock)
             {
@@ -704,10 +724,26 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
 
             documentDock.VisibleDockables = CreateList<IDockable>(dockable);
             documentDock.ActiveDockable = dockable;
-            return base.CreateWindowFrom(documentDock);
+            var documentWindow = base.CreateWindowFrom(documentDock);
+            if (documentWindow is not null)
+            {
+                documentWindow.OwnerMode = DockWindowOwnerMode.None;
+            }
+
+            return documentWindow;
         }
 
-        return base.CreateWindowFrom(dockable);
+        var window = base.CreateWindowFrom(dockable);
+        if (dockable is IDocumentDock floatedDocumentDock)
+        {
+            floatedDocumentDock.IsCollapsable = true;
+            if (window is not null)
+            {
+                window.OwnerMode = DockWindowOwnerMode.None;
+            }
+        }
+
+        return window;
     }
 
     /// <inheritdoc/>
@@ -732,6 +768,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         SyncDocumentDocks(root);
+        CloseFloatingWindowIfEmpty(root);
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
@@ -753,7 +790,9 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         if (collapse)
         {
             SyncDocumentDocks(root);
+            CloseFloatingWindowIfEmpty(root);
         }
+
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
@@ -868,6 +907,26 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             .ByInstance(dockable)?.Cleanup?.Invoke(dockable);
     }
 
+    private void CloseFloatingWindowIfEmpty(IRootDock? root)
+    {
+        if (root?.Window is not { } floatingWindow || HasVisibleLeafDockables(floatingWindow.Layout))
+        {
+            return;
+        }
+
+        var mainRoot = ResolveMainRoot(floatingWindow);
+        if (mainRoot is not null && mainRoot.Windows?.Contains(floatingWindow) != true)
+        {
+            return;
+        }
+
+        CloseWindow(floatingWindow);
+        if (mainRoot?.Windows?.Contains(floatingWindow) == true)
+        {
+            RemoveWindow(floatingWindow);
+        }
+    }
+
     private void UpdateDocumentDockCollapsibility(IRootDock? root)
     {
         if (root is null)
@@ -876,7 +935,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         var documentDocks = CollectDocumentDocks(root);
-        var collapsable = documentDocks.Count > 1;
+        var collapsable = root.Window is not null || documentDocks.Count > 1;
         foreach (var dock in documentDocks)
         {
             dock.IsCollapsable = collapsable;
@@ -932,10 +991,11 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
                     documentDocks = updatedDocks;
                 }
 
+                var collapsable = root.Window is not null || documentDocks.Count > 1;
                 foreach (var dock in documentDocks)
                 {
                     dock.Id = "DocumentsPane";
-                    dock.IsCollapsable = documentDocks.Count > 1;
+                    dock.IsCollapsable = collapsable;
                     if (dock is DocumentDock concreteDock)
                     {
                         concreteDock.EnableGlobalDocking = false;
