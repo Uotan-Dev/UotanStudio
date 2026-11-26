@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using Avalonia.Media;
 using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -25,6 +26,31 @@ public static class ExplorerIconCatalog
     /// </summary>
     private static readonly FrozenSet<string> ImageFileExtensions =
         [with(StringComparer.Ordinal), ".img", ".raw", ".bin", ".simg", ".sparse", ".super", ".image", ".iso"];
+
+    /// <summary>
+    /// Resolves the bundled PNG asset name used by the in-app file icon for an extension. The mapping mirrors
+    /// the OS file-association icons so Explorer and the shell show the same artwork.
+    /// <para>解析扩展名对应的随包 PNG 资源名，供应用内文件图标使用；映射与系统文件关联图标一致，
+    /// 使资源管理器与系统外壳显示相同的图案。</para>
+    /// </summary>
+    /// <param name="extension">A dotted extension, case-insensitive. <para>带点的扩展名，不区分大小写。</para></param>
+    /// <returns>The PNG asset base name, or null when the extension has no dedicated icon.
+    /// <para>PNG 资源基名；扩展名没有专用图标时为 null。</para></returns>
+    public static string? FormatIconName(string extension) => FileAssociationService.IconNameFor(extension);
+
+    private static AppIconKind? FormatIconKind(string extension) => FormatIconName(extension) switch
+    {
+        "apk" => AppIconKind.FileApk,
+        "arsc" => AppIconKind.FileArsc,
+        "dex" => AppIconKind.FileDex,
+        "hap" => AppIconKind.FileHap,
+        "log" => AppIconKind.FileLog,
+        "prop" => AppIconKind.FileProp,
+        "qcn" => AppIconKind.FileQcn,
+        "rc" => AppIconKind.FileRc,
+        "img" => AppIconKind.FileImg,
+        _ => null,
+    };
 
     /// <summary>
     /// Resolves a node icon: placeholder nodes and unknown extensions use the generic file glyph,
@@ -58,6 +84,11 @@ public static class ExplorerIconCatalog
         }
 
         var extension = Path.GetExtension(path).ToLowerInvariant();
+
+        if (FormatIconKind(extension) is { } formatKind)
+        {
+            return new(formatKind, ExplorerIconPalette.Document);
+        }
 
         if (ImageFileExtensions.Contains(extension))
         {

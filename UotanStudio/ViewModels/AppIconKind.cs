@@ -63,4 +63,13 @@ public enum AppIconKind
     Checksum,
     Extract,
     OpenFolder,
+    FileApk,
+    FileArsc,
+    FileDex,
+    FileHap,
+    FileLog,
+    FileProp,
+    FileQcn,
+    FileRc,
+    FileImg,
 }

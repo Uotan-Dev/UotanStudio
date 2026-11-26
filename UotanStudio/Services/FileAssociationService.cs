@@ -32,6 +32,27 @@ public static partial class FileAssociationService
         (".uotannode", "UotanStudio.uotannode", "uotannode.ico", "UotanStudio Node Project")
     ];
 
+    private static readonly Dictionary<string, string> ExtensionIconNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".apk"] = "apk",
+        [".arsc"] = "arsc",
+        [".dex"] = "dex",
+        [".hap"] = "hap",
+        [".hsp"] = "hap",
+        [".log"] = "log",
+        [".logcat"] = "log",
+        [".adblog"] = "log",
+        [".prop"] = "prop",
+        [".qcn"] = "qcn",
+        [".rc"] = "rc",
+        [".img"] = "img",
+        [".bin"] = "img",
+        [".dat"] = "img",
+        [".ext4"] = "img",
+        [".erofs"] = "img",
+        [".f2fs"] = "img",
+    };
+
     /// <summary>
     /// Extensions that Project Explorer can automatically recognize when opening files
     /// (excluding generic code/text and image formats).
@@ -256,7 +277,7 @@ public static partial class FileAssociationService
                 result.Add(new AssociationSpec(
                     extension,
                     ProgIdFor(extension),
-                    Formats[0].IconFile,
+                    IconFileFor(extension),
                     $"UotanStudio {extension[1..].ToUpperInvariant()} File"));
             }
         }
@@ -288,6 +309,18 @@ public static partial class FileAssociationService
     /// <returns>The ProgId used for the extension.<para>该扩展名使用的 ProgId。</para></returns>
     internal static string ProgIdFor(string extension) =>
         $"UotanStudio.{extension.TrimStart('.').ToLowerInvariant()}";
+
+    /// <summary>Resolves the bare icon name explicitly mapped to an extension, or null when unmapped.<para>解析扩展名显式映射的图标基名；未映射时为 null。</para></summary>
+    /// <param name="extension">Normalized extension.<para>规范化后的扩展名。</para></param>
+    /// <returns>The icon base name, or null.<para>图标基名；无映射时为 null。</para></returns>
+    internal static string? IconNameFor(string extension) =>
+        ExtensionIconNames.TryGetValue(extension, out var name) ? name : null;
+
+    /// <summary>Resolves the bundled ICO file registered as the shell icon for an extension.<para>解析扩展名在系统外壳中注册的随包 ICO 文件。</para></summary>
+    /// <param name="extension">Normalized extension.<para>规范化后的扩展名。</para></param>
+    /// <returns>The ICO file name; unmatched formats reuse the generic image icon.<para>ICO 文件名；未匹配的格式复用通用镜像图标。</para></returns>
+    internal static string IconFileFor(string extension) =>
+        IconNameFor(extension) is { } name ? $"{name}.ico" : "img.ico";
 
     /// <summary>Builds the XDG shared-MIME XML document for the given specs.<para>为给定规格生成 XDG 共享 MIME XML 文档。</para></summary>
     /// <param name="specs">Association specs.<para>关联规格。</para></param>
