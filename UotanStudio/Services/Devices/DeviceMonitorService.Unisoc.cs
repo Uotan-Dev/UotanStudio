@@ -153,8 +153,9 @@ public sealed partial class DeviceMonitorService
                         request.Length));
                     await using (var output = File.Create(temporary))
                     {
+                        var byteProgress = new ReadByteProgress(request.Name, request.Length, progress);
                         var read = await storage.ReadPartitionAsync(request.Name, request.Offset, request.Length,
-                            output, token).ConfigureAwait(false);
+                            output, token, byteProgress).ConfigureAwait(false);
                         progress?.Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, request.Name, read,
                             request.Length));
                         if (read < request.Length)
@@ -182,6 +183,63 @@ public sealed partial class DeviceMonitorService
 
             return true;
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+
+    /// <summary>
+    /// Erases the selected partitions on the endpoint without writing any image: the plan's loaders bring the link to
+    /// FDL2 and each named partition is erased in turn. NV partitions are refused by the storage session and are
+    /// skipped rather than aborting the run.
+    /// <para>在端点上擦除所选分区而不写入任何镜像：计划的加载器把链路提升到 FDL2，随后逐个擦除指定分区。存储会话会拒绝
+    /// NV 分区，因此这些分区被跳过而不是中断整个运行。</para>
+    /// </summary>
+    /// <param name="device">The selected UNISOC endpoint. <para>所选紫光展锐端点。</para></param>
+    /// <param name="packagePath">PAC package that supplies the loaders. <para>提供加载器的 PAC 包。</para></param>
+    /// <param name="partitionNames">Partition names to erase. <para>要擦除的分区名。</para></param>
+    /// <param name="confirmation">The exact flash confirmation phrase. <para>精确的刷写确认短语。</para></param>
+    /// <param name="progress">Optional progress sink. <para>可选的进度接收器。</para></param>
+    /// <param name="cancellationToken">Cancels the run. <para>取消本次运行。</para></param>
+    internal Task EraseUnisocPartitionsAsync(DetectedDevice device, string packagePath,
+        IReadOnlyList<string> partitionNames, string confirmation, IProgress<UnisocFlashProgress>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(partitionNames);
+        if (device.Protocol != DeviceProtocolKind.Unisoc)
+        {
+            throw new ArgumentException("A UNISOC target is required.", nameof(device));
+        }
+
+        if (!string.Equals(confirmation, UnisocFlashOptions.ConfirmationPhrase, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The erase request is not confirmed with the exact phrase.", nameof(confirmation));
+        }
+
+        if (!File.Exists(packagePath))
+        {
+            throw new FileNotFoundException($"The UNISOC package '{packagePath}' does not exist.", packagePath);
+        }
+
+        return RunUnisocAsync(device, async (session, _, token) =>
+        {
+            using var plan = await Task.Run(() => UnisocFlashPlan.Load(packagePath, token), token).ConfigureAwait(false);
+            var storage = session.OpenStorage();
+            foreach (var name in partitionNames)
+            {
+                token.ThrowIfCancellationRequested();
+                if (name.Contains("nv", StringComparison.OrdinalIgnoreCase))
+                {
+                    progress?.Report(new UnisocFlashProgress(UnisocFlashPhase.Skip, name, 0, 0,
+                        "NV partitions are never erased."));
+                    continue;
+                }
+
+                progress?.Report(new UnisocFlashProgress(UnisocFlashPhase.Erase, name, 0, 0));
+                await storage.ErasePartitionAsync(name, confirmation, token).ConfigureAwait(false);
+            }
+
+            return true;
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -226,5 +284,16 @@ public sealed partial class DeviceMonitorService
                 .ConfigureAwait(false);
             return true;
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Bridges cumulative read bytes into per-chunk Unisoc progress records so the UI advances during a
+    /// long partition read instead of jumping from 0 to 100 only when the read finishes.
+    /// <para>把累计读取字节桥接为逐块紫光进度记录，使长分区回读期间界面持续推进，而不是只在读完时从 0 跳到 100。</para>
+    /// </summary>
+    private sealed class ReadByteProgress(string name, long total, IProgress<UnisocFlashProgress>? progress) : IProgress<long>
+    {
+        public void Report(long value)
+            => progress?.Report(new UnisocFlashProgress(UnisocFlashPhase.Flash, name, value, total));
     }
 }

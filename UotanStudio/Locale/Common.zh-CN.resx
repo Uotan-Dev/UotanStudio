@@ -4802,15 +4802,6 @@
   <data name="Flash_UnisocPostPowerOff" xml:space="preserve">
     <value>关机</value>
   </data>
-  <data name="Flash_UnisocManualLoaders" xml:space="preserve">
-    <value>手动加载器（仅用于拿不到包的设备；地址必须与设备匹配）</value>
-  </data>
-  <data name="Flash_UnisocChooseFdl1" xml:space="preserve">
-    <value>选择 FDL1</value>
-  </data>
-  <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
-    <value>选择 FDL2</value>
-  </data>
   <data name="Flash_UnisocEraseConfirmTitle" xml:space="preserve">
     <value>擦除分区</value>
   </data>

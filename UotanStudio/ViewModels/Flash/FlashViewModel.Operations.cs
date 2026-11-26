@@ -3889,6 +3889,10 @@ public sealed partial class FlashViewModel
         {
             await RunRkEraseSelectedAsync(rkdlDevice);
         }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Unisoc })
+        {
+            await RunUnisocEraseAsync();
+        }
         else
         {
             await RunSelectedAsync(erase: true);

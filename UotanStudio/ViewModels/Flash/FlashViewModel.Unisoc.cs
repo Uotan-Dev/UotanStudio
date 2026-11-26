@@ -33,6 +33,13 @@ public sealed partial class FlashViewModel
     /// <para>PAC 探测必须读取以到达魔数字的头部长度。</para></summary>
     private const int UnisocPacProbeLength = 2124;
 
+    /// <summary>Grid command of every PAC step that writes a payload. <para>每个写入负载的 PAC 步骤的网格命令。</para></summary>
+    private const string UnisocFlashCommand = "flash";
+
+    /// <summary>Grid command of every PAC step that erases without a payload.
+    /// <para>每个不含负载的擦除 PAC 步骤的网格命令。</para></summary>
+    private const string UnisocEraseCommand = "erase";
+
     /// <summary>Status line of the Unisoc section; the stage readout and every operation write it.
     /// <para>紫光展锐分类的状态行；阶段读取与每个操作都会写入。</para></summary>
     [ObservableProperty]
@@ -42,16 +49,6 @@ public sealed partial class FlashViewModel
     /// blocks the storage actions. <para>状态行下方随阶段变化的提示行；说明当前加载阶段能做什么，以及存储动作还差什么。</para></summary>
     [ObservableProperty]
     private string _unisocModeHint = string.Empty;
-
-    /// <summary>Manually chosen first-stage loader for endpoints whose package is unavailable; empty while the plan
-    /// supplies it. <para>包不可用时手动选择的一级加载器；计划可提供时为空。</para></summary>
-    [ObservableProperty]
-    private string _unisocFdl1Path = string.Empty;
-
-    /// <summary>Manually chosen second-stage loader; empty while the plan supplies it.
-    /// <para>计划可提供时为空的手动二级加载器。</para></summary>
-    [ObservableProperty]
-    private string _unisocFdl2Path = string.Empty;
 
     /// <summary>Selected erase mode index: keep data, partition erase or full erase.
     /// <para>所选擦除模式索引：保留数据、分区擦除或整片擦除。</para></summary>
@@ -91,8 +88,6 @@ public sealed partial class FlashViewModel
         RegisterGate("UnisocExpander", FlashControlGate.SectionHeader("UnisocExpander"));
         RegisterGate("UnisocPane", FlashControlGate.Unisoc("UnisocPane", busyDisabled: true));
         RegisterGate("UnisocRefreshButton", FlashControlGate.Unisoc("UnisocRefreshButton"));
-        RegisterGate("UnisocChooseFdl1Button", FlashControlGate.Unisoc("UnisocChooseFdl1Button"));
-        RegisterGate("UnisocChooseFdl2Button", FlashControlGate.Unisoc("UnisocChooseFdl2Button"));
     }
 
     /// <summary>
@@ -163,26 +158,6 @@ public sealed partial class FlashViewModel
     {
         _unisocStatusCache = null;
         RefreshUnisocDeviceStatus();
-    }
-
-    /// <summary>Chooses the manual first-stage loader for endpoints without a PAC package.
-    /// <para>为没有 PAC 包的端点选择手动一级加载器。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnUnisocChooseFdl1Click(object? sender, RoutedEventArgs e)
-    {
-        UnisocFdl1Path = await PickUnisocImageAsync("Flash_UnisocChooseFdl1").ConfigureAwait(true);
-    }
-
-    /// <summary>Chooses the manual second-stage loader for endpoints without a PAC package.
-    /// <para>为没有 PAC 包的端点选择手动二级加载器。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnUnisocChooseFdl2Click(object? sender, RoutedEventArgs e)
-    {
-        UnisocFdl2Path = await PickUnisocImageAsync("Flash_UnisocChooseFdl2").ConfigureAwait(true);
     }
 
     /// <summary>
@@ -310,7 +285,20 @@ public sealed partial class FlashViewModel
     /// 烧录路径以同一个名字匹配已勾选行。擦除条目被标记为破坏性，因此全选跳过它，勾选它需要确认。</para>
     /// </summary>
     private List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan)
+        => BuildUnisocPlanRows(plan, FormatUnisocRemainingSpace());
+
+    /// <summary>
+    /// Builds the grid rows for one plan with the remaining-space label supplied, so the mapping is verifiable without
+    /// a constructed view model or a live localizer.
+    /// <para>用外部提供的剩余空间标签构建一个计划的网格行，使该映射无需构造视图模型或实时本地化器即可验证。</para>
+    /// </summary>
+    /// <param name="plan">The loaded plan. <para>已加载的计划。</para></param>
+    /// <param name="remainingSpaceLabel">Label for the partition that fills the device.
+    /// <para>占满设备剩余空间分区的标签。</para></param>
+    /// <returns>The grid rows. <para>网格行。</para></returns>
+    internal static List<FlashPartitionEntry> BuildUnisocPlanRows(UnisocFlashPlan plan, string remainingSpaceLabel)
     {
+        ArgumentNullException.ThrowIfNull(plan);
         Dictionary<string, SprdPacPartition> declared = new(StringComparer.OrdinalIgnoreCase);
         foreach (var partition in plan.Partitions)
         {
@@ -318,6 +306,8 @@ public sealed partial class FlashViewModel
         }
 
         List<FlashPartitionEntry> rows = [];
+        rows.Add(CreateUnisocLoaderRow("FDL1", plan.Loaders.FirstStage, plan.Loaders.FirstStageAddress, plan.PackagePath));
+        rows.Add(CreateUnisocLoaderRow("FDL2", plan.Loaders.SecondStage, plan.Loaders.SecondStageAddress, plan.PackagePath));
         foreach (var image in plan.Images)
         {
             var packaged = image.PackagedFileName;
@@ -327,8 +317,8 @@ public sealed partial class FlashViewModel
                 IsDestructiveErase = image.EraseOnly,
                 Name = image.Name,
                 StorageMedium = DescribeUnisocStorageMedium(image.FlashType),
-                Command = image.Operation,
-                Offset = DescribeUnisocOffset(image, declared),
+                Command = image.EraseOnly ? UnisocEraseCommand : UnisocFlashCommand,
+                Offset = DescribeUnisocOffset(image, declared, remainingSpaceLabel),
                 Size = DescribeUnisocEntrySize(image),
                 FileName = packaged.Length > 0 ? FormatUnisocPackagedFileName(packaged) : string.Empty,
                 FilePath = packaged.Length > 0 ? plan.PackagePath : string.Empty,
@@ -338,6 +328,34 @@ public sealed partial class FlashViewModel
 
         return rows;
     }
+
+    /// <summary>
+    /// Builds the grid row for one PAC loader. The row is a locked script row: it states which boot image the
+    /// package uploads and at which RAM address, but no storage action writes it to a partition.
+    /// <para>为一个 PAC 加载器构建网格行。该行是锁定的脚本行：说明包上传哪个引导镜像、载入哪个 RAM 地址，
+    /// 但没有任何存储动作会把它写入分区。</para>
+    /// </summary>
+    /// <param name="command">The fixed row command, <c>FDL1</c> or <c>FDL2</c>.
+    /// <para>固定的行命令，<c>FDL1</c> 或 <c>FDL2</c>。</para></param>
+    /// <param name="entry">The loader entry the package carries. <para>包携带的加载器条目。</para></param>
+    /// <param name="address">The confirmed RAM load address. <para>确认的 RAM 加载地址。</para></param>
+    /// <param name="packagePath">The package the loader streams from. <para>加载器流式读取的来源包。</para></param>
+    /// <returns>The loader row. <para>加载器行。</para></returns>
+    private static FlashPartitionEntry CreateUnisocLoaderRow(
+        string command, PacEntry entry, uint address, string packagePath) => new()
+        {
+            IsScriptStep = true,
+            IsDestructiveErase = false,
+            IsSelected = true,
+            Name = command,
+            StorageMedium = string.Empty,
+            Command = command,
+            Offset = string.Format(CultureInfo.InvariantCulture, "0x{0:X8}", address),
+            Size = FormatByteSize(entry.Length),
+            FileName = FormatUnisocPackagedFileName(entry.Name),
+            FilePath = packagePath,
+            AcceptsFile = false
+        };
 
     /// <summary>
     /// Names the storage medium the package declares: the scheme's <c>FlashTypeID</c> is <c>1</c> for Nand flash and
@@ -371,13 +389,13 @@ public sealed partial class FlashViewModel
     /// <param name="declared">The declared partitions by identifier. <para>按标识索引的已声明分区。</para></param>
     /// <returns>The derived offset, the scheme base, or an empty string when neither applies.
     /// <para>推导出的偏移、scheme 基址；两者都不适用时为空字符串。</para></returns>
-    private string DescribeUnisocOffset(
-        UnisocFlashImage image, IReadOnlyDictionary<string, SprdPacPartition> declared)
+    private static string DescribeUnisocOffset(
+        UnisocFlashImage image, IReadOnlyDictionary<string, SprdPacPartition> declared, string remainingSpaceLabel)
     {
         if (image.Partition.Length > 0 && declared.TryGetValue(image.Partition, out var partition))
         {
             return partition.fillsRemainingSpace
-                ? FormatUnisocRemainingSpace()
+                ? remainingSpaceLabel
                 : partition.offset is { } offset ? FormatUnisocBase(offset) : string.Empty;
         }
 
@@ -583,6 +601,111 @@ public sealed partial class FlashViewModel
             });
             await App.DeviceMonitor.FlashUnisocAsync(device, PackagePath, options, selected, progress,
                 cancellation.Token, external).ConfigureAwait(true);
+            UnisocStatusText = language.GetString("Flash_UnisocFlashDone");
+            AppendLog(language.GetString("Flash_UnisocFlashDone"));
+            await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(language.GetString("Flash_Canceled"));
+        }
+        catch (Exception exception)
+        {
+            AppendError(exception);
+        }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            _unisocStatusCache = null;
+            RefreshUnisocDeviceStatus();
+            UpdateEdlButton();
+        }
+    }
+
+
+    /// <summary>
+    /// Erases the partitions ticked in the main grid on the endpoint, without writing an image. The typed flash
+    /// confirmation is required because erasing destroys the stored contents of every selected partition. Loader rows
+    /// and rows without a partition name are skipped, and the plan's loaders bring the link to FDL2 first.
+    /// <para>在端点上擦除主网格中勾选的分区而不写入镜像。由于擦除会销毁每个所选分区的已存内容，必须先输入刷写确认短语。
+    /// 加载器行与没有分区名的行被跳过，且先由计划的加载器把链路提升到 FDL2。</para>
+    /// </summary>
+    internal async Task RunUnisocEraseAsync()
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Unisoc } device)
+        {
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(PackagePath) || !File.Exists(PackagePath))
+        {
+            AppendLog(_localizer.GetString("Flash_UnisocNeedPackage"));
+            return;
+        }
+
+        var selected = Partitions
+            .Where(row => row.IsSelected && !row.IsScriptStep && row.Name.Length > 0)
+            .Select(row => row.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (selected.Length == 0)
+        {
+            AppendLog(_localizer.GetString("Flash_NoPartitionSelected"));
+            return;
+        }
+
+        var language = _localizer;
+        if (TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        bool confirmed;
+        _confirming = true;
+        try
+        {
+            confirmed = await DialogService.ConfirmDangerousAsync(owner, new DangerousConfirmRequest
+            {
+                TabTitle = language.GetString("Flash_Unisoc"),
+                Title = language.GetString("Flash_UnisocEraseConfirmTitle"),
+                Detail = string.Format(
+                    CultureInfo.CurrentCulture,
+                    language.GetString("Flash_UnisocEraseConfirmDetail"),
+                    string.Join(", ", selected)),
+                ConfirmWord = UnisocFlashOptions.ConfirmationPhrase,
+                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
+            }).ConfigureAwait(true);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        SetBusy(true);
+        try
+        {
+            var progress = new Progress<UnisocFlashProgress>(report =>
+            {
+                UnisocStatusText = FormatUnisocFlashProgress(report, language);
+                if (report.Total > 0)
+                {
+                    ReportBusyTransfer(report.BytesCompleted, report.Total);
+                }
+            });
+            await App.DeviceMonitor.EraseUnisocPartitionsAsync(device, PackagePath, selected,
+                UnisocFlashOptions.ConfirmationPhrase, progress, cancellation.Token).ConfigureAwait(true);
             UnisocStatusText = language.GetString("Flash_UnisocFlashDone");
             AppendLog(language.GetString("Flash_UnisocFlashDone"));
             await App.DeviceMonitor.ForceRefreshAsync().ConfigureAwait(true);
@@ -921,21 +1044,4 @@ public sealed partial class FlashViewModel
         return string.Format(language.GetString("Flash_UnisocFlashProgressNoPercent"), phase, target);
     }
 
-    private async Task<string> PickUnisocImageAsync(string titleKey)
-    {
-        if (TopLevel.GetTopLevel(Surface) is not { } topLevel)
-        {
-            return string.Empty;
-        }
-
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString(titleKey),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        return files.Count == 1 && files[0].TryGetLocalPath() is { } path && File.Exists(path)
-            ? path
-            : string.Empty;
-    }
 }

@@ -50,6 +50,39 @@ public class UnisocFlashTests : IDisposable
         Assert.Equal(0xA5, reader.ReadByte());
     }
 
+
+    [Fact]
+    public void BuildRows_ListsBothLoadersAndMapsStepsToFlashOrErase()
+    {
+        var path = WritePackage([
+            new PackageEntry("FDL", "fdl1.bin", PackagePayload(4)),
+            new PackageEntry("FDL2", "fdl2.bin", PackagePayload(4)),
+            new PackageEntry("XML", "scheme.xml",
+                Encoding.ASCII.GetBytes(BuildSchemeXml("0x00005500", "0x9EFFFE00", ["boot"], ["EraseMisc"]))),
+            new PackageEntry("boot", "boot.img", PackagePayload(16)),
+        ]);
+
+        using var plan = UnisocFlashPlan.Load(path, TestContext.Current.CancellationToken);
+        var rows = FlashViewModel.BuildUnisocPlanRows(plan, "remaining");
+
+        var fdl1 = Assert.Single(rows, row => row.Command == "FDL1");
+        Assert.True(fdl1.IsScriptStep);
+        Assert.True(fdl1.IsSelected);
+        Assert.Equal("0x00005500", fdl1.Offset);
+        Assert.Equal("PAC:fdl1.bin", fdl1.FileName);
+
+        var fdl2 = Assert.Single(rows, row => row.Command == "FDL2");
+        Assert.True(fdl2.IsScriptStep);
+        Assert.Equal("0x9EFFFE00", fdl2.Offset);
+
+        var write = Assert.Single(rows, row => row.Name == "boot");
+        Assert.Equal("flash", write.Command);
+        Assert.False(write.IsDestructiveErase);
+
+        var erase = Assert.Single(rows, row => row.IsDestructiveErase);
+        Assert.Equal("erase", erase.Command);
+    }
+
     [Fact]
     public void Load_SchemeDeclaresEraseStep_PlanListsEraseEntryWithoutPayload()
     {
