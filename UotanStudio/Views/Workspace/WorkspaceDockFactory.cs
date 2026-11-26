@@ -907,9 +907,22 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             .ByInstance(dockable)?.Cleanup?.Invoke(dockable);
     }
 
+    private bool IsFloatingRoot(IRootDock? root)
+    {
+        if (root?.Window is not { } window || ReferenceEquals(root, _mainRoot))
+        {
+            return false;
+        }
+
+        var mainRoot = ResolveMainRoot(window);
+        return mainRoot is not null && !ReferenceEquals(mainRoot, root);
+    }
+
     private void CloseFloatingWindowIfEmpty(IRootDock? root)
     {
-        if (root?.Window is not { } floatingWindow || HasVisibleLeafDockables(floatingWindow.Layout))
+        if (!IsFloatingRoot(root)
+            || root?.Window is not { } floatingWindow
+            || HasVisibleLeafDockables(floatingWindow.Layout))
         {
             return;
         }
@@ -935,7 +948,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         var documentDocks = CollectDocumentDocks(root);
-        var collapsable = root.Window is not null || documentDocks.Count > 1;
+        var collapsable = IsFloatingRoot(root) || documentDocks.Count > 1;
         foreach (var dock in documentDocks)
         {
             dock.IsCollapsable = collapsable;
@@ -991,7 +1004,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
                     documentDocks = updatedDocks;
                 }
 
-                var collapsable = root.Window is not null || documentDocks.Count > 1;
+                var collapsable = IsFloatingRoot(root) || documentDocks.Count > 1;
                 foreach (var dock in documentDocks)
                 {
                     dock.Id = "DocumentsPane";

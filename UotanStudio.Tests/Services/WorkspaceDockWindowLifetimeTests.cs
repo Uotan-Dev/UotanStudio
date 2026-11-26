@@ -212,6 +212,38 @@ public sealed class WorkspaceDockWindowLifetimeTests
     }
 
     [Fact]
+    public void FloatDockable_LastDocumentWithMainRootWindowAttached_PreservesMainDocumentsPaneAndClosesFloatingWindowOnReturn()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var mainWindow = factory.CreateDockWindow();
+        mainWindow.Layout = root;
+        factory.InitDockWindow(mainWindow, root, null);
+        root.Window = mainWindow;
+
+        var mainDocumentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        var doc1 = Assert.IsAssignableFrom<IDocument>(factory.FindDockable(root, d => d.Id == "Doc1"));
+
+        factory.FloatDockable(doc1);
+
+        var floatingWindow = Assert.Single(root.Windows!);
+        Assert.Equal(DockWindowOwnerMode.None, floatingWindow.OwnerMode);
+        Assert.Same(mainDocumentsPane, factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+        Assert.False(mainDocumentsPane.IsCollapsable);
+        Assert.Empty(mainDocumentsPane.VisibleDockables!);
+
+        var floatingDocumentDock = Assert.IsAssignableFrom<IDocumentDock>(doc1.Owner);
+        Assert.True(floatingDocumentDock.IsCollapsable);
+
+        factory.MoveDockable(floatingDocumentDock, mainDocumentsPane, doc1, null);
+
+        Assert.Empty(root.Windows!);
+        Assert.Contains(doc1, mainDocumentsPane.VisibleDockables!);
+        Assert.Same(mainDocumentsPane, doc1.Owner);
+        Assert.False(mainDocumentsPane.IsCollapsable);
+    }
+
+    [Fact]
     public void RightColumn_FloatBothAndDockBack_RemountsRightColumnAndPanels()
     {
         var factory = new HeadlessWorkspaceDockFactory();
