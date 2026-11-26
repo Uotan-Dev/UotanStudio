@@ -423,6 +423,51 @@ public sealed partial class WorkspacePanelService : ObservableObject
         return null;
     }
 
+    internal IToolDock? FindBottomToolHost()
+        => _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost as IToolDock;
+
+    internal void EnsureHostMounted(IFactory factory, IRootDock root, IDock host)
+    {
+        if (factory.FindDockable(root, d => ReferenceEquals(d, host)) is not null)
+        {
+            return;
+        }
+
+        if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceMainLayout", StringComparison.Ordinal))
+            is not IProportionalDock mainLayout)
+        {
+            return;
+        }
+
+        var leftPane = _panels.GetValueOrDefault(ProjectExplorer)?.RegisteredHost;
+        if (ReferenceEquals(host, leftPane))
+        {
+            SyncLeftPane(leftPane, factory, mainLayout, isShowing: true);
+            return;
+        }
+
+        var bottomPane = _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost;
+        if (ReferenceEquals(host, bottomPane))
+        {
+            if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceCenterColumn", StringComparison.Ordinal))
+                is IProportionalDock centerCol)
+            {
+                SyncBottomPane(bottomPane, centerCol, factory, isShowing: true);
+            }
+            return;
+        }
+
+        var rightPaneTop = _panels.GetValueOrDefault(ImagesView)?.RegisteredHost;
+        var rightPane = _panels.GetValueOrDefault(Properties)?.RegisteredHost;
+        if (ReferenceEquals(host, rightPaneTop) || ReferenceEquals(host, rightPane))
+        {
+            var rightCol = (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceRightColumn", StringComparison.Ordinal))
+                ?? rightPaneTop?.Owner
+                ?? rightPane?.Owner) as IProportionalDock;
+            SyncRightColumn(rightCol, rightPaneTop, rightPane, factory, mainLayout, isShowing: true);
+        }
+    }
+
     private static void UpdateHost(PanelEntry? entry)
     {
         if (entry is null) return;
@@ -472,43 +517,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     private void EnsureHostMounted(IFactory factory, IDock host)
     {
         var root = FindRoot(factory, host);
-        if (root is null || factory.FindDockable(root, d => ReferenceEquals(d, host)) is not null)
+        if (root is not null)
         {
-            return;
-        }
-
-        if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceMainLayout", StringComparison.Ordinal))
-            is not IProportionalDock mainLayout)
-        {
-            return;
-        }
-
-        var leftPane = _panels.GetValueOrDefault(ProjectExplorer)?.RegisteredHost;
-        if (ReferenceEquals(host, leftPane))
-        {
-            SyncLeftPane(leftPane, factory, mainLayout, isShowing: true);
-            return;
-        }
-
-        var bottomPane = _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost;
-        if (ReferenceEquals(host, bottomPane))
-        {
-            if (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceCenterColumn", StringComparison.Ordinal))
-                is IProportionalDock centerCol)
-            {
-                SyncBottomPane(bottomPane, centerCol, factory, isShowing: true);
-            }
-            return;
-        }
-
-        var rightPaneTop = _panels.GetValueOrDefault(ImagesView)?.RegisteredHost;
-        var rightPane = _panels.GetValueOrDefault(Properties)?.RegisteredHost;
-        if (ReferenceEquals(host, rightPaneTop) || ReferenceEquals(host, rightPane))
-        {
-            var rightCol = (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceRightColumn", StringComparison.Ordinal))
-                ?? rightPaneTop?.Owner
-                ?? rightPane?.Owner) as IProportionalDock;
-            SyncRightColumn(rightCol, rightPaneTop, rightPane, factory, mainLayout, isShowing: true);
+            EnsureHostMounted(factory, root, host);
         }
     }
 

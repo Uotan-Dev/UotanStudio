@@ -16,6 +16,7 @@
         <Setter Property="DocumentContextMenu">
             <Template><ContextMenu x:DataType="core:IDockable">
                 <controls:DocumentFileActionsMenuItem />
+                <controls:DockToMainWindowMenuItem />
                 <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
                           Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>

@@ -1,8 +1,11 @@
 using System.Runtime.CompilerServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Dock.Avalonia.Controls;
+using Dock.Model.Core;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 using UotanStudio.Views.Controls;
@@ -17,7 +20,13 @@ namespace UotanStudio.Views.Workspace;
 /// </summary>
 internal static class DockMenuIcons
 {
-    private static readonly ConditionalWeakTable<MenuFlyout, object> _attachedFlyouts = new();
+    private sealed class HeaderFlyoutState
+    {
+        public required DockToMainWindowMenuItem ReturnItem { get; init; }
+        public WeakReference<ToolChromeControl>? LastChrome { get; set; }
+    }
+
+    private static readonly ConditionalWeakTable<MenuFlyout, HeaderFlyoutState> _attachedFlyouts = new();
     private static int _wired;
 
     /// <summary>
@@ -47,18 +56,45 @@ internal static class DockMenuIcons
     internal static void Apply(MenuFlyout menu) => ApplyItems(menu.Items);
 
     /// <summary>
-    /// Registers a one-time <c>Opened</c> handler for the header MenuFlyout, filling icons after the menu opens
-    /// and its headers have resolved.
-    /// <para>为顶栏 MenuFlyout 注册一次性的 <c>Opened</c> 处理，在其打开、标题解析完成后再补齐图标。</para>
+    /// Registers a one-time handler for the header MenuFlyout, injecting the floating-window
+    /// return-to-main-window item and filling icons when the menu opens. Because the theme can share a
+    /// single MenuFlyout across multiple <see cref="ToolChromeControl"/> instances, the active chrome is
+    /// resolved dynamically on every open.
+    /// <para>为顶栏 MenuFlyout 注册一次性处理，在打开前刷新浮动窗口“停靠回主窗口”菜单项并在打开后补齐图标。
+    /// 由于主题可能在多个 <see cref="ToolChromeControl"/> 之间复用同一个 MenuFlyout，因此每次打开时动态解析当前标题栏。</para>
     /// </summary>
     private static void AttachHeader(ToolChromeControl chrome)
     {
-        if (chrome.ToolFlyout is not MenuFlyout flyout || _attachedFlyouts.TryGetValue(flyout, out _))
+        if (chrome.ToolFlyout is not MenuFlyout flyout)
         {
             return;
         }
 
-        _attachedFlyouts.Add(flyout, new object());
+        if (_attachedFlyouts.TryGetValue(flyout, out var existing))
+        {
+            existing.LastChrome = new WeakReference<ToolChromeControl>(chrome);
+            return;
+        }
+
+        var state = new HeaderFlyoutState
+        {
+            ReturnItem = new DockToMainWindowMenuItem(),
+            LastChrome = new WeakReference<ToolChromeControl>(chrome)
+        };
+        _attachedFlyouts.Add(flyout, state);
+        flyout.Items.Insert(0, state.ReturnItem);
+        flyout.Opening += (_, _) =>
+        {
+            var activeChrome = (flyout.Target as Visual)?.FindAncestorOfType<ToolChromeControl>();
+            if (activeChrome is null && state.LastChrome is { } weak && weak.TryGetTarget(out var last))
+            {
+                activeChrome = last;
+            }
+
+            state.ReturnItem.DataContext = (activeChrome?.DataContext as IDock)?.ActiveDockable
+                ?? activeChrome?.DataContext;
+            state.ReturnItem.RefreshVisibility();
+        };
         flyout.Opened += (_, _) => Apply(flyout);
     }
 
@@ -111,7 +147,8 @@ internal static class DockMenuIcons
         }
 
         if (text == lang.GetString("DockMenu_Dock")
-            || text == lang.GetString("DockMenu_DockAsTool"))
+            || text == lang.GetString("DockMenu_DockAsTool")
+            || text == lang.GetString("DockMenu_DockToMainWindow"))
         {
             return AppIconKind.Pin;
         }

@@ -4,6 +4,8 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
+using UotanStudio.UiAbstractions;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -11,8 +13,9 @@ namespace UotanStudio.Views.Nodes;
 /// Dock layout factory for the node editor, creating a layout with toolbox, canvas, properties panel, and execution log.
 /// <para>节点编辑器的 Dock 布局工厂，创建包含工具箱、画布、属性面板和执行日志的布局。</para>
 /// </summary>
-public class NodeDockFactory : Factory
+public class NodeDockFactory : Factory, IDockReturnFactory
 {
+    private IRootDock? _mainRoot;
     /// <summary>
     /// Creates the dock layout for the node editor.
     /// <para>创建节点编辑器的 Dock 布局。</para>
@@ -107,6 +110,7 @@ public class NodeDockFactory : Factory
         };
 
         var rootDock = CreateRootDock();
+        _mainRoot = rootDock;
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -152,7 +156,138 @@ public class NodeDockFactory : Factory
     protected virtual IHostWindow CreateHostWindow()
     {
         var options = new DockManagerOptions { IsDockingEnabled = true };
-        return new HostWindow(options);
+        return new DockHostWindow(options);
+    }
+
+    /// <inheritdoc/>
+    public bool CanDockToMainWindow(IDockable? dockable)
+    {
+        if (dockable is null)
+        {
+            return false;
+        }
+
+        var sourceRoot = FindRoot(dockable, static _ => true);
+        if (sourceRoot?.Window is not { } floatingWindow)
+        {
+            return false;
+        }
+
+        var mainRoot = ResolveMainRoot(floatingWindow);
+        return mainRoot is not null && !ReferenceEquals(mainRoot, sourceRoot);
+    }
+
+    /// <inheritdoc/>
+    public void DockToMainWindow(IDockable? dockable)
+    {
+        if (dockable?.Owner is not IDock sourceDock)
+        {
+            return;
+        }
+
+        var sourceRoot = FindRoot(dockable, static _ => true);
+        if (sourceRoot?.Window is not { } floatingWindow)
+        {
+            return;
+        }
+
+        var mainRoot = ResolveMainRoot(floatingWindow);
+        if (mainRoot is null || ReferenceEquals(mainRoot, sourceRoot))
+        {
+            return;
+        }
+
+        var keepAsTool = dockable is ITool && (dockable is not IDocument || sourceDock is IToolDock);
+        IDock? targetDock = keepAsTool
+            ? (dockable.OriginalOwner is IToolDock original && ContainsInDockTree(mainRoot, original)
+                ? original
+                : FindInDockTree<IToolDock>(mainRoot))
+            : FindInDockTree<IDocumentDock>(mainRoot);
+
+        if (targetDock is null || ReferenceEquals(sourceDock, targetDock))
+        {
+            return;
+        }
+
+        MoveDockable(sourceDock, targetDock, dockable, targetDock.ActiveDockable);
+        SetActiveDockable(dockable);
+        SetFocusedDockable(mainRoot, dockable);
+
+        if (!HasVisibleLeafDockables(floatingWindow.Layout))
+        {
+            CloseWindow(floatingWindow);
+            if (mainRoot.Windows?.Contains(floatingWindow) == true)
+            {
+                RemoveWindow(floatingWindow);
+            }
+        }
+    }
+
+    private IRootDock? ResolveMainRoot(IDockWindow floatingWindow)
+    {
+        var candidate = floatingWindow.Owner as IRootDock ?? _mainRoot;
+        while (candidate?.Window?.Owner is IRootDock parentRoot && !ReferenceEquals(parentRoot, candidate))
+        {
+            candidate = parentRoot;
+        }
+
+        return candidate;
+    }
+
+    private static bool ContainsInDockTree(IDock root, IDockable target)
+        => FindInDockTree<IDockable>(root, d => ReferenceEquals(d, target)) is not null;
+
+    private static T? FindInDockTree<T>(IDockable? current, Func<T, bool>? predicate = null)
+        where T : class, IDockable
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        if (current is T matched && (predicate is null || predicate(matched)))
+        {
+            return matched;
+        }
+
+        if (current is IDock { VisibleDockables: { } children })
+        {
+            foreach (var child in children)
+            {
+                if (FindInDockTree(child, predicate) is { } found)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasVisibleLeafDockables(IDockable? root)
+    {
+        if (root is null)
+        {
+            return false;
+        }
+
+        if (root is ITool or IDocument)
+        {
+            return true;
+        }
+
+        if (root is IDock { VisibleDockables: { } children })
+        {
+            foreach (var child in children)
+            {
+                if (HasVisibleLeafDockables(child))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static ManagedHostWindow CreateManagedHostWindow()

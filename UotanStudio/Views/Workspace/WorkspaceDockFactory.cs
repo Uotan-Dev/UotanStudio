@@ -27,9 +27,11 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     object? IWorkspaceDockFactory.ProjectExplorer => _projectExplorer;
     private PropertiesViewModel? _properties;
     private TerminalDockService? _terminals;
+    private IRootDock? _mainRoot;
     private readonly HashSet<IDockable> _closingDocuments = [];
     private bool _syncingDocumentDocks;
     private bool _syncDocumentDocksPending;
+    private bool _floatingFromToolDock;
 
     public WorkspaceDockFactory() : this(new AiSettingsViewModel()) { }
 
@@ -217,6 +219,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         };
 
         var rootDock = CreateRootDock();
+        _mainRoot = rootDock;
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -329,7 +332,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     protected virtual IHostWindow CreateHostWindow()
     {
         var options = new DockManagerOptions { IsDockingEnabled = true };
-        var hwnd = new HostWindow(options);
+        var hwnd = new DockHostWindow(options);
 
         hwnd.ShowInTaskbar = true;
         hwnd.CanResize = true;
@@ -492,6 +495,165 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     }
 
     /// <inheritdoc/>
+    public bool CanDockToMainWindow(IDockable? dockable)
+    {
+        if (dockable is null)
+        {
+            return false;
+        }
+
+        var sourceRoot = FindRoot(dockable, static _ => true);
+        if (sourceRoot?.Window is not { } floatingWindow)
+        {
+            return false;
+        }
+
+        var mainRoot = ResolveMainRoot(floatingWindow);
+        return mainRoot is not null && !ReferenceEquals(mainRoot, sourceRoot);
+    }
+
+    /// <inheritdoc/>
+    public void DockToMainWindow(IDockable? dockable)
+    {
+        if (dockable?.Owner is not IDock sourceDock)
+        {
+            return;
+        }
+
+        var sourceRoot = FindRoot(dockable, static _ => true);
+        if (sourceRoot?.Window is not { } floatingWindow)
+        {
+            return;
+        }
+
+        var mainRoot = ResolveMainRoot(floatingWindow);
+        if (mainRoot is null || ReferenceEquals(mainRoot, sourceRoot))
+        {
+            return;
+        }
+
+        var registeredToolHost = WorkspacePanelService.Instance.FindRegisteredToolHost(dockable)
+            ?? (dockable is TerminalViewModel ? WorkspacePanelService.Instance.FindBottomToolHost() : null);
+
+        if (registeredToolHost is not null)
+        {
+            if (ReferenceEquals(sourceDock, registeredToolHost))
+            {
+                // The registered tool pane itself was floated into its own window: detach it from the
+                // floating root and remount it into its default initial slot in the main layout.
+                ReleaseDockablePresentations(sourceDock);
+                base.RemoveDockable(sourceDock, collapse: true);
+                WorkspacePanelService.Instance.EnsureHostMounted(this, mainRoot, registeredToolHost);
+            }
+            else
+            {
+                MoveDockable(sourceDock, registeredToolHost, dockable, registeredToolHost.ActiveDockable);
+                WorkspacePanelService.Instance.EnsureHostMounted(this, mainRoot, registeredToolHost);
+            }
+        }
+        else
+        {
+            var keepAsTool = dockable is ITool && (dockable is not IDocument || sourceDock is IToolDock);
+            IDock? targetDock = keepAsTool
+                ? ResolveTargetToolDock(dockable, mainRoot) ?? WorkspacePanelService.Instance.FindBottomToolHost()
+                : FindInDockTree<IDocumentDock>(mainRoot);
+
+            if (targetDock is null && keepAsTool)
+            {
+                var fallbackToolDock = CreateToolDock();
+                fallbackToolDock.Proportion = 0.2;
+                fallbackToolDock.VisibleDockables = CreateList<IDockable>();
+
+                var mainContent = mainRoot.ActiveDockable ?? mainRoot.VisibleDockables?.FirstOrDefault();
+                if (mainContent is IProportionalDock rootProportional)
+                {
+                    AddDockable(rootProportional, new ProportionalDockSplitter());
+                    AddDockable(rootProportional, fallbackToolDock);
+                    targetDock = fallbackToolDock;
+                }
+                else if (mainContent is not null)
+                {
+                    var wrapper = CreateProportionalDock();
+                    wrapper.Orientation = Orientation.Horizontal;
+                    wrapper.VisibleDockables = CreateList<IDockable>(
+                        fallbackToolDock,
+                        new ProportionalDockSplitter(),
+                        mainContent);
+                    wrapper.ActiveDockable = mainContent;
+                    InitDockable(wrapper, mainRoot);
+                    mainRoot.VisibleDockables = CreateList<IDockable>(wrapper);
+                    mainRoot.ActiveDockable = wrapper;
+                    mainRoot.DefaultDockable = wrapper;
+                    targetDock = fallbackToolDock;
+                }
+            }
+
+            if (targetDock is null || ReferenceEquals(sourceDock, targetDock))
+            {
+                return;
+            }
+
+            MoveDockable(sourceDock, targetDock, dockable, targetDock.ActiveDockable);
+            if (targetDock is IToolDock)
+            {
+                WorkspacePanelService.Instance.EnsureHostMounted(this, mainRoot, targetDock);
+            }
+        }
+
+        SetActiveDockable(dockable);
+        SetFocusedDockable(mainRoot, dockable);
+
+        if (!HasVisibleLeafDockables(floatingWindow.Layout))
+        {
+            CloseWindow(floatingWindow);
+            if (mainRoot.Windows?.Contains(floatingWindow) == true)
+            {
+                RemoveWindow(floatingWindow);
+            }
+        }
+
+        SyncDocumentDocks(mainRoot);
+        WorkspacePanelService.Instance.OnDockContentsChanged();
+    }
+
+    private IRootDock? ResolveMainRoot(IDockWindow floatingWindow)
+    {
+        var candidate = floatingWindow.Owner as IRootDock ?? _mainRoot;
+        while (candidate?.Window?.Owner is IRootDock parentRoot && !ReferenceEquals(parentRoot, candidate))
+        {
+            candidate = parentRoot;
+        }
+
+        return candidate;
+    }
+
+    private static bool HasVisibleLeafDockables(IDockable? root)
+    {
+        if (root is null)
+        {
+            return false;
+        }
+
+        if (root is ITool or IDocument)
+        {
+            return true;
+        }
+
+        if (root is IDock { VisibleDockables: { } children })
+        {
+            foreach (var child in children)
+            {
+                if (HasVisibleLeafDockables(child))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <inheritdoc/>
     public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable? targetDockable)
     {
         var root = FindRoot(targetDock, _ => true) ?? FindRoot(sourceDock, _ => true);
@@ -521,6 +683,31 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     }
 
     /// <inheritdoc/>
+    public override IDockWindow? CreateWindowFrom(IDockable dockable)
+    {
+        // Document editors implement both IDocument and ITool so DockAsTool works, but Dock.Model's
+        // default CreateWindowFrom checks ITool before IDocument and would wrap a floated document in
+        // a ToolDock. Keep document tabs in a DocumentDock unless they were floated from a ToolDock.
+        if (dockable is IDocument && !_floatingFromToolDock && dockable.Owner is not IToolDock)
+        {
+            var documentDock = CreateDocumentDock();
+            documentDock.DockGroup = dockable.DockGroup;
+            if (dockable.Owner is IDocumentDock sourceDocumentDock)
+            {
+                documentDock.Id = sourceDocumentDock.Id;
+                documentDock.CanCreateDocument = sourceDocumentDock.CanCreateDocument;
+                documentDock.EnableWindowDrag = sourceDocumentDock.EnableWindowDrag;
+            }
+
+            documentDock.VisibleDockables = CreateList<IDockable>(dockable);
+            documentDock.ActiveDockable = dockable;
+            return base.CreateWindowFrom(documentDock);
+        }
+
+        return base.CreateWindowFrom(dockable);
+    }
+
+    /// <inheritdoc/>
     public override void SplitToWindow(IDock dock, IDockable dockable, double x, double y, double width, double height, DockWindowOptions? options)
     {
         var root = FindRoot(dock, _ => true);
@@ -530,7 +717,17 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         }
 
         ReleaseDockablePresentations(dockable);
-        base.SplitToWindow(dock, dockable, x, y, width, height, options);
+        var previousFloatingFromToolDock = _floatingFromToolDock;
+        _floatingFromToolDock = dock is IToolDock;
+        try
+        {
+            base.SplitToWindow(dock, dockable, x, y, width, height, options);
+        }
+        finally
+        {
+            _floatingFromToolDock = previousFloatingFromToolDock;
+        }
+
         SyncDocumentDocks(root);
         WorkspacePanelService.Instance.OnDockContentsChanged();
     }
@@ -561,13 +758,13 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
     private IToolDock? ResolveTargetToolDock(IDockable dockable, IRootDock root)
     {
         if (dockable.OriginalOwner is IToolDock originalToolDock
-            && ReferenceEquals(FindRoot(originalToolDock, _ => true), root))
+            && ContainsInDockTree(root, originalToolDock))
         {
             return originalToolDock;
         }
 
         if (WorkspacePanelService.Instance.FindRegisteredToolHost(dockable) is { } registeredToolDock
-            && ReferenceEquals(FindRoot(registeredToolDock, _ => true), root))
+            && ContainsInDockTree(root, registeredToolDock))
         {
             return registeredToolDock;
         }
@@ -575,13 +772,43 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         string[] preferredPaneIds = ["BottomPane", "RightPane", "RightPaneTop", "LeftPane"];
         foreach (var id in preferredPaneIds)
         {
-            if (FindDockable(root, d => d is IToolDock && d.Id == id) is IToolDock pane)
+            if (FindInDockTree<IToolDock>(root, d => d.Id == id) is { } pane)
             {
                 return pane;
             }
         }
 
-        return FindDockable(root, static d => d is IToolDock) as IToolDock;
+        return FindInDockTree<IToolDock>(root);
+    }
+
+    private static bool ContainsInDockTree(IDock root, IDockable target)
+        => FindInDockTree<IDockable>(root, d => ReferenceEquals(d, target)) is not null;
+
+    private static T? FindInDockTree<T>(IDockable? current, Func<T, bool>? predicate = null)
+        where T : class, IDockable
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        if (current is T matched && (predicate is null || predicate(matched)))
+        {
+            return matched;
+        }
+
+        if (current is IDock { VisibleDockables: { } children })
+        {
+            foreach (var child in children)
+            {
+                if (FindInDockTree(child, predicate) is { } found)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
     }
 
     private void SafeRemoveDockable(IDockable dockable)

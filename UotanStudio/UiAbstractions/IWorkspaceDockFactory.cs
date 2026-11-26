@@ -7,7 +7,7 @@ namespace UotanStudio.UiAbstractions;
 /// concrete factory type.
 /// <para>视图模型与服务适配器使用的工作区 Dock 工厂接口，不引用具体工厂类型。</para>
 /// </summary>
-public interface IWorkspaceDockFactory : IFactory
+public interface IWorkspaceDockFactory : IFactory, IDockReturnFactory
 {
     /// <summary>
     /// The project-explorer panel instance owned by the factory, or null before it is created.
