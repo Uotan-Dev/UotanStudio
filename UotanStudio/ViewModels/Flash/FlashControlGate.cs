@@ -142,7 +142,8 @@ internal sealed class FlashControlGate
         static context => context.Mode != FlashDeviceMode.None &&
             (context.Kind is FlashDeviceKind.Unknown or FlashDeviceKind.Fastboot ||
                 context.Mode is FlashDeviceMode.Sunxi or FlashDeviceMode.Unisoc) &&
-            !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom),
+            !(context.Mode == FlashDeviceMode.Rkdl && context.Stage == RockchipStage.Maskrom) &&
+            !(context.Mode == FlashDeviceMode.Unisoc && !context.IsUnisocFdl2),
         busyDisabled);
 
     /// <summary>
@@ -156,7 +157,8 @@ internal sealed class FlashControlGate
     /// 进迭时空 BootROM 下载模式与其它协议保持关闭，因为该阶段根本没有分区表，而其余协议都经各自分类拥有的动作读取。</para>
     /// </summary>
     internal static FlashControlGate PartitionTableRead(string name, bool busyDisabled = false) => new(name,
-        static context => context.Mode is FlashDeviceMode.Edl or FlashDeviceMode.Sunxi or FlashDeviceMode.Unisoc ||
+        static context => context.Mode is FlashDeviceMode.Edl or FlashDeviceMode.Sunxi ||
+            (context.Mode == FlashDeviceMode.Unisoc && context.IsUnisocFdl2) ||
             (context.Kind == FlashDeviceKind.Fastboot &&
                 !(context.IsSpacemiTFastboot && context.FastbootStage == SpacemiTBootStage.BromFdl)),
         busyDisabled);

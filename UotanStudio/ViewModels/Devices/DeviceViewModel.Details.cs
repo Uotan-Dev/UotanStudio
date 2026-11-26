@@ -140,6 +140,7 @@ public partial class DeviceViewModel
                     UnisocBootStage.Fdl2 => "FDL2",
                     _ => status.Stage.ToString(),
                 };
+                device.SetUnisocSecureBoot(status.SecureBoot);
             }
         }
         catch (Exception exception)

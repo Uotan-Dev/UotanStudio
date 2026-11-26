@@ -323,6 +323,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             var label = IsAdb && IsReadyState(State) ? "Android"
                 : IsHdc && IsReadyState(State) ? "HarmonyOS"
                 : IsRkdl ? RkdlStageLabel(State)
+                : IsUnisoc ? UnisocStateLabel(State)
                 : State;
             return HasDetectedSlot && IsReadyState(State) ? $"{label} {Slot}" : label;
         }
@@ -337,6 +338,21 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     /// <param name="state">The discovered Rockchip state. <para>发现层给出的瑞芯微状态。</para></param>
     /// <returns>The display stage text. <para>用于显示的阶段文本。</para></returns>
+
+    /// <summary>
+    /// State text for a UNISOC endpoint: the download-mode connection plus the loader stage the handshake reported,
+    /// so the row never reads the protocol name back as if it were a device state.
+    /// <para>紫光展锐端点的状态文本：下载模式连接，加上握手上报的加载阶段，使该行绝不把协议名当作设备状态回显。</para>
+    /// </summary>
+    /// <param name="state">The enumerated link state. <para>枚举得到的链路状态。</para></param>
+    /// <returns>The state text with the reported loader stage appended.
+    /// <para>追加了已上报加载阶段的状态文本。</para></returns>
+    private string UnisocStateLabel(string state)
+    {
+        var link = string.IsNullOrEmpty(state) ? "Connected" : state;
+        return UnisocStage.Length > 0 ? $"{link} · {UnisocStage}" : link;
+    }
+
     private static string RkdlStageLabel(string state) => state switch
     {
         "maskrom" => "MaskROM",
@@ -827,7 +843,29 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// UNISOC badge text: appends the handshake-reported loader stage once a session connected.
     /// <para>紫光展锐徽章文本：会话连接后追加握手上报的加载阶段。</para>
     /// </summary>
-    public string UnisocBadge => IsUnisoc && UnisocStage.Length > 0 ? $"Unisoc · {UnisocStage}" : "Unisoc";
+    public string UnisocBadge
+    {
+        get
+        {
+            if (!IsUnisoc)
+            {
+                return "Unisoc";
+            }
+
+            var parts = new List<string> { "Unisoc" };
+            if (UnisocStage.Length > 0)
+            {
+                parts.Add(UnisocStage);
+            }
+
+            if (HasUnisocStage)
+            {
+                parts.Add(IsUnisocSecureBoot ? "Secure" : "Unsecure");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
 
     /// <summary>
     /// Whether the handshake has already reported the UNISOC loader stage; a <see langword="false"/> value keeps
@@ -835,6 +873,31 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>握手是否已上报紫光展锐加载阶段；为 <see langword="false"/> 时下次扫描会重试身份查询。</para>
     /// </summary>
     public bool HasUnisocStage => UnisocStage.Length > 0;
+
+    /// <summary>
+    /// Whether the handshake found a protected Boot ROM. A locked Boot ROM answers anything other than the open
+    /// <c>SPRD3</c> version string, so this is the secure-boot verdict the device reported.
+    /// <para>握手是否发现受保护的 Boot ROM。锁定的 Boot ROM 只回应非开放 <c>SPRD3</c> 版本串，因此这就是设备上报的
+    /// 安全启动结论。</para>
+    /// </summary>
+    public bool IsUnisocSecureBoot
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(UnisocBadge));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Publishes the secure-boot verdict the handshake reported for this endpoint.
+    /// <para>发布握手为该端点上报的安全启动结论。</para>
+    /// </summary>
+    /// <param name="secure">Whether the Boot ROM is protected. <para>Boot ROM 是否受保护。</para></param>
+    internal void SetUnisocSecureBoot(bool secure) => IsUnisocSecureBoot = secure;
 
     /// <summary>
     /// Whether the device is an Apple (iOS) target.

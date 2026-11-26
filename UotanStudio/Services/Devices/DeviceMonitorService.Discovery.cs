@@ -228,7 +228,7 @@ public sealed partial class DeviceMonitorService
                     DeviceProtocolKind.Hdc => "device",
                     DeviceProtocolKind.Diagnostic => "diag",
                     DeviceProtocolKind.Sunxi => "sunxi",
-                    DeviceProtocolKind.Unisoc => "unisoc",
+                    DeviceProtocolKind.Unisoc => "connected",
                     _ => string.Empty,
                 },
                 VendorId = info.VendorId,
