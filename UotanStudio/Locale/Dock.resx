@@ -358,13 +358,10 @@
     <value>Dock</value>
   </data>
   <data name="DockMenu_DockAsDocument" xml:space="preserve">
-    <value>Dock as Tabbed Document</value>
+    <value>Dock as Document Window</value>
   </data>
   <data name="DockMenu_DockAsTool" xml:space="preserve">
     <value>Dock as Tool Window</value>
-  </data>
-  <data name="DockMenu_DockToMainWindow" xml:space="preserve">
-    <value>Dock to Main Window</value>
   </data>
   <data name="DockMenu_AutoHide" xml:space="preserve">
     <value>Auto Hide</value>

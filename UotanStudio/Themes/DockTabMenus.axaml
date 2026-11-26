@@ -5,6 +5,17 @@
         xmlns:core="using:Dock.Model.Core"
         xmlns:controls="using:UotanStudio.Views.Controls"
         xmlns:ui="using:UotanStudio.UiAbstractions">
+    <Styles.Resources>
+        <MenuFlyout x:Key="ToolChromeControlContextMenu">
+            <controls:ToolDockMenuItem Action="Float" />
+            <Separator />
+            <controls:ToolDockMenuItem Action="Dock" />
+            <controls:ToolDockMenuItem Action="DockAsDocument" />
+            <controls:ToolDockMenuItem Action="AutoHide" />
+            <Separator />
+            <controls:ToolDockMenuItem Action="Close" />
+        </MenuFlyout>
+    </Styles.Resources>
     <!-- 文档/工具标签页右键菜单：覆盖 Semi Dock 主题的默认菜单——
          去掉方向性关闭（关闭左侧/右侧/上方/下方）、新建水平/垂直文档停靠区、布局模式，
          并为保留项加上图标。命令仍走 Dock 工厂方法（Factory.Xxx + CommandParameter=当前停靠项）。 -->
@@ -12,23 +23,16 @@
          closes, the new horizontal/vertical document dock entries and the layout-mode submenu, and by adding
          icons to the remaining entries. Commands still call the Dock factory methods (Factory.Xxx with the
          current dockable as CommandParameter). -->
+    <Style Selector="dock|ToolChromeControl">
+        <Setter Property="ToolFlyout" Value="{DynamicResource ToolChromeControlContextMenu}" />
+    </Style>
     <Style Selector="dock|DocumentTabStripItem">
         <Setter Property="DocumentContextMenu">
             <Template><ContextMenu x:DataType="core:IDockable">
                 <controls:DocumentFileActionsMenuItem />
                 <controls:DockToMainWindowMenuItem />
-                <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
-                          Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:ArrowRightUp Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
-                          Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:Window1 Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <controls:ToolDockMenuItem Action="Float" />
+                <controls:ToolDockMenuItem Action="FloatAll" />
                 <Separator />
                 <MenuItem Header="{DynamicResource DockMenu_DockAsTool}"
                           Command="{Binding ((ui:IWorkspaceDockFactory)Factory).DockAsTool}" CommandParameter="{Binding}">
@@ -43,12 +47,7 @@
                         <icons:Close Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{DynamicResource DockMenu_CloseOthers}"
-                          Command="{Binding Factory.CloseOtherDockables}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:CloseCircle Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <controls:ToolDockMenuItem Action="CloseOthers" />
                 <MenuItem Header="{DynamicResource DockMenu_CloseAll}"
                           Command="{Binding Factory.CloseAllDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
@@ -61,79 +60,15 @@
     <Style Selector="dock|ToolTabStripItem">
         <Setter Property="TabContextMenu">
             <Template><ContextMenu x:DataType="core:IDockable">
-                <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
-                          Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:ArrowRightUp Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
-                          Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:Window1 Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <controls:ToolDockMenuItem Action="Float" />
+                <controls:ToolDockMenuItem Action="FloatAll" />
                 <Separator />
-                <MenuItem Header="{DynamicResource DockMenu_Dock}" IsVisible="{Binding CanPin}"
-                          Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:Pin Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}" IsVisible="{Binding CanDockAsDocument}"
-                          Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:PageTab Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="{DynamicResource DockMenu_AutoHide}" IsVisible="{Binding CanPin}"
-                          Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:LockOff Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <controls:ToolDockMenuItem Action="Dock" />
+                <controls:ToolDockMenuItem Action="DockAsDocument" />
+                <controls:ToolDockMenuItem Action="AutoHide" />
                 <Separator />
-                <MenuItem Header="{DynamicResource DockMenu_Close}" IsVisible="{Binding CanClose}"
-                          Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
-                    <MenuItem.Icon>
-                        <icons:Close Width="16" Height="16" />
-                    </MenuItem.Icon>
-                </MenuItem>
+                <controls:ToolDockMenuItem Action="Close" />
             </ContextMenu></Template>
-        </Setter>
-    </Style>
-    <!-- 自动隐藏后的固定工具条（ToolPinItemControl）内文本项的右键菜单：同样补上图标。 -->
-    <!-- Pinned (auto-hidden) tool bar item menu: with icons. -->
-    <Style Selector="dock|ToolPinItemControl TextBlock">
-        <Setter Property="ContextMenu">
-            <Template>
-                <ContextMenu x:DataType="core:IDockable">
-                    <MenuItem Header="{DynamicResource DockMenu_Float}"
-                              Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
-                        <MenuItem.Icon>
-                            <icons:ArrowRightUp Width="16" Height="16" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="{DynamicResource DockMenu_Show}"
-                              Command="{Binding Factory.PreviewPinnedDockable}" CommandParameter="{Binding}">
-                        <MenuItem.Icon>
-                            <icons:Browse Width="16" Height="16" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}"
-                              Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
-                        <MenuItem.Icon>
-                            <icons:PageTab Width="16" Height="16" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <MenuItem Header="{DynamicResource DockMenu_Close}"
-                              Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
-                        <MenuItem.Icon>
-                            <icons:Close Width="16" Height="16" />
-                        </MenuItem.Icon>
-                    </MenuItem>
-                </ContextMenu>
-            </Template>
         </Setter>
     </Style>
 </Styles>

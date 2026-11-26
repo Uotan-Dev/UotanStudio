@@ -244,6 +244,129 @@ public sealed class WorkspaceDockWindowLifetimeTests
     }
 
     [Fact]
+    public void PinDockable_RightToolPanes_PinToRightEdgePreviewAndRestoreToOriginalSlots()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+
+        factory.PinDockable(images);
+        factory.PinDockable(properties);
+
+        Assert.True(root.LeftPinnedDockables is null or { Count: 0 });
+        Assert.NotNull(root.RightPinnedDockables);
+        Assert.Contains(images, root.RightPinnedDockables!);
+        Assert.Contains(properties, root.RightPinnedDockables!);
+
+        factory.PreviewPinnedDockable(images);
+        Assert.NotNull(root.PinnedDock);
+        Assert.Equal(Alignment.Right, root.PinnedDock!.Alignment);
+        Assert.Same(images, root.PinnedDock.ActiveDockable);
+
+        factory.UnpinDockable(images);
+        factory.UnpinDockable(properties);
+
+        Assert.Empty(root.RightPinnedDockables!);
+        Assert.Null(root.PinnedDock);
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+        var rightBottom = Assert.IsAssignableFrom<IToolDock>(properties.Owner);
+        Assert.Equal("RightPaneTop", rightTop.Id);
+        Assert.Equal("RightPane", rightBottom.Id);
+        Assert.Equal(Alignment.Right, rightTop.Alignment);
+        Assert.Equal(Alignment.Right, rightBottom.Alignment);
+        Assert.Equal(0.35, rightBottom.Proportion);
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+    }
+
+    [Fact]
+    public void PinDockable_FloatingTool_DoesNotPinIntoFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var toolA = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "ToolA"));
+
+        factory.FloatDockable(toolA);
+        var floatingRoot = Assert.Single(root.Windows!).Layout!;
+
+        factory.PinDockable(toolA);
+
+        Assert.False(factory.IsDockablePinned(toolA));
+        Assert.True(floatingRoot.LeftPinnedDockables is null or { Count: 0 });
+        Assert.Contains(WorkspaceSessionCapture.Enumerate(floatingRoot), d => ReferenceEquals(d, toolA));
+    }
+
+    [Fact]
+    public void Show_PinnedPanel_UnpinsAndRestoresWithoutDuplicating()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+
+        factory.PinDockable(images);
+        Assert.True(factory.IsDockablePinned(images));
+
+        WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
+
+        Assert.False(factory.IsDockablePinned(images));
+        Assert.True(root.RightPinnedDockables is null or { Count: 0 });
+        Assert.Equal("RightPaneTop", images.Owner?.Id);
+        Assert.Equal("RightPane", properties.Owner?.Id);
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+    }
+
+    [Fact]
+    public void DockAsDocument_FloatingTool_MovesToMainDocumentsPaneAndClosesFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var toolA = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "ToolA"));
+        var documentsPane = Assert.IsAssignableFrom<IDocumentDock>(factory.FindDockable(root, d => d.Id == "DocumentsPane"));
+
+        factory.FloatDockable(toolA);
+        Assert.Single(root.Windows!);
+
+        factory.DockAsDocument(toolA);
+
+        Assert.Empty(root.Windows!);
+        Assert.Contains(toolA, documentsPane.VisibleDockables!);
+        Assert.Same(documentsPane, toolA.Owner);
+    }
+
+    [Fact]
+    public void DockAsTool_FloatingDocument_MovesToMainToolDockAndClosesFloatingWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildLayout(factory);
+        var doc1 = Assert.IsAssignableFrom<IDockable>(factory.FindDockable(root, d => d.Id == "Doc1"));
+
+        factory.FloatDockable(doc1);
+        Assert.Single(root.Windows!);
+
+        factory.DockAsTool(doc1);
+
+        Assert.Empty(root.Windows!);
+        var toolDock = Assert.IsAssignableFrom<IToolDock>(doc1.Owner);
+        Assert.Contains(doc1, toolDock.VisibleDockables!);
+    }
+
+    [Fact]
+    public void TogglePreviewPinnedDockable_ClickedTwice_ExpandsThenCollapses()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out _);
+
+        factory.PinDockable(images);
+        Assert.Null(root.PinnedDock);
+
+        factory.TogglePreviewPinnedDockable(images);
+        Assert.NotNull(root.PinnedDock);
+        Assert.Same(images, root.PinnedDock!.ActiveDockable);
+
+        factory.TogglePreviewPinnedDockable(images);
+        Assert.Null(root.PinnedDock);
+    }
+
+    [Fact]
     public void RightColumn_FloatBothAndDockBack_RemountsRightColumnAndPanels()
     {
         var factory = new HeadlessWorkspaceDockFactory();
@@ -397,6 +520,7 @@ public sealed class WorkspaceDockWindowLifetimeTests
         var rightTop = new ToolDock
         {
             Id = "RightPaneTop",
+            Alignment = Alignment.Right,
             Proportion = double.NaN,
             ActiveDockable = images,
             VisibleDockables = factory.CreateList<IDockable>(images)
@@ -404,6 +528,7 @@ public sealed class WorkspaceDockWindowLifetimeTests
         var rightBottom = new ToolDock
         {
             Id = "RightPane",
+            Alignment = Alignment.Right,
             Proportion = 0.35,
             ActiveDockable = properties,
             VisibleDockables = factory.CreateList<IDockable>(properties)

@@ -64,6 +64,7 @@ public class NodeDockFactory : Factory, IDockReturnFactory
         {
             Id = "NodeLeftPane",
             Title = LanguageService.Instance.GetString("Dock_NodeLeftPane"),
+            Alignment = Alignment.Left,
             Proportion = 0.2,
             ActiveDockable = nodeToolbox,
             VisibleDockables = CreateList<IDockable>(nodeToolbox)
@@ -73,6 +74,7 @@ public class NodeDockFactory : Factory, IDockReturnFactory
         {
             Id = "NodeRightPane",
             Title = LanguageService.Instance.GetString("Dock_NodeRightPane"),
+            Alignment = Alignment.Right,
             Proportion = 0.2,
             ActiveDockable = nodeProperties,
             VisibleDockables = CreateList<IDockable>(nodeProperties)
@@ -82,6 +84,7 @@ public class NodeDockFactory : Factory, IDockReturnFactory
         {
             Id = "NodeBottomPane",
             Title = LanguageService.Instance.GetString("Dock_NodeBottomPane"),
+            Alignment = Alignment.Bottom,
             Proportion = 0.25,
             ActiveDockable = executionLog,
             VisibleDockables = CreateList<IDockable>(executionLog)
@@ -157,6 +160,94 @@ public class NodeDockFactory : Factory, IDockReturnFactory
     {
         var options = new DockManagerOptions { IsDockingEnabled = true };
         return new DockHostWindow(options);
+    }
+
+    /// <inheritdoc/>
+    public override void DockAsDocument(IDockable dockable)
+    {
+        if (dockable is null)
+        {
+            return;
+        }
+
+        if (IsDockablePinned(dockable))
+        {
+            UnpinDockable(dockable);
+        }
+
+        if (dockable.Owner is not IDock sourceDock)
+        {
+            return;
+        }
+
+        var sourceRoot = FindRoot(sourceDock, _ => true);
+        var targetRoot = sourceRoot;
+        var targetDocumentDock = sourceRoot is not null ? FindInDockTree<IDocumentDock>(sourceRoot) : null;
+        if (targetDocumentDock is null && sourceRoot?.Window is { } floatingWindow)
+        {
+            var mainRoot = ResolveMainRoot(floatingWindow);
+            if (mainRoot is not null)
+            {
+                targetRoot = mainRoot;
+                targetDocumentDock = FindInDockTree<IDocumentDock>(mainRoot);
+            }
+        }
+
+        if (targetDocumentDock is null || ReferenceEquals(sourceDock, targetDocumentDock))
+        {
+            return;
+        }
+
+        MoveDockable(sourceDock, targetDocumentDock, dockable, targetDocumentDock.VisibleDockables?.LastOrDefault());
+        SetActiveDockable(dockable);
+        if (targetRoot is not null)
+        {
+            SetFocusedDockable(targetRoot, dockable);
+        }
+
+        if (IsFloatingRoot(sourceRoot)
+            && sourceRoot?.Window is { } emptiedWindow
+            && !HasVisibleLeafDockables(emptiedWindow.Layout))
+        {
+            var mainRoot = ResolveMainRoot(emptiedWindow);
+            CloseWindow(emptiedWindow);
+            if (mainRoot?.Windows?.Contains(emptiedWindow) == true)
+            {
+                RemoveWindow(emptiedWindow);
+            }
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void PinDockableCore(IDockable dockable, IRootDock rootDock, IToolDock? unpinDock)
+    {
+        if (!IsDockablePinned(dockable, rootDock) && IsFloatingRoot(rootDock))
+        {
+            return;
+        }
+
+        if (dockable.Owner is IToolDock sourceToolDock && sourceToolDock.Alignment == Alignment.Unset)
+        {
+            sourceToolDock.Alignment = sourceToolDock.Id switch
+            {
+                "NodeRightPane" => Alignment.Right,
+                "NodeBottomPane" => Alignment.Bottom,
+                _ => Alignment.Left
+            };
+        }
+
+        base.PinDockableCore(dockable, rootDock, unpinDock);
+    }
+
+    private bool IsFloatingRoot(IRootDock? root)
+    {
+        if (root?.Window is not { } window || ReferenceEquals(root, _mainRoot))
+        {
+            return false;
+        }
+
+        var mainRoot = ResolveMainRoot(window);
+        return mainRoot is not null && !ReferenceEquals(mainRoot, root);
     }
 
     /// <inheritdoc/>

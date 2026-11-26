@@ -311,6 +311,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
         // returns it to the pane it came from. A panel that was never hidden (or was closed from a
         // floating window) has no such entry, so it goes back to its mounted host or registered tool dock.
         var mainRoot = FindRoot(factory, entry.RegisteredHost);
+        if (factory.IsDockablePinned(entry.Dockable))
+        {
+            factory.UnpinDockable(entry.Dockable);
+        }
+
         var hidden = mainRoot?.HiddenDockables;
         if (hidden?.Contains(entry.Dockable) == true)
         {

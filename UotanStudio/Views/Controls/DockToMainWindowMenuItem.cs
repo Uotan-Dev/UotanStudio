@@ -28,7 +28,7 @@ public sealed class DockToMainWindowMenuItem : MenuItem
     /// </summary>
     public DockToMainWindowMenuItem()
     {
-        Bind(HeaderProperty, new DynamicResourceExtension("DockMenu_DockToMainWindow"));
+        Bind(HeaderProperty, new DynamicResourceExtension("DockMenu_Dock"));
         Icon = new AppIcon { Kind = AppIconKind.Pin, Width = 16, Height = 16 };
         Click += OnClick;
         DataContextChanged += (_, _) => RefreshVisibility();

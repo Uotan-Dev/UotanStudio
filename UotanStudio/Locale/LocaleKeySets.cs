@@ -2288,7 +2288,6 @@ internal static class LocaleKeySets
         "DockMenu_Dock",
         "DockMenu_DockAsDocument",
         "DockMenu_DockAsTool",
-        "DockMenu_DockToMainWindow",
         "DockMenu_AutoHide",
         "Terminal_Shell",
         "Terminal_New",

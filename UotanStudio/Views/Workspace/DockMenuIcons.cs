@@ -1,8 +1,10 @@
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.VisualTree;
 using Dock.Avalonia.Controls;
 using Dock.Model.Core;
@@ -22,19 +24,21 @@ internal static class DockMenuIcons
 {
     private sealed class HeaderFlyoutState
     {
-        public required DockToMainWindowMenuItem ReturnItem { get; init; }
         public WeakReference<ToolChromeControl>? LastChrome { get; set; }
     }
 
     private static readonly ConditionalWeakTable<MenuFlyout, HeaderFlyoutState> _attachedFlyouts = new();
+    private static readonly ConditionalWeakTable<ToolPinItemControl, object> _attachedPinItems = new();
     private static int _wired;
 
     /// <summary>
     /// Wires app-wide: every Dock header (main window or floating window) attaches the Opened handler during the
     /// pointer-press / key-down tunnel phase, before the button pops the menu, so even the first open right after
-    /// startup carries icons; the bubbling Click is only a fallback.
+    /// startup carries icons; the bubbling Click is only a fallback. Also wires auto-hidden edge tabs
+    /// (<see cref="ToolPinItemControl"/>) to toggle preview on click and expose the unified pin context menu.
     /// <para>全局接线：Dock 顶栏（主窗口与浮动窗口一致）在指针按下/键盘按下的隧道阶段先挂上 Opened 处理，
-    /// 按钮随后才弹出菜单，因此启动后第一次打开也带图标；Click 冒泡仅作兜底。</para>
+    /// 按钮随后才弹出菜单，因此启动后第一次打开也带图标；Click 冒泡仅作兜底。同时为自动隐藏边缘标签
+    /// （<see cref="ToolPinItemControl"/>）接线点击展开/收起切换与统一的右键菜单。</para>
     /// </summary>
     internal static void EnsureWired()
     {
@@ -49,6 +53,81 @@ internal static class DockMenuIcons
             (chrome, _) => AttachHeader(chrome), RoutingStrategies.Tunnel, handledEventsToo: true);
         Button.ClickEvent.AddClassHandler<ToolChromeControl>(
             (chrome, _) => AttachHeader(chrome), RoutingStrategies.Bubble, handledEventsToo: true);
+
+        TemplatedControl.TemplateAppliedEvent.AddClassHandler<ToolPinItemControl>(
+            (pinItem, _) => AttachPinItem(pinItem));
+        InputElement.PointerPressedEvent.AddClassHandler<ToolPinItemControl>(
+            (pinItem, _) => AttachPinItem(pinItem), RoutingStrategies.Tunnel, handledEventsToo: true);
+        Control.ContextRequestedEvent.AddClassHandler<ToolPinItemControl>(
+            OnPinItemContextRequested, RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    private static void OnPinItemContextRequested(ToolPinItemControl pinItem, ContextRequestedEventArgs e)
+    {
+        AttachPinItem(pinItem);
+        if (pinItem.ContextMenu is { } menu)
+        {
+            menu.Open(pinItem);
+            e.Handled = true;
+        }
+    }
+
+    private static void AttachPinItem(ToolPinItemControl pinItem)
+    {
+        foreach (var textBlock in pinItem.GetVisualDescendants().OfType<TextBlock>())
+        {
+            textBlock.ContextMenu = null;
+        }
+
+        if (_attachedPinItems.TryGetValue(pinItem, out _))
+        {
+            return;
+        }
+
+        var button = pinItem.GetVisualDescendants().OfType<Button>().FirstOrDefault();
+        if (button is null)
+        {
+            return;
+        }
+
+        _attachedPinItems.Add(pinItem, new object());
+        pinItem.ContextMenu = CreatePinItemContextMenu();
+
+        button.ClearValue(Button.CommandProperty);
+        button.Click += (_, _) =>
+        {
+            if (pinItem.DataContext is IDockable { Factory: { } factory } dockable)
+            {
+                factory.TogglePreviewPinnedDockable(dockable);
+            }
+        };
+    }
+
+    private static ContextMenu CreatePinItemContextMenu()
+    {
+        var menu = new ContextMenu();
+        var showItem = new MenuItem
+        {
+            Icon = new AppIcon { Kind = AppIconKind.Show, Width = 16, Height = 16 }
+        };
+        showItem.Bind(HeaderedSelectingItemsControl.HeaderProperty, new DynamicResourceExtension("DockMenu_Show"));
+        showItem.Click += (_, _) =>
+        {
+            var dockable = showItem.DataContext as IDockable
+                ?? menu.PlacementTarget?.DataContext as IDockable;
+            if (dockable is { Factory: { } factory })
+            {
+                factory.TogglePreviewPinnedDockable(dockable);
+            }
+        };
+
+        menu.Items.Add(new ToolDockMenuItem { Action = ToolDockMenuAction.Dock });
+        menu.Items.Add(showItem);
+        menu.Items.Add(new ToolDockMenuItem { Action = ToolDockMenuAction.Float });
+        menu.Items.Add(new ToolDockMenuItem { Action = ToolDockMenuAction.DockAsDocument });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new ToolDockMenuItem { Action = ToolDockMenuAction.Close });
+        return menu;
     }
 
     internal static void Apply(ContextMenu menu) => ApplyItems(menu.Items);
@@ -78,11 +157,9 @@ internal static class DockMenuIcons
 
         var state = new HeaderFlyoutState
         {
-            ReturnItem = new DockToMainWindowMenuItem(),
             LastChrome = new WeakReference<ToolChromeControl>(chrome)
         };
         _attachedFlyouts.Add(flyout, state);
-        flyout.Items.Insert(0, state.ReturnItem);
         flyout.Opening += (_, _) =>
         {
             var activeChrome = (flyout.Target as Visual)?.FindAncestorOfType<ToolChromeControl>();
@@ -91,9 +168,15 @@ internal static class DockMenuIcons
                 activeChrome = last;
             }
 
-            state.ReturnItem.DataContext = (activeChrome?.DataContext as IDock)?.ActiveDockable
-                ?? activeChrome?.DataContext;
-            state.ReturnItem.RefreshVisibility();
+            var activeDockable = (activeChrome?.DataContext as IDock)?.ActiveDockable
+                ?? activeChrome?.DataContext as IDockable;
+            foreach (var entry in flyout.Items)
+            {
+                if (entry is ToolDockMenuItem toolItem)
+                {
+                    toolItem.RefreshState(activeDockable);
+                }
+            }
         };
         flyout.Opened += (_, _) => Apply(flyout);
     }
@@ -147,8 +230,7 @@ internal static class DockMenuIcons
         }
 
         if (text == lang.GetString("DockMenu_Dock")
-            || text == lang.GetString("DockMenu_DockAsTool")
-            || text == lang.GetString("DockMenu_DockToMainWindow"))
+            || text == lang.GetString("DockMenu_DockAsTool"))
         {
             return AppIconKind.Pin;
         }
