@@ -1,4 +1,4 @@
-﻿using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Protocols.Unisoc;
@@ -36,7 +36,7 @@ public class UnisocDiscoveryTests
             Serial = "1782:4D00",
             Protocol = DeviceProtocolKind.Unisoc,
             Transport = DeviceTransportKind.Usb,
-            State = "unisoc"
+            State = "connected"
         });
 
         Assert.True(device.IsUnisoc);
@@ -45,8 +45,13 @@ public class UnisocDiscoveryTests
 
         device.UnisocStage = "FDL2";
 
-        Assert.Equal("Unisoc · FDL2", device.UnisocBadge);
+        Assert.Equal("Unisoc · FDL2 · Unsecure", device.UnisocBadge);
         Assert.True(device.HasUnisocStage);
+
+        device.SetUnisocSecureBoot(true);
+        Assert.Equal("Unisoc · FDL2 · Secure", device.UnisocBadge);
+
+        Assert.Equal("connected · FDL2", device.StateLabel);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.IO.Ports;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Comm.Routing;
@@ -221,7 +222,8 @@ public sealed partial class DeviceController
             // Match the vendor tool's channel clear before CHECK_BAUD: discard stale bytes left by the boot
             // ROM's arrival banner or a previous probe so the stage parser sees the device's fresh version reply.
             serial.Reset();
-            var lease = await BuildUnisocSerialLeaseAsync(devicePath, serial, cancellationToken)
+            var probeSent = SendImmediateCheckBaud(serial, cancellationToken);
+            var lease = await BuildUnisocSerialLeaseAsync(devicePath, serial, cancellationToken, probeSent)
                 .ConfigureAwait(false);
             if (lease is not null)
             {
@@ -233,8 +235,33 @@ public sealed partial class DeviceController
             .ConfigureAwait(false);
     }
 
+
+    /// <summary>
+    /// Writes one CHECK_BAUD header byte on a freshly opened Unisoc download serial port. This must happen at the
+    /// instant of arrival, ahead of endpoint registration, route checks or session construction, because the Boot
+    /// ROM answers the first CHECK_BAUD only once and only for a short window after enumeration.
+    /// <para>在刚打开的紫光下载串口上立即写入一个 CHECK_BAUD 帧头字节。该动作必须在到达瞬间完成，先于端点登记、
+    /// 路由校验与会话构建，因为 Boot ROM 仅在枚举后短窗口内对首次 CHECK_BAUD 应答一次。</para>
+    /// </summary>
+    private static bool SendImmediateCheckBaud(SerialTransport serial, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var probe = new byte[] { 0x7E };
+            serial.Write(probe, 0, probe.Length, 2000);
+            UsbTrace.LogErrorFormatted($"UNISOC immediate CHECK_BAUD wrote 0x7E on '{serial.PortName}'.");
+            return !cancellationToken.IsCancellationRequested;
+        }
+        catch (Exception error)
+        {
+            UsbTrace.LogFormatted($"UNISOC immediate CHECK_BAUD write failed: {error.GetType().Name}: {error.Message}");
+            return false;
+        }
+    }
+
     private async Task<DeviceLease?> BuildUnisocSerialLeaseAsync(string devicePath, SerialTransport serial,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool checkBaudAlreadySent = false, bool attachExistingFdl2 = false,
+        int transferBaudRate = 0, int storageBlockSize = 0)
     {
         var (vid, pid) = TryParsePathVidPid(devicePath);
         var endpoint = new DeviceEndpoint
@@ -273,11 +300,16 @@ public sealed partial class DeviceController
             // and a short FDL1 start delay, all inside the arrival pipeline's 2.8 s work slice.
             // 下载设备只在约 2 秒内应答 CHECK_BAUD，默认握手预算（10×1000ms）会超出窗口。快速到达路径因此使用
             // 紧凑参数：每种校验只做一次短探测并缩短 FDL1 启动等待，全部落在到达流水线 2.8 秒工作片内。
+            var alreadySent = !attachExistingFdl2 && (checkBaudAlreadySent || SendImmediateCheckBaud(serial, cancellationToken));
             var fastOptions = new UnisocSessionOptions(
-                CommandTimeoutMs: 500,
+                CommandTimeoutMs: attachExistingFdl2 ? 10_000 : 2000,
                 Fdl1StartDelayMs: 100,
-                EntryProbeTimeoutMs: 250,
-                CheckBaudRetries: 2);
+                EntryProbeTimeoutMs: 500,
+                CheckBaudRetries: 2,
+                StorageBlockSize: storageBlockSize > 0 ? storageBlockSize : UnisocConstants.DefaultStorageBlockSize,
+                CheckBaudAlreadySent: alreadySent,
+                AttachExistingFdl2: attachExistingFdl2,
+                TransferBaudRate: attachExistingFdl2 ? 0 : transferBaudRate);
             var session = factory is UnisocDeviceSessionFactory unisocFactory
                 ? await unisocFactory.CreateWithOptionsAsync(endpoint, transport, fastOptions, cancellationToken)
                     .ConfigureAwait(false)
@@ -297,6 +329,74 @@ public sealed partial class DeviceController
 
             throw;
         }
+    }
+
+
+    /// <summary>
+    /// Handshakes a UNISOC download session directly over a named serial port, without USB discovery. A watcher
+    /// that sees the vendor VCOM port appear has only a couple of seconds before the gadget falls back to the
+    /// application; an inventory walk cannot fit in that window, and the PnP path resolver cannot resolve a bare
+    /// COM port name. This entry point opens exactly that port and runs the same tight handshake profile the
+    /// arrival path uses.
+    /// <para>不经过 USB 发现，直接在指定串口上握手紫光下载会话。监视器看到厂商 VCOM 端口出现后只有数秒窗口，
+    /// 清单遍历无法容纳；PnP 路径解析器也无法解析裸 COM 端口名。此入口直接打开该端口并运行与到达路径相同的
+    /// 紧凑握手参数。</para>
+    /// </summary>
+    /// <param name="portName">The exact COM/TTY port reported by the platform. <para>平台上报的精确 COM/TTY 端口。</para></param>
+    /// <param name="baudRate">Serial line speed. <para>串口线路速度。</para></param>
+    /// <param name="cancellationToken">Cancels the open and handshake. <para>取消打开与握手。</para></param>
+    /// <param name="transferBaudRate">Optional CHANGE_BAUD rate negotiated after FDL1 CONNECT; 0 keeps 115200.
+    /// <para>FDL1 CONNECT 后可选的 CHANGE_BAUD 速率；0 表示保持 115200。</para></param>
+    /// <param name="storageBlockSize">Optional partition read/write chunk size; 0 keeps the 4096-byte default.
+    /// <para>可选的分区读写分块大小；0 表示保持默认 4096 字节。</para></param>
+    /// <returns>The lease holding the handshaken session, or <see langword="null"/> when the port cannot be opened.
+    /// <para>持有已握手会话的租约；端口无法打开时为 <see langword="null"/>。</para></returns>
+    public async Task<DeviceLease?> HandshakeUnisocSerialPortAsync(string portName, int baudRate = 115200,
+        CancellationToken cancellationToken = default, int transferBaudRate = 0, int storageBlockSize = 0)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        var serial = OpenMtkVcomPort(portName, baudRate);
+        if (serial is null)
+        {
+            return null;
+        }
+
+        serial.Reset();
+        var probeSent = SendImmediateCheckBaud(serial, cancellationToken);
+        return await BuildUnisocSerialLeaseAsync(portName, serial, cancellationToken, probeSent,
+            transferBaudRate: transferBaudRate, storageBlockSize: storageBlockSize).ConfigureAwait(false);
+    }
+
+
+    /// <summary>
+    /// Attaches directly to an FDL2 that survived a previous download process, without sending CHECK_BAUD or
+    /// starting any discovery. Used by a backup tool that must resume storage reads after its predecessor exited
+    /// while the device remained in download mode.
+    /// <para>直接挂载上一个下载进程遗留的 FDL2，不发送 CHECK_BAUD、不启动发现。供备份工具在前一进程退出而设备仍在
+    /// 下载模式时续接存储读取。</para>
+    /// </summary>
+    /// <param name="portName">The exact COM/TTY port of the live FDL2. <para>在线 FDL2 的精确 COM/TTY 端口。</para></param>
+    /// <param name="baudRate">Serial line speed. <para>串口线路速度。</para></param>
+    /// <param name="cancellationToken">Cancels the open and attach. <para>取消打开与挂载。</para></param>
+    /// <returns>The lease holding the attached FDL2 session, or <see langword="null"/> when the port cannot open.
+    /// <para>持有已挂载 FDL2 会话的租约；端口无法打开时为 <see langword="null"/>。</para></returns>
+    public async Task<DeviceLease?> AttachUnisocFdl2Async(string portName, int baudRate = 115200,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+        var serial = OpenMtkVcomPort(portName, baudRate);
+        if (serial is null)
+        {
+            return null;
+        }
+
+        serial.Reset();
+        return await BuildUnisocSerialLeaseAsync(portName, serial, cancellationToken, attachExistingFdl2: true)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

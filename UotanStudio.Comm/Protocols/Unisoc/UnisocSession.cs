@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
 
@@ -23,6 +24,21 @@ namespace UotanStudio.Comm.Protocols.Unisoc;
 /// <para>未识别链路上第一次 CHECK_BAUD 探测的预算。</para></param>
 /// <param name="CheckBaudRetries">CHECK_BAUD repeats before the FDL handshake gives up.
 /// <para>FDL 握手在放弃前重复 CHECK_BAUD 的次数。</para></param>
+/// <param name="CheckBaudAlreadySent">The caller wrote the CHECK_BAUD byte on the freshly opened port before
+/// creating the session; the engine collects that reply first instead of writing a second probe. A Boot ROM
+/// answers the first CHECK_BAUD only once, so a second write gets silence.
+/// <para>调用方在创建会话前已在刚打开的端口上写过 CHECK_BAUD 字节；引擎先收取该应答而不再写第二次探测。
+/// Boot ROM 的首次 CHECK_BAUD 只应答一次，第二次写入将得到静默。</para></param>
+/// <param name="AttachExistingFdl2">Attaches to an FDL2 that survived a previous process instead of running the
+/// CHECK_BAUD stage detection. FDL2 stays alive after the download tool exits, and an already-running FDL2
+/// answers a fresh CHECK_BAUD with UNSUPPORTED_COMMAND under a checksum the boot-stage probe does not expect.
+/// The session sends DISABLE_TRANSCODE once (harmless to repeat) and then exposes the storage face directly.
+/// <para>挂载上一个进程遗留的 FDL2，不执行 CHECK_BAUD 阶段检测。FDL2 在下载工具退出后仍然存活，而已运行的 FDL2
+/// 对新 CHECK_BAUD 以 UNSUPPORTED_COMMAND 应答，校验与启动阶段探测预期不符。会话先发一次 DISABLE_TRANSCODE
+///（重复无害），随后直接暴露存储面。</para></param>
+/// <param name="TransferBaudRate">Optional serial rate negotiated with CHANGE_BAUD after FDL1 CONNECT, matching
+/// the vendor tool's high-speed path (0 keeps the BootROM rate of 115200). Only serial transports can reconfigure.
+/// <para>在 FDL1 CONNECT 后通过 CHANGE_BAUD 协商的串口速率，对齐厂商工具的高速路径（0 表示保持 BootROM 的 115200）。仅串口传输可重配置。</para></param>
 public sealed record UnisocSessionOptions(
     int LoaderBlockSize = UnisocConstants.DefaultLoaderBlockSize,
     int StorageBlockSize = UnisocConstants.DefaultStorageBlockSize,
@@ -31,7 +47,10 @@ public sealed record UnisocSessionOptions(
     int EraseTimeoutMs = UnisocConstants.EraseTimeoutMs,
     int Fdl1StartDelayMs = UnisocConstants.Fdl1StartDelayMs,
     int EntryProbeTimeoutMs = UnisocConstants.EntryProbeTimeoutMs,
-    int CheckBaudRetries = UnisocConstants.CheckBaudRetries)
+    int CheckBaudRetries = UnisocConstants.CheckBaudRetries,
+    bool CheckBaudAlreadySent = false,
+    bool AttachExistingFdl2 = false,
+    int TransferBaudRate = 0)
 {
     /// <summary>Validates every value; called by the sessions before any transport is touched.
     /// <para>校验每个取值；会话在触碰任何传输之前调用它。</para></summary>
@@ -426,9 +445,11 @@ internal class UnisocSession : IDisposable
 
             if (read <= 0)
             {
+                UsbTrace.LogErrorFormatted($"UNISOC CollectReply({kind}): silent within {remainingMs} ms.");
                 return (null, false);
             }
 
+            UsbTrace.LogErrorFormatted($"UNISOC CollectReply({kind}): read {read} B: {Convert.ToHexString(_receiveBuffer.AsSpan(0, Math.Min(read, 32)))}");
             try
             {
                 _parser.Append(_receiveBuffer.AsSpan(0, read));

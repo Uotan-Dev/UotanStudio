@@ -155,6 +155,25 @@ public class UnisocProtocolTests
         Assert.Equal("SPRD3", System.Text.Encoding.ASCII.GetString(session.Identity.Version!).TrimEnd('\0'));
     }
 
+
+    [Fact]
+    public async Task Open_PreSentCheckBaud_ConsumesReplyWithoutSecondProbe()
+    {
+        var transport = new FakeTransport();
+        transport.EnqueueRaw(Convert.FromHexString("7E00810006535052443300570A7E"));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        var options = new UnisocSessionOptions(CheckBaudAlreadySent: true);
+
+        using var session = await UnisocDeviceSession.OpenAsync(transport, options, TestContext.Current.CancellationToken);
+
+        Assert.Equal(UnisocBootStage.BootRom, session.Stage);
+        Assert.Equal("SPRD3", System.Text.Encoding.ASCII.GetString(session.Identity.Version!).TrimEnd('\0'));
+        var writes = transport.WrittenTypes();
+        Assert.DoesNotContain((ushort)UnisocCommand.CheckBaud, writes);
+        Assert.Equal((ushort)UnisocCommand.Connect, Assert.Single(writes));
+    }
+
+
     [Fact]
     public async Task Open_BootRomAnswersOtherVersion_MarksSecureBoot()
     {
@@ -238,6 +257,33 @@ public class UnisocProtocolTests
         Assert.Single(mids);
         Assert.Equal(loader, mids[0]);
         Assert.Contains(transport.WrittenTypes(), type => type == (ushort)UnisocCommand.ExecData);
+    }
+
+
+    [Fact]
+    public async Task UploadFdl1_HighSpeedOption_SendsChangeBaudAndReconfiguresTransport()
+    {
+        var transport = new FakeTransport();
+        transport.Enqueue(broker => broker.Reply(0x81, "SPRD3\0"u8.ToArray(), UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        var options = new UnisocSessionOptions(TransferBaudRate: 921600, Fdl1StartDelayMs: 0);
+        using var session = await UnisocDeviceSession.OpenAsync(transport, options, TestContext.Current.CancellationToken);
+
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Crc16));
+        transport.Enqueue(broker => broker.Reply(0x81, "FDL1"u8.ToArray(), UnisocChecksumKind.Sum));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Sum));
+        transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Sum));
+
+        await session.UploadFdl1Async(new MemoryStream([0xA5]), 0x5500, TestContext.Current.CancellationToken);
+
+        var changes = transport.WrittenFrames(UnisocCommand.ChangeBaud);
+        Assert.Single(changes);
+        Assert.Equal(921600u, BinaryPrimitives.ReadUInt32BigEndian(changes[0]));
+        Assert.Equal(921600, transport.AppliedBaudRate);
+        Assert.Equal(UnisocBootStage.Fdl1, session.Stage);
     }
 
     [Fact]
@@ -356,6 +402,17 @@ public class UnisocProtocolTests
     }
 
     [Fact]
+    public void SessionOptions_AcceptVendorHighSpeedBlockSize_AndRejectBeyond()
+    {
+        var options = new UnisocSessionOptions(StorageBlockSize: 0xF800);
+        options.Validate();
+        Assert.Equal(0xF800, UnisocConstants.MaximumStorageBlockSize);
+
+        var tooLarge = new UnisocSessionOptions(StorageBlockSize: 0xF900);
+        Assert.Throws<ArgumentOutOfRangeException>(tooLarge.Validate);
+    }
+
+    [Fact]
     public async Task Storage_ReadPartitionTable_ParsesRecordsAndRefusesBadOnes()
     {
         var transport = new FakeTransport();
@@ -402,10 +459,12 @@ public class UnisocProtocolTests
         transport.Enqueue(broker => broker.Reply(0x80, [], UnisocChecksumKind.Sum));
 
         await using var output = new MemoryStream();
+        var reported = new List<long>();
         var read = await storage.ReadPartitionAsync("boot", 0, payload.Length, output,
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken, new CollectProgress(reported));
 
         Assert.Equal(payload.Length, read);
+        Assert.Equal(new long[] { 4096, 8192, 9000 }, reported);
         Assert.Equal(payload, output.ToArray());
         var starts = transport.WrittenFrames(UnisocCommand.ReadStart);
         Assert.Single(starts);
@@ -482,6 +541,12 @@ public class UnisocProtocolTests
     /// <para>线上的设备侧：以设备自身的校验约定排队应答，并记录主机发出的每一条帧。没有排队应答的读取返回零字节，
     /// 会话据此判超时，因此静默链路与预算线路都得到真实演练。</para>
     /// </summary>
+
+    private sealed class CollectProgress(List<long> values) : IProgress<long>
+    {
+        public void Report(long value) => values.Add(value);
+    }
+
     private sealed class FakeTransport : IUnisocTransport
     {
         private readonly List<Action<DeviceBroker>> _replies = [];
@@ -511,6 +576,12 @@ public class UnisocProtocolTests
             .ToList();
 
         public byte[] LastRawWrite => _writes[^1];
+
+        public int? AppliedBaudRate { get; private set; }
+
+        public bool CanSetBaudRate { get; set; } = true;
+
+        public void SetBaudRate(int baudRate) => AppliedBaudRate = baudRate;
 
         private static byte[] DecodePayload(byte[] frame)
         {

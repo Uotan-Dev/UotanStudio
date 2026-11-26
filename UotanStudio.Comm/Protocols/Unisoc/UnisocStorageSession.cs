@@ -177,6 +177,8 @@ public sealed class UnisocStorageSession
     /// <param name="length">Bytes to read. <para>要读取的字节数。</para></param>
     /// <param name="destination">Destination stream; the session writes as chunks arrive.
     /// <para>目标流；会话随分块到达写入。</para></param>
+    /// <param name="progress">Optional cumulative-byte sink, reported once per received chunk.
+    /// <para>可选的累计字节接收器，每收到一个分块上报一次。</para></param>
     /// <param name="cancellationToken">Cancels the read; already-read chunks are kept by the caller's stream.
     /// <para>取消读取；已读分块由调用方的流自行保留。</para></param>
     /// <returns>Bytes actually read, which may be shorter than requested when the partition ends early.
@@ -186,16 +188,16 @@ public sealed class UnisocStorageSession
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task<long> ReadPartitionAsync(string name, long offset, long length, Stream destination,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IProgress<long>? progress = null)
     {
         ValidateRange(name, offset, length);
-        if (offset > 0x1_0000_0000L - length)
+        if (offset > long.MaxValue - length)
         {
-            throw new ArgumentOutOfRangeException(nameof(length), "The read range exceeds the 32-bit address space.");
+            throw new ArgumentOutOfRangeException(nameof(length), "The read range overflows the address space.");
         }
 
         return await ReadWindowAsync(name, offset, length,
-            (chunk, token) => destination.WriteAsync(chunk, token), cancellationToken).ConfigureAwait(false);
+            (chunk, token) => destination.WriteAsync(chunk, token), cancellationToken, progress).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -301,12 +303,13 @@ public sealed class UnisocStorageSession
     }
 
     private async Task<long> ReadWindowAsync(string name, long offset, long length,
-        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken cancellationToken)
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken cancellationToken,
+        IProgress<long>? progress = null)
     {
         ValidateName(name);
-        if (offset < 0 || length < 0 || offset > 0x1_0000_0000L - length)
+        if (offset < 0 || length < 0 || offset > long.MaxValue - length)
         {
-            throw new ArgumentOutOfRangeException(nameof(length), "The read range exceeds the 32-bit address space.");
+            throw new ArgumentOutOfRangeException(nameof(length), "The read range overflows the address space.");
         }
 
         var end = offset + length;
@@ -355,6 +358,7 @@ public sealed class UnisocStorageSession
             }
 
             transferred += received;
+            progress?.Report(transferred);
             if (received < chunk)
             {
                 break;
@@ -364,6 +368,58 @@ public sealed class UnisocStorageSession
         await _session.SendAndExpectAckAsync(UnisocCommand.ReadEnd, ReadOnlyMemory<byte>.Empty,
             _session.CommandTimeoutMs, cancellationToken).ConfigureAwait(false);
         return transferred;
+    }
+
+    /// <summary>
+    /// Discovers the byte size of one named partition the same way the vendor tool does: open a read session with
+    /// a deliberately huge size, then probe 4-byte reads at descending offsets until the device stops answering.
+    /// This is required for the native partition table, which reports only a name and a device-defined size value
+    /// with no byte extent, unlike a validated GPT.
+    /// <para>按厂商工具的方式探测指定分区的字节大小：以刻意放大的尺寸打开读会话，随后在递减偏移上做 4 字节探测，
+    /// 直到设备不再应答。原生分区表只上报名字与设备自定义的大小值、没有字节范围，因此必须这样探测，而不能依赖
+    /// 校验通过的 GPT。</para>
+    /// </summary>
+    /// <param name="name">Partition name as the device spells it. <para>设备拼写形式的分区名。</para></param>
+    /// <param name="cancellationToken">Cancels the discovery. <para>取消探测。</para></param>
+    /// <returns>The discovered size in bytes, aligned to one MiB. <para>探测到的字节大小，按 1 MiB 对齐。</para></returns>
+    /// <exception cref="UnisocProtocolException">The device refused or the link faulted.
+    /// <para>设备拒绝或链路失效。</para></exception>
+    public async Task<long> DiscoverPartitionSizeAsync(string name, CancellationToken cancellationToken)
+    {
+        ValidateName(name);
+        const int highestPower = 47;
+        const int lowestPower = 20;
+        const long alignment = 1L << 20;
+        var oversized = 1L << (highestPower + 1);
+        await _session.SendAndExpectAckAsync(UnisocCommand.ReadStart,
+            SelectPacket(name, (ulong)oversized, mode64: true), _session.CommandTimeoutMs, cancellationToken)
+            .ConfigureAwait(false);
+
+        long size = 0;
+        try
+        {
+            for (var power = highestPower; power >= lowestPower; power--)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var probeAt = size + (1L << power) - alignment;
+                var midst = new byte[12];
+                BinaryPrimitives.WriteUInt32LittleEndian(midst, 4);
+                BinaryPrimitives.WriteUInt64LittleEndian(midst.AsSpan(4), (ulong)probeAt);
+                var reply = await _session.ExchangeAsync(UnisocCommand.ReadMidst, midst,
+                    _session.StorageChunkTimeoutMs, cancellationToken).ConfigureAwait(false);
+                if ((UnisocReply)reply.Type == UnisocReply.ReadFlash)
+                {
+                    size = probeAt + alignment;
+                }
+            }
+        }
+        finally
+        {
+            await _session.SendAndExpectAckAsync(UnisocCommand.ReadEnd, ReadOnlyMemory<byte>.Empty,
+                _session.CommandTimeoutMs, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        return size;
     }
 
     private static void ValidateRange(string name, long offset, long length)

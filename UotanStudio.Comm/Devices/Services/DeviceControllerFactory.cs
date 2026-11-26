@@ -26,6 +26,27 @@ public static class DeviceControllerFactory
     /// <para>已启动移除监视与 server 状态监视的控制器。</para></returns>
     public static DeviceController CreateDefault() => CreateDefault(CommKit.Default);
 
+    /// <summary>
+    /// Creates a controller with no discovery sources and no background USB/server watches, intended for a
+    /// diagnostic host that handshakes a named serial port directly. A background USB monitor probes every
+    /// arriving node (opening WinUSB on it), which disturbs a Unisoc BootROM whose answer window is one-shot
+    /// and only ~2 s long; a host that owns the download port must not run such a monitor concurrently.
+    /// <para>创建一个无发现源、无后台 USB/server 监视的控制器，供直接握手指定串口的诊断宿主使用。后台 USB 监视器会在
+    /// 设备到达时探测每个节点（对其打开 WinUSB），会惊扰只有一次性、约 2 秒应答窗口的紫光 BootROM；持有下载端口的
+    /// 宿主不应同时运行该监视器。</para>
+    /// </summary>
+    /// <returns>A controller whose direct serial handshake is the only supported entry point.
+    /// <para>仅支持直接串口握手的控制器。</para></returns>
+    public static DeviceController CreateForDirectSerial()
+    {
+        DebugBridgeRoute.ConfigureMode(DeviceCommunicationConfiguration.Current.RouteMode);
+        return new DeviceController(
+            [],
+            new CommDeviceTransportOpener(CommKit.Default),
+            DefaultDeviceSessionFactories.All,
+            CommKit.Default);
+    }
+
     /// <summary>Creates the default controller over the supplied communication kit and the standard localhost debug-bridge endpoints.</summary>
     internal static DeviceController CreateDefault(ICommKit kit)
     {

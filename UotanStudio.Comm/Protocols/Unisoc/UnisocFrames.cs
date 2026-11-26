@@ -379,6 +379,15 @@ internal interface IUnisocTransport : IDisposable
     /// <returns>A task that completes when the control transfer has been issued.
     /// <para>控制传输发出后完成的任务。</para></returns>
     Task SendDownloadModeControlAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
+    /// Reconfigures the host transport to a new baud rate after the device acknowledged CHANGE_BAUD.
+    /// <para>设备确认 CHANGE_BAUD 后，把主机传输重新配置到新波特率。</para></summary>
+    /// <summary>Whether the host side can actually reconfigure its line speed.</summary>
+    /// <para>主机侧能否真正重配置线路速率。</para>
+    bool CanSetBaudRate => false;
+
+    void SetBaudRate(int baudRate) { }
 }
 
 /// <summary>
@@ -388,6 +397,10 @@ internal interface IUnisocTransport : IDisposable
 /// </summary>
 internal sealed class UnisocSerialTransport(SerialTransport serial) : IUnisocTransport
 {
+    public bool CanSetBaudRate => true;
+
+    public void SetBaudRate(int baudRate) => serial.SetBaudRate(baudRate);
+
     /// <summary>Writes the buffer and fails when the port accepted only part of it.
     /// <para>写入缓冲区，并在串口只接受部分字节时失败。</para></summary>
     /// <param name="data">Bytes to write. <para>待写入的字节。</para></param>

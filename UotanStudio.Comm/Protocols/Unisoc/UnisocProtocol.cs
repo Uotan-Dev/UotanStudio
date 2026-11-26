@@ -56,9 +56,12 @@ internal static class UnisocConstants
     /// <summary>Default chunk size for storage reads and writes. <para>存储读写的默认分块大小。</para></summary>
     public const int DefaultStorageBlockSize = 4096;
 
-    /// <summary>Largest storage chunk the sessions accept, keeping the 16-bit length field inside frame bounds.
-    /// <para>会话接受的最大存储分块，保持 16 位长度字段在帧边界内。</para></summary>
-    public const int MaximumStorageBlockSize = 32768;
+    /// <summary>Largest storage chunk the sessions accept. The vendor tool raises its block size to
+    /// <c>0xF800</c> (63488) on the high-speed path, which is the largest 2048-aligned value that still fits the
+    /// 16-bit frame length field; larger chunks would exceed <see cref="MaximumPayload"/>.
+    /// <para>会话接受的最大存储分块。厂商工具在高速路径把分块提升到 <c>0xF800</c>（63488），这是仍能装进
+    /// 16 位帧长度字段的最大 2048 对齐值；更大的分块会超过 <see cref="MaximumPayload"/>。</para></summary>
+    public const int MaximumStorageBlockSize = 0xF800;
 
     /// <summary>Default timeout of one BSL command exchange. <para>一次 BSL 命令交互的默认超时。</para></summary>
     public const int DefaultCommandTimeoutMs = 10_000;

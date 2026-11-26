@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Unisoc;
 
@@ -76,6 +77,18 @@ internal sealed class UnisocDeviceEngine : UnisocSession
         try
         {
             await transport.SendDownloadModeControlAsync(cancellationToken).ConfigureAwait(false);
+            if (session.Options.AttachExistingFdl2)
+            {
+                session.DiscardBuffered();
+                session.SetChecksumKind(UnisocChecksumKind.Sum);
+                await session.SendAndExpectAckAsync(UnisocCommand.DisableTranscode,
+                    ReadOnlyMemory<byte>.Empty, session.CommandTimeoutMs, cancellationToken).ConfigureAwait(false);
+                session.SetTranscodeDisabled();
+                session.DiscardBuffered();
+                session.Identity = new UnisocDeviceIdentity(UnisocBootStage.Fdl2, null, SecureBoot: false);
+                return session;
+            }
+
             var identity = await session.IdentifyAsync(cancellationToken).ConfigureAwait(false);
             session.Identity = identity;
             return session;
@@ -97,11 +110,11 @@ internal sealed class UnisocDeviceEngine : UnisocSession
         for (var attempt = 0; attempt < Options.CheckBaudRetries && crcReply is null && !crcMalformed; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // The write budget must be the full command timeout, not the short reply budget: a CDC/VCOM port
-            // that has just enumerated can take longer than the reply window to accept the first byte, and a
-            // write timeout here faults the session and prevents any silent retry.
-            await Transport.WriteAsync(UnisocFrames.EncodeCheckBaud(1), cancellationToken, Options.CommandTimeoutMs)
-                .ConfigureAwait(false);
+            if (!(Options.CheckBaudAlreadySent && attempt == 0))
+            {
+                await Transport.WriteAsync(UnisocFrames.EncodeCheckBaud(1), cancellationToken, Options.CommandTimeoutMs)
+                    .ConfigureAwait(false);
+            }
             (crcReply, crcMalformed) = await CollectReplyAsync(UnisocChecksumKind.Crc16,
                 Options.EntryProbeTimeoutMs, cancellationToken).ConfigureAwait(false);
         }
@@ -274,6 +287,7 @@ internal sealed class UnisocDeviceEngine : UnisocSession
         }
 
         SetChecksumKind(UnisocChecksumKind.Sum);
+
         UnisocFrame? version = null;
         for (var attempt = 0; attempt < Options.CheckBaudRetries && version is null; attempt++)
         {
@@ -289,6 +303,29 @@ internal sealed class UnisocDeviceEngine : UnisocSession
 
         await ConnectAsync(UnisocChecksumKind.Sum, cancellationToken).ConfigureAwait(false);
         Identity = Identity with { Stage = UnisocBootStage.Fdl1, Version = version.Value.Payload };
+
+        var requested = Options.TransferBaudRate;
+        var effective = requested != 0 ? requested
+            : address is 0x5500 or 0x65000800 or 0x65008000 ? 921600 : 0;
+        if (effective is > 0 and <= 4_000_000 && Transport.CanSetBaudRate)
+        {
+            var speed = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(speed, (uint)effective);
+            var reply = await ExchangeAsync(UnisocCommand.ChangeBaud, speed,
+                Options.CommandTimeoutMs, cancellationToken).ConfigureAwait(false);
+            if ((UnisocReply)reply.Type == UnisocReply.Ack)
+            {
+                Transport.SetBaudRate(effective);
+                UsbTrace.LogErrorFormatted($"UNISOC CHANGE_BAUD: device ACKed {effective}, host port reconfigured.");
+                await Task.Delay(Options.Fdl1StartDelayMs, cancellationToken).ConfigureAwait(false);
+                DiscardBuffered();
+            }
+            else
+            {
+                UsbTrace.LogErrorFormatted($"UNISOC CHANGE_BAUD: device replied 0x{reply.Type:X4} to {effective}; staying at current rate.");
+                DiscardBuffered();
+            }
+        }
     }
 
     /// <summary>
