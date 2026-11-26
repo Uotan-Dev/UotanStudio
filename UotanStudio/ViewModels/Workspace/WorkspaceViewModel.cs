@@ -426,6 +426,26 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Opens or focuses a MediaTek LK bootloader image in the LK workbench.
+    /// <para>在 LK 工作台中打开或聚焦 MediaTek LK 引导镜像。</para></summary>
+    /// <param name="path">Image path.<para>镜像路径。</para></param>
+    /// <param name="activate">Whether the document becomes active.<para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load.<para>载入完成的完成任务。</para></returns>
+    internal Task OpenLkImageAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new LkImageViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
+
+    /// <summary>Opens or focuses a MediaTek preloader boot region in the preloader workbench.
+    /// <para>在预加载器工作台中打开或聚焦 MediaTek 预加载器引导区。</para></summary>
+    /// <param name="path">Region path.<para>区域路径。</para></param>
+    /// <param name="activate">Whether the document becomes active.<para>文档是否成为活动项。</para></param>
+    /// <returns>Completion of the load.<para>载入完成的完成任务。</para></returns>
+    internal Task OpenMtkPreloaderAsync(string path, bool activate) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new MtkPreloaderViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath), activate);
+
     /// <summary>
     /// Opens or focuses an offline log document.
     /// <para>打开或聚焦离线日志文档。</para>

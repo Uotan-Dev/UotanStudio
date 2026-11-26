@@ -103,5 +103,13 @@ public enum EditorOpenMode
 
     /// <summary>Open a boot logo or splash partition in the logo partition workbench.
     /// <para>以 Logo 分区工作台打开开机 Logo 或 splash 分区。</para></summary>
-    LogoPartition
+    LogoPartition,
+
+    /// <summary>Open a MediaTek LK bootloader image in the LK partition workbench.
+    /// <para>以 LK 分区工作台打开 MediaTek LK 引导镜像。</para></summary>
+    LkImage,
+
+    /// <summary>Open a MediaTek preloader boot region in the preloader workbench.
+    /// <para>以预加载器工作台打开 MediaTek 预加载器引导区。</para></summary>
+    MtkPreloader
 }

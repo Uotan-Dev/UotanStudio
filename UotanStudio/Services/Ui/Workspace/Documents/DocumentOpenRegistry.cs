@@ -264,6 +264,32 @@ internal static class DocumentOpenRegistry
         },
         new()
         {
+            Kind = "LkImage",
+            Mode = EditorOpenMode.LkImage,
+            ViewModelType = typeof(LkImageViewModel),
+            LocaleKey = "Explorer_OpenAsLk",
+            MenuOrder = 18,
+            IconKind = AppIconKind.Chip,
+            Probe = static r => UotanStudio.Firmware.VendorFirmware.MediaTek.Lk.LkImageReader.IsLkImage(ProbeHeader(r)),
+            Open = static (w, r) => w.OpenLkImageAsync(r.Path!, r.Activate),
+            GetPath = vm => ((LkImageViewModel)vm).FilePath,
+            Cleanup = vm => ((LkImageViewModel)vm).Cleanup(),
+        },
+        new()
+        {
+            Kind = "MtkPreloader",
+            Mode = EditorOpenMode.MtkPreloader,
+            ViewModelType = typeof(MtkPreloaderViewModel),
+            LocaleKey = "Explorer_OpenAsPreloader",
+            MenuOrder = 19,
+            IconKind = AppIconKind.Chip,
+            Probe = static r => UotanStudio.Firmware.VendorFirmware.MediaTek.Preloader.MtkPreloaderReader.IsPreloader(ProbeHeader(r)),
+            Open = static (w, r) => w.OpenMtkPreloaderAsync(r.Path!, r.Activate),
+            GetPath = vm => ((MtkPreloaderViewModel)vm).FilePath,
+            Cleanup = vm => ((MtkPreloaderViewModel)vm).Cleanup(),
+        },
+        new()
+        {
             Kind = "Compare",
             ViewModelType = typeof(CompareViewModel),
             GetPath = _ => null,
@@ -485,6 +511,12 @@ internal static class DocumentOpenRegistry
 
         new(EditorOpenMode.LogoPartition, static (_, header, _, _) =>
             header is not null && LogoPartitionFormat.IsLogoPartitionHeader(header)),
+
+        new(EditorOpenMode.LkImage, static (_, header, _, _) =>
+            header is not null && UotanStudio.Firmware.VendorFirmware.MediaTek.Lk.LkImageReader.IsLkImage(header)),
+
+        new(EditorOpenMode.MtkPreloader, static (_, header, _, _) =>
+            header is not null && UotanStudio.Firmware.VendorFirmware.MediaTek.Preloader.MtkPreloaderReader.IsPreloader(header)),
 
         new(EditorOpenMode.Image, static (_, header, _, extension) =>
             header is not null && ImageFileCatalog.IsDecodableImageHeader(header)

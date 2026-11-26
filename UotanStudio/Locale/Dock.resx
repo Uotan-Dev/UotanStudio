@@ -2199,4 +2199,115 @@
   <data name="Dock_Logo_SelectEntryFirst" xml:space="preserve">
     <value>Select an embedded image first.</value>
   </data>
+  <data name="Dock_Lk_Title" xml:space="preserve">
+    <value>LK partition workbench</value>
+  </data>
+  <data name="Dock_Lk_Entries" xml:space="preserve">
+    <value>Partitions</value>
+  </data>
+  <data name="Dock_Lk_Kind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Dock_Lk_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Dock_Lk_Address" xml:space="preserve">
+    <value>Load address</value>
+  </data>
+  <data name="Dock_Lk_Offset" xml:space="preserve">
+    <value>Header offset</value>
+  </data>
+  <data name="Dock_Lk_Certificate" xml:space="preserve">
+    <value>Certificate</value>
+  </data>
+  <data name="Dock_Lk_Patches" xml:space="preserve">
+    <value>Patches</value>
+  </data>
+  <data name="Dock_Lk_Categories" xml:space="preserve">
+    <value>Patch categories</value>
+  </data>
+  <data name="Dock_Lk_PatchHint" xml:space="preserve">
+    <value>Patches are written to the new file below; the source image is never modified.</value>
+  </data>
+  <data name="Dock_Lk_Output" xml:space="preserve">
+    <value>Output path</value>
+  </data>
+  <data name="Dock_Lk_Apply" xml:space="preserve">
+    <value>Create patched image</value>
+  </data>
+  <data name="Dock_Lk_Backup" xml:space="preserve">
+    <value>Keep a backup of the source</value>
+  </data>
+  <data name="Dock_Lk_CertBypass" xml:space="preserve">
+    <value>Also rewrite the cert2 digests (signature no longer valid)</value>
+  </data>
+  <data name="Lk_SourceSummary" xml:space="preserve">
+    <value>{0} entries, {1} bytes</value>
+  </data>
+  <data name="Lk_PatchDone" xml:space="preserve">
+    <value>Patched image written to {0}; {1} change(s). Backup: {2}</value>
+  </data>
+  <data name="Lk_NoBackup" xml:space="preserve">
+    <value>none</value>
+  </data>
+  <data name="Lk_KindApp" xml:space="preserve">
+    <value>Application</value>
+  </data>
+  <data name="Lk_KindModem" xml:space="preserve">
+    <value>Modem</value>
+  </data>
+  <data name="Lk_KindCert" xml:space="preserve">
+    <value>Certificate</value>
+  </data>
+  <data name="Dock_Preloader_Title" xml:space="preserve">
+    <value>Preloader workbench</value>
+  </data>
+  <data name="Dock_Preloader_Storage" xml:space="preserve">
+    <value>Declared storage</value>
+  </data>
+  <data name="Dock_Preloader_CodeOffset" xml:space="preserve">
+    <value>Code offset</value>
+  </data>
+  <data name="Dock_Preloader_FlagBlock" xml:space="preserve">
+    <value>Flag block</value>
+  </data>
+  <data name="Dock_Preloader_LockState" xml:space="preserve">
+    <value>Fastboot lock state</value>
+  </data>
+  <data name="Dock_Preloader_Unlock" xml:space="preserve">
+    <value>Clear the fastboot lock byte</value>
+  </data>
+  <data name="Dock_Preloader_Apply" xml:space="preserve">
+    <value>Create unlocked preloader</value>
+  </data>
+  <data name="Dock_Preloader_Warning" xml:space="preserve">
+    <value>This rearranges preloader code and clears the fastboot lock byte. Flash the result only at your own risk; keep the backup.</value>
+  </data>
+  <data name="Dock_Preloader_PatchDone" xml:space="preserve">
+    <value>Unlocked preloader written to {0}; {1} step(s). Backup: {2}</value>
+  </data>
+  <data name="Dock_Preloader_RawUnsupported" xml:space="preserve">
+    <value>Raw (MMM) - not patchable</value>
+  </data>
+  <data name="Dock_Preloader_UnknownStorage" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Dock_Preloader_NoFlagBlock" xml:space="preserve">
+    <value>not found</value>
+  </data>
+  <data name="Dock_Preloader_Locked" xml:space="preserve">
+    <value>Locked (0x22)</value>
+  </data>
+  <data name="Dock_Preloader_HardLocked" xml:space="preserve">
+    <value>Hard lock (0x11)</value>
+  </data>
+  <data name="Dock_Preloader_Unlocked" xml:space="preserve">
+    <value>Unlocked</value>
+  </data>
+  <data name="Explorer_OpenAsLk" xml:space="preserve">
+    <value>Open as LK image</value>
+  </data>
+  <data name="Explorer_OpenAsPreloader" xml:space="preserve">
+    <value>Open as preloader</value>
+  </data>
 </root>

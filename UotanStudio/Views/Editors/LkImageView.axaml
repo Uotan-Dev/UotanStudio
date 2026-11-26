@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Editors"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             x:Class="UotanStudio.Views.Editors.LkImageView"
+             x:DataType="vm:LkImageViewModel">
+    <Grid>
+        <DockPanel>
+            <controls:EditorErrorBanner DockPanel.Dock="Top" Message="{Binding ErrorMessage, Mode=TwoWay}" />
+            <Border DockPanel.Dock="Top" Padding="16,12,16,0">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{DynamicResource Dock_Lk_Title}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding FilePath}" Opacity="0.7" />
+                    <TextBlock Text="{Binding Summary}" Opacity="0.8" IsVisible="{Binding IsRecognized}" />
+                </StackPanel>
+            </Border>
+            <Border DockPanel.Dock="Bottom" Padding="16,8,16,16" IsVisible="{Binding IsRecognized}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Dock_Lk_PatchHint}" TextWrapping="Wrap" Opacity="0.8" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBox Text="{Binding OutputPath, Mode=TwoWay}"
+                                 PlaceholderText="{DynamicResource Dock_Lk_Output}" />
+                        <Button Grid.Column="1" Content="{DynamicResource Dock_Lk_Apply}" Command="{Binding PatchCommand}"
+                                IsEnabled="{Binding !IsPatching}" />
+                    </Grid>
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="20" LineSpacing="8">
+                        <CheckBox Content="{DynamicResource Dock_Lk_Backup}" IsChecked="{Binding CreateBackup, Mode=TwoWay}" />
+                        <CheckBox Content="{DynamicResource Dock_Lk_CertBypass}" IsChecked="{Binding ApplyCertBypass, Mode=TwoWay}" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" Opacity="0.85" />
+                </StackPanel>
+            </Border>
+            <TabControl Margin="16,8,16,8">
+                <TabItem Header="{DynamicResource Dock_Lk_Entries}">
+                    <DataGrid ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                              IsReadOnly="True" AutoGenerateColumns="False" CanUserResizeColumns="True"
+                              GridLinesVisibility="Horizontal" FontFamily="Consolas"
+                              Background="Transparent" BorderThickness="1"
+                              BorderBrush="{DynamicResource SemiColorBorder}" CornerRadius="6">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Name}" Binding="{Binding Name}" />
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Kind}" Binding="{Binding Kind}" />
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Size}" Binding="{Binding Size}" />
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Address}" Binding="{Binding Address}" />
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Offset}" Binding="{Binding Offset}" />
+                            <DataGridTextColumn x:DataType="vm:LkEntryRow" Header="{DynamicResource Dock_Lk_Certificate}" Binding="{Binding Certificate}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="{DynamicResource Dock_Lk_Patches}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="8" Margin="4,12">
+                            <TextBlock Text="{DynamicResource Dock_Lk_Categories}" Opacity="0.8" />
+                            <ItemsControl ItemsSource="{Binding Categories}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <CheckBox Content="{Binding}" IsChecked="True" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Grid>
+</UserControl>

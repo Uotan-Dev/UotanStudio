@@ -58,6 +58,8 @@ internal static class ViewModelViewRegistry
         [typeof(FileManagerEditorViewModel)] = new(() => new FileManagerEditorView(), IsDocumentStyle: true),
         [typeof(ImageViewerViewModel)] = new(() => new ImageViewerView(), IsDocumentStyle: true),
         [typeof(LogoPartitionViewModel)] = new(() => new LogoPartitionView(), IsDocumentStyle: true),
+        [typeof(LkImageViewModel)] = new(() => new LkImageView(), IsDocumentStyle: true),
+        [typeof(MtkPreloaderViewModel)] = new(() => new MtkPreloaderView(), IsDocumentStyle: true),
         [typeof(ImageViewModel)] = new(() => new ImageView()),
         [typeof(AiAssistantViewModel)] = new(() => new AiAssistantView()),
         [typeof(AiSettingsViewModel)] = new(() => new AiSettingsView()),

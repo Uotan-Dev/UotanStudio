@@ -2199,4 +2199,115 @@
   <data name="Dock_Logo_SelectEntryFirst" xml:space="preserve">
     <value>请先选择一个内嵌图片。</value>
   </data>
+  <data name="Dock_Lk_Title" xml:space="preserve">
+    <value>LK 分区工作台</value>
+  </data>
+  <data name="Dock_Lk_Entries" xml:space="preserve">
+    <value>分区</value>
+  </data>
+  <data name="Dock_Lk_Kind" xml:space="preserve">
+    <value>种类</value>
+  </data>
+  <data name="Dock_Lk_Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Dock_Lk_Address" xml:space="preserve">
+    <value>加载地址</value>
+  </data>
+  <data name="Dock_Lk_Offset" xml:space="preserve">
+    <value>头部偏移</value>
+  </data>
+  <data name="Dock_Lk_Certificate" xml:space="preserve">
+    <value>证书</value>
+  </data>
+  <data name="Dock_Lk_Patches" xml:space="preserve">
+    <value>补丁</value>
+  </data>
+  <data name="Dock_Lk_Categories" xml:space="preserve">
+    <value>补丁类别</value>
+  </data>
+  <data name="Dock_Lk_PatchHint" xml:space="preserve">
+    <value>补丁写入下方指定的新文件，源镜像不会被修改。</value>
+  </data>
+  <data name="Dock_Lk_Output" xml:space="preserve">
+    <value>输出路径</value>
+  </data>
+  <data name="Dock_Lk_Apply" xml:space="preserve">
+    <value>生成修补镜像</value>
+  </data>
+  <data name="Dock_Lk_Backup" xml:space="preserve">
+    <value>保留源文件备份</value>
+  </data>
+  <data name="Dock_Lk_CertBypass" xml:space="preserve">
+    <value>同时重写 cert2 摘要（签名将不再有效）</value>
+  </data>
+  <data name="Lk_SourceSummary" xml:space="preserve">
+    <value>{0} 个条目，{1} 字节</value>
+  </data>
+  <data name="Lk_PatchDone" xml:space="preserve">
+    <value>修补镜像已写入 {0}；共 {1} 项变更。备份：{2}</value>
+  </data>
+  <data name="Lk_NoBackup" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Lk_KindApp" xml:space="preserve">
+    <value>应用</value>
+  </data>
+  <data name="Lk_KindModem" xml:space="preserve">
+    <value>调制解调器</value>
+  </data>
+  <data name="Lk_KindCert" xml:space="preserve">
+    <value>证书</value>
+  </data>
+  <data name="Dock_Preloader_Title" xml:space="preserve">
+    <value>预加载器工作台</value>
+  </data>
+  <data name="Dock_Preloader_Storage" xml:space="preserve">
+    <value>声明的存储类型</value>
+  </data>
+  <data name="Dock_Preloader_CodeOffset" xml:space="preserve">
+    <value>代码偏移</value>
+  </data>
+  <data name="Dock_Preloader_FlagBlock" xml:space="preserve">
+    <value>标志块</value>
+  </data>
+  <data name="Dock_Preloader_LockState" xml:space="preserve">
+    <value>Fastboot 锁状态</value>
+  </data>
+  <data name="Dock_Preloader_Unlock" xml:space="preserve">
+    <value>清零 fastboot 锁字节</value>
+  </data>
+  <data name="Dock_Preloader_Apply" xml:space="preserve">
+    <value>生成解锁预加载器</value>
+  </data>
+  <data name="Dock_Preloader_Warning" xml:space="preserve">
+    <value>该操作会重排预加载器代码并清零 fastboot 锁字节。请自行承担刷入风险，并保留备份。</value>
+  </data>
+  <data name="Dock_Preloader_PatchDone" xml:space="preserve">
+    <value>解锁预加载器已写入 {0}；共 {1} 个步骤。备份：{2}</value>
+  </data>
+  <data name="Dock_Preloader_RawUnsupported" xml:space="preserve">
+    <value>RAW（MMM）— 不可修补</value>
+  </data>
+  <data name="Dock_Preloader_UnknownStorage" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Dock_Preloader_NoFlagBlock" xml:space="preserve">
+    <value>未找到</value>
+  </data>
+  <data name="Dock_Preloader_Locked" xml:space="preserve">
+    <value>已锁定（0x22）</value>
+  </data>
+  <data name="Dock_Preloader_HardLocked" xml:space="preserve">
+    <value>硬锁（0x11）</value>
+  </data>
+  <data name="Dock_Preloader_Unlocked" xml:space="preserve">
+    <value>已解锁</value>
+  </data>
+  <data name="Explorer_OpenAsLk" xml:space="preserve">
+    <value>以 LK 镜像打开</value>
+  </data>
+  <data name="Explorer_OpenAsPreloader" xml:space="preserve">
+    <value>以预加载器打开</value>
+  </data>
 </root>
