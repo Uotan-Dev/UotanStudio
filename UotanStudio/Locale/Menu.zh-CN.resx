@@ -66,6 +66,9 @@
   <data name="Menu_View" xml:space="preserve">
     <value>视图</value>
   </data>
+  <data name="Menu_Manage" xml:space="preserve">
+    <value>管理</value>
+  </data>
   <data name="Menu_Tools" xml:space="preserve">
     <value>工具</value>
   </data>

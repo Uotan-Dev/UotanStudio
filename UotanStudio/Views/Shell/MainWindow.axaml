@@ -333,26 +333,48 @@
 					     Command="{Binding MenuVM.ResetWorkspaceLayoutCommand}" />
 				</MenuItem>
 
+				<!-- 管理 / Manage -->
+				<MenuItem>
+					<MenuItem.Header>
+						<TextBlock Text="{DynamicResource Menu_Manage}" FontWeight="SemiBold" />
+					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_DeviceManager}" Command="{Binding MenuVM.OpenDeviceCommand}">
+						<MenuItem.Icon>
+							<avalonia:Device Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_KeyManager}" Command="{Binding MenuVM.OpenKeyManagerCommand}">
+						<MenuItem.Icon>
+							<avalonia:Key Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_VisualPluginManager}" Command="{Binding MenuVM.OpenVisualPluginManagerCommand}">
+						<MenuItem.Icon>
+							<avalonia:App Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_LogWindow}" Command="{Binding MenuVM.OpenLogWindowCommand}">
+						<MenuItem.Icon>
+							<avalonia:File Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_UsbTreeWindow}" Command="{Binding MenuVM.OpenUsbTreeCommand}">
+						<MenuItem.Icon>
+							<avalonia:Sitemap Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+				</MenuItem>
+
 				<!-- 工具 / Tools -->
 				<MenuItem>
 				 <MenuItem.Header>
 				  <TextBlock Text="{DynamicResource Menu_Tools}" FontWeight="SemiBold" />
 				 </MenuItem.Header>
-				 <MenuItem Header="{DynamicResource Menu_DeviceManager}" Command="{Binding MenuVM.OpenDeviceCommand}">
-					<MenuItem.Icon>
-						<avalonia:Device Width="16" Height="16" />
-					</MenuItem.Icon>
-				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_ScreenMirror}" Command="{Binding MenuVM.OpenScreenMirrorCommand}">
 					<MenuItem.Icon>
 						<avalonia:Cast Width="16" Height="16" />
 					</MenuItem.Icon>
-				 </MenuItem>
-				 <MenuItem Header="{DynamicResource Menu_KeyManager}" Command="{Binding MenuVM.OpenKeyManagerCommand}">
-					<MenuItem.Icon><avalonia:Key Width="16" Height="16" /></MenuItem.Icon>
-				 </MenuItem>
-				 <MenuItem Header="{DynamicResource Menu_VisualPluginManager}" Command="{Binding MenuVM.OpenVisualPluginManagerCommand}">
-					<MenuItem.Icon><avalonia:App Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_ApkSigner}" Command="{Binding MenuVM.OpenApkSignerCommand}">
 					<MenuItem.Icon><avalonia:Certificate Width="16" Height="16" /></MenuItem.Icon>
@@ -371,16 +393,6 @@
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_DiskFlash}" Command="{Binding MenuVM.OpenDiskFlashCommand}">
 					<MenuItem.Icon><avalonia:Save Width="16" Height="16" /></MenuItem.Icon>
-				 </MenuItem>
-				 <MenuItem Header="{DynamicResource Menu_LogWindow}" Command="{Binding MenuVM.OpenLogWindowCommand}">
-					<MenuItem.Icon>
-						<avalonia:File Width="16" Height="16" />
-					</MenuItem.Icon>
-				 </MenuItem>
-				 <MenuItem Header="{DynamicResource Menu_UsbTreeWindow}" Command="{Binding MenuVM.OpenUsbTreeCommand}">
-					<MenuItem.Icon>
-						<avalonia:Sitemap Width="16" Height="16" />
-					</MenuItem.Icon>
 				 </MenuItem>
 				 <Separator />
 				 <MenuItem Header="{DynamicResource Menu_CompareFiles}" Command="{Binding MenuVM.CompareFilesCommand}">

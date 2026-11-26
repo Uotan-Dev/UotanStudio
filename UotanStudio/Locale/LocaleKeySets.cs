@@ -1860,6 +1860,7 @@ internal static class LocaleKeySets
         "Menu_File",
         "Menu_Edit",
         "Menu_View",
+        "Menu_Manage",
         "Menu_Tools",
         "Menu_Help",
         "Menu_NewProject",

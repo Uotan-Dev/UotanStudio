@@ -66,6 +66,9 @@
   <data name="Menu_View" xml:space="preserve">
     <value>View</value>
   </data>
+  <data name="Menu_Manage" xml:space="preserve">
+    <value>Manage</value>
+  </data>
   <data name="Menu_Tools" xml:space="preserve">
     <value>Tools</value>
   </data>
