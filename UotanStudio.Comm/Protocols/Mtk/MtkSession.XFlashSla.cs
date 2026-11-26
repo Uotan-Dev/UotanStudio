@@ -46,7 +46,20 @@ public sealed partial class MtkSession
             var refusalRecorded = false;
             try
             {
-                var status = await QueryXFlashControlAsync(channel, 0x040016, token, 4).ConfigureAwait(false);
+                byte[] status;
+                try
+                {
+                    status = await QueryXFlashControlAsync(channel, 0x040016, token, 4).ConfigureAwait(false);
+                }
+                catch (MtkProtocolException error) when (error.Status == XFlashUnsupportedControlCode)
+                {
+                    RecordSlaEvidence(MtkSlaFlowKind.DaSlaXFlash, MtkSlaEvidenceStage.DeviceRequired, null,
+                        CommandOutcomeKind.Rejected,
+                        "sla-unqueried; the agent reports the DA2 SLA status control code as unsupported, " +
+                        "so the SLA status is reported as not applicable.");
+                    return;
+                }
+
                 if (status.Length != 4)
                 {
                     throw new MtkProtocolException("The DA2 SLA status must contain one word.");

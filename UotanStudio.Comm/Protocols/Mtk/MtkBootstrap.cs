@@ -146,8 +146,9 @@ public static partial class MtkBootstrap
                 ResolveBootResourceOrder(resourceOrder, options.BootResourceProvider, device),
                 cancellationToken).ConfigureAwait(false);
             await session.UploadDownloadAgentAsync(stageOne, first.LoadAddress, checked((int)stageOne.Length),
-                checked((int)first.SignatureLength), cancellationToken: cancellationToken).ConfigureAwait(false);
-            await session.StartDownloadAgentAsync(cancellationToken).ConfigureAwait(false);
+                confirmWrite: true, checked((int)first.SignatureLength), cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            await session.StartDownloadAgentAsync(confirmExecute: true, cancellationToken).ConfigureAwait(false);
             if (protocol == MtkDaProtocol.Legacy)
             {
                 await session.InitializeLegacyAgentAsync(stageTwo, second.LoadAddress, checked((int)stageTwo.Length),

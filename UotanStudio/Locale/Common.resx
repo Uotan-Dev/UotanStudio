@@ -4802,15 +4802,6 @@ Continue?</value>
   <data name="Flash_UnisocPostPowerOff" xml:space="preserve">
     <value>Power off</value>
   </data>
-  <data name="Flash_UnisocManualLoaders" xml:space="preserve">
-    <value>Manual loaders (only for devices whose package is unavailable; addresses must match the device)</value>
-  </data>
-  <data name="Flash_UnisocChooseFdl1" xml:space="preserve">
-    <value>Choose FDL1</value>
-  </data>
-  <data name="Flash_UnisocChooseFdl2" xml:space="preserve">
-    <value>Choose FDL2</value>
-  </data>
   <data name="Flash_UnisocEraseConfirmTitle" xml:space="preserve">
     <value>Erase partition</value>
   </data>

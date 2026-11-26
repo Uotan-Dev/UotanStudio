@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using UotanStudio.Comm.Protocols.Common.Evidence;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -33,6 +34,17 @@ public sealed partial class MtkSession
     private const uint XFlashSwitchUsbSpeed = 0x01000B;
     private const uint XFlashUsbSpeedVendorMagic = 0x0E8D2001;
     private const uint XFlashGetUsbSpeed = 0x04000B;
+
+    /// <summary>The download-agent status that reports an unsupported device-control code.
+    /// <para>下载代理上报"设备控制码不受支持"的状态。</para></summary>
+    /// <remarks>
+    /// The vendor tool treats exactly this status as "the query does not apply here" and continues, while
+    /// every other failure aborts. Keeping the value named stops the SLA probe from turning an older agent
+    /// into a dead session.
+    /// <para>厂商工具只把这一状态当作"该查询在此不适用"并继续，其余失败一律中止。为该取值命名，
+    /// 可避免 SLA 探测把较旧的代理变成失效会话。</para>
+    /// </remarks>
+    private const uint XFlashUnsupportedControlCode = 0xC0010004;
     private MtkXFlashChannel? _xflash;
     private MtkXFlashConnectionAgent? _xflashConnectionAgent;
     private bool _xflashExternalRamInitialized;
@@ -204,6 +216,19 @@ public sealed partial class MtkSession
                 var reply = await QueryXFlashControlAsync(channel, XFlashGetUsbSpeed, cancellationToken, 64)
                     .ConfigureAwait(false);
                 var speed = DecodeXFlashUsbSpeed(reply);
+                if (speed.Kind != MtkXFlashUsbSpeedKind.FullSpeed)
+                {
+                    // The agent has already re-enumerated at the new rate, so the open handle still talks at
+                    // the old one. The host has to reopen the device and restart the agent channel; when no
+                    // reopener is available the speed simply stays as reported instead of being claimed.
+                    // 代理已按新速率重新枚举，而当前句柄仍以旧速率通信。主机必须重新打开设备并重建代理通道；
+                    // 没有重开器时保持已报告的速度，而不是宣称切换成功。
+                    if (!await TryReopenXFlashChannelAsync(speed, cancellationToken).ConfigureAwait(false))
+                    {
+                        return speed;
+                    }
+                }
+
                 RecordSecurityEvidence("xflash-usb-speed", CommandOutcomeKind.Completed,
                     $"The agent switched USB speed and reports {speed.Text}.", Convert.ToHexString(reply));
                 return speed;
@@ -217,6 +242,65 @@ public sealed partial class MtkSession
         finally
         {
             _operation.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reopens the transport after the agent re-enumerated at a higher USB rate and rebuilds the agent
+    /// channel on it.
+    /// <para>在代理以更高 USB 速率重新枚举之后重开传输，并在其上重建代理通道。</para>
+    /// </summary>
+    /// <remarks>
+    /// Failure is reported as <see langword="false"/> and restores the session to its previous stage so the
+    /// caller keeps a usable full-speed session; it never leaves a half-switched channel behind.
+    /// <para>失败时返回 <see langword="false"/> 并恢复会话到先前阶段，使调用方仍保有可用的全速会话；
+    /// 不会留下半切换的通道。</para>
+    /// </remarks>
+    /// <param name="speed">The speed the agent reported before the reopen.
+    /// <para>重开前代理报告的速度。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.
+    /// <para>操作取消令牌。</para></param>
+    /// <returns><see langword="true"/> when a new transport and channel are in place.
+    /// <para>新的传输与通道已就位时为 <see langword="true"/>。</para></returns>
+    private async Task<bool> TryReopenXFlashChannelAsync(MtkXFlashUsbSpeed speed, CancellationToken cancellationToken)
+    {
+        if (_reopener is not { } reopener)
+        {
+            RecordSecurityEvidence("xflash-usb-speed", CommandOutcomeKind.Partial,
+                $"The agent reports {speed.Text} but no transport reopener is attached, so the host keeps the " +
+                "existing handle and the higher rate is not applied.");
+            return false;
+        }
+
+        var previousStage = _state;
+        ICommTransport? replacement = null;
+        try
+        {
+            replacement = await reopener.ReopenAsync(cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(replacement);
+            if (!replacement.IsConnected)
+            {
+                throw new InvalidOperationException("The reopened transport is not connected.");
+            }
+
+            var previous = Transport;
+            Transport = replacement;
+            replacement = null;
+            previous.Dispose();
+            _xflash = new MtkXFlashChannel(Transport, _timeoutMs);
+            _state = previousStage;
+            RecordSecurityEvidence("xflash-usb-speed", CommandOutcomeKind.Completed,
+                $"The host reopened the device and rebuilt the agent channel at {speed.Text}.");
+            return true;
+        }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested)
+        {
+            replacement?.Dispose();
+            _state = previousStage;
+            RecordSecurityEvidence("xflash-usb-speed", CommandOutcomeKind.Partial,
+                $"The host could not reopen the device after the {speed.Text} switch ({error.Message}); the " +
+                "existing handle is kept and the higher rate is not applied.");
+            return false;
         }
     }
 

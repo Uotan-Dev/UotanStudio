@@ -17,7 +17,7 @@ namespace UotanStudio.Comm.Transports.Abstractions;
 /// <para>在指定会话上初始化新的 <see cref="UsbDeviceTransport"/>。</para>
 /// </remarks>
 /// <param name="session">The opened USB device session. <para>已打开的 USB 设备会话。</para></param>
-internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTransport
+internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTransport, ICommTransportZeroLengthWrite
 {
     /// <summary>
     /// Gets the underlying USB device session, exposed for protocol layers that need
@@ -123,6 +123,19 @@ internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTrans
     /// <returns>A task that resolves to the number of bytes written. <para>返回实际写入字节数的任务。</para></returns>
     public Task<long> WriteAsync(byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
         => Session.WriteAsync(data, offset, length, timeoutMs, cancellationToken);
+
+    /// <summary>
+    /// Emits the terminating zero-length packet the BROM and preloader expect after a bulk download.
+    /// <para>发出 BROM 与 preloader 在批量下载之后期望的终止零长度包。</para>
+    /// </summary>
+    /// <param name="timeoutMs">The positive completion timeout. <para>正数的完成超时。</para></param>
+    /// <param name="cancellationToken">Cancellation for the packet. <para>该数据包的取消令牌。</para></param>
+    /// <returns>A task completing once the packet has been handed to the link.
+    /// <para>该数据包交给链路后完成的任务。</para></returns>
+    /// <exception cref="NotSupportedException">The active backend cannot emit an explicit zero-length packet.
+    /// <para>当前后端无法发出显式零长度包。</para></exception>
+    public Task WriteZeroLengthPacketAsync(int timeoutMs, CancellationToken cancellationToken = default)
+        => Session.WriteZlpAsync(timeoutMs, cancellationToken);
 
     /// <summary>
     /// Returns a <see cref="Stream"/> over the underlying USB session.

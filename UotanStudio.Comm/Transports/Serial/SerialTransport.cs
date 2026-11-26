@@ -24,7 +24,7 @@ public sealed class SerialTransport(
     int dataBits = 8,
     StopBits stopBits = StopBits.One,
     Handshake handshake = Handshake.RequestToSend)
-    : ICommTransport, ICommTransportBaudRateControl
+    : ICommTransport, ICommTransportBaudRateControl, ICommTransportZeroLengthWrite
 {
     private SerialPort? _port;
     private int _baudRate = baudRate;
@@ -324,6 +324,29 @@ public sealed class SerialTransport(
     {
         var port = EnsureConnected();
         return WritePort(port, data, offset, length, timeoutMs);
+    }
+
+    /// <summary>
+    /// Reports that this link has no packet boundary and therefore no terminating packet to emit.
+    /// <para>报告本链路没有包边界，因此也没有终止包可发。</para>
+    /// </summary>
+    /// <param name="timeoutMs">The positive completion timeout, which this implementation ignores.
+    /// <para>正数的完成超时；本实现忽略该值。</para></param>
+    /// <param name="cancellationToken">Cancellation for the call. <para>该调用的取消令牌。</para></param>
+    /// <returns>A completed task. <para>已完成的任务。</para></returns>
+    /// <remarks>
+    /// A serial line carries an unframed byte stream, so a zero-length write has no wire representation and
+    /// the device never waits for one. The capability is implemented as a successful no-op so callers that
+    /// require the packet on packet-oriented links do not mistake an inapplicable operation for a failure.
+    /// <para>串口承载的是无帧字节流，零长度写没有线路表示，设备也从不等待它。该能力实现为成功的空操作，
+    /// 使那些在面向包的链路上确实需要该数据包的调用方，不会把"不适用"误判为失败。</para>
+    /// </remarks>
+    public Task WriteZeroLengthPacketAsync(int timeoutMs, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = EnsureConnected();
+        return Task.CompletedTask;
     }
 
     private static long WritePort(SerialPort port, byte[] data, int offset, int length, int timeoutMs)

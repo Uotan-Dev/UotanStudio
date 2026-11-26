@@ -716,12 +716,19 @@ public sealed partial class MtkSession : IProtocolSession
     /// <para>镜像中包含的签名后缀长度。</para></param>
     /// <param name="progress">Optional cumulative uploaded-byte progress.
     /// <para>可选的累计已上传字节进度。</para></param>
+    /// <param name="confirmWrite">Must be <see langword="true"/>; this call changes device memory.
+    /// <para>必须为 <see langword="true"/>；本次调用会改变设备内存。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes once the device confirms the uploaded agent checksum and the session advances to the agent-uploaded stage.
     /// <para>在设备确认已上传代理的校验和、会话推进到代理已上传阶段后完成的任务。</para></returns>
-    public Task UploadDownloadAgentAsync(Stream image, uint loadAddress, int length, int signatureLength = 0,
-        IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-        => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, cancellationToken);
+    /// <exception cref="UnauthorizedAccessException">The caller did not confirm the memory write, so no byte was sent.
+    /// <para>调用方未确认该内存写入，因此没有发出任何字节。</para></exception>
+    public Task UploadDownloadAgentAsync(Stream image, uint loadAddress, int length, bool confirmWrite,
+        int signatureLength = 0, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    {
+        RequireDaMemoryWriteConfirmation(confirmWrite, "download agent");
+        return UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, cancellationToken);
+    }
 
     /// <remarks>
     /// An odd image is padded with a single trailing zero, but only when no signature suffix has to stay
@@ -810,7 +817,20 @@ public sealed partial class MtkSession : IProtocolSession
 
                 if (DeviceInfo is not { HardwareCode: 0x2531 })
                 {
-                    await Transport.WriteAsync([], 0, 0, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                    // The agent answers the completion word only after it sees the transfer end, which is
+                    // signalled by a zero-length packet. Writing zero bytes locally emits nothing, so the
+                    // explicit capability is used and its absence is reported rather than assumed benign.
+                    // 代理只有在看到传输结束（由零长度包表示）之后才回完成字。在本地写零字节不会发出任何内容，
+                    // 因此这里使用显式能力，并在能力缺失时如实上报，而不是假定无害。
+                    if (Transport is not ICommTransportZeroLengthWrite zeroLengthWrite)
+                    {
+                        throw new NotSupportedException(
+                            "The active transport cannot emit the zero-length packet the download agent needs to " +
+                            "report the upload completion word.");
+                    }
+
+                    await zeroLengthWrite.WriteZeroLengthPacketAsync(_timeoutMs, cancellationToken)
+                        .ConfigureAwait(false);
                     await Task.Delay(UploadSettleDelayMs, cancellationToken).ConfigureAwait(false);
                 }
 
@@ -826,9 +846,17 @@ public sealed partial class MtkSession : IProtocolSession
                 }
                 else if (reportedChecksum != checksum)
                 {
-                    RecordSecurityEvidence("da-upload-checksum", CommandOutcomeKind.Completed,
-                        $"warning: the device reported agent checksum 0x{reportedChecksum:X4} instead of the computed " +
-                        $"0x{checksum:X4}; continuing as the reference does.");
+                    // The vendor tool defines a dedicated failure status for this disagreement, so a mismatch
+                    // means the image in target memory is not the image that was streamed. Jumping to it
+                    // would execute a truncated or shifted agent, so the session stops before that jump.
+                    // 厂商工具为该不一致定义了专用失败状态，因此校验和不符意味着目标内存中的镜像并非被流式写入的
+                    // 镜像。跳转过去会执行被截断或错位的代理，所以会话在跳转之前停止。
+                    RecordSecurityEvidence("da-upload-checksum", CommandOutcomeKind.Rejected,
+                        $"the device reported agent checksum 0x{reportedChecksum:X4} instead of the computed " +
+                        $"0x{checksum:X4}; the upload is not trusted and the agent is not started.");
+                    throw new MtkProtocolException(
+                        $"The download agent checksum mismatch (reported 0x{reportedChecksum:X4}, computed " +
+                        $"0x{checksum:X4}) means the uploaded image is incomplete or misaligned.");
                 }
 
                 NoteUploadStage(MtkDaUploadStage.ChecksumConfirmed);
@@ -863,6 +891,10 @@ public sealed partial class MtkSession : IProtocolSession
     /// The operation cancellation token.
     /// <para>操作取消令牌。</para>
     /// </param>
+    /// <param name="confirmExecute">
+    /// Must be <see langword="true"/>; this call makes the target execute an image already in its memory.
+    /// <para>必须为 <see langword="true"/>；本次调用会让目标执行其内存中已有的镜像。</para>
+    /// </param>
     /// <param name="echoJumpAddress">
     /// Whether the target is expected to echo the jump address before reporting status. The documented
     /// sequence writes the address without an echo and reads it back for comparison; targets that answer
@@ -874,9 +906,10 @@ public sealed partial class MtkSession : IProtocolSession
     /// A task that completes once the target acknowledges execution and the session advances to the agent-started stage.
     /// <para>在目标确认执行、会话推进到代理已启动阶段后完成的任务。</para>
     /// </returns>
-    public async Task StartDownloadAgentAsync(CancellationToken cancellationToken = default,
+    public async Task StartDownloadAgentAsync(bool confirmExecute, CancellationToken cancellationToken = default,
         bool echoJumpAddress = true)
     {
+        RequireDaMemoryWriteConfirmation(confirmExecute, "download agent");
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
