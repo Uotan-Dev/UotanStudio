@@ -2,6 +2,7 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services.Ui.Workspace;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Workspace;
 using Xunit;
@@ -125,6 +126,213 @@ public sealed class WorkspaceDockWindowLifetimeTests
         Assert.Empty(root.Windows!);
         Assert.Contains(dual, documentsPane.VisibleDockables!);
         Assert.Same(documentsPane, dual.Owner);
+    }
+
+    [Fact]
+    public void RightColumn_FloatBothAndDockBack_RemountsRightColumnAndPanels()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+
+        factory.FloatDockable(images);
+        factory.FloatDockable(properties);
+        Assert.Equal(2, root.Windows!.Count);
+
+        factory.DockToMainWindow(images);
+        // Simulate ProportionalStackPanel assigning CollapsedProportion=1.0 while alone in rightCol.
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+        rightTop.Proportion = 1.0;
+        rightTop.CollapsedProportion = 1.0;
+
+        factory.DockToMainWindow(properties);
+
+        Assert.Empty(root.Windows!);
+        AssertRightColumnSplitIntact(root, images, properties);
+    }
+
+    [Fact]
+    public void RightColumn_FloatWholePanesAndDockBack_RemountsBothWithoutOverwriting()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+        var rightBottom = Assert.IsAssignableFrom<IToolDock>(properties.Owner);
+
+        factory.FloatDockable(rightTop);
+        factory.FloatDockable(rightBottom);
+        Assert.Equal(2, root.Windows!.Count);
+
+        factory.DockToMainWindow(images);
+        rightTop.Proportion = 1.0;
+        rightTop.CollapsedProportion = 1.0;
+
+        factory.DockToMainWindow(properties);
+
+        Assert.Empty(root.Windows!);
+        AssertRightColumnSplitIntact(root, images, properties);
+    }
+
+    [Fact]
+    public void RightColumn_FloatBothAndClose_ShowAndToggleFromMenuRemountsBoth()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+        var rightBottom = Assert.IsAssignableFrom<IToolDock>(properties.Owner);
+
+        factory.FloatDockable(rightTop);
+        factory.FloatDockable(rightBottom);
+        Assert.Equal(2, root.Windows!.Count);
+
+        foreach (var window in root.Windows!.ToList())
+        {
+            factory.CloseWindow(window);
+            if (root.Windows!.Contains(window))
+            {
+                factory.RemoveWindow(window);
+            }
+        }
+
+        Assert.Empty(root.Windows!);
+        Assert.False(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+        Assert.False(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+
+        WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
+        rightTop.Proportion = 1.0;
+        rightTop.CollapsedProportion = 1.0;
+
+        WorkspacePanelService.Instance.Show(WorkspacePanelService.Properties);
+        AssertRightColumnSplitIntact(root, images, properties);
+
+        WorkspacePanelService.Instance.Hide(WorkspacePanelService.Properties);
+        WorkspacePanelService.Instance.Show(WorkspacePanelService.Properties);
+        AssertRightColumnSplitIntact(root, images, properties);
+    }
+
+    [Fact]
+    public void RightColumn_FloatOneAndDockBack_ReplacesPromotedSiblingWithRightColumn()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+
+        factory.FloatDockable(rightTop);
+        Assert.Single(root.Windows!);
+
+        factory.DockToMainWindow(images);
+
+        Assert.Empty(root.Windows!);
+        AssertRightColumnSplitIntact(root, images, properties);
+    }
+
+    [Fact]
+    public void HideFromMenu_ClosesEmptiedFloatingWindowAndShowRemountsInMainWindow()
+    {
+        var factory = new HeadlessWorkspaceDockFactory();
+        var root = BuildRightColumnLayout(factory, out var images, out var properties);
+        var rightTop = Assert.IsAssignableFrom<IToolDock>(images.Owner);
+
+        factory.FloatDockable(rightTop);
+        Assert.Single(root.Windows!);
+
+        WorkspacePanelService.Instance.Hide(WorkspacePanelService.ImagesView);
+
+        Assert.Empty(root.Windows!);
+        Assert.False(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+
+        WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
+
+        Assert.Empty(root.Windows!);
+        AssertRightColumnSplitIntact(root, images, properties);
+    }
+
+    private static void AssertRightColumnSplitIntact(IRootDock root, Tool images, Tool properties)
+    {
+        var mainLayout = Assert.IsAssignableFrom<IProportionalDock>(
+            WorkspaceSessionCapture.Enumerate(root).Single(d => d.Id == "WorkspaceMainLayout"));
+        var rightCol = Assert.IsAssignableFrom<IProportionalDock>(
+            WorkspaceSessionCapture.Enumerate(root).Single(d => d.Id == "WorkspaceRightColumn"));
+
+        Assert.Equal(Orientation.Vertical, rightCol.Orientation);
+        Assert.False(rightCol.IsEmpty);
+        Assert.Contains(rightCol, mainLayout.VisibleDockables!);
+        Assert.DoesNotContain(images.Owner!, mainLayout.VisibleDockables!);
+        Assert.DoesNotContain(properties.Owner!, mainLayout.VisibleDockables!);
+
+        Assert.Equal(3, rightCol.VisibleDockables!.Count);
+        var topPane = Assert.IsAssignableFrom<IToolDock>(rightCol.VisibleDockables[0]);
+        Assert.IsAssignableFrom<IProportionalDockSplitter>(rightCol.VisibleDockables[1]);
+        var bottomPane = Assert.IsAssignableFrom<IToolDock>(rightCol.VisibleDockables[2]);
+
+        Assert.False(topPane.IsEmpty);
+        Assert.False(bottomPane.IsEmpty);
+        Assert.True(double.IsNaN(topPane.CollapsedProportion));
+        Assert.Equal(0.35, bottomPane.CollapsedProportion);
+        Assert.Contains(images, topPane.VisibleDockables!);
+        Assert.Contains(properties, bottomPane.VisibleDockables!);
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.ImagesView));
+        Assert.True(WorkspacePanelService.Instance.IsPanelVisible(WorkspacePanelService.Properties));
+    }
+
+    private static IRootDock BuildRightColumnLayout(WorkspaceDockFactory factory, out Tool images, out Tool properties)
+    {
+        images = new Tool { Id = "ImagesView", CanClose = true };
+        properties = new Tool { Id = "Properties", CanClose = true };
+
+        var rightTop = new ToolDock
+        {
+            Id = "RightPaneTop",
+            Proportion = double.NaN,
+            ActiveDockable = images,
+            VisibleDockables = factory.CreateList<IDockable>(images)
+        };
+        var rightBottom = new ToolDock
+        {
+            Id = "RightPane",
+            Proportion = 0.35,
+            ActiveDockable = properties,
+            VisibleDockables = factory.CreateList<IDockable>(properties)
+        };
+        var rightCol = new ProportionalDock
+        {
+            Id = "WorkspaceRightColumn",
+            Orientation = Orientation.Vertical,
+            Proportion = 0.15,
+            VisibleDockables = factory.CreateList<IDockable>(rightTop, new ProportionalDockSplitter(), rightBottom)
+        };
+        var documentDock = new DocumentDock
+        {
+            Id = "DocumentsPane",
+            IsCollapsable = false,
+            Proportion = double.NaN,
+            VisibleDockables = factory.CreateList<IDockable>()
+        };
+        var centerCol = new ProportionalDock
+        {
+            Id = "WorkspaceCenterColumn",
+            Orientation = Orientation.Vertical,
+            Proportion = 0.7,
+            VisibleDockables = factory.CreateList<IDockable>(documentDock)
+        };
+        var mainLayout = new ProportionalDock
+        {
+            Id = "WorkspaceMainLayout",
+            Orientation = Orientation.Horizontal,
+            Proportion = double.NaN,
+            VisibleDockables = factory.CreateList<IDockable>(centerCol, new ProportionalDockSplitter(), rightCol)
+        };
+        var root = factory.CreateRootDock();
+        root.Id = "Root";
+        root.IsCollapsable = false;
+        root.ActiveDockable = mainLayout;
+        root.DefaultDockable = mainLayout;
+        root.VisibleDockables = factory.CreateList<IDockable>(mainLayout);
+        factory.InitLayout(root);
+
+        WorkspacePanelService.Instance.RegisterMainRoot(root);
+        WorkspacePanelService.Instance.Register(WorkspacePanelService.ImagesView, images, rightTop, visible: true);
+        WorkspacePanelService.Instance.Register(WorkspacePanelService.Properties, properties, rightBottom, visible: true);
+        return root;
     }
 
     private static IRootDock BuildLayout(WorkspaceDockFactory factory)

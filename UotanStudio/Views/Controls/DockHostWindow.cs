@@ -23,6 +23,7 @@ public class DockHostWindow : HostWindow
 {
     private bool _pendingX11Drag;
     private bool _x11Dragging;
+    private bool _startingX11Drag;
     private PointerPressedEventArgs? _pendingPressArgs;
     private IPointer? _x11CapturedPointer;
     private Point _pendingStartClient;
@@ -61,7 +62,6 @@ public class DockHostWindow : HostWindow
         AddHandler(PointerReleasedEvent, OnLinuxPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerCaptureLostEvent, OnLinuxPointerCaptureLost, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerEnteredEvent, OnLinuxPointerEntered, RoutingStrategies.Tunnel, handledEventsToo: true);
-        Deactivated += OnLinuxDeactivated;
     }
 
     private bool IsX11Window => OperatingSystem.IsLinux() && PlatformImpl is IX11OptionsToplevelImplFeature;
@@ -72,7 +72,6 @@ public class DockHostWindow : HostWindow
         if (OperatingSystem.IsLinux())
         {
             ResetX11DragState();
-            Deactivated -= OnLinuxDeactivated;
         }
 
         base.OnClosed(e);
@@ -107,7 +106,6 @@ public class DockHostWindow : HostWindow
         _pendingStartClient = e.GetPosition(this);
         _pendingDockScope = dockScope;
         _x11CapturedPointer = e.Pointer;
-        e.Pointer.Capture(this);
         e.Handled = true;
     }
 
@@ -147,7 +145,23 @@ public class DockHostWindow : HostWindow
             _pendingX11Drag = false;
             _pendingPressArgs = null;
 
-            if (!InvokeTryBeginWindowDrag(this, pressArgs, scope, ownsPointerRelease: true))
+            _startingX11Drag = true;
+            bool started;
+            try
+            {
+                started = InvokeTryBeginWindowDrag(this, pressArgs, scope, ownsPointerRelease: true);
+                if (started)
+                {
+                    _x11CapturedPointer = e.Pointer;
+                    e.Pointer.Capture(this);
+                }
+            }
+            finally
+            {
+                _startingX11Drag = false;
+            }
+
+            if (!started)
             {
                 ReleaseX11Capture();
                 return;
@@ -184,6 +198,11 @@ public class DockHostWindow : HostWindow
 
     private void OnLinuxPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
+        if (_startingX11Drag)
+        {
+            return;
+        }
+
         if (_x11Dragging)
         {
             CancelX11Drag();
@@ -202,26 +221,6 @@ public class DockHostWindow : HostWindow
             && !_pendingX11Drag
             && HasStuckDraggingState()
             && !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            ClearStuckDraggingState();
-        }
-    }
-
-    private void OnLinuxDeactivated(object? sender, EventArgs e)
-    {
-        if (_x11Dragging)
-        {
-            CancelX11Drag();
-            return;
-        }
-
-        if (_pendingX11Drag)
-        {
-            ResetX11DragState();
-            return;
-        }
-
-        if (HasStuckDraggingState())
         {
             ClearStuckDraggingState();
         }
@@ -297,7 +296,7 @@ public class DockHostWindow : HostWindow
                 return false;
             }
 
-            if (current is Control { Name: "PART_Grip" })
+            if (current is Control control && (control.Name == "PART_Grip" || DockProperties.GetIsDragArea(control)))
             {
                 insideToolGrip = true;
             }

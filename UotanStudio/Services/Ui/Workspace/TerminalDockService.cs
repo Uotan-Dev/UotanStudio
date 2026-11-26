@@ -1,3 +1,4 @@
+using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Terminal;
@@ -95,8 +96,21 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
         foreach (var entry in _entries)
         {
             var host = GetHost(entry);
+            var ownerRoot = factory.FindRoot(host, static _ => true);
             host.VisibleDockables?.Remove(entry.Model);
-            if (host.ActiveDockable == entry.Model) host.ActiveDockable = host.VisibleDockables?.FirstOrDefault();
+            if (host.ActiveDockable == entry.Model)
+            {
+                host.ActiveDockable = host.VisibleDockables?.FirstOrDefault();
+            }
+
+            if (ownerRoot?.Window is { } floatingWindow
+                && !WorkspacePanelService.HasVisibleLeafDockables(floatingWindow.Layout))
+            {
+                var mainRoot = floatingWindow.Owner as IRootDock;
+                WorkspacePanelService.CloseFloatingWindow(factory, mainRoot, floatingWindow);
+                entry.Host = defaultHost;
+                entry.Model.Owner = null;
+            }
         }
     }
 

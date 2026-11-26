@@ -226,6 +226,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         rootDock.VisibleDockables = CreateList<IDockable>(mainLayout);
 
         var panels = WorkspacePanelService.Instance;
+        panels.RegisterMainRoot(rootDock);
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
         panels.Register(WorkspacePanelService.PluginTool, pluginTool, leftTools, visible: true);
@@ -543,6 +544,8 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
                 // floating root and remount it into its default initial slot in the main layout.
                 ReleaseDockablePresentations(sourceDock);
                 base.RemoveDockable(sourceDock, collapse: true);
+                sourceDock.Owner = null;
+                sourceDock.IsEmpty = sourceDock.VisibleDockables is null or { Count: 0 };
                 WorkspacePanelService.Instance.EnsureHostMounted(this, mainRoot, registeredToolHost);
             }
             else
