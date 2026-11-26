@@ -155,7 +155,7 @@
             </Grid>
             <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                     CornerRadius="6" ClipToBounds="True">
-                <local:CodeEditor Name="ScriptEditor" FontSize="13" Language="plaintext" IsReadOnly="True"
+                <local:CodeEditor Name="ScriptEditor" FontSize="13" IsReadOnly="True"
                                   AutomationProperties.Name="{DynamicResource Delivery_ScriptEditor}" />
             </Border>
         </Grid>

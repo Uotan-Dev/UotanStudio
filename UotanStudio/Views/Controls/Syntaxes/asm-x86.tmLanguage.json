@@ -1,0 +1,152 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.asm.x86",
+  "name": "x86 Assembly",
+  "comment": "x86/x86-64 assembly (GAS, Intel and NASM flavours) for Tint; written for UotanStudio.",
+  "fileTypes": [
+    "asm",
+    "inc",
+    "s",
+    "S"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "#labels"
+    },
+    {
+      "include": "#registers"
+    },
+    {
+      "include": "#instructions"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#strings"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.semicolon.asm",
+          "match": ";.*$"
+        },
+        {
+          "name": "comment.line.number-sign.asm",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.line.double-slash.asm",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.c.asm",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.directive.asm",
+          "match": "^\\.?(?:section|text|data|bss|rodata|globl|global|align|balign|p2align|byte|short|long|word|quad|dword|qword|ascii|asciz|string|zero|space|fill|equ|set|org|end|macro|endm|include|ifdef|ifndef|if|else|endif|type|size|file|loc|ident|intel_syntax|att_syntax|bits|default|extern|public|proc|endp|model|segment|ends)\b"
+        },
+        {
+          "name": "meta.preprocessor.asm",
+          "match": "^\\s*(#\\s*(?:include|define|undef|if|ifdef|ifndef|else|elif|endif|error|pragma))\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.preprocessor.asm"
+            }
+          }
+        }
+      ]
+    },
+    "labels": {
+      "patterns": [
+        {
+          "name": "entity.name.function.asm",
+          "match": "^\\s*([A-Za-z_.$?][A-Za-z0-9_.$?@]*)\\s*:",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.asm"
+            }
+          }
+        },
+        {
+          "name": "entity.name.label.local.asm",
+          "match": "^\\s*(\\d+)\\s*:",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.local.asm"
+            }
+          }
+        },
+        {
+          "name": "variable.other.asm",
+          "match": "\\$?[A-Za-z_.$?][A-Za-z0-9_.$?@]*(?=\\s*\\()"
+        }
+      ]
+    },
+    "registers": {
+      "patterns": [
+        {
+          "name": "variable.language.register.asm",
+          "match": "%?\\b(?:r(?:1[0-5]|[0-9])[dwb]?|e(?:ax|bx|cx|dx|si|di|sp|bp)|[abcd][lh]|[sd]il|[sb]pl|ip|eip|rip|rflags|eflags|flags|c[ds]|e?[ds]s|fs|gs|st[0-7]?|mm[0-7]|xmm[0-9]|xmm1[0-5]|ymm[0-9]|ymm1[0-5]|zmm[0-9]|zmm1[0-9]|zmm2[0-9]|zmm3[01]|k[0-7]|cr[0-8]|dr[0-7])\\b"
+        }
+      ]
+    },
+    "instructions": {
+      "patterns": [
+        {
+          "name": "keyword.other.instruction.asm",
+          "match": "\\b(?:mov|movzx|movsx|movsxd|lea|push|pop|pushf|popf|xchg|add|adc|sub|sbb|mul|imul|div|idiv|inc|dec|neg|cmp|test|and|or|xor|not|shl|shr|sal|sar|rol|ror|rcl|rcr|nop|hlt|ret|retn|call|jmp|je|jne|jz|jnz|jg|jge|jl|jle|ja|jae|jb|jbe|jc|jnc|jo|jno|js|jns|jp|jnp|loop|loope|loopne|int|int3|syscall|sysenter|cpuid|rdtsc|rdmsr|wrmsr|in|out|inb|outb|inw|outw|inl|outl|rep|repe|repne|movsb|movsw|movsd|movsq|stosb|stosw|stosd|stosq|lodsb|lodsw|lodsd|lodsq|scasb|scasw|scasd|scasq|cmpsb|cmpsw|cmpsd|cmpsq|cbw|cwde|cdqe|cwd|cdq|cqo|leave|enter|bswap|cmpxchg|xadd|set[abgl][a-z]?|cmov[a-z]{1,2}|bt|bts|btr|btc|bsf|bsr|popcnt|lzcnt|tzcnt|shld|shrd|imul|enter|paddb|paddw|paddd|paddq|psubb|psubw|psubd|psubq|pxor|por|pand|movaps|movups|movdqa|movdqu|addps|addss|subps|subss|mulps|mulss|divps|divss|sqrtss|sqrtsd|ucomiss|comiss|v[a-z0-9]+)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.asm",
+          "match": "\\b0[xX][0-9A-Fa-f]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.asm",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.asm",
+          "match": "(?<![A-Za-z0-9_$.])\\b\\d+\\b"
+        },
+        {
+          "name": "constant.character.asm",
+          "match": "'(?:\\\\.|[^'\\\\])'"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.asm",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.asm",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

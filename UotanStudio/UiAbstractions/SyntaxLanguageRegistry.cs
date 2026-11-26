@@ -2,8 +2,10 @@ namespace UotanStudio.UiAbstractions;
 
 /// <summary>
 /// Syntax language registry, resolving TextMate syntax language ids by file extension for the document
-/// editor.
-/// <para>语法语言注册表，按文件扩展名解析 TextMate 语法语言标识，供文档编辑器选择语法高亮。</para>
+/// editor. The ids follow Visual Studio Code's TextMate language ids, which is also the set the Tint
+/// grammar map in <c>TintSyntaxColorizer</c> keys on.
+/// <para>语法语言注册表，按文件扩展名解析 TextMate 语法语言标识，供文档编辑器选择语法高亮。标识沿用
+/// Visual Studio Code 的 TextMate 语言标识，<c>TintSyntaxColorizer</c> 中的 Tint 语法映射也按这些标识索引。</para>
 /// </summary>
 public static class SyntaxLanguageRegistry
 {
@@ -24,7 +26,7 @@ public static class SyntaxLanguageRegistry
         ("ini", "INI"),
         ("xml", "XML"),
         ("json", "JSON"),
-        ("shell", "Shell"),
+        ("shellscript", "Shell"),
         ("makefile", "Makefile"),
         ("c", "C"),
         ("cpp", "C++"),
@@ -32,6 +34,25 @@ public static class SyntaxLanguageRegistry
         ("markdown", "Markdown"),
         ("yaml", "YAML"),
         ("dts", "DTS"),
+        ("python", "Python"),
+        ("javascript", "JavaScript"),
+        ("typescript", "TypeScript"),
+        ("java", "Java"),
+        ("kotlin", "Kotlin"),
+        ("go", "Go"),
+        ("rust", "Rust"),
+        ("ruby", "Ruby"),
+        ("php", "PHP"),
+        ("swift", "Swift"),
+        ("sql", "SQL"),
+        ("css", "CSS"),
+        ("html", "HTML"),
+        ("powershell", "PowerShell"),
+        ("batch", "Batch"),
+        ("toml", "TOML"),
+        ("asm", "Assembly"),
+        ("diff", "Diff"),
+        ("log", "Log"),
     ];
 
     /// <summary>
@@ -54,17 +75,36 @@ public static class SyntaxLanguageRegistry
 
         return Path.GetExtension(fileNameOrPath).ToLowerInvariant() switch
         {
-            ".prop" or ".properties" or ".rc" or ".ini" => "ini",
+            ".prop" or ".properties" or ".rc" or ".ini" or ".cfg" or ".conf" => "ini",
             ".xml" => "xml",
             ".json" => "json",
-            ".sh" => "shell",
-            ".mk" => "makefile",
+            ".sh" or ".bash" => "shellscript",
+            ".mk" or ".mak" => "makefile",
             ".c" or ".h" => "c",
-            ".cpp" or ".cc" => "cpp",
+            ".cpp" or ".cc" or ".cxx" or ".c++" or ".hpp" or ".hxx" or ".inl" or ".ipp" => "cpp",
             ".cs" => "csharp",
-            ".md" => "markdown",
+            ".md" or ".markdown" => "markdown",
             ".yaml" or ".yml" => "yaml",
-            ".dts" or ".dtsi" => "dts",
+            ".dts" or ".dtsi" or ".dtso" => "dts",
+            ".toml" => "toml",
+            ".asm" or ".inc" or ".s" => "asm",
+            ".py" or ".pyw" or ".pyi" => "python",
+            ".js" or ".mjs" or ".cjs" or ".jsx" => "javascript",
+            ".ts" or ".tsx" or ".mts" or ".cts" => "typescript",
+            ".java" => "java",
+            ".kt" or ".kts" => "kotlin",
+            ".go" => "go",
+            ".rs" => "rust",
+            ".rb" or ".rake" or ".gemspec" => "ruby",
+            ".php" => "php",
+            ".swift" => "swift",
+            ".sql" => "sql",
+            ".css" or ".scss" or ".less" => "css",
+            ".html" or ".htm" or ".xhtml" => "html",
+            ".ps1" or ".psm1" or ".psd1" => "powershell",
+            ".bat" or ".cmd" => "batch",
+            ".diff" or ".patch" => "diff",
+            ".log" => "log",
             _ => null
         };
     }
