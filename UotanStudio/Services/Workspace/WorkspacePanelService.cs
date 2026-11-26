@@ -88,6 +88,20 @@ public sealed partial class WorkspacePanelService : ObservableObject
         WeakReferenceMessenger.Default.Register<WorkspacePanelService, LanguageStateChangedMessage>(
             this, static (service, _) => service.RefreshLocalizedTitles());
 
+    /// <summary>
+    /// Clears the process-wide panel registry, main root and terminal dock so isolated tests start from a
+    /// clean slate; production code never calls this.
+    /// <para>清除进程级面板注册表、主根与终端停靠区，使隔离测试从干净状态开始；生产代码不会调用。</para>
+    /// </summary>
+    internal void ResetForTests()
+    {
+        _panels.Clear();
+        _titledDockables.Clear();
+        _mainRoot = null;
+        _terminals = null;
+        TerminalVisible = false;
+    }
+
     internal Dictionary<string, bool> CaptureVisibility()
     {
         var visibility = _panels.Keys.ToDictionary(key => key, IsPanelVisible);

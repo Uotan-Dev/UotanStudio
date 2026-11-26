@@ -10,8 +10,11 @@ internal static class ExplorerExpansionState
     /// <summary>
     /// Lists the expanded directories below <paramref name="rootDirectory"/> as <c>/</c>-separated relative
     /// paths sorted ordinally; collapsed, placeholder and out-of-root nodes are skipped.
+    /// A collapsed directory hides its whole subtree, so nothing below it is listed even when it was expanded
+    /// earlier: restoring the stored paths then leaves that directory collapsed.
     /// <para>按序数排序列出 <paramref name="rootDirectory"/> 下已展开目录的 <c>/</c> 分隔相对路径；
-    /// 折叠节点、占位节点与根外节点不会列出。</para>
+    /// 折叠节点、占位节点与根外节点不会列出。折叠目录会隐藏整棵子树，因此即使其中的子目录先前展开过也不会列出，
+    /// 还原后该目录保持折叠。</para>
     /// </summary>
     /// <param name="roots">Explorer tree roots to walk. <para>要遍历的资源管理器树根。</para></param>
     /// <param name="rootDirectory">Directory the stored paths are relative to. <para>存储路径所相对的目录。</para></param>
@@ -29,16 +32,17 @@ internal static class ExplorerExpansionState
 
         void Visit(ExplorerNode node)
         {
-            if (!node.IsDirectory || node.IsPlaceholder)
+            if (!node.IsDirectory || node.IsPlaceholder || !node.IsExpanded)
             {
                 return;
             }
 
-            if (node.IsExpanded && TryGetRelativePath(node.Path, root) is { Length: > 0 } relative)
+            if (TryGetRelativePath(node.Path, root) is not { Length: > 0 } relative)
             {
-                paths.Add(relative);
+                return;
             }
 
+            paths.Add(relative);
             foreach (var child in node.Children)
             {
                 Visit(child);

@@ -141,7 +141,7 @@ public sealed class ProjectOperationsService
             state[DeliveryPlanStore.StateKey] = kept;
         var panels = WorkspacePanelService.Instance.CaptureVisibility();
         state[PanelStateKey] = JsonSerializer.SerializeToElement(panels, AppSettingsJsonContext.Default.DictionaryStringBoolean);
-        if (ProjectExplorer is { } explorer && explorer.CaptureExpandedPaths() is { Count: > 0 } expanded)
+        if (ProjectExplorer is { } explorer && explorer.CaptureExpandedPaths() is { } expanded)
             state[ExplorerStateKey] = JsonSerializer.SerializeToElement(expanded, AppSettingsJsonContext.Default.ListString);
         else if (_session.SolutionState is { } previousState && previousState.TryGetValue(ExplorerStateKey, out var keptExplorer))
             state[ExplorerStateKey] = keptExplorer;
