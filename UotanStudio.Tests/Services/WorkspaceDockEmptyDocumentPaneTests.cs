@@ -6,6 +6,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Workspace panel state")]
 public sealed class WorkspaceDockEmptyDocumentPaneTests
 {
     [Fact]

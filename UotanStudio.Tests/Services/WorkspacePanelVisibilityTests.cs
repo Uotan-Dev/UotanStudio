@@ -8,6 +8,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
+[Collection("Workspace panel state")]
 public sealed class WorkspacePanelVisibilityTests
 {
     private sealed class HeadlessWorkspaceDockFactory() : WorkspaceDockFactory(new AiSettingsViewModel())

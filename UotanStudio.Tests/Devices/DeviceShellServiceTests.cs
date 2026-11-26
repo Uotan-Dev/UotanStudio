@@ -4,6 +4,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Devices;
 
+[Collection("Workspace panel state")]
 public sealed class DeviceShellServiceTests
 {
     [Theory]

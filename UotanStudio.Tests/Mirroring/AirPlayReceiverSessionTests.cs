@@ -9,6 +9,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Mirroring;
 
+[Collection("AirPlay loopback listener")]
 public sealed class AirPlayReceiverSessionTests
 {
     private sealed record RtspReply(int Status, string Headers, byte[] Body);
@@ -133,9 +134,16 @@ public sealed class AirPlayReceiverSessionTests
         ["sdk"] = "310.10",
     });
 
+    private static int FreePort()
+    {
+        using var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        return ((IPEndPoint)probe.LocalEndpoint).Port;
+    }
+
     private static MirrorSessionFacade StartFacade(List<string> log)
         => MirrorSessionFacade.FromAirPlay(MirrorSessionFacade.StartAirPlayReceiver(
-            new AirPlayOptions { RtspPort = 0, Advertise = false }, text => log.Add(text)));
+            new AirPlayOptions { RtspPort = FreePort(), Advertise = false }, text => log.Add(text)));
 
     private static TcpClient Connect(MirrorSessionFacade facade)
     {
@@ -193,7 +201,7 @@ public sealed class AirPlayReceiverSessionTests
     public void Handshake_AnnounceWithEkeyWithoutKeyMaterial_ReturnsForbidden()
     {
         using var facade = MirrorSessionFacade.FromAirPlay(
-            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { Advertise = false }));
+            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { RtspPort = FreePort(), Advertise = false }));
         facade.Connect();
         using var client = Connect(facade);
         using var stream = client.GetStream();
@@ -207,7 +215,7 @@ public sealed class AirPlayReceiverSessionTests
     public void InterleavedVideo_AfterHandshake_ReadFrameReturnsConfigurationAndKeyFrame()
     {
         using var facade = MirrorSessionFacade.FromAirPlay(
-            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { Advertise = false }));
+            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { RtspPort = FreePort(), Advertise = false }));
         facade.Connect();
         using var client = Connect(facade);
         using var stream = client.GetStream();
@@ -235,7 +243,7 @@ public sealed class AirPlayReceiverSessionTests
     public void ReadFrame_NoMediaArrived_ReturnsNullAfterTimeout()
     {
         using var facade = MirrorSessionFacade.FromAirPlay(
-            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { Advertise = false }));
+            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { RtspPort = FreePort(), Advertise = false }));
         facade.Connect();
 
         var frame = facade.ReadFrame(50);
@@ -247,7 +255,7 @@ public sealed class AirPlayReceiverSessionTests
     public void Handshake_PostPairVerify_ReturnsNotImplemented()
     {
         using var facade = MirrorSessionFacade.FromAirPlay(
-            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { Advertise = false }));
+            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { RtspPort = FreePort(), Advertise = false }));
         facade.Connect();
         using var client = Connect(facade);
         using var stream = client.GetStream();
@@ -261,7 +269,7 @@ public sealed class AirPlayReceiverSessionTests
     public void Handshake_UnknownMethod_ReturnsMethodNotAllowed()
     {
         using var facade = MirrorSessionFacade.FromAirPlay(
-            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { Advertise = false }));
+            MirrorSessionFacade.StartAirPlayReceiver(new AirPlayOptions { RtspPort = FreePort(), Advertise = false }));
         facade.Connect();
         using var client = Connect(facade);
         using var stream = client.GetStream();

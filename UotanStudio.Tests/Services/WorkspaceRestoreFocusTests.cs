@@ -1,6 +1,7 @@
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Pipeline.Projects;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
@@ -9,8 +10,17 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
-public sealed class WorkspaceRestoreFocusTests
+[Collection("Workspace panel state")]
+public sealed class WorkspaceRestoreFocusTests : IDisposable
 {
+    public WorkspaceRestoreFocusTests() => WorkspacePanelService.Instance.ResetForTests();
+
+    public void Dispose()
+    {
+        WorkspacePanelService.Instance.ResetForTests();
+        GC.SuppressFinalize(this);
+    }
+
     private sealed class HeadlessWorkspaceDockFactory() : WorkspaceDockFactory(new AiSettingsViewModel())
     {
         protected override IHostWindow CreateHostWindow() => null!;

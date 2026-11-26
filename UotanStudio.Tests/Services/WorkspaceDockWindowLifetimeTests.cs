@@ -10,8 +10,17 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
-public sealed class WorkspaceDockWindowLifetimeTests
+[Collection("Workspace panel state")]
+public sealed class WorkspaceDockWindowLifetimeTests : IDisposable
 {
+    public WorkspaceDockWindowLifetimeTests() => WorkspacePanelService.Instance.ResetForTests();
+
+    public void Dispose()
+    {
+        WorkspacePanelService.Instance.ResetForTests();
+        GC.SuppressFinalize(this);
+    }
+
     private sealed class HeadlessWorkspaceDockFactory() : WorkspaceDockFactory(new AiSettingsViewModel())
     {
         protected override IHostWindow CreateHostWindow() => null!;
