@@ -223,13 +223,37 @@ public sealed partial class MtkSession
         MtkXFlashStorageKind storageKind, CancellationToken token)
     {
         var nor = await ReadAsync(28, _timeoutMs, token).ConfigureAwait(false);
-        var nand = await ReadAsync(options.NandSize64Bit ? 17 : 13, _timeoutMs, token).ConfigureAwait(false);
-        var count = BinaryPrimitives.ReadUInt16BigEndian(nand.AsSpan(nand.Length - 2));
-        if (count > 256)
+        var nandInventory = await ReadAsync(17, _timeoutMs, token).ConfigureAwait(false);
+        var size64Bit = BinaryPrimitives.ReadUInt16BigEndian(nandInventory.AsSpan(15)) != 0;
+        byte[] nandIds;
+        if (size64Bit)
         {
-            throw new MtkProtocolException("The Legacy NAND ID count exceeds the supported limit.");
+            var count = BinaryPrimitives.ReadUInt16BigEndian(nandInventory.AsSpan(15));
+            if (count > 256)
+            {
+                throw new MtkProtocolException("The Legacy NAND ID count exceeds the supported limit.");
+            }
+
+            nandIds = await ReadAsync(count * 2, _timeoutMs, token).ConfigureAwait(false);
         }
-        var nandIds = await ReadAsync(count * 2, _timeoutMs, token).ConfigureAwait(false);
+        else
+        {
+            var count32 = BinaryPrimitives.ReadUInt16BigEndian(nandInventory.AsSpan(11));
+            if (count32 > 256)
+            {
+                throw new MtkProtocolException("The Legacy NAND ID count exceeds the supported limit.");
+            }
+
+            var leading = nandInventory.AsSpan(13, 4);
+            nandIds = new byte[count32 * 2];
+            var overlap = Math.Min(leading.Length, nandIds.Length);
+            leading[..overlap].CopyTo(nandIds);
+            if (nandIds.Length > overlap)
+            {
+                var rest = await ReadAsync(nandIds.Length - overlap, _timeoutMs, token).ConfigureAwait(false);
+                rest.CopyTo(nandIds.AsSpan(overlap));
+            }
+        }
         var nandDetails = await ReadAsync(9, _timeoutMs, token).ConfigureAwait(false);
         var emmc = await ReadAsync(92, _timeoutMs, token).ConfigureAwait(false);
         _ = await ReadAsync(28, _timeoutMs, token).ConfigureAwait(false);
@@ -252,7 +276,8 @@ public sealed partial class MtkSession
         var storage = storageKind switch
         {
             MtkXFlashStorageKind.Nor => MtkLegacyStorageInfo.ParseNor(nor),
-            MtkXFlashStorageKind.Nand => MtkLegacyStorageInfo.ParseNand(nand, nandIds, nandDetails, options.NandSize64Bit),
+            MtkXFlashStorageKind.Nand => MtkLegacyStorageInfo.ParseNand(
+                nandInventory, nandIds, nandDetails, size64Bit),
             _ => MtkLegacyStorageInfo.Parse(emmc)
         };
         LegacyCompletion = completion;

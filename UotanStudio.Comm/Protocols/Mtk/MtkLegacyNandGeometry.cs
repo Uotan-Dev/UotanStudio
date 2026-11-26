@@ -81,7 +81,7 @@ public sealed class MtkLegacyNandGeometry
     internal static MtkLegacyNandGeometry Parse(ReadOnlySpan<byte> inventory, ReadOnlySpan<byte> ids,
         ReadOnlySpan<byte> details, bool size64Bit)
     {
-        if (inventory.Length != (size64Bit ? 17 : 13) || details.Length != 9)
+        if (inventory.Length != 17 || details.Length != 9)
         {
             throw new MtkProtocolException("The Legacy NAND inventory has an invalid length.");
         }
@@ -90,7 +90,8 @@ public sealed class MtkLegacyNandGeometry
         {
             throw new MtkProtocolException("Legacy NAND initialization failed.", status);
         }
-        var count = BinaryPrimitives.ReadUInt16BigEndian(inventory[^2..]);
+        var countOffset = size64Bit ? 15 : 11;
+        var count = BinaryPrimitives.ReadUInt16BigEndian(inventory[countOffset..]);
         var capacity = size64Bit
             ? BinaryPrimitives.ReadUInt64BigEndian(inventory[7..])
             : BinaryPrimitives.ReadUInt32BigEndian(inventory[7..]);

@@ -20,15 +20,21 @@ public sealed record MtkLegacyOptions
     /// </value>
     public string? StageOneResponseHex { get; init; }
 
-    /// <summary>Gets whether the inventory uses a 64-bit rather than 32-bit NAND size.
-    /// <para>获取清单是否使用 64 位而非 32 位 NAND 容量。</para></summary>
+    /// <summary>Gets a retained, superseded preference for the NAND capacity width.
+    /// <para>获取一个保留但已被取代的 NAND 容量宽度偏好。</para></summary>
     /// <value>
-    /// False by default and applied only to the NAND family; the total inventory byte count is the same
-    /// for either layout, so the flag selects how the size field is parsed. It is not inferred from a
-    /// zero ID count.
-    /// <para>默认为 false，仅作用于 NAND 家族；两种布局的清单一字节数相同，本标志决定容量字段如何解析。
-    /// 不根据零 ID 数量推测。</para>
+    /// Ignored by the inventory reader, which always requests the 64-bit form and treats a zero identifier
+    /// count as the protocol's own 32-bit marker, as the vendor tool does.
+    /// <para>清单读取器忽略该值：它始终按 64 位形式读取，并把标识数量为零当作协议自身的 32 位标记，
+    /// 这与厂商工具的做法一致。</para>
     /// </value>
+    /// <remarks>
+    /// The flag cannot distinguish the two layouts from outside: the inventory byte count is identical, so a
+    /// caller that guessed wrong shifted every later field by four bytes. It stays declared so existing
+    /// initialisers keep compiling, and it no longer selects anything.
+    /// <para>该标志无法从外部区分两种布局：清单一字节数完全相同，调用方猜错就会让之后每个字段偏移四字节。
+    /// 保留声明只为让既有初始化代码继续编译，它已不再选择任何行为。</para>
+    /// </remarks>
     public bool NandSize64Bit { get; init; }
 
     /// <summary>Gets the host platform byte used in read commands.

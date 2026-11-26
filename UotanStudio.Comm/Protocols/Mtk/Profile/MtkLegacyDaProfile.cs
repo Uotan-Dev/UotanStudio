@@ -81,7 +81,7 @@ public sealed record MtkLegacyDaProfile
             ObservedStageOneResponseHex = observedStageOneResponseHex,
             Completion = options.CompletionProfile,
             NandSize64Bit = options.NandSize64Bit,
-            AgentPacketLength = options.AgentPacketLength
+            AgentPacketLength = options.AgentPacketLength,
         };
     }
 
