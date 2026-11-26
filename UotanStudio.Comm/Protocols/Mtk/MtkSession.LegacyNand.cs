@@ -43,7 +43,8 @@ public sealed partial class MtkSession
             var length = options.GetTransferLength(geometry, mainLength);
             var recordSize = options.GetRecordSize(geometry);
             var header = options.CreateHeader(geometry, offset, mainLength, length);
-            var packetLength = recordSize * options.PagesPerPacket;
+            var maximumPacketLength = recordSize * options.PagesPerPacket;
+            var packetLength = maximumPacketLength;
             cancellationToken.ThrowIfCancellationRequested();
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadline.CancelAfter(timeoutMs);
@@ -53,20 +54,24 @@ public sealed partial class MtkSession
                 await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
                 await RequireLegacyByteAsync(0x5A, "NAND readback header", token).ConfigureAwait(false);
                 var parameters = await ReadAsync(12, _timeoutMs, token).ConfigureAwait(false);
-                if (BinaryPrimitives.ReadUInt32BigEndian(parameters) != geometry.PageSize
-                    || BinaryPrimitives.ReadUInt32BigEndian(parameters.AsSpan(4)) != geometry.SpareSize
-                    || BinaryPrimitives.ReadUInt32BigEndian(parameters.AsSpan(8)) != recordSize)
+                var agentPageSize = BinaryPrimitives.ReadUInt32BigEndian(parameters);
+                var agentSpareSize = BinaryPrimitives.ReadUInt32BigEndian(parameters.AsSpan(4));
+                var agentPacketLength = BinaryPrimitives.ReadUInt32BigEndian(parameters.AsSpan(8));
+                if (agentPageSize != geometry.PageSize || agentSpareSize != geometry.SpareSize)
                 {
-                    throw new MtkProtocolException("The Legacy NAND readback geometry or page record size does not match the selected layout.");
+                    throw new MtkProtocolException("The Legacy NAND readback geometry does not match the selected layout.");
                 }
+
+                if (agentPacketLength == 0 || agentPacketLength > maximumPacketLength)
+                {
+                    throw new MtkProtocolException("The Legacy NAND readback packet length is outside the selected page layout.");
+                }
+
+                packetLength = (int)agentPacketLength;
                 var pages = new byte[4];
                 BinaryPrimitives.WriteUInt32BigEndian(pages, (uint)options.PagesPerPacket);
                 await WriteAsync(pages, _timeoutMs, token).ConfigureAwait(false);
-                var total = BinaryPrimitives.ReadUInt64BigEndian(await ReadAsync(8, _timeoutMs, token).ConfigureAwait(false));
-                if (total != (ulong)length)
-                {
-                    throw new MtkProtocolException("The Legacy NAND total readback length does not match the requested page span.");
-                }
+                _ = await ReadAsync(4, _timeoutMs, token).ConfigureAwait(false);
                 var packet = new byte[packetLength];
                 var checksumBytes = new byte[2];
                 for (long transferred = 0; transferred < length;)

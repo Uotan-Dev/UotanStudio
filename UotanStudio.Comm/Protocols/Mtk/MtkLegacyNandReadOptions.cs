@@ -145,13 +145,31 @@ public sealed record MtkLegacyNandReadOptions
     {
         Validate();
         geometry.ValidateRange(offset, mainLength, LogicalCapacityBytes ?? geometry.CapacityBytes);
-        var bytes = new byte[23];
+        if ((ulong)offset + (ulong)mainLength > uint.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset),
+                "The Legacy NAND read range must fit the 32-bit address and length fields of this command.");
+        }
+
+        var bytes = new byte[15];
         bytes[0] = 0xDF;
-        bytes[1] = (byte)Mode;
-        bytes[2] = (byte)AddressType;
-        BinaryPrimitives.WriteUInt64BigEndian(bytes.AsSpan(3), (ulong)offset);
-        BinaryPrimitives.WriteUInt64BigEndian(bytes.AsSpan(11),
-            (ulong)(LengthUnit == MtkLegacyNandLengthUnit.MainAreaBytes ? mainLength : streamLength));
+        bytes[1] = LegacyHostOsByte;
+        bytes[2] = (byte)Mode;
+        bytes[3] = (byte)AddressType;
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(4), (uint)offset);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(8),
+            (uint)(LengthUnit == MtkLegacyNandLengthUnit.MainAreaBytes ? mainLength : streamLength));
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(11), 0);
         return bytes;
     }
+
+    /// <summary>The host-identity byte every Legacy NAND read frame carries after its command byte.
+    /// <para>每个 Legacy NAND 读帧在命令字节之后携带的主机标识字节。</para></summary>
+    /// <remarks>
+    /// The download agent takes a host discriminator here and the protocol uses 32-bit address and length
+    /// fields; the command is not the 64-bit storage form used by the eMMC and NOR readers.
+    /// <para>下载代理在此处接受一个主机区分字节，且协议使用 32 位地址与长度字段；该命令不是 eMMC 与 NOR
+    /// 读取器所用的 64 位存储形式。</para>
+    /// </remarks>
+    internal const byte LegacyHostOsByte = 0x0C;
 }
