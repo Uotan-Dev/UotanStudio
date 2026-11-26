@@ -9,7 +9,7 @@
 - 新增 ViewModel 必须登记到 `ViewModelViewRegistry`（AOT 安全、无反射）；新增编辑器还要登记 `DocumentOpenRegistry`，它同时是打开派发、会话恢复、清理与“打开方式”菜单的唯一来源。
 - 新增 XAML 使用当前 Avalonia API 与编译绑定（`AvaloniaUseCompiledBindingsByDefault=true`），避免已标记 obsolete 的属性，不要退回反射绑定。`IsRidAgnostic=false` 用于保留 Comm 原生资产的 RID，`AllowUnsafeBlocks` 用于 `FileAssociationService` 的源生成 `LibraryImport`，都不要顺手删。
 - 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常；ViewModel 层 async void 方法若方法体全程自捕获异常并送入统一日志，亦属合法形态。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
-- 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。`Register` 是应用级单例的完整目录，新增应用级单例要同时补注册，否则 `ServiceHub` 解析不到它。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities`、无工厂的 `AddSingleton<T>()` 与开放泛型注册：宿主视图模型的内部构造函数与公共无参构造函数并存，类型映射会静默选中无参重载而丢掉已注册依赖；开放泛型在 NativeAOT 下到运行时才失败且没有编译诊断。`BuildProvider` 仅在 Debug 下开 `ValidateOnBuild`，它只校验描述符级映射，工厂注册的依赖完整性由 `ServiceRegistrationTests.Register_EveryRegistration_Resolves` 覆盖，注册形态由 `DependencyInjectionBoundaryGuardTests` 冻结；发布验证仍按根 `AGENTS.md` 的命令执行。
+- 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。`Register` 是应用级单例的完整目录，新增应用级单例要同时补注册，否则 `ServiceHub` 解析不到它。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities`、无工厂的 `AddSingleton<T>()` 与开放泛型注册：宿主视图模型的内部构造函数与公共无参构造函数并存，类型映射会静默选中无参重载而丢掉已注册依赖；开放泛型在 NativeAOT 下到运行时才失败且没有编译诊断。`BuildProvider` 仅在 Debug 下开 `ValidateOnBuild`，它只校验描述符级映射，工厂注册的依赖完整性目前只由 `DependencyInjectionBoundaryGuardTests` 冻结注册形态（`ServiceRegistrationTests` 已随测试精简删除，没有解析级覆盖）；发布验证仍按根 `AGENTS.md` 的命令执行。
 - 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回惰性默认实例；不启动容器的测试可直接运行。四个门面各自的 `Default` 只返回惰性默认实例、不查容器，`ServiceRegistration` 的注册工厂必须使用 `Default`：容器直接解析该类型时，工厂若调用 `Instance`，门面会经 `ServiceHub` 再次解析同一类型，被 DI 判为循环依赖。
 - USB 树的「启用接管」「安装驱动」等驱动操作都以管理员令牌执行：`Services/Devices/UsbDriverConfigService` 在未提权时用 `runas` 重启自身进入 `--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall` 助手模式（参数与结果文件格式见 `UsbDriverElevatedCommand`），等待子进程并读回状态；UAC 被取消或宿主无法重启自身时返回 `ElevationRequired`，界面沿用原有提示。
 - 厂商驱动包只在 USB 树安装：行内「安装驱动」按钮由 `DriverPackageCatalog.FindMatch` 按设备硬件/兼容 ID 与包内 INF 声明的 ID 相交匹配，且仅在设备尚未绑定驱动时显示；安装走 Comm 的厂商包暂存入口，只对无驱动设备生效，不做危险确认。接管走 Comm 的自签 WinUSB 包（设备级 INF、目录签名、证书写入 `LocalMachine` 的 Root 与 TrustedPublisher），宿主不生成证书也不持有私钥；取消接管按绑定的 provider 校验后卸载包并删除证书。设置页不提供驱动安装界面，也不要把厂商包安装或移除加回设置页。
@@ -24,7 +24,7 @@
 
 ## UI、本地化与编辑器
 
-- 本地化资源固定为 `Locale/` 下 7 个 `.resx` 模块；中英 key 集合必须一致，同一语言内 key 必须唯一。改 key 要同步 `Locale/LocaleKeySets.cs`；`LocaleDictionaryTests` 会比对生成索引与 resx。
+- 本地化资源固定为 `Locale/` 下 7 个 `.resx` 模块；中英 key 集合必须一致，同一语言内 key 必须唯一。改 key 要同步 `Locale/LocaleKeySets.cs`；key 集合的一致性目前**没有自动化测试**守护，只能靠评审与构建（源生成器从 `AdditionalFiles` 读 `.resx`）。
 - `.resx` 只作为 `AdditionalFiles` 并从 SDK 默认 `EmbeddedResource` glob 移除，否则会生成 satellite assembly。UI 可见文本只走资源字典，不能在界面中拼接中英文。
 - 已生成脚本文本只在生成时确定语言；切换界面语言不得改写已生成内容。
 - 编辑器明确选择“按文本打开”时必须保持文本模式（`EditorOpenMode.Text`），即使文件含 NUL 或使用二进制扩展名；只有 `Auto` 才允许按扩展名或内容探测。
@@ -42,7 +42,7 @@
 - 渲染后端与合成模式是启动期设置：设置页只写 `renderingBackend`/`renderingCompositionMode` 并提示重启，桌面入口在下一次启动时转换平台选项；"自动"项展示当前进程实际使用的后端与合成宿主（`RenderingRuntimeProbe`，经保留的解析器反射读取），Wayland 下不提供可选项。
 - MCP 暴露由 `McpExposureService` 启动：只监听 `127.0.0.1`；沙箱根为空或无法规范化时回退不受限沙箱，并强制关闭刷写门控；签名经 `DeliveryKeyProvider`。
 - `KeyLibraryService`（`%AppData%/UotanStudio/keys`）是密钥生成/导入/导出的唯一路径；发布与导出使用不覆盖语义，不得覆盖已有密钥或证书。
-- 节点身份与工厂只来自 `NodeFactoryRegistrar`；内置节点数被 `NodeCatalogReductionTests` 冻结为 97，增删节点要同步基线并通过 `NodeSchemaPortCoverageTests`。
+- 节点身份与工厂只来自 `NodeFactoryRegistrar`；内置节点数当前**没有**测试冻结（曾被引用的 `NodeCatalogReductionTests`、`NodeSchemaPortCoverageTests` 已随测试精简删除），增删节点须人工核对 `NodeFactoryRegistrar.BuiltInTypeKeys` 与插件注册的一致性。
 
 ## 启动与呈现
 
@@ -62,9 +62,8 @@
 
 ```text
 dotnet build UotanStudio.slnx --no-restore --nologo -c Debug
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.LocaleDictionaryTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.ProjectOperationsBoundaryTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.NodeCatalogReductionTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Architecture --minimum-expected-tests 1
 ```
 
 - 触摸全局窗口、Dock、XAML 渲染或真实 FolderPicker 的改动没有可靠的自动化覆盖，必须人工验证，不能把编译通过写成界面已验证。
+- `UotanStudio.Tests.Services` 里的 `WorkspaceDockEmptyDocumentPaneTests` 与 `WorkspaceDockWindowLifetimeTests` 在整命名空间并行跑时稳定失败 2–3 项（单跑各自全通过），所以不要把它整段当作门禁；需要时按类单跑。

@@ -133,7 +133,7 @@ Targeted runs use the native xunit.v3 filters:
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build \
   --filter-class UotanStudio.Tests.Firmware.ErofsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build \
-  --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
+  --filter "FullyQualifiedName~HashBoundaryGuardTests" --minimum-expected-tests 1
 ```
 
 Benchmarks run on their own:

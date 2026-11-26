@@ -41,7 +41,7 @@
 
 ```text
 dotnet build UotanStudio.Mirroring/UotanStudio.Mirroring.csproj --nologo
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Media.OhscrcpyProtocolTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.OhscrcpyControlChannelTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.OhscrcpyServerManagerTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.OhscrcpyClientTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyToOhscrcpyControlAdapterTests --minimum-expected-tests 1
@@ -50,11 +50,12 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyClientConnectTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyServerProtocolOptionsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Devices.HdcSessionRoutingTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Mirroring --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyControlMessageTests --minimum-expected-tests 1
 ```
 
-- 单元验证范围：gRPC 帧与 `ReplyMessage` 解析、SPS 几何（`UotanStudio.Tests.Media.OhscrcpyProtocolTests`）；控制代理/采集库选择与设备启动命令构造（`OhscrcpyServerManagerTests`）；客户端 gRPC 解复用、视频元数据与控制分发（`OhscrcpyClientTests`）；scrcpy 控制消息到 UI Test JSON/uinput 的映射（`ScrcpyToOhscrcpyControlAdapterTests`）；facade 参数、端口与采集参数校验（`MirrorSessionFacadeTests`）；HDC 会话路由决策（`UotanStudio.Tests.Devices.HdcSessionRoutingTests`，覆盖 server 拥有目标、无 server 与 ServerOnly 拒绝直连）。
-- 直连控制/转发全链路（`fport` → gRPC/UI Test JSON）只由受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖（接受 connect key 或 `host:port`）。HDC server 占用目标时直连会被 Comm 的 fail-closed USB 策略拒绝；跳过或失败都不算通过。
-- server 会话的投屏链路（server 路由的 shell 探测、sync 文件推送与 `fport` 回退）不在 `OhscrcpyHdcIntegrationTests` 的覆盖范围内（该测试只覆盖直连端点）；推送、转发与控制没有硬件通过记录，不能写成已验证。
+- 单元验证范围：gRPC 帧与 `ReplyMessage` 解析、SPS 几何（`UotanStudio.Tests.Mirroring.OhscrcpyControlChannelTests`；原名 `UotanStudio.Tests.Media.OhscrcpyProtocolTests` 的类已随测试精简删除）；控制代理/采集库选择与设备启动命令构造（`OhscrcpyServerManagerTests`）；客户端 gRPC 解复用、视频元数据与控制分发（`OhscrcpyClientTests`）；scrcpy 控制消息到 UI Test JSON/uinput 的映射（`ScrcpyToOhscrcpyControlAdapterTests`）；facade 参数、端口与采集参数校验（`MirrorSessionFacadeTests`）；HDC 会话路由决策（`UotanStudio.Tests.Devices.HdcSessionRoutingTests`，覆盖 server 拥有目标、无 server 与 ServerOnly 拒绝直连）。
+- 直连控制/转发全链路（`fport` → gRPC/UI Test JSON）原本只由受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖，该类已随测试精简删除，当前**没有任何自动化覆盖**。
+- server 会话的投屏链路（server 路由的 shell 探测、sync 文件推送与 `fport` 回退）从未被自动化覆盖；推送、转发与控制没有硬件通过记录，不能写成已验证。
 - scrcpy 的真实投屏结论目前来自模拟器回环端口；设备→客户端剪贴板推送未在硬件上观察到，不能写成已验证。缺少 `Desktop/Assets/scrcpy-server.jar` 时，出厂摘要测试按 `VERIFICATION.md` 的说明跳过而非通过。
+- 不要用 `--filter-namespace UotanStudio.Tests.Mirroring` 当门禁：`AirPlayReceiverSessionTests` 会绑定 `TcpListener`，在受限主机上以 `SocketException`（访问套接字被拒绝）失败 5 项，属环境限制而非产品缺陷；该命名空间请按类单跑，跳过 AirPlay 接收端相关类。
 - HDC 视频路径未在本机硬件验证：采集库需要设备侧匹配的 protobuf/gRPC ABI（模拟器还缺 `libgrpc.z.so`），`dlopen` 失败时视频解码/播放与 UI 渲染都不可用；设备库随包分发只代表文件存在，不代表可加载，不能写成已验证。

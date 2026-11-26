@@ -33,9 +33,8 @@
 
 ```text
 dotnet build UotanStudio.Mcp/UotanStudio.Mcp.csproj --nologo
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.McpToolCatalogTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.McpSandboxTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.McpHttpExposureTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.Net11McpSearchTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Architecture --minimum-expected-tests 1
 ```
 
-- 这些类属于 `"MCP tool generation"` collection，必须保持串行。NativeAOT 下 `tools/list` 数量未按当前源码重测，不能写成已验证。
+- 工具目录、沙箱与 HTTP 暴露曾由 `McpToolCatalogTests`、`McpSandboxTests`、`McpHttpExposureTests` 覆盖，这些类已随测试精简删除；`"MCP tool generation"` collection 也不复存在。当前只有 `Net11McpSearchTests` 的检索契约测试，工具目录/沙箱/HTTP 暴露没有自动化门禁，改动须人工评审。NativeAOT 下 `tools/list` 数量未按当前源码重测，不能写成已验证。

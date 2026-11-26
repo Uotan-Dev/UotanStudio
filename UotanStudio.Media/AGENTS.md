@@ -29,7 +29,7 @@
 
 ```text
 dotnet build UotanStudio.Media/UotanStudio.Media.csproj --nologo
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Media.VideoDecoderFactoryTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Media.FallbackVideoDecoderTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Media.Nv12ToBgraConverterTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Mirroring --minimum-expected-tests 1
 ```
+
+- `UotanStudio.Tests.Media` 命名空间当前没有任何测试：`VideoDecoderFactoryTests`、`FallbackVideoDecoderTests`、`Nv12ToBgraConverterTests` 已随测试精简删除。Media 的解码工厂、回退与 NV12 转换没有自动化门禁，改动须人工评审；上一条 `UotanStudio.Tests.Mirroring` 只覆盖消费 `ScrcpyVideoFrame` 的一侧。

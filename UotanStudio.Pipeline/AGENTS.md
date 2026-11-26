@@ -63,12 +63,11 @@
 ```text
 dotnet build UotanStudio.Pipeline/UotanStudio.Pipeline.csproj --nologo
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Delivery --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Projects --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.ProjectOperationsBoundaryTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Architecture --minimum-expected-tests 1
 ```
 
-- 交付测试住在唯一测试宿主的 `UotanStudio.Tests/Delivery/`（命名空间 `UotanStudio.Tests.Delivery`），工程测试住在 `UotanStudio.Tests/Projects/`（命名空间 `UotanStudio.Tests.Projects`）。
-- 工程测试使用独立会话和纯数据工作区，不初始化 Avalonia；真实窗口生命周期属于宿主验证，不要在本库测试里启动 Dock 或 UI。
+- 交付测试住在唯一测试宿主的 `UotanStudio.Tests/Delivery/`（命名空间 `UotanStudio.Tests.Delivery`）。工程生命周期的测试曾住在 `UotanStudio.Tests/Projects/`（命名空间 `UotanStudio.Tests.Projects`），这些类已随测试精简删除，该命名空间当前没有任何测试；会话与持久化改动暂无自动化门禁，必须人工评审并跑 `UotanStudio.Tests.Architecture`。
+- 若重新补工程测试，应使用独立会话和纯数据工作区，不初始化 Avalonia；真实窗口生命周期属于宿主验证，不要在本库测试里启动 Dock 或 UI。
 - 交付测试要覆盖失败回滚、取消、超限与字节身份，而不是只断言内部对象往返；把外部工具、真实设备与刷写结果留在仓库外验证。
 
 ## 未验证边界

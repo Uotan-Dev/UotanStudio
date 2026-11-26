@@ -19,8 +19,8 @@
 
 ```text
 dotnet build UotanStudio.RegexInfer/UotanStudio.RegexInfer.csproj --nologo
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.RegexInfer.RegexInferContractTests --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.RegexInfer.RegexInferCandidateInvariantTests --minimum-expected-tests 1
 ```
+
+- 本库当前**没有**自动化测试：`RegexInferContractTests` 与 `RegexInferCandidateInvariantTests` 已随测试精简删除。候选契约、确定性排序与预算边界须人工评审；上文的行为规则仍然有效，但不再有测试兜底。
 
 - 当前没有统一的正则超时或 ReDoS 兜底；在补上之前，不要声称对所有输入都线性、有界或对所有 .NET 版本都等价。

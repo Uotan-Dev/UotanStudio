@@ -9,9 +9,9 @@
 - 定向跑优先用原生简单过滤器 `--filter-class`、`--filter-method`、`--filter-namespace`、`--filter-trait`，并且每条都带 `--minimum-expected-tests 1`，防止选择器失效时把"零测试"当成成功：
 
   ```text
-  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Shell.ChecksumServiceTests --minimum-expected-tests 1
-  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Shell.ChecksumServiceTests.ComputeAsync_KnownVectors_ProducesStandardDigests --minimum-expected-tests 1
-  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
+  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Firmware.Architecture.HashBoundaryGuardTests --minimum-expected-tests 1
+  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Firmware.Architecture.HashBoundaryGuardTests.ProductionSources_NoHashComputationOutsideTheHashLibrary --minimum-expected-tests 1
+  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ErofsTests" --minimum-expected-tests 1
   dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --filter-namespace UotanStudio.Tests.Architecture --minimum-expected-tests 1
   dotnet test --solution UotanStudio.slnx --no-restore
   ```
@@ -30,7 +30,7 @@
 - 本目录不使用行间 `//` 或 `/* */` 注释。跳过原因必须来自代码里的 `Skip = "…"` 文案，夹具意图写在测试名与断言里。
 - 测试不引用整镜像内存型构建 API；需要内存镜像字节时经 `InMemoryImage` 走流式重载构建。生产代码必须走文件路径或流式重载。不要用项目级 `NoWarn` 掩盖生产警告、空引用、裁剪或异步问题。
 - 共享进程全局状态（节点类型注册表、语言服务、`WeakReferenceMessenger`、静态缓存）的测试要显式登记并清理，不能依赖别的类先跑过；单跑一个类必须给出与全量一致的结果，否则算隔离缺陷而不是偶发。
-- 会因首次生成而泄漏环境参数的工具目录测试固定在同一个 collection（`"MCP tool generation"`）里串行。
+- 会因首次生成而泄漏环境参数的测试固定在同一个 `[CollectionDefinition(..., DisableParallelization = true)]` 里串行；现有定义（如 `"Debug bridge route"`、`"Workspace state"`）在各自的测试文件内声明，新增时要按同样方式登记。（原名 `"MCP tool generation"` 的 collection 已随测试精简删除。）
 - 构建镜像并断言 inode 形态、advise 位或镜像字节的用例必须固定时间：给 `ErofsOptions.BuildTime` 一个常量，源时间早于该常量时同时用 `File.SetLastWriteTimeUtc`/`Directory.SetLastWriteTimeUtc` 固定源时间，不得依赖墙钟。构建默认把超级块纪元取作当前秒，源 mtime 早于纪元会命中 `NeedsExtendedInodeTime` 的 `timestamp < epoch` 分支而写成扩展 inode，扩展记录不写 nlink-one/dot-omitted advise 位，于是同一条用例在并行负载下会随机换成另一种布局。
 
 ## 环境门控

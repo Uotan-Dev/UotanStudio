@@ -53,7 +53,7 @@
 dotnet build UotanStudio.slnx --no-restore --nologo -c Debug
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Devices --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Protocols --minimum-expected-tests 1
-dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Services.HeadlessControllerGatewayTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Architecture.DependencyInjectionBoundaryGuardTests --minimum-expected-tests 1
 ```
 
 - 设备 I/O 归属与 scrcpy 分离没有自动架构门禁，只能靠评审；Windows-only 构建与测试不证明 Linux/macOS 后端或 NativeAOT 行为。

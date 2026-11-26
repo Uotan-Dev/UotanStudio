@@ -133,7 +133,7 @@ dotnet test --solution UotanStudio.slnx --no-restore
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build \
   --filter-class UotanStudio.Tests.Firmware.ErofsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build \
-  --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
+  --filter "FullyQualifiedName~HashBoundaryGuardTests" --minimum-expected-tests 1
 ```
 
 基准测试项目独立运行：

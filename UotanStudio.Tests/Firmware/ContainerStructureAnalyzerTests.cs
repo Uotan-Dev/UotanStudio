@@ -32,7 +32,7 @@ public sealed class ContainerStructureAnalyzerTests : IDisposable
         File.WriteAllBytes(Path.Combine(source, "boot.img"), BuildExt4Header(0x1000));
         File.WriteAllBytes(Path.Combine(source, "system.img"), BuildExt4Header(0x4000));
         var pacPath = Path.Combine(_temp.Path, "firmware.pac");
-        PacBuilder.Build(source, pacPath);
+        PacBuilder.Build(source, pacPath, cancellationToken: TestContext.Current.CancellationToken);
 
         var structure = ContainerStructureAnalyzer.Analyze(pacPath);
 
@@ -99,7 +99,7 @@ public sealed class ContainerStructureAnalyzerTests : IDisposable
         File.WriteAllBytes(Path.Combine(source, "boot.img"), BuildExt4Header(0x800));
         File.WriteAllBytes(Path.Combine(source, "system.img"), BuildExt4Header(0x2000));
         var pacPath = Path.Combine(_temp.Path, "firmware.pac");
-        PacBuilder.Build(source, pacPath);
+        PacBuilder.Build(source, pacPath, cancellationToken: TestContext.Current.CancellationToken);
         var outputDirectory = Path.Combine(_temp.Path, "out");
 
         var result = await ContainerEntryExtractor.ExtractAsync(
