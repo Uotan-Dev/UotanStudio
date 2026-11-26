@@ -71,6 +71,7 @@ public sealed record MtkLegacyFlashOperation(int StepIndex, byte PartitionId, lo
 public sealed class MtkLegacyFlashPlan : IDisposable
 {
     private readonly List<PreparedLegacyOperation> _prepared = [];
+    private readonly Dictionary<uint, List<(long Start, long End)>> _occupied = [];
     private readonly List<Stream> _sources = [];
     private readonly Lock _lifecycleGate = new();
     private MtkFlashPlanState _state;
@@ -335,9 +336,62 @@ public sealed class MtkLegacyFlashPlan : IDisposable
             throw new InvalidDataException("The plan exceeds the aggregate executable-extent limit.");
         }
 
+        ReserveExtent(partitionId, offset, length);
         TotalBytes = checked(TotalBytes + length);
         _prepared.Add(new PreparedLegacyOperation(
             new MtkLegacyFlashOperation(index, partitionId, offset, length, erase, verify), source, sourceOffset));
+    }
+
+
+    /// <summary>
+    /// Claims one byte range and rejects a range that another step already covers.
+    /// <para>占用一段字节范围，并拒绝已被其他步骤覆盖的范围。</para>
+    /// </summary>
+    /// <remarks>
+    /// The agent executes each step in order, so two overlapping steps would write the same bytes twice and
+    /// the later one would silently win. Refusing the plan keeps the device untouched.
+    /// <para>代理按顺序执行每个步骤，因此两个重叠步骤会把同一段字节写两次，后一个静默胜出。拒绝整份计划
+    /// 可让设备保持未被改动。</para>
+    /// </remarks>
+    /// <param name="key">The partition or region key. <para>分区或区域键。</para></param>
+    /// <param name="offset">The range start. <para>范围起点。</para></param>
+    /// <param name="length">The positive range length. <para>正数范围长度。</para></param>
+    private void ReserveExtent(uint key, long offset, long length)
+    {
+        if (!_occupied.TryGetValue(key, out var extents))
+        {
+            extents = [];
+            _occupied[key] = extents;
+        }
+
+        var start = offset;
+        var end = checked(offset + length);
+        var low = 0;
+        var high = extents.Count;
+        while (low < high)
+        {
+            var middle = low + ((high - low) / 2);
+            if (extents[middle].Start < start)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        if (low > 0 && extents[low - 1].End > start)
+        {
+            throw new InvalidDataException("The plan contains overlapping byte ranges on one target.");
+        }
+
+        if (low < extents.Count && extents[low].Start < end)
+        {
+            throw new InvalidDataException("The plan contains overlapping byte ranges on one target.");
+        }
+
+        extents.Insert(low, (start, end));
     }
 
     private void Finish() => Operations =

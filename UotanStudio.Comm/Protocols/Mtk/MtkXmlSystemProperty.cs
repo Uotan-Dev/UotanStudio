@@ -63,9 +63,10 @@ public sealed class MtkXmlSystemProperty
                 }
                 if (reader.NodeType == XmlNodeType.Element)
                 {
+                    var isRoot = reader.Depth == 0;
                     var item = reader.Depth == 1 && reader.LocalName == "item";
                     if (reader.NamespaceURI.Length != 0
-                        || (item ? reader.AttributeCount != 1 || reader.GetAttribute("key") is null : reader.AttributeCount != 0))
+                        || !IsAcceptedAttributeShape(reader, isRoot, item))
                     {
                         throw new InvalidDataException("Unsupported XML property namespace or attributes.");
                     }
@@ -79,33 +80,63 @@ public sealed class MtkXmlSystemProperty
         {
             throw new InvalidDataException("The XML property envelope does not match the selected profile.");
         }
-        XElement? itemElement = null;
-        string? version = null;
-        foreach (var field in root.Elements())
-        {
-            if (field.HasElements)
-            {
-                throw new InvalidDataException("XML property fields must be scalar.");
-            }
-            if (field.Name == "item" && itemElement is null)
-            {
-                itemElement = field;
-            }
-            else if (field.Name == "version" && version is null && field.Value.Length is > 0 and <= 32)
-            {
-                version = field.Value;
-            }
-            else
-            {
-                throw new InvalidDataException("Duplicate or unsupported XML property fields.");
-            }
-        }
-        if (itemElement is null || itemElement.Attribute("key")?.Value != key
-            || itemElement.Value.Length is 0 or > 4096)
+
+        var version = ReadVersionAttribute(root) ?? ReadVersionElement(root);
+        var itemElement = root.Elements("item").FirstOrDefault(element => element.Attribute("key")?.Value == key);
+        if (itemElement is null || itemElement.HasElements || itemElement.Value.Length is 0 or > 4096)
         {
             throw new InvalidDataException("The XML property key or scalar value is missing, mismatched or oversized.");
         }
+
         return new MtkXmlSystemProperty(root.Name.LocalName, version, key, itemElement.Value);
+    }
+
+    private static bool IsAcceptedAttributeShape(XmlReader reader, bool root, bool item)
+    {
+        if (item)
+        {
+            return reader.AttributeCount == 1 && reader.GetAttribute("key") is not null;
+        }
+
+        if (!root)
+        {
+            return reader.AttributeCount == 0;
+        }
+
+        for (var index = 0; index < reader.AttributeCount; index++)
+        {
+            reader.MoveToAttribute(index);
+            if (!reader.LocalName.Equals("version", StringComparison.Ordinal))
+            {
+                reader.MoveToElement();
+                return false;
+            }
+        }
+
+        reader.MoveToElement();
+        return true;
+    }
+
+    private static string? ReadVersionAttribute(XElement root)
+    {
+        var attribute = root.Attribute("version");
+        return attribute is { Value.Length: > 0 and <= 32 } ? attribute.Value : null;
+    }
+
+    private static string? ReadVersionElement(XElement root)
+    {
+        var element = root.Elements("version").FirstOrDefault();
+        if (element is null)
+        {
+            return null;
+        }
+
+        if (element.HasElements || element.Value.Length is not (> 0 and <= 32))
+        {
+            throw new InvalidDataException("The XML property version field is invalid.");
+        }
+
+        return element.Value;
     }
 }
 

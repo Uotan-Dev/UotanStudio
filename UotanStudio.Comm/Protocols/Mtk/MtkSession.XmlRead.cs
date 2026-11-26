@@ -86,6 +86,7 @@ public sealed partial class MtkSession
             await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
             var request = await ReceiveXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
             var packetLength = ValidateXmlUploadRequest(request, "ROM_0", MtkXmlChannel.MaximumBinaryPayload);
+            RequireBoundedXmlPacketCount(length, packetLength);
             await channel.AcknowledgeAsync(token).ConfigureAwait(false);
             RequireXmlReadLength(await channel.ReceiveTextAsync(token).ConfigureAwait(false), length);
             await channel.AcknowledgeAsync(token).ConfigureAwait(false);
