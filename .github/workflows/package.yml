@@ -321,7 +321,7 @@ jobs:
           <dict>
             <key>CFBundleName</key><string>UotanStudio</string>
             <key>CFBundleDisplayName</key><string>UotanStudio</string>
-            <key>CFBundleIdentifier</key><string>club.openatom.uotanstudio.desktop</string>
+            <key>CFBundleIdentifier</key><string>cn.uotan.uotanstudio.desktop</string>
             <key>CFBundleExecutable</key><string>UotanStudio.Desktop</string>
             <key>CFBundleIconFile</key><string>UotanStudio</string>
             <key>CFBundleShortVersionString</key><string>VER_PLACEHOLDER</string>
@@ -436,7 +436,7 @@ jobs:
           Section: utils
           Priority: optional
           Architecture: $ARCH
-          Maintainer: UotanStudio <uotan@openatom.club>
+          Maintainer: UotanStudio <uotan@uotan.cn>
           Depends: libc6 (>= $GLIBC_FLOOR), libstdc++6, libfontconfig1, libssl3, libx11-6,
            libxext6, libxfixes3, libxcursor1, libxi6, libxrandr2, libice6, libglib2.0-0,
            libwayland-cursor0, libwayland-egl1, libxkbcommon0, libgbm1, libdrm2, libegl1,
