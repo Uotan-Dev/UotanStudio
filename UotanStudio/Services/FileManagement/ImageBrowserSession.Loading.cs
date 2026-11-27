@@ -212,6 +212,13 @@ internal sealed partial class ImageBrowserSession
 
         FirmwareFormatRegistry.RegisterAll();
 
+        var firmwareHandler = FormatDetector.Detect(path);
+        if (firmwareHandler is not null && firmwareHandler.FormatName is "Sony FTF" or "Sony SIN")
+        {
+            throw new InvalidDataException(
+                $"{firmwareHandler.FormatName} is a firmware container, not a CPIO/TAR filesystem image. Use the firmware unpack action first.");
+        }
+
         if (ArchiveBrowser.SupportsPath(path)) return LoadCpio(path, ct);
 
         var kind = DetectFilesystem(path);
