@@ -130,11 +130,12 @@ public sealed partial class MtkSession
             await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
             await RequireLegacyByteAsync(0x5A, "storage header", token).ConfigureAwait(false);
             var buffer = write ? new byte[(int)Math.Min(length, options.StoragePacketLength)] : null;
+            var total = length + lead;
             var skip = lead;
             long transferred = 0;
-            while (transferred < length)
+            while (transferred < total)
             {
-                var count = (int)Math.Min(length - transferred, options.StoragePacketLength);
+                var count = (int)Math.Min(total - transferred, options.StoragePacketLength);
                 if (write)
                 {
                     await stream.ReadExactlyAsync(buffer!.AsMemory(0, count), token).ConfigureAwait(false);
@@ -153,18 +154,18 @@ public sealed partial class MtkSession
                     {
                         throw new MtkProtocolException("The Legacy storage packet checksum does not match.");
                     }
-                    var usable = data.AsSpan(skip, data.Length - skip);
+                    var start = skip;
                     skip = 0;
-                    if (usable.Length > 0)
+                    if (start < data.Length)
                     {
-                        await stream.WriteAsync(data.AsMemory(data.Length - usable.Length), token).ConfigureAwait(false);
+                        await stream.WriteAsync(data.AsMemory(start), token).ConfigureAwait(false);
                     }
                     await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 transferred += count;
-                progress?.Report(transferred);
+                progress?.Report(Math.Clamp(transferred - lead, 0, length));
             }
             token.ThrowIfCancellationRequested();
             ThrowIfDisposed();
