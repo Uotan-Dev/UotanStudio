@@ -174,6 +174,7 @@ internal static class DockMenuIcons
             {
                 if (entry is ToolDockMenuItem toolItem)
                 {
+                    toolItem.HostFlyout = flyout;
                     toolItem.RefreshState(activeDockable);
                 }
             }

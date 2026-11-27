@@ -1,39 +1,60 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="using:System"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
              xmlns:controls="using:UotanStudio.Views.Controls"
              x:Class="UotanStudio.Views.Editors.LkImageView"
              x:DataType="vm:LkImageViewModel">
+    <UserControl.Styles>
+        <Style Selector="TabItem">
+            <Setter Property="HeaderTemplate">
+                <DataTemplate x:DataType="sys:String">
+                    <TextBlock Text="{Binding}" FontWeight="SemiBold" />
+                </DataTemplate>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
     <Grid>
         <DockPanel>
             <controls:EditorErrorBanner DockPanel.Dock="Top" Message="{Binding ErrorMessage, Mode=TwoWay}" />
-            <Border DockPanel.Dock="Top" Padding="16,12,16,0">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="{DynamicResource Dock_Lk_Title}" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding FilePath}" Opacity="0.7" />
-                    <TextBlock Text="{Binding Summary}" Opacity="0.8" IsVisible="{Binding IsRecognized}" />
-                </StackPanel>
-            </Border>
-            <Border DockPanel.Dock="Bottom" Padding="16,8,16,16" IsVisible="{Binding IsRecognized}">
+            <Border DockPanel.Dock="Top" Padding="16,12,16,10" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Dock_Lk_PatchHint}" TextWrapping="Wrap" Opacity="0.8" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <TextBox Text="{Binding OutputPath, Mode=TwoWay}"
-                                 PlaceholderText="{DynamicResource Dock_Lk_Output}" />
-                        <Button Grid.Column="1" Content="{DynamicResource Dock_Lk_Apply}" Command="{Binding PatchCommand}"
-                                IsEnabled="{Binding !IsPatching}" />
-                    </Grid>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="20" LineSpacing="8">
-                        <CheckBox Content="{DynamicResource Dock_Lk_Backup}" IsChecked="{Binding CreateBackup, Mode=TwoWay}" />
-                        <CheckBox Content="{DynamicResource Dock_Lk_CertBypass}" IsChecked="{Binding ApplyCertBypass, Mode=TwoWay}" />
-                    </WrapPanel>
-                    <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" Opacity="0.85" />
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{DynamicResource Dock_Lk_Title}" FontSize="18" FontWeight="SemiBold" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding FilePath}" Opacity="0.7" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Summary}" Opacity="0.75"
+                                       IsVisible="{Binding IsRecognized}" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel Spacing="8" IsVisible="{Binding IsRecognized}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
+                            <CheckBox Content="{DynamicResource Dock_Lk_Backup}" IsChecked="{Binding CreateBackup, Mode=TwoWay}"
+                                      VerticalAlignment="Center" />
+                            <CheckBox Content="{DynamicResource Dock_Lk_CertBypass}" IsChecked="{Binding ApplyCertBypass, Mode=TwoWay}"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Dock_Lk_PatchHint}" TextWrapping="Wrap" Opacity="0.75"
+                                       VerticalAlignment="Center" />
+                        </WrapPanel>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Text="{Binding OutputPath, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource Dock_Lk_Output}" />
+                            <Button Grid.Column="1" Content="{DynamicResource Dock_Lk_Apply}" Command="{Binding PatchCommand}"
+                                    IsEnabled="{Binding !IsPatching}" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Border>
-            <TabControl Margin="16,8,16,8">
+            <Border DockPanel.Dock="Top" Padding="16,8" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    IsVisible="{Binding ResultText, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.85" />
+            </Border>
+            <TabControl Margin="16,8,16,16">
                 <TabItem Header="{DynamicResource Dock_Lk_Entries}">
-                    <DataGrid ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                    <DataGrid Margin="0,8,0,0" ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                               IsReadOnly="True" AutoGenerateColumns="False" CanUserResizeColumns="True"
                               GridLinesVisibility="Horizontal" FontFamily="Consolas"
                               Background="Transparent" BorderThickness="1"

@@ -8,41 +8,77 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.QcnEditorView"
              x:DataType="viewmodels:QcnEditorViewModel">
-  <Grid IsEnabled="{Binding !IsBusy}">
-    <Grid.RowDefinitions>Auto,Auto,Auto,*,Auto</Grid.RowDefinitions>
+  <UserControl.Resources>
+    <CornerRadius x:Key="QcnCardCornerRadius">6</CornerRadius>
+    <SolidColorBrush x:Key="QcnCardBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+  </UserControl.Resources>
+  <UserControl.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="SelectableTextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Border.QcnEntryCard">
+      <Setter Property="CornerRadius" Value="{StaticResource QcnCardCornerRadius}" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{StaticResource QcnCardBorderBrush}" />
+    </Style>
+    <Style Selector="ListBox.QcnList > ListBoxItem">
+      <Setter Property="CornerRadius" Value="{StaticResource QcnCardCornerRadius}" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+  <Grid IsEnabled="{Binding !IsBusy}" RowDefinitions="Auto,Auto,*,Auto">
     <!-- 错误提示条：与对比视图同一套单行样式与关闭按钮。 -->
     <controls:EditorErrorBanner Grid.Row="0"
                                 Message="{Binding CompileError, Mode=TwoWay}" />
 
     <!-- 顶部摘要栏：文件版本 / 机型 / 条目统计。 -->
-    <Border Grid.Row="1" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border Grid.Row="1" Padding="12,4,12,0">
       <TextBlock Text="{Binding SourceDescription}"
                  VerticalAlignment="Center"
-                 FontSize="11" Opacity="0.7" FontFamily="Consolas"
+                 FontSize="12" Opacity="0.75" FontFamily="Consolas"
                  TextTrimming="CharacterEllipsis" />
     </Border>
 
-    <Grid Grid.Row="3" ColumnDefinitions="300,*">
+    <Grid Grid.Row="2" ColumnDefinitions="300,*">
       <!-- 左：搜索 + NV 条目列表 -->
-      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-        <DockPanel>
-          <TextBox DockPanel.Dock="Top" Margin="6,6,6,4" PlaceholderText="{x:Static viewmodels:QcnEditorViewModel.SearchLabel}"
+      <Border Grid.Column="0">
+        <DockPanel Margin="12,6,12,12">
+          <TextBox DockPanel.Dock="Top" Margin="0,0,0,6"
+                   PlaceholderText="{x:Static viewmodels:QcnEditorViewModel.SearchLabel}"
                    Text="{Binding SearchText, Mode=TwoWay}" />
-          <TextBlock DockPanel.Dock="Top" Margin="6,0,6,4" FontSize="11" Opacity="0.7"
+          <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontWeight="SemiBold" Opacity="0.85"
                      Text="{x:Static viewmodels:QcnEditorViewModel.ItemsLabel}" />
-          <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+          <ListBox Classes="QcnList"
+                   ItemsSource="{Binding Items}"
+                   SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                   Background="Transparent" BorderThickness="0" Padding="0"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="viewmodels:QcnNvItemViewModel">
-                <StackPanel Margin="2,3" Spacing="1">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding IdHex}" FontFamily="Consolas" FontSize="10" Opacity="0.6" />
-                    <TextBlock Text="{Binding KnownName}" FontSize="11"
-                               IsVisible="{Binding KnownName, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Border Classes="QcnEntryCard">
+                  <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                      <TextBlock Grid.Column="0" VerticalAlignment="Center">
+                        <Run Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
+                        <Run Text=" " />
+                        <Run Text="{Binding IdHex}" FontFamily="Consolas" FontSize="12"
+                             Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                      </TextBlock>
+                      <TextBlock Grid.Column="1" Text="{Binding KnownName}" FontWeight="Medium"
+                                 TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                 IsVisible="{Binding KnownName, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </Grid>
+                    <TextBlock Text="{Binding DecodedPreview}" FontFamily="Consolas" FontSize="12" Opacity="0.7"
+                               TextTrimming="CharacterEllipsis" />
                   </StackPanel>
-                  <TextBlock Text="{Binding DecodedPreview}" FontFamily="Consolas" FontSize="10" Opacity="0.7"
-                             TextTrimming="CharacterEllipsis" />
-                </StackPanel>
+                </Border>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
@@ -52,63 +88,76 @@
       <!-- 右：选中条目详情（结构化值 + 原始数据） -->
       <Border Grid.Column="1">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Margin="8,6,8,4" FontSize="11" Opacity="0.7"
+          <TextBlock DockPanel.Dock="Top" Margin="16,6,16,4" FontWeight="SemiBold" Opacity="0.85"
                      Text="{x:Static viewmodels:QcnEditorViewModel.PropertiesLabel}" />
-          <TextBlock Margin="8,8,0,0" Opacity="0.6"
+          <TextBlock Margin="16,0,16,0" Opacity="0.6"
                      Text="{x:Static viewmodels:QcnEditorViewModel.NoSelectionLabel}"
                      IsVisible="{Binding HasSelection, Converter={x:Static BoolConverters.Not}}" />
-          <ScrollViewer IsVisible="{Binding HasSelection}">
-            <StackPanel Margin="8,0,8,8" Spacing="8" DataContext="{Binding SelectedItem}"
-                        x:DataType="viewmodels:QcnNvItemViewModel"
-                        IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}">
-              <StackPanel Orientation="Horizontal" Spacing="10">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.ItemIdLabel}" FontSize="11" Opacity="0.7" />
-                  <TextBlock Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
-                  <TextBlock Text="{Binding IdHex}" FontFamily="Consolas" FontSize="11" Opacity="0.6" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4"
-                            IsVisible="{Binding KnownName, Converter={x:Static ObjectConverters.IsNotNull}}">
-                  <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.NameLabel}" FontSize="11" Opacity="0.7" />
-                  <TextBlock Text="{Binding KnownName}" />
-                  <TextBlock Text="{Binding Category}" FontSize="10" Opacity="0.6" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.LengthLabel}" FontSize="11" Opacity="0.7" />
-                  <TextBlock Text="{Binding EffectiveLength}" FontFamily="Consolas" />
+          <Grid IsVisible="{Binding HasSelection}">
+            <Grid Margin="16,0,16,12" RowDefinitions="Auto,*" RowSpacing="10"
+                  DataContext="{Binding SelectedItem}"
+                  x:DataType="viewmodels:QcnNvItemViewModel"
+                  IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}">
+              <StackPanel Grid.Row="0" Spacing="8">
+                <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="6">
+                  <TextBlock VerticalAlignment="Center">
+                    <Run Text="{x:Static viewmodels:QcnEditorViewModel.ItemIdLabel}"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Run Text=" " />
+                    <Run Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
+                    <Run Text=" " />
+                    <Run Text="{Binding IdHex}" FontFamily="Consolas" FontSize="12"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                  </TextBlock>
+                  <TextBlock VerticalAlignment="Center"
+                             IsVisible="{Binding KnownName, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <Run Text="{x:Static viewmodels:QcnEditorViewModel.NameLabel}"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Run Text=" " />
+                    <Run Text="{Binding KnownName}" FontWeight="Medium" />
+                    <Run Text=" " />
+                    <Run Text="{Binding Category}" FontSize="12"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                  </TextBlock>
+                  <TextBlock VerticalAlignment="Center">
+                    <Run Text="{x:Static viewmodels:QcnEditorViewModel.LengthLabel}"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Run Text=" " />
+                    <Run Text="{Binding EffectiveLength}" FontFamily="Consolas" />
+                  </TextBlock>
+                </WrapPanel>
+
+                <TextBlock Text="{Binding StreamPath}" FontSize="12" FontFamily="Consolas" Opacity="0.6"
+                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StreamPath}" />
+
+                <StackPanel Spacing="4"
+                            IsVisible="{Binding Kind, Converter={x:Static editors:QcnStructuredKindVisibilityConverter.Instance}}">
+                  <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.StructuredLabel}" Opacity="0.75" />
+                  <TextBox Text="{Binding StructuredValue, Mode=TwoWay}" FontFamily="Consolas" FontSize="13" />
+                  <TextBlock Text="{Binding StructuredHint}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"
+                             IsVisible="{Binding StructuredHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                             TextWrapping="Wrap" />
                 </StackPanel>
               </StackPanel>
 
-              <TextBlock Text="{Binding StreamPath}" FontSize="10" FontFamily="Consolas" Opacity="0.55"
-                         TextTrimming="CharacterEllipsis" />
-
-              <StackPanel Spacing="2"
-                          IsVisible="{Binding Kind, Converter={x:Static editors:QcnStructuredKindVisibilityConverter.Instance}}">
-                <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.StructuredLabel}" FontSize="11" Opacity="0.7" />
-                <TextBox Text="{Binding StructuredValue, Mode=TwoWay}" FontFamily="Consolas" />
-                <TextBlock Text="{Binding StructuredHint}" FontSize="11" Foreground="Orange"
-                           IsVisible="{Binding StructuredHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
-              </StackPanel>
-
-              <StackPanel Spacing="2">
-                <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.DataLabel}" FontSize="11" Opacity="0.7" />
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
-                        MinHeight="220">
+              <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="4">
+                <TextBlock Grid.Row="0" Text="{x:Static viewmodels:QcnEditorViewModel.DataLabel}" Opacity="0.75" />
+                <Border Grid.Row="1" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1"
+                        CornerRadius="6" ClipToBounds="True">
                   <controls:HexViewer Data="{Binding Data}" BytesEdited="OnItemBytesEdited" />
                 </Border>
-              </StackPanel>
-            </StackPanel>
-          </ScrollViewer>
+              </Grid>
+            </Grid>
+          </Grid>
         </DockPanel>
       </Border>
     </Grid>
 
     <!-- 底部状态栏：编辑状态 -->
-    <Border Grid.Row="4" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+    <Border Grid.Row="3" Padding="12,4">
       <StackPanel Orientation="Horizontal" Spacing="12">
         <TextBlock Text="{Binding IsDirty, StringFormat='[*]'}"
-                   FontSize="12" Foreground="Orange"
+                   FontSize="12" Foreground="{DynamicResource SemiColorWarning}"
                    IsVisible="{Binding IsDirty}" />
       </StackPanel>
     </Border>
