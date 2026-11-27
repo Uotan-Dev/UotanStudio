@@ -133,19 +133,55 @@ public sealed class MtkMbrSnapshot
     /// <returns>The ordered extents.<para>已排序的区间。</para></returns>
     public IReadOnlyList<(uint FirstLba, uint SectorCount, byte PartitionType)> EnumerateExtents()
         => [.. Primary.Where(static entry => entry.IsPopulated && !entry.IsExtended)
-                .Select(static entry => (entry.FirstLba, entry.SectorCount, entry.PartitionType))
+                .Select(entry => (entry.FirstLba,
+                    ResolveExtentSectorCount(entry.FirstLba, entry.SectorCount, entry.FirstLba, TotalSectors),
+                    entry.PartitionType))
                 .Concat(Logical.Select(static entry => (entry.FirstLba, entry.SectorCount, entry.PartitionType)))
                 .OrderBy(static extent => extent.FirstLba)];
 
-    /// <summary>Writes the little-endian LBA of an extended boot record that must be read next.
-    /// <para>写出接下来必须读取的扩展引导记录的小端 LBA。</para>
-    /// </summary>
+    /// <summary>Resolves a partition's declared sector count to a length bounded by the region.</summary>
+    /// <remarks>
+    /// An MBR may express "through the end of the device" either with a count of <c>0xFFFFFFFF</c> or with a
+    /// start-plus-count whose sum reaches the 32-bit LBA limit. Both forms are clamped to the sectors that
+    /// actually remain in the region, so a backup never tries to read past the discovered capacity.
+    /// <para>MBR 可以用 <c>0xFFFFFFFF</c> 扇区数，或「起始 LBA 加扇区数恰好到达 32 位 LBA 上限」来表示「一直到设备末尾」；
+    /// 两种形式都会收敛到区域中实际剩余的扇区数，备份因此不会越出已发现的容量。</para>
+    /// </remarks>
+    /// <param name="declaredFirstLba">The entry's own first LBA, in the same coordinate space as its count.
+    /// <para>条目自身的起始 LBA，与其扇区数处于同一坐标系。</para></param>
+    /// <param name="declaredCount">The raw sector-count field.<para>原始扇区数字段。</para></param>
+    /// <param name="absoluteFirstLba">The entry's start LBA rebased into the region.
+    /// <para>换算到区域内的条目起始 LBA。</para></param>
+    /// <param name="totalSectors">The region capacity in sectors.<para>区域容量，以扇区计。</para></param>
+    /// <returns>The bounded sector count, or zero when the entry is empty or starts outside the region.
+    /// <para>收敛后的扇区数；条目为空或起点位于区域之外时为零。</para></returns>
+    internal static uint ResolveExtentSectorCount(uint declaredFirstLba, uint declaredCount,
+        uint absoluteFirstLba, uint totalSectors)
+    {
+        if (declaredCount == 0 || absoluteFirstLba >= totalSectors)
+        {
+            return 0;
+        }
+
+        var available = totalSectors - absoluteFirstLba;
+        if (declaredCount == uint.MaxValue ||
+            (declaredFirstLba <= uint.MaxValue - declaredCount &&
+             declaredFirstLba + declaredCount == uint.MaxValue))
+        {
+            return available;
+        }
+
+        return declaredCount <= available ? declaredCount : 0;
+    }
+
+    /// <summary>Checks whether a sector carries the <c>0x55AA</c> boot signature in byte order.</summary>
+    /// <para>按字节顺序检查扇区是否带有 <c>0x55AA</c> 引导签名。</para>
     /// <param name="sector">The MBR sector.<para>MBR 扇区。</para></param>
-    /// <returns><see langword="true"/> when the word has the boot signature.
-    /// <para>该字具有引导签名时为 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when the last two bytes are <c>55 AA</c>.
+    /// <para>最后两个字节为 <c>55 AA</c> 时为 <see langword="true"/>。</para></returns>
     internal static bool HasBootSignature(ReadOnlySpan<byte> sector)
         => sector.Length >= SectorSize &&
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(sector[(SectorSize - 2)..]) == BootSignature;
+            sector[SectorSize - 2] == 0x55 && sector[SectorSize - 1] == 0xAA;
 
     /// <summary>Reads the four 16-byte entries starting at byte 446 and classifies each as extended or not.
     /// <para>读取从字节 446 开始的四个 16 字节条目，并判定各自是否为扩展容器。</para>

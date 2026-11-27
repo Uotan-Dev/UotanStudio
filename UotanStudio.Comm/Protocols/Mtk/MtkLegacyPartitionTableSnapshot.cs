@@ -77,12 +77,85 @@ public sealed class MtkLegacyPartitionTableSnapshot
     /// <para>获取已解析表所声明的已填充分区数量。</para></summary>
     /// <value>A nonnegative count; empty GPT entries and unused MBR slots are excluded.
     /// <para>非负计数；空的 GPT 条目与未使用的 MBR 槽位不计入。</para></value>
-    public int PartitionCount => Kind switch
+    public int PartitionCount => EnumerateExtents().Count;
+
+    /// <summary>Resolves every addressable partition extent the table declares, in ascending offset order, with the
+    /// byte ranges already translated into region-relative coordinates.
+    /// <para>解析该表声明的每个可寻址分区区间，按偏移升序排列，字节范围已换算为区域内相对坐标。</para>
+    /// </summary>
+    /// <remarks>
+    /// A GPT entry carries absolute device byte offsets, so they are used verbatim. A classic MBR stores LBAs relative
+    /// to the 512-byte sector that holds the table, so each extent is recomputed against <see cref="TableOffset"/>:
+    /// treating those LBAs as region-absolute is what makes an MBR read land on the wrong sectors. Extended
+    /// containers are skipped because they only describe the chain and own no payload. Names come from the table when
+    /// it has a name field and are otherwise synthesised as <c>mbr-TT-N</c>, never invented from filesystem content.
+    /// <para>GPT 条目自带设备绝对字节偏移，因此原样采用。经典 MBR 存储的是相对于承载分区表的 512 字节扇区的 LBA，
+    /// 因此每个区间都要对照 <see cref="TableOffset"/> 重新计算：把这些 LBA 当成区域绝对偏移，正是 MBR 读取落到错误扇区
+    /// 的原因。扩展容器只描述链条、并不拥有负载，因此被跳过。表有名称字段时名称取自表内，否则合成为 <c>mbr-TT-N</c>，
+    /// 绝不根据文件系统内容臆造。</para>
+    /// </remarks>
+    /// <returns>The extents ordered by ascending offset, empty when no table was resolved.
+    /// <para>按偏移升序排列的区间；未解析出表时为空。</para></returns>
+    public IReadOnlyList<MtkLegacyPartitionExtent> EnumerateExtents() => Kind switch
     {
-        PartitionTableKind.Gpt => Gpt?.Partitions.Count ?? 0,
-        PartitionTableKind.Mbr => Mbr is null
-            ? 0
-            : Mbr.Primary.Count(static entry => entry.IsPopulated) + Mbr.Logical.Count,
-        _ => 0
+        PartitionTableKind.Gpt => [.. (Gpt?.Partitions ?? [])
+            .Select(static partition => new MtkLegacyPartitionExtent(partition.Name, partition.ByteOffset,
+                partition.ByteLength, null, false))
+            .OrderBy(static extent => extent.ByteOffset)],
+        PartitionTableKind.Mbr => Mbr is null ? [] : DescribeMbrExtents(Mbr, TableOffset),
+        _ => []
     };
+
+    /// <summary>Finds exactly one extent by name, rejecting an absent or ambiguous match instead of guessing.
+    /// <para>按名称查找恰好一个区间；缺失或有歧义时直接拒绝，而不是猜测。</para>
+    /// </summary>
+    /// <param name="name">The exact case-sensitive extent name.
+    /// <para>精确、区分大小写的区间名称。</para></param>
+    /// <returns>The single matching extent.<para>唯一匹配的区间。</para></returns>
+    /// <exception cref="KeyNotFoundException">No extent carries this name.
+    /// <para>没有任何区间携带该名称。</para></exception>
+    /// <exception cref="InvalidDataException">More than one extent carries this name.
+    /// <para>多个区间携带该名称。</para></exception>
+    public MtkLegacyPartitionExtent FindExtent(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        MtkLegacyPartitionExtent? match = null;
+        foreach (var extent in EnumerateExtents())
+        {
+            if (!string.Equals(extent.Name, name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (match is not null)
+            {
+                throw new InvalidDataException(
+                    "The partition table declares more than one extent named '" + name + "'.");
+            }
+
+            match = extent;
+        }
+
+        return match ?? throw new KeyNotFoundException(
+            "The partition table declares no extent named '" + name + "'.");
+    }
+
+    private static IReadOnlyList<MtkLegacyPartitionExtent> DescribeMbrExtents(MtkMbrSnapshot mbr, long tableOffset)
+    {
+        var extents = new List<MtkLegacyPartitionExtent>(mbr.Primary.Count + mbr.Logical.Count);
+        var ordinals = new Dictionary<byte, int>();
+        foreach (var (firstLba, sectorCount, partitionType) in mbr.EnumerateExtents())
+        {
+            ordinals.TryGetValue(partitionType, out var ordinal);
+            ordinals[partitionType] = ++ordinal;
+            var offset = checked(tableOffset + (firstLba * (long)MtkMbrSnapshot.SectorSize));
+            var length = sectorCount * (long)MtkMbrSnapshot.SectorSize;
+            var logical = mbr.Logical.Any(entry => entry.FirstLba == firstLba
+                && entry.SectorCount == sectorCount && entry.PartitionType == partitionType);
+            extents.Add(new MtkLegacyPartitionExtent("mbr-" + partitionType.ToString("X2") + "-" + ordinal,
+                offset, length, partitionType, logical));
+        }
+
+        return extents;
+    }
 }

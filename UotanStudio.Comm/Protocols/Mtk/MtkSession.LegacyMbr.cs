@@ -40,7 +40,7 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await ReadLegacyMbrOwnedAsync(partitionId, 0, cancellationToken).ConfigureAwait(false);
+            return await ReadLegacyMbrOwnedAsync(partitionId, 0, null, 0, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -54,11 +54,16 @@ public sealed partial class MtkSession
     /// <param name="partitionId">Explicit discovered Legacy physical region. <para>显式指定的已发现 Legacy 物理区域。</para></param>
     /// <param name="tableBaseOffset">Region-relative byte offset of the record, aligned to 512.
     /// <para>记录在区域内相对于区域的字节偏移，按 512 对齐。</para></param>
+    /// <param name="prefetchedWindow">Bytes already read at <paramref name="prefetchedWindowOffset"/> during table
+    /// discovery, reused so the single-sector reads that fail on some agents are avoided.
+    /// <para>分区表发现时在 <paramref name="prefetchedWindowOffset"/> 处已读取的字节；复用它们可避开某些代理上会失败的单扇区读取。</para></param>
+    /// <param name="prefetchedWindowOffset">Region-relative offset of the first byte of <paramref name="prefetchedWindow"/>.
+    /// <para><paramref name="prefetchedWindow"/> 首字节相对于区域的偏移。</para></param>
     /// <param name="cancellationToken">Cancellation propagated to every storage exchange. <para>取消信号会传播到每一次存储交换。</para></param>
     /// <returns>A validated MBR snapshot whose logical block numbers are relative to <paramref name="tableBaseOffset"/>.
     /// <para>已校验的 MBR 快照，其逻辑块号相对于 <paramref name="tableBaseOffset"/>。</para></returns>
     private async Task<MtkMbrSnapshot> ReadLegacyMbrOwnedAsync(byte partitionId, long tableBaseOffset,
-        CancellationToken cancellationToken)
+        byte[]? prefetchedWindow, long prefetchedWindowOffset, CancellationToken cancellationToken)
     {
         RequireState(MtkSessionState.LegacyStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
@@ -77,11 +82,15 @@ public sealed partial class MtkSession
         }
 
         var sector = new byte[MbrSectorBytes];
-        await ReadSectorOwnedAsync(partitionId, tableBaseOffset, sector, cancellationToken).ConfigureAwait(false);
+        await ReadMbrSectorAsync(partitionId, tableBaseOffset, prefetchedWindow, prefetchedWindowOffset, sector,
+            cancellationToken).ConfigureAwait(false);
         if (!MtkMbrSnapshot.HasBootSignature(sector))
         {
             throw new InvalidDataException(
-                $"The Legacy region has no MBR at byte offset {tableBaseOffset}: the 0x55AA boot signature is absent.");
+                $"The Legacy region has no MBR at byte offset {tableBaseOffset}: the 0x55AA boot signature is absent " +
+                $"(actual {sector[MbrSectorBytes - 2]:X2} {sector[MbrSectorBytes - 1]:X2}, " +
+                $"head {Convert.ToHexString(sector.AsSpan(0, 16))}, " +
+                $"tail {Convert.ToHexString(sector.AsSpan(MbrSectorBytes - 16))}).");
         }
 
         var primary = MtkMbrSnapshot.ReadEntries(sector);
@@ -112,7 +121,8 @@ public sealed partial class MtkSession
                     throw new InvalidDataException($"The extended partition chain revisits LBA {next}.");
                 }
 
-                await ReadSectorOwnedAsync(partitionId, checked(tableBaseOffset + (long)next * MbrSectorBytes), sector,
+                var chainOffset = checked(tableBaseOffset + (long)next * MbrSectorBytes);
+                await ReadMbrSectorAsync(partitionId, chainOffset, prefetchedWindow, prefetchedWindowOffset, sector,
                     cancellationToken).ConfigureAwait(false);
                 if (!MtkMbrSnapshot.HasBootSignature(sector))
                 {
@@ -150,20 +160,16 @@ public sealed partial class MtkSession
                     }
 
                     var absolute = checked(next + entry.FirstLba);
-                    if (entry.SectorCount == 0)
+                    var sectorCount = MtkMbrSnapshot.ResolveExtentSectorCount(
+                        entry.FirstLba, entry.SectorCount, absolute, totalSectors);
+                    if (sectorCount == 0)
                     {
                         throw new InvalidDataException(
-                            $"The logical partition at LBA {absolute} in the record at LBA {next} declares no sectors.");
-                    }
-
-                    if (absolute >= totalSectors || entry.SectorCount > totalSectors - absolute)
-                    {
-                        throw new InvalidDataException(
-                            $"The logical partition at LBA {absolute} with {entry.SectorCount} sectors exceeds the region.");
+                            $"The logical partition at LBA {absolute} in the record at LBA {next} declares no usable sectors.");
                     }
 
                     logical.Add(new MtkMbrLogicalPartition(logical.Count, entry.Status, entry.PartitionType,
-                        absolute, entry.SectorCount, next));
+                        absolute, sectorCount, next));
                 }
 
                 if (next == extended.FirstLba || !record.Any(static entry => entry.IsExtended))
@@ -186,18 +192,33 @@ public sealed partial class MtkSession
                 continue;
             }
 
-            var first = extendedBase == 0 ? entry.FirstLba : checked(extendedBase + entry.FirstLba);
-            if (entry.SectorCount == 0)
+            if (entry.IsExtended)
             {
-                throw new InvalidDataException($"{table} declares a partition at LBA {first} with no sectors.");
+                continue;
             }
 
-            if (first >= totalSectors || entry.SectorCount > totalSectors - first)
+            var first = extendedBase == 0 ? entry.FirstLba : checked(extendedBase + entry.FirstLba);
+            var sectorCount = MtkMbrSnapshot.ResolveExtentSectorCount(
+                entry.FirstLba, entry.SectorCount, first, totalSectors);
+            if (sectorCount == 0)
             {
                 throw new InvalidDataException(
-                    $"{table} declares a partition at LBA {first} with {entry.SectorCount} sectors, beyond the region.");
+                    $"{table} declares a partition at LBA {first} with no usable sectors.");
             }
         }
+    }
+
+    private async Task ReadMbrSectorAsync(byte partitionId, long offset, byte[]? window, long windowOffset,
+        byte[] destination, CancellationToken cancellationToken)
+    {
+        if (window is not null && offset >= windowOffset && offset - windowOffset >= 0 &&
+            offset - windowOffset + destination.Length <= window.Length)
+        {
+            window.AsSpan((int)(offset - windowOffset), destination.Length).CopyTo(destination);
+            return;
+        }
+
+        await ReadSectorOwnedAsync(partitionId, offset, destination, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ReadSectorOwnedAsync(byte partitionId, long offset, byte[] destination,

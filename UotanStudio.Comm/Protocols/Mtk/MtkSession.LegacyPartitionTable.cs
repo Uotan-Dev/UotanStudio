@@ -108,6 +108,8 @@ public sealed partial class MtkSession
             }
         }
 
+        byte[]? tableWindow = null;
+        long tableWindowOffset = 0;
         if (!PartitionTableProbe.TryDetect(probe, out var kind))
         {
             var scanned = await TryScanLegacyTableAsync(partitionId, region, storage, probe, tableOffset,
@@ -120,6 +122,8 @@ public sealed partial class MtkSession
 
             tableOffset = scanned.TableOffset;
             kind = scanned.Kind;
+            tableWindow = scanned.Window;
+            tableWindowOffset = scanned.WindowOffset;
         }
 
         switch (kind)
@@ -135,8 +139,8 @@ public sealed partial class MtkSession
 
             case PartitionTableKind.Mbr:
                 {
-                    var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, cancellationToken)
-                        .ConfigureAwait(false);
+                    var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, tableWindow,
+                        tableWindowOffset, cancellationToken).ConfigureAwait(false);
                     ThrowIfDisposed();
                     return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
                         PartitionTableKind.Mbr, null, mbr);
@@ -148,18 +152,19 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task<(bool Found, long TableOffset, PartitionTableKind Kind, long ScannedBytes)>
+    private async Task<(bool Found, long TableOffset, PartitionTableKind Kind, long ScannedBytes,
+        byte[]? Window, long WindowOffset)>
         TryScanLegacyTableAsync(byte partitionId, MtkLegacyStorageRegion region,
         MtkLegacyStorageInfo storage, byte[] head, long tableOffset, CancellationToken cancellationToken)
     {
         if (head.Length < PartitionTableScanner.SectorSize)
         {
-            return (false, 0, PartitionTableKind.Unknown, 0);
+            return (false, 0, PartitionTableKind.Unknown, 0, null, 0);
         }
 
         if (PartitionTableScanner.TryFind(head, tableOffset, region.CapacityBytes, out var found, out var kind))
         {
-            return (true, found, kind, head.Length);
+            return (true, found, kind, head.Length, head, tableOffset);
         }
 
         var limit = Math.Min(region.CapacityBytes, tableOffset + LegacyTableScanLimitBytes);
@@ -172,13 +177,14 @@ public sealed partial class MtkSession
             await ReadLegacyProbeOwnedAsync(partitionId, cursor, chunk, cancellationToken).ConfigureAwait(false);
             if (PartitionTableScanner.TryFind(chunk, cursor, region.CapacityBytes, out found, out kind))
             {
-                return (true, found, kind, cursor + LegacyTableScanChunkBytes - tableOffset);
+                return (true, found, kind, cursor + LegacyTableScanChunkBytes - tableOffset,
+                    (byte[])chunk.Clone(), cursor);
             }
 
             cursor += LegacyTableScanChunkBytes;
         }
 
-        return (false, 0, PartitionTableKind.Unknown, cursor - tableOffset);
+        return (false, 0, PartitionTableKind.Unknown, cursor - tableOffset, null, 0);
     }
 
     private async Task<GptTable> ReadLegacyGptAtOwnedAsync(byte partitionId, MtkLegacyStorageRegion region,
