@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Threading;
 using Dock.Model.Core;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
@@ -56,6 +58,13 @@ public sealed class ToolDockMenuItem : MenuItem
 
     private ContextMenu? _hostContextMenu;
     private IDockable? _explicitDockable;
+
+    /// <summary>
+    /// Optional <see cref="MenuFlyout"/> hosting this item so the popup can finish closing before a
+    /// floating parent window is destroyed on Wayland.
+    /// <para>承载本菜单项的可选 <see cref="MenuFlyout"/>，用于在 Wayland 下等待弹出层完全关闭后再销毁父级浮动窗口。</para>
+    /// </summary>
+    internal MenuFlyout? HostFlyout { get; set; }
 
     /// <summary>Uses the standard menu-item theme.<para>使用标准菜单项主题。</para></summary>
     protected override Type StyleKeyOverride => typeof(MenuItem);
@@ -280,26 +289,33 @@ public sealed class ToolDockMenuItem : MenuItem
             return;
         }
 
-        switch (Action)
+        var action = Action;
+        switch (action)
         {
             case ToolDockMenuAction.Float:
                 if (dockable.CanFloat)
                 {
-                    factory.FloatDockable(dockable);
+                    RunAfterMenuCloses(() => factory.FloatDockable(dockable));
                 }
                 break;
 
             case ToolDockMenuAction.FloatAll:
                 if (dockable.CanFloat)
                 {
-                    factory.FloatAllDockables(dockable);
+                    RunAfterMenuCloses(() => factory.FloatAllDockables(dockable));
                 }
                 break;
 
             case ToolDockMenuAction.Dock:
                 if (factory is IDockReturnFactory returnFactory && returnFactory.CanDockToMainWindow(dockable))
                 {
-                    returnFactory.DockToMainWindow(dockable);
+                    RunAfterMenuCloses(() =>
+                    {
+                        if (returnFactory.CanDockToMainWindow(dockable))
+                        {
+                            returnFactory.DockToMainWindow(dockable);
+                        }
+                    });
                 }
                 else if (factory.IsDockablePinned(dockable))
                 {
@@ -319,23 +335,80 @@ public sealed class ToolDockMenuItem : MenuItem
             case ToolDockMenuAction.DockAsDocument:
                 if (dockable.CanDockAsDocument)
                 {
-                    factory.DockAsDocument(dockable);
+                    RunAfterMenuCloses(() => factory.DockAsDocument(dockable));
                 }
                 break;
 
             case ToolDockMenuAction.Close:
                 if (dockable.CanClose)
                 {
-                    factory.CloseDockable(dockable);
+                    RunAfterMenuCloses(() => factory.CloseDockable(dockable));
                 }
                 break;
 
             case ToolDockMenuAction.CloseOthers:
                 if (HasMultipleVisiblePeers(dockable))
                 {
-                    factory.CloseOtherDockables(dockable);
+                    RunAfterMenuCloses(() => factory.CloseOtherDockables(dockable));
                 }
                 break;
         }
+    }
+
+    private void RunAfterMenuCloses(Action action)
+    {
+        void Schedule()
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                // Give Avalonia's WaylandWorker thread a brief turn to flush xdg_popup.destroy
+                // before any window close destroys the parent HostWindow's xdg_toplevel.
+                DispatcherTimer.RunOnce(action, TimeSpan.FromMilliseconds(50), DispatcherPriority.Background);
+                return;
+            }
+
+            Dispatcher.UIThread.Post(action, DispatcherPriority.Background);
+        }
+
+        if (HostFlyout is { IsOpen: true } flyout)
+        {
+            void OnFlyoutClosed(object? s, EventArgs args)
+            {
+                flyout.Closed -= OnFlyoutClosed;
+                Schedule();
+            }
+
+            flyout.Closed += OnFlyoutClosed;
+            flyout.Hide();
+            return;
+        }
+
+        if (_hostContextMenu is { IsOpen: true } contextMenu)
+        {
+            void OnContextMenuClosed(object? s, RoutedEventArgs args)
+            {
+                contextMenu.Closed -= OnContextMenuClosed;
+                Schedule();
+            }
+
+            contextMenu.Closed += OnContextMenuClosed;
+            contextMenu.Close();
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is PopupRoot { Parent: Popup { IsOpen: true } popup })
+        {
+            void OnPopupClosed(object? s, EventArgs args)
+            {
+                popup.Closed -= OnPopupClosed;
+                Schedule();
+            }
+
+            popup.Closed += OnPopupClosed;
+            popup.Close();
+            return;
+        }
+
+        Schedule();
     }
 }

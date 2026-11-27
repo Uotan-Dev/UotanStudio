@@ -21,6 +21,14 @@ public sealed class DockToMainWindowMenuItem : MenuItem
 {
     private ContextMenu? _hostContextMenu;
 
+    /// <summary>
+    /// Optional <see cref="MenuFlyout"/> hosting this item (e.g. a floating tool window header flyout),
+    /// used so the popup can finish closing before the parent floating window is destroyed on Wayland.
+    /// <para>承载本菜单项的可选 <see cref="MenuFlyout"/>（例如浮动工具窗口顶栏菜单），
+    /// 用于在 Wayland 下等待弹出层完全关闭后再销毁父级浮动窗口。</para>
+    /// </summary>
+    internal MenuFlyout? HostFlyout { get; set; }
+
     /// <summary>Uses the standard menu-item theme.<para>使用标准菜单项主题。</para></summary>
     protected override Type StyleKeyOverride => typeof(MenuItem);
 
@@ -125,21 +133,73 @@ public sealed class DockToMainWindowMenuItem : MenuItem
         }
 
         // Defer returning (and potentially closing the floating HostWindow) until after the hosting
-        // ContextMenu / MenuFlyout popup has finished closing. On Wayland, destroying a parent
+        // MenuFlyout / ContextMenu popup has completely closed. On Wayland, destroying a parent
         // xdg_toplevel while its child xdg_popup is still alive triggers a fatal protocol error
         // (xdg_wm_base error 2: destroyed popup not top most popup).
-        _hostContextMenu?.Close();
-        if (this.FindLogicalAncestorOfType<Popup>() is { IsOpen: true } popup)
+        void ScheduleDockReturn()
         {
-            popup.Close();
+            if (OperatingSystem.IsLinux())
+            {
+                // Give Avalonia's WaylandWorker thread a brief turn to flush xdg_popup.destroy
+                // before CloseWindow destroys the parent HostWindow's xdg_toplevel.
+                DispatcherTimer.RunOnce(() =>
+                {
+                    if (factory.CanDockToMainWindow(dockable))
+                    {
+                        factory.DockToMainWindow(dockable);
+                    }
+                }, TimeSpan.FromMilliseconds(50), DispatcherPriority.Background);
+                return;
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (factory.CanDockToMainWindow(dockable))
+                {
+                    factory.DockToMainWindow(dockable);
+                }
+            }, DispatcherPriority.Background);
         }
 
-        Dispatcher.UIThread.Post(() =>
+        if (HostFlyout is { IsOpen: true } flyout)
         {
-            if (factory.CanDockToMainWindow(dockable))
+            void OnFlyoutClosed(object? s, EventArgs args)
             {
-                factory.DockToMainWindow(dockable);
+                flyout.Closed -= OnFlyoutClosed;
+                ScheduleDockReturn();
             }
-        }, DispatcherPriority.Background);
+
+            flyout.Closed += OnFlyoutClosed;
+            flyout.Hide();
+            return;
+        }
+
+        if (_hostContextMenu is { IsOpen: true } contextMenu)
+        {
+            void OnContextMenuClosed(object? s, RoutedEventArgs args)
+            {
+                contextMenu.Closed -= OnContextMenuClosed;
+                ScheduleDockReturn();
+            }
+
+            contextMenu.Closed += OnContextMenuClosed;
+            contextMenu.Close();
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this) is PopupRoot { Parent: Popup { IsOpen: true } popup })
+        {
+            void OnPopupClosed(object? s, EventArgs args)
+            {
+                popup.Closed -= OnPopupClosed;
+                ScheduleDockReturn();
+            }
+
+            popup.Closed += OnPopupClosed;
+            popup.Close();
+            return;
+        }
+
+        ScheduleDockReturn();
     }
 }
