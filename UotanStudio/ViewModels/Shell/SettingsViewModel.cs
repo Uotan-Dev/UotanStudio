@@ -7,6 +7,7 @@ using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.Services.HardwareAcceleration;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;
@@ -1142,6 +1143,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         InitializeFromAppSettings(_appSettings, applyLanguage);
 
+        RefreshHardwareAccelerationOptions();
+        _ = RefreshToolboxAsync();
+
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
@@ -1385,6 +1389,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             item.RefreshLocalizedText();
         }
+        RefreshToolboxLocalizedState();
         foreach (var member in DevelopmentMembers.All)
         {
             member.RefreshLocalizedText();
@@ -1536,6 +1541,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
 
         InitializeFromAppSettings(_appSettings);
+        RefreshHardwareAccelerationOptions();
+        _ = RefreshToolboxAsync();
         McpExposureService.Instance.Apply(McpExposeEnabled, McpExposePort, McpExposeRootDirectory, McpExposeAllowFlash);
 
         OnPropertyChanged(string.Empty);

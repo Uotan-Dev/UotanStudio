@@ -585,4 +585,403 @@
   <data name="Settings_AutoCheckUpdatesHint" xml:space="preserve">
     <value>Check for new versions automatically on startup.</value>
   </data>
+  <data name="Settings_Toolbox" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
+  <data name="Settings_ToolboxDescription" xml:space="preserve">
+    <value>Inspect the content shipped with the application and the caches filled by downloads.</value>
+  </data>
+  <data name="Settings_ToolboxRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Settings_ToolboxEmbedded" xml:space="preserve">
+    <value>Embedded resources</value>
+  </data>
+  <data name="Settings_ToolboxEmbeddedHint" xml:space="preserve">
+    <value>These payloads are embedded in the application and can never be deleted; exporting copies them to a directory you pick.</value>
+  </data>
+  <data name="Settings_ToolboxExport" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Settings_ToolboxPurge" xml:space="preserve">
+    <value>Clear cache</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPaths" xml:space="preserve">
+    <value>Detected implementations</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAuto" xml:space="preserve">
+    <value>Automatic ({0})</value>
+  </data>
+  <data name="Settings_HardwareAccelerationSummary" xml:space="preserve">
+    <value>{0} · hardware selects {1} · {2} bytes per iteration</value>
+  </data>
+  <data name="Settings_HardwareAccelerationWidth" xml:space="preserve">
+    <value>{0} B/iter</value>
+  </data>
+  <data name="Settings_HardwareAccelerationActive" xml:space="preserve">
+    <value>In use</value>
+  </data>
+  <data name="Settings_HardwareAccelerationAvailable" xml:space="preserve">
+    <value>Available</value>
+  </data>
+  <data name="Settings_HardwareAccelerationNone" xml:space="preserve">
+    <value>This processor reports no vector implementation, so byte-block work already runs on the scalar software loop.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathScalar" xml:space="preserve">
+    <value>Scalar software loop</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathScalarHint" xml:space="preserve">
+    <value>Portable byte-at-a-time implementation, always available.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathPortableVectors" xml:space="preserve">
+    <value>Portable vectors</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathPortableVectorsHint" xml:space="preserve">
+    <value>Width-agnostic vector operations lowered to the widest registers the runtime exposes.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSse2" xml:space="preserve">
+    <value>SSE2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSse2Hint" xml:space="preserve">
+    <value>x86 128-bit integer operations.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx2" xml:space="preserve">
+    <value>AVX2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx2Hint" xml:space="preserve">
+    <value>x86 256-bit integer operations.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx512" xml:space="preserve">
+    <value>AVX-512</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx512Hint" xml:space="preserve">
+    <value>x86 512-bit integer operations.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx10" xml:space="preserve">
+    <value>AVX10</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx10Hint" xml:space="preserve">
+    <value>x86 converged vector ISA, including the 512-bit form.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAdvSimd" xml:space="preserve">
+    <value>Advanced SIMD</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAdvSimdHint" xml:space="preserve">
+    <value>ARM64 128-bit vector operations.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrc" xml:space="preserve">
+    <value>ARM CRC32</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrcHint" xml:space="preserve">
+    <value>ARM64 CRC32 and CRC32C instructions.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrypto" xml:space="preserve">
+    <value>ARM crypto extensions</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCryptoHint" xml:space="preserve">
+    <value>ARM64 AES, PMULL, SHA-1 and SHA-256 extensions.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve" xml:space="preserve">
+    <value>Scalable Vector Extension</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSveHint" xml:space="preserve">
+    <value>ARM64 vectors whose width the runtime decides.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve2" xml:space="preserve">
+    <value>Scalable Vector Extension 2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve2Hint" xml:space="preserve">
+    <value>Second generation of the ARM64 scalable vectors.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLsx" xml:space="preserve">
+    <value>LoongArch LSX</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLsxHint" xml:space="preserve">
+    <value>128-bit vector operations through runtime-emitted native kernels.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLasx" xml:space="preserve">
+    <value>LoongArch LASX</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLasxHint" xml:space="preserve">
+    <value>256-bit vector operations through runtime-emitted native kernels.</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathRiscVVector" xml:space="preserve">
+    <value>RISC-V vector extension</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathRiscVVectorHint" xml:space="preserve">
+    <value>RVV 1.0 operations adapting to the hart's register width.</value>
+  </data>
+  <data name="Settings_DriverInstall" xml:space="preserve">
+    <value>Driver packages</value>
+  </data>
+  <data name="Settings_DriverInstallHintElevated" xml:space="preserve">
+    <value>The application is elevated, so a package is staged and bound to present devices immediately.</value>
+  </data>
+  <data name="Settings_DriverInstallHintElevation" xml:space="preserve">
+    <value>Staging a driver package asks for administrator rights once; devices bind when they next enumerate.</value>
+  </data>
+  <data name="Settings_DriverInstallUnsupportedHint" xml:space="preserve">
+    <value>Vendor driver packages can only be staged on Windows.</value>
+  </data>
+  <data name="Settings_DriverInstallAction" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Settings_DriverInstallTitle" xml:space="preserve">
+    <value>Install driver package</value>
+  </data>
+  <data name="Settings_DriverInstallMessage" xml:space="preserve">
+    <value>Stage {0} into the Windows driver store and bind it to present devices?</value>
+  </data>
+  <data name="Settings_DriverInstallConfirm" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Settings_DriverInstallSucceeded" xml:space="preserve">
+    <value>{0} was staged.</value>
+  </data>
+  <data name="Settings_DriverInstallElevation" xml:space="preserve">
+    <value>{0} needs administrator rights.</value>
+  </data>
+  <data name="Settings_DriverInstallFailed" xml:space="preserve">
+    <value>{0} could not be installed.</value>
+  </data>
+  <data name="Toolbox_NotMaterialized" xml:space="preserve">
+    <value>not materialized</value>
+  </data>
+  <data name="Toolbox_CacheEmpty" xml:space="preserve">
+    <value>empty</value>
+  </data>
+  <data name="Toolbox_FileCount" xml:space="preserve">
+    <value>{0} files</value>
+  </data>
+  <data name="Toolbox_StateEmbedded" xml:space="preserve">
+    <value>shipped</value>
+  </data>
+  <data name="Toolbox_StateNotShipped" xml:space="preserve">
+    <value>not shipped</value>
+  </data>
+  <data name="Toolbox_StateCached" xml:space="preserve">
+    <value>cached</value>
+  </data>
+  <data name="Toolbox_StateInstallable" xml:space="preserve">
+    <value>installable</value>
+  </data>
+  <data name="Toolbox_StateUnavailable" xml:space="preserve">
+    <value>unavailable</value>
+  </data>
+  <data name="Toolbox_UnavailableAssetsMissing" xml:space="preserve">
+    <value>the payload is missing from this build</value>
+  </data>
+  <data name="Toolbox_SizeBytes" xml:space="preserve">
+    <value>{0} B</value>
+  </data>
+  <data name="Toolbox_SizeUnit" xml:space="preserve">
+    <value>{0:0.##} {1}</value>
+  </data>
+  <data name="Toolbox_RefreshFailed" xml:space="preserve">
+    <value>Reading the toolbox content failed: {0}</value>
+  </data>
+  <data name="Toolbox_PurgeTitle" xml:space="preserve">
+    <value>Clear cache</value>
+  </data>
+  <data name="Toolbox_PurgeMessage" xml:space="preserve">
+    <value>Delete the derived cache of {0}? The application rebuilds it the next time it is needed.</value>
+  </data>
+  <data name="Toolbox_PurgeConfirm" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Toolbox_PurgeSucceeded" xml:space="preserve">
+    <value>Cleared the cache of {0}, freeing {1}.</value>
+  </data>
+  <data name="Toolbox_PurgeFailed" xml:space="preserve">
+    <value>Clearing the cache of {0} failed: {1}</value>
+  </data>
+  <data name="Toolbox_ExportNoPicker" xml:space="preserve">
+    <value>This platform provides no folder picker, so nothing was exported.</value>
+  </data>
+  <data name="Toolbox_ExportPick" xml:space="preserve">
+    <value>Export {0} to</value>
+  </data>
+  <data name="Toolbox_ExportSucceeded" xml:space="preserve">
+    <value>Exported {0} ({1} files) to {2}.</value>
+  </data>
+  <data name="Toolbox_ExportFailed" xml:space="preserve">
+    <value>Exporting {0} failed: {1}</value>
+  </data>
+  <data name="Toolbox_BundleFonts" xml:space="preserve">
+    <value>MiSans variable face</value>
+  </data>
+  <data name="Toolbox_BundleFontsHint" xml:space="preserve">
+    <value>The interface font decoded into memory at startup.</value>
+  </data>
+  <data name="Toolbox_BundleOhosDevice" xml:space="preserve">
+    <value>OpenHarmony capture libraries</value>
+  </data>
+  <data name="Toolbox_BundleOhosDeviceHint" xml:space="preserve">
+    <value>UI Test capture libraries and control agents.</value>
+  </data>
+  <data name="Toolbox_BundleRockusb" xml:space="preserve">
+    <value>Rockchip Rockusb driver</value>
+  </data>
+  <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
+    <value>Vendor driver package staged for the maskrom download mode.</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
+    <value>MediaTek VCOM driver</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekVcomHint" xml:space="preserve">
+    <value>Virtual COM port driver for MediaTek download mode.</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekFull" xml:space="preserve">
+    <value>MediaTek full driver</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekFullHint" xml:space="preserve">
+    <value>Complete MediaTek USB driver package.</value>
+  </data>
+  <data name="Toolbox_BundleGoogleUsb" xml:space="preserve">
+    <value>Google USB driver</value>
+  </data>
+  <data name="Toolbox_BundleGoogleUsbHint" xml:space="preserve">
+    <value>Android USB driver package published by Google.</value>
+  </data>
+  <data name="Toolbox_BundleRockchipAdb" xml:space="preserve">
+    <value>Rockchip ADB driver</value>
+  </data>
+  <data name="Toolbox_BundleRockchipAdbHint" xml:space="preserve">
+    <value>Android ADB driver package for Rockchip devices.</value>
+  </data>
+  <data name="Toolbox_BundleQualcommQud" xml:space="preserve">
+    <value>Qualcomm QUD driver</value>
+  </data>
+  <data name="Toolbox_BundleQualcommQudHint" xml:space="preserve">
+    <value>Qualcomm USB, modem and diagnostic drivers.</value>
+  </data>
+  <data name="Toolbox_BundleUnisocSpreadtrum" xml:space="preserve">
+    <value>UNISOC Spreadtrum driver</value>
+  </data>
+  <data name="Toolbox_BundleUnisocSpreadtrumHint" xml:space="preserve">
+    <value>UNISOC serial, ADB and modem drivers.</value>
+  </data>
+  <data name="Toolbox_BundleWinUsbCoinstaller" xml:space="preserve">
+    <value>WinUSB coinstallers</value>
+  </data>
+  <data name="Toolbox_BundleWinUsbCoinstallerHint" xml:space="preserve">
+    <value>amd64 coinstallers shared by every bundled INF that binds WinUSB.</value>
+  </data>
+  <data name="Toolbox_BundleDeliveryUpdater" xml:space="preserve">
+    <value>Recovery updater</value>
+  </data>
+  <data name="Toolbox_BundleDeliveryUpdaterHint" xml:space="preserve">
+    <value>Native arm64 Edify updater used by recovery packages.</value>
+  </data>
+  <data name="Toolbox_BundleMagicRules" xml:space="preserve">
+    <value>Compiled magic rules</value>
+  </data>
+  <data name="Toolbox_BundleMagicRulesHint" xml:space="preserve">
+    <value>The magic(5) table the format detector reads.</value>
+  </data>
+  <data name="Toolbox_CacheDeliveryTools" xml:space="preserve">
+    <value>Delivery tool cache</value>
+  </data>
+  <data name="Toolbox_CacheDeliveryToolsHint" xml:space="preserve">
+    <value>Downloaded platform-tools and zstd archives used by delivery builds.</value>
+  </data>
+  <data name="Toolbox_CacheAsset" xml:space="preserve">
+    <value>Materialized asset cache</value>
+  </data>
+  <data name="Toolbox_CacheAssetHint" xml:space="preserve">
+    <value>Temporary copies of embedded bundles, rebuilt on demand.</value>
+  </data>
+  <data name="Toolbox_DriverRockusb" xml:space="preserve">
+    <value>Rockusb driver package</value>
+  </data>
+  <data name="Toolbox_DriverRockusbHint" xml:space="preserve">
+    <value>Stages the Rockchip maskrom download driver.</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekVcom" xml:space="preserve">
+    <value>MediaTek VCOM driver package</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekVcomHint" xml:space="preserve">
+    <value>Stages the MediaTek virtual COM port driver.</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekFull" xml:space="preserve">
+    <value>MediaTek full driver package</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekFullHint" xml:space="preserve">
+    <value>Stages the complete MediaTek USB driver package.</value>
+  </data>
+  <data name="Toolbox_DriverGoogleUsb" xml:space="preserve">
+    <value>Google USB driver package</value>
+  </data>
+  <data name="Toolbox_DriverGoogleUsbHint" xml:space="preserve">
+    <value>Stages the Android USB driver published by Google.</value>
+  </data>
+  <data name="Toolbox_DriverRockchipAdb" xml:space="preserve">
+    <value>Rockchip ADB driver package</value>
+  </data>
+  <data name="Toolbox_DriverRockchipAdbHint" xml:space="preserve">
+    <value>Stages the ADB driver for Rockchip devices.</value>
+  </data>
+  <data name="Toolbox_DriverQualcommQud" xml:space="preserve">
+    <value>Qualcomm QUD driver package</value>
+  </data>
+  <data name="Toolbox_DriverQualcommQudHint" xml:space="preserve">
+    <value>Stages the Qualcomm USB, modem and diagnostic drivers.</value>
+  </data>
+  <data name="Toolbox_DriverUnisocSpreadtrum" xml:space="preserve">
+    <value>UNISOC Spreadtrum driver package</value>
+  </data>
+  <data name="Toolbox_DriverUnisocSpreadtrumHint" xml:space="preserve">
+    <value>Stages the UNISOC serial, ADB and modem drivers.</value>
+  </data>
+  <data name="Toolbox_Summary" xml:space="preserve">
+    <value>{0} groups · {1} cached</value>
+  </data>
+  <data name="Toolbox_StateInstalled" xml:space="preserve">
+    <value>installed</value>
+  </data>
+  <data name="Toolbox_DriverUninstall" xml:space="preserve">
+    <value>Remove driver</value>
+  </data>
+  <data name="Toolbox_DriverInstall" xml:space="preserve">
+    <value>Install driver</value>
+  </data>
+  <data name="Toolbox_RootPatchHint" xml:space="preserve">
+    <value>Root patch packages downloaded from this project's releases.</value>
+  </data>
+  <data name="Settings_DriverUninstallTitle" xml:space="preserve">
+    <value>Remove driver package</value>
+  </data>
+  <data name="Settings_DriverUninstallMessage" xml:space="preserve">
+    <value>Remove {0} from the Windows driver store?</value>
+  </data>
+  <data name="Settings_DriverUninstallConfirm" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Settings_DriverUninstallSucceeded" xml:space="preserve">
+    <value>{0} was removed.</value>
+  </data>
+  <data name="Settings_DriverUninstallFailed" xml:space="preserve">
+    <value>{0} could not be removed.</value>
+  </data>
+  <data name="Toolbox_EntryCount" xml:space="preserve">
+    <value>{0} version(s) on disk</value>
+  </data>
+  <data name="Toolbox_EntryDeleteTitle" xml:space="preserve">
+    <value>Delete downloaded file</value>
+  </data>
+  <data name="Toolbox_EntryDeleteMessage" xml:space="preserve">
+    <value>Delete {0} from disk? The rest of this item stays in place.</value>
+  </data>
+  <data name="Toolbox_EntryDeleteConfirm" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Toolbox_EntryDeleteSucceeded" xml:space="preserve">
+    <value>Deleted {0}.</value>
+  </data>
+  <data name="Toolbox_EntryDeleteFailed" xml:space="preserve">
+    <value>Could not delete {0}: {1}</value>
+  </data>
+  <data name="Toolbox_EntryDeleteAction" xml:space="preserve">
+    <value>Delete this file</value>
+  </data>
 </root>

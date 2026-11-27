@@ -817,6 +817,160 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Toolbox section -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Tools Width="18" Height="18"
+                                     Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_Toolbox}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_ToolboxDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Width="64" Height="3"
+                                     IsVisible="{Binding IsToolboxBusy}" />
+                        <Button Classes="settings-action" Command="{Binding RefreshToolboxCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Refresh Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_ToolboxRefresh}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <StackPanel Classes="settings-row-block" Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_ToolboxEmbedded}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ToolboxEmbeddedHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding ToolboxItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ToolboxContentItem">
+                                        <Border Classes="settings-order-row" Margin="0,0,0,6">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Classes="settings-label" />
+                                                        <TextBlock Text="{Binding Description}"
+                                                                   Classes="settings-description" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <TextBlock Text="{Binding DeclaredSizeText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding PresentSizeText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding FileCountText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding StateText}"
+                                                                       Classes="settings-value"
+                                                                       Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                                VerticalAlignment="Center">
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding ExportCommand}"
+                                                                IsVisible="{Binding CanExport}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <icons:Export Width="14" Height="14" />
+                                                                <TextBlock Text="{DynamicResource Settings_ToolboxExport}" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding PurgeCommand}"
+                                                                IsVisible="{Binding CanPurgeCache}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <icons:Delete Width="14" Height="14" />
+                                                                <TextBlock Text="{DynamicResource Settings_ToolboxPurge}" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding InstallCommand}"
+                                                                IsVisible="{Binding IsDriverRow}"
+                                                                IsEnabled="{Binding CanInstall}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <icons:Setting Width="14" Height="14" />
+                                                                <TextBlock Text="{Binding InstallActionText}" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding ToggleExpandedCommand}"
+                                                                IsVisible="{Binding CanExpand}"
+                                                                ToolTip.Tip="{Binding EntryCountText}">
+                                                            <icons:ChevronDown Width="14" Height="14" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding Entries}"
+                                                    IsVisible="{Binding IsExpanded}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ToolboxContentEntryItem">
+                                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"
+                                                                Margin="0,2,0,0">
+                                                                <TextBlock Text="{Binding Name}"
+                                                                    Classes="settings-value"
+                                                                    TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Grid.Column="1" Text="{Binding Path}"
+                                                                    Classes="settings-description"
+                                                                    TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Grid.Column="2" Text="{Binding SizeText}"
+                                                                    Classes="settings-value" />
+                                                                <Button Grid.Column="3"
+                                                                        Classes="settings-action"
+                                                                        Command="{Binding DeleteCommand}"
+                                                                        ToolTip.Tip="{DynamicResource Settings_ToolboxEntryDelete}">
+                                                                        <icons:Delete Width="14" Height="14" />
+                                                                </Button>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_HardwareAccelerationPaths}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{Binding HardwareAccelerationSummary}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding HardwareAccelerationOptions}"
+                                      SelectedIndex="{Binding HardwareAccelerationIndex, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <Border Classes="settings-banner-info" Margin="20,0,20,14"
+                                IsVisible="{Binding LacksHardwareAcceleration}">
+                            <TextBlock Text="{DynamicResource Settings_HardwareAccelerationNone}"
+                                       Classes="settings-value"
+                                       Foreground="{DynamicResource TextForeground}" />
+                        </Border>
+
+                        <Border Classes="settings-banner-info" Margin="20,0,20,16"
+                                IsVisible="{Binding HasToolboxStatus}">
+                            <TextBlock Text="{Binding ToolboxStatus}" Classes="settings-value"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- Developers section -->
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="4,12,4,0">
                     <Border Classes="settings-icon">

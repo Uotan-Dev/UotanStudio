@@ -661,7 +661,15 @@ public sealed class RootPatchPackageService
     private static bool HasAuthority(Uri source, string authority)
         => string.Equals(source.GetLeftPart(UriPartial.Authority), authority, StringComparison.OrdinalIgnoreCase);
 
-    private static string DefaultResourceRoot()
+    /// <summary>
+    /// Resolves the directory that holds the per-source download folders, so other readers (the toolbox card) can
+    /// enumerate what has already been downloaded without constructing a service that needs a network client.
+    /// <para>解析存放按来源划分的下载目录的根目录，使其他读取方（工具箱卡片）能够枚举已下载内容，而无需构造需要
+    /// 网络客户端的服务。</para>
+    /// </summary>
+    /// <returns>The configured download root, the parent of the legacy scrcpy cache, or the application root.
+    /// <para>配置的下载根目录、遗留 scrcpy 缓存目录的父目录，或应用根目录。</para></returns>
+    internal static string DefaultResourceRoot()
     {
         var configured = RootPatchPackageSettingsStore.DownloadDir;
         if (!string.IsNullOrWhiteSpace(configured))
