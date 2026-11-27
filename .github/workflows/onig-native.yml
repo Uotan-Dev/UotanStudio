@@ -1,0 +1,81 @@
+name: Build Onigwarp Native Libraries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: onig-native ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: riscv64
+            elf: RISC-V
+            cross_image: mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-riscv64
+          - arch: loongarch64
+            elf: LoongArch
+            cross_image: mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-loongarch64
+    env:
+      CROSS_IMAGE: ${{ matrix.cross_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Restore native cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/cross/natives/out
+          key: ${{ matrix.arch }}-natives-v1-${{ runner.os }}-oniguruma6.9.10-portapty2.2.4
+
+      - name: Build native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/cross"
+          natives="$work/natives"
+          src="$natives/src"
+          out="$natives/out"
+          mkdir -p "$src" "$out"
+          libs=("$out/libonigwrap.so" "$out/libporta_pty.so")
+          if [ ! -f "${libs[0]}" ] || [ ! -f "${libs[1]}" ]; then
+            onigwrap="$src/onigwrap"
+            git init -q "$onigwrap"
+            git -C "$onigwrap" remote add origin https://github.com/aikawayataro/Onigwrap
+            git -C "$onigwrap" fetch -q --depth 1 origin 98683ee59d6d18d5aa579a11499cde753e5a6b34
+            git -C "$onigwrap" checkout -q FETCH_HEAD
+            portapty="$src/portapty"
+            git init -q "$portapty"
+            git -C "$portapty" remote add origin https://github.com/tomlm/Porta.Pty
+            git -C "$portapty" fetch -q --depth 1 origin 5fd8cc38428b345e252327bf6b438bee6c6a62a6
+            git -C "$portapty" checkout -q FETCH_HEAD
+            curl -fL --retry 3 -o "$src/onig.tar.gz" https://github.com/kkos/oniguruma/releases/download/v6.9.10/onig-6.9.10.tar.gz
+            mkdir "$src/oniguruma"
+            tar xzf "$src/onig.tar.gz" -C "$src/oniguruma" --strip-components=1
+            rm "$src/onig.tar.gz"
+            docker run --rm --platform linux/amd64 \
+              -v "$src:/natives-src" \
+              -v "$GITHUB_WORKSPACE:/work/src:ro" \
+              "$CROSS_IMAGE" bash /work/src/tools/cross-natives/build.sh \
+                ${{ matrix.arch }} /natives-src /natives-src/out
+          fi
+          for lib in "${libs[@]}"; do
+            test -f "$lib"
+            readelf -h "$lib" | grep -q "${{ matrix.elf }}"
+          done
+          ls -l "$out"
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v7
+        with:
+          name: onig-native-${{ matrix.arch }}
+          path: ${{ runner.temp }}/cross/natives/out/*.so
+          if-no-files-found: error
+          retention-days: 30
