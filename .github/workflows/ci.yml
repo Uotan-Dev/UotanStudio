@@ -604,49 +604,6 @@ jobs:
           (cd "$work/ilc-nupkg" && zip -qr "$work/nuget-local/$ilcm" .)
           touch "$work/nuget-local/.toolchain-ready"
 
-      - name: Restore cross natives cache
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/cross/natives/out
-          key: ${{ matrix.arch }}-natives-v1-${{ runner.os }}-oniguruma6.9.10-portapty2.2.4
-
-      - name: Build cross native libraries
-        shell: bash
-        run: |
-          set -euo pipefail
-          work="$RUNNER_TEMP/cross"
-          natives="$work/natives"
-          mkdir -p "$natives/out"
-          libs=("$natives/out/libonigwrap.so" "$natives/out/libporta_pty.so")
-          if [ -f "${libs[0]}" ] && [ -f "${libs[1]}" ]; then
-            echo "Cross native libraries restored from cache."
-          else
-            src="$natives/src"
-            mkdir -p "$src"
-            onigwrap="$src/onigwrap"
-            git init -q "$onigwrap"
-            git -C "$onigwrap" remote add origin https://github.com/aikawayataro/Onigwrap
-            git -C "$onigwrap" fetch -q --depth 1 origin 98683ee59d6d18d5aa579a11499cde753e5a6b34
-            git -C "$onigwrap" checkout -q FETCH_HEAD
-            portapty="$src/portapty"
-            git init -q "$portapty"
-            git -C "$portapty" remote add origin https://github.com/tomlm/Porta.Pty
-            git -C "$portapty" fetch -q --depth 1 origin 5fd8cc38428b345e252327bf6b438bee6c6a62a6
-            git -C "$portapty" checkout -q FETCH_HEAD
-            curl -fL --retry 3 -o "$src/onig.tar.gz" \
-              "https://github.com/kkos/oniguruma/releases/download/v6.9.10/onig-6.9.10.tar.gz"
-            mkdir "$src/oniguruma"
-            tar xzf "$src/onig.tar.gz" -C "$src/oniguruma" --strip-components=1
-            rm "$src/onig.tar.gz"
-            docker run --rm --platform linux/amd64 \
-              -v "$src:/natives-src" \
-              -v "$GITHUB_WORKSPACE:/work/src:ro" \
-              "$CROSS_IMAGE" bash /work/src/tools/cross-natives/build.sh ${{ matrix.arch }} /natives-src /natives-src/out
-            cp "$src/out/"*.so "$natives/out/"
-          fi
-          readelf -h "${libs[0]}" | grep -q ${{ matrix.elf }} || { echo "::error::libonigwrap.so is not a ${{ matrix.arch }} ELF." >&2; exit 1; }
-          readelf -h "${libs[1]}" | grep -q ${{ matrix.elf }} || { echo "::error::libporta_pty.so is not a ${{ matrix.arch }} ELF." >&2; exit 1; }
-
       - name: Restore ${{ matrix.arch }} cross JIT cache
         uses: actions/cache@v6
         with:
@@ -839,7 +796,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/publish"
           cp -R "$work/out/." "$RUNNER_TEMP/publish/"
           sudo chown -R "$(id -u):$(id -g)" "$work/home"
-          cp "$work/natives/out/libonigwrap.so" "$work/natives/out/libporta_pty.so" "$RUNNER_TEMP/publish/"
           if [ -f "$RUNNER_TEMP/publish/UotanStudio.Desktop" ]; then
             file "$RUNNER_TEMP/publish/UotanStudio.Desktop"
           else
@@ -856,6 +812,23 @@ jobs:
           test -f "$RUNNER_TEMP/publish/libSkiaSharp.so" \
             || echo "::warning::libSkiaSharp.so is missing from the publish output; check the RID asset resolution."
           file "$RUNNER_TEMP/publish/libSkiaSharp.so" 2>/dev/null || true
+
+      - name: Build Porta.Pty native dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          native="$RUNNER_TEMP/porta-pty"
+          mkdir -p "$native/src" "$native/out"
+          git init -q "$native/src/portapty"
+          git -C "$native/src/portapty" remote add origin https://github.com/tomlm/Porta.Pty
+          git -C "$native/src/portapty" fetch -q --depth 1 origin 5fd8cc38428b345e252327bf6b438bee6c6a62a6
+          git -C "$native/src/portapty" checkout -q FETCH_HEAD
+          docker run --rm --platform linux/amd64 \
+            -v "$native:/native" \
+            -v "$GITHUB_WORKSPACE:/work/src:ro" \
+            "$CROSS_IMAGE" bash /work/src/tools/cross-natives/build-porta-pty.sh \
+              ${{ matrix.arch }} /native/src /native/out
+          cp "$native/out/libporta_pty.so" "$RUNNER_TEMP/publish/"
 
       - name: Package (tar.gz)
         shell: bash
