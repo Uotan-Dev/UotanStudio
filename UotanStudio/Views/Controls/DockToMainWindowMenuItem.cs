@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Threading;
 using Dock.Model.Core;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
@@ -117,9 +119,27 @@ public sealed class DockToMainWindowMenuItem : MenuItem
 
     private void OnClick(object? sender, RoutedEventArgs e)
     {
-        if (ResolveDockable() is { Factory: IDockReturnFactory factory } dockable)
+        if (ResolveDockable() is not { Factory: IDockReturnFactory factory } dockable)
         {
-            factory.DockToMainWindow(dockable);
+            return;
         }
+
+        // Defer returning (and potentially closing the floating HostWindow) until after the hosting
+        // ContextMenu / MenuFlyout popup has finished closing. On Wayland, destroying a parent
+        // xdg_toplevel while its child xdg_popup is still alive triggers a fatal protocol error
+        // (xdg_wm_base error 2: destroyed popup not top most popup).
+        _hostContextMenu?.Close();
+        if (this.FindLogicalAncestorOfType<Popup>() is { IsOpen: true } popup)
+        {
+            popup.Close();
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (factory.CanDockToMainWindow(dockable))
+            {
+                factory.DockToMainWindow(dockable);
+            }
+        }, DispatcherPriority.Background);
     }
 }
