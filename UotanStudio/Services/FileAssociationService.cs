@@ -23,6 +23,8 @@ public static partial class FileAssociationService
     private const int RegOptionNonVolatile = 0;
     private const int KeyWrite = 0x00020006;
     private const int KeyRead = 0x00020019;
+    private const uint ShellChangeAssociationChanged = 0x08000000;
+    private const uint ShellChangeNotifyIdList = 0x0000;
 
     private static readonly nint Hkcu = new(0x80000001L);
 
@@ -102,6 +104,9 @@ public static partial class FileAssociationService
 
     [LibraryImport("advapi32.dll", EntryPoint = "RegCloseKey", SetLastError = true)]
     private static partial int RegCloseKey(nint hKey);
+
+    [LibraryImport("shell32.dll", EntryPoint = "SHChangeNotify")]
+    private static partial void SHChangeNotify(uint eventId, uint flags, nint item1, nint item2);
 
     /// <summary>
     /// Registers the built-in project formats together with <paramref name="selectedExtensions"/> and reports
@@ -431,8 +436,12 @@ public static partial class FileAssociationService
             SetStringValue(Path.Combine(ClassesRoot, spec.Extension, "OpenWithProgids"), spec.ProgId, string.Empty);
         }
 
+        RefreshWindowsShellAssociations();
         return true;
     }
+
+    private static void RefreshWindowsShellAssociations() =>
+        SHChangeNotify(ShellChangeAssociationChanged, ShellChangeNotifyIdList, nint.Zero, nint.Zero);
 
     /// <summary>
     /// Builds the shell open command that passes the selected file to the executable.
