@@ -25,6 +25,7 @@ public class DockHostWindow : HostWindow
     private bool _x11Dragging;
     private bool _startingX11Drag;
     private PointerPressedEventArgs? _pendingPressArgs;
+    private Control? _pendingPressSource;
     private IPointer? _x11CapturedPointer;
     private Point _pendingStartClient;
     private PixelPoint _x11DragAnchorOffset;
@@ -103,6 +104,7 @@ public class DockHostWindow : HostWindow
 
         _pendingX11Drag = true;
         _pendingPressArgs = e;
+        _pendingPressSource = e.Source as Control;
         _pendingStartClient = e.GetPosition(this);
         _pendingDockScope = dockScope;
         _x11CapturedPointer = e.Pointer;
@@ -141,9 +143,13 @@ public class DockHostWindow : HostWindow
             }
 
             var pressArgs = _pendingPressArgs;
+            var pressSource = _pendingPressSource;
             var scope = _pendingDockScope;
             _pendingX11Drag = false;
             _pendingPressArgs = null;
+            _pendingPressSource = null;
+
+            EnsureFocusedDockableForDrag(pressSource);
 
             _startingX11Drag = true;
             bool started;
@@ -241,6 +247,7 @@ public class DockHostWindow : HostWindow
         _x11Dragging = false;
         _pendingX11Drag = false;
         _pendingPressArgs = null;
+        _pendingPressSource = null;
         ReleaseX11Capture();
         InvokeEndWindowDrag(this, e);
     }
@@ -250,6 +257,7 @@ public class DockHostWindow : HostWindow
         _x11Dragging = false;
         _pendingX11Drag = false;
         _pendingPressArgs = null;
+        _pendingPressSource = null;
         ReleaseX11Capture();
         InvokeCancelExternalWindowDrag(this);
     }
@@ -259,6 +267,7 @@ public class DockHostWindow : HostWindow
         _x11Dragging = false;
         _pendingX11Drag = false;
         _pendingPressArgs = null;
+        _pendingPressSource = null;
         ReleaseX11Capture();
     }
 
@@ -280,9 +289,62 @@ public class DockHostWindow : HostWindow
     private void ClearStuckDraggingState()
         => InvokeCancelExternalWindowDrag(this);
 
+    private void EnsureFocusedDockableForDrag(Control? source)
+    {
+        if (Window?.Layout is not { } layout || Window.Factory is not { } factory)
+        {
+            return;
+        }
+
+        if (source is not null)
+        {
+            for (Visual? current = source; current is not null && !ReferenceEquals(current, this); current = current.GetVisualParent())
+            {
+                if (current is ToolChromeControl { DataContext: IDock { ActiveDockable: { } active } })
+                {
+                    factory.SetFocusedDockable(layout, active);
+                    return;
+                }
+
+                if (current is DocumentTabStrip { DataContext: IDock { ActiveDockable: { } docActive } })
+                {
+                    factory.SetFocusedDockable(layout, docActive);
+                    return;
+                }
+            }
+        }
+
+        if (layout.FocusedDockable is not null)
+        {
+            return;
+        }
+
+        var fallback = ResolveActiveLeafDockable(layout);
+        if (fallback is not null)
+        {
+            factory.SetFocusedDockable(layout, fallback);
+        }
+    }
+
+    private static IDockable? ResolveActiveLeafDockable(IDockable? current)
+    {
+        while (current is IDock dock)
+        {
+            var next = dock.ActiveDockable ?? dock.VisibleDockables?.FirstOrDefault();
+            if (next is null || ReferenceEquals(next, current))
+            {
+                return current;
+            }
+
+            current = next;
+        }
+
+        return current;
+    }
+
     private bool TryResolveX11DragScope(Control? source, out WindowDragDockScope dockScope)
     {
-        dockScope = WindowDragDockScope.WindowChrome;
+        dockScope = WindowDragDockScope.FullWindow;
         if (source is null)
         {
             return false;
@@ -305,7 +367,7 @@ public class DockHostWindow : HostWindow
             {
                 if (ToolChromeControlsWholeWindow && insideToolGrip)
                 {
-                    dockScope = WindowDragDockScope.WindowChrome;
+                    dockScope = WindowDragDockScope.FullWindow;
                     return true;
                 }
 
@@ -316,7 +378,7 @@ public class DockHostWindow : HostWindow
             {
                 if (tabStrip.EnableWindowDrag)
                 {
-                    dockScope = DockSettings.DocumentWindowDragScope;
+                    dockScope = WindowDragDockScope.FullWindow;
                     return true;
                 }
 
@@ -325,7 +387,7 @@ public class DockHostWindow : HostWindow
 
             if (current is HostWindowTitleBar)
             {
-                dockScope = WindowDragDockScope.WindowChrome;
+                dockScope = WindowDragDockScope.FullWindow;
                 return true;
             }
         }
