@@ -31,7 +31,7 @@
     </Style>
     <Style Selector="TextBlock.status-badge">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
     </Style>
     <Style Selector="TextBlock.status-badge.missing">
       <Setter Property="Foreground" Value="{DynamicResource SemiColorWarning}" />
@@ -46,7 +46,7 @@
     <Border Grid.Row="1" Padding="12,4,12,0">
       <TextBlock Text="{Binding SourceDescription}"
                  VerticalAlignment="Center"
-                 FontSize="12" Opacity="0.75" FontFamily="Consolas,monospace"
+                 FontSize="12" Opacity="0.75" FontFamily="{StaticResource MonospaceFontFamily}"
                  TextTrimming="CharacterEllipsis" />
     </Border>
 
@@ -76,9 +76,9 @@
                 <Grid ColumnDefinitions="160,170,*,76" ColumnSpacing="8" Margin="0,1">
                   <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
                              TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Text="{Binding AddressText}" FontFamily="Consolas,monospace"
+                  <TextBlock Grid.Column="1" Text="{Binding AddressText}" FontFamily="{StaticResource MonospaceFontFamily}"
                              FontSize="12" Opacity="0.8" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2" Text="{Binding Path}" FontFamily="Consolas,monospace" FontSize="12"
+                  <TextBlock Grid.Column="2" Text="{Binding Path}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                              Opacity="0.85" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}"
                              VerticalAlignment="Center" />
                   <Border Grid.Column="3" Classes="status-badge" HorizontalAlignment="Center"
@@ -105,7 +105,7 @@
             <StackPanel Spacing="4">
               <TextBlock Text="{x:Static viewmodels:RockchipConfigEditorViewModel.HeaderLabel}"
                          FontWeight="SemiBold" Opacity="0.85" />
-              <SelectableTextBlock Text="{Binding HeaderHex}" FontFamily="Consolas,monospace" FontSize="12"
+              <SelectableTextBlock Text="{Binding HeaderHex}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                                    TextWrapping="Wrap" Opacity="0.8" />
             </StackPanel>
             <StackPanel Spacing="4">
@@ -120,9 +120,9 @@
                             x:DataType="viewmodels:RockchipConfigRowViewModel"
                             IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}">
                   <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                  <SelectableTextBlock Text="{Binding Path}" FontFamily="Consolas,monospace" FontSize="12"
+                  <SelectableTextBlock Text="{Binding Path}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                                        TextWrapping="Wrap" Opacity="0.85" />
-                  <SelectableTextBlock Text="{Binding TailText}" FontFamily="Consolas,monospace" FontSize="12"
+                  <SelectableTextBlock Text="{Binding TailText}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                                        TextWrapping="Wrap" Opacity="0.8" />
                 </StackPanel>
               </Grid>

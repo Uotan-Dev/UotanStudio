@@ -2176,6 +2176,7 @@ internal static class LocaleKeySets
         "About_Project_Oniguruma",
         "About_Project_MicrosoftTerminal",
         "About_Project_MiSansFont",
+        "About_Project_JetBrainsMonoFont",
         "About_Project_AndroidUpdateBinary",
         "About_Project_Xunit",
         "About_Project_BenchmarkDotNet",

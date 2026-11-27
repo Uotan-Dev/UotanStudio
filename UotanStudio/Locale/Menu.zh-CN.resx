@@ -1023,6 +1023,9 @@
   <data name="About_Project_MiSansFont" xml:space="preserve">
     <value>界面字体；按 MiSans Fonts 知识产权许可使用，文件未修改，不得单独再分发或改编</value>
   </data>
+  <data name="About_Project_JetBrainsMonoFont" xml:space="preserve">
+    <value>代码编辑器、十六进制查看器、日志、终端与技术表格使用的等宽字体（v2.304，SIL OFL 1.1）</value>
+  </data>
   <data name="About_Project_AndroidUpdateBinary" xml:space="preserve">
     <value>Recovery DAT 包的 pinned update-binary 回退实现（AOSP bootable/recovery，arm64 ELF）</value>
   </data>

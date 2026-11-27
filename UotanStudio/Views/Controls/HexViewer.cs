@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using UotanStudio.Fonts;
 using UotanStudio.Services;
 
 namespace UotanStudio.Views.Controls;
@@ -121,7 +122,7 @@ public partial class HexViewer : Grid
         {
             Width = 200,
             Height = 26,
-            FontFamily = FontFamily.Parse("Consolas"),
+            FontFamily = BundledFont.MonospaceFontFamily,
             FontSize = 13,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
@@ -198,7 +199,7 @@ public partial class HexViewer : Grid
     {
         private const int BufferLines = 4;
         private const double FontSize = 13;
-        private static readonly Typeface MonospaceTypeface = new("Consolas");
+        private static readonly Typeface MonospaceTypeface = new(BundledFont.MonospaceFontFamily);
         private static readonly IBrush DefaultSelectionBrush =
             new SolidColorBrush(Color.FromArgb(0x66, 0x59, 0xC2, 0xFF));
         private static readonly string[] AsciiCharText = CreateAsciiCharText();

@@ -61,7 +61,7 @@
     </Style>
     <Style Selector="TextBox.field-value">
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
     </Style>
 
     <!-- 分区列表行：主题把行内边距写死在 TreeViewItemPadding 资源上（ContentPresenter 优先取该资源，
@@ -108,7 +108,7 @@
                   SelectedItem="{Binding SelectedTableCopy, Mode=TwoWay}">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="viewmodels:PartitionTableCopyItemViewModel">
-              <TextBlock Text="{Binding Display}" FontFamily="Consolas" FontSize="11" />
+              <TextBlock Text="{Binding Display}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="11" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
@@ -179,7 +179,7 @@
                   <TextBlock Text="{Binding LabelText}" FontSize="10"
                              TextTrimming="CharacterEllipsis" />
                   <TextBlock Text="{Binding OffsetText}" FontSize="9" Opacity="0.6"
-                             FontFamily="Consolas" TextTrimming="CharacterEllipsis" />
+                             FontFamily="{StaticResource MonospaceFontFamily}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
               </Border>
             </DataTemplate>
@@ -223,9 +223,9 @@
                 <!-- Name and its parenthesised size share one baseline via runs in a single TextBlock,
                      which removes the misalignment of two separate TextBlocks. -->
                 <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                  <Run Text="{Binding Name}" FontFamily="Consolas" FontSize="13" />
+                  <Run Text="{Binding Name}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" />
                   <Run Text=" (" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                  <Run Text="{Binding Size}" FontFamily="Consolas" FontSize="11" />
+                  <Run Text="{Binding Size}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="11" />
                   <Run Text=")" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </TextBlock>
               </TreeDataTemplate>

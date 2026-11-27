@@ -79,7 +79,7 @@ public partial class TerminalView : UserControl
         var terminal = _terminal = new DockTerminal
         {
             Process = string.Empty,
-            FontFamily = new FontFamily("Cascadia Mono,Consolas,Menlo,DejaVu Sans Mono,monospace"),
+            FontFamily = BundledFont.MonospaceFontFamily,
             FontSize = 13,
             BufferSize = 10000,
             Options = new XTerm.Options.TerminalOptions { MinimumContrastRatio = 4.5 },

@@ -19,6 +19,7 @@
                 <!-- Global accent: kept in its own file so re-skinning only touches Themes/AccentColors.axaml. -->
                 <ResourceInclude Source="avares://UotanStudio/Themes/AccentColors.axaml"/>
             </ResourceDictionary.MergedDictionaries>
+            <FontFamily x:Key="MonospaceFontFamily">fonts:UotanStudio/JetBrainsMonoVF#JetBrains Mono</FontFamily>
             <converters:IntEqualConverter x:Key="IntEqualConverter" />
             <converters:AssetImageConverter x:Key="AssetImageConverter" />
             <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />

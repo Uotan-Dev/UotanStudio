@@ -422,6 +422,17 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
+            Name = "JetBrains Mono",
+            DescriptionKey = "About_Project_JetBrainsMonoFont",
+            RepositoryUrl = "https://github.com/JetBrains/JetBrainsMono",
+            LicenseName = "SIL OFL 1.1",
+            LicenseUrl = "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt",
+            AuthorName = "JetBrains",
+            AuthorGitHubUrl = "https://github.com/JetBrains",
+            AuthorAvatarUrl = "https://github.com/JetBrains.png"
+        },
+        new OpenSourceProject
+        {
             Name = "Android update-binary (AOSP)",
             DescriptionKey = "About_Project_AndroidUpdateBinary",
             RepositoryUrl = "https://android.googlesource.com/platform/bootable/recovery",

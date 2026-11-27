@@ -76,7 +76,7 @@
                 <TabItem Header="{DynamicResource Dock_Qualcomm_Segments}">
                     <DataGrid Margin="0,8,0,0" ItemsSource="{Binding SegmentRows}" IsReadOnly="True"
                               AutoGenerateColumns="False" GridLinesVisibility="Horizontal"
-                              CanUserResizeColumns="True" FontFamily="Consolas"
+                              CanUserResizeColumns="True" FontFamily="{StaticResource MonospaceFontFamily}"
                               Background="Transparent" BorderThickness="1"
                               BorderBrush="{DynamicResource SemiColorBorder}" CornerRadius="6">
                         <DataGrid.Columns>

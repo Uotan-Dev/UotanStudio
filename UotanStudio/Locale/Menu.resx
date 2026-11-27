@@ -1023,6 +1023,9 @@ Continue creating the project?</value>
   <data name="About_Project_MiSansFont" xml:space="preserve">
     <value>Interface font used under the MiSans Fonts IP license; files are unmodified and may not be redistributed or adapted separately.</value>
   </data>
+  <data name="About_Project_JetBrainsMonoFont" xml:space="preserve">
+    <value>Monospace typeface used in code editors, hex viewer, logs, terminal, and technical tables (v2.304, SIL OFL 1.1).</value>
+  </data>
   <data name="About_Project_AndroidUpdateBinary" xml:space="preserve">
     <value>Pinned update-binary fallback for Recovery DAT packages (AOSP bootable/recovery, arm64 ELF).</value>
   </data>

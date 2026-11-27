@@ -81,7 +81,7 @@
              Height="32"
              VerticalAlignment="Center"
              VerticalContentAlignment="Center"
-             FontFamily="Consolas,monospace"
+             FontFamily="{StaticResource MonospaceFontFamily}"
              Text="{Binding Pattern, Mode=TwoWay}"
              PlaceholderText="{DynamicResource RegexGenerator_PatternPlaceholder}" />
     <Button Grid.Row="5" Grid.Column="1"

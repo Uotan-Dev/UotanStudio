@@ -218,7 +218,7 @@
               <avalonia:ArrowUp />
             </Button>
             <TextBlock Grid.Column="1" Text="{Binding CurrentPath}" Margin="8,0,0,0" FontSize="12"
-                       FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       FontFamily="{StaticResource MonospaceFontFamily}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        ToolTip.Tip="{Binding CurrentPath}" />
           </Grid>
         </Border>

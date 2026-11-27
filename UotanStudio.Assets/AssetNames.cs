@@ -11,7 +11,7 @@ public static class AssetNames
     /// </summary>
     public static class Bundles
     {
-        /// <summary>MiSans font faces. <para>MiSans 字形。</para></summary>
+        /// <summary>Bundled UI and monospace font faces. <para>随包界面与等宽字形。</para></summary>
         public const string Fonts = "fonts";
 
         /// <summary>OpenHarmony UI Test capture libraries and control agents.
@@ -58,6 +58,18 @@ public static class AssetNames
         /// <para>MiSans 可变字形。其唯一的 <c>wght</c> 轴覆盖界面需要的全部字重。</para>
         /// </summary>
         public const string Variable = "MiSansVF.ttf";
+
+        /// <summary>
+        /// The upright JetBrains Mono variable face used for code, hex, log and terminal views.
+        /// <para>用于代码、十六进制、日志与终端视图的 JetBrains Mono 正体可变字形。</para>
+        /// </summary>
+        public const string Monospace = "JetBrainsMonoVF.ttf";
+
+        /// <summary>
+        /// The italic JetBrains Mono variable face used for italic syntax tokens in editors.
+        /// <para>用于编辑器中斜体语法词元的 JetBrains Mono 斜体可变字形。</para>
+        /// </summary>
+        public const string MonospaceItalic = "JetBrainsMonoItalicVF.ttf";
     }
 
     /// <summary>File names inside <see cref="Bundles.DeliveryUpdater"/>.

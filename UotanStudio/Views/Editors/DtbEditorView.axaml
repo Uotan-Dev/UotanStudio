@@ -29,7 +29,7 @@
                   SelectionChanged="OnNodeTreeSelectionChanged">
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="viewmodels:DtbNodeViewModel" ItemsSource="{Binding Children}">
-              <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+              <TextBlock Text="{Binding Name}" FontFamily="{StaticResource MonospaceFontFamily}" />
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
         </TreeView>

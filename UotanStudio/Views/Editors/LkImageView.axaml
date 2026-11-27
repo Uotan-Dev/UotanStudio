@@ -56,7 +56,7 @@
                 <TabItem Header="{DynamicResource Dock_Lk_Entries}">
                     <DataGrid Margin="0,8,0,0" ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                               IsReadOnly="True" AutoGenerateColumns="False" CanUserResizeColumns="True"
-                              GridLinesVisibility="Horizontal" FontFamily="Consolas"
+                              GridLinesVisibility="Horizontal" FontFamily="{StaticResource MonospaceFontFamily}"
                               Background="Transparent" BorderThickness="1"
                               BorderBrush="{DynamicResource SemiColorBorder}" CornerRadius="6">
                         <DataGrid.Columns>

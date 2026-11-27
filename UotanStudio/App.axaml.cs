@@ -187,13 +187,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Decodes the bundled MiSans faces and registers their font collection under
-    /// <see cref="BundledFont.CollectionKey"/>. Runs before the first window is created because the global
-    /// text style resolves that family; a missing family fails the splash layout outright.
-    /// A failure is logged only; the caller still shows the splash, whose text then falls back to whatever the
-    /// platform can resolve.
-    /// <para>解码随包 MiSans 字形，并在 <see cref="BundledFont.CollectionKey"/> 下注册其字体集合。必须在第一个窗口创建前
-    /// 运行：全局文本样式会解析该字体族，缺失会让启动窗布局直接失败。失败只记录日志，调用方仍会显示
+    /// Decodes the bundled MiSans and JetBrains Mono faces and registers their font collections under
+    /// <see cref="BundledFont.CollectionKey"/> and <see cref="BundledFont.MonospaceCollectionKey"/>. Runs before
+    /// the first window is created because the global text style resolves MiSans; a missing family fails the splash
+    /// layout outright. A failure is logged only; the caller still shows the splash, whose text then falls back to
+    /// whatever the platform can resolve.
+    /// <para>解码随包 MiSans 与 JetBrains Mono 字形，并在 <see cref="BundledFont.CollectionKey"/> 与
+    /// <see cref="BundledFont.MonospaceCollectionKey"/> 下注册其字体集合。必须在第一个窗口创建前运行：
+    /// 全局文本样式会解析 MiSans 字体族，缺失会让启动窗布局直接失败。失败只记录日志，调用方仍会显示
     /// 启动窗，此时其文本退回到平台可解析的字体。</para>
     /// </summary>
     private static void RegisterBundledFonts()
@@ -202,6 +203,7 @@ public partial class App : Application
         {
             var faces = ZstdEmbeddedFontCollection.DecompressFaces();
             FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection(faces));
+            FontManager.Current.AddFontCollection(ZstdEmbeddedFontCollection.CreateMonospaceCollection());
         }
         catch (Exception ex)
         {

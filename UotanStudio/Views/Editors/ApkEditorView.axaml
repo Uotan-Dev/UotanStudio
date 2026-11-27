@@ -29,7 +29,7 @@
       <Setter Property="Opacity" Value="0.75" />
     </Style>
     <Style Selector="SelectableTextBlock.field-value">
-      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
   </UserControl.Styles>

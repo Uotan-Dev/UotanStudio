@@ -41,7 +41,7 @@
     <Border Grid.Row="1" Padding="12,4,12,0">
       <TextBlock Text="{Binding SourceDescription}"
                  VerticalAlignment="Center"
-                 FontSize="12" Opacity="0.75" FontFamily="Consolas"
+                 FontSize="12" Opacity="0.75" FontFamily="{StaticResource MonospaceFontFamily}"
                  TextTrimming="CharacterEllipsis" />
     </Border>
 
@@ -66,16 +66,16 @@
                   <StackPanel Spacing="4">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
                       <TextBlock Grid.Column="0" VerticalAlignment="Center">
-                        <Run Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
+                        <Run Text="{Binding Id}" FontFamily="{StaticResource MonospaceFontFamily}" FontWeight="SemiBold" />
                         <Run Text=" " />
-                        <Run Text="{Binding IdHex}" FontFamily="Consolas" FontSize="12"
+                        <Run Text="{Binding IdHex}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                              Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                       </TextBlock>
                       <TextBlock Grid.Column="1" Text="{Binding KnownName}" FontWeight="Medium"
                                  TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                  IsVisible="{Binding KnownName, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </Grid>
-                    <TextBlock Text="{Binding DecodedPreview}" FontFamily="Consolas" FontSize="12" Opacity="0.7"
+                    <TextBlock Text="{Binding DecodedPreview}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12" Opacity="0.7"
                                TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Border>
@@ -104,9 +104,9 @@
                     <Run Text="{x:Static viewmodels:QcnEditorViewModel.ItemIdLabel}"
                          Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <Run Text=" " />
-                    <Run Text="{Binding Id}" FontFamily="Consolas" FontWeight="SemiBold" />
+                    <Run Text="{Binding Id}" FontFamily="{StaticResource MonospaceFontFamily}" FontWeight="SemiBold" />
                     <Run Text=" " />
-                    <Run Text="{Binding IdHex}" FontFamily="Consolas" FontSize="12"
+                    <Run Text="{Binding IdHex}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12"
                          Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                   </TextBlock>
                   <TextBlock VerticalAlignment="Center"
@@ -123,17 +123,17 @@
                     <Run Text="{x:Static viewmodels:QcnEditorViewModel.LengthLabel}"
                          Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <Run Text=" " />
-                    <Run Text="{Binding EffectiveLength}" FontFamily="Consolas" />
+                    <Run Text="{Binding EffectiveLength}" FontFamily="{StaticResource MonospaceFontFamily}" />
                   </TextBlock>
                 </WrapPanel>
 
-                <TextBlock Text="{Binding StreamPath}" FontSize="12" FontFamily="Consolas" Opacity="0.6"
+                <TextBlock Text="{Binding StreamPath}" FontSize="12" FontFamily="{StaticResource MonospaceFontFamily}" Opacity="0.6"
                            TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StreamPath}" />
 
                 <StackPanel Spacing="4"
                             IsVisible="{Binding Kind, Converter={x:Static editors:QcnStructuredKindVisibilityConverter.Instance}}">
                   <TextBlock Text="{x:Static viewmodels:QcnEditorViewModel.StructuredLabel}" Opacity="0.75" />
-                  <TextBox Text="{Binding StructuredValue, Mode=TwoWay}" FontFamily="Consolas" FontSize="13" />
+                  <TextBox Text="{Binding StructuredValue, Mode=TwoWay}" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" />
                   <TextBlock Text="{Binding StructuredHint}" FontSize="12" Foreground="{DynamicResource SemiColorWarning}"
                              IsVisible="{Binding StructuredHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                              TextWrapping="Wrap" />

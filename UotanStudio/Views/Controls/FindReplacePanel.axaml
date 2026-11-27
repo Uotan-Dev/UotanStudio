@@ -101,15 +101,15 @@
         <StackPanel Orientation="Horizontal" Spacing="1">
           <ToggleButton Name="MatchCaseToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_MatchCase}"
                         AutomationProperties.Name="{DynamicResource FindReplace_MatchCase}">
-            <TextBlock Text="Ab" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text="Ab" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </ToggleButton>
           <ToggleButton Name="WholeWordToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_WholeWord}"
                         AutomationProperties.Name="{DynamicResource FindReplace_WholeWord}">
-            <TextBlock Text="ab" TextDecorations="Underline" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text="ab" TextDecorations="Underline" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </ToggleButton>
           <ToggleButton Name="RegexToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_Regex}"
                         AutomationProperties.Name="{DynamicResource FindReplace_Regex}">
-            <TextBlock Text=".*" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text=".*" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </ToggleButton>
           <Button Name="RegexGeneratorButton" Classes="find-tool" Click="OnRegexGeneratorClick"
                   ToolTip.Tip="{DynamicResource FindReplace_RegexGenerator}"
@@ -118,7 +118,7 @@
           </Button>
           <ToggleButton Name="PreserveCaseToggle" Classes="find-tool" IsVisible="{Binding #ReplaceToggle.IsChecked}" ToolTip.Tip="{DynamicResource FindReplace_PreserveCase}"
                         AutomationProperties.Name="{DynamicResource FindReplace_PreserveCase}">
-            <TextBlock Text="AB" FontFamily="Consolas,monospace" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text="AB" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </ToggleButton>
         </StackPanel>
         <ComboBox Name="ScopeBox" Grid.Column="1" Margin="4,0,0,0" HorizontalAlignment="Stretch"

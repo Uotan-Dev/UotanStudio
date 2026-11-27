@@ -3,5 +3,5 @@
                 xmlns:edit="using:AvaloniaEdit"
                 x:Class="UotanStudio.Views.Controls.CodeEditor"
                 ShowLineNumbers="True"
-                FontFamily="Consolas"
+                FontFamily="{StaticResource MonospaceFontFamily}"
                 FlowDirection="LeftToRight" />

@@ -54,7 +54,7 @@
         <ToggleButton Name="RegexSearchButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                       VerticalAlignment="Center" IsChecked="{Binding UseRegex, Mode=TwoWay}"
                       ToolTip.Tip="{DynamicResource Log_UseRegex}" AutomationProperties.Name="{DynamicResource Log_UseRegex}">
-          <TextBlock Text=".*" FontFamily="Consolas,monospace" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <TextBlock Text=".*" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </ToggleButton>
         <Button Name="RegexGeneratorButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                 VerticalAlignment="Center" Click="OnRegexGeneratorClick"
@@ -64,7 +64,7 @@
         <ToggleButton Name="MatchCaseButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                       VerticalAlignment="Center" IsChecked="{Binding MatchCase, Mode=TwoWay}"
                       ToolTip.Tip="{DynamicResource Log_MatchCase}" AutomationProperties.Name="{DynamicResource Log_MatchCase}">
-          <TextBlock Text="Ab" FontFamily="Consolas,monospace" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <TextBlock Text="Ab" FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </ToggleButton>
         <WrapPanel Name="LiveControls" DataContext="{Binding LiveModel}" x:DataType="live:AdbLogViewModel"
                    IsVisible="False" ItemSpacing="8" LineSpacing="4">
@@ -109,7 +109,7 @@
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="2" Name="LogEditor"
                      IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
-                     FontFamily="Consolas,monospace" FontSize="13"
+                     FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13"
                      Padding="8,4" Background="Transparent"
                      Foreground="{DynamicResource TextForeground}"
                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

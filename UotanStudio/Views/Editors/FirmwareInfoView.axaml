@@ -33,7 +33,7 @@
       <Setter Property="Opacity" Value="0.75" />
     </Style>
     <Style Selector="TextBlock.field-label.mono">
-      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
     </Style>
 
     <!-- 值列文本：与 ELF 文件头页统一默认字号与等宽体。 -->
@@ -42,7 +42,7 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="SelectableTextBlock.field-value.mono">
-      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
     </Style>
     <Style Selector="SelectableTextBlock.field-value.muted">
       <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -51,7 +51,7 @@
     <!-- 条目行：无键名，等宽体整行铺满，与键列同一起始边。 -->
     <!-- Entry line: no key, monospace full width, sharing the key column's left edge. -->
     <Style Selector="SelectableTextBlock.entry-line">
-      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="Margin" Value="0,4" />
     </Style>

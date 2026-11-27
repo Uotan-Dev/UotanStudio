@@ -99,12 +99,16 @@ public class AssetCatalogIntegrityTests
         var bundle = AssetCatalog.Fonts;
 
         Assert.True(bundle.IsPresent);
-        var entry = bundle[AssetNames.Fonts.Variable];
-        var payload = AssetStore.Read(entry);
-        Assert.Equal(entry.Length, payload.LongLength);
-        Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
-        Assert.True(payload.Length > 0x00010000, "a TrueType variable face must be a full sfnt");
-        Assert.Equal(0x00010000u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(payload));
+        string[] faces = [AssetNames.Fonts.Variable, AssetNames.Fonts.Monospace, AssetNames.Fonts.MonospaceItalic];
+        foreach (var face in faces)
+        {
+            var entry = bundle[face];
+            var payload = AssetStore.Read(entry);
+            Assert.Equal(entry.Length, payload.LongLength);
+            Assert.Equal(entry.Sha256, Sha256.ComputeHexLower(payload));
+            Assert.True(payload.Length > 0x00010000, "a TrueType variable face must be a full sfnt");
+            Assert.Equal(0x00010000u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(payload));
+        }
     }
 
     [Fact]

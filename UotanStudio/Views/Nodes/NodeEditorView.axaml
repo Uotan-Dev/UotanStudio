@@ -1192,7 +1192,7 @@
                     </ScrollViewer>
                     <edit:TextEditor Grid.Row="1" x:Name="ExecutionLogTextEditor"
                                      IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
-                                     FontFamily="Consolas" FontSize="13"
+                                     FontFamily="{StaticResource MonospaceFontFamily}" FontSize="13"
                                      Padding="8,4" Background="Transparent"
                                      Foreground="{DynamicResource TextForeground}"
                                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

@@ -50,7 +50,7 @@
                   SelectionChanged="OnTreeSelectionChanged">
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="viewmodels:ManifestTreeNodeViewModel" ItemsSource="{Binding Children}">
-              <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+              <TextBlock Text="{Binding Name}" FontFamily="{StaticResource MonospaceFontFamily}" />
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
         </TreeView>
@@ -87,10 +87,10 @@
                                                 MinEditorWidth="180"
                                                 ColumnSpacing="3"
                                                 RowSpacing="2">
-                      <TextBlock Text="{Binding Name}" FontFamily="Consolas"
+                      <TextBlock Text="{Binding Name}" FontFamily="{StaticResource MonospaceFontFamily}"
                                  VerticalAlignment="Center"
                                  TextWrapping="Wrap" />
-                      <TextBox Text="{Binding Value, Mode=TwoWay}" FontFamily="Consolas" />
+                      <TextBox Text="{Binding Value, Mode=TwoWay}" FontFamily="{StaticResource MonospaceFontFamily}" />
                     </controls:ResponsiveFormRow>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

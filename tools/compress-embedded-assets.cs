@@ -17,12 +17,14 @@ var driversTarget = Path.Combine(assetsRoot, "drivers");
 
 var specs = new BundleSpec[]
 {
-    // 只随包可变字体 MiSansVF：其 wght 轴覆盖界面需要的全部字重，宿主按请求字重设置该轴。
-    // Ship only the MiSansVF variable font: its wght axis spans every weight the UI needs, and the host
-    // pins that axis to the requested weight.
+    // 随包可变字体 MiSansVF（界面）与 JetBrains Mono VF（正体 + 斜体，等宽）；宿主按请求字重固定其 wght 轴。
+    // Ship the MiSansVF (UI) and JetBrains Mono VF (upright + italic, monospace) variable fonts; the host
+    // pins their wght axis to the requested weight.
     new("fonts", Path.Combine(assetsRoot, "fonts"), fontsSource, "*.ttf", Generated: false, Optional: false,
         [
             new("MiSansVF.ttf", Path.Combine("MiSans", "可变字体", "MiSansVF.ttf")),
+            new("JetBrainsMonoVF.ttf", Path.Combine("JetBrainsMono", "fonts", "variable", "JetBrainsMono[wght].ttf")),
+            new("JetBrainsMonoItalicVF.ttf", Path.Combine("JetBrainsMono", "fonts", "variable", "JetBrainsMono-Italic[wght].ttf")),
         ]),
     new("ohos/device", Path.Combine(assetsRoot, "ohos", "device"), null, "*.so", Generated: false, Optional: false),
     new("drivers/rockusb", Path.Combine(driversTarget, "rockusb"), null, "rockusb.*", Generated: false, Optional: false),

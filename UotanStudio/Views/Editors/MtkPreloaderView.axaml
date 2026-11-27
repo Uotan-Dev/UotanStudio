@@ -45,7 +45,7 @@
                             <controls:ResponsiveFormRow MinLabelWidth="170" MaxLabelWidth="210" MinEditorWidth="180"
                                                         ColumnSpacing="16" RowSpacing="4" Margin="4,5">
                                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Opacity="0.75" />
-                                <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas" TextWrapping="Wrap" />
+                                <SelectableTextBlock Text="{Binding Value}" FontFamily="{StaticResource MonospaceFontFamily}" TextWrapping="Wrap" />
                             </controls:ResponsiveFormRow>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

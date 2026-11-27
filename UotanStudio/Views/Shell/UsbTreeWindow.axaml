@@ -52,7 +52,7 @@
     </Style>
     <Style Selector="TextBlock.node-meta">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
       <Setter Property="Opacity" Value="0.8" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -65,7 +65,7 @@
     </Style>
     <Style Selector="TextBlock.protocol-badge">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
     </Style>
     <Style Selector="TextBlock.detail-title">
       <Setter Property="FontSize" Value="12" />
@@ -79,7 +79,7 @@
     </Style>
     <Style Selector="TextBlock.detail-value">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontFamily" Value="Consolas,monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="TextBlock.detail-warning">

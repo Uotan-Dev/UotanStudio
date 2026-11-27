@@ -273,7 +273,7 @@
                             <TextBlock Text="{Binding SelectedKey.Summary}" />
                             <SelectableTextBlock Text="{Binding SelectedKey.Fingerprint}" TextWrapping="Wrap" FontSize="12" />
                             <TextBox Name="PublicKeyBox" Text="{Binding PublicKey, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" Height="160"
-                                     FontFamily="Consolas, monospace" FontSize="12" TextWrapping="Wrap" />
+                                     FontFamily="{StaticResource MonospaceFontFamily}" FontSize="12" TextWrapping="Wrap" />
                             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"
                                         IsVisible="{Binding CanSetCurrentDefault}">
                                 <TextBlock VerticalAlignment="Center" FontSize="12" Opacity="0.75"
