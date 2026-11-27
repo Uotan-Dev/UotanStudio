@@ -8,6 +8,8 @@ public sealed partial class MtkSession
 {
     private const int LegacyTableProbeBytes = 1024;
     private const int LegacyTableProbeTimeoutMs = 60000;
+    private const int LegacyTableScanChunkBytes = 1024 * 1024;
+    private const int LegacyTableScanLimitBytes = 32 * 1024 * 1024;
 
     /// <summary>
     /// Reads the partition table of one Legacy region, detecting whether the region prefixes its table with a
@@ -21,11 +23,18 @@ public sealed partial class MtkSession
     /// detected header with an unrecognised table rather than as a parse failure. Detection reads two sectors from the
     /// region start, which is enough to see both the prefixed header and a GPT header at LBA 1; when the header
     /// declares a table further in, a second probe is taken at that offset instead of the whole prefix being buffered.
-    /// The chosen reader then performs its own validated reads. Nothing is written, guessed or repaired.
+    /// A region without a layout header whose start carries no table is then searched forwards through a bounded head
+    /// window, because some media leave erased space ahead of the table: the user area of such a device can begin with
+    /// megabytes of zeroes before its MBR. Every candidate is validated by <see cref="PartitionTableScanner"/> rather
+    /// than by a bare signature test, so stray <c>EFI PART</c> text inside payload data never becomes a table. The
+    /// chosen reader then performs its own validated reads. Nothing is written, guessed or repaired.
     /// <para>设备暴露八个物理区域，通常只有用户区承载分区表；两块引导区则以 <c>BRLYT</c> 布局头开始，因此从其中读取
     /// 分区表会被如实报告为“已识别头部、表未识别”，而不是解析失败。检测从区域起始处读取两个扇区，足以同时看到前置头部与
-    /// LBA 1 上的 GPT 头部；当头部声明的表位置更靠后时，改为在该偏移处重新探测，而不是缓冲整个前缀。随后由选定的读取器
-    /// 执行各自带校验的读取。不写入、不猜测、不修复。</para>
+    /// LBA 1 上的 GPT 头部；当头部声明的表位置更靠后时，改为在该偏移处重新探测，而不是缓冲整个前缀。对于没有布局头、起始处
+    /// 也没有分区表的区域，随后会在这个区域的有界头部窗口内向前搜索，因为部分介质会在分区表之前留下擦除空间：这类设备的
+    /// 用户区开头可能有数兆字节的全零，之后才是它的 MBR。每个候选都由 <see cref="PartitionTableScanner"/> 校验而不是仅凭
+    /// 签名判断，因此负载数据中零散的 <c>EFI PART</c> 文本永远不会被当成分区表。随后由选定的读取器执行各自带校验的读取。
+    /// 不写入、不猜测、不修复。</para>
     /// </remarks>
     /// <param name="partitionId">Explicit discovered Legacy physical region, not a GPT entry index.
     /// <para>显式指定的已发现 Legacy 物理区域，不是 GPT 条目索引。</para></param>
@@ -101,32 +110,75 @@ public sealed partial class MtkSession
 
         if (!PartitionTableProbe.TryDetect(probe, out var kind))
         {
-            throw new InvalidDataException(BuildUnrecognizedTableMessage(partitionId, layoutHeader, tableOffset));
+            var scanned = await TryScanLegacyTableAsync(partitionId, region, storage, probe, tableOffset,
+                cancellationToken).ConfigureAwait(false);
+            if (!scanned.Found)
+            {
+                throw new InvalidDataException(
+                    BuildUnrecognizedTableMessage(partitionId, layoutHeader, tableOffset, scanned.ScannedBytes));
+            }
+
+            tableOffset = scanned.TableOffset;
+            kind = scanned.Kind;
         }
 
         switch (kind)
         {
             case PartitionTableKind.Gpt:
-            {
-                var gpt = await ReadLegacyGptAtOwnedAsync(partitionId, region, tableOffset, cancellationToken)
-                    .ConfigureAwait(false);
-                ThrowIfDisposed();
-                return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
-                    PartitionTableKind.Gpt, gpt, null);
-            }
+                {
+                    var gpt = await ReadLegacyGptAtOwnedAsync(partitionId, region, tableOffset, cancellationToken)
+                        .ConfigureAwait(false);
+                    ThrowIfDisposed();
+                    return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
+                        PartitionTableKind.Gpt, gpt, null);
+                }
 
             case PartitionTableKind.Mbr:
-            {
-                var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, cancellationToken)
-                    .ConfigureAwait(false);
-                ThrowIfDisposed();
-                return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
-                    PartitionTableKind.Mbr, null, mbr);
-            }
+                {
+                    var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, cancellationToken)
+                        .ConfigureAwait(false);
+                    ThrowIfDisposed();
+                    return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
+                        PartitionTableKind.Mbr, null, mbr);
+                }
 
             default:
-                throw new InvalidDataException(BuildUnrecognizedTableMessage(partitionId, layoutHeader, tableOffset));
+                throw new InvalidDataException(
+                    BuildUnrecognizedTableMessage(partitionId, layoutHeader, tableOffset, LegacyTableProbeBytes));
         }
+    }
+
+    private async Task<(bool Found, long TableOffset, PartitionTableKind Kind, long ScannedBytes)>
+        TryScanLegacyTableAsync(byte partitionId, MtkLegacyStorageRegion region,
+        MtkLegacyStorageInfo storage, byte[] head, long tableOffset, CancellationToken cancellationToken)
+    {
+        if (head.Length < PartitionTableScanner.SectorSize)
+        {
+            return (false, 0, PartitionTableKind.Unknown, 0);
+        }
+
+        if (PartitionTableScanner.TryFind(head, tableOffset, region.CapacityBytes, out var found, out var kind))
+        {
+            return (true, found, kind, head.Length);
+        }
+
+        var limit = Math.Min(region.CapacityBytes, tableOffset + LegacyTableScanLimitBytes);
+        var chunk = new byte[LegacyTableScanChunkBytes];
+        var cursor = tableOffset + head.Length;
+        while (cursor + LegacyTableScanChunkBytes <= limit)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            storage.ValidateRange(partitionId, cursor, LegacyTableScanChunkBytes);
+            await ReadLegacyProbeOwnedAsync(partitionId, cursor, chunk, cancellationToken).ConfigureAwait(false);
+            if (PartitionTableScanner.TryFind(chunk, cursor, region.CapacityBytes, out found, out kind))
+            {
+                return (true, found, kind, cursor + LegacyTableScanChunkBytes - tableOffset);
+            }
+
+            cursor += LegacyTableScanChunkBytes;
+        }
+
+        return (false, 0, PartitionTableKind.Unknown, cursor - tableOffset);
     }
 
     private async Task<GptTable> ReadLegacyGptAtOwnedAsync(byte partitionId, MtkLegacyStorageRegion region,
@@ -163,18 +215,19 @@ public sealed partial class MtkSession
     }
 
     private static string BuildUnrecognizedTableMessage(byte partitionId, MtkBromLayoutHeader layoutHeader,
-        long tableOffset)
+        long tableOffset, long scannedBytes)
     {
         var region = MtkLegacyEmmcRegion.Describe(partitionId);
         if (layoutHeader.IsRecognized)
         {
             return "Region " + region + " starts with a MediaTek BRLYT layout header describing " +
                 layoutHeader.DescribeMediaType() + " media of " + layoutHeader.TotalSize + " bytes, but the " +
-                tableOffset + "-byte prefix is not followed by a recognised GPT or MBR partition table. Only the " +
-                "user area (" + MtkLegacyEmmcRegion.User + ") normally carries one; boot areas hold boot images.";
+                tableOffset + "-byte prefix is not followed by a recognised GPT or MBR partition table within the " +
+                scannedBytes + " bytes examined. Only the user area (" + MtkLegacyEmmcRegion.User +
+                ") normally carries one; boot areas hold boot images.";
         }
 
-        return "Region " + region + " at byte offset " + tableOffset +
-            " carries neither a GPT nor an MBR partition table.";
+        return "Region " + region + " carries neither a GPT nor an MBR partition table in the " + scannedBytes +
+            " bytes examined from byte offset " + tableOffset + ".";
     }
 }

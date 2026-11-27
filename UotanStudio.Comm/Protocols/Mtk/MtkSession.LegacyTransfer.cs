@@ -121,12 +121,16 @@ public sealed partial class MtkSession
                 header[1] = nor ? (byte)0x20 : (byte)1;
                 header[2] = partitionId;
             }
-            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(3), (ulong)offset);
-            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)length);
-            BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(19), (uint)options.StoragePacketLength);
+            var packetLength = options.StoragePacketLength;
+            var windowStart = write ? offset : offset - offset % packetLength;
+            var lead = (int)(offset - windowStart);
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(3), (ulong)windowStart);
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)(length + lead));
+            BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(19), (uint)packetLength);
             await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
             await RequireLegacyByteAsync(0x5A, "storage header", token).ConfigureAwait(false);
             var buffer = write ? new byte[(int)Math.Min(length, options.StoragePacketLength)] : null;
+            var skip = lead;
             long transferred = 0;
             while (transferred < length)
             {
@@ -149,7 +153,12 @@ public sealed partial class MtkSession
                     {
                         throw new MtkProtocolException("The Legacy storage packet checksum does not match.");
                     }
-                    await stream.WriteAsync(data, token).ConfigureAwait(false);
+                    var usable = data.AsSpan(skip, data.Length - skip);
+                    skip = 0;
+                    if (usable.Length > 0)
+                    {
+                        await stream.WriteAsync(data.AsMemory(data.Length - usable.Length), token).ConfigureAwait(false);
+                    }
                     await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();

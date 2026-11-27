@@ -139,11 +139,23 @@ public sealed class MbrTable
 
             var start = BinaryPrimitives.ReadUInt32LittleEndian(entry[8..]);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(entry[12..]);
-            if (entry[0] is not (0 or BootableFlag) || entry[4] == 0 || start == 0 || size == 0
-                || (ulong)start + size > 1UL << 32)
+            if (entry[0] is not (0 or BootableFlag) || entry[4] == 0 || start == 0 || size == 0)
             {
                 return false;
             }
+
+            if (ExtendedTypes.Contains(entry[4]))
+            {
+                if ((ulong)start >= 1UL << 32)
+                {
+                    return false;
+                }
+            }
+            else if ((ulong)start + size > 1UL << 32)
+            {
+                return false;
+            }
+
             populated = true;
         }
         return populated;
