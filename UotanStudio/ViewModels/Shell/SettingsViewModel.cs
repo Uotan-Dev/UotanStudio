@@ -7,7 +7,6 @@ using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
-using UotanStudio.Services.HardwareAcceleration;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;

@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.VendorFirmware.MediaTek.Preloader;
 using UotanStudio.Services;
-using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Editors;
 

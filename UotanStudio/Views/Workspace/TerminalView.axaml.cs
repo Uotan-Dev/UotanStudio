@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
+using UotanStudio.Fonts;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;

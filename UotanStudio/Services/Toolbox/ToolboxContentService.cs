@@ -1,6 +1,5 @@
 using UotanStudio.Assets;
 using UotanStudio.Comm.Transports.Usb.Drivers;
-using UotanStudio.Net.Components.Root;
 using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services.PatchPackages;
 
