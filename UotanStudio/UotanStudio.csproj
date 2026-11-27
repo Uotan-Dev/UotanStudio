@@ -2,23 +2,14 @@
   <PropertyGroup>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsAotCompatible>true</IsAotCompatible>
-    <!-- Required by the source-generated LibraryImport marshalling stubs in FileAssociationService. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- Preserve the Desktop RID through this reference to Comm's native assets. -->
     <IsRidAgnostic>false</IsRidAgnostic>
   </PropertyGroup>
   
   <ItemGroup>
-    <!-- 仅显式包含非 XAML 资源（图标等）；.axaml 由 Avalonia 默认 glob（**/*.axaml）纳入，
-         显式重复声明 Locale/Themes 会与默认项重复，导致 AVLN2002 重复 x:Class。 -->
     <AvaloniaResource Include="Assets\**" />
-    <!-- Lingua 源生成器从 AdditionalFiles 读取 Locale/*.resx 并生成强类型 manager；这些 .resx
-         必须从 SDK 默认 EmbeddedResource glob 移除，否则语言变体会生成 satellite assembly。 -->
     <AdditionalFiles Include="Locale\**\*.resx" />
     <EmbeddedResource Remove="Locale\**\*.resx" />
-    <!-- Tint source generator: these grammars are not bundled with Tint (no device-tree, TOML or x86
-         syntax ships with it), so they are compiled into the host here. Each JSON becomes a grammar
-         class in the root namespace; TintSyntaxColorizer registers them by scope name. -->
     <TintGrammar Include="Views\Controls\Syntaxes\dts.tmLanguage.json"
                  LanguageId="dts" FileExtensions=".dts;.dtsi;.dtso" />
     <TintGrammar Include="Views\Controls\Syntaxes\toml.tmLanguage.json"
@@ -26,12 +17,6 @@
     <TintGrammar Include="Views\Controls\Syntaxes\asm-x86.tmLanguage.json"
                  LanguageId="asm" FileExtensions=".asm;.inc" />
   </ItemGroup>
-
-  <!--
-    Emit the compiled version/channel/commit constants used by BuildInfo. Version.props feeds
-    $(Version) and $(VersionChannel); SourceRevisionId is populated by the SDK's source-control
-    targets (SourceLink) and stays empty in builds made from a tarball without Git metadata.
-  -->
   <Target Name="GenerateUotanBuildInfo" BeforeTargets="CoreCompile" DependsOnTargets="InitializeSourceControlInformation">
     <PropertyGroup>
       <_UotanCommitShort Condition="'$(SourceRevisionId)' != '' and $([System.String]::Copy('$(SourceRevisionId)').Length) &gt;= 7">$(SourceRevisionId.Substring(0, 7))</_UotanCommitShort>
@@ -67,9 +52,6 @@
     <PackageReference Include="Iciclecreek.Avalonia.Terminal" />
     <PackageReference Include="Porta.Pty" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
-    <!-- Syntax highlighting: Tint tokenizes the VS Code TextMate grammars and themes in managed code;
-         it replaces AvaloniaEdit.TextMate/TextMateSharp (Avalonia 12 has no Tint adapter, so
-         Views/Controls/TintSyntaxColorizer.cs bridges the tokens to AvaloniaEdit's line transformers). -->
     <PackageReference Include="Tint" />
     <PackageReference Include="Tint.Grammars" />
     <PackageReference Include="Tint.Themes" />
@@ -87,20 +69,11 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
-    <!-- Explicit-factory DI container; registrations are AOT/trimming safe. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- Abstractions only: the unified-log bridge reads ILogger producers without the implementation, options or provider pipeline.
-         .NET 11 ships Microsoft.Extensions.Logging.Abstractions inside the shared framework, so no PackageReference is needed. -->
-
-    <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />
-    <!-- Remote file browsing (multi-column browser "Remote Files"): SFTP/SCP over SSH.NET, FTP/FTPS over FluentFTP.
-         WebDAV uses HttpClient only: no WebDAV package is trim/AOT clean enough for the NativeAOT gate. -->
     <PackageReference Include="SSH.NET" />
     <PackageReference Include="FluentFTP" />
-    <!-- Image viewer: the facade sniffs magic bytes and dispatches to these per-format decoders.
-         HEIF is not part of the facade and is registered explicitly by ImageFileCatalog. -->
     <PackageReference Include="Sdcb.SimdCodecs" />
     <PackageReference Include="Sdcb.SimdCodecs.Abstractions" />
     <PackageReference Include="Sdcb.SimdCodecs.Bmp" />
@@ -120,7 +93,7 @@
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.HarfBuzz" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
-    <!-- 屏蔽 Avalonia.Skia 传递来的旧版 Linux 原生库（3.119.4），避免覆盖 4.157.0 -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
     <PackageReference Include="HarfBuzzSharp" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
   </ItemGroup>
