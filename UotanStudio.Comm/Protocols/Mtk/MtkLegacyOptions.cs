@@ -124,12 +124,13 @@ public sealed record MtkLegacyOptions
     /// <summary>Gets whether charging is forced on rather than automatically detected.
     /// <para>获取是否强制充电而非自动检测。</para></summary>
     /// <value>
-    /// This byte documents <c>0x02</c> as Auto and <c>0x01</c> as On, and transmits On. False selects wire
-    /// value 2 and true selects 1.
-    /// <para>该字节注明 <c>0x02</c> 为自动、<c>0x01</c> 为强制开启，并发送开启值。
-    /// false 选择线值 2，true 选择 1。</para>
+    /// This byte documents <c>0x02</c> as Auto and <c>0x01</c> as On. The reference implementation always
+    /// transmits On (<c>0x01</c>) regardless of the host setting, so the default here also transmits
+    /// <c>0x01</c>; false selects wire value 2.
+    /// <para>该字节注明 <c>0x02</c> 为自动、<c>0x01</c> 为强制开启。参考实现不理会主机设置，始终发送开启值
+    /// （<c>0x01</c>），因此此处默认同样发送 <c>0x01</c>；false 选择线值 2。</para>
     /// </value>
-    public bool ForceCharging { get; init; }
+    public bool ForceCharging { get; init; } = true;
 
     internal void Validate()
     {
