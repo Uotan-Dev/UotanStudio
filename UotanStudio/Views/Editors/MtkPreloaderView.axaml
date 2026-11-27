@@ -7,36 +7,43 @@
     <Grid>
         <DockPanel>
             <controls:EditorErrorBanner DockPanel.Dock="Top" Message="{Binding ErrorMessage, Mode=TwoWay}" />
-            <Border DockPanel.Dock="Top" Padding="16,12,16,0">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="{DynamicResource Dock_Preloader_Title}" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding FilePath}" Opacity="0.7" />
-                </StackPanel>
-            </Border>
-            <Border DockPanel.Dock="Bottom" Padding="16,8,16,16" IsVisible="{Binding IsRecognized}">
+            <Border DockPanel.Dock="Top" Padding="16,12,16,10" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Dock_Preloader_Warning}" TextWrapping="Wrap"
-                               Foreground="{DynamicResource SemiColorWarning}" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <TextBox Text="{Binding OutputPath, Mode=TwoWay}"
-                                 PlaceholderText="{DynamicResource Dock_Lk_Output}" />
-                        <Button Grid.Column="1" Content="{DynamicResource Dock_Preloader_Apply}" Command="{Binding PatchCommand}"
-                                IsEnabled="{Binding CanPatch}" />
-                    </Grid>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="20" LineSpacing="8">
-                        <CheckBox Content="{DynamicResource Dock_Lk_Backup}" IsChecked="{Binding CreateBackup, Mode=TwoWay}" />
-                        <CheckBox Content="{DynamicResource Dock_Preloader_Unlock}" IsChecked="{Binding UnlockFastboot, Mode=TwoWay}" />
-                    </WrapPanel>
-                    <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" Opacity="0.85" />
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{DynamicResource Dock_Preloader_Title}" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding FilePath}" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding FilePath}" Opacity="0.7" />
+                    </StackPanel>
+                    <StackPanel Spacing="8" IsVisible="{Binding IsRecognized}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="4">
+                            <CheckBox Content="{DynamicResource Dock_Lk_Backup}" IsChecked="{Binding CreateBackup, Mode=TwoWay}"
+                                      VerticalAlignment="Center" />
+                            <CheckBox Content="{DynamicResource Dock_Preloader_Unlock}" IsChecked="{Binding UnlockFastboot, Mode=TwoWay}"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Dock_Preloader_Warning}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SemiColorWarning}" VerticalAlignment="Center" />
+                        </WrapPanel>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Text="{Binding OutputPath, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource Dock_Lk_Output}" />
+                            <Button Grid.Column="1" Content="{DynamicResource Dock_Preloader_Apply}" Command="{Binding PatchCommand}"
+                                    IsEnabled="{Binding CanPatch}" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Border>
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsRecognized}">
-                <ItemsControl ItemsSource="{Binding Fields}" Margin="16,12">
+            <Border DockPanel.Dock="Top" Padding="16,8" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    IsVisible="{Binding ResultText, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.85" />
+            </Border>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsRecognized}" Margin="16,8,16,16">
+                <ItemsControl ItemsSource="{Binding Fields}" Margin="4,8">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:PreloaderFieldRow">
                             <controls:ResponsiveFormRow MinLabelWidth="170" MaxLabelWidth="210" MinEditorWidth="180"
-                                                        ColumnSpacing="16" RowSpacing="8" Margin="4,5">
+                                                        ColumnSpacing="16" RowSpacing="4" Margin="4,5">
                                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Opacity="0.75" />
                                 <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas" TextWrapping="Wrap" />
                             </controls:ResponsiveFormRow>
