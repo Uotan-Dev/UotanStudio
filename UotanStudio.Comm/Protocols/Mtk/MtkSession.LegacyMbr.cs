@@ -13,10 +13,12 @@ public sealed partial class MtkSession
     /// that produced it instead of silently truncating the list. Every extent is validated against the region
     /// capacity, and the chain is bounded by hop count and by visited-set membership, so a corrupt loop cannot spin
     /// the reader. Nothing is repaired, guessed or replayed: an invalid table surfaces as
-    /// <see cref="InvalidDataException"/>.
+    /// <see cref="InvalidDataException"/>. This overload assumes the record starts at the region's first byte; use
+    /// <see cref="ReadLegacyPartitionTableAsync"/> when the region may prefix its table with a vendor header.
     /// <para>每次只向设备请求一个扇区，因此缺失或损坏的记录会在产生它的那一跳上报，而不是静默截断列表。每个区间都
     /// 会按区域容量校验，链同时受跳数与已访问集合约束，损坏的环无法让读取器空转。不做修复、猜测或重放：无效的表以
-    /// <see cref="InvalidDataException"/> 呈现。</para>
+    /// <see cref="InvalidDataException"/> 呈现。此重载假定记录从区域首字节开始；当区域可能以厂商头部作为分区表前缀
+    /// 时，请使用 <see cref="ReadLegacyPartitionTableAsync"/>。</para>
     /// </remarks>
     /// <param name="partitionId">Explicit discovered Legacy physical region, not a partition index.
     /// <para>显式指定的已发现 Legacy 物理区域，不是分区索引。</para></param>
@@ -38,7 +40,7 @@ public sealed partial class MtkSession
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await ReadLegacyMbrOwnedAsync(partitionId, cancellationToken).ConfigureAwait(false);
+            return await ReadLegacyMbrOwnedAsync(partitionId, 0, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -46,7 +48,17 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task<MtkMbrSnapshot> ReadLegacyMbrOwnedAsync(byte partitionId, CancellationToken cancellationToken)
+    /// <summary>Reads an MBR that may start part-way into a Legacy region, treating the table base as LBA 0.
+    /// <para>读取可能起始于 Legacy 区域中段的 MBR，并把分区表基址视为 LBA 0。</para>
+    /// </summary>
+    /// <param name="partitionId">Explicit discovered Legacy physical region. <para>显式指定的已发现 Legacy 物理区域。</para></param>
+    /// <param name="tableBaseOffset">Region-relative byte offset of the record, aligned to 512.
+    /// <para>记录在区域内相对于区域的字节偏移，按 512 对齐。</para></param>
+    /// <param name="cancellationToken">Cancellation propagated to every storage exchange. <para>取消信号会传播到每一次存储交换。</para></param>
+    /// <returns>A validated MBR snapshot whose logical block numbers are relative to <paramref name="tableBaseOffset"/>.
+    /// <para>已校验的 MBR 快照，其逻辑块号相对于 <paramref name="tableBaseOffset"/>。</para></returns>
+    private async Task<MtkMbrSnapshot> ReadLegacyMbrOwnedAsync(byte partitionId, long tableBaseOffset,
+        CancellationToken cancellationToken)
     {
         RequireState(MtkSessionState.LegacyStorageReady);
         cancellationToken.ThrowIfCancellationRequested();
@@ -56,20 +68,20 @@ public sealed partial class MtkSession
             throw new NotSupportedException("Raw flash page geometry does not define a block-device layout.");
         }
 
-        storage.ValidateRange(partitionId, 0, MbrSectorBytes);
+        storage.ValidateRange(partitionId, tableBaseOffset, MbrSectorBytes);
         var region = storage.Regions.Single(candidate => candidate.PartitionId == partitionId);
-        var totalSectors = checked((uint)(region.CapacityBytes / MbrSectorBytes));
+        var totalSectors = checked((uint)((region.CapacityBytes - tableBaseOffset) / MbrSectorBytes));
         if (totalSectors == 0)
         {
             throw new InvalidDataException("The selected Legacy region reports no addressable sectors.");
         }
 
         var sector = new byte[MbrSectorBytes];
-        await ReadSectorOwnedAsync(partitionId, 0, sector, cancellationToken).ConfigureAwait(false);
+        await ReadSectorOwnedAsync(partitionId, tableBaseOffset, sector, cancellationToken).ConfigureAwait(false);
         if (!MtkMbrSnapshot.HasBootSignature(sector))
         {
             throw new InvalidDataException(
-                "The Legacy region does not start with an MBR: the 0x55AA boot signature is absent from LBA 0.");
+                $"The Legacy region has no MBR at byte offset {tableBaseOffset}: the 0x55AA boot signature is absent.");
         }
 
         var primary = MtkMbrSnapshot.ReadEntries(sector);
@@ -100,8 +112,8 @@ public sealed partial class MtkSession
                     throw new InvalidDataException($"The extended partition chain revisits LBA {next}.");
                 }
 
-                await ReadSectorOwnedAsync(partitionId, (long)next * MbrSectorBytes, sector, cancellationToken)
-                    .ConfigureAwait(false);
+                await ReadSectorOwnedAsync(partitionId, checked(tableBaseOffset + (long)next * MbrSectorBytes), sector,
+                    cancellationToken).ConfigureAwait(false);
                 if (!MtkMbrSnapshot.HasBootSignature(sector))
                 {
                     throw new InvalidDataException($"The extended boot record at LBA {next} has no 0x55AA signature.");
@@ -129,7 +141,8 @@ public sealed partial class MtkSession
                         var following = checked(extended.FirstLba + entry.FirstLba);
                         if (following == 0)
                         {
-                            throw new InvalidDataException($"The extended boot record at LBA {next} declares a null link.");
+                            throw new InvalidDataException(
+                                $"The extended boot record at LBA {next} declares a null link.");
                         }
 
                         next = following;
