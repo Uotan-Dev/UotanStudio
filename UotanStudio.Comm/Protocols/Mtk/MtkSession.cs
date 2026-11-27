@@ -39,6 +39,7 @@ public sealed partial class MtkSession : IProtocolSession
     private const int HandshakeRetryBackoffMs = 10;
     private const int JumpSettleDelayMs = 100;
     private const int UploadSettleDelayMs = 120;
+    private const int StageTwoCompletionSettleDelayMs = 500;
     private const int HandshakeDrainTimeoutMs = 50;
     private const int HandshakeDrainLength = 0x100;
     private static readonly byte[] BootHandshakeCommand = [0xA0, 0x0A, 0x50, 0x05];
