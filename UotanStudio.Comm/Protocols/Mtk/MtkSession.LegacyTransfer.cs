@@ -124,15 +124,24 @@ public sealed partial class MtkSession
             var packetLength = options.StoragePacketLength;
             var windowStart = write ? offset : offset - offset % packetLength;
             var lead = (int)(offset - windowStart);
+            var requestLength = length + lead;
+            if (!write && !nor)
+            {
+                var region = LegacyStorage!.Regions[partitionId - 1];
+                var available = region.CapacityBytes - windowStart;
+                var rounded = (requestLength + packetLength - 1) / packetLength * packetLength;
+                requestLength = Math.Min(rounded, available);
+            }
             BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(3), (ulong)windowStart);
-            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)(length + lead));
+            BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(11), (ulong)requestLength);
             BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(19), (uint)packetLength);
             await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
             await RequireLegacyByteAsync(0x5A, "storage header", token).ConfigureAwait(false);
             var buffer = write ? new byte[(int)Math.Min(length, options.StoragePacketLength)] : null;
-            var total = length + lead;
+            var total = requestLength;
             var skip = lead;
             long transferred = 0;
+            long written = 0;
             while (transferred < total)
             {
                 var count = (int)Math.Min(total - transferred, options.StoragePacketLength);
@@ -156,16 +165,18 @@ public sealed partial class MtkSession
                     }
                     var start = skip;
                     skip = 0;
-                    if (start < data.Length)
+                    if (start < data.Length && written < length)
                     {
-                        await stream.WriteAsync(data.AsMemory(start), token).ConfigureAwait(false);
+                        var take = (int)Math.Min(data.Length - start, length - written);
+                        await stream.WriteAsync(data.AsMemory(start, take), token).ConfigureAwait(false);
+                        written += take;
                     }
                     await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();
                 ThrowIfDisposed();
                 transferred += count;
-                progress?.Report(Math.Clamp(transferred - lead, 0, length));
+                progress?.Report(Math.Min(written, length));
             }
             token.ThrowIfCancellationRequested();
             ThrowIfDisposed();
