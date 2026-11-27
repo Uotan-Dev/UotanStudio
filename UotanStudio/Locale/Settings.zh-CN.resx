@@ -585,4 +585,403 @@
   <data name="Settings_AutoCheckUpdatesHint" xml:space="preserve">
     <value>启动时自动检查是否有可用更新。</value>
   </data>
+  <data name="Settings_Toolbox" xml:space="preserve">
+    <value>工具箱</value>
+  </data>
+  <data name="Settings_ToolboxDescription" xml:space="preserve">
+    <value>查看随应用分发的内容与由下载填充的缓存。</value>
+  </data>
+  <data name="Settings_ToolboxRefresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Settings_ToolboxEmbedded" xml:space="preserve">
+    <value>内嵌资源</value>
+  </data>
+  <data name="Settings_ToolboxEmbeddedHint" xml:space="preserve">
+    <value>这些负载内嵌在应用中，永远不可删除；导出会把它们复制到你选择的目录。</value>
+  </data>
+  <data name="Settings_ToolboxExport" xml:space="preserve">
+    <value>导出</value>
+  </data>
+  <data name="Settings_ToolboxPurge" xml:space="preserve">
+    <value>清除缓存</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPaths" xml:space="preserve">
+    <value>检测到的实现</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAuto" xml:space="preserve">
+    <value>自动（{0}）</value>
+  </data>
+  <data name="Settings_HardwareAccelerationSummary" xml:space="preserve">
+    <value>{0} · 硬件自动选择 {1} · 每轮迭代 {2} 字节</value>
+  </data>
+  <data name="Settings_HardwareAccelerationWidth" xml:space="preserve">
+    <value>每轮 {0} 字节</value>
+  </data>
+  <data name="Settings_HardwareAccelerationActive" xml:space="preserve">
+    <value>正在使用</value>
+  </data>
+  <data name="Settings_HardwareAccelerationAvailable" xml:space="preserve">
+    <value>可用</value>
+  </data>
+  <data name="Settings_HardwareAccelerationNone" xml:space="preserve">
+    <value>此处理器没有报告任何向量实现，字节块运算已经运行在标量软件循环上。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathScalar" xml:space="preserve">
+    <value>标量软件循环</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathScalarHint" xml:space="preserve">
+    <value>可移植的逐字节实现，始终可用。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathPortableVectors" xml:space="preserve">
+    <value>可移植向量</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathPortableVectorsHint" xml:space="preserve">
+    <value>宽度无关的向量运算，由运行时降级到最宽可用寄存器。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSse2" xml:space="preserve">
+    <value>SSE2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSse2Hint" xml:space="preserve">
+    <value>x86 128 位整数运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx2" xml:space="preserve">
+    <value>AVX2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx2Hint" xml:space="preserve">
+    <value>x86 256 位整数运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx512" xml:space="preserve">
+    <value>AVX-512</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx512Hint" xml:space="preserve">
+    <value>x86 512 位整数运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx10" xml:space="preserve">
+    <value>AVX10</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAvx10Hint" xml:space="preserve">
+    <value>x86 融合向量指令集，含 512 位形态。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAdvSimd" xml:space="preserve">
+    <value>Advanced SIMD</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathAdvSimdHint" xml:space="preserve">
+    <value>ARM64 128 位向量运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrc" xml:space="preserve">
+    <value>ARM CRC32</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrcHint" xml:space="preserve">
+    <value>ARM64 CRC32 与 CRC32C 指令。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCrypto" xml:space="preserve">
+    <value>ARM 密码学扩展</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathArmCryptoHint" xml:space="preserve">
+    <value>ARM64 AES、PMULL、SHA-1 与 SHA-256 扩展。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve" xml:space="preserve">
+    <value>可伸缩向量扩展</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSveHint" xml:space="preserve">
+    <value>ARM64 向量，宽度由运行时决定。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve2" xml:space="preserve">
+    <value>可伸缩向量扩展 2</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathSve2Hint" xml:space="preserve">
+    <value>ARM64 可伸缩向量的第二代。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLsx" xml:space="preserve">
+    <value>LoongArch LSX</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLsxHint" xml:space="preserve">
+    <value>经运行时发射的原生内核执行的 128 位向量运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLasx" xml:space="preserve">
+    <value>LoongArch LASX</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathLoongArchLasxHint" xml:space="preserve">
+    <value>经运行时发射的原生内核执行的 256 位向量运算。</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathRiscVVector" xml:space="preserve">
+    <value>RISC-V 向量扩展</value>
+  </data>
+  <data name="Settings_HardwareAccelerationPathRiscVVectorHint" xml:space="preserve">
+    <value>自适应核心寄存器宽度的 RVV 1.0 运算。</value>
+  </data>
+  <data name="Settings_DriverInstall" xml:space="preserve">
+    <value>驱动包</value>
+  </data>
+  <data name="Settings_DriverInstallHintElevated" xml:space="preserve">
+    <value>应用已提权，驱动包会立即暂存并绑定到在位设备。</value>
+  </data>
+  <data name="Settings_DriverInstallHintElevation" xml:space="preserve">
+    <value>暂存驱动包会请求一次管理员权限；设备在下次枚举时完成绑定。</value>
+  </data>
+  <data name="Settings_DriverInstallUnsupportedHint" xml:space="preserve">
+    <value>厂商驱动包只能在 Windows 上暂存。</value>
+  </data>
+  <data name="Settings_DriverInstallAction" xml:space="preserve">
+    <value>安装</value>
+  </data>
+  <data name="Settings_DriverInstallTitle" xml:space="preserve">
+    <value>安装驱动包</value>
+  </data>
+  <data name="Settings_DriverInstallMessage" xml:space="preserve">
+    <value>把 {0} 暂存到 Windows 驱动仓库并绑定到在位设备吗？</value>
+  </data>
+  <data name="Settings_DriverInstallConfirm" xml:space="preserve">
+    <value>安装</value>
+  </data>
+  <data name="Settings_DriverInstallSucceeded" xml:space="preserve">
+    <value>已暂存 {0}。</value>
+  </data>
+  <data name="Settings_DriverInstallElevation" xml:space="preserve">
+    <value>{0} 需要管理员权限。</value>
+  </data>
+  <data name="Settings_DriverInstallFailed" xml:space="preserve">
+    <value>无法安装 {0}。</value>
+  </data>
+  <data name="Toolbox_NotMaterialized" xml:space="preserve">
+    <value>未物化</value>
+  </data>
+  <data name="Toolbox_CacheEmpty" xml:space="preserve">
+    <value>空</value>
+  </data>
+  <data name="Toolbox_FileCount" xml:space="preserve">
+    <value>{0} 个文件</value>
+  </data>
+  <data name="Toolbox_StateEmbedded" xml:space="preserve">
+    <value>随包</value>
+  </data>
+  <data name="Toolbox_StateNotShipped" xml:space="preserve">
+    <value>未随包</value>
+  </data>
+  <data name="Toolbox_StateCached" xml:space="preserve">
+    <value>已缓存</value>
+  </data>
+  <data name="Toolbox_StateInstallable" xml:space="preserve">
+    <value>可安装</value>
+  </data>
+  <data name="Toolbox_StateUnavailable" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="Toolbox_UnavailableAssetsMissing" xml:space="preserve">
+    <value>本次构建缺少该负载</value>
+  </data>
+  <data name="Toolbox_SizeBytes" xml:space="preserve">
+    <value>{0} B</value>
+  </data>
+  <data name="Toolbox_SizeUnit" xml:space="preserve">
+    <value>{0:0.##} {1}</value>
+  </data>
+  <data name="Toolbox_RefreshFailed" xml:space="preserve">
+    <value>读取工具箱内容失败：{0}</value>
+  </data>
+  <data name="Toolbox_PurgeTitle" xml:space="preserve">
+    <value>清除缓存</value>
+  </data>
+  <data name="Toolbox_PurgeMessage" xml:space="preserve">
+    <value>删除 {0} 的派生缓存吗？应用会在下次需要时重建它。</value>
+  </data>
+  <data name="Toolbox_PurgeConfirm" xml:space="preserve">
+    <value>清除</value>
+  </data>
+  <data name="Toolbox_PurgeSucceeded" xml:space="preserve">
+    <value>已清除 {0} 的缓存，释放 {1}。</value>
+  </data>
+  <data name="Toolbox_PurgeFailed" xml:space="preserve">
+    <value>清除 {0} 的缓存失败：{1}</value>
+  </data>
+  <data name="Toolbox_ExportNoPicker" xml:space="preserve">
+    <value>当前平台没有目录选择器，未导出任何内容。</value>
+  </data>
+  <data name="Toolbox_ExportPick" xml:space="preserve">
+    <value>把 {0} 导出到</value>
+  </data>
+  <data name="Toolbox_ExportSucceeded" xml:space="preserve">
+    <value>已把 {0}（{1} 个文件）导出到 {2}。</value>
+  </data>
+  <data name="Toolbox_ExportFailed" xml:space="preserve">
+    <value>导出 {0} 失败：{1}</value>
+  </data>
+  <data name="Toolbox_BundleFonts" xml:space="preserve">
+    <value>MiSans 可变字形</value>
+  </data>
+  <data name="Toolbox_BundleFontsHint" xml:space="preserve">
+    <value>启动时解码进内存的界面字体。</value>
+  </data>
+  <data name="Toolbox_BundleOhosDevice" xml:space="preserve">
+    <value>OpenHarmony 采集库</value>
+  </data>
+  <data name="Toolbox_BundleOhosDeviceHint" xml:space="preserve">
+    <value>UI Test 采集库与控制代理。</value>
+  </data>
+  <data name="Toolbox_BundleRockusb" xml:space="preserve">
+    <value>瑞芯微 Rockusb 驱动</value>
+  </data>
+  <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
+    <value>为 maskrom 下载模式暂存的厂商驱动包。</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
+    <value>联发科 VCOM 驱动</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekVcomHint" xml:space="preserve">
+    <value>用于联发科下载模式的虚拟串口驱动。</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekFull" xml:space="preserve">
+    <value>联发科全量驱动</value>
+  </data>
+  <data name="Toolbox_BundleMediaTekFullHint" xml:space="preserve">
+    <value>完整的联发科 USB 驱动包。</value>
+  </data>
+  <data name="Toolbox_BundleGoogleUsb" xml:space="preserve">
+    <value>Google USB 驱动</value>
+  </data>
+  <data name="Toolbox_BundleGoogleUsbHint" xml:space="preserve">
+    <value>由 Google 发布的 Android USB 驱动包。</value>
+  </data>
+  <data name="Toolbox_BundleRockchipAdb" xml:space="preserve">
+    <value>瑞芯微 ADB 驱动</value>
+  </data>
+  <data name="Toolbox_BundleRockchipAdbHint" xml:space="preserve">
+    <value>面向瑞芯微设备的 Android ADB 驱动包。</value>
+  </data>
+  <data name="Toolbox_BundleQualcommQud" xml:space="preserve">
+    <value>高通 QUD 驱动</value>
+  </data>
+  <data name="Toolbox_BundleQualcommQudHint" xml:space="preserve">
+    <value>高通 USB、调制解调器与诊断驱动。</value>
+  </data>
+  <data name="Toolbox_BundleUnisocSpreadtrum" xml:space="preserve">
+    <value>紫光展锐驱动</value>
+  </data>
+  <data name="Toolbox_BundleUnisocSpreadtrumHint" xml:space="preserve">
+    <value>紫光展锐串口、ADB 与调制解调器驱动。</value>
+  </data>
+  <data name="Toolbox_BundleWinUsbCoinstaller" xml:space="preserve">
+    <value>WinUSB 共装器</value>
+  </data>
+  <data name="Toolbox_BundleWinUsbCoinstallerHint" xml:space="preserve">
+    <value>每个绑定 WinUSB 的随包 INF 共用的 amd64 共装器。</value>
+  </data>
+  <data name="Toolbox_BundleDeliveryUpdater" xml:space="preserve">
+    <value>卡刷更新器</value>
+  </data>
+  <data name="Toolbox_BundleDeliveryUpdaterHint" xml:space="preserve">
+    <value>卡刷包使用的原生 arm64 Edify 更新器。</value>
+  </data>
+  <data name="Toolbox_BundleMagicRules" xml:space="preserve">
+    <value>编译型 magic 规则</value>
+  </data>
+  <data name="Toolbox_BundleMagicRulesHint" xml:space="preserve">
+    <value>格式探测读取的 magic(5) 规则表。</value>
+  </data>
+  <data name="Toolbox_CacheDeliveryTools" xml:space="preserve">
+    <value>交付工具缓存</value>
+  </data>
+  <data name="Toolbox_CacheDeliveryToolsHint" xml:space="preserve">
+    <value>交付构建使用的已下载 platform-tools 与 zstd 归档。</value>
+  </data>
+  <data name="Toolbox_CacheAsset" xml:space="preserve">
+    <value>资源物化缓存</value>
+  </data>
+  <data name="Toolbox_CacheAssetHint" xml:space="preserve">
+    <value>内嵌资源包的临时副本，按需重建。</value>
+  </data>
+  <data name="Toolbox_DriverRockusb" xml:space="preserve">
+    <value>Rockusb 驱动包</value>
+  </data>
+  <data name="Toolbox_DriverRockusbHint" xml:space="preserve">
+    <value>暂存瑞芯微 maskrom 下载驱动。</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekVcom" xml:space="preserve">
+    <value>联发科 VCOM 驱动包</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekVcomHint" xml:space="preserve">
+    <value>暂存联发科虚拟串口驱动。</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekFull" xml:space="preserve">
+    <value>联发科全量驱动包</value>
+  </data>
+  <data name="Toolbox_DriverMediaTekFullHint" xml:space="preserve">
+    <value>暂存完整的联发科 USB 驱动包。</value>
+  </data>
+  <data name="Toolbox_DriverGoogleUsb" xml:space="preserve">
+    <value>Google USB 驱动包</value>
+  </data>
+  <data name="Toolbox_DriverGoogleUsbHint" xml:space="preserve">
+    <value>暂存由 Google 发布的 Android USB 驱动。</value>
+  </data>
+  <data name="Toolbox_DriverRockchipAdb" xml:space="preserve">
+    <value>瑞芯微 ADB 驱动包</value>
+  </data>
+  <data name="Toolbox_DriverRockchipAdbHint" xml:space="preserve">
+    <value>暂存面向瑞芯微设备的 ADB 驱动。</value>
+  </data>
+  <data name="Toolbox_DriverQualcommQud" xml:space="preserve">
+    <value>高通 QUD 驱动包</value>
+  </data>
+  <data name="Toolbox_DriverQualcommQudHint" xml:space="preserve">
+    <value>暂存高通 USB、调制解调器与诊断驱动。</value>
+  </data>
+  <data name="Toolbox_DriverUnisocSpreadtrum" xml:space="preserve">
+    <value>紫光展锐驱动包</value>
+  </data>
+  <data name="Toolbox_DriverUnisocSpreadtrumHint" xml:space="preserve">
+    <value>暂存紫光展锐串口、ADB 与调制解调器驱动。</value>
+  </data>
+  <data name="Toolbox_Summary" xml:space="preserve">
+    <value>{0} 组 · 已缓存 {1}</value>
+  </data>
+  <data name="Toolbox_StateInstalled" xml:space="preserve">
+    <value>已安装</value>
+  </data>
+  <data name="Toolbox_DriverUninstall" xml:space="preserve">
+    <value>移除驱动</value>
+  </data>
+  <data name="Toolbox_DriverInstall" xml:space="preserve">
+    <value>安装驱动</value>
+  </data>
+  <data name="Toolbox_RootPatchHint" xml:space="preserve">
+    <value>从该项目 Release 下载的 root 补丁包。</value>
+  </data>
+  <data name="Settings_DriverUninstallTitle" xml:space="preserve">
+    <value>移除驱动包</value>
+  </data>
+  <data name="Settings_DriverUninstallMessage" xml:space="preserve">
+    <value>要将 {0} 从 Windows 驱动存储中移除吗？</value>
+  </data>
+  <data name="Settings_DriverUninstallConfirm" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="Settings_DriverUninstallSucceeded" xml:space="preserve">
+    <value>已移除 {0}。</value>
+  </data>
+  <data name="Settings_DriverUninstallFailed" xml:space="preserve">
+    <value>无法移除 {0}。</value>
+  </data>
+  <data name="Toolbox_EntryCount" xml:space="preserve">
+    <value>磁盘上 {0} 个版本</value>
+  </data>
+  <data name="Toolbox_EntryDeleteTitle" xml:space="preserve">
+    <value>删除已下载文件</value>
+  </data>
+  <data name="Toolbox_EntryDeleteMessage" xml:space="preserve">
+    <value>要从磁盘删除 {0} 吗？该项的其它内容保持不动。</value>
+  </data>
+  <data name="Toolbox_EntryDeleteConfirm" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Toolbox_EntryDeleteSucceeded" xml:space="preserve">
+    <value>已删除 {0}。</value>
+  </data>
+  <data name="Toolbox_EntryDeleteFailed" xml:space="preserve">
+    <value>无法删除 {0}：{1}</value>
+  </data>
+  <data name="Toolbox_EntryDeleteAction" xml:space="preserve">
+    <value>删除这个文件</value>
+  </data>
 </root>

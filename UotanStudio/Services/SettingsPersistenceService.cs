@@ -19,6 +19,7 @@ public class AppSettings : IJsonOnDeserialized
     /// <summary>Discards the HDC path keys, the retired EROFS legacy layout switch, the retired recent-node list and the retired auto-backup switch kept in extension data, and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键、已退役的 EROFS legacy 布局开关、最近使用节点列表与自动备份开关，并初始化缺失的集合。</para></summary>
     void IJsonOnDeserialized.OnDeserialized()
     {
+        ApplyHardwareAccelerationPolicy();
         AdditionalSettings?.Remove("hdcPath");
         AdditionalSettings?.Remove("HdcPath");
         AdditionalSettings?.Remove("erofsLegacyCompatibility");
@@ -36,6 +37,17 @@ public class AppSettings : IJsonOnDeserialized
         ExpandedFlashSections ??= [];
         RemoteConnectionHistory ??= [];
         AssociatedFileExtensions ??= [.. FileAssociationService.DefaultAssociatedExtensions];
+    }
+
+    /// <summary>
+    /// Applies the persisted byte-block dispatch policy to the process, so work started before the settings page
+    /// exists already honours the choice.
+    /// <para>把持久化的字节块分派策略应用到进程，使设置页存在之前就开始的工作已经遵循该选择。</para>
+    /// </summary>
+    private void ApplyHardwareAccelerationPolicy()
+    {
+        Hash.Simd.SimdOps.ProcessSoftwareFallback = UseSoftwareFallback;
+        Hash.Simd.SimdOps.ProcessIsaCeiling = IsaCeiling;
     }
 
     /// <summary>
@@ -511,6 +523,29 @@ public class AppSettings : IJsonOnDeserialized
     public bool UsePartialPresentation { get; set; }
 
     /// <summary>
+    /// Gets or sets whether byte-block hashing and checksum work must use the scalar software loop instead of the
+    /// processor's widest vector kernel. The choice applies to the whole process and takes effect immediately.
+    /// <para>获取或设置字节块哈希与校验和运算是否必须使用标量软件循环，而不是处理器最宽的向量内核。该选择作用于整个
+    /// 进程并立即生效。</para>
+    /// </summary>
+    /// <value>True routes every byte-block operation through the scalar loop.
+    /// <para>为真时把全部字节块运算导向标量循环。</para></value>
+    [JsonPropertyName("useSoftwareFallback")]
+    public bool UseSoftwareFallback { get; set; }
+
+    /// <summary>
+    /// Gets or sets the instruction-set ceiling that caps the byte-block dispatch order. Any implementation ranked
+    /// above the ceiling is skipped even when the processor supports it, so a kernel that misbehaves on this machine can
+    /// be bypassed without forcing the scalar loop. The choice applies to the whole process and takes effect immediately.
+    /// <para>获取或设置限制字节块分派顺序的指令集上限。即使处理器支持，排名高于该上限的实现也会被跳过，因此在这台机器上
+    /// 表现异常的某个内核可以被绕过，而不必强制走标量循环。该选择作用于整个进程并立即生效。</para>
+    /// </summary>
+    /// <value><see cref="Hash.Simd.SimdIsa.None"/> selects the widest usable kernel.
+    /// <para><see cref="Hash.Simd.SimdIsa.None"/> 表示选用可用的最宽内核。</para></value>
+    [JsonPropertyName("isaCeiling")]
+    public Hash.Simd.SimdIsa IsaCeiling { get; set; }
+
+    /// <summary>
     /// Gets or sets the comma-separated partitions skipped by default during readback.
     /// <para>获取或设置回读时默认跳过的逗号分隔分区列表。</para>
     /// </summary>
@@ -765,11 +800,12 @@ public sealed class RemoteConnectionProfile
 [JsonSerializable(typeof(RemoteConnectionProfile))]
 [JsonSerializable(typeof(RemoteProtocol))]
 [JsonSerializable(typeof(RemoteEncryptionMode))]
+[JsonSerializable(typeof(Hash.Simd.SimdIsa))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>), typeof(JsonStringEnumConverter<WindowState>), typeof(JsonStringEnumConverter<RemoteProtocol>), typeof(JsonStringEnumConverter<RemoteEncryptionMode>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>), typeof(JsonStringEnumConverter<WindowState>), typeof(JsonStringEnumConverter<RemoteProtocol>), typeof(JsonStringEnumConverter<RemoteEncryptionMode>), typeof(JsonStringEnumConverter<Hash.Simd.SimdIsa>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
