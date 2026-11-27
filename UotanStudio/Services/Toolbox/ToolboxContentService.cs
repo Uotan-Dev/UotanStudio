@@ -447,7 +447,7 @@ internal static class ToolboxContentService
                 ToolboxContentKind.RootPatchPackage,
                 key,
                 TitleKey: null,
-                LiteralTitle: key,
+                LiteralTitle: source.DisplayName(),
                 "Toolbox_RootPatchHint",
                 bytes,
                 bytes,

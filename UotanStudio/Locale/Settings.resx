@@ -586,10 +586,10 @@
     <value>Check for new versions automatically on startup.</value>
   </data>
   <data name="Settings_Toolbox" xml:space="preserve">
-    <value>Toolbox</value>
+    <value>Resource management</value>
   </data>
   <data name="Settings_ToolboxDescription" xml:space="preserve">
-    <value>Inspect the content shipped with the application and the caches filled by downloads.</value>
+    <value>Manage bundled fonts and drivers, as well as downloaded caches and patch packages.</value>
   </data>
   <data name="Settings_ToolboxRefresh" xml:space="preserve">
     <value>Refresh</value>
@@ -599,6 +599,12 @@
   </data>
   <data name="Settings_ToolboxEmbeddedHint" xml:space="preserve">
     <value>These payloads are embedded in the application and can never be deleted; exporting copies them to a directory you pick.</value>
+  </data>
+  <data name="Settings_ToolboxDownloaded" xml:space="preserve">
+    <value>Downloaded resources</value>
+  </data>
+  <data name="Settings_ToolboxDownloadedHint" xml:space="preserve">
+    <value>Rebuildable download caches and downloaded patch packages; clearing them frees disk space and they will be re-downloaded when needed.</value>
   </data>
   <data name="Settings_ToolboxExport" xml:space="preserve">
     <value>Export</value>
@@ -778,7 +784,7 @@
     <value>{0:0.##} {1}</value>
   </data>
   <data name="Toolbox_RefreshFailed" xml:space="preserve">
-    <value>Reading the toolbox content failed: {0}</value>
+    <value>Reading resources failed: {0}</value>
   </data>
   <data name="Toolbox_PurgeTitle" xml:space="preserve">
     <value>Clear cache</value>
@@ -808,10 +814,10 @@
     <value>Exporting {0} failed: {1}</value>
   </data>
   <data name="Toolbox_BundleFonts" xml:space="preserve">
-    <value>MiSans variable face</value>
+    <value>MiSans &amp; JetBrains Mono fonts</value>
   </data>
   <data name="Toolbox_BundleFontsHint" xml:space="preserve">
-    <value>The interface font decoded into memory at startup.</value>
+    <value>The interface and monospace fonts decoded into memory at startup.</value>
   </data>
   <data name="Toolbox_BundleOhosDevice" xml:space="preserve">
     <value>OpenHarmony capture libraries</value>
@@ -820,10 +826,10 @@
     <value>UI Test capture libraries and control agents.</value>
   </data>
   <data name="Toolbox_BundleRockusb" xml:space="preserve">
-    <value>Rockchip Rockusb driver</value>
+    <value>Rockchip RockUSB driver</value>
   </data>
   <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
-    <value>Vendor driver package staged for the maskrom download mode.</value>
+    <value>Vendor driver package staged for Maskrom download mode.</value>
   </data>
   <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
     <value>MediaTek VCOM driver</value>
@@ -865,16 +871,16 @@
     <value>WinUSB coinstallers</value>
   </data>
   <data name="Toolbox_BundleWinUsbCoinstallerHint" xml:space="preserve">
-    <value>amd64 coinstallers shared by every bundled INF that binds WinUSB.</value>
+    <value>AMD64 coinstallers shared by every bundled INF that binds WinUSB.</value>
   </data>
   <data name="Toolbox_BundleDeliveryUpdater" xml:space="preserve">
     <value>Recovery updater</value>
   </data>
   <data name="Toolbox_BundleDeliveryUpdaterHint" xml:space="preserve">
-    <value>Native arm64 Edify updater used by recovery packages.</value>
+    <value>Native ARM64 Edify updater used by recovery packages.</value>
   </data>
   <data name="Toolbox_BundleMagicRules" xml:space="preserve">
-    <value>Compiled magic rules</value>
+    <value>Compiled Magic rules</value>
   </data>
   <data name="Toolbox_BundleMagicRulesHint" xml:space="preserve">
     <value>The magic(5) table the format detector reads.</value>
@@ -883,7 +889,7 @@
     <value>Delivery tool cache</value>
   </data>
   <data name="Toolbox_CacheDeliveryToolsHint" xml:space="preserve">
-    <value>Downloaded platform-tools and zstd archives used by delivery builds.</value>
+    <value>Platform-tools and Zstd archives used by delivery builds.</value>
   </data>
   <data name="Toolbox_CacheAsset" xml:space="preserve">
     <value>Materialized asset cache</value>
@@ -892,10 +898,10 @@
     <value>Temporary copies of embedded bundles, rebuilt on demand.</value>
   </data>
   <data name="Toolbox_DriverRockusb" xml:space="preserve">
-    <value>Rockusb driver package</value>
+    <value>RockUSB driver package</value>
   </data>
   <data name="Toolbox_DriverRockusbHint" xml:space="preserve">
-    <value>Stages the Rockchip maskrom download driver.</value>
+    <value>Stages the Rockchip Maskrom download driver.</value>
   </data>
   <data name="Toolbox_DriverMediaTekVcom" xml:space="preserve">
     <value>MediaTek VCOM driver package</value>

@@ -32,6 +32,18 @@ public partial class SettingsViewModel
     /// </summary>
     public ObservableCollection<ToolboxContentItem> ToolboxItems { get; } = [];
 
+    /// <summary>
+    /// Gets the embedded toolbox rows (embedded asset bundles and vendor driver packages).
+    /// <para>获取内嵌工具箱行（内嵌资源包与厂商驱动包）。</para>
+    /// </summary>
+    public ObservableCollection<ToolboxContentItem> EmbeddedToolboxItems { get; } = [];
+
+    /// <summary>
+    /// Gets the downloaded toolbox rows (rebuildable download caches and downloaded root patch packages).
+    /// <para>获取已下载的工具箱行（可重建下载缓存与已下载的 root 补丁包）。</para>
+    /// </summary>
+    public ObservableCollection<ToolboxContentItem> DownloadedToolboxItems { get; } = [];
+
     /// <summary>The selectable dispatch targets in dropdown order.<para>下拉框顺序中的可选派发目标。</para></summary>
     private HardwareAccelerationTarget[] _hardwareAccelerationTargets = [];
 
@@ -124,6 +136,8 @@ public partial class SettingsViewModel
     {
         var rows = await Task.Run(ToolboxContentService.Enumerate);
         ToolboxItems.Clear();
+        EmbeddedToolboxItems.Clear();
+        DownloadedToolboxItems.Clear();
         foreach (var row in rows)
         {
             var item = row.Kind == ToolboxContentKind.DriverPackage
@@ -137,6 +151,14 @@ public partial class SettingsViewModel
                     (target, entry) => RunToolboxAction(
                         _ => DeleteToolboxEntryAsync(target, entry), target));
             ToolboxItems.Add(item);
+            if (row.Kind is ToolboxContentKind.DownloadCache or ToolboxContentKind.RootPatchPackage)
+            {
+                DownloadedToolboxItems.Add(item);
+            }
+            else
+            {
+                EmbeddedToolboxItems.Add(item);
+            }
         }
 
         OnPropertyChanged(nameof(ToolboxSummary));

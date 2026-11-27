@@ -586,10 +586,10 @@
     <value>启动时自动检查是否有可用更新。</value>
   </data>
   <data name="Settings_Toolbox" xml:space="preserve">
-    <value>工具箱</value>
+    <value>资源管理</value>
   </data>
   <data name="Settings_ToolboxDescription" xml:space="preserve">
-    <value>查看随应用分发的内容与由下载填充的缓存。</value>
+    <value>管理随应用内置的字体、驱动与资源，以及已下载的缓存和补丁包。</value>
   </data>
   <data name="Settings_ToolboxRefresh" xml:space="preserve">
     <value>刷新</value>
@@ -599,6 +599,12 @@
   </data>
   <data name="Settings_ToolboxEmbeddedHint" xml:space="preserve">
     <value>这些负载内嵌在应用中，永远不可删除；导出会把它们复制到你选择的目录。</value>
+  </data>
+  <data name="Settings_ToolboxDownloaded" xml:space="preserve">
+    <value>已下载的资源</value>
+  </data>
+  <data name="Settings_ToolboxDownloadedHint" xml:space="preserve">
+    <value>可重建的下载缓存与已下载的补丁包；清除可释放磁盘空间，需要时会重新下载。</value>
   </data>
   <data name="Settings_ToolboxExport" xml:space="preserve">
     <value>导出</value>
@@ -778,7 +784,7 @@
     <value>{0:0.##} {1}</value>
   </data>
   <data name="Toolbox_RefreshFailed" xml:space="preserve">
-    <value>读取工具箱内容失败：{0}</value>
+    <value>读取资源列表失败：{0}</value>
   </data>
   <data name="Toolbox_PurgeTitle" xml:space="preserve">
     <value>清除缓存</value>
@@ -808,10 +814,10 @@
     <value>导出 {0} 失败：{1}</value>
   </data>
   <data name="Toolbox_BundleFonts" xml:space="preserve">
-    <value>MiSans 可变字形</value>
+    <value>MiSans 与 JetBrains Mono 字体</value>
   </data>
   <data name="Toolbox_BundleFontsHint" xml:space="preserve">
-    <value>启动时解码进内存的界面字体。</value>
+    <value>启动时解码进内存的界面与等宽字体。</value>
   </data>
   <data name="Toolbox_BundleOhosDevice" xml:space="preserve">
     <value>OpenHarmony 采集库</value>
@@ -820,10 +826,10 @@
     <value>UI Test 采集库与控制代理。</value>
   </data>
   <data name="Toolbox_BundleRockusb" xml:space="preserve">
-    <value>瑞芯微 Rockusb 驱动</value>
+    <value>瑞芯微 RockUSB 驱动</value>
   </data>
   <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
-    <value>为 maskrom 下载模式暂存的厂商驱动包。</value>
+    <value>用于 Maskrom 下载模式的厂商驱动包。</value>
   </data>
   <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
     <value>联发科 VCOM 驱动</value>
@@ -865,16 +871,16 @@
     <value>WinUSB 共装器</value>
   </data>
   <data name="Toolbox_BundleWinUsbCoinstallerHint" xml:space="preserve">
-    <value>每个绑定 WinUSB 的随包 INF 共用的 amd64 共装器。</value>
+    <value>每个绑定 WinUSB 的随包 INF 共用的 AMD64 共装器。</value>
   </data>
   <data name="Toolbox_BundleDeliveryUpdater" xml:space="preserve">
     <value>卡刷更新器</value>
   </data>
   <data name="Toolbox_BundleDeliveryUpdaterHint" xml:space="preserve">
-    <value>卡刷包使用的原生 arm64 Edify 更新器。</value>
+    <value>卡刷包使用的原生 ARM64 Edify 更新器。</value>
   </data>
   <data name="Toolbox_BundleMagicRules" xml:space="preserve">
-    <value>编译型 magic 规则</value>
+    <value>编译型 Magic 规则</value>
   </data>
   <data name="Toolbox_BundleMagicRulesHint" xml:space="preserve">
     <value>格式探测读取的 magic(5) 规则表。</value>
@@ -883,7 +889,7 @@
     <value>交付工具缓存</value>
   </data>
   <data name="Toolbox_CacheDeliveryToolsHint" xml:space="preserve">
-    <value>交付构建使用的已下载 platform-tools 与 zstd 归档。</value>
+    <value>交付构建使用的 platform-tools 与 Zstd 归档。</value>
   </data>
   <data name="Toolbox_CacheAsset" xml:space="preserve">
     <value>资源物化缓存</value>
@@ -892,46 +898,46 @@
     <value>内嵌资源包的临时副本，按需重建。</value>
   </data>
   <data name="Toolbox_DriverRockusb" xml:space="preserve">
-    <value>Rockusb 驱动包</value>
+    <value>RockUSB 驱动包</value>
   </data>
   <data name="Toolbox_DriverRockusbHint" xml:space="preserve">
-    <value>暂存瑞芯微 maskrom 下载驱动。</value>
+    <value>瑞芯微 Maskrom 下载驱动。</value>
   </data>
   <data name="Toolbox_DriverMediaTekVcom" xml:space="preserve">
     <value>联发科 VCOM 驱动包</value>
   </data>
   <data name="Toolbox_DriverMediaTekVcomHint" xml:space="preserve">
-    <value>暂存联发科虚拟串口驱动。</value>
+    <value>联发科虚拟串口驱动。</value>
   </data>
   <data name="Toolbox_DriverMediaTekFull" xml:space="preserve">
     <value>联发科全量驱动包</value>
   </data>
   <data name="Toolbox_DriverMediaTekFullHint" xml:space="preserve">
-    <value>暂存完整的联发科 USB 驱动包。</value>
+    <value>完整的联发科 USB 驱动包。</value>
   </data>
   <data name="Toolbox_DriverGoogleUsb" xml:space="preserve">
     <value>Google USB 驱动包</value>
   </data>
   <data name="Toolbox_DriverGoogleUsbHint" xml:space="preserve">
-    <value>暂存由 Google 发布的 Android USB 驱动。</value>
+    <value>由 Google 发布的 Android USB 驱动。</value>
   </data>
   <data name="Toolbox_DriverRockchipAdb" xml:space="preserve">
     <value>瑞芯微 ADB 驱动包</value>
   </data>
   <data name="Toolbox_DriverRockchipAdbHint" xml:space="preserve">
-    <value>暂存面向瑞芯微设备的 ADB 驱动。</value>
+    <value>面向瑞芯微设备的 ADB 驱动。</value>
   </data>
   <data name="Toolbox_DriverQualcommQud" xml:space="preserve">
     <value>高通 QUD 驱动包</value>
   </data>
   <data name="Toolbox_DriverQualcommQudHint" xml:space="preserve">
-    <value>暂存高通 USB、调制解调器与诊断驱动。</value>
+    <value>高通 USB、调制解调器与诊断驱动。</value>
   </data>
   <data name="Toolbox_DriverUnisocSpreadtrum" xml:space="preserve">
     <value>紫光展锐驱动包</value>
   </data>
   <data name="Toolbox_DriverUnisocSpreadtrumHint" xml:space="preserve">
-    <value>暂存紫光展锐串口、ADB 与调制解调器驱动。</value>
+    <value>紫光展锐串口、ADB 与调制解调器驱动。</value>
   </data>
   <data name="Toolbox_Summary" xml:space="preserve">
     <value>{0} 组 · 已缓存 {1}</value>
@@ -946,7 +952,7 @@
     <value>安装驱动</value>
   </data>
   <data name="Toolbox_RootPatchHint" xml:space="preserve">
-    <value>从该项目 Release 下载的 root 补丁包。</value>
+    <value>从该项目 Release 下载的 Root 补丁包。</value>
   </data>
   <data name="Settings_DriverUninstallTitle" xml:space="preserve">
     <value>移除驱动包</value>

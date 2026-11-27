@@ -3860,6 +3860,8 @@ internal static class LocaleKeySets
         "Settings_ToolboxRefresh",
         "Settings_ToolboxEmbedded",
         "Settings_ToolboxEmbeddedHint",
+        "Settings_ToolboxDownloaded",
+        "Settings_ToolboxDownloadedHint",
         "Settings_ToolboxExport",
         "Settings_ToolboxPurge",
         "Settings_HardwareAccelerationPaths",

@@ -75,6 +75,21 @@ public static class RootPatchSources
         /// <para>小写的上游键，即稳定的磁盘目录名。</para></returns>
         public string CommandFolderName() => source.Key();
 
+        /// <summary>Returns the human-readable project name with canonical casing.
+        /// <para>返回规范大小写的项目显示名称。</para></summary>
+        /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+        /// <returns>The canonical project name such as <c>Magisk</c> or <c>KernelSU</c>.
+        /// <para>规范的项目名称，例如 <c>Magisk</c> 或 <c>KernelSU</c>。</para></returns>
+        public string DisplayName() => source switch
+        {
+            RootPatchPackageSource.Magisk => "Magisk",
+            RootPatchPackageSource.MagiskAlpha => "Magisk Alpha",
+            RootPatchPackageSource.KernelSu => "KernelSU",
+            RootPatchPackageSource.SukiSu => "SukiSU",
+            RootPatchPackageSource.APatch => "APatch",
+            _ => source.Key(),
+        };
+
         /// <summary>Returns the package family a source's downloads are expected to contain.
         /// <para>返回该来源的下载文件预期包含的包类型族。</para></summary>
         /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
