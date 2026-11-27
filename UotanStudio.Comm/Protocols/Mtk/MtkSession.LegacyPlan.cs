@@ -137,6 +137,57 @@ public sealed partial class MtkSession
         }
     }
 
+    private async Task RevalidateLegacyTableOwnedAsync(MtkLegacyPartitionTableSnapshot expected,
+        CancellationToken cancellationToken)
+    {
+        var current = await ReadLegacyPartitionTableOwnedAsync(expected.PartitionId, cancellationToken)
+            .ConfigureAwait(false);
+        if (current.Kind != expected.Kind || current.TableOffset != expected.TableOffset)
+        {
+            throw new InvalidDataException(
+                "The Legacy partition table moved after preparation; no partition operation was started.");
+        }
+
+        if (current.Gpt is { } gpt && expected.Gpt is { } previousGpt)
+        {
+            if (gpt.MetadataSha256 != previousGpt.MetadataSha256 || gpt.BlockSize != previousGpt.BlockSize
+                || gpt.BlockCount != previousGpt.BlockCount)
+            {
+                throw new InvalidDataException(
+                    "The Legacy GPT metadata changed after preparation; no partition operation was started.");
+            }
+
+            return;
+        }
+
+        if (current.Mbr is { } mbr && expected.Mbr is { } previousMbr
+            && !ExtentsMatch(mbr.EnumerateExtents(), previousMbr.EnumerateExtents()))
+        {
+            throw new InvalidDataException(
+                "The Legacy MBR metadata changed after preparation; no partition operation was started.");
+        }
+    }
+
+    private static bool ExtentsMatch(
+        IReadOnlyList<(uint FirstLba, uint SectorCount, byte PartitionType)> current,
+        IReadOnlyList<(uint FirstLba, uint SectorCount, byte PartitionType)> previous)
+    {
+        if (current.Count != previous.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < current.Count; index++)
+        {
+            if (current[index] != previous[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private async Task RevalidateLegacyGptOwnedAsync(MtkLegacyGptSnapshot expected,
         CancellationToken cancellationToken)
     {

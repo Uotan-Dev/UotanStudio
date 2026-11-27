@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Firmware.BlockImage;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
@@ -61,6 +62,80 @@ public sealed partial class MtkSession
                 await RevalidateLegacyGptOwnedAsync(snapshot, cancellationToken).ConfigureAwait(false);
                 await TransferLegacyStorageOwnedAsync(false, snapshot.PartitionId, partition.ByteOffset,
                     partition.ByteLength, output, LegacyPlanTransferTimeoutMs, progress, cancellationToken,
+                    nor: false).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
+    /// <summary>Backs up one named Legacy partition from either a GPT or an MBR table, revalidating the observed table under the same operation lease as the data read. No repair, slot inference or retry is performed.
+    /// <para>从 GPT 或 MBR 表中备份一个具名 Legacy 分区，并在与数据读取同一操作租约下重新校验已观测的分区表。 不执行修复、槽位推断或重试。</para></summary>
+    /// <remarks>
+    /// This is the MBR counterpart of the GPT overload and the only entry point that handles both kinds, so a caller
+    /// that has just read a table does not have to branch on <see cref="PartitionTableKind"/>. The extent's byte offset
+    /// already includes any layout-header prefix, because an MBR's LBAs are relative to the sector holding the table
+    /// rather than to the start of the region. The destination is replaced only after a successful transfer and
+    /// staging-file flush. This does not freeze device contents or promise a point-in-time storage snapshot. Progress
+    /// excludes the metadata reads of the revalidation, and callbacks must not wait on this session.
+    /// <para>这是 GPT 重载的 MBR 对应物，也是同时处理两种表的唯一入口，因此刚读完分区表的调用方不必按
+    /// <see cref="PartitionTableKind"/> 分支。区间的字节偏移已计入任何布局头前缀，因为 MBR 的 LBA 相对于承载分区表的
+    /// 扇区，而不是区域起点。目标文件只在传输成功且暂存文件刷写完成后替换。这不会冻结设备内容，也不承诺时间点存储
+    /// 快照。进度不含重新校验所用的元数据读取，且回调不得等待本会话。</para>
+    /// </remarks>
+    /// <param name="snapshot">A Legacy partition-table observation from this session's current storage inventory.
+    /// <para>来自本会话当前 Legacy 存储清单的分区表观测结果。</para></param>
+    /// <param name="partitionName">Exact case-sensitive extent name; for an MBR this is the synthetic <c>mbr-TT-N</c> label.
+    /// <para>精确、区分大小写的区间名称；MBR 为合成的 <c>mbr-TT-N</c> 标签。</para></param>
+    /// <param name="destinationPath">Output file in an existing directory.
+    /// <para>位于已存在目录中的输出文件。</para></param>
+    /// <param name="progress">Cumulative partition bytes; full progress is not publication success.
+    /// <para>累计的分区字节数；进度跑满不代表发布成功。</para></param>
+    /// <param name="cancellationToken">Cancellation for waiting, metadata, data and publication preparation.
+    /// <para>用于等待、元数据、数据与发布准备的取消令牌。</para></param>
+    /// <returns>A task that completes once the staging file replaced the destination.
+    /// <para>在暂存文件替换目标文件后完成的异步任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
+    /// <para><paramref name="snapshot"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="partitionName"/> or <paramref name="destinationPath"/> is blank.
+    /// <para><paramref name="partitionName"/> 或 <paramref name="destinationPath"/> 为空白。</para></exception>
+    /// <exception cref="KeyNotFoundException">No extent carries this name.
+    /// <para>没有任何区间携带该名称。</para></exception>
+    /// <exception cref="InvalidDataException">More than one extent carries this name, or the revalidated table changed.
+    /// <para>多个区间携带该名称，或重新校验的表发生了变化。</para></exception>
+    /// <exception cref="InvalidOperationException">Legacy storage is not ready, or the snapshot belongs to a different storage inventory.
+    /// <para>Legacy 存储未就绪，或快照属于另一份存储清单。</para></exception>
+    /// <exception cref="MtkProtocolException">A metadata or data exchange failed; the session faults.
+    /// <para>元数据或数据交换失败；会话进入 fault 状态。</para></exception>
+    /// <exception cref="IOException">The staging file cannot be created or publication failed.
+    /// <para>无法创建暂存文件或发布失败。</para></exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
+    /// <para>调用方在任一协作点取消。</para></exception>
+    public async Task ReadLegacyPartitionToFileAsync(MtkLegacyPartitionTableSnapshot snapshot, string partitionName,
+        string destinationPath, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(partitionName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        var extent = snapshot.FindExtent(partitionName);
+        await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            RequireState(MtkSessionState.LegacyStorageReady);
+            if (!ReferenceEquals(snapshot.Storage, LegacyStorage))
+            {
+                throw new InvalidOperationException(
+                    "The Legacy partition-table snapshot belongs to a different storage inventory.");
+            }
+
+            await StorageFilePublisher.PublishAsync(destinationPath, extent.ByteLength, async output =>
+            {
+                await RevalidateLegacyTableOwnedAsync(snapshot, cancellationToken).ConfigureAwait(false);
+                await TransferLegacyStorageOwnedAsync(false, snapshot.PartitionId, extent.ByteOffset,
+                    extent.ByteLength, output, LegacyPlanTransferTimeoutMs, progress, cancellationToken,
                     nor: false).ConfigureAwait(false);
             }, cancellationToken).ConfigureAwait(false);
         }
