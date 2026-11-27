@@ -282,6 +282,117 @@ public sealed class DriverPackageInstaller
         }
     }
 
+    /// <summary>
+    /// Reports whether the staged driver store currently holds an OEM INF that belongs to one bundled package,
+    /// using the same provider and catalog matching as <see cref="Uninstall"/> but changing nothing. A package
+    /// that is bundled but never staged reports <see langword="false"/>, and so does a package whose ownership
+    /// cannot be established.
+    /// <para>报告驱动仓库当前是否存在属于某个内置驱动包的已暂存 OEM INF，判定依据与 <see cref="Uninstall"/>
+    /// 相同，但不做任何变更。随包但从未暂存的包返回 <see langword="false"/>，无法确认归属的包同样返回
+    /// <see langword="false"/>。</para>
+    /// </summary>
+    /// <param name="packageId">The package id from <see cref="DriverPackageCatalog"/>, for example <c>rockusb</c>.
+    /// <para><see cref="DriverPackageCatalog"/> 中的包标识，例如 <c>rockusb</c>。</para></param>
+    /// <returns><see langword="true"/> when at least one staged OEM INF is attributable to the package.
+    /// <para>至少有一个已暂存 OEM INF 可归入该包时为 <see langword="true"/>。</para></returns>
+    public static bool IsInstalled(string packageId)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var package = DriverPackageCatalog.Find(packageId);
+        if (package is null || !package.IsAvailable || package.InfFileNames.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!TryCollectOwnership(package, out var providers, out var catalogs))
+            {
+                return false;
+            }
+
+            var stagedInfs = ReadStagedInfFiles();
+            if (stagedInfs is null)
+            {
+                return false;
+            }
+
+            foreach (var staged in stagedInfs)
+            {
+                if (IsAttributable(staged, providers, catalogs))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or NotSupportedException or InvalidDataException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Collects the provider and catalog file names one package's embedded INFs declare, which is the ownership
+    /// evidence both removal and the read-only probe rely on.
+    /// <para>收集某个包的已内嵌 INF 声明的提供者与目录文件名，这是卸载与只读探测共同依赖的归属证据。</para>
+    /// </summary>
+    /// <param name="package">The catalog entry.<para>目录条目。</para></param>
+    /// <param name="providers">Receives the declared providers.<para>接收声明的提供者。</para></param>
+    /// <param name="catalogs">Receives the declared catalog file names.<para>接收声明的目录文件名。</para></param>
+    /// <returns><see langword="true"/> when both sets have at least one entry.
+    /// <para>两个集合都至少有一条记录时为 <see langword="true"/>。</para></returns>
+    private static bool TryCollectOwnership(DriverPackageDescriptor package,
+        out HashSet<string> providers, out HashSet<string> catalogs)
+    {
+        providers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        catalogs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var infName in package.InfFileNames)
+        {
+            var inf = DriverPackageAssets.TryReadFile(package.Id, infName);
+            if (inf is null || !DriverPackageInfReader.TryRead(inf, out var metadata) || metadata is null)
+            {
+                continue;
+            }
+
+            providers.Add(metadata.Provider);
+            foreach (var catalog in metadata.CatalogFileNames)
+            {
+                catalogs.Add(Path.GetFileName(catalog));
+            }
+        }
+
+        return providers.Count > 0 && catalogs.Count > 0;
+    }
+
+    /// <summary>
+    /// Tests one staged OEM INF against a package's declared provider and catalog, accepting the rewritten catalog
+    /// name the driver store assigns during staging.
+    /// <para>用某个包声明的提供者与目录判定一条已暂存 OEM INF，并接受驱动仓库在暂存时改写的目录名。</para>
+    /// </summary>
+    /// <param name="staged">The staged INF record.<para>已暂存 INF 记录。</para></param>
+    /// <param name="providers">Providers declared by the package.<para>包声明的提供者。</para></param>
+    /// <param name="catalogs">Catalogs declared by the package.<para>包声明的目录文件。</para></param>
+    /// <returns><see langword="true"/> when the staged INF belongs to the package.
+    /// <para>已暂存 INF 属于该包时为 <see langword="true"/>。</para></returns>
+    private static bool IsAttributable(
+        (string FileName, string? Provider, IReadOnlyList<string> CatalogFileNames) staged,
+        HashSet<string> providers, HashSet<string> catalogs)
+    {
+        var declared = staged.CatalogFileNames.Any(catalog => catalogs.Contains(Path.GetFileName(catalog)));
+        var rewritten = staged.CatalogFileNames.Any(
+            catalog => string.Equals(Path.GetFileName(catalog),
+                Path.GetFileNameWithoutExtension(staged.FileName) + ".cat", StringComparison.OrdinalIgnoreCase));
+        return (declared || rewritten) && !string.IsNullOrWhiteSpace(staged.Provider)
+            && providers.Contains(staged.Provider);
+    }
+
     private static WinUsbDriverOperationResult? CheckPackage(string packageId, string pastTenseAction)
     {
         var package = DriverPackageCatalog.Find(packageId);

@@ -38,8 +38,6 @@ public static class DriverPackageCatalog
         Describe("unisoc-spreadtrum", "UnisocSpreadtrum", "Unisoc",
             ["sprdadb.inf", "sprdvcom.inf", "sprdvmdm.inf", "rdavcom.inf"],
             null),
-        Describe("wch-serial", "WchSerial", "Wch", [], "SelfExtractorOnly"),
-        Describe("huawei-hisuite", "HuaweiHiSuite", "Huawei", [], "LicenseAndSize"),
     ];
 
     /// <summary>
