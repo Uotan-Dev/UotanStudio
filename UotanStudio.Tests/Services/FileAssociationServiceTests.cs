@@ -27,6 +27,7 @@ public class FileAssociationServiceTests
         { ".rc", "rc.ico" },
         { ".img", "img.ico" },
         { ".f2fs", "img.ico" },
+        { ".ruu", "img.ico" },
     };
 
     [Theory]
@@ -45,11 +46,12 @@ public class FileAssociationServiceTests
     [Fact]
     public void BuildSpecs_AssociatedFormats_UseFormatSpecificIcons()
     {
-        var specs = FileAssociationService.BuildSpecs([".apk", ".hap", ".qcn", ".xyz"]);
+        var specs = FileAssociationService.BuildSpecs([".apk", ".hap", ".qcn", ".ruu", ".xyz"]);
 
         Assert.Contains(specs, spec => spec.Extension == ".apk" && spec.IconFile == "apk.ico");
         Assert.Contains(specs, spec => spec.Extension == ".hap" && spec.IconFile == "hap.ico");
         Assert.Contains(specs, spec => spec.Extension == ".qcn" && spec.IconFile == "qcn.ico");
+        Assert.Contains(specs, spec => spec.Extension == ".ruu" && spec.IconFile == "img.ico");
         Assert.Contains(specs, spec => spec.Extension == ".xyz" && spec.IconFile == "img.ico");
     }
 

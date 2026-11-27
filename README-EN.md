@@ -85,7 +85,7 @@ flowchart TD
 | Boot and security | boot / recovery / vendor_boot / dtbo parsing and repacking, AVB descriptor verification and signing, hashtree and FEC construction, SELinux policy parsing, boot patch footprint analysis |
 | Android metadata | `resources.arsc`, binary XML, DEX decompilation and Smali, OAT/VDEX, APK parsing and repacking, v1/v2/v3 signing with JKS key stores, QCN modem configuration |
 | Device tree and executables | DTB/DTS editing, ELF inspection, Qualcomm images and PBT |
-| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG and RKBOOT/RKLOADER loaders, Amlogic DZ/KDZ, Allwinner IMAGEWTY, MediaTek, Sony SIN, NTPi, NB0 |
+| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG and RKBOOT/RKLOADER loaders, Amlogic DZ/KDZ, Allwinner IMAGEWTY, MediaTek, Sony SIN, NTPi, NB0, HTC RUU (`.ruu`, ROM ZIP read/decrypt/unpack) |
 
 ## 🔌 Device communication
 

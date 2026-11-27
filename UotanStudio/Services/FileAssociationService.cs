@@ -16,7 +16,8 @@ namespace UotanStudio.Services;
 public static partial class FileAssociationService
 {
     private const string ClassesRoot = @"Software\Classes";
-    private const string MacBundleIdentifier = "club.openatom.uotanstudio.desktop";
+    private const string WindowsIconCacheDirectory = @"UotanStudio\FileAssociations";
+    private const string MacBundleIdentifier = "cn.uotan.uotanstudio.desktop";
     private const string DesktopEntryId = "uotanstudio";
     private const int RegSz = 1;
     private const int RegOptionNonVolatile = 0;
@@ -51,6 +52,8 @@ public static partial class FileAssociationService
         [".ext4"] = "img",
         [".erofs"] = "img",
         [".f2fs"] = "img",
+        [".ruu"] = "img",
+        [".ftf"] = "img",
     };
 
     /// <summary>
@@ -64,7 +67,7 @@ public static partial class FileAssociationService
         ".img", ".bin", ".dat", ".lz4", ".br", ".dtb", ".dtbo", ".dts", ".dtsi",
         ".ext4", ".erofs", ".f2fs", ".qcn",
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz", ".app", ".sin",
-        ".mpk", ".cpb", ".ntpi",
+        ".mpk", ".cpb", ".ntpi", ".ruu", ".ftf",
         // Android / HarmonyOS app & system metadata/config
         ".apk", ".hap", ".dex", ".arsc", ".prop", ".rc",
         // Device logs
@@ -79,7 +82,7 @@ public static partial class FileAssociationService
     [
         ".img", ".br", ".dtb", ".dtbo", ".dts", ".dtsi", ".qcn",
         ".pac", ".ops", ".ofp", ".ozip", ".nb0", ".dz", ".kdz",
-        ".app", ".hap", ".sin", ".mpk", ".cpb", ".ntpi", ".logcat"
+        ".app", ".hap", ".sin", ".ftf", ".mpk", ".cpb", ".ntpi", ".ruu", ".logcat"
     ];
 
     [LibraryImport("advapi32.dll", EntryPoint = "RegCreateKeyExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
@@ -391,6 +394,21 @@ public static partial class FileAssociationService
         return true;
     }
 
+    private static string ReleaseWindowsIcons(IReadOnlyList<AssociationSpec> specs, string sourceDirectory)
+    {
+        var targetDirectory = Path.Combine(Path.GetTempPath(), WindowsIconCacheDirectory);
+        Directory.CreateDirectory(targetDirectory);
+
+        foreach (var iconFile in specs.Select(static spec => spec.IconFile).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var sourcePath = Path.Combine(sourceDirectory, iconFile);
+            var targetPath = Path.Combine(targetDirectory, iconFile);
+            File.Copy(sourcePath, targetPath, overwrite: true);
+        }
+
+        return targetDirectory;
+    }
+
     private static bool RegisterWindowsCore(IReadOnlyList<AssociationSpec> specs)
     {
         var exePath = Environment.ProcessPath;
@@ -401,14 +419,16 @@ public static partial class FileAssociationService
         }
 
         var iconDirectory = Path.Combine(AppContext.BaseDirectory, "Assets");
+        var releasedIconDirectory = ReleaseWindowsIcons(specs, iconDirectory);
         foreach (var spec in specs)
         {
             SetStringValue(Path.Combine(ClassesRoot, spec.ProgId), null, spec.Description);
             SetStringValue(Path.Combine(ClassesRoot, spec.ProgId, "DefaultIcon"), null,
-                $"\"{Path.Combine(iconDirectory, spec.IconFile)}\",0");
+                $"\"{Path.Combine(releasedIconDirectory, spec.IconFile)}\",0");
             SetStringValue(Path.Combine(ClassesRoot, spec.ProgId, "shell", "open", "command"), null,
                 BuildWindowsOpenCommand(exePath));
             SetStringValue(Path.Combine(ClassesRoot, spec.Extension), null, spec.ProgId);
+            SetStringValue(Path.Combine(ClassesRoot, spec.Extension, "OpenWithProgids"), spec.ProgId, string.Empty);
         }
 
         return true;
