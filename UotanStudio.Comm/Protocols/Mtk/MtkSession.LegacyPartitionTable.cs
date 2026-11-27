@@ -107,22 +107,22 @@ public sealed partial class MtkSession
         switch (kind)
         {
             case PartitionTableKind.Gpt:
-                {
-                    var gpt = await ReadLegacyGptAtOwnedAsync(partitionId, region, tableOffset, cancellationToken)
-                        .ConfigureAwait(false);
-                    ThrowIfDisposed();
-                    return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
-                        PartitionTableKind.Gpt, gpt, null);
-                }
+            {
+                var gpt = await ReadLegacyGptAtOwnedAsync(partitionId, region, tableOffset, cancellationToken)
+                    .ConfigureAwait(false);
+                ThrowIfDisposed();
+                return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
+                    PartitionTableKind.Gpt, gpt, null);
+            }
 
             case PartitionTableKind.Mbr:
-                {
-                    var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, cancellationToken)
-                        .ConfigureAwait(false);
-                    ThrowIfDisposed();
-                    return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
-                        PartitionTableKind.Mbr, null, mbr);
-                }
+            {
+                var mbr = await ReadLegacyMbrOwnedAsync(partitionId, tableOffset, cancellationToken)
+                    .ConfigureAwait(false);
+                ThrowIfDisposed();
+                return new MtkLegacyPartitionTableSnapshot(storage, partitionId, tableOffset, layoutHeader,
+                    PartitionTableKind.Mbr, null, mbr);
+            }
 
             default:
                 throw new InvalidDataException(BuildUnrecognizedTableMessage(partitionId, layoutHeader, tableOffset));

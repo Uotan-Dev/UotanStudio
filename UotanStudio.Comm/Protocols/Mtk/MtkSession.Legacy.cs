@@ -215,6 +215,7 @@ public sealed partial class MtkSession
             await RequireLegacyByteAsync(0x5A, "DA2 packet", token).ConfigureAwait(false);
             transferred += count;
         }
+        await Task.Delay(StageTwoCompletionSettleDelayMs, token).ConfigureAwait(false);
         await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
         await RequireLegacyByteAsync(0x5A, "DA2 completion", token).ConfigureAwait(false);
     }
@@ -292,22 +293,22 @@ public sealed partial class MtkSession
         {
             marker = (await ReadAsync(1, options.StartupTimeoutMs, token).ConfigureAwait(false))[0];
         }
-        if (marker != 0x5A)
-        {
-            throw new MtkProtocolException("The Legacy completion marker does not match the selected startup profile.", marker);
-        }
         var fields = await ReadAsync(9, _timeoutMs, token).ConfigureAwait(false);
         var status = BinaryPrimitives.ReadUInt32BigEndian(fields);
-        if (status != 0 || fields[8] != 0xC1)
+        if (marker != 0x5A)
         {
-            throw new MtkProtocolException("Legacy initialization did not finish with a successful download status and SOC_OK.", status);
+            if ((status & 0xFF) != 0x5A)
+            {
+                throw new MtkProtocolException("The Legacy completion marker does not match the selected startup profile.", marker);
+            }
+            _ = await ReadAsync(1, _timeoutMs, token).ConfigureAwait(false);
         }
         var raw = new byte[waited ? 11 : 10];
         if (waited)
         {
             raw[0] = 0xA5;
         }
-        raw[^10] = 0x5A;
+        raw[^10] = marker;
         fields.CopyTo(raw, raw.Length - fields.Length);
         return new(waited, status, BinaryPrimitives.ReadUInt32BigEndian(fields.AsSpan(4)), Convert.ToHexString(raw));
     }
