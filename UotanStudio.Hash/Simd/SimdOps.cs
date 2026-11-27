@@ -68,14 +68,20 @@ public static class SimdOps
 
     private static readonly SimdKernel SelectedKernel = SelectKernel();
 
+    private static volatile bool s_processSoftwareFallback;
+
+    private static volatile SimdIsa s_processIsaCeiling;
+
     /// <summary>
     /// Gets or sets a per-thread switch that forces the scalar software fallback regardless of the detected hardware.
     /// <para>获取或设置一个线程级开关，无论检测到何种硬件都强制使用标量软件回退。</para>
     /// </summary>
     /// <remarks>
     /// The switch is thread-local so that parallel test collections and worker threads cannot change each other's
-    /// dispatch; callers that enable it must restore it in a <c>finally</c> block.
-    /// <para>该开关是线程本地的，因此并行测试集合与工作线程不会改变彼此的分派；启用方必须在 <c>finally</c> 中恢复。</para>
+    /// dispatch; callers that enable it must restore it in a <c>finally</c> block. It composes with
+    /// <see cref="ProcessSoftwareFallback"/>: either switch being set routes every operation to the scalar loop.
+    /// <para>该开关是线程本地的，因此并行测试集合与工作线程不会改变彼此的分派；启用方必须在 <c>finally</c> 中恢复。
+    /// 它与 <see cref="ProcessSoftwareFallback"/> 叠加生效：任一开关打开都会把全部运算导向标量循环。</para>
     /// </remarks>
     public static bool ForceSoftwareFallback
     {
@@ -84,10 +90,181 @@ public static class SimdOps
     }
 
     /// <summary>
+    /// Gets or sets a process-wide switch that forces the scalar software fallback on every thread, for hosts that
+    /// expose the choice as one application-wide setting.
+    /// <para>获取或设置一个进程级开关，在所有线程上强制使用标量软件回退，供把该选择作为应用级设置的宿主使用。</para>
+    /// </summary>
+    /// <remarks>
+    /// Unlike the thread-local switch this needs no installation on worker threads, so a background worker started
+    /// before or after the change always observes it. It never alters the kernel selected at type initialization, so
+    /// clearing it restores hardware dispatch immediately and results stay bit-identical in both directions.
+    /// <para>与线程级开关不同，它无需在工作线程上安装，因此无论工作线程在该变更之前还是之后启动都能观察到它。
+    /// 它不会改变类型初始化时选定的内核，因此清除后立即恢复硬件分派，两个方向的结果都逐位一致。</para>
+    /// </remarks>
+    public static bool ProcessSoftwareFallback
+    {
+        get => s_processSoftwareFallback;
+        set => s_processSoftwareFallback = value;
+    }
+
+    /// <summary>
+    /// Gets the kernel byte-block operations dispatch to right now, honouring both software fallback switches.
+    /// <para>获取字节块运算当前分派到的内核，并遵循两个软件回退开关。</para>
+    /// </summary>
+    /// <value><see cref="SimdKernel.Software"/> while either switch is set, otherwise the selected kernel.
+    /// <para>任一开关打开时为 <see cref="SimdKernel.Software"/>，否则为选定的内核。</para></value>
+    internal static SimdKernel DispatchingKernel
+        => ForceSoftwareFallback || ProcessSoftwareFallback
+            ? SimdKernel.Software
+            : SelectWithinCeiling(s_processIsaCeiling);
+
+    /// <summary>
     /// Gets the kernel selected at type initialization for this processor.
     /// <para>获取类型初始化时为本处理器选定的内核。</para>
     /// </summary>
     internal static SimdKernel ActiveKernel => SelectedKernel;
+
+    /// <summary>
+    /// Gets or sets a process-wide ceiling on the instruction family byte-block operations may dispatch to, so a host
+    /// can deliberately run a narrower kernel than the processor's widest one.
+    /// <para>获取或设置进程级的指令族上限，使宿主能够刻意选择比处理器最宽实现更窄的内核。</para>
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SimdIsa.None"/> means no ceiling and restores the kernel selected at type initialization. Any other
+    /// value restricts dispatch to that family or a narrower one listed after it in <see cref="DispatchOrder"/>; when
+    /// the requested family is not usable on this processor the next narrower usable kernel runs instead, and the
+    /// scalar loop remains the final fallback. Because every kernel hands its tail bytes to the same scalar loop, a
+    /// ceiling never changes results.
+    /// <para><see cref="SimdIsa.None"/> 表示不设上限，恢复类型初始化时选定的内核。其它取值把分派限制在该指令族或
+    /// <see cref="DispatchOrder"/> 中排在它之后更窄的指令族；请求的指令族在本机不可用时，改选下一个更窄的可用内核，
+    /// 标量循环始终是最终回退。因为每个内核都把尾部字节交给同一个标量循环，上限绝不改变结果。</para>
+    /// </remarks>
+    public static SimdIsa ProcessIsaCeiling
+    {
+        get => s_processIsaCeiling;
+        set => s_processIsaCeiling = value;
+    }
+
+    /// <summary>
+    /// Gets every instruction family in dispatch order, widest first and the scalar loop last.
+    /// <para>获取按分派顺序排列的全部指令族，最宽的在前，标量循环在最后。</para>
+    /// </summary>
+    /// <value>The stable presentation and ceiling order.<para>稳定的呈现与上限顺序。</para></value>
+    /// <summary>
+    /// Lists every kernel family widest first, ending with the portable vector and scalar kernels.
+    /// <para>按从宽到窄列出所有内核指令族，最后是可移植向量与标量内核。</para>
+    /// </summary>
+    /// <remarks>
+    /// Dispatch walks this order and picks the first family the processor can execute. Exposed so a caller can
+    /// enumerate the same ordering the dispatcher uses, for example to offer a downgrade target.
+    /// <para>分派按此顺序行进并选取处理器能够执行的第一个指令族。公开它是为了让调用方按分派器的同一顺序枚
+    /// 举指令族，例如提供降级目标。</para>
+    /// </remarks>
+    public static IReadOnlyList<SimdIsa> DispatchOrder { get; } =
+    [
+        SimdIsa.LoongArchLasx,
+        SimdIsa.LoongArchLsx,
+        SimdIsa.RiscVVector,
+        SimdIsa.Sve2,
+        SimdIsa.Sve,
+        SimdIsa.Avx10,
+        SimdIsa.Avx512,
+        SimdIsa.Avx2,
+        SimdIsa.Sse2,
+        SimdIsa.AdvSimd,
+        SimdIsa.ArmCrc,
+        SimdIsa.ArmCrypto,
+        SimdIsa.PortableVectors,
+        SimdIsa.Scalar,
+    ];
+
+    /// <summary>
+    /// Picks the kernel a ceiling allows: the first usable kernel at or after the ceiling family in dispatch order.
+    /// <para>选取上限允许的内核：分派顺序中位于该指令族或其后的首个可用内核。</para>
+    /// </summary>
+    /// <param name="ceiling">The ceiling family, or <see cref="SimdIsa.None"/> for the natural selection.
+    /// <para>上限指令族；<see cref="SimdIsa.None"/> 表示自然选择。</para></param>
+    /// <returns>The kernel to dispatch to.<para>要分派到的内核。</para></returns>
+    private static SimdKernel SelectWithinCeiling(SimdIsa ceiling)
+    {
+        if (ceiling == SimdIsa.None)
+        {
+            return SelectedKernel;
+        }
+
+        var start = DispatchOrder.Count;
+        for (var index = 0; index < DispatchOrder.Count; index++)
+        {
+            if (DispatchOrder[index] == ceiling)
+            {
+                start = index;
+                break;
+            }
+        }
+
+        for (var index = start; index < DispatchOrder.Count; index++)
+        {
+            var kernel = KernelOf(DispatchOrder[index]);
+            if (kernel is not null && IsKernelUsable(kernel.Value))
+            {
+                return kernel.Value;
+            }
+        }
+
+        return SimdKernel.Software;
+    }
+
+    /// <summary>
+    /// Reports whether one instruction family has a kernel that can run on the running processor.
+    /// <para>报告某个指令族是否存在可在当前处理器上运行的内核。</para>
+    /// </summary>
+    /// <param name="isa">The instruction family to test.<para>待检测的指令族。</para></param>
+    /// <returns><see langword="true"/> when the family maps to a usable kernel.
+    /// <para>该族映射到可用内核时为 <see langword="true"/>。</para></returns>
+    public static bool IsIsaUsable(SimdIsa isa) => KernelOf(isa) is { } kernel && IsKernelUsable(kernel);
+
+    /// <summary>
+    /// Maps one instruction family to the kernel that executes it.
+    /// <para>把一个指令族映射到执行它的内核。</para>
+    /// </summary>
+    /// <param name="isa">The instruction family.<para>指令族。</para></param>
+    /// <returns>The kernel, or <see langword="null"/> when the family has no dedicated block kernel.
+    /// <para>执行该族的内核；该族没有专用块内核时为 <see langword="null"/>。</para></returns>
+    private static SimdKernel? KernelOf(SimdIsa isa) => isa switch
+    {
+        SimdIsa.LoongArchLasx or SimdIsa.LoongArchLsx => SimdKernel.LoongArchVector,
+        SimdIsa.RiscVVector => SimdKernel.RiscVVector,
+        SimdIsa.Sve or SimdIsa.Sve2 => SimdKernel.Sve,
+        SimdIsa.Avx10 or SimdIsa.Avx512 => SimdKernel.Vector512,
+        SimdIsa.Avx2 => SimdKernel.Vector256,
+        SimdIsa.Sse2 or SimdIsa.AdvSimd or SimdIsa.ArmCrc or SimdIsa.ArmCrypto => SimdKernel.Vector128,
+        SimdIsa.PortableVectors => SimdKernel.PortableVectors,
+        SimdIsa.Scalar => SimdKernel.Software,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Reports whether one kernel can execute on the running processor, mirroring the checks in
+    /// <see cref="SelectKernel"/> so a ceiling never selects an unusable kernel.
+    /// <para>报告某个内核能否在当前处理器上执行，与 <see cref="SelectKernel"/> 的判定一致，使上限绝不会选中不可用的内核。</para>
+    /// </summary>
+    /// <param name="kernel">Kernel to check.<para>待检查的内核。</para></param>
+    /// <returns><see langword="true"/> when the kernel can run here.
+    /// <para>该内核可在本机运行时为 <see langword="true"/>。</para></returns>
+    private static bool IsKernelUsable(SimdKernel kernel) => kernel switch
+    {
+        SimdKernel.Software => true,
+        SimdKernel.PortableVectors => Vector.IsHardwareAccelerated,
+        SimdKernel.Vector128 => Vector128.IsHardwareAccelerated,
+        SimdKernel.Vector256 => Vector256.IsHardwareAccelerated,
+        SimdKernel.Vector512 => Vector512.IsHardwareAccelerated
+            && (Avx512F.IsSupported || Avx512BW.IsSupported || Avx10v1.V512.IsSupported
+                || Avx10v2.V512.IsSupported),
+        SimdKernel.Sve => ArmSve.IsSupported && Vector.IsHardwareAccelerated,
+        SimdKernel.LoongArchVector => SelectedKernel == SimdKernel.LoongArchVector,
+        SimdKernel.RiscVVector => SelectedKernel == SimdKernel.RiscVVector,
+        _ => false,
+    };
 
     /// <summary>
     /// XORs <paramref name="source"/> into <paramref name="destination"/> in place using the widest available kernel.
@@ -257,11 +434,10 @@ public static class SimdOps
         _ => XorFoldWordsSoftware(words),
     };
 
-    /// <summary>Returns the scalar loop when the per-thread fallback switch is set; otherwise the selected kernel.
-    /// <para>线程级回退开关打开时返回标量循环，否则返回所选内核。</para></summary>
+    /// <summary>Returns the scalar loop when either fallback switch is set; otherwise the selected kernel.
+    /// <para>任一回退开关打开时返回标量循环，否则返回所选内核。</para></summary>
     /// <returns>The kernel used by the public entry points.<para>公共入口使用的内核。</para></returns>
-    private static SimdKernel CurrentKernel()
-        => ForceSoftwareFallback ? SimdKernel.Software : SelectedKernel;
+    private static SimdKernel CurrentKernel() => DispatchingKernel;
 
     /// <summary>Selects the widest kernel the processor and runtime can execute. On LoongArch64 and RiscV64 the JIT
     /// has no vector backend, so the runtime-emitted native kernels are probed first and the portable chain below

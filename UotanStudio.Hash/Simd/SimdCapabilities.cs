@@ -45,6 +45,31 @@ public static class SimdCapabilities
     public static int ActiveVectorWidthBytes => WidthOf(SimdOps.ActiveKernel);
 
     /// <summary>
+    /// Gets the instruction family byte-block operations actually dispatch to right now, honouring both software
+    /// fallback switches and the process instruction-set ceiling.
+    /// <para>获取字节块运算此刻实际分派到的指令族，并遵循两个软件回退开关与进程指令集上限。</para>
+    /// </summary>
+    /// <value>The effective family; <see cref="SimdIsa.Scalar"/> while a fallback is in force.
+    /// <para>实际生效的指令族；回退生效期间为 <see cref="SimdIsa.Scalar"/>。</para></value>
+    public static SimdIsa EffectiveIsa => ToIsa(SimdOps.DispatchingKernel);
+
+    /// <summary>
+    /// Gets the block width of the kernel byte-block operations actually dispatch to.
+    /// <para>获取字节块运算实际分派到的内核的块宽度。</para>
+    /// </summary>
+    public static int EffectiveVectorWidthBytes => WidthOf(SimdOps.DispatchingKernel);
+
+    /// <summary>
+    /// Reports whether one instruction family can execute byte-block kernels on the running processor, so a settings
+    /// page only offers ceilings this machine can honour.
+    /// <para>报告某个指令族能否在当前处理器上执行字节块内核，使设置页只提供本机能够兑现的上限。</para>
+    /// </summary>
+    /// <param name="isa">The instruction family to test.<para>待检测的指令族。</para></param>
+    /// <returns><see langword="true"/> when the family has a kernel that runs here.
+    /// <para>该族存在可在本机运行的内核时为 <see langword="true"/>。</para></returns>
+    public static bool IsUsable(SimdIsa isa) => SimdOps.IsIsaUsable(isa);
+
+    /// <summary>
     /// Gets whether byte-block operations execute on a vector kernel instead of the scalar software fallback.
     /// <para>获取字节块运算是否走向量内核，而非标量软件回退。</para>
     /// </summary>
