@@ -32,7 +32,7 @@
 - 自包含发布使用 csproj 指定的 `PublishWithSatoriGC` SDK；`riscv64`/`loongarch64` 显式设置 `UseSatoriGC=false` 并使用默认 GC。运行时通过 `GC.GetConfigurationVariables()` 的 `SatoriGC` 键检测 GC；`NETCoreSdkVersion` 写入 `AssemblyMetadata.DotNetSdkVersion` 供设置页展示。
 - `WindowsCompositionRoots.xml` 只在 win RID 发布时作为 `TrimmerRootDescriptor` 注入，保留 `Avalonia.Win32.WindowImpl.CompositionEffectsSurface` 供设置页报告实际合成宿主；不要改成无条件引用，否则 Linux/macOS 发布会保留 Win32 平台实现。
 - `UotanStudio.Tests` 不引用 Desktop，`Program.cs` 与命令行没有自动化测试。改动后必须 Release 构建 + 对应 RID 发布，并手工冒烟 GUI、`--managed-device-shell`、`--mcp-headless`、`--mcp` 四种模式；不能写成“已测试”。
-- 文件关联只能人工验证：Windows 首次启动后检查 `HKCU\Software\Classes\.uotan` 指向 `UotanStudio.uotan`，图标来自输出目录 `Assets/`。
+- 文件关联只能人工验证：Windows 首次启动后检查 `HKCU\Software\Classes\.uotan` 指向 `UotanStudio.uotan`，图标来自输出目录 `Assets/`；Linux 检查 `~/.local/share/icons/hicolor/<size>x<size>/mimetypes/` 下生成对应 `<name>.png`；macOS 检查应用包 `Contents/Info.plist` 的 `CFBundleTypeIconFile` 及随包 `.icns`。
 
 ```text
 dotnet restore UotanStudio.slnx -p:Configuration=Debug

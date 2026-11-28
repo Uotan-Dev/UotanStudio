@@ -26,6 +26,8 @@ public static partial class FileAssociationService
     private const uint ShellChangeAssociationChanged = 0x08000000;
     private const uint ShellChangeNotifyIdList = 0x0000;
 
+    private static readonly int[] LinuxIconSizes = [16, 24, 32, 48, 64, 128, 256];
+
     private static readonly nint Hkcu = new(0x80000001L);
 
     private static readonly (string Extension, string ProgId, string IconFile, string Description)[] Formats =
@@ -326,9 +328,9 @@ public static partial class FileAssociationService
 
     /// <summary>Resolves the bundled ICO file registered as the shell icon for an extension.<para>解析扩展名在系统外壳中注册的随包 ICO 文件。</para></summary>
     /// <param name="extension">Normalized extension.<para>规范化后的扩展名。</para></param>
-    /// <returns>The ICO file name; unmatched formats reuse the generic image icon.<para>ICO 文件名；未匹配的格式复用通用镜像图标。</para></returns>
+    /// <returns>The ICO file name; unmatched formats reuse the generic file icon.<para>ICO 文件名；未匹配的格式复用通用文件图标。</para></returns>
     internal static string IconFileFor(string extension) =>
-        IconNameFor(extension) is { } name ? $"{name}.ico" : "img.ico";
+        IconNameFor(extension) is { } name ? $"{name}.ico" : "file.ico";
 
     /// <summary>Builds the XDG shared-MIME XML document for the given specs.<para>为给定规格生成 XDG 共享 MIME XML 文档。</para></summary>
     /// <param name="specs">Association specs.<para>关联规格。</para></param>
@@ -345,6 +347,7 @@ public static partial class FileAssociationService
             builder.Append($"  <mime-type type=\"{escaped}\">\n");
             builder.Append($"    <comment>{EscapeXml(spec.Description)}</comment>\n");
             builder.Append($"    <glob pattern=\"*{EscapeXml(spec.Extension)}\"/>\n");
+            builder.Append($"    <icon name=\"{LinuxIconName(spec)}\"/>\n");
             builder.Append("  </mime-type>\n");
         }
 
@@ -376,7 +379,7 @@ public static partial class FileAssociationService
     /// <param name="specs">Association specs.<para>关联规格。</para></param>
     /// <returns>One declaration per spec, in the same order.<para>与规格顺序一致的声明集合。</para></returns>
     internal static IReadOnlyList<MacDocumentType> BuildMacDocumentTypes(IReadOnlyList<AssociationSpec> specs) =>
-        [.. specs.Select(spec => new MacDocumentType(spec.Extension, MacBundleIdentifier))];
+        [.. specs.Select(spec => new MacDocumentType(spec.Extension, MacBundleIdentifier, MacIconName(spec)))];
 
     /// <summary>Derives an XDG MIME type from a file extension.<para>从文件扩展名派生 XDG MIME 类型。</para></summary>
     /// <param name="extension">Normalized extension.<para>规范化后的扩展名。</para></param>
@@ -653,6 +656,8 @@ public static partial class FileAssociationService
                 declaration.Append("    <key>CFBundleTypeName</key><string>");
                 declaration.Append(EscapeXml(type.Extension)).Append(" File</string>\n");
                 declaration.Append("    <key>CFBundleTypeRole</key><string>Viewer</string>\n");
+                declaration.Append("    <key>CFBundleTypeIconFile</key><string>");
+                declaration.Append(EscapeXml(type.IconFile)).Append("</string>\n");
                 declaration.Append("  </dict>\n");
             }
 
@@ -713,6 +718,7 @@ public static partial class FileAssociationService
             builder.Append($"    <key>CFBundleTypeExtensions</key><array><string>{EscapeXml(type.Extension.TrimStart('.'))}</string></array>\n");
             builder.Append($"    <key>CFBundleTypeName</key><string>{EscapeXml(type.Extension)} File</string>\n");
             builder.Append("    <key>CFBundleTypeRole</key><string>Viewer</string>\n");
+            builder.Append($"    <key>CFBundleTypeIconFile</key><string>{EscapeXml(type.IconFile)}</string>\n");
             builder.Append("  </dict>\n");
         }
 
@@ -816,6 +822,7 @@ public static partial class FileAssociationService
         Directory.CreateDirectory(mimeDirectory);
         Directory.CreateDirectory(applicationsDirectory);
 
+        InstallLinuxIcons(dataHome, specs);
         WriteAtomically(Path.Combine(mimeDirectory, "uotanstudio.xml"), BuildMimeXml(specs));
         var executable = Environment.ProcessPath ?? "UotanStudio.Desktop";
         var desktopPath = Path.Combine(applicationsDirectory, $"{DesktopEntryId}.desktop");
@@ -847,6 +854,65 @@ public static partial class FileAssociationService
         TryDelete(Path.Combine(dataHome, "applications", $"{DesktopEntryId}.desktop"));
         RefreshLinuxDatabases(dataHome);
         return true;
+    }
+
+    /// <summary>Resolves the hicolor icon name for a spec; unmatched formats use the generic file icon.
+    /// <para>解析规格对应的 hicolor 图标名；未匹配的格式使用通用文件图标。</para></summary>
+    internal static string LinuxIconName(AssociationSpec spec)
+    {
+        var iconFile = spec.IconFile;
+        return iconFile.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
+            ? iconFile[..^4]
+            : iconFile;
+    }
+
+    /// <summary>Resolves the ICNS resource name for a macOS document type.
+    /// <para>解析 macOS 文档类型对应的 ICNS 资源名。</para></summary>
+    internal static string MacIconName(AssociationSpec spec) => $"{LinuxIconName(spec)}.icns";
+
+    /// <summary>
+    /// Copies the bundled hicolor PNG icons into the XDG data home so the names referenced by the
+    /// generated shared-MIME XML resolve in desktop themes.
+    /// <para>把随包 hicolor PNG 图标复制到 XDG 数据目录，使生成的共享 MIME XML 引用的图标名可在桌面主题中解析。</para>
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void InstallLinuxIcons(string dataHome, IReadOnlyList<AssociationSpec> specs)
+    {
+        var source = Path.Combine(AppContext.BaseDirectory, "Assets", "Icons");
+        var target = Path.Combine(dataHome, "icons", "hicolor");
+        var names = specs.Select(LinuxIconName).Concat(["uotanstudio"]).Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names)
+        {
+            foreach (var size in LinuxIconSizes)
+            {
+                var fileName = $"{name}-{size}.png";
+                var sourcePath = Path.Combine(source, fileName);
+                if (!File.Exists(sourcePath))
+                {
+                    continue;
+                }
+
+                var targetDirectory = Path.Combine(target, $"{size}x{size}", "mimetypes");
+                Directory.CreateDirectory(targetDirectory);
+                var targetPath = Path.Combine(targetDirectory, $"{name}.png");
+                File.Copy(sourcePath, targetPath, overwrite: true);
+            }
+        }
+
+        TryRunUpdateIconCache(target);
+    }
+
+    private static void TryRunUpdateIconCache(string iconRoot)
+    {
+        try
+        {
+            RunHelper("gtk-update-icon-cache", $"-q -f \"{iconRoot}\"", "Linux");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FileAssociation",
+                $"Refreshing the icon cache failed: {ex.Message}");
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1034,7 +1100,8 @@ public static partial class FileAssociationService
     /// <summary>Describes a macOS document type declaration.<para>描述一条 macOS 文档类型声明。</para></summary>
     /// <param name="Extension">Normalized extension.<para>规范化后的扩展名。</para></param>
     /// <param name="BundleIdentifier">Target application bundle identifier.<para>目标应用包标识符。</para></param>
-    internal sealed record MacDocumentType(string Extension, string BundleIdentifier);
+    /// <param name="IconFile">Bundled ICNS resource name used as the Finder icon.<para>Finder 使用的随包 ICNS 资源名。</para></param>
+    internal sealed record MacDocumentType(string Extension, string BundleIdentifier, string IconFile);
 }
 
 /// <summary>Outcome status of a file-association registration attempt.<para>文件关联注册尝试的结果状态。</para></summary>
