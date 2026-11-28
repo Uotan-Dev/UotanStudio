@@ -59,14 +59,15 @@ internal partial class ImageViewModel
                 throw new IOException("Select the sub-project containing this entry before operating on it. 请先选择此条目所属的子项目。");
             var relative = ProjectContextService.Instance.RelativePath(path);
             if (relative is null) throw new IOException("The selected path is outside the project.");
-            await RunImagesAsync(pack ? "img" : "extract", new ImageEntryViewModel
+            var completed = await RunImagesAsync(pack ? "img" : "extract", new ImageEntryViewModel
             {
                 RelativePath = relative,
                 DisplayName = Path.GetFileName(path),
                 IsDirectory = pack,
                 Format = pack ? "folder" : ImageInputService.DetectFormat(path)
             });
-            if (TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
+
+            if (completed && TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
                 await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), StatusText,
                     Ursa.Controls.MessageBoxIcon.Information);
         }
@@ -79,20 +80,20 @@ internal partial class ImageViewModel
         }
     }
 
-    private async Task RunImagesAsync(string operation, ImageEntryViewModel? clicked)
+    private async Task<bool> RunImagesAsync(string operation, ImageEntryViewModel? clicked)
     {
-        if (IsOperating) return;
+        if (IsOperating) return false;
         var entries = clicked is null ? GetSelectedImages() : [clicked];
         if (entries.Count == 0)
         {
             StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
             await ShowPromptAsync(StatusText);
-            return;
+            return false;
         }
 
         var context = ProjectContextService.Instance;
         var project = context.ActiveSubProject;
-        if (project is null) return;
+        if (project is null) return false;
         var requests = entries.Select(entry => (Entry: entry, Paths: new ImageOperationPaths(
             context.ResolvePath(entry.RelativePath) ?? string.Empty, entry.IsDirectory, project.RootPath, project.OutputDir))).ToArray();
         var brotliLevel = ProjectSettingViewModel.Instance?.BRComGrade ?? 3;
@@ -196,6 +197,7 @@ internal partial class ImageViewModel
         finally { IsOperating = false; }
         if (failed > 0)
             await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Warning);
+        return failed == 0;
     }
 
     /// <summary>
