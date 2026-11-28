@@ -7,7 +7,7 @@ namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 /// <para>通知引导程序跳过一个校验阶段的 VBMeta 头标志位。</para>
 /// </summary>
 [Flags]
-public enum AvbVbmetaFlag : uint
+public enum AvbVBMetaFlag : uint
 {
     /// <summary>No flag selected. <para>未选择任何标志位。</para></summary>
     None = 0,
@@ -16,14 +16,14 @@ public enum AvbVbmetaFlag : uint
     /// Bit 0 of the big-endian <c>flags</c> field: dm-verity hashtree verification is skipped.
     /// <para>大端 <c>flags</c> 字段的第 0 位：跳过 dm-verity 哈希树校验。</para>
     /// </summary>
-    HashtreeDisabled = AvbSigner.VbmetaFlagHashtreeDisabled,
+    HashtreeDisabled = AvbSigner.VBMetaFlagHashtreeDisabled,
 
     /// <summary>
     /// Bit 1 of the big-endian <c>flags</c> field: AVB signature verification is skipped, so the
     /// bootloader accepts the vbmeta struct without checking its stored hash or signature.
     /// <para>大端 <c>flags</c> 字段的第 1 位：跳过 AVB 签名校验，引导程序不再检查 vbmeta 结构存储的哈希与签名。</para>
     /// </summary>
-    VerificationDisabled = AvbSigner.VbmetaFlagVerificationDisabled
+    VerificationDisabled = AvbSigner.VBMetaFlagVerificationDisabled
 }
 
 public static partial class AvbSigner
@@ -43,8 +43,8 @@ public static partial class AvbSigner
     /// 镜像以读写方式打开，长度至少 256 字节。</para>
     /// </param>
     /// <param name="flag">
-    /// The single flag bit to write; <see cref="AvbVbmetaFlag.None"/> and combined masks are rejected.
-    /// <para>要写入的单个标志位；<see cref="AvbVbmetaFlag.None"/> 与组合掩码会被拒绝。</para>
+    /// The single flag bit to write; <see cref="AvbVBMetaFlag.None"/> and combined masks are rejected.
+    /// <para>要写入的单个标志位；<see cref="AvbVBMetaFlag.None"/> 与组合掩码会被拒绝。</para>
     /// </param>
     /// <param name="disabled">
     /// <see langword="true"/> sets the bit, <see langword="false"/> clears it; all other flag bits are preserved.
@@ -60,9 +60,9 @@ public static partial class AvbSigner
     /// <para>成功结果报告镜像路径、未改变的大小与 <c>flags-patched</c> 算法标签；被拒绝的输入或 I/O 故障返回说明原因的失败结果。</para>
     /// </returns>
     /// <exception cref="OperationCanceledException">Cancellation was requested. <para>请求了取消。</para></exception>
-    public static async Task<AvbSignResult> SetVbmetaFlagAsync(
+    public static async Task<AvbSignResult> SetVBMetaFlagAsync(
         string imagePath,
-        AvbVbmetaFlag flag,
+        AvbVBMetaFlag flag,
         bool disabled,
         CancellationToken cancellationToken = default)
     {
@@ -71,7 +71,7 @@ public static partial class AvbSigner
             return Fail("imagePath must be provided. 必须提供 imagePath。");
         }
 
-        if (flag is not (AvbVbmetaFlag.HashtreeDisabled or AvbVbmetaFlag.VerificationDisabled))
+        if (flag is not (AvbVBMetaFlag.HashtreeDisabled or AvbVBMetaFlag.VerificationDisabled))
         {
             return Fail($"VBMeta flag '{flag}' is not a single supported bit. VBMeta 标志 '{flag}' 不是受支持的单个标志位。");
         }
@@ -92,7 +92,7 @@ public static partial class AvbSigner
                 return Fail($"'{imagePath}' is shorter than a VBMeta header. '{imagePath}' 短于 VBMeta 头。");
             }
 
-            var vbmetaOffset = await LocateVbmetaAsync(stream, cancellationToken).ConfigureAwait(false);
+            var vbmetaOffset = await LocateVBMetaAsync(stream, cancellationToken).ConfigureAwait(false);
             if (vbmetaOffset < 0)
             {
                 return Fail($"'{imagePath}' carries no AVB0 VBMeta struct. '{imagePath}' 不含 AVB0 VBMeta 结构。");
@@ -151,7 +151,7 @@ public static partial class AvbSigner
     /// footer-declared offset for a partition image, validated to contain a full 256-byte header.
     /// <para>在镜像内定位 VBMeta 结构：独立 <c>AVB0</c> 镜像为偏移 0，分区镜像取尾部声明的偏移，并校验其能容纳完整 256 字节头。</para>
     /// </summary>
-    private static async Task<long> LocateVbmetaAsync(FileStream stream, CancellationToken cancellationToken)
+    private static async Task<long> LocateVBMetaAsync(FileStream stream, CancellationToken cancellationToken)
     {
         var magic = new byte[4];
         stream.Position = 0;
@@ -171,11 +171,11 @@ public static partial class AvbSigner
         stream.Position = length - AvbFooter.Size;
         await stream.ReadExactlyAsync(footerBytes, cancellationToken).ConfigureAwait(false);
         if (AvbFooter.TryLoad(footerBytes) is not { } footer
-            || footer.VbmetaOffset > (ulong)length - AvbVBMetaImageHeader.Size)
+            || footer.VBMetaOffset > (ulong)length - AvbVBMetaImageHeader.Size)
         {
             return -1;
         }
 
-        return (long)footer.VbmetaOffset;
+        return (long)footer.VBMetaOffset;
     }
 }

@@ -4,7 +4,7 @@ namespace UotanStudio.Services.Flash;
 
 /// <summary>Stages a verification-disabled VBMeta image without changing the source.
 /// <para>在不改动源文件的前提下暂存关闭校验的 VBMeta 镜像。</para></summary>
-public static class FlashVbmetaImage
+public static class FlashVBMetaImage
 {
     /// <summary>Returns a new temporary image owned by the caller.
     /// <para>返回一份全新的临时镜像，由接收方负责管理。</para></summary>
@@ -16,7 +16,7 @@ public static class FlashVbmetaImage
         var output = Path.Combine(Path.GetTempPath(), "uotan-vbmeta-" + Guid.NewGuid().ToString("N") + ".img");
         try
         {
-            var result = await AvbSigner.DisableVbmetaVerificationAsync(source, output, ct).ConfigureAwait(false);
+            var result = await AvbSigner.DisableVBMetaVerificationAsync(source, output, ct).ConfigureAwait(false);
             if (!result.Success)
             {
                 throw new InvalidDataException(result.ErrorMessage ?? "Failed to disable VBMeta verification.");

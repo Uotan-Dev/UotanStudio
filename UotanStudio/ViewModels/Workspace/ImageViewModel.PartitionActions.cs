@@ -181,7 +181,7 @@ internal partial class ImageViewModel
     {
         if (!ProjectContextService.Instance.IsProjectOpen)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize super aborted: no project is open  合成 super 中止：尚未打开工程");
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize Super aborted: no project is open  合成 super 中止：尚未打开工程");
             return;
         }
 
@@ -219,7 +219,7 @@ internal partial class ImageViewModel
             var hadExistingOutput = File.Exists(outputPath);
             if (!await ConfirmPackOverwriteAsync(hadExistingOutput ? [outputPath] : [])) return;
             var deviceSize = ulong.TryParse(settings.SUPERSize, out var parsed) && parsed > 0 ? parsed : 9_126_805_504UL;
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing super image with {partitions.Count} partition(s)  正在合成 super 镜像（{partitions.Count} 个分区）");
+            LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing Super image with {partitions.Count} partition(s)  正在合成 Super 镜像（{partitions.Count} 个分区）");
             var result = await _firmware.SynthesizeSuperAsync(partitions, outputPath, deviceSize, settings.SUPERName);
             if (!result.Success)
             {
@@ -245,7 +245,7 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
+            LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize Super failed: {ex.Message}  合成 super 失败：{ex.Message}");
             StatusText = UserError.Describe(ex, "UserError_SuperFailed");
             ProgressPercent = 0;
             await ShowPromptAsync(StatusText, Ursa.Controls.MessageBoxIcon.Error);

@@ -116,19 +116,19 @@ public static class AvbVerifier
         result.IsSigned = true;
         result.Footer = footer;
         var footerOffset = (ulong)(imageData.Length - AvbFooter.Size);
-        if (footer.Value.OriginalImageSize > footer.Value.VbmetaOffset ||
-            footer.Value.VbmetaOffset > footerOffset ||
-            footer.Value.VbmetaSize > footerOffset - footer.Value.VbmetaOffset ||
-            footer.Value.VbmetaSize < AvbVBMetaImageHeader.Size ||
-            footer.Value.VbmetaOffset > int.MaxValue ||
-            footer.Value.VbmetaSize > int.MaxValue)
+        if (footer.Value.OriginalImageSize > footer.Value.VBMetaOffset ||
+            footer.Value.VBMetaOffset > footerOffset ||
+            footer.Value.VBMetaSize > footerOffset - footer.Value.VBMetaOffset ||
+            footer.Value.VBMetaSize < AvbVBMetaImageHeader.Size ||
+            footer.Value.VBMetaOffset > int.MaxValue ||
+            footer.Value.VBMetaSize > int.MaxValue)
         {
             result.ErrorMessage = "Invalid AVB footer image size, VBMeta offset, or VBMeta size.";
             return result;
         }
 
-        var vbmetaOffset = (int)footer.Value.VbmetaOffset;
-        var vbmetaSize = (int)footer.Value.VbmetaSize;
+        var vbmetaOffset = (int)footer.Value.VBMetaOffset;
+        var vbmetaSize = (int)footer.Value.VBMetaSize;
         var vbmeta = imageData.AsSpan(vbmetaOffset, vbmetaSize).ToArray();
         AvbVBMetaImageHeader header;
         try
@@ -154,7 +154,7 @@ public static class AvbVerifier
             return result;
         }
 
-        if (!TryValidateVbmetaRanges(header, (ulong)vbmeta.Length, out var rangeError))
+        if (!TryValidateVBMetaRanges(header, (ulong)vbmeta.Length, out var rangeError))
         {
             result.ErrorMessage = rangeError;
             return result;
@@ -235,7 +235,7 @@ public static class AvbVerifier
         }
 
         result.VBMetaHeader = header;
-        if (!TryValidateVbmetaRanges(header, (ulong)imageData.Length, out var error, allowTrailingPadding: true))
+        if (!TryValidateVBMetaRanges(header, (ulong)imageData.Length, out var error, allowTrailingPadding: true))
         {
             result.ErrorMessage = error;
             return result;
@@ -307,19 +307,19 @@ public static class AvbVerifier
         result.IsSigned = true;
         result.Footer = footer;
         var footerOffset = (ulong)(imageLength - AvbFooter.Size);
-        if (footer.Value.OriginalImageSize > footer.Value.VbmetaOffset ||
-            footer.Value.VbmetaOffset > footerOffset ||
-            footer.Value.VbmetaSize > footerOffset - footer.Value.VbmetaOffset ||
-            footer.Value.VbmetaSize < AvbVBMetaImageHeader.Size ||
-            footer.Value.VbmetaOffset > long.MaxValue ||
-            footer.Value.VbmetaSize > long.MaxValue)
+        if (footer.Value.OriginalImageSize > footer.Value.VBMetaOffset ||
+            footer.Value.VBMetaOffset > footerOffset ||
+            footer.Value.VBMetaSize > footerOffset - footer.Value.VBMetaOffset ||
+            footer.Value.VBMetaSize < AvbVBMetaImageHeader.Size ||
+            footer.Value.VBMetaOffset > long.MaxValue ||
+            footer.Value.VBMetaSize > long.MaxValue)
         {
             result.ErrorMessage = "Invalid AVB footer image size, VBMeta offset, or VBMeta size.";
             return result;
         }
 
 
-        var verified = VerifyRegionFromStream(stream, (long)footer.Value.VbmetaOffset, footer.Value.VbmetaSize, false);
+        var verified = VerifyRegionFromStream(stream, (long)footer.Value.VBMetaOffset, footer.Value.VBMetaSize, false);
         result.VBMetaHeader = verified.VBMetaHeader;
         result.IsValid = verified.IsValid;
         result.ErrorMessage = verified.ErrorMessage;
@@ -370,7 +370,7 @@ public static class AvbVerifier
         }
 
         result.VBMetaHeader = header;
-        if (!TryValidateVbmetaRanges(header, availableSize, out var error, allowTrailingPadding))
+        if (!TryValidateVBMetaRanges(header, availableSize, out var error, allowTrailingPadding))
         {
             result.ErrorMessage = error;
             return result;
@@ -389,7 +389,7 @@ public static class AvbVerifier
         return VerifyVBMeta(vbmeta);
     }
 
-    private static bool TryValidateVbmetaRanges(AvbVBMetaImageHeader header, ulong vbmetaSize, out string? error, bool allowTrailingPadding = false)
+    private static bool TryValidateVBMetaRanges(AvbVBMetaImageHeader header, ulong vbmetaSize, out string? error, bool allowTrailingPadding = false)
     {
         if (header.AuthenticationDataBlockSize > ulong.MaxValue - header.AuxiliaryDataBlockSize)
         {

@@ -31,10 +31,10 @@ public static partial class AvbSigner
     private static ReadOnlySpan<byte> MagicBytes => "AVB0"u8;
 
     /// <summary>VBMeta header flag bit that disables hashtree (dm-verity) verification. <para>禁用哈希树（dm-verity）校验的 VBMeta 头标志位。</para></summary>
-    public const uint VbmetaFlagHashtreeDisabled = 0x1;
+    public const uint VBMetaFlagHashtreeDisabled = 0x1;
 
     /// <summary>VBMeta header flag bit that disables verification entirely. <para>完全禁用校验的 VBMeta 头标志位。</para></summary>
-    public const uint VbmetaFlagVerificationDisabled = 0x2;
+    public const uint VBMetaFlagVerificationDisabled = 0x2;
 
     /// <summary>Disables AVB verification on a VBMeta image by setting the verification-disabled flags and zeroing the authentication block.
     /// <para>通过设置禁用校验标志并清零认证块来禁用 VBMeta 镜像的 AVB 校验。</para></summary>
@@ -48,7 +48,7 @@ public static partial class AvbSigner
     /// <para>成功结果报告修补后的输出大小与 <c>flags-patched</c> 算法标签；被拒绝的输入返回说明原因的失败结果。</para></returns>
     /// <exception cref="IOException">Either path cannot be resolved to a full path.
     /// <para>任一路径无法解析为完整路径。</para></exception>
-    public static async Task<AvbSignResult> DisableVbmetaVerificationAsync(
+    public static async Task<AvbSignResult> DisableVBMetaVerificationAsync(
         string vbmetaPath,
         string outputPath,
         CancellationToken cancellationToken = default)
@@ -65,14 +65,14 @@ public static partial class AvbSigner
 
         if (PathsEqual(vbmetaPath, outputPath))
         {
-            return Fail("Output path must differ from the source vbmeta. 输出路径不能与源 vbmeta 相同。");
+            return Fail("Output path must differ from the source VBMeta. 输出路径不能与源 VBMeta 相同。");
         }
 
         try
         {
             if (!File.Exists(vbmetaPath))
             {
-                return Fail($"vbmeta source file '{vbmetaPath}' does not exist. vbmeta 源文件 '{vbmetaPath}' 不存在。");
+                return Fail($"VBMeta source file '{vbmetaPath}' does not exist. VBMeta 源文件 '{vbmetaPath}' 不存在。");
             }
 
             await using var source = new FileStream(
@@ -92,7 +92,7 @@ public static partial class AvbSigner
             }
 
             var flags = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(120));
-            flags |= VbmetaFlagHashtreeDisabled | VbmetaFlagVerificationDisabled;
+            flags |= VBMetaFlagHashtreeDisabled | VBMetaFlagVerificationDisabled;
             BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(120), flags);
 
             var tempPath = TempFileHelper.CreateAdjacentPath(outputPath);
@@ -158,7 +158,7 @@ public static partial class AvbSigner
     /// <para>包含算法名、描述符数量与输出大小的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> or <paramref name="descriptors"/> is <see langword="null"/>.
     /// <para><paramref name="key"/> 或 <paramref name="descriptors"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task<AvbSignResult> SignVbmetaAsync(
+    public static async Task<AvbSignResult> SignVBMetaAsync(
         string vbmetaPath,
         RSA key,
         string outputPath,
@@ -182,12 +182,12 @@ public static partial class AvbSigner
         {
             if (!File.Exists(vbmetaPath))
             {
-                return Fail($"vbmeta source file '{vbmetaPath}' does not exist. vbmeta 源文件 '{vbmetaPath}' 不存在。");
+                return Fail($"VBMeta source file '{vbmetaPath}' does not exist. VBMeta 源文件 '{vbmetaPath}' 不存在。");
             }
 
             if (PathsEqual(vbmetaPath, outputPath))
             {
-                return Fail("Output path must differ from the source vbmeta. 输出路径不能与源 vbmeta 相同。");
+                return Fail("Output path must differ from the source VBMeta. 输出路径不能与源 VBMeta 相同。");
             }
 
             var descriptorList = descriptors.ToList();
@@ -211,11 +211,11 @@ public static partial class AvbSigner
                 releaseString = ReleaseString;
             }
 
-            var vbmeta = BuildSignedVbmeta(
+            var vbmeta = BuildSignedVBMeta(
                 descriptorList, key, keyBits, algorithmType, rollbackIndex, flags, rollbackIndexLocation, releaseString,
                 requiredMajor, requiredMinor);
 
-            await PublishVbmetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
+            await PublishVBMetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
 
             return new AvbSignResult
             {
@@ -255,7 +255,7 @@ public static partial class AvbSigner
     /// <para>包含算法名、描述符数量与输出大小的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> or <paramref name="descriptors"/> is <see langword="null"/>.
     /// <para><paramref name="key"/> 或 <paramref name="descriptors"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task<AvbSignResult> SignVbmetaAsync<TDescriptor>(
+    public static async Task<AvbSignResult> SignVBMetaAsync<TDescriptor>(
         string vbmetaPath,
         RSA key,
         string outputPath,
@@ -280,12 +280,12 @@ public static partial class AvbSigner
         {
             if (!File.Exists(vbmetaPath))
             {
-                return Fail($"vbmeta source file '{vbmetaPath}' does not exist. vbmeta 源文件 '{vbmetaPath}' 不存在。");
+                return Fail($"VBMeta source file '{vbmetaPath}' does not exist. VBMeta 源文件 '{vbmetaPath}' 不存在。");
             }
 
             if (PathsEqual(vbmetaPath, outputPath))
             {
-                return Fail("Output path must differ from the source vbmeta. 输出路径不能与源 vbmeta 相同。");
+                return Fail("Output path must differ from the source VBMeta. 输出路径不能与源 VBMeta 相同。");
             }
 
             var descriptorList = descriptors as IReadOnlyList<object> ?? [.. descriptors.Cast<object>()];
@@ -318,11 +318,11 @@ public static partial class AvbSigner
             {
                 requiredMinor = Math.Max(requiredMinor, 1);
             }
-            var vbmeta = BuildSignedVbmetaCore(
+            var vbmeta = BuildSignedVBMetaCore(
                 SerializeDescriptors(descriptorList), key, keyBits, algorithmType,
                 rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor, requiredMinor);
 
-            await PublishVbmetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
+            await PublishVBMetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
 
             return new AvbSignResult
             {
@@ -496,7 +496,7 @@ public static partial class AvbSigner
         }
     }
 
-    private static byte[] BuildSignedVbmeta(
+    private static byte[] BuildSignedVBMeta(
         IReadOnlyList<AvbHashDescriptor> descriptors,
         RSA key,
         int keyBits,
@@ -507,12 +507,12 @@ public static partial class AvbSigner
         string releaseString,
         uint requiredMajor = 1,
         uint requiredMinor = 0)
-        => BuildSignedVbmetaCore(
+        => BuildSignedVBMetaCore(
             SerializeHashDescriptors(descriptors), key, keyBits, algorithmType,
             rollbackIndex, flags, rollbackIndexLocation, releaseString, requiredMajor,
             descriptors.Any(descriptor => descriptor.Flags != 0) ? Math.Max(requiredMinor, 1) : requiredMinor);
 
-    private static byte[] BuildSignedVbmetaCore(
+    private static byte[] BuildSignedVBMetaCore(
         byte[] descriptorBytes,
         RSA key,
         int keyBits,
@@ -929,7 +929,7 @@ public static partial class AvbSigner
         => string.Equals(Path.GetFullPath(first), Path.GetFullPath(second),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static Task PublishVbmetaAsync(string outputPath, byte[] vbmeta, CancellationToken cancellationToken)
+    private static Task PublishVBMetaAsync(string outputPath, byte[] vbmeta, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var result = AvbSignatureVerifier.Verify(vbmeta);

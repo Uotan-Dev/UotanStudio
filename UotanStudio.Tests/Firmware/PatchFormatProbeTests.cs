@@ -90,7 +90,7 @@ public sealed class PatchFormatProbeTests
     [Theory]
     [InlineData("7f454c46", PatchFormatKind.Elf)]
     [InlineData("3aff26ed", PatchFormatKind.Sparse)]
-    [InlineData("41564230", PatchFormatKind.Vbmeta)]
+    [InlineData("41564230", PatchFormatKind.VBMeta)]
     public void Read_TruncatedKnownStructure_RejectsMagicOnlyInput(string hex, PatchFormatKind expected)
     {
         using var stream = new MemoryStream(Convert.FromHexString(hex));
@@ -131,14 +131,14 @@ public sealed class PatchFormatProbeTests
     }
 
     [Fact]
-    public void Read_VbmetaMetadata_DoesNotVerifyTrustAndRejectsOutOfRangeBlocks()
+    public void Read_VBMetaMetadata_DoesNotVerifyTrustAndRejectsOutOfRangeBlocks()
     {
         var bytes = new byte[256];
         "AVB0"u8.CopyTo(bytes);
         BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(4), 1);
         using var stream = new MemoryStream(bytes);
         var result = PatchFormatProbe.Read(stream, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.True(result.Matches(PatchFormatKind.Vbmeta, PatchFormatEvidence.Structure));
+        Assert.True(result.Matches(PatchFormatKind.VBMeta, PatchFormatEvidence.Structure));
         Assert.Equal("AvbDescriptors", result.Detail);
         BinaryPrimitives.WriteUInt64BigEndian(bytes.AsSpan(12), 64);
         Assert.True(PatchFormatProbe.Read(stream, cancellationToken: TestContext.Current.CancellationToken).Rejected);

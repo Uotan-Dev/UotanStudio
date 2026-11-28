@@ -165,7 +165,7 @@ public sealed partial class FastbootSession
             : long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec) ? dec : -1;
     }
 
-    private static readonly FrozenSet<string> VbmetaPartitionSet = new HashSet<string>(
+    private static readonly FrozenSet<string> VBMetaPartitionSet = new HashSet<string>(
         ["vbmeta", "vbmeta_system", "vbmeta_vendor", "vbmeta_custom"],
         StringComparer.OrdinalIgnoreCase).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -349,7 +349,7 @@ public sealed partial class FastbootSession
     /// <param name="partition">Partition name, optionally carrying an <c>_a</c>/<c>_b</c> slot suffix. <para>分区名，可带 <c>_a</c>/<c>_b</c> 槽位后缀。</para></param>
     /// <returns><see langword="true"/> when the base name matches a known vbmeta partition (case-insensitive).
     /// <para>基础名匹配已知 vbmeta 分区（不区分大小写）时返回 <see langword="true"/>。</para></returns>
-    public bool IsVbmetaPartition(string partition)
+    public bool IsVBMetaPartition(string partition)
     {
         if (string.IsNullOrWhiteSpace(partition))
         {
@@ -368,7 +368,7 @@ public sealed partial class FastbootSession
             }
         }
 
-        return VbmetaPartitionSet.Contains(partName);
+        return VBMetaPartitionSet.Contains(partName);
     }
 
 }

@@ -24,12 +24,12 @@ public static partial class AvbChainVerifier
             if (footer is { } metadataFooter)
             {
                 var end = (ulong)stream.Length - AvbFooter.Size;
-                if (metadataFooter.OriginalImageSize > metadataFooter.VbmetaOffset || metadataFooter.VbmetaOffset > end || metadataFooter.VbmetaSize > end - metadataFooter.VbmetaOffset)
+                if (metadataFooter.OriginalImageSize > metadataFooter.VBMetaOffset || metadataFooter.VBMetaOffset > end || metadataFooter.VBMetaSize > end - metadataFooter.VBMetaOffset)
                 {
                     throw new InvalidDataException("The AVB footer overlaps content or references bytes outside the image.");
                 }
-                offset = (long)metadataFooter.VbmetaOffset;
-                available = metadataFooter.VbmetaSize;
+                offset = (long)metadataFooter.VBMetaOffset;
+                available = metadataFooter.VBMetaSize;
             }
             if (available < AvbVBMetaImageHeader.Size)
             {

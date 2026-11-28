@@ -255,11 +255,11 @@ public sealed class AvbOtaService
 {
     private const string PayloadEntryName = "payload.bin";
     private const string OtaCertificateEntryName = "META-INF/com/android/otacert";
-    private const string VbmetaPartitionName = "vbmeta";
+    private const string VBMetaPartitionName = "vbmeta";
     private const long MaximumPayloadBytes = 16L * 1024 * 1024 * 1024;
     private const int MaximumCertificateBytes = 1024 * 1024;
     private const int MaximumTrustedRootBytes = 2056;
-    private const int MaximumVbmetaBytes = 16 * 1024 * 1024;
+    private const int MaximumVBMetaBytes = 16 * 1024 * 1024;
 
     /// <summary>
     /// Lists the manifest partition names of a raw payload or of the <c>payload.bin</c> inside an A/B OTA ZIP.
@@ -342,7 +342,7 @@ public sealed class AvbOtaService
                 return FailPatch("The requested partitions cannot be patched. 无法修补所请求的分区。", warnings, errors);
             }
 
-            var vbmetaName = ResolveManifestName(metadata.PartitionNames, VbmetaPartitionName);
+            var vbmetaName = ResolveManifestName(metadata.PartitionNames, VBMetaPartitionName);
             var extractionDirectory = scratch.CreateDirectory("images");
             var extractNames = new List<string>(targets);
             if (vbmetaName is not null)
@@ -418,7 +418,7 @@ public sealed class AvbOtaService
                 var vbmetaPath = Path.Combine(extractionDirectory, vbmetaName + ".img");
                 if (!File.Exists(vbmetaPath))
                 {
-                    warnings.Add("The payload declares vbmeta but no image was extracted, so the top-level AVB metadata was not re-signed. 清单声明了 vbmeta 但未提取到镜像，未重签顶层 AVB 元数据。");
+                    warnings.Add("The payload declares VBMeta but no image was extracted, so the top-level AVB metadata was not re-signed. 清单声明了 VBMeta 但未提取到镜像，未重签顶层 AVB 元数据。");
                 }
                 else
                 {
@@ -428,12 +428,12 @@ public sealed class AvbOtaService
                         signedImages.Add((name, replacements[name]));
                     }
 
-                    var vbmetaOutput = await ResignVbmetaAsync(
+                    var vbmetaOutput = await ResignVBMetaAsync(
                         vbmetaPath, signedImages, signedDirectory, avbKey, request.DisableAvbVerification,
                         errors, cancellationToken).ConfigureAwait(false);
                     if (vbmetaOutput is null)
                     {
-                        return FailPatch("The top-level vbmeta could not be re-signed. 顶层 vbmeta 重签失败。", warnings, errors);
+                        return FailPatch("The top-level VBMeta could not be re-signed. 顶层 VBMeta 重签失败。", warnings, errors);
                     }
 
                     replacements[vbmetaName] = vbmetaOutput;
@@ -685,7 +685,7 @@ public sealed class AvbOtaService
         {
             foreach (var name in manifestNames)
             {
-                if (IsVbmetaMetadataPartition(name))
+                if (IsVBMetaMetadataPartition(name))
                 {
                     continue;
                 }
@@ -710,9 +710,9 @@ public sealed class AvbOtaService
             }
 
             var name = requestedName.Trim();
-            if (IsVbmetaMetadataPartition(name))
+            if (IsVBMetaMetadataPartition(name))
             {
-                errors.Add($"Partition '{name}' is AVB metadata and cannot be a patch target; only the top-level vbmeta is re-signed from the updated descriptor table. 分区 '{name}' 属于 AVB 元数据，不能作为修补目标；只有顶层 vbmeta 会依据更新后的描述符表重签。");
+                errors.Add($"Partition '{name}' is AVB metadata and cannot be a patch target; only the top-level VBMeta is re-signed from the updated descriptor table. 分区 '{name}' 属于 AVB 元数据，不能作为修补目标；只有顶层 VBMeta 会依据更新后的描述符表重签。");
                 continue;
             }
 
@@ -737,8 +737,8 @@ public sealed class AvbOtaService
         return targets;
     }
 
-    private static bool IsVbmetaMetadataPartition(string name)
-        => name.StartsWith(VbmetaPartitionName, StringComparison.OrdinalIgnoreCase);
+    private static bool IsVBMetaMetadataPartition(string name)
+        => name.StartsWith(VBMetaPartitionName, StringComparison.OrdinalIgnoreCase);
 
     private static async Task VerifyPatchOutputAsync(
         string outputPath,
@@ -768,7 +768,7 @@ public sealed class AvbOtaService
         }
     }
 
-    private static async Task<string?> ResignVbmetaAsync(
+    private static async Task<string?> ResignVBMetaAsync(
         string vbmetaPath,
         IReadOnlyList<(string Name, string Path)> signedImages,
         string outputDirectory,
@@ -784,35 +784,35 @@ public sealed class AvbOtaService
             table = table.ReplaceContentDescriptors(name, descriptors);
         }
 
-        var signedVbmetaPath = Path.Combine(outputDirectory, "vbmeta.signed.img");
-        var signResult = await AvbSigner.SignVbmetaWithDescriptorTableAsync(
-            vbmetaPath, key, signedVbmetaPath, table, cancellationToken).ConfigureAwait(false);
+        var signedVBMetaPath = Path.Combine(outputDirectory, "vbmeta.signed.img");
+        var signResult = await AvbSigner.SignVBMetaWithDescriptorTableAsync(
+            vbmetaPath, key, signedVBMetaPath, table, cancellationToken).ConfigureAwait(false);
         if (!signResult.Success)
         {
-            errors.Add($"Re-signing the top-level vbmeta failed: {signResult.ErrorMessage ?? "unknown error"}. 重签顶层 vbmeta 失败：{signResult.ErrorMessage ?? "未知错误"}。");
+            errors.Add($"Re-signing the top-level VBMeta failed: {signResult.ErrorMessage ?? "unknown error"}. 重签顶层 VBMeta 失败：{signResult.ErrorMessage ?? "未知错误"}。");
             return null;
         }
 
         if (!disableVerification)
         {
-            return await PadVbmetaToPayloadBlockAsync(signedVbmetaPath, outputDirectory, cancellationToken)
+            return await PadVBMetaToPayloadBlockAsync(signedVBMetaPath, outputDirectory, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        var disabledVbmetaPath = Path.Combine(outputDirectory, "vbmeta.disabled.img");
-        var disableResult = await AvbSigner.DisableVbmetaVerificationAsync(
-            signedVbmetaPath, disabledVbmetaPath, cancellationToken).ConfigureAwait(false);
+        var disabledVBMetaPath = Path.Combine(outputDirectory, "vbmeta.disabled.img");
+        var disableResult = await AvbSigner.DisableVBMetaVerificationAsync(
+            signedVBMetaPath, disabledVBMetaPath, cancellationToken).ConfigureAwait(false);
         if (!disableResult.Success)
         {
-            errors.Add($"Disabling vbmeta verification failed: {disableResult.ErrorMessage ?? "unknown error"}. 禁用 vbmeta 校验失败：{disableResult.ErrorMessage ?? "未知错误"}。");
+            errors.Add($"Disabling VBMeta verification failed: {disableResult.ErrorMessage ?? "unknown error"}. 禁用 VBMeta 校验失败：{disableResult.ErrorMessage ?? "未知错误"}。");
             return null;
         }
 
-        return await PadVbmetaToPayloadBlockAsync(disabledVbmetaPath, outputDirectory, cancellationToken)
+        return await PadVBMetaToPayloadBlockAsync(disabledVBMetaPath, outputDirectory, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private static async Task<string> PadVbmetaToPayloadBlockAsync(
+    private static async Task<string> PadVBMetaToPayloadBlockAsync(
         string vbmetaPath, string outputDirectory, CancellationToken cancellationToken)
     {
         const int blockSize = 4096;
@@ -856,7 +856,7 @@ public sealed class AvbOtaService
                 return await AvbDescriptorTable.FromSignedImageAsync(vbmetaPath, cancellationToken).ConfigureAwait(false);
             }
 
-            if (stream.Length > MaximumVbmetaBytes)
+            if (stream.Length > MaximumVBMetaBytes)
             {
                 throw new InvalidDataException($"'{vbmetaPath}' exceeds the 16 MiB vbmeta limit.");
             }
@@ -940,7 +940,7 @@ public sealed class AvbOtaService
         List<string> errors,
         CancellationToken cancellationToken)
     {
-        if (ResolveManifestName(manifestNames, VbmetaPartitionName) is null)
+        if (ResolveManifestName(manifestNames, VBMetaPartitionName) is null)
         {
             errors.Add("The payload manifest has no vbmeta partition, so the AVB chain cannot be verified. 载荷清单没有 vbmeta 分区，无法校验 AVB 链。");
             return null;
@@ -962,9 +962,9 @@ public sealed class AvbOtaService
                 }
             }
 
-            if (!partitionPaths.ContainsKey(VbmetaPartitionName))
+            if (!partitionPaths.ContainsKey(VBMetaPartitionName))
             {
-                errors.Add("The extracted images do not contain vbmeta, so the AVB chain cannot be verified. 提取结果中没有 vbmeta，无法校验 AVB 链。");
+                errors.Add("The extracted images do not contain VBMeta, so the AVB chain cannot be verified. 提取结果中没有 VBMeta，无法校验 AVB 链。");
                 return null;
             }
 
@@ -991,7 +991,7 @@ public sealed class AvbOtaService
             var result = await AvbChainVerifier.VerifyAsync(
                 new AvbChainVerifyOptions
                 {
-                    RootPartitionName = VbmetaPartitionName,
+                    RootPartitionName = VBMetaPartitionName,
                     PartitionPaths = partitionPaths,
                     SlotSuffix = request.SlotSuffix,
                     TrustedRootPublicKey = trustedRoot,

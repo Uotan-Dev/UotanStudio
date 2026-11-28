@@ -373,7 +373,7 @@ public sealed class BootPatchService
                 LinkCount = 1
             });
             changes.Add("write Magisk patch configuration");
-            if (options.PatchVbmetaFlag)
+            if (options.PatchVBMetaFlag)
                 changes.Add("enable Magisk PATCHVBMETAFLAG");
         }
         if (detection.Kind == BootPatchKind.KernelSu)

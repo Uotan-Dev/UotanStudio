@@ -941,7 +941,7 @@
     <value>LZMA/LZMA2 解压；NuGet 包装层 MIT，内含 7-Zip LZMA SDK（公有领域）</value>
   </data>
   <data name="About_Project_GoogleProtobuf" xml:space="preserve">
-    <value>Protocol Buffers 序列化库（OTA payload 等 protobuf 解析）</value>
+    <value>Protocol Buffers 序列化库（OTA Payload 等 protobuf 解析）</value>
   </data>
   <data name="About_Project_BsDiff" xml:space="preserve">
     <value>bsdiff 二进制差分/补丁的 .NET 移植；移植层 MIT，原始 bsdiff 为 BSD-2-Clause</value>

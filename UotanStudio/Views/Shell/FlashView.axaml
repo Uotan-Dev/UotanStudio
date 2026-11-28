@@ -424,8 +424,8 @@
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                             <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                   RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
-                                <CheckBox Grid.Row="0" Grid.Column="0" Name="DisableVbmetaBox"
-                                          Content="{DynamicResource Flash_DisableVbmeta}" HorizontalAlignment="Left" />
+                                <CheckBox Grid.Row="0" Grid.Column="0" Name="DisableVBMetaBox"
+                                          Content="{DynamicResource Flash_DisableVBMeta}" HorizontalAlignment="Left" />
                                 <CheckBox Grid.Row="0" Grid.Column="1" Name="AddRootBox"
                                           Content="{DynamicResource Flash_AddRoot}" HorizontalAlignment="Left" />
                                 <CheckBox Grid.Row="1" Grid.Column="0" Name="EraseDataBox"
@@ -456,9 +456,9 @@
                             <!-- The AVB option group follows its check box: the command selector appears once AVB
                                  disabling is ticked and collapses again as soon as it is cleared. -->
                             <StackPanel Name="AvbOptionsPanel" Spacing="8"
-                                        IsVisible="{Binding #DisableVbmetaBox.IsChecked}">
+                                        IsVisible="{Binding #DisableVBMetaBox.IsChecked}">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
-                                <TextBlock Text="{DynamicResource Flash_DisableVbmeta}" FontWeight="SemiBold" />
+                                <TextBlock Text="{DynamicResource Flash_DisableVBMeta}" FontWeight="SemiBold" />
                                 <ComboBox Name="AvbDisableCommandBox" HorizontalAlignment="Stretch" Height="32"
                                           VerticalContentAlignment="Center"
                                           SelectedIndex="0"

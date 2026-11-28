@@ -31,7 +31,7 @@ internal static class NodeCatalogSeed
         D("Firmware.Container.Unpack", "Node_Firmware_Container_Unpack", "Firmware", FirmwareNodeViewModel.CreateUnpackNode),
         D("Firmware.Container.Pack", "Node_Firmware_Container_Pack", "Firmware", FirmwareNodeViewModel.CreatePackNode),
         D("Validation.Signature.Verify", "Node_Validation_Signature_Verify", "Validation", FirmwareNodeViewModel.CreateVerifyNode),
-        D("Validation.Vbmeta.Sign", "Node_Validation_Vbmeta_Sign", "Validation", VbmetaSignNodeViewModel.CreateSignNode),
+        D("Validation.VBMeta.Sign", "Node_Validation_VBMeta_Sign", "Validation", VBMetaSignNodeViewModel.CreateSignNode),
         D("Boot.CommandLine.Edit", "Node_Boot_CommandLine_Edit", "Composite", FirmwareNodeViewModel.CreateCmdlineEditNode),
         D("Image.Super.Pack", "Node_Image_Super_Pack", "Firmware", SuperNodeViewModel.CreateSuperPackNode),
         D("Image.Super.Unpack", "Node_Image_Super_Unpack", "Firmware", SuperUnpackNodeViewModel.CreateUnpackNode),
@@ -184,7 +184,7 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.ReadsDevice | NodeCapability.PatchSafe;
         }
-        if (typeKey is "File.Text.Publish" or "File.Artifact.Publish" or "File.Bytes.Write" or "Validation.Vbmeta.Sign")
+        if (typeKey is "File.Text.Publish" or "File.Artifact.Publish" or "File.Bytes.Write" or "Validation.VBMeta.Sign")
         {
             capabilities |= NodeCapability.ProducesArtifact | NodeCapability.PublishesFile;
         }

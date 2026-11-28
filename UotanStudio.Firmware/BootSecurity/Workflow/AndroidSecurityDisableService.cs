@@ -23,11 +23,11 @@ internal sealed record AndroidSecurityDisableRequest
     /// <para>启用校验禁用时所消费的 VBMeta 镜像。</para>
     /// </summary>
     /// <value>
-    /// Required when <see cref="DisableVbmetaVerification"/> is <see langword="true"/>;
+    /// Required when <see cref="DisableVBMetaVerification"/> is <see langword="true"/>;
     /// otherwise ignored, <c>null</c> by default.
-    /// <para>当 <see cref="DisableVbmetaVerification"/> 为 <see langword="true"/> 时必填；否则被忽略，默认 <c>null</c>。</para>
+    /// <para>当 <see cref="DisableVBMetaVerification"/> 为 <see langword="true"/> 时必填；否则被忽略，默认 <c>null</c>。</para>
     /// </value>
-    public string? VbmetaPath { get; init; }
+    public string? VBMetaPath { get; init; }
     /// <summary>
     /// Directory that receives the published outputs; created when missing.
     /// <para>接收已发布输出的目录；不存在时会被创建。</para>
@@ -49,10 +49,10 @@ internal sealed record AndroidSecurityDisableRequest
     public bool DisableForceEncryption { get; init; } = true;
     /// <summary>Enables the VBMeta verification-disable step. <para>启用 VBMeta 校验禁用步骤。</para></summary>
     /// <value>
-    /// Defaults to <see langword="true"/>; requires <see cref="VbmetaPath"/>.
-    /// <para>默认为 <see langword="true"/>；需要 <see cref="VbmetaPath"/>。</para>
+    /// Defaults to <see langword="true"/>; requires <see cref="VBMetaPath"/>.
+    /// <para>默认为 <see langword="true"/>；需要 <see cref="VBMetaPath"/>。</para>
     /// </value>
-    public bool DisableVbmetaVerification { get; init; } = true;
+    public bool DisableVBMetaVerification { get; init; } = true;
 }
 
 /// <summary>
@@ -100,7 +100,7 @@ internal static class AndroidSecurityDisableService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.OutputDirectory);
-        if (!request.DisableVerity && !request.DisableForceEncryption && !request.DisableVbmetaVerification)
+        if (!request.DisableVerity && !request.DisableForceEncryption && !request.DisableVBMetaVerification)
         {
             throw new ArgumentException("At least one security change must be requested.", nameof(request));
         }
@@ -146,13 +146,13 @@ internal static class AndroidSecurityDisableService
                 }
             }
 
-            if (request.DisableVbmetaVerification)
+            if (request.DisableVBMetaVerification)
             {
-                if (string.IsNullOrWhiteSpace(request.VbmetaPath))
+                if (string.IsNullOrWhiteSpace(request.VBMetaPath))
                 {
                     throw new ArgumentException("A vbmeta image is required when verification disabling is enabled.", nameof(request));
                 }
-                var source = Path.GetFullPath(request.VbmetaPath);
+                var source = Path.GetFullPath(request.VBMetaPath);
                 if (!File.Exists(source))
                 {
                     throw new FileNotFoundException("VBMeta input was not found.", source);
@@ -163,7 +163,7 @@ internal static class AndroidSecurityDisableService
                     throw new InvalidDataException($"Duplicate output filename '{name}'.");
                 }
                 var stagedPath = Path.Combine(staging, name);
-                var result = await AvbSigner.DisableVbmetaVerificationAsync(source, stagedPath, cancellationToken)
+                var result = await AvbSigner.DisableVBMetaVerificationAsync(source, stagedPath, cancellationToken)
                     .ConfigureAwait(false);
                 if (!result.Success)
                 {

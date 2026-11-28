@@ -60,9 +60,9 @@ internal static class AvbFooterEditor
 
             var dataEnd = checked((ulong)(inputLength - AvbFooter.Size));
             if (footer.OriginalImageSize > long.MaxValue ||
-                footer.OriginalImageSize > footer.VbmetaOffset ||
-                footer.VbmetaOffset > dataEnd ||
-                footer.VbmetaSize > dataEnd - footer.VbmetaOffset)
+                footer.OriginalImageSize > footer.VBMetaOffset ||
+                footer.VBMetaOffset > dataEnd ||
+                footer.VBMetaSize > dataEnd - footer.VBMetaOffset)
             {
                 return FirmwareOpResult.Fail("The AVB footer references ranges outside the image.");
             }

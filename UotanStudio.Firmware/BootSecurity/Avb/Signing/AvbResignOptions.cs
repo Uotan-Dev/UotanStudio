@@ -39,7 +39,7 @@ public sealed class AvbResignOptions
     /// <para>两种模式使用的盐；空数组表示不加盐。</para></value>
     public byte[]? Salt { get; init; }
 
-    /// <summary>Rollback index stored in the VBMeta header. <para>Vbmeta 头部回滚索引。</para></summary>
+    /// <summary>Rollback index stored in the VBMeta header. <para>VBMeta 头部回滚索引。</para></summary>
     /// <value>The anti-rollback counter; defaults to 0. <para>防回滚计数器；默认为 0。</para></value>
     public ulong RollbackIndex { get; init; }
 
@@ -47,7 +47,7 @@ public sealed class AvbResignOptions
     /// <value>The rollback slot number; defaults to 0. <para>回滚槽位编号；默认为 0。</para></value>
     public uint RollbackIndexLocation { get; init; }
 
-    /// <summary>VBMeta flags (hashtree-disabled, verification-disabled). <para>Vbmeta 标志位。</para></summary>
+    /// <summary>VBMeta flags (hashtree-disabled, verification-disabled). <para>VBMeta 标志位。</para></summary>
     /// <value>The raw 32-bit flag word; 0 means no flag bits set. <para>原始 32 位标志字；0 表示未设置任何标志位。</para></value>
     public uint Flags { get; init; }
 

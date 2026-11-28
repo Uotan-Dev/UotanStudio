@@ -120,7 +120,7 @@ public class ContainerFormatConformanceTests
     public void AvbAlgorithm_MustMatchActualRsaKeyAndSignature(int keyBits, uint algorithm, bool expected)
     {
         using var key = SigningTestKeys.Create(keyBits);
-        var (image, publicKey, signature, signedData) = SignedVbmeta(key, algorithm);
+        var (image, publicKey, signature, signedData) = SignedVBMeta(key, algorithm);
         Assert.True(key.VerifyData(signedData, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         Assert.Equal(expected, AvbSignatureVerifier.Verify(image).SignatureIsValid);
         Assert.Equal(expected, AvbSignatureVerifier.Verify(image, key).SignatureIsValid);
@@ -131,7 +131,7 @@ public class ContainerFormatConformanceTests
     public void AvbSignatureSize_MustEqualAlgorithmWidthEvenWhenRangeFits()
     {
         using var key = SigningTestKeys.Create(2048);
-        var (image, blob, signature, _) = SignedVbmeta(key, 1);
+        var (image, blob, signature, _) = SignedVBMeta(key, 1);
         BinaryPrimitives.WriteUInt64BigEndian(image.AsSpan(56), 255);
         Assert.False(AvbSignatureVerifier.Verify(image).SignatureIsValid);
         Assert.False(AvbSignatureVerifier.VerifySignature(image, signature[..255], blob, 1).SignatureIsValid);
@@ -183,7 +183,7 @@ public class ContainerFormatConformanceTests
         return ~crc;
     }
 
-    private static (byte[] Image, byte[] PublicKey, byte[] Signature, byte[] SignedData) SignedVbmeta(RSA key, uint algorithm)
+    private static (byte[] Image, byte[] PublicKey, byte[] Signature, byte[] SignedData) SignedVBMeta(RSA key, uint algorithm)
     {
         var modulus = key.ExportParameters(false).Modulus!;
         var bits = modulus.Length * 8;

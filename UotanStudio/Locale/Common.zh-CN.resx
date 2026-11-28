@@ -370,7 +370,7 @@
     <value>此安装包自带 update-binary，需要第三方 recovery；原厂 recovery 会拒绝它无法验证的包。</value>
   </data>
   <data name="Delivery_Script_SuperSizeMismatch" xml:space="preserve">
-    <value>Super 镜像按 {0} 字节的 super 构建，设备实际报告 {1} 字节；请按设备大小重新生成交付。</value>
+    <value>Super 镜像按 {0} 字节构建，设备实际报告 {1} 字节；请按设备大小重新生成交付。</value>
   </data>
   <data name="Delivery_Script_SuperSizeUnknown" xml:space="preserve">
     <value>设备未报告 super-partition-size，Super 大小未经校验。</value>
@@ -567,7 +567,7 @@
   <data name="Flash_EraseSelected" xml:space="preserve">
     <value>擦除选中分区</value>
   </data>
-  <data name="Flash_DisableVbmeta" xml:space="preserve">
+  <data name="Flash_DisableVBMeta" xml:space="preserve">
     <value>禁用 AVB</value>
   </data>
   <data name="Flash_DeleteCow" xml:space="preserve">
@@ -708,7 +708,7 @@
   <data name="Flash_RebootConflict" xml:space="preserve">
     <value>所选脚本步骤已包含重启，请关闭刷入后操作或取消选择该步骤。</value>
   </data>
-  <data name="Flash_VbmetaMissing" xml:space="preserve">
+  <data name="Flash_VBMetaMissing" xml:space="preserve">
     <value>请选中 vbmeta 分区及镜像以禁用校验。</value>
   </data>
   <data name="Flash_ChooseRootPackage" xml:space="preserve">
@@ -1345,7 +1345,7 @@
     <value>重打包已签名镜像</value>
   </data>
   <data name="Image_AvbUnsignedRepackMessage" xml:space="preserve">
-    <value>{0} 带有 AVB 签名（footer 与 vbmeta）。重新打包将输出未签名镜像，丢弃这些验证启动数据，设备可能无法启动或无法通过完整性校验。
+    <value>{0} 带有 AVB 签名（footer 与 VBMeta）。重新打包将输出未签名镜像，丢弃这些验证启动数据，设备可能无法启动或无法通过完整性校验。
 
 确认仍要继续吗？</value>
   </data>
@@ -1448,7 +1448,7 @@
   <data name="BootPatch_KeepAvb" xml:space="preserve">
     <value>保留 AVB 2.0/dm-verity</value>
   </data>
-  <data name="BootPatch_PatchVbmeta" xml:space="preserve">
+  <data name="BootPatch_PatchVBMeta" xml:space="preserve">
     <value>修补 VBMeta 标志</value>
   </data>
   <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
@@ -2785,10 +2785,10 @@
   <data name="FirmwareField_OriginalImageSize" xml:space="preserve">
     <value>原镜像大小（字节）</value>
   </data>
-  <data name="FirmwareField_VbmetaOffset" xml:space="preserve">
+  <data name="FirmwareField_VBMetaOffset" xml:space="preserve">
     <value>VBMeta 文件偏移（字节）</value>
   </data>
-  <data name="FirmwareField_VbmetaSize" xml:space="preserve">
+  <data name="FirmwareField_VBMetaSize" xml:space="preserve">
     <value>VBMeta 数据大小（字节）</value>
   </data>
   <data name="FirmwareField_RequiredLibavbVersion" xml:space="preserve">
@@ -3188,7 +3188,7 @@
     <value>执行失败。</value>
   </data>
   <data name="UserError_SuperFailed" xml:space="preserve">
-    <value>合成 super 镜像失败。</value>
+    <value>合成 Super 镜像失败。</value>
   </data>
   <data name="UserError_FlashFailed" xml:space="preserve">
     <value>刷入选中的镜像失败。</value>
@@ -3209,7 +3209,7 @@
     <value>未选择 DEX 条目，无法写回。</value>
   </data>
   <data name="UserError_PartitionUnrecognized" xml:space="preserve">
-    <value>无法识别分区表。需要 LP super 元数据、GPT、MBR、Amlogic 或 Rockchip parameter 文件（CMDLINE: mtdparts=...）。</value>
+    <value>无法识别分区表。需要 LP Super 元数据、GPT、MBR、Amlogic 或 Rockchip parameter 文件（CMDLINE: mtdparts=...）。</value>
   </data>
   <data name="UserError_PartitionInvalidEdit" xml:space="preserve">
     <value>分区编辑无效。请检查分区参数。</value>
@@ -3269,10 +3269,10 @@
     <value>正在删除 {0}</value>
   </data>
   <data name="ImageView_SynthesizingSuper" xml:space="preserve">
-    <value>正在合成 super 镜像（{0} 个分区）</value>
+    <value>正在合成 Super 镜像（{0} 个分区）</value>
   </data>
   <data name="ImageView_SynthesizedSuper" xml:space="preserve">
-    <value>已合成 super 镜像</value>
+    <value>已合成 Super 镜像</value>
   </data>
   <data name="ImageView_FlashingImages" xml:space="preserve">
     <value>正在刷入 {0} 个镜像</value>

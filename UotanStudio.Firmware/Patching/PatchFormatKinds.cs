@@ -29,7 +29,7 @@ public enum PatchFormatKind
     /// <summary>Android vendor boot image. <para>Android vendor boot 镜像。</para></summary>
     VendorBoot,
     /// <summary>AVB vbmeta partition. <para>AVB vbmeta 分区。</para></summary>
-    Vbmeta,
+    VBMeta,
     /// <summary>OTA payload image. <para>OTA payload 镜像。</para></summary>
     Payload,
     /// <summary>Flattened device tree blob. <para>展平设备树 blob。</para></summary>

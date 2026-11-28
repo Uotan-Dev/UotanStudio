@@ -64,7 +64,7 @@ public sealed class AvbImageVerifyResult
 /// </summary>
 public static class AvbImageVerifier
 {
-    private const ulong MaximumVbmetaBytes = 16 * 1024 * 1024;
+    private const ulong MaximumVBMetaBytes = 16 * 1024 * 1024;
 
     /// <summary>Verifies a raw or Android Sparse partition image.
     /// <para>验证原始或 Android Sparse 分区镜像。</para></summary>
@@ -103,15 +103,15 @@ public static class AvbImageVerifier
             }
 
             var end = checked((ulong)(stream.Length - AvbFooter.Size));
-            if (footer.OriginalImageSize > footer.VbmetaOffset || footer.VbmetaOffset > end
-                || footer.VbmetaSize < AvbVBMetaImageHeader.Size || footer.VbmetaSize > end - footer.VbmetaOffset
-                || footer.VbmetaSize > MaximumVbmetaBytes)
+            if (footer.OriginalImageSize > footer.VBMetaOffset || footer.VBMetaOffset > end
+                || footer.VBMetaSize < AvbVBMetaImageHeader.Size || footer.VBMetaSize > end - footer.VBMetaOffset
+                || footer.VBMetaSize > MaximumVBMetaBytes)
             {
                 return Fail("The AVB footer references an invalid or oversized VBMeta region.", footer);
             }
 
-            var vbmeta = new byte[(int)footer.VbmetaSize];
-            stream.Position = checked((long)footer.VbmetaOffset);
+            var vbmeta = new byte[(int)footer.VBMetaSize];
+            stream.Position = checked((long)footer.VBMetaOffset);
             await stream.ReadExactlyAsync(vbmeta, cancellationToken).ConfigureAwait(false);
             var signature = AvbSignatureVerifier.Verify(vbmeta, trustedPublicKey);
             var signatureIsValid = signature.HashIsValid && signature.SignatureIsValid;

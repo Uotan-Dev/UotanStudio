@@ -51,8 +51,8 @@ public sealed class AvbDescriptorTableTests : IDisposable
         Assert.True(third.Success, third.ErrorMessage);
 
         var templatePath = Path.Combine(_root, "template.bin");
-        var firstVbmeta = ExtractVbmeta(await File.ReadAllBytesAsync(bootSigned, token));
-        await File.WriteAllBytesAsync(templatePath, firstVbmeta, token);
+        var firstVBMeta = ExtractVBMeta(await File.ReadAllBytesAsync(bootSigned, token));
+        await File.WriteAllBytesAsync(templatePath, firstVBMeta, token);
 
         var propertyPath = Path.Combine(_root, "property.vbmeta");
         var propertyDescriptor = new AvbPropertyDescriptor
@@ -60,21 +60,21 @@ public sealed class AvbDescriptorTableTests : IDisposable
             Key = "com.android.build.type",
             Value = "userdebug"u8.ToArray()
         };
-        var propertySign = await AvbSigner.SignVbmetaAsync<AvbPropertyDescriptor>(
+        var propertySign = await AvbSigner.SignVBMetaAsync<AvbPropertyDescriptor>(
             templatePath, key, propertyPath, [propertyDescriptor], token);
         Assert.True(propertySign.Success, propertySign.ErrorMessage);
         var propertyTable = AvbDescriptorTable.Parse(await File.ReadAllBytesAsync(propertyPath, token));
         Assert.Equal(0UL, Assert.Single(propertyTable.Entries).Tag);
 
         var bootReplacementTable = AvbDescriptorTable.Parse(
-            ExtractVbmeta(await File.ReadAllBytesAsync(bootReplacementSigned, token)));
+            ExtractVBMeta(await File.ReadAllBytesAsync(bootReplacementSigned, token)));
         var vendorTable = await AvbDescriptorTable.FromSignedImageAsync(vendorSigned, token);
         var merged = propertyTable
             .ReplaceContentDescriptors("boot", bootReplacementTable)
             .ReplaceContentDescriptors("vendor", vendorTable);
 
         var finalPath = Path.Combine(_root, "vbmeta.final.img");
-        var finalSign = await AvbSigner.SignVbmetaWithDescriptorTableAsync(
+        var finalSign = await AvbSigner.SignVBMetaWithDescriptorTableAsync(
             templatePath, key, finalPath, merged, token);
 
         Assert.True(finalSign.Success, finalSign.ErrorMessage);
@@ -89,7 +89,7 @@ public sealed class AvbDescriptorTableTests : IDisposable
         var finalDescriptors = AvbSignatureVerifier.ReadDescriptorsStrict(finalBytes);
         Assert.Equal(3, finalDescriptors.Count);
         var expectedBootDigest = Assert.Single(AvbSignatureVerifier.ReadDescriptorsStrict(
-            ExtractVbmeta(await File.ReadAllBytesAsync(bootReplacementSigned, token)))).Digest;
+            ExtractVBMeta(await File.ReadAllBytesAsync(bootReplacementSigned, token)))).Digest;
         var bootDescriptor = Assert.Single(finalDescriptors, descriptor => descriptor.PartitionName == "boot");
         Assert.Equal(expectedBootDigest, bootDescriptor.Digest);
         var property = Assert.Single(finalDescriptors, descriptor => descriptor.Tag == 0);
@@ -104,7 +104,7 @@ public sealed class AvbDescriptorTableTests : IDisposable
     [InlineData(4096UL)]
     public void Parse_DescriptorLengthUnalignedOrOutOfRange_ThrowsInvalidDataException(ulong declaredLength)
     {
-        var vbmeta = BuildVbmetaWithDescriptorEntry(declaredLength);
+        var vbmeta = BuildVBMetaWithDescriptorEntry(declaredLength);
 
         Assert.Throws<InvalidDataException>(() => AvbDescriptorTable.Parse(vbmeta));
     }
@@ -122,7 +122,7 @@ public sealed class AvbDescriptorTableTests : IDisposable
     }
 
     [Fact]
-    public async Task SignVbmetaWithDescriptorTableAsync_CanceledBeforeStart_PreservesExistingOutput()
+    public async Task SignVBMetaWithDescriptorTableAsync_CanceledBeforeStart_PreservesExistingOutput()
     {
         var token = TestContext.Current.CancellationToken;
         using var key = SigningTestKeys.Create();
@@ -131,7 +131,7 @@ public sealed class AvbDescriptorTableTests : IDisposable
         var signResult = await AvbSigner.AddHashFooterAsync(imagePath, "boot", key, signedPath, token);
         Assert.True(signResult.Success, signResult.ErrorMessage);
         var templatePath = _temp.WriteBytes("template.bin",
-            ExtractVbmeta(await File.ReadAllBytesAsync(signedPath, token)));
+            ExtractVBMeta(await File.ReadAllBytesAsync(signedPath, token)));
         var table = await AvbDescriptorTable.FromSignedImageAsync(signedPath, token);
         var outputPath = Path.Combine(_root, "final.img");
         await File.WriteAllBytesAsync(outputPath, [9, 8, 7], token);
@@ -139,7 +139,7 @@ public sealed class AvbDescriptorTableTests : IDisposable
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => AvbSigner.SignVbmetaWithDescriptorTableAsync(
+            () => AvbSigner.SignVBMetaWithDescriptorTableAsync(
                 templatePath, key, outputPath, table, cancellation.Token));
 
         Assert.Equal(new byte[] { 9, 8, 7 }, await File.ReadAllBytesAsync(outputPath, token));
@@ -147,16 +147,16 @@ public sealed class AvbDescriptorTableTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static byte[] ExtractVbmeta(byte[] signedImage)
+    private static byte[] ExtractVBMeta(byte[] signedImage)
     {
         var footer = AvbFooter.TryLoad(signedImage);
         Assert.True(footer.HasValue);
-        var offset = checked((int)footer.Value.VbmetaOffset);
-        var size = checked((int)footer.Value.VbmetaSize);
+        var offset = checked((int)footer.Value.VBMetaOffset);
+        var size = checked((int)footer.Value.VBMetaSize);
         return signedImage[offset..(offset + size)];
     }
 
-    private static byte[] BuildVbmetaWithDescriptorEntry(ulong declaredLength)
+    private static byte[] BuildVBMetaWithDescriptorEntry(ulong declaredLength)
     {
         const int auxiliarySize = 128;
         var vbmeta = new byte[AvbVBMetaImageHeader.Size + auxiliarySize];

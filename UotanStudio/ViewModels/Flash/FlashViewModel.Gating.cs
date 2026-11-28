@@ -198,7 +198,7 @@ public sealed partial class FlashViewModel
         // condition can close them. Only a running page operation does.
         // 七个选项复选框表达的是意图而不是设备能力：由各自的烧录路径决定是否读取，没有路径时由烧录动作报告不匹配，
         // 因此没有任何设备条件能关闭它们，只有页面操作运行期间才关闭。
-        RegisterGate("DisableVbmetaBox", FlashControlGate.BusyOnly("DisableVbmetaBox"));
+        RegisterGate("DisableVBMetaBox", FlashControlGate.BusyOnly("DisableVBMetaBox"));
         RegisterGate("AddRootBox", FlashControlGate.BusyOnly("AddRootBox"));
         RegisterGate("EraseDataBox", FlashControlGate.BusyOnly("EraseDataBox"));
         RegisterGate("RebootAfterBox", FlashControlGate.BusyOnly("RebootAfterBox"));

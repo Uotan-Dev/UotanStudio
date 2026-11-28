@@ -49,8 +49,8 @@ internal sealed class BootRepackConfiguration
                 VersionMajor = footer.VersionMajor,
                 VersionMinor = footer.VersionMinor,
                 OriginalImageSize = footer.OriginalImageSize,
-                VbmetaOffset = footer.VbmetaOffset,
-                VbmetaSize = footer.VbmetaSize
+                VBMetaOffset = footer.VBMetaOffset,
+                VBMetaSize = footer.VBMetaSize
             };
         return (JsonObject)JsonSerializer.SerializeToNode(configuration, BootRepackJsonContext.Default.BootRepackConfiguration)!;
     }
@@ -166,8 +166,8 @@ internal sealed class AvbFooterState
     public uint VersionMajor { get; set; }
     public uint VersionMinor { get; set; }
     public ulong OriginalImageSize { get; set; }
-    public ulong VbmetaOffset { get; set; }
-    public ulong VbmetaSize { get; set; }
+    public ulong VBMetaOffset { get; set; }
+    public ulong VBMetaSize { get; set; }
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

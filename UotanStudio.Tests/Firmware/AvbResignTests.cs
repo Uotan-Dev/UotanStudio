@@ -141,7 +141,7 @@ public sealed class AvbResignTests : IDisposable
         Assert.Equal(data, bytes[..data.Length]);
         var footer = AvbFooter.TryLoad(bytes)!.Value;
         Assert.Equal((ulong)data.Length, footer.OriginalImageSize);
-        var metadata = bytes.AsSpan((int)footer.VbmetaOffset, (int)footer.VbmetaSize).ToArray();
+        var metadata = bytes.AsSpan((int)footer.VBMetaOffset, (int)footer.VBMetaSize).ToArray();
         var header = AvbVBMetaImageHeader.FromBytes(metadata);
         Assert.Equal(987UL, header.RollbackIndex);
         Assert.Equal(31U, header.RollbackIndexLocation);

@@ -346,7 +346,7 @@ public static class BootPatchAnalyzer
                 var executableScript = Regex.Replace(script, @"(?m)^\s*#.*$", string.Empty);
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.KeepVerity, "KEEPVERITY");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.KeepForceEncryption, "KEEPFORCEENCRYPT");
-                AddSupportedOption(executableScript, supportedOptions, BootPatchOption.PatchVbmetaFlag, "PATCHVBMETAFLAG");
+                AddSupportedOption(executableScript, supportedOptions, BootPatchOption.PatchVBMetaFlag, "PATCHVBMETAFLAG");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.RecoveryMode, "RECOVERYMODE");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.LegacySar, "LEGACYSAR");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.PreInitDevice, "PREINITDEVICE");

@@ -366,8 +366,8 @@ public sealed class FirmwareService
 
                 var sb = new StringBuilder();
                 sb.AppendLine(result.IsSigned
-                    ? $"Signed vbmeta image. Algorithm: {result.AlgorithmName}  已签名 vbmeta 镜像。算法：{result.AlgorithmName}"
-                    : "Unsigned vbmeta image (algorithm NONE). 未签名 vbmeta 镜像（算法 NONE）。");
+                    ? $"Signed VBMeta image. Algorithm: {result.AlgorithmName}  已签名 VBMeta 镜像。算法：{result.AlgorithmName}"
+                    : "Unsigned VBMeta image (algorithm NONE). 未签名 VBMeta 镜像（算法 NONE）。");
                 sb.AppendLine(result.HashIsValid
                     ? "Embedded digest: VALID. 内嵌摘要：有效。"
                     : "Embedded digest: invalid or absent. 内嵌摘要：无效或缺失。");
@@ -413,7 +413,7 @@ public sealed class FirmwareService
     /// <param name="descriptors">The hash descriptors to embed. <para>要嵌入的哈希描述符。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOperationResult> SignVbmetaAsync(
+    public async Task<FirmwareOperationResult> SignVBMetaAsync(
         string vbmetaPath,
         string privateKeyPath,
         string outputPath,
@@ -430,7 +430,7 @@ public sealed class FirmwareService
                 return FirmwareOperationResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
             }
 
-            var result = await AvbSigner.SignVbmetaAsync(vbmetaPath, key, outputPath, descriptors, cancellationToken);
+            var result = await AvbSigner.SignVBMetaAsync(vbmetaPath, key, outputPath, descriptors, cancellationToken);
             LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Firmware",
                 result.Success
                     ? $"VBMeta signed: {result.AlgorithmName}, {result.DescriptorCount} descriptor(s), {result.OutputSize} bytes -> {outputPath}"
@@ -626,7 +626,7 @@ public sealed class FirmwareService
     /// <para>补丁输出路径（必须与源不同）。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOperationResult> DisableVbmetaVerificationAsync(
+    public async Task<FirmwareOperationResult> DisableVBMetaVerificationAsync(
         string vbmetaPath,
         string outputPath,
         CancellationToken cancellationToken = default)
@@ -635,7 +635,7 @@ public sealed class FirmwareService
         {
             LogService.Instance.Write(LogLevel.Info, "Firmware", $"Disabling AVB verification on {vbmetaPath} -> {outputPath}");
 
-            var result = await AvbSigner.DisableVbmetaVerificationAsync(vbmetaPath, outputPath, cancellationToken);
+            var result = await AvbSigner.DisableVBMetaVerificationAsync(vbmetaPath, outputPath, cancellationToken);
             LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Firmware",
                 result.Success
                     ? $"AVB verification disabled -> {outputPath}"
@@ -1518,9 +1518,9 @@ public sealed class FirmwareService
                 Sparse = sparse,
                 VirtualAb = virtualAb
             }, outputPath, token: cancellationToken).ConfigureAwait(false);
-            return new FirmwareOperationResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
+            return new FirmwareOperationResult { Success = true, Summary = $"Synthesized Super image with {partitions.Count} partition(s) -> {outputPath}" };
         }
-        catch (OperationCanceledException) { return FirmwareOperationResult.Fail("Super synthesis cancelled. 合成 super 已取消。"); }
+        catch (OperationCanceledException) { return FirmwareOperationResult.Fail("Super synthesis cancelled. 合成 Super 已取消。"); }
         catch (Exception ex) { return FirmwareOperationResult.Fail(ex.Message); }
     }
 }

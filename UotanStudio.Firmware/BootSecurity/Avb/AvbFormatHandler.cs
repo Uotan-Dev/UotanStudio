@@ -244,18 +244,18 @@ internal sealed class AvbFormatHandler : IReadonlyFormatHandler
                 {
                     var f = footerResult.Footer.Value;
                     var imgLen = (ulong)imageLength;
-                    if (f.VbmetaOffset > imgLen ||
-                        f.VbmetaSize > imgLen - f.VbmetaOffset ||
-                        f.VbmetaOffset > long.MaxValue ||
-                        f.VbmetaSize > long.MaxValue)
+                    if (f.VBMetaOffset > imgLen ||
+                        f.VBMetaSize > imgLen - f.VBMetaOffset ||
+                        f.VBMetaOffset > long.MaxValue ||
+                        f.VBMetaSize > long.MaxValue)
                     {
                         return Task.FromResult(FirmwareOpResult.Fail("AVB footer VBMeta range is invalid."));
                     }
 
                     Directory.CreateDirectory(outputDirectory);
                     var vbmetaPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(filePath)}.vbmeta.bin");
-                    fs.Position = (long)f.VbmetaOffset;
-                    var vbmetaData = new byte[(int)f.VbmetaSize];
+                    fs.Position = (long)f.VBMetaOffset;
+                    var vbmetaData = new byte[(int)f.VBMetaSize];
                     fs.ReadExactly(vbmetaData);
                     File.WriteAllBytes(vbmetaPath, vbmetaData);
                     return Task.FromResult(FirmwareOpResult.Ok(

@@ -110,8 +110,8 @@
                             <CheckBox Classes="compact-check" Name="KeepAvbBox" IsChecked="True">
                                 <TextBlock Text="{DynamicResource BootPatch_KeepAvb}" TextWrapping="Wrap" />
                             </CheckBox>
-                            <CheckBox Classes="compact-check" Name="PatchVbmetaBox">
-                                <TextBlock Text="{DynamicResource BootPatch_PatchVbmeta}" TextWrapping="Wrap" />
+                            <CheckBox Classes="compact-check" Name="PatchVBMetaBox">
+                                <TextBlock Text="{DynamicResource BootPatch_PatchVBMeta}" TextWrapping="Wrap" />
                             </CheckBox>
                         </WrapPanel>
                     </Grid>

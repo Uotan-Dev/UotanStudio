@@ -92,7 +92,7 @@ public sealed class AvbDescriptorReaderTests
     }
 
     [Fact]
-    public void ExtractHashDescriptors_NonVbmetaOrTooShort_ReturnsEmpty()
+    public void ExtractHashDescriptors_NonVBMetaOrTooShort_ReturnsEmpty()
     {
         Assert.Empty(AvbDescriptorReader.ExtractHashDescriptors(new byte[300]));
         Assert.Empty(AvbDescriptorReader.ExtractHashDescriptors("not an AVB image"u8.ToArray()));

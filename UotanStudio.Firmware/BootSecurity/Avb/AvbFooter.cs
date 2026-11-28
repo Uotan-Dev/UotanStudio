@@ -51,12 +51,12 @@ public readonly struct AvbFooter
     /// <summary>Byte offset from the start of the image to the vbmeta struct, a big-endian uint64 at
     /// footer offset 20. <para>从镜像起始到 vbmeta 结构的字节偏移，位于尾部偏移 20 的大端 uint64。</para></summary>
     /// <value>The absolute vbmeta struct offset. <para>vbmeta 结构的绝对偏移。</para></value>
-    public ulong VbmetaOffset { get; init; }
+    public ulong VBMetaOffset { get; init; }
 
     /// <summary>Byte length of the vbmeta struct as recorded in the footer, a big-endian uint64 at
     /// footer offset 28. <para>尾部中记录的 vbmeta 结构字节长度，位于尾部偏移 28 的大端 uint64。</para></summary>
     /// <value>The vbmeta struct length in bytes. <para>vbmeta 结构的字节长度。</para></value>
-    public ulong VbmetaSize { get; init; }
+    public ulong VBMetaSize { get; init; }
 
     /// <summary>
     /// Parses a standard footer from the end of an image or a footer-sized span.
@@ -100,8 +100,8 @@ public readonly struct AvbFooter
             VersionMajor = versionMajor,
             VersionMinor = BinaryPrimitives.ReadUInt32BigEndian(footer.Slice(8, 4)),
             OriginalImageSize = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(12, 8)),
-            VbmetaOffset = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(20, 8)),
-            VbmetaSize = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(28, 8))
+            VBMetaOffset = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(20, 8)),
+            VBMetaSize = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(28, 8))
         };
     }
 

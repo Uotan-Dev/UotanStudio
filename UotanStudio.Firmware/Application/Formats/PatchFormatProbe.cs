@@ -102,7 +102,7 @@ public static class PatchFormatProbe
                 case PatchFormatKind.Sparse:
                     ValidateSparse(stream, cancellationToken);
                     return new PatchFormatResult(kind, PatchFormatEvidence.Structure, "SparseChunks");
-                case PatchFormatKind.Vbmeta:
+                case PatchFormatKind.VBMeta:
                     AvbMetadataReader.Read(stream, cancellationToken);
                     return new PatchFormatResult(kind, PatchFormatEvidence.Structure, "AvbDescriptors");
                 default:
@@ -126,7 +126,7 @@ public static class PatchFormatProbe
         if (bytes.StartsWith("\u007fELF"u8)) { return PatchFormatKind.Elf; }
         if (bytes.StartsWith("ANDROID!"u8)) { return PatchFormatKind.Boot; }
         if (bytes.StartsWith("VNDRBOOT"u8)) { return PatchFormatKind.VendorBoot; }
-        if (bytes.StartsWith("AVB0"u8)) { return PatchFormatKind.Vbmeta; }
+        if (bytes.StartsWith("AVB0"u8)) { return PatchFormatKind.VBMeta; }
         if (bytes.StartsWith("CrAU"u8)) { return PatchFormatKind.Payload; }
         if (bytes.StartsWith("dex\n"u8) || bytes.StartsWith("cdex"u8)) { return PatchFormatKind.Dex; }
         if (bytes.StartsWith("PK\u0003\u0004"u8) || bytes.StartsWith("PK\u0005\u0006"u8)) { return PatchFormatKind.Zip; }

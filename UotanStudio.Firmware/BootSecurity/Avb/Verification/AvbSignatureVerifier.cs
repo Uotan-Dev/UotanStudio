@@ -399,7 +399,7 @@ public static partial class AvbSignatureVerifier
     {
         if (vbmetaData is not { Length: >= HeaderSize })
         {
-            return new AvbSignatureVerifyResult { ErrorMessage = "vbmeta data is too short to contain a 256-byte header. vbmeta 数据过短，不足以容纳 256 字节头。" };
+            return new AvbSignatureVerifyResult { ErrorMessage = "VBMeta data is too short to contain a 256-byte header. VBMeta 数据过短，不足以容纳 256 字节头。" };
         }
 
         var algorithmType = BinaryPrimitives.ReadUInt32BigEndian(vbmetaData.AsSpan(28, 4));
@@ -414,7 +414,7 @@ public static partial class AvbSignatureVerifier
 
         if (!vbmetaData.AsSpan(0, 4).SequenceEqual(MagicBytes))
         {
-            return new AvbSignatureVerifyResult { ErrorMessage = "Invalid vbmeta magic (expected AVB0). 无效的 vbmeta 魔数（应为 AVB0）。" };
+            return new AvbSignatureVerifyResult { ErrorMessage = "Invalid VBMeta magic (expected AVB0). 无效的 VBMeta 魔数（应为 AVB0）。" };
         }
 
         var result = new AvbSignatureVerifyResult
@@ -425,7 +425,7 @@ public static partial class AvbSignatureVerifier
 
         if (algorithmType == AlgorithmNone)
         {
-            return With(result, ErrorMessage: "vbmeta image declares algorithm NONE (not signed). vbmeta 镜像声明算法为 NONE（未签名）。");
+            return With(result, ErrorMessage: "VBMeta image declares algorithm NONE (not signed). VBMeta 镜像声明算法为 NONE（未签名）。");
         }
 
         if (!TryGetKeySizeAndHash(algorithmType, out var keySizeBits, out _) ||
@@ -433,7 +433,7 @@ public static partial class AvbSignatureVerifier
             authSize > (ulong)vbmetaData.Length - HeaderSize ||
             auxSize > (ulong)vbmetaData.Length - HeaderSize - authSize)
         {
-            return With(result, ErrorMessage: "vbmeta header declares invalid authentication or auxiliary block sizes. vbmeta 头声明的认证块或辅助块大小无效。");
+            return With(result, ErrorMessage: "VBMeta header declares invalid authentication or auxiliary block sizes. VBMeta 头声明的认证块或辅助块大小无效。");
         }
 
         try
@@ -447,7 +447,7 @@ public static partial class AvbSignatureVerifier
         if (sigSize != (ulong)keySizeBits / 8 || sigOffset > authSize || sigSize > authSize - sigOffset ||
             sigOffset > int.MaxValue || sigSize > int.MaxValue)
         {
-            return With(result, ErrorMessage: "vbmeta header declares no in-range signature. vbmeta 头未声明有效范围内的签名。");
+            return With(result, ErrorMessage: "VBMeta header declares no in-range signature. VBMeta 头未声明有效范围内的签名。");
         }
 
         var sigStart = HeaderSize + (int)sigOffset;
@@ -503,7 +503,7 @@ public static partial class AvbSignatureVerifier
         if (vbmetaData is not { Length: >= HeaderSize } ||
             !vbmetaData.AsSpan(0, 4).SequenceEqual(MagicBytes))
         {
-            return new AvbSignatureVerifyResult { ErrorMessage = "Invalid vbmeta data. 无效的 vbmeta 数据。" };
+            return new AvbSignatureVerifyResult { ErrorMessage = "Invalid VBMeta data. 无效的 VBMeta 数据。" };
         }
 
         using var key = ImportAvbRsaPublicKey(avbRsaPublicKeyBlob);

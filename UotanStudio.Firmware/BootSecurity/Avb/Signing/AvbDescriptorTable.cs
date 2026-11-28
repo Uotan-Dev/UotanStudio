@@ -125,14 +125,14 @@ public sealed class AvbDescriptorTable
         var footer = AvbFooter.TryLoad(footerBytes)
             ?? throw new InvalidDataException("The image does not carry a supported AVB footer.");
         var end = checked((ulong)(stream.Length - AvbFooter.Size));
-        if (footer.VbmetaSize < AvbVBMetaImageHeader.Size || footer.VbmetaSize > MaximumTableBytes
-            || footer.VbmetaOffset > end || footer.VbmetaSize > end - footer.VbmetaOffset)
+        if (footer.VBMetaSize < AvbVBMetaImageHeader.Size || footer.VBMetaSize > MaximumTableBytes
+            || footer.VBMetaOffset > end || footer.VBMetaSize > end - footer.VBMetaOffset)
         {
             throw new InvalidDataException("The AVB footer references an invalid VBMeta region.");
         }
 
-        var vbmeta = new byte[(int)footer.VbmetaSize];
-        stream.Position = checked((long)footer.VbmetaOffset);
+        var vbmeta = new byte[(int)footer.VBMetaSize];
+        stream.Position = checked((long)footer.VBMetaOffset);
         await stream.ReadExactlyAsync(vbmeta, cancellationToken).ConfigureAwait(false);
         return Parse(vbmeta);
     }

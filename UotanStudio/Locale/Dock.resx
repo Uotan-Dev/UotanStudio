@@ -480,11 +480,11 @@
   <data name="Dock_Properties_Metadata_OriginalImageSize" xml:space="preserve">
     <value>Original image size</value>
   </data>
-  <data name="Dock_Properties_Metadata_VbmetaOffset" xml:space="preserve">
-    <value>vbmeta offset</value>
+  <data name="Dock_Properties_Metadata_VBMetaOffset" xml:space="preserve">
+    <value>VBMeta offset</value>
   </data>
-  <data name="Dock_Properties_Metadata_VbmetaSize" xml:space="preserve">
-    <value>vbmeta size</value>
+  <data name="Dock_Properties_Metadata_VBMetaSize" xml:space="preserve">
+    <value>VBMeta size</value>
   </data>
   <data name="Dock_Properties_Metadata_Type" xml:space="preserve">
     <value>Kind</value>
@@ -790,7 +790,7 @@
     <value>Symbolic Link</value>
   </data>
   <data name="FileManager_Unrecognized" xml:space="preserve">
-    <value>Unrecognized file: expected an ext4/EROFS/F2FS image, CPIO/TAR archive or supported compressed file</value>
+    <value>Unrecognized file: expected an EXT4/EROFS/F2FS image, CPIO/TAR archive or supported compressed file</value>
   </data>
   <data name="Dock_Properties_Hex_FileName" xml:space="preserve">
     <value>File Name</value>

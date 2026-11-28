@@ -827,7 +827,7 @@ public partial class BootPatchWindow : Window
             KeepEncryptionBox.IsChecked = true;
             InstallRecoveryBox.IsChecked = false;
             KeepAvbBox.IsChecked = true;
-            PatchVbmetaBox.IsChecked = false;
+            PatchVBMetaBox.IsChecked = false;
         }
 
         var supported = detection?.SupportedOptions;
@@ -837,12 +837,12 @@ public partial class BootPatchWindow : Window
         KeepEncryptionBox.IsVisible = supports(BootPatchOption.KeepForceEncryption);
         InstallRecoveryBox.IsVisible = supports(BootPatchOption.RecoveryMode);
         KeepAvbBox.IsVisible = supports(BootPatchOption.KeepVerity);
-        PatchVbmetaBox.IsVisible = supports(BootPatchOption.PatchVbmetaFlag);
+        PatchVBMetaBox.IsVisible = supports(BootPatchOption.PatchVBMetaFlag);
         if (!ForceRootfsBox.IsVisible) ForceRootfsBox.IsChecked = false;
         if (!KeepEncryptionBox.IsVisible) KeepEncryptionBox.IsChecked = true;
         if (!InstallRecoveryBox.IsVisible) InstallRecoveryBox.IsChecked = false;
         if (!KeepAvbBox.IsVisible) KeepAvbBox.IsChecked = true;
-        if (!PatchVbmetaBox.IsVisible) PatchVbmetaBox.IsChecked = false;
+        if (!PatchVBMetaBox.IsVisible) PatchVBMetaBox.IsChecked = false;
         RefreshArchitectureOptions();
         RefreshKmiOptions();
         UpdatePatchModeState();
@@ -1023,7 +1023,7 @@ public partial class BootPatchWindow : Window
                 KeepForceEncryption = KeepEncryptionBox.IsChecked == true,
                 KeepVerity = KeepAvbBox.IsChecked == true,
                 RecoveryMode = InstallRecoveryBox.IsChecked == true,
-                PatchVbmetaFlag = PatchVbmetaBox.IsChecked == true,
+                PatchVBMetaFlag = PatchVBMetaBox.IsChecked == true,
                 PreInitDevice = patchMode is BootPatchMode.Gki or BootPatchMode.Kpm || usesSuperKey
                     ? null
                     : PrebootDeviceBox.Text,

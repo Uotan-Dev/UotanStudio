@@ -19,7 +19,7 @@ public class AvbFooterVerificationTests
     [InlineData(true, 4294967296UL)]
     public void VerifyVBMetaFromStream_OversizedMetadata_RejectsBeforeReadingBlock(bool authentication, ulong blockSize)
     {
-        var header = BuildVbmeta(algorithm: 1);
+        var header = BuildVBMeta(algorithm: 1);
         BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(authentication ? 12 : 20, 8), blockSize);
         using var stream = new MemoryStream(header, writable: false);
 
@@ -35,7 +35,7 @@ public class AvbFooterVerificationTests
     [InlineData(4294967296UL)]
     public void VerifyFromStream_OversizedMetadata_RejectsAfterFooterAndHeaderOnly(ulong blockSize)
     {
-        var header = BuildVbmeta(algorithm: 1);
+        var header = BuildVBMeta(algorithm: 1);
         BinaryPrimitives.WriteUInt64BigEndian(header.AsSpan(20, 8), blockSize);
         var footer = BuildFooterImage(header)[^AvbFooter.Size..];
         BinaryPrimitives.WriteUInt64BigEndian(footer.AsSpan(28, 8), blockSize + (ulong)header.Length);
@@ -52,7 +52,7 @@ public class AvbFooterVerificationTests
     [Fact]
     public void Verify_StandardFooterWithAlgorithmNone_IsUnsignedAndInvalid()
     {
-        var image = BuildFooterImage(BuildVbmeta(algorithm: 0));
+        var image = BuildFooterImage(BuildVBMeta(algorithm: 0));
 
         var result = AvbVerifier.Verify(image);
 
@@ -67,7 +67,7 @@ public class AvbFooterVerificationTests
     [InlineData(false)]
     public void Verify_OutOfRangeAuthenticationOrAuxiliaryData_Fails(bool authentication)
     {
-        var vbmeta = BuildVbmeta(algorithm: 1);
+        var vbmeta = BuildVBMeta(algorithm: 1);
         BinaryPrimitives.WriteUInt64BigEndian(vbmeta.AsSpan(authentication ? 12 : 20, 8), 1);
         var image = BuildFooterImage(vbmeta);
 
@@ -81,7 +81,7 @@ public class AvbFooterVerificationTests
     [Fact]
     public void Verify_UnknownAlgorithm_Fails()
     {
-        var image = BuildFooterImage(BuildVbmeta(algorithm: uint.MaxValue));
+        var image = BuildFooterImage(BuildVBMeta(algorithm: uint.MaxValue));
 
         var result = AvbVerifier.Verify(image);
 
@@ -93,7 +93,7 @@ public class AvbFooterVerificationTests
     [Fact]
     public void Verify_FooterSizeTooLargeForByteArray_ReturnsInvalidWithoutOverflow()
     {
-        var image = BuildFooterImage(BuildVbmeta(algorithm: 1));
+        var image = BuildFooterImage(BuildVBMeta(algorithm: 1));
         BinaryPrimitives.WriteUInt64BigEndian(
             image.AsSpan(image.Length - AvbFooter.Size + 28, 8),
             (ulong)int.MaxValue + 1);
@@ -109,7 +109,7 @@ public class AvbFooterVerificationTests
     [Fact]
     public void VerifyVBMeta_AlgorithmNoneWithTrailingPadding_IsUnsignedAndInvalid()
     {
-        var vbmeta = BuildVbmeta(algorithm: 0);
+        var vbmeta = BuildVBMeta(algorithm: 0);
         Array.Resize(ref vbmeta, vbmeta.Length + 64);
 
         var result = AvbVerifier.VerifyVBMeta(vbmeta);
@@ -122,7 +122,7 @@ public class AvbFooterVerificationTests
     [Fact]
     public void Verify_UnsupportedFooterMajor_IsRejectedWithVersionError()
     {
-        var image = BuildFooterImage(BuildVbmeta(algorithm: 0));
+        var image = BuildFooterImage(BuildVBMeta(algorithm: 0));
         BinaryPrimitives.WriteUInt32BigEndian(image.AsSpan(image.Length - AvbFooter.Size + 4, 4), 2);
 
         Assert.Null(AvbFooter.TryLoad(image));
@@ -143,7 +143,7 @@ public class AvbFooterVerificationTests
         Directory.CreateDirectory(root);
         try
         {
-            await File.WriteAllBytesAsync(imagePath, BuildVbmeta(algorithm: 0), TestContext.Current.CancellationToken);
+            await File.WriteAllBytesAsync(imagePath, BuildVBMeta(algorithm: 0), TestContext.Current.CancellationToken);
             var handler = new AvbFormatHandler();
 
             Assert.True(handler.CanHandle(imagePath));
@@ -166,7 +166,7 @@ public class AvbFooterVerificationTests
         {
             var imagePath = Path.Combine(root, "standalone.img");
             var outputPath = Path.Combine(root, "packed.img");
-            await File.WriteAllBytesAsync(imagePath, BuildVbmeta(algorithm: 0), TestContext.Current.CancellationToken);
+            await File.WriteAllBytesAsync(imagePath, BuildVBMeta(algorithm: 0), TestContext.Current.CancellationToken);
 
             var result = await new AvbFormatHandler().PackAsync(imagePath, outputPath, TestContext.Current.CancellationToken);
 
@@ -192,7 +192,7 @@ public class AvbFooterVerificationTests
         {
             var image = new byte[64 + AvbVBMetaImageHeader.Size + AvbFooter.Size];
             BinaryPrimitives.WriteUInt32BigEndian(image, FdtConstants.DtboMagic);
-            var footer = BuildFooterImage(BuildVbmeta(algorithm: 0))[^AvbFooter.Size..];
+            var footer = BuildFooterImage(BuildVBMeta(algorithm: 0))[^AvbFooter.Size..];
             footer.CopyTo(image, image.Length - AvbFooter.Size);
             var path = Path.Combine(root, "dtbo.img");
             File.WriteAllBytes(path, image);
@@ -209,7 +209,7 @@ public class AvbFooterVerificationTests
         }
     }
 
-    private static byte[] BuildVbmeta(uint algorithm)
+    private static byte[] BuildVBMeta(uint algorithm)
     {
         var vbmeta = new byte[AvbVBMetaImageHeader.Size];
         "AVB0"u8.CopyTo(vbmeta);

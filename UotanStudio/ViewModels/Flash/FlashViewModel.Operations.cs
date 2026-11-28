@@ -4165,7 +4165,7 @@ public sealed partial class FlashViewModel
             return;
         }
         var plainOptions = erase || Field<CheckBox>("DeleteCowBox").IsChecked == true || Field<CheckBox>("EraseDataBox").IsChecked == true ||
-            Field<CheckBox>("RebootAfterBox").IsChecked == true || Field<CheckBox>("DisableVbmetaBox").IsChecked == true || Field<CheckBox>("AddRootBox").IsChecked == true;
+            Field<CheckBox>("RebootAfterBox").IsChecked == true || Field<CheckBox>("DisableVBMetaBox").IsChecked == true || Field<CheckBox>("AddRootBox").IsChecked == true;
         if (device.Protocol != DeviceProtocolKind.Fastboot && plainOptions && !IsOptionlessRun(device.Protocol, erase))
         {
             AppendLog(_localizer.GetString("Flash_ModeMismatch"));
@@ -4184,12 +4184,12 @@ public sealed partial class FlashViewModel
         var deleteCow = !erase && Field<CheckBox>("DeleteCowBox").IsChecked == true;
         var eraseData = !erase && Field<CheckBox>("EraseDataBox").IsChecked == true;
         var rebootAfter = !erase && Field<CheckBox>("RebootAfterBox").IsChecked == true;
-        var disableVbmeta = !erase && Field<CheckBox>("DisableVbmetaBox").IsChecked == true;
+        var disableVBMeta = !erase && Field<CheckBox>("DisableVBMetaBox").IsChecked == true;
         var addRoot = !erase && Field<CheckBox>("AddRootBox").IsChecked == true;
-        if (disableVbmeta && !selected.Any(entry => entry.EffectiveCommand == "flash" &&
+        if (disableVBMeta && !selected.Any(entry => entry.EffectiveCommand == "flash" &&
             entry.Name.StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase)))
         {
-            AppendLog(language.GetString("Flash_VbmetaMissing"));
+            AppendLog(language.GetString("Flash_VBMetaMissing"));
             return;
         }
         var rootEntry = addRoot
@@ -4221,7 +4221,7 @@ public sealed partial class FlashViewModel
         if (deleteCow) description += Environment.NewLine + language.GetString("Flash_DeleteCow");
         if (eraseData) description += Environment.NewLine + language.GetString("Flash_EraseData");
         if (rebootAfter) description += Environment.NewLine + language.GetString("Flash_RebootAfter");
-        if (disableVbmeta) description += Environment.NewLine + language.GetString("Flash_DisableVbmeta");
+        if (disableVBMeta) description += Environment.NewLine + language.GetString("Flash_DisableVBMeta");
         if (addRoot && rootEntry is { } rootTarget)
         {
             description += Environment.NewLine + language.GetString("Flash_AddRoot") + ": " + rootTarget.Name;
@@ -4469,13 +4469,13 @@ public sealed partial class FlashViewModel
                     staged.Add(path);
                     prepared[entry] = path;
                 }
-                if (disableVbmeta)
+                if (disableVBMeta)
                 {
                     foreach (var entry in selected.Where(entry => entry.EffectiveCommand == "flash" &&
                         entry.Name.StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase)))
                     {
                         var source = prepared.GetValueOrDefault(entry, entry.FilePath);
-                        var output = await FlashVbmetaImage.PrepareAsync(source, cancellation.Token);
+                        var output = await FlashVBMetaImage.PrepareAsync(source, cancellation.Token);
                         staged.Add(output);
                         prepared[entry] = output;
                     }

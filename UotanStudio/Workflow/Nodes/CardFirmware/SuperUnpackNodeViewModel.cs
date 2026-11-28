@@ -70,15 +70,15 @@ public sealed class SuperUnpackNodeViewModel : FlowNodeViewModel
         var outputDir = Text(ReadInput("Output Dir"));
         if (string.IsNullOrWhiteSpace(superPath) || !File.Exists(superPath))
         {
-            throw new InvalidOperationException($"The Super input was not found: {superPath}.  super 镜像不存在。");
+            throw new InvalidOperationException($"The Super input was not found: {superPath}.  Super 镜像不存在。");
         }
         if (string.IsNullOrWhiteSpace(requested))
         {
-            throw new InvalidOperationException("The Partitions input is required before unpacking a super image.");
+            throw new InvalidOperationException("The Partitions input is required before unpacking a Super image.");
         }
         if (string.IsNullOrWhiteSpace(outputDir))
         {
-            throw new InvalidOperationException("The Output Dir input is required before unpacking a super image.");
+            throw new InvalidOperationException("The Output Dir input is required before unpacking a Super image.");
         }
 
         var names = requested
@@ -95,7 +95,7 @@ public sealed class SuperUnpackNodeViewModel : FlowNodeViewModel
         if (missing.Length > 0)
         {
             throw new InvalidDataException(
-                $"The super image has no partition(s): {string.Join(", ", missing)}.  super 中不存在请求的分区。");
+                $"The Super image has no partition(s): {string.Join(", ", missing)}.  Super 中不存在请求的分区。");
         }
 
         Directory.CreateDirectory(outputDir);
@@ -103,7 +103,7 @@ public sealed class SuperUnpackNodeViewModel : FlowNodeViewModel
             outputDirectory: outputDir).ConfigureAwait(false);
         if (result.OutputPaths.Count == 0)
         {
-            throw new InvalidDataException("No logical partition was extracted from the super image.  未从 super 提取到任何分区。");
+            throw new InvalidDataException("No logical partition was extracted from the Super image.  未从 Super 提取到任何分区。");
         }
 
         WriteOutput("Available", available);

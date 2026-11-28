@@ -35,7 +35,7 @@ public partial class FirmwareNodeViewModel
 
         if (!await HasMagicAsync(path, "AVB0", context.CancellationToken).ConfigureAwait(false))
         {
-            throw new InvalidDataException("Signature verification requires an AVB vbmeta image.");
+            throw new InvalidDataException("Signature verification requires an AVB VBMeta image.");
         }
 
         var publicKey = PathText(ReadInput("Public Key"));

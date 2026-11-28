@@ -131,7 +131,7 @@ internal sealed class AvbVerificationService
     /// Verifies the integrity of a vbmeta image from raw bytes.
     /// <para>验证原始字节 vbmeta 镜像的完整性。</para>
     /// </summary>
-    public AvbVerificationResult VerifyVbmetaImage(byte[] data)
+    public AvbVerificationResult VerifyVBMetaImage(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
 
@@ -139,7 +139,7 @@ internal sealed class AvbVerificationService
         if (data.Length == 0)
         {
             result.Success = false;
-            result.Message = "Vbmeta data is empty. vbmeta 数据为空。";
+            result.Message = "VBMeta data is empty. VBMeta 数据为空。";
             return result;
         }
 
@@ -148,7 +148,7 @@ internal sealed class AvbVerificationService
             if (!TryParseHeader(data, out var header))
             {
                 result.Success = false;
-                result.Message = "Not a valid AVB vbmeta image (bad magic or short header). 不是有效的 AVB vbmeta 镜像。";
+                result.Message = "Not a valid AVB VBMeta image (bad magic or short header). 不是有效的 AVB VBMeta 镜像。";
                 return result;
             }
 
@@ -172,7 +172,7 @@ internal sealed class AvbVerificationService
                 byte[]? computed = null;
                 foreach (var headerSize in new[] { AvbVBMetaImageHeader.Size }.Concat(CandidateHeaderSizes))
                 {
-                    try { computed = ComputeVbmetaDigest(data, header, headerSize); }
+                    try { computed = ComputeVBMetaDigest(data, header, headerSize); }
                     catch (InvalidDataException) { continue; }
 
                     if (computed != null && CryptographicOperations.FixedTimeEquals(computed, result.StoredHash))
@@ -186,13 +186,13 @@ internal sealed class AvbVerificationService
                 result.ComputedHash ??= computed;
                 result.Success = result.HashVerificationSucceeded;
                 result.Message = result.HashVerificationSucceeded
-                    ? "VBMeta image hash verification succeeded. vbmeta 镜像哈希校验成功。"
-                    : "VBMeta image hash verification failed. vbmeta 镜像哈希校验失败。";
+                    ? "VBMeta image hash verification succeeded. VBMeta 镜像哈希校验成功。"
+                    : "VBMeta image hash verification failed. VBMeta 镜像哈希校验失败。";
             }
             else
             {
                 result.Success = false;
-                result.Message = "Vbmeta header declares no hash; nothing to verify. vbmeta 头未声明哈希。";
+                result.Message = "VBMeta header declares no hash; nothing to verify. VBMeta 头未声明哈希。";
             }
 
             if (data.Length >= AvbFooter.Size)
@@ -208,7 +208,7 @@ internal sealed class AvbVerificationService
         catch (Exception ex)
         {
             result.Success = false;
-            result.Message = $"Failed to parse or verify vbmeta image: {ex.Message} 解析或校验失败。";
+            result.Message = $"Failed to parse or verify VBMeta image: {ex.Message} 解析或校验失败。";
         }
 
         return result;
@@ -218,29 +218,29 @@ internal sealed class AvbVerificationService
     /// Verifies the integrity of a vbmeta image from a file.
     /// <para>从文件验证 vbmeta 镜像的完整性。</para>
     /// </summary>
-    public AvbVerificationResult VerifyVbmetaFile(string filePath)
+    public AvbVerificationResult VerifyVBMetaFile(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         if (!File.Exists(filePath))
-            throw new FileNotFoundException($"Vbmeta image file not found: {filePath}", filePath);
-        return VerifyVbmetaImage(File.ReadAllBytes(filePath));
+            throw new FileNotFoundException($"VBMeta image file not found: {filePath}", filePath);
+        return VerifyVBMetaImage(File.ReadAllBytes(filePath));
     }
 
     /// <summary>
     /// Returns whether the byte array starts with the vbmeta magic ("AVB0").
     /// <para>返回字节数组是否以 vbmeta 魔数（"AVB0"）开头。</para>
     /// </summary>
-    public bool IsVbmetaImage(byte[] data) => data != null && data.Length >= 4 && data.AsSpan(0, 4).SequenceEqual("AVB0"u8);
+    public bool IsVBMetaImage(byte[] data) => data != null && data.Length >= 4 && data.AsSpan(0, 4).SequenceEqual("AVB0"u8);
 
     /// <summary>
     /// Recomputes the AVB digest of a vbmeta image.
     /// <para>重新计算 vbmeta 镜像的 AVB 摘要。</para>
     /// </summary>
-    public byte[]? ComputeVbmetaDigest(byte[] data)
+    public byte[]? ComputeVBMetaDigest(byte[] data)
     {
         if (data == null) return null;
         if (!TryParseHeader(data, out var header)) return null;
-        return ComputeVbmetaDigest(data, header, AvbVBMetaImageHeader.Size);
+        return ComputeVBMetaDigest(data, header, AvbVBMetaImageHeader.Size);
     }
 
     /// <summary>
@@ -329,7 +329,7 @@ internal sealed class AvbVerificationService
         _ => string.Empty
     };
 
-    private byte[]? ComputeVbmetaDigest(byte[] data, AvbVBMetaImageHeader header, int headerSize)
+    private byte[]? ComputeVBMetaDigest(byte[] data, AvbVBMetaImageHeader header, int headerSize)
     {
         var algorithmName = GetHashAlgorithmName(header.AlgorithmType);
         if (string.IsNullOrEmpty(algorithmName)) return null;
@@ -349,7 +349,7 @@ internal sealed class AvbVerificationService
     private static byte[] BuildHashInput(byte[] data, AvbVBMetaImageHeader header, int headerSize)
     {
         if (headerSize < 80 || data.Length < headerSize)
-            throw new InvalidDataException("Vbmeta image is shorter than its header.");
+            throw new InvalidDataException("VBMeta image is shorter than its header.");
 
         var headerBytes = new byte[headerSize];
         Buffer.BlockCopy(data, 0, headerBytes, 0, headerSize);
@@ -359,7 +359,7 @@ internal sealed class AvbVerificationService
         var auxStart = headerSize + (long)header.AuthenticationDataBlockSize;
         var auxSize = (long)header.AuxiliaryDataBlockSize;
         if (auxStart < 0 || auxSize < 0 || auxStart + auxSize > data.Length)
-            throw new InvalidDataException("Vbmeta auxiliary data block is out of range.");
+            throw new InvalidDataException("VBMeta auxiliary data block is out of range.");
 
         var input = new byte[headerSize + auxSize];
         Buffer.BlockCopy(headerBytes, 0, input, 0, headerSize);

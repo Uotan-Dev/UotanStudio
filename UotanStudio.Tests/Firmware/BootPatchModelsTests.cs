@@ -124,7 +124,7 @@ public sealed class BootPatchModelsTests
         Assert.Equal(BootPatchKind.Magisk, result.Kind);
         Assert.Equal(["arm64", "x64"], result.Architectures);
         Assert.Equal("27.0:27000", result.Version);
-        Assert.Contains(BootPatchOption.PatchVbmetaFlag, result.SupportedOptions!);
+        Assert.Contains(BootPatchOption.PatchVBMetaFlag, result.SupportedOptions!);
         Assert.Contains(BootPatchOption.LegacySar, result.SupportedOptions!);
     }
 

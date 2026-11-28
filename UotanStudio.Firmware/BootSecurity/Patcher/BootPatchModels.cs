@@ -88,7 +88,7 @@ public enum BootPatchOption
     /// PATCHVBMETAFLAG: request the vbmeta flag patch path.
     /// <para>PATCHVBMETAFLAG：请求 vbmeta 标志修补路径。</para>
     /// </summary>
-    PatchVbmetaFlag,
+    PatchVBMetaFlag,
     /// <summary>
     /// RECOVERYMODE: patch for a recovery-image installation.
     /// <para>RECOVERYMODE：面向 recovery 镜像安装进行修补。</para>
@@ -226,7 +226,7 @@ public sealed record BootPatchOptions
     /// <summary>Requests the Magisk PATCHVBMETAFLAG configuration.
     /// <para>请求 Magisk 的 PATCHVBMETAFLAG 配置。</para></summary>
     /// <value>Defaults to <see langword="false"/>. <para>默认为 <see langword="false"/>。</para></value>
-    public bool PatchVbmetaFlag { get; init; }
+    public bool PatchVBMetaFlag { get; init; }
     /// <summary>Patches for a recovery-image installation instead of a boot image.
     /// <para>面向 recovery 镜像安装而非 boot 镜像进行修补。</para></summary>
     /// <value>Defaults to <see langword="false"/>. <para>默认为 <see langword="false"/>。</para></value>

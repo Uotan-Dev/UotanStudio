@@ -458,8 +458,8 @@ public partial class AvbToolViewModel : ViewModelBase
             Mode = FooterModeIndex == 1 ? AvbResignMode.Hashtree : AvbResignMode.Hash,
             RollbackIndex = rollbackIndex,
             RollbackIndexLocation = rollbackLocation,
-            Flags = (DisableVerity ? (uint)AvbVbmetaFlag.HashtreeDisabled : 0)
-                | (DisableAvbVerification ? (uint)AvbVbmetaFlag.VerificationDisabled : 0),
+            Flags = (DisableVerity ? (uint)AvbVBMetaFlag.HashtreeDisabled : 0)
+                | (DisableAvbVerification ? (uint)AvbVBMetaFlag.VerificationDisabled : 0),
             PartitionSize = partitionSize,
         };
         var output = SignedOutputPath;
@@ -769,14 +769,14 @@ public partial class AvbToolViewModel : ViewModelBase
             }
         }
 
-        var res1 = await AvbSigner.SetVbmetaFlagAsync(outputPath, AvbVbmetaFlag.HashtreeDisabled, targetVerityDisabled, cancellationToken);
+        var res1 = await AvbSigner.SetVBMetaFlagAsync(outputPath, AvbVBMetaFlag.HashtreeDisabled, targetVerityDisabled, cancellationToken);
         if (!res1.Success)
         {
             Status = UserError.WithDetails(res1.ErrorMessage, "Avb_DisableFailed");
             return;
         }
 
-        var res2 = await AvbSigner.SetVbmetaFlagAsync(outputPath, AvbVbmetaFlag.VerificationDisabled, targetVerificationDisabled, cancellationToken);
+        var res2 = await AvbSigner.SetVBMetaFlagAsync(outputPath, AvbVBMetaFlag.VerificationDisabled, targetVerificationDisabled, cancellationToken);
         if (!res2.Success)
         {
             Status = UserError.WithDetails(res2.ErrorMessage, "Avb_DisableFailed");

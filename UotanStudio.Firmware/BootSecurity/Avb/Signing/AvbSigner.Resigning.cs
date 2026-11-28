@@ -112,7 +112,7 @@ public static partial class AvbSigner
             }
 
             var minor = options.RollbackIndexLocation > 0 ? 2U : options.DoNotUseAb ? 1U : 0U;
-            var vbmeta = BuildSignedVbmetaCore(SerializeDescriptors([descriptor]), key, keyBits, algorithm,
+            var vbmeta = BuildSignedVBMetaCore(SerializeDescriptors([descriptor]), key, keyBits, algorithm,
                 options.RollbackIndex, options.Flags, options.RollbackIndexLocation, ReleaseString, 1, minor);
             var minimumSize = checked(vbmetaOffset + AlignPartitionBlock(vbmeta.Length) + BlockSize);
             var outputSize = options.PartitionSize ?? minimumSize;
@@ -229,19 +229,19 @@ public static partial class AvbSigner
         }
         var footer = AvbFooter.TryLoad(bytes) ?? throw new InvalidDataException("Unsupported AVB footer version.");
         var end = checked((ulong)(source.Length - AvbFooter.Size));
-        if (footer.OriginalImageSize > footer.VbmetaOffset || footer.VbmetaOffset > end ||
-            footer.VbmetaSize < HeaderSize || footer.VbmetaSize > end - footer.VbmetaOffset)
+        if (footer.OriginalImageSize > footer.VBMetaOffset || footer.VBMetaOffset > end ||
+            footer.VBMetaSize < HeaderSize || footer.VBMetaSize > end - footer.VBMetaOffset)
         {
             throw new InvalidDataException("The original AVB footer has invalid image or metadata ranges.");
         }
-        source.Position = checked((long)footer.VbmetaOffset);
+        source.Position = checked((long)footer.VBMetaOffset);
         var headerBytes = new byte[HeaderSize];
         await source.ReadExactlyAsync(headerBytes, cancellationToken).ConfigureAwait(false);
         var header = AvbVBMetaImageHeader.FromBytes(headerBytes);
         if (!headerBytes.AsSpan(0, 4).SequenceEqual(MagicBytes) ||
             header.AuthenticationDataBlockSize > 16UL * 1024 * 1024 ||
             header.AuxiliaryDataBlockSize > 16UL * 1024 * 1024 ||
-            HeaderSize + header.AuthenticationDataBlockSize + header.AuxiliaryDataBlockSize > footer.VbmetaSize)
+            HeaderSize + header.AuthenticationDataBlockSize + header.AuxiliaryDataBlockSize > footer.VBMetaSize)
         {
             throw new InvalidDataException("The original AVB footer does not reference bounded VBMeta metadata.");
         }

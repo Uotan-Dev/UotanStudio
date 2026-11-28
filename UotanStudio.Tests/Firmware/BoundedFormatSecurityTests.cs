@@ -28,8 +28,8 @@ public class BoundedFormatSecurityTests
         Assert.Equal(1U, result.Value.VersionMajor);
         Assert.Equal(0U, result.Value.VersionMinor);
         Assert.Equal(0x1122334455667788UL, result.Value.OriginalImageSize);
-        Assert.Equal(0x20UL, result.Value.VbmetaOffset);
-        Assert.Equal(0x30UL, result.Value.VbmetaSize);
+        Assert.Equal(0x20UL, result.Value.VBMetaOffset);
+        Assert.Equal(0x30UL, result.Value.VBMetaSize);
     }
 
     [Fact]

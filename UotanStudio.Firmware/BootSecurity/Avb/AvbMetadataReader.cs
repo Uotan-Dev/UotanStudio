@@ -27,13 +27,13 @@ internal static class AvbMetadataReader
             stream.Position = stream.Length - AvbFooter.Size;
             stream.ReadExactly(footerBytes);
             var footer = AvbFooter.TryLoad(footerBytes) ?? throw new InvalidDataException("No AVB footer or VBMeta header found.");
-            Range(footer.VbmetaOffset, footer.VbmetaSize, (ulong)stream.Length - AvbFooter.Size);
-            if (footer.OriginalImageSize > footer.VbmetaOffset)
+            Range(footer.VBMetaOffset, footer.VBMetaSize, (ulong)stream.Length - AvbFooter.Size);
+            if (footer.OriginalImageSize > footer.VBMetaOffset)
             {
                 throw new InvalidDataException("AVB original image overlaps VBMeta.");
             }
-            offset = footer.VbmetaOffset;
-            available = footer.VbmetaSize;
+            offset = footer.VBMetaOffset;
+            available = footer.VBMetaSize;
             fields["FooterVersion"] = $"{footer.VersionMajor}.{footer.VersionMinor}";
             fields["OriginalImageSize"] = MetadataDisplay.Number(footer.OriginalImageSize);
             Range(0, (ulong)headerBytes.Length, available);
@@ -53,8 +53,8 @@ internal static class AvbMetadataReader
         {
             throw new InvalidDataException("AVB metadata exceeds the 16 MiB inspection limit per block.");
         }
-        fields["VbmetaOffset"] = MetadataDisplay.Number(offset);
-        fields["VbmetaSize"] = MetadataDisplay.Number(auxiliaryOffset + header.AuxiliaryDataBlockSize);
+        fields["VBMetaOffset"] = MetadataDisplay.Number(offset);
+        fields["VBMetaSize"] = MetadataDisplay.Number(auxiliaryOffset + header.AuxiliaryDataBlockSize);
         fields["RequiredLibavbVersion"] = $"{header.RequiredLibavbVersionMajor}.{header.RequiredLibavbVersionMinor}";
         fields["AlgorithmType"] = MetadataDisplay.Number(header.AlgorithmType);
         fields["AlgorithmName"] = header.AlgorithmType switch

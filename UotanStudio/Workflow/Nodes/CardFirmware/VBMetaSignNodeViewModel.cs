@@ -12,14 +12,14 @@ namespace UotanStudio.Workflow.Nodes;
 /// <para>AVB vbmeta 签名节点。用 RSA 私钥对既有 AVB0 vbmeta 重新签名，是重打包后的 boot 或 recovery 镜像在设备上
 /// 通过校验前的必要一步。</para>
 /// </summary>
-public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
+public sealed class VBMetaSignNodeViewModel : FlowNodeViewModel
 {
     /// <summary>
     /// Creates a vbmeta signing node with the specified display title.
     /// <para>创建具有指定显示标题的 vbmeta 签名节点。</para>
     /// </summary>
     /// <param name="title">The display title of the node. <para>节点的显示标题。</para></param>
-    public VbmetaSignNodeViewModel(string title) : base(title, NodeCategory.Firmware)
+    public VBMetaSignNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
     }
 
@@ -28,14 +28,14 @@ public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
     /// <para>创建 vbmeta 签名节点。</para>
     /// </summary>
     /// <returns>The configured node instance. <para>配置完成的节点实例。</para></returns>
-    public static VbmetaSignNodeViewModel CreateSignNode()
+    public static VBMetaSignNodeViewModel CreateSignNode()
     {
-        var node = new VbmetaSignNodeViewModel("Sign VBMeta")
+        var node = new VBMetaSignNodeViewModel("Sign VBMeta")
         {
             Location = new Point(100, 100),
-            TypeKey = "Validation.Vbmeta.Sign"
+            TypeKey = "Validation.VBMeta.Sign"
         };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Vbmeta", PortType = NodePortType.Path, IsRequired = true });
+        node.Input.Add(new NodeConnectorViewModel { Title = "VBMeta", PortType = NodePortType.Path, IsRequired = true });
         node.Input.Add(new NodeConnectorViewModel
         {
             Title = "Private Key",
@@ -59,18 +59,18 @@ public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
     /// <exception cref="InvalidDataException">The signer rejected the input. <para>签名器拒绝了输入。</para></exception>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
-        if (!string.Equals(TypeKey, "Validation.Vbmeta.Sign", StringComparison.Ordinal))
+        if (!string.Equals(TypeKey, "Validation.VBMeta.Sign", StringComparison.Ordinal))
         {
             await base.ExecuteAsync(context).ConfigureAwait(false);
             return;
         }
 
-        var vbmetaPath = Text(ReadInput("Vbmeta"));
+        var vbmetaPath = Text(ReadInput("VBMeta"));
         var keyPath = Text(ReadInput("Private Key"));
         var outputPath = Text(ReadInput("Output Path"));
         if (string.IsNullOrWhiteSpace(vbmetaPath))
         {
-            throw new InvalidOperationException("The Vbmeta input is required before signing.");
+            throw new InvalidOperationException("The VBMeta input is required before signing.");
         }
         if (string.IsNullOrWhiteSpace(keyPath))
         {
@@ -85,7 +85,7 @@ public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
             ?? throw new InvalidOperationException(
                 $"The private key at '{keyPath}' could not be loaded as an RSA private key.  私钥无法解析为 RSA 私钥。");
 
-        var written = await Task.Run(() => AvbSigner.SignVbmetaAsync(vbmetaPath, key, outputPath,
+        var written = await Task.Run(() => AvbSigner.SignVBMetaAsync(vbmetaPath, key, outputPath,
             [], context.CancellationToken), context.CancellationToken).ConfigureAwait(false);
 
         if (!written.Success)
@@ -96,7 +96,7 @@ public sealed class VbmetaSignNodeViewModel : FlowNodeViewModel
         WriteOutput("Signed", written.OutputPath ?? outputPath);
         WriteOutput("Algorithm", written.AlgorithmName);
         context.Log.Write(LogLevel.Info, Title,
-            $"Signed vbmeta with {written.AlgorithmName} ({written.OutputSize} bytes).  已完成 VBMeta 签名。");
+            $"Signed VBMeta with {written.AlgorithmName} ({written.OutputSize} bytes).  已完成 VBMeta 签名。");
     }
 
     private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);

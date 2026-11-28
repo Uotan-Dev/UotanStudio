@@ -370,7 +370,7 @@ Author: 暮间雾
     <value>This package runs its own update-binary and needs a custom recovery; stock recovery rejects packages it cannot verify.</value>
   </data>
   <data name="Delivery_Script_SuperSizeMismatch" xml:space="preserve">
-    <value>The Super image was built for a {0}-byte super but the device reports {1} bytes; rebuild the delivery with the device size.</value>
+    <value>The Super image was built for {0} bytes but the device reports {1} bytes; rebuild the delivery with the device size.</value>
   </data>
   <data name="Delivery_Script_SuperSizeUnknown" xml:space="preserve">
     <value>Device does not report super-partition-size; the Super size was not verified.</value>
@@ -567,7 +567,7 @@ Author: 暮间雾
   <data name="Flash_EraseSelected" xml:space="preserve">
     <value>Erase selected</value>
   </data>
-  <data name="Flash_DisableVbmeta" xml:space="preserve">
+  <data name="Flash_DisableVBMeta" xml:space="preserve">
     <value>Disable AVB</value>
   </data>
   <data name="Flash_DeleteCow" xml:space="preserve">
@@ -708,7 +708,7 @@ Author: 暮间雾
   <data name="Flash_RebootConflict" xml:space="preserve">
     <value>The selected script already reboots; disable post-flash actions or deselect that step.</value>
   </data>
-  <data name="Flash_VbmetaMissing" xml:space="preserve">
+  <data name="Flash_VBMetaMissing" xml:space="preserve">
     <value>Select a vbmeta partition and image to disable verification.</value>
   </data>
   <data name="Flash_ChooseRootPackage" xml:space="preserve">
@@ -1312,7 +1312,7 @@ Author: 暮间雾
     <value>Repack signed image</value>
   </data>
   <data name="Image_AvbUnsignedRepackMessage" xml:space="preserve">
-    <value>{0} carries an AVB signature (footer and vbmeta). Repacking will produce an unsigned image without that verified-boot data; the device may fail to boot or fail integrity checks.
+    <value>{0} carries an AVB signature (footer and VBMeta). Repacking will produce an unsigned image without that verified-boot data; the device may fail to boot or fail integrity checks.
 
 Continue anyway?</value>
   </data>
@@ -1448,7 +1448,7 @@ Continue anyway?</value>
   <data name="BootPatch_KeepAvb" xml:space="preserve">
     <value>Keep AVB2.0/dm-verity</value>
   </data>
-  <data name="BootPatch_PatchVbmeta" xml:space="preserve">
+  <data name="BootPatch_PatchVBMeta" xml:space="preserve">
     <value>Patch VBMeta flags</value>
   </data>
   <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
@@ -2480,10 +2480,10 @@ Continue?</value>
     <value>The selected signing key no longer exists in the key library; the delivery is now unsigned.</value>
   </data>
   <data name="Delivery_SuperFormatRawHint" xml:space="preserve">
-    <value>Raw super image. Organized ZIP output always produces RAW because the Recovery dd installer reads no sparse header.</value>
+    <value>Raw Super image. Organized ZIP output always produces RAW because the Recovery dd installer reads no sparse header.</value>
   </data>
   <data name="Delivery_SuperFormatSparseHint" xml:space="preserve">
-    <value>Sparse super image. Unavailable for organized ZIP output; the archive always carries RAW.</value>
+    <value>Sparse Super image. Unavailable for organized ZIP output; the archive always carries RAW.</value>
   </data>
   <data name="Delivery_AutoZeroHint" xml:space="preserve">
     <value>Add read-only zero-size _b companion rows for every _a partition. Turning this off clears the current composition.</value>
@@ -2785,10 +2785,10 @@ Continue?</value>
   <data name="FirmwareField_OriginalImageSize" xml:space="preserve">
     <value>Original Image Size</value>
   </data>
-  <data name="FirmwareField_VbmetaOffset" xml:space="preserve">
+  <data name="FirmwareField_VBMetaOffset" xml:space="preserve">
     <value>VBMeta Offset</value>
   </data>
-  <data name="FirmwareField_VbmetaSize" xml:space="preserve">
+  <data name="FirmwareField_VBMetaSize" xml:space="preserve">
     <value>VBMeta data size (bytes)</value>
   </data>
   <data name="FirmwareField_RequiredLibavbVersion" xml:space="preserve">
@@ -3188,7 +3188,7 @@ Continue?</value>
     <value>Execution failed.</value>
   </data>
   <data name="UserError_SuperFailed" xml:space="preserve">
-    <value>Failed to build the super image.</value>
+    <value>Failed to build the Super image.</value>
   </data>
   <data name="UserError_FlashFailed" xml:space="preserve">
     <value>Failed to flash the selected images.</value>
@@ -3209,7 +3209,7 @@ Continue?</value>
     <value>No DEX entry is selected for write-back.</value>
   </data>
   <data name="UserError_PartitionUnrecognized" xml:space="preserve">
-    <value>Unrecognized partition table. Expected LP super metadata, GPT, MBR, Amlogic, or a Rockchip parameter file (CMDLINE: mtdparts=...).</value>
+    <value>Unrecognized partition table. Expected LP Super metadata, GPT, MBR, Amlogic, or a Rockchip parameter file (CMDLINE: mtdparts=...).</value>
   </data>
   <data name="UserError_PartitionInvalidEdit" xml:space="preserve">
     <value>The partition edit is invalid. Check the partition parameters.</value>
@@ -3269,10 +3269,10 @@ Continue?</value>
     <value>Deleting {0}</value>
   </data>
   <data name="ImageView_SynthesizingSuper" xml:space="preserve">
-    <value>Synthesizing super image ({0} partitions)</value>
+    <value>Synthesizing Super image ({0} partitions)</value>
   </data>
   <data name="ImageView_SynthesizedSuper" xml:space="preserve">
-    <value>Synthesized super image</value>
+    <value>Synthesized Super image</value>
   </data>
   <data name="ImageView_FlashingImages" xml:space="preserve">
     <value>Flashing {0} image(s)</value>

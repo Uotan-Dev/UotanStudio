@@ -71,7 +71,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
         }
         catch (Exception ex)
         {
-            context.Log.Write(LogLevel.Error, Title, $"Super node failed: {ex.Message}  super 节点执行失败。");
+            context.Log.Write(LogLevel.Error, Title, $"Super node failed: {ex.Message}  Super 节点执行失败。");
             throw;
         }
     }
@@ -133,7 +133,7 @@ public class SuperNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         if (!result.Success)
         {
-            throw new InvalidOperationException($"Super pack failed: {result.Summary}  合成 super 失败。");
+            throw new InvalidOperationException($"Super pack failed: {result.Summary}  合成 Super 失败。");
         }
 
         WriteOutput("Result", result.Summary);

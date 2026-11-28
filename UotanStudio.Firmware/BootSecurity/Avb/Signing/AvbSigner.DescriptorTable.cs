@@ -27,7 +27,7 @@ public static partial class AvbSigner
     /// <para>包含算法与描述符数量的成功结果，或说明拒绝原因的失败结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> or <paramref name="descriptors"/> is <see langword="null"/>.
     /// <para><paramref name="key"/> 或 <paramref name="descriptors"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task<AvbSignResult> SignVbmetaWithDescriptorTableAsync(
+    public static async Task<AvbSignResult> SignVBMetaWithDescriptorTableAsync(
         string vbmetaPath,
         RSA key,
         string outputPath,
@@ -51,12 +51,12 @@ public static partial class AvbSigner
         {
             if (!File.Exists(vbmetaPath))
             {
-                return Fail($"vbmeta source file '{vbmetaPath}' does not exist. vbmeta 源文件 '{vbmetaPath}' 不存在。");
+                return Fail($"VBMeta source file '{vbmetaPath}' does not exist. VBMeta 源文件 '{vbmetaPath}' 不存在。");
             }
 
             if (PathsEqual(vbmetaPath, outputPath))
             {
-                return Fail("Output path must differ from the source vbmeta. 输出路径不能与源 vbmeta 相同。");
+                return Fail("Output path must differ from the source VBMeta. 输出路径不能与源 VBMeta 相同。");
             }
 
             var descriptorBytes = descriptors.ToArray();
@@ -84,10 +84,10 @@ public static partial class AvbSigner
                 releaseString = ReleaseString;
             }
 
-            var vbmeta = BuildSignedVbmetaCore(
+            var vbmeta = BuildSignedVBMetaCore(
                 descriptorBytes, key, keyBits, algorithmType, rollbackIndex, flags, rollbackIndexLocation,
                 releaseString, requiredMajor, requiredMinor);
-            await PublishVbmetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
+            await PublishVBMetaAsync(outputPath, vbmeta, cancellationToken).ConfigureAwait(false);
 
             return new AvbSignResult
             {

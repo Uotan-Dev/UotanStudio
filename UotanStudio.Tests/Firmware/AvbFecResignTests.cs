@@ -44,7 +44,7 @@ public sealed class AvbFecResignTests : IDisposable
         Assert.Equal(content, bytes[..content.Length]);
         var footer = AvbFooter.TryLoad(bytes)!.Value;
         Assert.Equal((ulong)content.Length, footer.OriginalImageSize);
-        var vbmeta = bytes.AsSpan((int)footer.VbmetaOffset, (int)footer.VbmetaSize).ToArray();
+        var vbmeta = bytes.AsSpan((int)footer.VBMetaOffset, (int)footer.VBMetaSize).ToArray();
         Assert.True(AvbSignatureVerifier.Verify(vbmeta).SignatureIsValid);
         var descriptor = Assert.Single(AvbSignatureVerifier.ReadDescriptorsStrict(vbmeta));
         Assert.Equal(roots, descriptor.FecNumRoots);
@@ -52,8 +52,8 @@ public sealed class AvbFecResignTests : IDisposable
         Assert.Equal(0UL, descriptor.FecOffset % 4096);
         Assert.True(descriptor.ImageSize <= descriptor.TreeOffset);
         Assert.True(descriptor.TreeOffset + descriptor.TreeSize <= descriptor.FecOffset);
-        Assert.True(descriptor.FecOffset + descriptor.FecSize <= footer.VbmetaOffset);
-        Assert.True(footer.VbmetaOffset + footer.VbmetaSize <= (ulong)bytes.Length - 4096);
+        Assert.True(descriptor.FecOffset + descriptor.FecSize <= footer.VBMetaOffset);
+        Assert.True(footer.VBMetaOffset + footer.VBMetaSize <= (ulong)bytes.Length - 4096);
         using (var image = new MemoryStream(bytes, writable: false))
         {
             var verified = await AvbPartitionVerifier.VerifyWithFecAsync(image, descriptor, token);
@@ -83,8 +83,8 @@ public sealed class AvbFecResignTests : IDisposable
         Assert.True(result.Success, result.ErrorMessage);
         var footer = AvbFooter.TryReadFile(output)!.Value;
         await using var image = new FileStream(output, FileMode.Open, FileAccess.Read, FileShare.Read);
-        image.Position = (long)footer.VbmetaOffset;
-        var vbmeta = new byte[(int)footer.VbmetaSize];
+        image.Position = (long)footer.VBMetaOffset;
+        var vbmeta = new byte[(int)footer.VBMetaSize];
         await image.ReadExactlyAsync(vbmeta, token);
         var descriptor = Assert.Single(AvbSignatureVerifier.ReadDescriptorsStrict(vbmeta));
         Assert.Equal(0U, descriptor.FecNumRoots);

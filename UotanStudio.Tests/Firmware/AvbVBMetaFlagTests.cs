@@ -6,19 +6,19 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-public sealed class AvbVbmetaFlagTests
+public sealed class AvbVBMetaFlagTests
 {
     [Fact]
-    public async Task SetVbmetaFlagAsync_StandaloneVbmeta_TogglesBitAndPreservesOtherBytes()
+    public async Task SetVBMetaFlagAsync_StandaloneVBMeta_TogglesBitAndPreservesOtherBytes()
     {
-        var original = BuildStandaloneVbmeta(0x00010000);
+        var original = BuildStandaloneVBMeta(0x00010000);
         var path = Path.Combine(Path.GetTempPath(), "avb_flag_" + Guid.NewGuid().ToString("N") + ".img");
         try
         {
             await File.WriteAllBytesAsync(path, original, TestContext.Current.CancellationToken);
 
-            var enabled = await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.HashtreeDisabled, disabled: true, TestContext.Current.CancellationToken);
+            var enabled = await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.HashtreeDisabled, disabled: true, TestContext.Current.CancellationToken);
 
             Assert.True(enabled.Success, enabled.ErrorMessage);
             Assert.Equal(path, enabled.OutputPath);
@@ -29,8 +29,8 @@ public sealed class AvbVbmetaFlagTests
             BinaryPrimitives.WriteUInt32BigEndian(expected.AsSpan(120, 4), 0x00010001);
             Assert.Equal(expected, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
 
-            var cleared = await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.HashtreeDisabled, disabled: false, TestContext.Current.CancellationToken);
+            var cleared = await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.HashtreeDisabled, disabled: false, TestContext.Current.CancellationToken);
 
             Assert.True(cleared.Success, cleared.ErrorMessage);
             Assert.Equal(original, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
@@ -42,7 +42,7 @@ public sealed class AvbVbmetaFlagTests
     }
 
     [Fact]
-    public async Task SetVbmetaFlagAsync_FooterImage_PatchesVbmetaDeclaredByFooter()
+    public async Task SetVBMetaFlagAsync_FooterImage_PatchesVBMetaDeclaredByFooter()
     {
         const int vbmetaOffset = 4096;
         var original = BuildFooterImage(vbmetaOffset, flags: 0);
@@ -51,8 +51,8 @@ public sealed class AvbVbmetaFlagTests
         {
             await File.WriteAllBytesAsync(path, original, TestContext.Current.CancellationToken);
 
-            var result = await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken);
+            var result = await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.ErrorMessage);
             var expected = (byte[])original.Clone();
@@ -67,18 +67,18 @@ public sealed class AvbVbmetaFlagTests
     }
 
     [Fact]
-    public async Task SetVbmetaFlagAsync_BothFlags_MatchesFastbootFlagsByte()
+    public async Task SetVBMetaFlagAsync_BothFlags_MatchesFastbootFlagsByte()
     {
-        var original = BuildStandaloneVbmeta(0);
+        var original = BuildStandaloneVBMeta(0);
         var path = Path.Combine(Path.GetTempPath(), "avb_flag_both_" + Guid.NewGuid().ToString("N") + ".img");
         try
         {
             await File.WriteAllBytesAsync(path, original, TestContext.Current.CancellationToken);
 
-            Assert.True((await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.HashtreeDisabled, disabled: true, TestContext.Current.CancellationToken)).Success);
-            Assert.True((await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken)).Success);
+            Assert.True((await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.HashtreeDisabled, disabled: true, TestContext.Current.CancellationToken)).Success);
+            Assert.True((await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken)).Success);
 
             var patched = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
             Assert.Equal(0x03, patched[123]);
@@ -91,7 +91,7 @@ public sealed class AvbVbmetaFlagTests
     }
 
     [Fact]
-    public async Task SetVbmetaFlagAsync_NonAvbImage_FailsWithoutWriting()
+    public async Task SetVBMetaFlagAsync_NonAvbImage_FailsWithoutWriting()
     {
         var original = new byte[512];
         Array.Fill(original, (byte)0xAA);
@@ -100,8 +100,8 @@ public sealed class AvbVbmetaFlagTests
         {
             await File.WriteAllBytesAsync(path, original, TestContext.Current.CancellationToken);
 
-            var result = await AvbSigner.SetVbmetaFlagAsync(
-                path, AvbVbmetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken);
+            var result = await AvbSigner.SetVBMetaFlagAsync(
+                path, AvbVBMetaFlag.VerificationDisabled, disabled: true, TestContext.Current.CancellationToken);
 
             Assert.False(result.Success);
             Assert.Equal(original, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
@@ -112,7 +112,7 @@ public sealed class AvbVbmetaFlagTests
         }
     }
 
-    private static byte[] BuildStandaloneVbmeta(uint flags)
+    private static byte[] BuildStandaloneVBMeta(uint flags)
     {
         var image = new byte[512];
         "AVB0"u8.CopyTo(image);

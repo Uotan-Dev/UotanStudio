@@ -226,9 +226,9 @@
     <value>Pack Firmware</value>
   </data>
   <data name="Node_Validation_Signature_Verify" xml:space="preserve">
-    <value>Assert AVB vbmeta signature</value>
+    <value>Assert AVB VBMeta signature</value>
   </data>
-  <data name="Node_Validation_Vbmeta_Sign" xml:space="preserve">
+  <data name="Node_Validation_VBMeta_Sign" xml:space="preserve">
     <value>Sign VBMeta</value>
   </data>
   <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
@@ -1158,8 +1158,8 @@
   <data name="Node_Choice_VendorBoot" xml:space="preserve">
     <value>Android vendor_boot</value>
   </data>
-  <data name="Node_Choice_Vbmeta" xml:space="preserve">
-    <value>AVB vbmeta</value>
+  <data name="Node_Choice_VBMeta" xml:space="preserve">
+    <value>AVB VBMeta</value>
   </data>
   <data name="Node_Choice_Payload" xml:space="preserve">
     <value>Android OTA Payload</value>
@@ -1968,7 +1968,7 @@
   <data name="Node_Family_Table" xml:space="preserve">
     <value>Partition tables</value>
   </data>
-  <data name="Node_Family_Vbmeta" xml:space="preserve">
+  <data name="Node_Family_VBMeta" xml:space="preserve">
     <value>VBMeta</value>
   </data>
   <data name="Node_Family_Adb" xml:space="preserve">
