@@ -4107,30 +4107,14 @@
   <data name="Flash_SunxiPhaseDone" xml:space="preserve">
     <value>完成</value>
   </data>
-  <data name="Flash_SunxiFelTools" xml:space="preserve">
-    <value>FEL 内存工具</value>
-  </data>
-  <data name="Flash_SunxiAddress" xml:space="preserve">
-    <value>地址（十六进制）</value>
-  </data>
-  <data name="Flash_SunxiLength" xml:space="preserve">
-    <value>长度（字节）</value>
-  </data>
-  <data name="Flash_SunxiReadMemory" xml:space="preserve">
-    <value>读取内存</value>
-  </data>
-  <data name="Flash_SunxiWriteMemory" xml:space="preserve">
-    <value>写入文件</value>
-  </data>
-  <data name="Flash_SunxiExecuteAddress" xml:space="preserve">
-    <value>入口地址（十六进制）</value>
-  </data>
-  <data name="Flash_SunxiExecute" xml:space="preserve">
-    <value>执行</value>
-  </data>
-  <data name="Flash_SunxiExecuteConfirmDetail" xml:space="preserve">
-    <value>将在设备上调用 0x{0:X8}。已上传代码可让设备进入任意状态。</value>
-  </data>
+  
+  
+  
+  
+  
+  
+  
+  
   <data name="Flash_SunxiPhaseFes1" xml:space="preserve">
     <value>正在运行 DRAM 加载器...</value>
   </data>
@@ -4161,15 +4145,9 @@
   <data name="Flash_SunxiStatusFailed" xml:space="preserve">
     <value>状态查询失败：</value>
   </data>
-  <data name="Flash_SunxiAddressInvalid" xml:space="preserve">
-    <value>请输入十六进制地址。</value>
-  </data>
-  <data name="Flash_SunxiLengthInvalid" xml:space="preserve">
-    <value>请输入正整数字节数。</value>
-  </data>
-  <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
-    <value>文件超过内存工具上限 {0}。</value>
-  </data>
+  
+  
+  
   <data name="Flash_SunxiInfo_Chip" xml:space="preserve">
     <value>芯片</value>
   </data>
@@ -4231,19 +4209,13 @@
     <value>紫光展锐</value>
   </data>
   <data name="Flash_UnisocHint" xml:space="preserve">
-    <value>经厂商下载串口深刷。加载阶段由握手识别；存储动作需要 FDL2，PAC 包内的加载器会先把链路提升到该阶段。</value>
+    <value>存储动作需要 FDL2；已加载 PAC 包内的加载器会把链路提升到该阶段。</value>
   </data>
   <data name="Flash_UnisocHintUnknown" xml:space="preserve">
     <value>加载阶段未知；刷新以重新握手。</value>
   </data>
   <data name="Flash_UnisocHintFdl2" xml:space="preserve">
     <value>FDL2 已应答：分区读取、分区表读取与整包烧录可用。</value>
-  </data>
-  <data name="Flash_UnisocRefresh" xml:space="preserve">
-    <value>刷新阶段</value>
-  </data>
-  <data name="Flash_UnisocFlashSourceHint" xml:space="preserve">
-    <value>用刷机包栏加载 .pac 包；包内加载器会把链路提升到 FDL2，分区镜像会填入主网格。</value>
   </data>
   <data name="Flash_UnisocFlashMode" xml:space="preserve">
     <value>擦除模式</value>

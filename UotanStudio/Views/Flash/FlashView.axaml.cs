@@ -421,14 +421,9 @@ public partial class FlashView : UserControl
     private void OnRkLbaWriteClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaWriteClick(sender, e);
     private void OnRkEraseSectorsClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseSectorsClick(sender, e);
     private void OnRkReadPartitionsClick(object? sender, RoutedEventArgs e) => _model.OnRkReadPartitionsClick(sender, e);
-    private void OnUnisocRefreshClick(object? sender, RoutedEventArgs e) => _model.OnUnisocRefreshClick(sender, e);
-    private void OnSunxiRefreshClick(object? sender, RoutedEventArgs e) => _model.OnSunxiRefreshClick(sender, e);
     private void OnSunxiChooseFes1Click(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseFes1Click(sender, e);
     private void OnSunxiChooseUbootClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseUbootClick(sender, e);
     private void OnSunxiBootFesClick(object? sender, RoutedEventArgs e) => _model.OnSunxiBootFesClick(sender, e);
-    private void OnSunxiReadMemoryClick(object? sender, RoutedEventArgs e) => _model.OnSunxiReadMemoryClick(sender, e);
-    private void OnSunxiWriteMemoryClick(object? sender, RoutedEventArgs e) => _model.OnSunxiWriteMemoryClick(sender, e);
-    private void OnSunxiExecuteClick(object? sender, RoutedEventArgs e) => _model.OnSunxiExecuteClick(sender, e);
     private void OnSunxiChooseDtbClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseDtbClick(sender, e);
     private void OnSunxiChooseSysConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseSysConfigClick(sender, e);
     private void OnSunxiChooseBoardConfigClick(object? sender, RoutedEventArgs e) => _model.OnSunxiChooseBoardConfigClick(sender, e);

@@ -440,7 +440,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var extractedEntries = extractedPaths
             .Select(images.AddExtractedImage)
             .OfType<ImageEntryViewModel>()
-            .Where(entry => entry.SizeBytes > 0 && entry.Format is not ("raw" or "unknown"))
+            .Where(entry => entry.Format is not "raw")
             .ToList();
         if (form.UnpackFully && extractedEntries.Count > 0)
         {
