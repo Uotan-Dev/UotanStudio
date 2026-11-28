@@ -267,16 +267,27 @@ public sealed partial class CpioFormatHandler
     private List<ArchiveEntry> CollectValidatedEntries(Stream source, ArchiveFormat format,
         CancellationToken cancellationToken)
     {
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        var entryTypes = new Dictionary<string, CpioFileType>(StringComparer.Ordinal);
         long expanded = 0;
         var entries = new List<ArchiveEntry>();
         foreach (var entry in _archive.ReadEntriesStreaming(source, format))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var name = PathPatternMatcher.NormalizeArchivePath(entry.Name);
-            if (names.Count >= MaximumEntries || name.Length > MaximumNameLength || !names.Add(name))
+            if (entryTypes.Count >= MaximumEntries || name.Length > MaximumNameLength)
             {
                 throw new ArchiveCorruptedException("CPIO archive exceeds the entry limit or contains duplicate paths.");
+            }
+            if (entryTypes.TryGetValue(name, out var previousType))
+            {
+                if (previousType != CpioFileType.Directory || entry.Metadata.FileType != CpioFileType.Directory)
+                {
+                    throw new ArchiveCorruptedException("CPIO archive exceeds the entry limit or contains duplicate paths.");
+                }
+            }
+            else
+            {
+                entryTypes.Add(name, entry.Metadata.FileType);
             }
             expanded = checked(expanded + entry.DataLength);
             if (expanded > MaximumArchiveBytes)

@@ -50,6 +50,86 @@ public sealed partial class CpioCompressedRoundTripTests : IDisposable
     }
 
     [Fact]
+    public async Task UnpackAsync_DuplicateDirectoryEntries_AreAccepted()
+    {
+        Directory.CreateDirectory(_root);
+        var token = TestContext.Current.CancellationToken;
+        using var archive = new MemoryStream();
+        var directory = new ArchiveEntry
+        {
+            Name = "dev",
+            Data = [],
+            Metadata = new ArchiveEntryMetadata
+            {
+                FileType = CpioFileType.Directory,
+                Mode = 0x41ED,
+                UnixPermissions = 0x1ED,
+                LinkCount = 2
+            }
+        };
+        new CpioArchive().SaveAll(archive, [directory, new ArchiveEntry
+        {
+            Name = "dev",
+            Data = [],
+            Metadata = new ArchiveEntryMetadata
+            {
+                FileType = CpioFileType.Directory,
+                Mode = 0x41ED,
+                UnixPermissions = 0x1ED,
+                LinkCount = 2
+            }
+        }], ArchiveFormat.NewAscii);
+        var source = Path.Combine(_root, "ramdisk.cpio");
+        await File.WriteAllBytesAsync(source, archive.ToArray(), token);
+
+        var output = Path.Combine(_root, "extracted");
+        var result = await new CpioFormatHandler().UnpackAsync(source, output, cancellationToken: token);
+
+        Assert.True(result.Success, result.Summary);
+        Assert.True(Directory.Exists(Path.Combine(output, "dev")));
+    }
+
+    [Fact]
+    public async Task UnpackAsync_DuplicateRegularEntries_AreRejected()
+    {
+        Directory.CreateDirectory(_root);
+        var token = TestContext.Current.CancellationToken;
+        using var archive = new MemoryStream();
+        var file = new ArchiveEntry
+        {
+            Name = "init",
+            Data = Encoding.UTF8.GetBytes("one"),
+            Metadata = new ArchiveEntryMetadata
+            {
+                FileType = CpioFileType.Regular,
+                Mode = 0x81A4,
+                UnixPermissions = 0x1A4,
+                LinkCount = 1
+            }
+        };
+        new CpioArchive().SaveAll(archive, [file, new ArchiveEntry
+        {
+            Name = "init",
+            Data = Encoding.UTF8.GetBytes("two"),
+            Metadata = new ArchiveEntryMetadata
+            {
+                FileType = CpioFileType.Regular,
+                Mode = 0x81A4,
+                UnixPermissions = 0x1A4,
+                LinkCount = 1
+            }
+        }], ArchiveFormat.NewAscii);
+        var source = Path.Combine(_root, "ramdisk.cpio");
+        await File.WriteAllBytesAsync(source, archive.ToArray(), token);
+
+        var output = Path.Combine(_root, "extracted");
+        var result = await new CpioFormatHandler().UnpackAsync(source, output, cancellationToken: token);
+
+        Assert.False(result.Success);
+        Assert.Contains("duplicate paths", result.Summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PackAsync_CancelledOrInvalidMetadata_PreservesExistingOutput()
     {
         Directory.CreateDirectory(_root);
