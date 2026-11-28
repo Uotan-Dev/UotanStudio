@@ -102,23 +102,11 @@
   <data name="Settings_MoveDown" xml:space="preserve">
     <value>下移</value>
   </data>
-  <data name="Settings_NodeEditor" xml:space="preserve">
-    <value>节点编辑器</value>
-  </data>
   <data name="Settings_Language" xml:space="preserve">
     <value>语言</value>
   </data>
   <data name="Settings_Theme" xml:space="preserve">
     <value>主题</value>
-  </data>
-  <data name="Settings_ThemeDefault" xml:space="preserve">
-    <value>跟随系统</value>
-  </data>
-  <data name="Settings_ThemeLight" xml:space="preserve">
-    <value>浅色</value>
-  </data>
-  <data name="Settings_ThemeDark" xml:space="preserve">
-    <value>深色</value>
   </data>
   <data name="Settings_AutoSave" xml:space="preserve">
     <value>自动保存</value>
@@ -162,47 +150,8 @@
   <data name="Settings_FileAssociationSortByName" xml:space="preserve">
     <value>排序：按首字母</value>
   </data>
-  <data name="Settings_UnpackToolPath" xml:space="preserve">
-    <value>解包工具路径</value>
-  </data>
-  <data name="Settings_TempDir" xml:space="preserve">
-    <value>临时文件目录</value>
-  </data>
-  <data name="Settings_AutoVerify" xml:space="preserve">
-    <value>解包后自动校验</value>
-  </data>
-  <data name="Settings_PathPlaceholder" xml:space="preserve">
-    <value>输入路径...</value>
-  </data>
-  <data name="Settings_DeviceTimeout" xml:space="preserve">
-    <value>设备超时时间</value>
-  </data>
-  <data name="Settings_AutoBackup" xml:space="preserve">
-    <value>烧录前自动备份</value>
-  </data>
-  <data name="Settings_SnapToGrid" xml:space="preserve">
-    <value>网格对齐</value>
-  </data>
-  <data name="Settings_GridSize" xml:space="preserve">
-    <value>网格大小</value>
-  </data>
-  <data name="Settings_ConnectionStyle" xml:space="preserve">
-    <value>连接线样式</value>
-  </data>
-  <data name="Settings_ConnBezier" xml:space="preserve">
-    <value>贝塞尔曲线</value>
-  </data>
-  <data name="Settings_ConnLine" xml:space="preserve">
-    <value>直线</value>
-  </data>
-  <data name="Settings_ConnStep" xml:space="preserve">
-    <value>阶梯线</value>
-  </data>
   <data name="Settings_Appearance" xml:space="preserve">
     <value>外观设置</value>
-  </data>
-  <data name="Settings_PageDescription" xml:space="preserve">
-    <value>调整界面、性能、设备连接与服务选项。</value>
   </data>
   <data name="Settings_GeneralDescription" xml:space="preserve">
     <value>集中管理界面、项目行为、渲染与设备连接。</value>
@@ -240,53 +189,11 @@
   <data name="Settings_McpExposeFlashHint" xml:space="preserve">
     <value>允许 MCP 工具擦除、刷写并重启设备。</value>
   </data>
-  <data name="Settings_ThemePreview" xml:space="preserve">
-    <value>主题预览</value>
-  </data>
-  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
-    <value>自动检测</value>
-  </data>
-  <data name="Settings_LanguagePreview" xml:space="preserve">
-    <value>语言预览</value>
-  </data>
   <data name="Settings_LanguagePreviewText" xml:space="preserve">
     <value>这是所选语言的预览文本。</value>
   </data>
-  <data name="Settings_VersionInfo" xml:space="preserve">
-    <value>版本信息</value>
-  </data>
-  <data name="Settings_FirmwareModule" xml:space="preserve">
-    <value>固件解打包模块</value>
-  </data>
-  <data name="Settings_FlashModule" xml:space="preserve">
-    <value>开发板烧录模块</value>
-  </data>
-  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
-    <value>可视化编程模块</value>
-  </data>
-  <data name="Settings_Version" xml:space="preserve">
-    <value>版本</value>
-  </data>
-  <data name="Settings_CheckForUpdates" xml:space="preserve">
-    <value>检查更新</value>
-  </data>
-  <data name="Settings_CheckingUpdates" xml:space="preserve">
-    <value>检查中...</value>
-  </data>
-  <data name="Settings_UpToDate" xml:space="preserve">
-    <value>已是最新版本</value>
-  </data>
-  <data name="Settings_UpdateAvailable" xml:space="preserve">
-    <value>有可用更新</value>
-  </data>
-  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
-    <value>更新检查失败</value>
-  </data>
   <data name="Settings_ResetToDefaults" xml:space="preserve">
     <value>恢复默认设置</value>
-  </data>
-  <data name="Settings_ResetConfirm" xml:space="preserve">
-    <value>确定要恢复所有设置为默认值吗？</value>
   </data>
   <data name="Settings_SettingsSaved" xml:space="preserve">
     <value>设置已保存</value>
@@ -302,15 +209,6 @@
   </data>
   <data name="Settings_ThemeDarkMode" xml:space="preserve">
     <value>深色模式</value>
-  </data>
-  <data name="Settings_AutoDetect" xml:space="preserve">
-    <value>自动检测</value>
-  </data>
-  <data name="Settings_AdbPath" xml:space="preserve">
-    <value>ADB 路径</value>
-  </data>
-  <data name="Settings_FastbootPath" xml:space="preserve">
-    <value>Fastboot 路径</value>
   </data>
   <data name="Settings_Mcp" xml:space="preserve">
     <value>MCP</value>
@@ -648,15 +546,6 @@
   <data name="Settings_HardwareAccelerationSummary" xml:space="preserve">
     <value>{0} · 硬件自动选择 {1} · 每轮迭代 {2} 字节</value>
   </data>
-  <data name="Settings_HardwareAccelerationWidth" xml:space="preserve">
-    <value>每轮 {0} 字节</value>
-  </data>
-  <data name="Settings_HardwareAccelerationActive" xml:space="preserve">
-    <value>正在使用</value>
-  </data>
-  <data name="Settings_HardwareAccelerationAvailable" xml:space="preserve">
-    <value>可用</value>
-  </data>
   <data name="Settings_HardwareAccelerationNone" xml:space="preserve">
     <value>此处理器没有报告任何向量实现，字节块运算已经运行在标量软件循环上。</value>
   </data>
@@ -743,21 +632,6 @@
   </data>
   <data name="Settings_HardwareAccelerationPathRiscVVectorHint" xml:space="preserve">
     <value>自适应核心寄存器宽度的 RVV 1.0 运算。</value>
-  </data>
-  <data name="Settings_DriverInstall" xml:space="preserve">
-    <value>驱动包</value>
-  </data>
-  <data name="Settings_DriverInstallHintElevated" xml:space="preserve">
-    <value>应用已提权，驱动包会立即暂存并绑定到在位设备。</value>
-  </data>
-  <data name="Settings_DriverInstallHintElevation" xml:space="preserve">
-    <value>暂存驱动包会请求一次管理员权限；设备在下次枚举时完成绑定。</value>
-  </data>
-  <data name="Settings_DriverInstallUnsupportedHint" xml:space="preserve">
-    <value>厂商驱动包只能在 Windows 上暂存。</value>
-  </data>
-  <data name="Settings_DriverInstallAction" xml:space="preserve">
-    <value>安装</value>
   </data>
   <data name="Settings_DriverInstallTitle" xml:space="preserve">
     <value>安装驱动包</value>
@@ -851,48 +725,6 @@
   </data>
   <data name="Toolbox_BundleOhosDeviceHint" xml:space="preserve">
     <value>UI Test 采集库与控制代理。</value>
-  </data>
-  <data name="Toolbox_BundleRockusb" xml:space="preserve">
-    <value>瑞芯微 RockUSB 驱动</value>
-  </data>
-  <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
-    <value>用于 Maskrom 下载模式的厂商驱动包。</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
-    <value>联发科 VCOM 驱动</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekVcomHint" xml:space="preserve">
-    <value>用于联发科下载模式的虚拟串口驱动。</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekFull" xml:space="preserve">
-    <value>联发科全量驱动</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekFullHint" xml:space="preserve">
-    <value>完整的联发科 USB 驱动包。</value>
-  </data>
-  <data name="Toolbox_BundleGoogleUsb" xml:space="preserve">
-    <value>Google USB 驱动</value>
-  </data>
-  <data name="Toolbox_BundleGoogleUsbHint" xml:space="preserve">
-    <value>由 Google 发布的 Android USB 驱动包。</value>
-  </data>
-  <data name="Toolbox_BundleRockchipAdb" xml:space="preserve">
-    <value>瑞芯微 ADB 驱动</value>
-  </data>
-  <data name="Toolbox_BundleRockchipAdbHint" xml:space="preserve">
-    <value>面向瑞芯微设备的 Android ADB 驱动包。</value>
-  </data>
-  <data name="Toolbox_BundleQualcommQud" xml:space="preserve">
-    <value>高通 QUD 驱动</value>
-  </data>
-  <data name="Toolbox_BundleQualcommQudHint" xml:space="preserve">
-    <value>高通 USB、调制解调器与诊断驱动。</value>
-  </data>
-  <data name="Toolbox_BundleUnisocSpreadtrum" xml:space="preserve">
-    <value>紫光展锐驱动</value>
-  </data>
-  <data name="Toolbox_BundleUnisocSpreadtrumHint" xml:space="preserve">
-    <value>紫光展锐串口、ADB 与调制解调器驱动。</value>
   </data>
   <data name="Toolbox_BundleWinUsbCoinstaller" xml:space="preserve">
     <value>WinUSB 共装器</value>
@@ -1013,8 +845,5 @@
   </data>
   <data name="Toolbox_EntryDeleteFailed" xml:space="preserve">
     <value>无法删除 {0}：{1}</value>
-  </data>
-  <data name="Toolbox_EntryDeleteAction" xml:space="preserve">
-    <value>删除这个文件</value>
   </data>
 </root>

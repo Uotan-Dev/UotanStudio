@@ -129,15 +129,6 @@
   <data name="Delivery_SecurityPatch" xml:space="preserve">
     <value>Security patch date</value>
   </data>
-  <data name="Delivery_InvalidParameter" xml:space="preserve">
-    <value>Invalid parameter: {0}</value>
-  </data>
-  <data name="Delivery_InvalidSuperSize" xml:space="preserve">
-    <value>Enter the device Super size; read it with fastboot getvar super-partition-size.</value>
-  </data>
-  <data name="Delivery_InvalidPayloadVersion" xml:space="preserve">
-    <value>Invalid Payload version.</value>
-  </data>
   <data name="Delivery_EditedScriptsNeedReview" xml:space="preserve">
     <value>Configuration changed. Review edited scripts before output.</value>
   </data>
@@ -203,9 +194,6 @@
   </data>
   <data name="Delivery_AutoGenerate" xml:space="preserve">
     <value>Generate automatically</value>
-  </data>
-  <data name="Delivery_Signature" xml:space="preserve">
-    <value>Signature</value>
   </data>
   <data name="Delivery_SuperImageList" xml:space="preserve">
     <value>Super image list</value>
@@ -411,9 +399,6 @@ Author: 暮间雾
   <data name="Tab_Node" xml:space="preserve">
     <value>Node</value>
   </data>
-  <data name="Tab_Log" xml:space="preserve">
-    <value>Log</value>
-  </data>
   <data name="Tab_Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
@@ -440,12 +425,6 @@ Author: 暮间雾
   </data>
   <data name="ScreenMirror_Connecting" xml:space="preserve">
     <value>Connecting to device...</value>
-  </data>
-  <data name="ScreenMirror_HdcUnsupported" xml:space="preserve">
-    <value>HDC devices do not support scrcpy mirroring.</value>
-  </data>
-  <data name="ScreenMirror_ProtocolUnsupported" xml:space="preserve">
-    <value>The selected device does not support scrcpy mirroring.</value>
   </data>
   <data name="ScreenMirror_Mirroring" xml:space="preserve">
     <value>Mirroring</value>
@@ -639,9 +618,6 @@ Author: 暮间雾
   <data name="Flash_ClearLog" xml:space="preserve">
     <value>Clear</value>
   </data>
-  <data name="Flash_LogPlaceholder" xml:space="preserve">
-    <value>Flash log output</value>
-  </data>
   <data name="Flash_FolderOnly" xml:space="preserve">
     <value>Select a package, image folder, or HTTP(S) URL.</value>
   </data>
@@ -738,9 +714,6 @@ Author: 暮间雾
   <data name="Flash_ChooseRootPackage" xml:space="preserve">
     <value>Select Root Package</value>
   </data>
-  <data name="Flash_RootBootMissing" xml:space="preserve">
-    <value>Select exactly one boot or init_boot image for Root patching.</value>
-  </data>
   <data name="Flash_Status" xml:space="preserve">
     <value>Status</value>
   </data>
@@ -767,9 +740,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_OverallProgress" xml:space="preserve">
     <value>{0} of {1}</value>
-  </data>
-  <data name="Flash_VerifyUnsupported" xml:space="preserve">
-    <value>Readback verification is not available for this protocol.</value>
   </data>
   <data name="Flash_WarningPrefix" xml:space="preserve">
     <value>Warning</value>
@@ -816,45 +786,6 @@ Author: 暮间雾
   <data name="Flash_MtkAuthFile" xml:space="preserve">
     <value>DAA auth file (--auth)</value>
   </data>
-  <data name="Flash_MtkRpmbMode" xml:space="preserve">
-    <value>RPMB addressing</value>
-  </data>
-  <data name="Flash_MtkRpmbOffset" xml:space="preserve">
-    <value>Start frame / byte offset</value>
-  </data>
-  <data name="Flash_MtkRpmbLength" xml:space="preserve">
-    <value>Frame count / byte length</value>
-  </data>
-  <data name="Flash_MtkRpmbRead" xml:space="preserve">
-    <value>Read RPMB area</value>
-  </data>
-  <data name="Flash_MtkRpmbReadConfirm" xml:space="preserve">
-    <value>The captured RPMB area is read-only but can contain keys and other sensitive data, and is written to the chosen file. Continue?</value>
-  </data>
-  <data name="Flash_MtkRpmbCapacity" xml:space="preserve">
-    <value>Read RPMB capacity</value>
-  </data>
-  <data name="Flash_MtkRpmbCapacityResult" xml:space="preserve">
-    <value>RPMB capacity: {0} byte(s)</value>
-  </data>
-  <data name="Flash_MtkRpmbCapacityUnknown" xml:space="preserve">
-    <value>This storage family reports no RPMB capacity.</value>
-  </data>
-  <data name="Flash_MtkRpmbRangeInvalid" xml:space="preserve">
-    <value>Enter a non-negative start and a positive length for the selected RPMB shape.</value>
-  </data>
-  <data name="Flash_MtkFullDump" xml:space="preserve">
-    <value>Dump user area</value>
-  </data>
-  <data name="Flash_MtkFullDumpConfirm" xml:space="preserve">
-    <value>The whole user data area is read only, may contain sensitive data, and one large file is written to the chosen path; the agent family must already have reported its storage geometry. Continue?</value>
-  </data>
-  <data name="Flash_MtkFullDumpReported" xml:space="preserve">
-    <value>The user-area dump was published with the full reported capacity.</value>
-  </data>
-  <data name="Flash_MtkFullDumpClamped" xml:space="preserve">
-    <value>The user-area dump was published with the length clamped to the family transfer alignment.</value>
-  </data>
   <data name="Flash_MtkStage" xml:space="preserve">
     <value>Boot stage</value>
   </data>
@@ -869,60 +800,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_MtkStageDa" xml:space="preserve">
     <value>Download agent</value>
-  </data>
-  <data name="Flash_MtkStageNowBootRom" xml:space="preserve">
-    <value>Active stage: BootROM.</value>
-  </data>
-  <data name="Flash_MtkStageNowPreloader" xml:space="preserve">
-    <value>Active stage: preloader.</value>
-  </data>
-  <data name="Flash_MtkStageNowDa" xml:space="preserve">
-    <value>Active stage: download agent.</value>
-  </data>
-  <data name="Flash_MtkStageNowLogging" xml:space="preserve">
-    <value>Active stage: logging port. It carries no download agent, so flash, erase, reboot and security actions stay disabled.</value>
-  </data>
-  <data name="Flash_MtkStageUndetermined" xml:space="preserve">
-    <value>The stage could not be determined from the USB descriptors. Declare it above when the device state is known.</value>
-  </data>
-  <data name="Flash_MtkDumpWholeFlash" xml:space="preserve">
-    <value>Dump whole storage area</value>
-  </data>
-  <data name="Flash_MtkDumpWholeFlashConfirm" xml:space="preserve">
-    <value>Reads the reported regions in order and writes one image per region. Nothing is written to the device. Continue?</value>
-  </data>
-  <data name="Flash_MtkDumpPlanPreview" xml:space="preserve">
-    <value>Plan: {0} partitions, {1} bytes</value>
-  </data>
-  <data name="Flash_MtkDumpDone" xml:space="preserve">
-    <value>Published {0} images, {1} bytes</value>
-  </data>
-  <data name="Flash_MtkSectorRegionHint" xml:space="preserve">
-    <value>Region token</value>
-  </data>
-  <data name="Flash_MtkSectorStartHint" xml:space="preserve">
-    <value>Start sector</value>
-  </data>
-  <data name="Flash_MtkSectorCountHint" xml:space="preserve">
-    <value>Sector count</value>
-  </data>
-  <data name="Flash_MtkReadSectors" xml:space="preserve">
-    <value>Read raw sector window</value>
-  </data>
-  <data name="Flash_MtkSectorInputInvalid" xml:space="preserve">
-    <value>Enter the region token, a start sector of zero or more, and a sector count of at least one.</value>
-  </data>
-  <data name="Flash_MtkAreaOffsetHint" xml:space="preserve">
-    <value>Absolute offset (bytes)</value>
-  </data>
-  <data name="Flash_MtkAreaLengthHint" xml:space="preserve">
-    <value>Length (bytes)</value>
-  </data>
-  <data name="Flash_MtkReadArea" xml:space="preserve">
-    <value>Read region-agnostic byte range</value>
-  </data>
-  <data name="Flash_MtkAreaInputInvalid" xml:space="preserve">
-    <value>Enter an absolute offset of zero or more and a byte length of at least one.</value>
   </data>
   <data name="Flash_MtkFlash" xml:space="preserve">
     <value>Start MTK download</value>
@@ -1065,9 +942,6 @@ Author: 暮间雾
   <data name="Flash_EdlDigestPartitionMissing" xml:space="preserve">
     <value>Enter the partition whose digest should be read.</value>
   </data>
-  <data name="Flash_EdlChooseProgrammer" xml:space="preserve">
-    <value>Override programmer (loader)</value>
-  </data>
   <data name="Flash_EdlAllowStreamDload" xml:space="preserve">
     <value>Allow Streaming DLOAD for command-mode targets
 (no Firehose programmer)</value>
@@ -1087,24 +961,6 @@ Author: 暮间雾
   <data name="Flash_EdlProgrammerInferredFailed" xml:space="preserve">
     <value>The inferred programmer set failed validation and stays unused</value>
   </data>
-  <data name="Flash_EdlChooseProgrammerDir" xml:space="preserve">
-    <value>Match programmer by folder</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirEmpty" xml:space="preserve">
-    <value>The folder holds no usable rows.</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirAmbiguous" xml:space="preserve">
-    <value>Several rows match; pick one explicitly in the list above.</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirNoMatch" xml:space="preserve">
-    <value>No row's declared identity agrees with the device.</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirNeedsIdentity" xml:space="preserve">
-    <value>The device has not reported a Sahara identity yet, so nothing can be matched.</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirMatched" xml:space="preserve">
-    <value>Unique match: {0}</value>
-  </data>
   <data name="Flash_EdlQudRecovery" xml:space="preserve">
     <value>Enable QUD HELLO recovery
 (only for drivers that repeat the hello handshake)</value>
@@ -1112,9 +968,6 @@ Author: 暮间雾
   <data name="Flash_EdlPendingCompletion" xml:space="preserve">
     <value>Accept one pending response as completion
 (single-image transfers only)</value>
-  </data>
-  <data name="Flash_EdlSerial" xml:space="preserve">
-    <value>Device serial</value>
   </data>
   <data name="Flash_EdlLunScan" xml:space="preserve">
     <value>Readable regions: LUN {0}</value>
@@ -1248,9 +1101,6 @@ Author: 暮间雾
   <data name="Flash_EdlInfo_SerialPort" xml:space="preserve">
     <value>Serial port</value>
   </data>
-  <data name="Flash_EdlSerialPort" xml:space="preserve">
-    <value>EDL serial port</value>
-  </data>
   <data name="Flash_Auto" xml:space="preserve">
     <value>Auto</value>
   </data>
@@ -1305,78 +1155,6 @@ Author: 暮间雾
   <data name="Flash_EdlGptEntrySizeInvalid" xml:space="preserve">
     <value>The partition entry size must be 0 to keep the header value, or a power of two from 128 through 4096.</value>
   </data>
-  <data name="Flash_EdlStreamingNandGroup" xml:space="preserve">
-    <value>Streaming NAND layout, bad-block map and stream control</value>
-  </data>
-  <data name="Flash_EdlNandPartitionHint" xml:space="preserve">
-    <value>Partition name</value>
-  </data>
-  <data name="Flash_EdlNandBlockHint" xml:space="preserve">
-    <value>Block index</value>
-  </data>
-  <data name="Flash_EdlNandBlockCountHint" xml:space="preserve">
-    <value>Blocks to scan</value>
-  </data>
-  <data name="Flash_EdlNandBaseHint" xml:space="preserve">
-    <value>NAND base address</value>
-  </data>
-  <data name="Flash_EdlNandPagesHint" xml:space="preserve">
-    <value>Pages per block</value>
-  </data>
-  <data name="Flash_EdlNandSectorsHint" xml:space="preserve">
-    <value>Sectors per page</value>
-  </data>
-  <data name="Flash_EdlNandBadLenHint" xml:space="preserve">
-    <value>Bad marker length</value>
-  </data>
-  <data name="Flash_EdlNandBadInSpare" xml:space="preserve">
-    <value>Bad marker in spare area</value>
-  </data>
-  <data name="Flash_EdlNandConfirm" xml:space="preserve">
-    <value>Confirm NAND write operations</value>
-  </data>
-  <data name="Flash_EdlNandTableChoose" xml:space="preserve">
-    <value>Choose partition table file</value>
-  </data>
-  <data name="Flash_EdlNandOverride" xml:space="preserve">
-    <value>Allow replacing an existing table</value>
-  </data>
-  <data name="Flash_EdlNandTrusted" xml:space="preserve">
-    <value>Enter trusted secure mode</value>
-  </data>
-  <data name="Flash_EdlNandReadMap" xml:space="preserve">
-    <value>Read bad-block map</value>
-  </data>
-  <data name="Flash_EdlNandMarkBad" xml:space="preserve">
-    <value>Mark block bad</value>
-  </data>
-  <data name="Flash_EdlNandUnmarkBad" xml:space="preserve">
-    <value>Clear bad marker</value>
-  </data>
-  <data name="Flash_EdlNandRegisters" xml:space="preserve">
-    <value>Read controller registers</value>
-  </data>
-  <data name="Flash_EdlNandCodeword" xml:space="preserve">
-    <value>Check codeword status</value>
-  </data>
-  <data name="Flash_EdlNandFlashMode" xml:space="preserve">
-    <value>Enter flash mode</value>
-  </data>
-  <data name="Flash_EdlNandSecureMode" xml:space="preserve">
-    <value>Enter secure mode</value>
-  </data>
-  <data name="Flash_EdlNandSendTable" xml:space="preserve">
-    <value>Send partition table</value>
-  </data>
-  <data name="Flash_EdlNandClose" xml:space="preserve">
-    <value>Close stream</value>
-  </data>
-  <data name="Flash_EdlNandInputInvalid" xml:space="preserve">
-    <value>Enter a block index of zero or more, a scan count of at least one, and non-negative layout values.</value>
-  </data>
-  <data name="Flash_EdlNandTableMissing" xml:space="preserve">
-    <value>Choose the partition table file first.</value>
-  </data>
   <data name="Flash_EdlReset" xml:space="preserve">
     <value>Reboot device</value>
   </data>
@@ -1398,35 +1176,11 @@ Author: 暮间雾
 
 
 
-  <data name="Flash_EdlSetActiveSlot" xml:space="preserve">
-    <value>Active slot (a, b, 0 or 1)</value>
-  </data>
   <data name="Flash_EdlSetActiveSlotConfirm" xml:space="preserve">
     <value>The currently active A/B slot on the device is changed; subsequent boots use the selected slot. Continue?</value>
   </data>
   <data name="Flash_EdlSetActiveSlotDone" xml:space="preserve">
     <value>Active slot change requested.</value>
-  </data>
-  <data name="Flash_EdlUfsProfileChoose" xml:space="preserve">
-    <value>Choose UFS provisioning profile</value>
-  </data>
-  <data name="Flash_EdlUfsProfileMissing" xml:space="preserve">
-    <value>Choose a UFS provisioning profile file before previewing or submitting it.</value>
-  </data>
-  <data name="Flash_EdlUfsPreview" xml:space="preserve">
-    <value>Preview UFS provisioning plan</value>
-  </data>
-  <data name="Flash_EdlUfsProvision" xml:space="preserve">
-    <value>Provision UFS logical units</value>
-  </data>
-  <data name="Flash_EdlUfsProvisionConfirm" xml:space="preserve">
-    <value>Provisioning creates the logical units the profile declares and cannot be undone on a blank device; the preview writes nothing. Continue?</value>
-  </data>
-  <data name="Flash_EdlUfsReset" xml:space="preserve">
-    <value>Reset the UFS device</value>
-  </data>
-  <data name="Flash_EdlUfsResetConfirm" xml:space="preserve">
-    <value>The device is asked to reset its UFS link, which ends the current firehose session. Continue?</value>
   </data>
   <data name="Flash_CompressedSuperEmptyUnsupported" xml:space="preserve">
     <value>Compressed super_empty images are not supported.</value>
@@ -1469,9 +1223,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_MtkRpmbModeFullArea" xml:space="preserve">
     <value>Read whole RPMB area</value>
-  </data>
-  <data name="Flash_MtkSpeedButton" xml:space="preserve">
-    <value>Negotiate transfer speed</value>
   </data>
   <data name="Flash_MtkSpeedApplied" xml:space="preserve">
     <value>Applied transfer speed: {0}</value>
@@ -1548,53 +1299,8 @@ Author: 暮间雾
 
 
 
-  <data name="Flash_MtkXmlRebootFamilyRequired" xml:space="preserve">
-    <value>META and Android-test reboots are defined only for the XML download-agent family; switch the protocol selector to XML.</value>
-  </data>
-  <data name="Flash_MtkPreloaderGroup" xml:space="preserve">
-    <value>Preloader command stage</value>
-  </data>
-  <data name="Flash_MtkPreloaderOffset" xml:space="preserve">
-    <value>Start address</value>
-  </data>
-  <data name="Flash_MtkPreloaderLength" xml:space="preserve">
-    <value>Length</value>
-  </data>
-  <data name="Flash_MtkPreloaderPeek" xml:space="preserve">
-    <value>Peek memory window</value>
-  </data>
-  <data name="Flash_MtkPreloaderReturnToBrom" xml:space="preserve">
-    <value>Return to BootROM</value>
-  </data>
-  <data name="Flash_MtkPreloaderReturnToBromConfirm" xml:space="preserve">
-    <value>Arming the preloader watchdog reset writes device state and reboots into BootROM on the next timeout. Continue?</value>
-  </data>
-  <data name="Flash_MtkPreloaderDisableWatchdog" xml:space="preserve">
-    <value>Disable watchdog</value>
-  </data>
-  <data name="Flash_MtkPreloaderDisableWatchdogConfirm" xml:space="preserve">
-    <value>The chip-specific watchdog-disable sequence writes device registers. Continue?</value>
-  </data>
-  <data name="Flash_MtkPreloaderJump" xml:space="preserve">
-    <value>Jump to partition</value>
-  </data>
-  <data name="Flash_MtkPreloaderPartitionName" xml:space="preserve">
-    <value>Partition to boot</value>
-  </data>
-  <data name="Flash_MtkPreloaderJumpConfirm" xml:space="preserve">
-    <value>Booting the named partition changes device state and is expected to drop the link, so the session must be reopened afterwards. Continue?</value>
-  </data>
-  <data name="Flash_MtkPreloaderBootloaderJump" xml:space="preserve">
-    <value>Jump to boot loader</value>
-  </data>
-  <data name="Flash_MtkPreloaderBootloaderJumpConfirm" xml:space="preserve">
-    <value>Jumping to the boot loader transfers execution and is expected to drop the link, so the session must be reopened afterwards. Continue?</value>
-  </data>
   <data name="Flash_OkResult" xml:space="preserve">
     <value>{0}: OK</value>
-  </data>
-  <data name="Flash_MtkPreloaderSessionFaulted" xml:space="preserve">
-    <value>The preloader session faults on any protocol refusal, so it was rebuilt; retry the operation on the fresh session.</value>
   </data>
   <data name="ViewLocator_NotFound" xml:space="preserve">
     <value>Not Found: </value>
@@ -1724,9 +1430,6 @@ Continue anyway?</value>
   <data name="BootPatch_CustomFile" xml:space="preserve">
     <value>Custom file</value>
   </data>
-  <data name="BootPatch_NoFile" xml:space="preserve">
-    <value>No file</value>
-  </data>
   <data name="BootPatch_SelectFile" xml:space="preserve">
     <value>Select file</value>
   </data>
@@ -1748,9 +1451,6 @@ Continue anyway?</value>
   <data name="BootPatch_PatchVbmeta" xml:space="preserve">
     <value>Patch VBMeta flags</value>
   </data>
-  <data name="BootPatch_AutoDetect" xml:space="preserve">
-    <value>Auto detect</value>
-  </data>
   <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
     <value>Auto detect architecture ({0})</value>
   </data>
@@ -1765,9 +1465,6 @@ Continue anyway?</value>
   </data>
   <data name="BootPatch_KmiDetectionFailed" xml:space="preserve">
     <value>Unable to determine the boot kernel KMI.</value>
-  </data>
-  <data name="BootPatch_KmiDetected" xml:space="preserve">
-    <value>Boot kernel KMI: {0}</value>
   </data>
   <data name="BootPatch_WarningTitle" xml:space="preserve">
     <value>Boot patch check</value>
@@ -1808,14 +1505,8 @@ Continue anyway?</value>
   <data name="BootPatch_BootArchitectureUnreadable" xml:space="preserve">
     <value>The boot kernel architecture could not be read: {0}</value>
   </data>
-  <data name="BootPatch_Progress" xml:space="preserve">
-    <value>Patch progress</value>
-  </data>
   <data name="BootPatch_Start" xml:space="preserve">
     <value>Start patch</value>
-  </data>
-  <data name="BootPatch_SuperPassword" xml:space="preserve">
-    <value>Super password (APatch)</value>
   </data>
   <data name="BootPatch_ApatchPassword" xml:space="preserve">
     <value>Enter SuperKey</value>
@@ -1913,17 +1604,8 @@ Continue anyway?</value>
   <data name="PackDialog_Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
-  <data name="ImageView_ImportHint" xml:space="preserve">
-    <value>Import images into the project images/ folder</value>
-  </data>
-  <data name="ImageView_ExportHint" xml:space="preserve">
-    <value>Export the selected image to an external path</value>
-  </data>
   <data name="ImageView_ExtractHint" xml:space="preserve">
     <value>Unpack the selected image to its corresponding directory</value>
-  </data>
-  <data name="ImageView_SuperHint" xml:space="preserve">
-    <value>Build a super image from the project's raw/sparse images</value>
   </data>
   <data name="ImageView_DatHint" xml:space="preserve">
     <value>Generate .new.dat + .transfer.list (Android v4)</value>
@@ -1943,17 +1625,11 @@ Continue anyway?</value>
   <data name="Image_ErofsDevicePickerUnavailable" xml:space="preserve">
     <value>File selection is unavailable for this EROFS image.</value>
   </data>
-  <data name="ImageView_NoProject" xml:space="preserve">
-    <value>No project is open</value>
-  </data>
   <data name="ImageView_OperationDone" xml:space="preserve">
     <value>Operation complete</value>
   </data>
   <data name="ImageView_SelectHint" xml:space="preserve">
     <value>Include this image in batch operations</value>
-  </data>
-  <data name="ImageView_SelectProject" xml:space="preserve">
-    <value>Project</value>
   </data>
   <data name="Image_ExtractOverwriteTitle" xml:space="preserve">
     <value>Directory Already Exists</value>
@@ -2057,21 +1733,6 @@ Continue anyway?</value>
   <data name="Window_RestoreOutOfScreenMessage" xml:space="preserve">
     <value>The saved window position or size is outside every visible screen area. The default window size and position are used instead.</value>
   </data>
-  <data name="Document_BuildProp" xml:space="preserve">
-    <value>build.prop</value>
-  </data>
-  <data name="Document_InitRc" xml:space="preserve">
-    <value>init.rc</value>
-  </data>
-  <data name="ProjectExplorer_Outer" xml:space="preserve">
-    <value>Outer</value>
-  </data>
-  <data name="ProjectExplorer_Inner" xml:space="preserve">
-    <value>Inner</value>
-  </data>
-  <data name="ProjectExplorer_Innermost" xml:space="preserve">
-    <value>Innermost</value>
-  </data>
   <data name="Explorer_OpenAsText" xml:space="preserve">
     <value>Open as Text</value>
   </data>
@@ -2092,9 +1753,6 @@ Continue anyway?</value>
   </data>
   <data name="Explorer_OpenAsArsc" xml:space="preserve">
     <value>Open as ARSC</value>
-  </data>
-  <data name="Explorer_OpenAsApk" xml:space="preserve">
-    <value>Open as APK</value>
   </data>
   <data name="Explorer_OpenAsApplication" xml:space="preserve">
     <value>Open as Application Info</value>
@@ -2214,9 +1872,6 @@ Continue anyway?</value>
   <data name="Checksum_Title" xml:space="preserve">
     <value>Checksum</value>
   </data>
-  <data name="Checksum_FileName" xml:space="preserve">
-    <value>File name</value>
-  </data>
   <data name="Checksum_ChooseFile" xml:space="preserve">
     <value>Choose File</value>
   </data>
@@ -2240,15 +1895,6 @@ Continue anyway?</value>
   </data>
   <data name="Dock_Dtb_Save" xml:space="preserve">
     <value>Save</value>
-  </data>
-  <data name="Dock_Dtb_Tree" xml:space="preserve">
-    <value>Device Tree</value>
-  </data>
-  <data name="Dock_Dtb_Source" xml:space="preserve">
-    <value>Device Tree Source</value>
-  </data>
-  <data name="Dock_Dtb_CompileError" xml:space="preserve">
-    <value>Compile Error</value>
   </data>
   <data name="Dock_Dex_Save" xml:space="preserve">
     <value>Rebuild &amp; Save</value>
@@ -2451,18 +2097,6 @@ Continue anyway?</value>
   <data name="Dock_Qcn_Busy" xml:space="preserve">
     <value>Parsing QCN, please wait…</value>
   </data>
-  <data name="Compare_Equal" xml:space="preserve">
-    <value>Equal</value>
-  </data>
-  <data name="Compare_Different" xml:space="preserve">
-    <value>Different</value>
-  </data>
-  <data name="Compare_LeftOnly" xml:space="preserve">
-    <value>Left Only</value>
-  </data>
-  <data name="Compare_RightOnly" xml:space="preserve">
-    <value>Right Only</value>
-  </data>
   <data name="Compare_Refresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
@@ -2471,9 +2105,6 @@ Continue anyway?</value>
   </data>
   <data name="Compare_CopyRightToLeft" xml:space="preserve">
     <value>Copy → Left</value>
-  </data>
-  <data name="Compare_OpenTextCompare" xml:space="preserve">
-    <value>Open Text Compare</value>
   </data>
   <data name="Compare_NextDiff" xml:space="preserve">
     <value>Next Difference</value>
@@ -2498,12 +2129,6 @@ Continue anyway?</value>
   </data>
   <data name="Compare_HexSummary" xml:space="preserve">
     <value>{0} differing bytes · {1} ranges</value>
-  </data>
-  <data name="Compare_FileCompare" xml:space="preserve">
-    <value>File Compare</value>
-  </data>
-  <data name="Compare_FolderCompare" xml:space="preserve">
-    <value>Folder Compare</value>
   </data>
   <data name="Compare_StartCompare" xml:space="preserve">
     <value>Start Compare</value>
@@ -2679,9 +2304,6 @@ Continue anyway?</value>
   <data name="Compare_NoNeighbourFolder" xml:space="preserve">
     <value>The neighbouring column has no folder to receive the entry.</value>
   </data>
-  <data name="Compare_NoDropFolder" xml:space="preserve">
-    <value>That row is not a folder and cannot receive a drop.</value>
-  </data>
   <data name="Compare_ColumnHint" xml:space="preserve">
     <value>Type a folder or file path in the box, then press the confirm button to load it.</value>
   </data>
@@ -2708,13 +2330,6 @@ Continue anyway?</value>
   </data>
   <data name="Compare_AddColumnWhileComparing" xml:space="preserve">
     <value>Cannot add a column while comparing; stop the comparison first.</value>
-  </data>
-  <data name="Compare_DropHint" xml:space="preserve">
-    <value>Drag files or folders here; each path takes one file column.
-You can also use “Add Folder” in the toolbar or type a path in a column.</value>
-  </data>
-  <data name="Compare_Metadata" xml:space="preserve">
-    <value>Metadata</value>
   </data>
   <data name="Compare_Unrecognized" xml:space="preserve">
     <value>Unrecognized firmware format</value>
@@ -3350,9 +2965,6 @@ Continue?</value>
   <data name="FirmwareField_PublicKeyMetadataSize" xml:space="preserve">
     <value>Public Key Metadata Size</value>
   </data>
-  <data name="FirmwareField_ToggleFlag" xml:space="preserve">
-    <value>Toggle flag</value>
-  </data>
   <data name="FirmwareField_TotalBlocks" xml:space="preserve">
     <value>Total blocks</value>
   </data>
@@ -3635,41 +3247,8 @@ Continue?</value>
   <data name="UserError_QcnSaveFailed" xml:space="preserve">
     <value>Failed to save the QCN file.</value>
   </data>
-  <data name="Scheme_Title" xml:space="preserve">
-    <value>Scheme</value>
-  </data>
-  <data name="Scheme_Open" xml:space="preserve">
-    <value>Open</value>
-  </data>
-  <data name="Scheme_Save" xml:space="preserve">
-    <value>Save</value>
-  </data>
   <data name="Scheme_Run" xml:space="preserve">
     <value>Run</value>
-  </data>
-  <data name="Scheme_Stop" xml:space="preserve">
-    <value>Stop</value>
-  </data>
-  <data name="Scheme_Stages" xml:space="preserve">
-    <value>Stages</value>
-  </data>
-  <data name="Scheme_Inputs" xml:space="preserve">
-    <value>Inputs</value>
-  </data>
-  <data name="Scheme_Assets" xml:space="preserve">
-    <value>Assets</value>
-  </data>
-  <data name="Scheme_StageStatus" xml:space="preserve">
-    <value>Stage status</value>
-  </data>
-  <data name="Scheme_Result" xml:space="preserve">
-    <value>Result</value>
-  </data>
-  <data name="Scheme_Resume" xml:space="preserve">
-    <value>Resume</value>
-  </data>
-  <data name="Scheme_NoStages" xml:space="preserve">
-    <value>This scheme has no stages.</value>
   </data>
   <data name="Scheme_RunSucceeded" xml:space="preserve">
     <value>Scheme run succeeded.</value>
@@ -3701,9 +3280,6 @@ Continue?</value>
   <data name="Avb_Title" xml:space="preserve">
     <value>AVB tool</value>
   </data>
-  <data name="Avb_TabKeys" xml:space="preserve">
-    <value>Keys</value>
-  </data>
   <data name="Avb_TabFooter" xml:space="preserve">
     <value>Footer</value>
   </data>
@@ -3727,9 +3303,6 @@ Continue?</value>
   </data>
   <data name="Avb_DisableCommandTitle" xml:space="preserve">
     <value>Disable command</value>
-  </data>
-  <data name="Avb_DisableOutputDirTitle" xml:space="preserve">
-    <value>Output directory</value>
   </data>
   <data name="Avb_ExecuteDisable" xml:space="preserve">
     <value>Disable verification</value>
@@ -3755,59 +3328,17 @@ Continue?</value>
   <data name="Avb_CancelDisableSuccess" xml:space="preserve">
     <value>AVB disable flags have been cleared successfully: {0}</value>
   </data>
-  <data name="Avb_KeysSubtitle" xml:space="preserve">
-    <value>AVB signing keys come from the shared key library; private keys stay on this machine.</value>
-  </data>
-  <data name="Avb_KeyList" xml:space="preserve">
-    <value>AVB keys</value>
-  </data>
   <data name="Avb_KeyRefresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
   <data name="Avb_KeyManage" xml:space="preserve">
     <value>Manage keys</value>
   </data>
-  <data name="Avb_KeyForm" xml:space="preserve">
-    <value>Create or import</value>
-  </data>
-  <data name="Avb_KeyName" xml:space="preserve">
-    <value>Key name</value>
-  </data>
-  <data name="Avb_KeyBits" xml:space="preserve">
-    <value>Key size</value>
-  </data>
-  <data name="Avb_KeyPassword" xml:space="preserve">
-    <value>Import password (optional)</value>
-  </data>
-  <data name="Avb_KeyGenerate" xml:space="preserve">
-    <value>Generate AVB key</value>
-  </data>
-  <data name="Avb_KeyImport" xml:space="preserve">
-    <value>Import private key…</value>
-  </data>
   <data name="Avb_KeyExportPublic" xml:space="preserve">
     <value>Export public key…</value>
   </data>
-  <data name="Avb_KeyDelete" xml:space="preserve">
-    <value>Delete key</value>
-  </data>
-  <data name="Avb_KeyDeleteTitle" xml:space="preserve">
-    <value>Delete AVB key</value>
-  </data>
-  <data name="Avb_KeyDeleteConfirm" xml:space="preserve">
-    <value>Permanently delete the AVB key “{0}”? Exported copies are unaffected.</value>
-  </data>
-  <data name="Avb_KeyPublicBlob" xml:space="preserve">
-    <value>Public key blob</value>
-  </data>
-  <data name="Avb_KeyPublicBlobHint" xml:space="preserve">
-    <value>avb_pkmd.bin is the libavb public key used by bootloaders and verification tools.</value>
-  </data>
   <data name="Avb_KeyEmpty" xml:space="preserve">
     <value>Create or select an AVB key first.</value>
-  </data>
-  <data name="Avb_KeyNameRequired" xml:space="preserve">
-    <value>Enter a key name.</value>
   </data>
   <data name="Avb_KeyUnreadable" xml:space="preserve">
     <value>The selected AVB private key could not be read.</value>
@@ -3902,12 +3433,6 @@ Continue?</value>
   <data name="Avb_FooterUnsign" xml:space="preserve">
     <value>Remove footer</value>
   </data>
-  <data name="Avb_FooterUnsignedHint" xml:space="preserve">
-    <value>Removing a footer writes &lt;image&gt;.unsigned.img next to the input.</value>
-  </data>
-  <data name="Avb_FooterKeyHint" xml:space="preserve">
-    <value>Signing uses the AVB key selected on the Keys tab.</value>
-  </data>
   <data name="Avb_FooterNoImage" xml:space="preserve">
     <value>Select a partition image first.</value>
   </data>
@@ -3961,9 +3486,6 @@ Continue?</value>
   </data>
   <data name="Avb_NotChecked" xml:space="preserve">
     <value>Not checked</value>
-  </data>
-  <data name="Avb_Result" xml:space="preserve">
-    <value>Result</value>
   </data>
   <data name="Avb_OtaInput" xml:space="preserve">
     <value>OTA package</value>
@@ -4056,25 +3578,6 @@ Continue?</value>
     <value>Select at least one partition.</value>
   </data>
 
-  <data name="Flash_RebootMenu" xml:space="preserve">
-    <value>Reboot Device</value>
-  </data>
-  <data name="Flash_RebootSystem" xml:space="preserve">
-    <value>System</value>
-  </data>
-  <data name="Flash_RebootBootloader" xml:space="preserve">
-    <value>Bootloader</value>
-  </data>
-  <data name="Flash_RebootRecovery" xml:space="preserve">
-    <value>Recovery</value>
-  </data>
-  <data name="Flash_RebootFastbootd" xml:space="preserve">
-    <value>Fastbootd</value>
-  </data>
-  <data name="Flash_RebootEdl" xml:space="preserve">
-    <value>Qualcomm EDL</value>
-  </data>
-
   <data name="Flash_ReadbackSelected" xml:space="preserve">
     <value>Read back selected</value>
   </data>
@@ -4086,18 +3589,6 @@ Continue?</value>
   </data>
   <data name="Flash_EdlProgrammerPathHint" xml:space="preserve">
     <value>Programmer file path</value>
-  </data>
-  <data name="Flash_EdlProgrammerDirHint" xml:space="preserve">
-    <value>Programmer directory path</value>
-  </data>
-  <data name="Flash_EdlRegionDirHint" xml:space="preserve">
-    <value>Dump directory path</value>
-  </data>
-  <data name="Flash_EdlUfsProfileHint" xml:space="preserve">
-    <value>UFS profile path</value>
-  </data>
-  <data name="Flash_EdlNandTableHint" xml:space="preserve">
-    <value>NAND partition table path</value>
   </data>
   <data name="Flash_MtkDaHint" xml:space="preserve">
     <value>DA file path</value>
@@ -4154,15 +3645,6 @@ Continue?</value>
   <data name="Flash_RkEnterMaskrom" xml:space="preserve">
     <value>Enter Maskrom</value>
   </data>
-  <data name="Flash_RkSelectConfig" xml:space="preserve">
-    <value>Select Config</value>
-  </data>
-  <data name="Flash_RkConfigPathHint" xml:space="preserve">
-    <value>Config file path</value>
-  </data>
-  <data name="Flash_RkChooseCustomConfig" xml:space="preserve">
-    <value>Choose Custom Config File</value>
-  </data>
   <data name="Flash_RkExportConfig" xml:space="preserve">
     <value>Export Config</value>
   </data>
@@ -4192,9 +3674,6 @@ Continue?</value>
   </data>
   <data name="Flash_RkFlashVendor" xml:space="preserve">
     <value>Flash Manufacturer: {0}</value>
-  </data>
-  <data name="Flash_RkStorageNoGeometry" xml:space="preserve">
-    <value>No flash geometry reported</value>
   </data>
   <data name="Flash_RkSwitchStorage" xml:space="preserve">
     <value>Switch Storage</value>
@@ -4258,9 +3737,6 @@ Continue?</value>
   </data>
   <data name="Flash_RkReadPartitions" xml:space="preserve">
     <value>Read Partitions</value>
-  </data>
-  <data name="Flash_RkPartitionHeader" xml:space="preserve">
-    <value>Partitions on device</value>
   </data>
   <data name="Flash_RkGptHeaderCrcMismatch" xml:space="preserve">
     <value>GPT header CRC mismatch</value>
@@ -4370,9 +3846,6 @@ Continue?</value>
   <data name="Flash_RkStorageNeedsLoader" xml:space="preserve">
     <value>The device is in mask ROM, which answers no storage query; load a Rockchip loader to read the current storage.</value>
   </data>
-  <data name="Flash_RkLoaderChecking" xml:space="preserve">
-    <value>Checking the loader file…</value>
-  </data>
   <data name="Flash_RkLoaderValid" xml:space="preserve">
     <value>Loader accepted</value>
   </data>
@@ -4466,9 +3939,6 @@ Continue?</value>
   <data name="Flash_RkStorageProbeFailed" xml:space="preserve">
     <value>{0}: the device did not answer ({1})</value>
   </data>
-  <data name="Flash_RkStorageProbeAbsent" xml:space="preserve">
-    <value>{0}: not present; the device still answers as {1}</value>
-  </data>
   <data name="RegexGenerator_Title" xml:space="preserve">
     <value>Regular Expression Generator</value>
   </data>
@@ -4531,9 +4001,6 @@ Continue?</value>
   </data>
   <data name="Flash_SunxiChooseFes1" xml:space="preserve">
     <value>Choose FES1...</value>
-  </data>
-  <data name="Flash_SunxiUboot" xml:space="preserve">
-    <value>Service payload image</value>
   </data>
   <data name="Flash_SunxiChooseUboot" xml:space="preserve">
     <value>Choose U-Boot...</value>
@@ -4750,9 +4217,6 @@ Continue?</value>
   </data>
   <data name="Flash_TegraEnterRcm" xml:space="preserve">
     <value>Enter RCM (APX)</value>
-  </data>
-  <data name="Flash_TegraEnterRcmHint" xml:space="preserve">
-    <value>Reboots into RCM so the download chain becomes reachable; the device reappears as an NVIDIA APX port after a few seconds.</value>
   </data>
   <data name="Flash_TegraRebootBootloader" xml:space="preserve">
     <value>Reboot to bootloader</value>
@@ -4979,9 +4443,6 @@ Continue?</value>
   <data name="DiskFlash_Failed" xml:space="preserve">
     <value>The image could not be flashed.</value>
   </data>
-  <data name="DiskFlash_ValidationFailed" xml:space="preserve">
-    <value>These targets cannot be written: {0}</value>
-  </data>
   <data name="DiskFlash_SizeUnknown" xml:space="preserve">
     <value>Size unknown</value>
   </data>
@@ -5044,9 +4505,6 @@ Continue?</value>
   </data>
   <data name="DiskFlash_ElevationUnavailableBody" xml:space="preserve">
     <value>This process may not write the selected drive and cannot start an administrator process for it. Restart the application as administrator; on Linux/macOS, start it with sudo.</value>
-  </data>
-  <data name="DiskFlash_ElevationUnsupportedTitle" xml:space="preserve">
-    <value>Elevation is not available</value>
   </data>
   <data name="DiskFlash_ElevationUnsupportedBody" xml:space="preserve">
     <value>Insufficient permissions to write the disk image. You may need to run this application with sudo.</value>
@@ -5284,9 +4742,6 @@ Continue?</value>
   </data>
   <data name="Flash_Progress_BackupDone" xml:space="preserve">
     <value>{0} backed up.</value>
-  </data>
-  <data name="Flash_Progress_ConvertingSparse" xml:space="preserve">
-    <value>Converting the image to sparse…</value>
   </data>
   <data name="Flash_Progress_EdlBackupDone" xml:space="preserve">
     <value>{0} backed up.</value>
@@ -5617,9 +5072,6 @@ Continue?</value>
   </data>
   <data name="CheckUpdate_SizeUnknown" xml:space="preserve">
     <value>size unknown</value>
-  </data>
-  <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
-    <value>{0} left</value>
   </data>
   <data name="Toolbar_More" xml:space="preserve">
     <value>More actions</value>

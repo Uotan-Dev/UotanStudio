@@ -138,20 +138,11 @@
   <data name="FindReplace_Project" xml:space="preserve">
     <value>Current project</value>
   </data>
-  <data name="Dock_Properties_Name" xml:space="preserve">
-    <value>Property Name</value>
-  </data>
-  <data name="Dock_Properties_Value" xml:space="preserve">
-    <value>Value</value>
-  </data>
   <data name="Dock_Properties_FileName" xml:space="preserve">
     <value>File Name</value>
   </data>
   <data name="Dock_Properties_ImageName" xml:space="preserve">
     <value>Image Name</value>
-  </data>
-  <data name="Dock_Properties_ImageSize" xml:space="preserve">
-    <value>Image Size</value>
   </data>
   <data name="Dock_Properties_ImageType" xml:space="preserve">
     <value>Image Type</value>
@@ -234,15 +225,6 @@
   <data name="Dock_EXT4RW" xml:space="preserve">
     <value>EXT4 R/W</value>
   </data>
-  <data name="Dock_SizeCalc" xml:space="preserve">
-    <value>Size Mode</value>
-  </data>
-  <data name="Dock_Auto" xml:space="preserve">
-    <value>Auto</value>
-  </data>
-  <data name="Dock_OriginalSize" xml:space="preserve">
-    <value>Original</value>
-  </data>
   <data name="Dock_EXT4Compress" xml:space="preserve">
     <value>EXT4 Compression</value>
   </data>
@@ -257,12 +239,6 @@
   </data>
   <data name="Dock_EROFSAlgorithmHint" xml:space="preserve">
     <value>lz4 packs faster; lz4hc spends more time searching for a smaller image (EROFS records the same LZ4 codec either way). lzma, deflate and zstd choose a different on-disk codec. The compression level only affects the searching encoders.</value>
-  </data>
-  <data name="Dock_EROFSCompLevel" xml:space="preserve">
-    <value>EROFS Level</value>
-  </data>
-  <data name="Dock_EROFSCompLevelHint" xml:space="preserve">
-    <value>Higher values search harder for a smaller image: it drives the lz4hc search depth and the fast lz4 density/speed trade-off.</value>
   </data>
   <data name="Dock_EROFSFeatures" xml:space="preserve">
     <value>EROFS Features</value>
@@ -279,15 +255,6 @@
   <data name="Dock_F2FSCompLevel" xml:space="preserve">
     <value>Compression level</value>
   </data>
-  <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
-    <value>Android F2FS</value>
-  </data>
-  <data name="Dock_F2FSAndroidProfileEnabled" xml:space="preserve">
-    <value>Native profile</value>
-  </data>
-  <data name="Dock_F2FSAndroidProfileHint" xml:space="preserve">
-    <value>Uses mkfs.f2fs and sload.f2fs for read-only, project quota and extra attributes. Requires native tools or a WSL distribution.</value>
-  </data>
   <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
     <value>Image size</value>
   </data>
@@ -296,18 +263,6 @@
   </data>
   <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
     <value>At least 64 MiB, aligned to 2 MiB. Choose the target partition capacity explicitly.</value>
-  </data>
-  <data name="Dock_F2FSWslDistribution" xml:space="preserve">
-    <value>WSL distribution</value>
-  </data>
-  <data name="Dock_SUPERSize" xml:space="preserve">
-    <value>Super Size</value>
-  </data>
-  <data name="Dock_SUPERName" xml:space="preserve">
-    <value>Super Cluster</value>
-  </data>
-  <data name="Dock_BRCompLevel" xml:space="preserve">
-    <value>BR Level</value>
   </data>
   <data name="Dock_NoDocumentOpen" xml:space="preserve">
     <value>No documents open</value>
@@ -441,15 +396,6 @@
   <data name="Dialog_SelectFile" xml:space="preserve">
     <value>Select file</value>
   </data>
-  <data name="Dock_File_Hex" xml:space="preserve">
-    <value>Hex</value>
-  </data>
-  <data name="Dock_File_Analysis" xml:space="preserve">
-    <value>Analysis</value>
-  </data>
-  <data name="Dock_File_AnalysisTitle" xml:space="preserve">
-    <value>Firmware Analysis</value>
-  </data>
   <data name="Dock_File_PathFormat" xml:space="preserve">
     <value>File: {0}</value>
   </data>
@@ -461,12 +407,6 @@
   </data>
   <data name="Dock_Properties_Type" xml:space="preserve">
     <value>Type</value>
-  </data>
-  <data name="Dock_Properties_TypeFormat" xml:space="preserve">
-    <value>Type: {0}</value>
-  </data>
-  <data name="Dock_Properties_Type_Node" xml:space="preserve">
-    <value>Node</value>
   </data>
   <data name="Dock_Properties_Type_Image" xml:space="preserve">
     <value>Image</value>
@@ -807,9 +747,6 @@
   <data name="Dock_Properties_Metadata_CompressionAttempts" xml:space="preserve">
     <value>Compression attempts</value>
   </data>
-  <data name="Dock_FileManager" xml:space="preserve">
-    <value>File Manager</value>
-  </data>
   <data name="FileManager_Refresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
@@ -842,15 +779,6 @@
   </data>
   <data name="FileManager_ImageSize" xml:space="preserve">
     <value>Size: {0}</value>
-  </data>
-  <data name="FileManager_Path" xml:space="preserve">
-    <value>Path</value>
-  </data>
-  <data name="FileManager_Size" xml:space="preserve">
-    <value>Size</value>
-  </data>
-  <data name="FileManager_Kind" xml:space="preserve">
-    <value>Type</value>
   </data>
   <data name="FileManager_KindFile" xml:space="preserve">
     <value>File</value>
@@ -963,18 +891,6 @@
   <data name="Dock_Properties_Dex_TypeCount" xml:space="preserve">
     <value>Types</value>
   </data>
-  <data name="Dock_Properties_Dex_SelectedNode" xml:space="preserve">
-    <value>Selected Item</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeKind" xml:space="preserve">
-    <value>Kind</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeDetail" xml:space="preserve">
-    <value>Detail</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeChildren" xml:space="preserve">
-    <value>Child Count</value>
-  </data>
   <data name="Dock_Properties_Manifest_FileName" xml:space="preserve">
     <value>File Name</value>
   </data>
@@ -1050,24 +966,6 @@
   <data name="Dock_Properties_Apk_VersionCode" xml:space="preserve">
     <value>Version Code</value>
   </data>
-  <data name="Dock_Properties_Apk_Sdk" xml:space="preserve">
-    <value>SDK</value>
-  </data>
-  <data name="Dock_Properties_Apk_Signing" xml:space="preserve">
-    <value>Signing status</value>
-  </data>
-  <data name="Dock_Properties_Apk_Hardening" xml:space="preserve">
-    <value>Hardening status</value>
-  </data>
-  <data name="Dock_Properties_Apk_TargetSystem" xml:space="preserve">
-    <value>Target system</value>
-  </data>
-  <data name="Dock_Properties_Apk_MinimumSystem" xml:space="preserve">
-    <value>Minimum system</value>
-  </data>
-  <data name="Dock_Properties_Apk_Abis" xml:space="preserve">
-    <value>ABIs</value>
-  </data>
   <data name="Dock_Properties_Apk_Permissions" xml:space="preserve">
     <value>Permissions</value>
   </data>
@@ -1113,9 +1011,6 @@
   <data name="Log_Export" xml:space="preserve">
     <value>Export</value>
   </data>
-  <data name="Log_Reload" xml:space="preserve">
-    <value>Reload file</value>
-  </data>
   <data name="Log_Loading" xml:space="preserve">
     <value>Loading log file</value>
   </data>
@@ -1136,9 +1031,6 @@
   </data>
   <data name="Log_ExportFailed" xml:space="preserve">
     <value>Failed to export logs: {0}</value>
-  </data>
-  <data name="Log_CopyDone" xml:space="preserve">
-    <value>Log entry copied to clipboard</value>
   </data>
   <data name="Log_LevelFilter" xml:space="preserve">
     <value>Level</value>
@@ -1215,15 +1107,6 @@
   <data name="ApkSign_Title" xml:space="preserve">
     <value>Sign APK</value>
   </data>
-  <data name="ApkSign_Key" xml:space="preserve">
-    <value>Private key (PKCS#8 / PKCS#1 / SEC1, PEM or DER)</value>
-  </data>
-  <data name="ApkSign_Certificate" xml:space="preserve">
-    <value>Certificate (PEM / DER / PFX)</value>
-  </data>
-  <data name="ApkSign_Output" xml:space="preserve">
-    <value>Signed APK output path</value>
-  </data>
   <data name="ApkSign_KeyPassword" xml:space="preserve">
     <value>Password (optional)</value>
   </data>
@@ -1248,9 +1131,6 @@
   <data name="ApkSign_Execute" xml:space="preserve">
     <value>Execute signing</value>
   </data>
-  <data name="ApkSign_SelectApk" xml:space="preserve">
-    <value>Select APK file</value>
-  </data>
   <data name="ApkSign_KeyLabel" xml:space="preserve">
     <value>Signing key</value>
   </data>
@@ -1265,9 +1145,6 @@
   </data>
   <data name="ApkSign_SelectDirectory" xml:space="preserve">
     <value>Select folder</value>
-  </data>
-  <data name="Apk_SizeFormat" xml:space="preserve">
-    <value>{0:N0} bytes</value>
   </data>
   <data name="Apk_Extract" xml:space="preserve">
     <value>Extract</value>
@@ -1298,12 +1175,6 @@
   </data>
   <data name="Apk_HardeningStatus" xml:space="preserve">
     <value>Hardening status</value>
-  </data>
-  <data name="Apk_SigningUnsigned" xml:space="preserve">
-    <value>Unsigned</value>
-  </data>
-  <data name="Apk_SigningSchemes" xml:space="preserve">
-    <value>Signed ({0})</value>
   </data>
   <data name="Apk_HardeningDetected" xml:space="preserve">
     <value>Detected ({0})</value>
@@ -2115,9 +1986,6 @@
   <data name="Dock_Logo_Preview" xml:space="preserve">
     <value>Preview</value>
   </data>
-  <data name="Dock_Logo_Related" xml:space="preserve">
-    <value>Related partitions</value>
-  </data>
   <data name="Dock_Logo_ExtractSelected" xml:space="preserve">
     <value>Extract selected</value>
   </data>
@@ -2126,12 +1994,6 @@
   </data>
   <data name="Dock_Logo_OpenImage" xml:space="preserve">
     <value>Open image</value>
-  </data>
-  <data name="Dock_Logo_OpenPartition" xml:space="preserve">
-    <value>Open partition</value>
-  </data>
-  <data name="Dock_Logo_Refresh" xml:space="preserve">
-    <value>Refresh</value>
   </data>
   <data name="Dock_Logo_Loading" xml:space="preserve">
     <value>Decoding logo images...</value>
@@ -2147,15 +2009,6 @@
   </data>
   <data name="Dock_Logo_PickFolder" xml:space="preserve">
     <value>Select extraction directory</value>
-  </data>
-  <data name="Dock_Logo_RelatedMissing" xml:space="preserve">
-    <value>Not found</value>
-  </data>
-  <data name="Dock_Logo_CapabilityExtract" xml:space="preserve">
-    <value>Logo tool - extractable</value>
-  </data>
-  <data name="Dock_Logo_CapabilityOpen" xml:space="preserve">
-    <value>Open only</value>
   </data>
   <data name="Dock_Logo_MagicUnknown" xml:space="preserve">
     <value>Unknown</value>
@@ -2285,27 +2138,6 @@
   </data>
   <data name="Dock_Preloader_Warning" xml:space="preserve">
     <value>This rearranges preloader code and clears the fastboot lock byte. Flash the result only at your own risk; keep the backup.</value>
-  </data>
-  <data name="Dock_Preloader_PatchDone" xml:space="preserve">
-    <value>Unlocked preloader written to {0}; {1} step(s). Backup: {2}</value>
-  </data>
-  <data name="Dock_Preloader_RawUnsupported" xml:space="preserve">
-    <value>Raw (MMM) - not patchable</value>
-  </data>
-  <data name="Dock_Preloader_UnknownStorage" xml:space="preserve">
-    <value>Unknown</value>
-  </data>
-  <data name="Dock_Preloader_NoFlagBlock" xml:space="preserve">
-    <value>not found</value>
-  </data>
-  <data name="Dock_Preloader_Locked" xml:space="preserve">
-    <value>Locked (0x22)</value>
-  </data>
-  <data name="Dock_Preloader_HardLocked" xml:space="preserve">
-    <value>Hard lock (0x11)</value>
-  </data>
-  <data name="Dock_Preloader_Unlocked" xml:space="preserve">
-    <value>Unlocked</value>
   </data>
   <data name="Explorer_OpenAsLk" xml:space="preserve">
     <value>Open as LK image</value>

@@ -102,23 +102,11 @@
   <data name="Settings_MoveDown" xml:space="preserve">
     <value>Move down</value>
   </data>
-  <data name="Settings_NodeEditor" xml:space="preserve">
-    <value>Node Editor</value>
-  </data>
   <data name="Settings_Language" xml:space="preserve">
     <value>Language</value>
   </data>
   <data name="Settings_Theme" xml:space="preserve">
     <value>Theme</value>
-  </data>
-  <data name="Settings_ThemeDefault" xml:space="preserve">
-    <value>Follow System</value>
-  </data>
-  <data name="Settings_ThemeLight" xml:space="preserve">
-    <value>Light</value>
-  </data>
-  <data name="Settings_ThemeDark" xml:space="preserve">
-    <value>Dark</value>
   </data>
   <data name="Settings_AutoSave" xml:space="preserve">
     <value>Auto Save</value>
@@ -162,47 +150,8 @@
   <data name="Settings_FileAssociationSortByName" xml:space="preserve">
     <value>Sort: Name</value>
   </data>
-  <data name="Settings_UnpackToolPath" xml:space="preserve">
-    <value>Unpack Tool Path</value>
-  </data>
-  <data name="Settings_TempDir" xml:space="preserve">
-    <value>Temp Directory</value>
-  </data>
-  <data name="Settings_AutoVerify" xml:space="preserve">
-    <value>Auto Verify After Unpack</value>
-  </data>
-  <data name="Settings_PathPlaceholder" xml:space="preserve">
-    <value>Enter path...</value>
-  </data>
-  <data name="Settings_DeviceTimeout" xml:space="preserve">
-    <value>Device Timeout</value>
-  </data>
-  <data name="Settings_AutoBackup" xml:space="preserve">
-    <value>Auto Backup Before Flash</value>
-  </data>
-  <data name="Settings_SnapToGrid" xml:space="preserve">
-    <value>Snap to Grid</value>
-  </data>
-  <data name="Settings_GridSize" xml:space="preserve">
-    <value>Grid Size</value>
-  </data>
-  <data name="Settings_ConnectionStyle" xml:space="preserve">
-    <value>Connection Style</value>
-  </data>
-  <data name="Settings_ConnBezier" xml:space="preserve">
-    <value>Bezier</value>
-  </data>
-  <data name="Settings_ConnLine" xml:space="preserve">
-    <value>Line</value>
-  </data>
-  <data name="Settings_ConnStep" xml:space="preserve">
-    <value>Step</value>
-  </data>
   <data name="Settings_Appearance" xml:space="preserve">
     <value>Appearance</value>
-  </data>
-  <data name="Settings_PageDescription" xml:space="preserve">
-    <value>Configure appearance, performance, device access, and services.</value>
   </data>
   <data name="Settings_GeneralDescription" xml:space="preserve">
     <value>Manage appearance, project behavior, rendering, and device access in one place.</value>
@@ -240,53 +189,11 @@
   <data name="Settings_McpExposeFlashHint" xml:space="preserve">
     <value>Allows MCP tools to erase, flash, and reboot devices.</value>
   </data>
-  <data name="Settings_ThemePreview" xml:space="preserve">
-    <value>Theme Preview</value>
-  </data>
-  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
-    <value>Auto Detect</value>
-  </data>
-  <data name="Settings_LanguagePreview" xml:space="preserve">
-    <value>Language Preview</value>
-  </data>
   <data name="Settings_LanguagePreviewText" xml:space="preserve">
     <value>This is a preview of the selected language.</value>
   </data>
-  <data name="Settings_VersionInfo" xml:space="preserve">
-    <value>Version Information</value>
-  </data>
-  <data name="Settings_FirmwareModule" xml:space="preserve">
-    <value>Firmware Unpack Module</value>
-  </data>
-  <data name="Settings_FlashModule" xml:space="preserve">
-    <value>Board Flash Module</value>
-  </data>
-  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
-    <value>Visual Programming Module</value>
-  </data>
-  <data name="Settings_Version" xml:space="preserve">
-    <value>Version</value>
-  </data>
-  <data name="Settings_CheckForUpdates" xml:space="preserve">
-    <value>Check for Updates</value>
-  </data>
-  <data name="Settings_CheckingUpdates" xml:space="preserve">
-    <value>Checking...</value>
-  </data>
-  <data name="Settings_UpToDate" xml:space="preserve">
-    <value>Already up to date</value>
-  </data>
-  <data name="Settings_UpdateAvailable" xml:space="preserve">
-    <value>Update available</value>
-  </data>
-  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
-    <value>Update check failed</value>
-  </data>
   <data name="Settings_ResetToDefaults" xml:space="preserve">
     <value>Reset to Defaults</value>
-  </data>
-  <data name="Settings_ResetConfirm" xml:space="preserve">
-    <value>Are you sure you want to reset all settings to defaults?</value>
   </data>
   <data name="Settings_SettingsSaved" xml:space="preserve">
     <value>Settings saved</value>
@@ -302,15 +209,6 @@
   </data>
   <data name="Settings_ThemeDarkMode" xml:space="preserve">
     <value>Dark Mode</value>
-  </data>
-  <data name="Settings_AutoDetect" xml:space="preserve">
-    <value>Auto Detect</value>
-  </data>
-  <data name="Settings_AdbPath" xml:space="preserve">
-    <value>ADB Path</value>
-  </data>
-  <data name="Settings_FastbootPath" xml:space="preserve">
-    <value>Fastboot Path</value>
   </data>
   <data name="Settings_Mcp" xml:space="preserve">
     <value>MCP</value>
@@ -648,15 +546,6 @@
   <data name="Settings_HardwareAccelerationSummary" xml:space="preserve">
     <value>{0} · hardware selects {1} · {2} bytes per iteration</value>
   </data>
-  <data name="Settings_HardwareAccelerationWidth" xml:space="preserve">
-    <value>{0} B/iter</value>
-  </data>
-  <data name="Settings_HardwareAccelerationActive" xml:space="preserve">
-    <value>In use</value>
-  </data>
-  <data name="Settings_HardwareAccelerationAvailable" xml:space="preserve">
-    <value>Available</value>
-  </data>
   <data name="Settings_HardwareAccelerationNone" xml:space="preserve">
     <value>This processor reports no vector implementation, so byte-block work already runs on the scalar software loop.</value>
   </data>
@@ -743,21 +632,6 @@
   </data>
   <data name="Settings_HardwareAccelerationPathRiscVVectorHint" xml:space="preserve">
     <value>RVV 1.0 operations adapting to the hart's register width.</value>
-  </data>
-  <data name="Settings_DriverInstall" xml:space="preserve">
-    <value>Driver packages</value>
-  </data>
-  <data name="Settings_DriverInstallHintElevated" xml:space="preserve">
-    <value>The application is elevated, so a package is staged and bound to present devices immediately.</value>
-  </data>
-  <data name="Settings_DriverInstallHintElevation" xml:space="preserve">
-    <value>Staging a driver package asks for administrator rights once; devices bind when they next enumerate.</value>
-  </data>
-  <data name="Settings_DriverInstallUnsupportedHint" xml:space="preserve">
-    <value>Vendor driver packages can only be staged on Windows.</value>
-  </data>
-  <data name="Settings_DriverInstallAction" xml:space="preserve">
-    <value>Install</value>
   </data>
   <data name="Settings_DriverInstallTitle" xml:space="preserve">
     <value>Install driver package</value>
@@ -851,48 +725,6 @@
   </data>
   <data name="Toolbox_BundleOhosDeviceHint" xml:space="preserve">
     <value>UI Test capture libraries and control agents.</value>
-  </data>
-  <data name="Toolbox_BundleRockusb" xml:space="preserve">
-    <value>Rockchip RockUSB driver</value>
-  </data>
-  <data name="Toolbox_BundleRockusbHint" xml:space="preserve">
-    <value>Vendor driver package staged for Maskrom download mode.</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekVcom" xml:space="preserve">
-    <value>MediaTek VCOM driver</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekVcomHint" xml:space="preserve">
-    <value>Virtual COM port driver for MediaTek download mode.</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekFull" xml:space="preserve">
-    <value>MediaTek full driver</value>
-  </data>
-  <data name="Toolbox_BundleMediaTekFullHint" xml:space="preserve">
-    <value>Complete MediaTek USB driver package.</value>
-  </data>
-  <data name="Toolbox_BundleGoogleUsb" xml:space="preserve">
-    <value>Google USB driver</value>
-  </data>
-  <data name="Toolbox_BundleGoogleUsbHint" xml:space="preserve">
-    <value>Android USB driver package published by Google.</value>
-  </data>
-  <data name="Toolbox_BundleRockchipAdb" xml:space="preserve">
-    <value>Rockchip ADB driver</value>
-  </data>
-  <data name="Toolbox_BundleRockchipAdbHint" xml:space="preserve">
-    <value>Android ADB driver package for Rockchip devices.</value>
-  </data>
-  <data name="Toolbox_BundleQualcommQud" xml:space="preserve">
-    <value>Qualcomm QUD driver</value>
-  </data>
-  <data name="Toolbox_BundleQualcommQudHint" xml:space="preserve">
-    <value>Qualcomm USB, modem and diagnostic drivers.</value>
-  </data>
-  <data name="Toolbox_BundleUnisocSpreadtrum" xml:space="preserve">
-    <value>UNISOC Spreadtrum driver</value>
-  </data>
-  <data name="Toolbox_BundleUnisocSpreadtrumHint" xml:space="preserve">
-    <value>UNISOC serial, ADB and modem drivers.</value>
   </data>
   <data name="Toolbox_BundleWinUsbCoinstaller" xml:space="preserve">
     <value>WinUSB coinstallers</value>
@@ -1013,8 +845,5 @@
   </data>
   <data name="Toolbox_EntryDeleteFailed" xml:space="preserve">
     <value>Could not delete {0}: {1}</value>
-  </data>
-  <data name="Toolbox_EntryDeleteAction" xml:space="preserve">
-    <value>Delete this file</value>
   </data>
 </root>

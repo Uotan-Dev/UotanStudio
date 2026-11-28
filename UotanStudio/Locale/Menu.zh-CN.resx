@@ -298,9 +298,6 @@
   <data name="Menu_SelectAll" xml:space="preserve">
     <value>全选</value>
   </data>
-  <data name="Menu_Preferences" xml:space="preserve">
-    <value>首选项...</value>
-  </data>
   <data name="Menu_Workspace" xml:space="preserve">
     <value>工作区</value>
   </data>
@@ -364,12 +361,6 @@
   <data name="Menu_WindowResetLayout" xml:space="preserve">
     <value>还原初始布局</value>
   </data>
-  <data name="Menu_FlashTools" xml:space="preserve">
-    <value>烧录工具</value>
-  </data>
-  <data name="Menu_FirmwareTools" xml:space="preserve">
-    <value>固件工具</value>
-  </data>
   <data name="Menu_DeviceManager" xml:space="preserve">
     <value>设备管理器</value>
   </data>
@@ -381,9 +372,6 @@
   </data>
   <data name="Menu_UsbTreeWindow" xml:space="preserve">
     <value>USB 树视图</value>
-  </data>
-  <data name="Tab_Device" xml:space="preserve">
-    <value>设备</value>
   </data>
   <data name="Menu_About" xml:space="preserve">
     <value>关于 UotanStudio</value>
@@ -514,12 +502,6 @@
   <data name="Plugin_UseTemplate" xml:space="preserve">
     <value>使用模板</value>
   </data>
-  <data name="Plugin_EditGraph" xml:space="preserve">
-    <value>编辑节点图</value>
-  </data>
-  <data name="Plugin_SaveGraph" xml:space="preserve">
-    <value>保存插件节点图</value>
-  </data>
   <data name="Plugin_Remove" xml:space="preserve">
     <value>移除</value>
   </data>
@@ -553,17 +535,11 @@
   <data name="Plugin_TemplateApplied" xml:space="preserve">
     <value>模板已添加到节点画布</value>
   </data>
-  <data name="Plugin_GraphSaved" xml:space="preserve">
-    <value>复合节点图已保存</value>
-  </data>
   <data name="Plugin_EditorUnavailable" xml:space="preserve">
     <value>节点编辑器当前不可用。</value>
   </data>
   <data name="Plugin_OperationFailed" xml:space="preserve">
     <value>插件操作失败：{0}</value>
-  </data>
-  <data name="Keys_Subtitle" xml:space="preserve">
-    <value>管理设备认证与 Payload 签名密钥，独立于当前工程。</value>
   </data>
   <data name="Keys_Search" xml:space="preserve">
     <value>搜索名称、用途或指纹</value>
@@ -691,9 +667,6 @@
   <data name="Keys_Details" xml:space="preserve">
     <value>密钥详情</value>
   </data>
-  <data name="Keys_Empty" xml:space="preserve">
-    <value>生成、导入或选择一个密钥以查看详情。</value>
-  </data>
   <data name="Keys_Rename" xml:space="preserve">
     <value>重命名</value>
   </data>
@@ -709,20 +682,11 @@
   <data name="Keys_ExportCertificate" xml:space="preserve">
     <value>导出证书…</value>
   </data>
-  <data name="Keys_RemoveHint" xml:space="preserve">
-    <value>确认从列表移除，文件保留在密钥库 .deleted 目录</value>
-  </data>
-  <data name="Keys_Remove" xml:space="preserve">
-    <value>移除密钥</value>
-  </data>
   <data name="Keys_New" xml:space="preserve">
     <value>新增密钥</value>
   </data>
   <data name="Keys_Delete" xml:space="preserve">
     <value>永久删除</value>
-  </data>
-  <data name="Keys_DeleteHint" xml:space="preserve">
-    <value>确认永久删除所选密钥（不可恢复）</value>
   </data>
   <data name="Keys_DeleteConfirm" xml:space="preserve">
     <value>确定永久删除密钥“{0}”吗？此操作不可恢复，已导出的副本不受影响。</value>
@@ -754,9 +718,6 @@
   <data name="Keys_ChoosePayload" xml:space="preserve">
     <value>从密钥库选择 Payload 密钥</value>
   </data>
-  <data name="Keys_ExternalPrivate" xml:space="preserve">
-    <value>或选择外部 PEM / DER 私钥</value>
-  </data>
   <data name="Keys_Unsigned" xml:space="preserve">
     <value>不签名</value>
   </data>
@@ -774,9 +735,6 @@
   </data>
   <data name="Keys_SetCurrentHint" xml:space="preserve">
     <value>写入运行时身份并重启后生效</value>
-  </data>
-  <data name="Keys_CurrentDefault" xml:space="preserve">
-    <value>默认</value>
   </data>
   <data name="Keys_InUse" xml:space="preserve">
     <value>当前使用</value>

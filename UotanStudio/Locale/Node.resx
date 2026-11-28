@@ -474,9 +474,6 @@
   <data name="Node_Conn_LegacyOutputPath" xml:space="preserve">
     <value>Legacy output path</value>
   </data>
-  <data name="Node_Conn_InputImage" xml:space="preserve">
-    <value>Input image</value>
-  </data>
   <data name="Node_Conn_ExpectedSHA256" xml:space="preserve">
     <value>Expected SHA-256</value>
   </data>
@@ -497,9 +494,6 @@
   </data>
   <data name="Node_Conn_Image" xml:space="preserve">
     <value>Image</value>
-  </data>
-  <data name="Node_Conn_ImageFile" xml:space="preserve">
-    <value>Image file</value>
   </data>
   <data name="Node_Conn_Mode" xml:space="preserve">
     <value>Mode</value>
@@ -588,9 +582,6 @@
   <data name="Node_Conn_Count" xml:space="preserve">
     <value>Count</value>
   </data>
-  <data name="Node_Conn_DexPath" xml:space="preserve">
-    <value>DEX Path</value>
-  </data>
   <data name="Node_Conn_False" xml:space="preserve">
     <value>False</value>
   </data>
@@ -611,9 +602,6 @@
   </data>
   <data name="Node_Conn_Offset" xml:space="preserve">
     <value>Offset</value>
-  </data>
-  <data name="Node_Conn_OtaPackage" xml:space="preserve">
-    <value>OTA Package</value>
   </data>
   <data name="Node_Conn_Serial" xml:space="preserve">
     <value>Serial</value>
@@ -678,47 +666,8 @@
   <data name="Node_Conn_RemotePort" xml:space="preserve">
     <value>Remote Port</value>
   </data>
-  <data name="Node_CatFirmware" xml:space="preserve">
-    <value>Firmware</value>
-  </data>
-  <data name="Node_CatFirmwareContainer" xml:space="preserve">
-    <value>Firmware Containers</value>
-  </data>
-  <data name="Node_CatFirmwareImage" xml:space="preserve">
-    <value>Image Processing</value>
-  </data>
-  <data name="Node_CatAndroid" xml:space="preserve">
-    <value>Android Packages &amp; Signing</value>
-  </data>
-  <data name="Node_CatDelivery" xml:space="preserve">
-    <value>Delivery Formats</value>
-  </data>
-  <data name="Node_CatFlash" xml:space="preserve">
-    <value>Flash</value>
-  </data>
-  <data name="Node_CatData" xml:space="preserve">
-    <value>Data</value>
-  </data>
-  <data name="Node_CatNetwork" xml:space="preserve">
-    <value>Network</value>
-  </data>
-  <data name="Node_CatFlow" xml:space="preserve">
-    <value>Flow</value>
-  </data>
-  <data name="Node_CatOutput" xml:space="preserve">
-    <value>Output</value>
-  </data>
-  <data name="Node_CatVisualPlugins" xml:space="preserve">
-    <value>Visual Plugins</value>
-  </data>
   <data name="Node_PluginWorkspace" xml:space="preserve">
     <value>Plugin workspace</value>
-  </data>
-  <data name="Node_PluginWorkspaceEmpty" xml:space="preserve">
-    <value>Install a composite-node plugin to edit its internal graph.</value>
-  </data>
-  <data name="Node_OpenPluginEditor" xml:space="preserve">
-    <value>Open visual editor</value>
   </data>
   <data name="Node_Prop_Category" xml:space="preserve">
     <value>Category</value>
@@ -762,9 +711,6 @@
   <data name="Node_Status_Cancelled" xml:space="preserve">
     <value>Cancelled</value>
   </data>
-  <data name="Node_CatPatch" xml:space="preserve">
-    <value>Firmware patches</value>
-  </data>
   <data name="Node_File_Text_Read" xml:space="preserve">
     <value>Read configuration text</value>
   </data>
@@ -800,9 +746,6 @@
   </data>
   <data name="Node_Conn_ExpectedValue" xml:space="preserve">
     <value>Expected value</value>
-  </data>
-  <data name="Node_Conn_UpperVersion" xml:space="preserve">
-    <value>Maximum version</value>
   </data>
   <data name="Node_Conn_Operation" xml:space="preserve">
     <value>Operation</value>
@@ -999,14 +942,8 @@
   <data name="Node_Choice_Regex" xml:space="preserve">
     <value>Regular expression</value>
   </data>
-  <data name="Node_Choice_VersionRange" xml:space="preserve">
-    <value>Version range (inclusive)</value>
-  </data>
   <data name="Node_Choice_FileExists" xml:space="preserve">
     <value>File exists</value>
-  </data>
-  <data name="Node_Choice_DirectoryExists" xml:space="preserve">
-    <value>Directory exists</value>
   </data>
   <data name="Node_Choice_Replace" xml:space="preserve">
     <value>Replace</value>
@@ -1067,9 +1004,6 @@
   </data>
   <data name="Node_Conn_ExpectedHash" xml:space="preserve">
     <value>Expected SHA-256</value>
-  </data>
-  <data name="Node_Conn_ExpectedPaths" xml:space="preserve">
-    <value>Expected changed paths (one per line)</value>
   </data>
   <data name="Node_PortType_PatchWorkspace" xml:space="preserve">
     <value>Patch workspace</value>
@@ -1182,20 +1116,11 @@
   <data name="Node_Workspace_File_Find" xml:space="preserve">
     <value>Find staged workspace files</value>
   </data>
-  <data name="Node_Conn_ExpectedFormat" xml:space="preserve">
-    <value>Expected format</value>
-  </data>
-  <data name="Node_Conn_RequiredEvidence" xml:space="preserve">
-    <value>Required evidence</value>
-  </data>
   <data name="Node_Conn_Evidence" xml:space="preserve">
     <value>Evidence</value>
   </data>
   <data name="Node_Conn_Detail" xml:space="preserve">
     <value>Inspection detail</value>
-  </data>
-  <data name="Node_Conn_StructureValid" xml:space="preserve">
-    <value>Structure checked</value>
   </data>
   <data name="Node_Conn_RelativePaths" xml:space="preserve">
     <value>Relative paths</value>
@@ -1314,27 +1239,6 @@
   <data name="Node_Patch_MissingWorkspace" xml:space="preserve">
     <value>Connect a patch workspace before importing a resource.</value>
   </data>
-  <data name="Plugin_Resources" xml:space="preserve">
-    <value>Package resources</value>
-  </data>
-  <data name="Plugin_ResourceId" xml:space="preserve">
-    <value>Resource ID (letters, digits, dots, underscores, hyphens)</value>
-  </data>
-  <data name="Plugin_AddResource" xml:space="preserve">
-    <value>Add file</value>
-  </data>
-  <data name="Plugin_RemoveResource" xml:space="preserve">
-    <value>Remove selected</value>
-  </data>
-  <data name="Plugin_ExportBundle" xml:space="preserve">
-    <value>Export resource bundle</value>
-  </data>
-  <data name="Plugin_ResourceBusy" xml:space="preserve">
-    <value>Wait for the current operation to finish before editing resources.</value>
-  </data>
-  <data name="Plugin_ResourceHelp" xml:space="preserve">
-    <value>Use these IDs in Read package resource nodes. Removing a referenced resource causes execution to fail. Save or export to include changes.</value>
-  </data>
   <data name="Plugin_DependencyUnavailable" xml:space="preserve">
     <value>Required package is unavailable or disabled: {0}</value>
   </data>
@@ -1350,23 +1254,11 @@
   <data name="Plugin_CodeRuntimeDisabled" xml:space="preserve">
     <value>This build runs ahead-of-time (AOT) or trimmed, so code-dependent plugins cannot run. Data plugins are unaffected, and JIT builds support every plugin kind.</value>
   </data>
-  <data name="Plugin_Requirements" xml:space="preserve">
-    <value>Package dependencies and conflicts</value>
-  </data>
-  <data name="Plugin_DependencyHelp" xml:space="preserve">
-    <value>Installed/enabled packages only; this does not apply prerequisite patches. One line: package.id minimum maximum. Use * for no bound; minimum is inclusive and maximum exclusive. Versions use major.minor.patch (e.g. 1.2.3). An ID alone accepts any version.</value>
-  </data>
   <data name="Plugin_Dependencies" xml:space="preserve">
     <value>Required packages</value>
   </data>
   <data name="Plugin_Conflicts" xml:space="preserve">
     <value>Conflicting packages (one ID per line)</value>
-  </data>
-  <data name="Plugin_RequirementsInvalid" xml:space="preserve">
-    <value>Invalid dependency/conflict declaration. Check IDs, duplicate entries, numeric version bounds and self-references.</value>
-  </data>
-  <data name="Plugin_Version" xml:space="preserve">
-    <value>Package version</value>
   </data>
   <data name="Node_Conn_Compatible" xml:space="preserve">
     <value>Compatible target</value>
@@ -1430,9 +1322,6 @@
   </data>
   <data name="Node_Patch_UnguardedMutation" xml:space="preserve">
     <value>The file-changing node &apos;{0}&apos; is not exclusively controlled by an Apply output. Connect its flow input to the application path and remove bypass/Skip paths. A composite must expose a flow input to be controlled from outside.</value>
-  </data>
-  <data name="Node_Conn_ExecutionFlow" xml:space="preserve">
-    <value>Execution flow</value>
   </data>
   <data name="Node_Patch_CompositeLimit" xml:space="preserve">
     <value>A patch run cannot invoke more than 4096 composite nodes.</value>
@@ -1809,9 +1698,6 @@
   <data name="Node_Choice_Direct" xml:space="preserve">
     <value>Direct</value>
   </data>
-  <data name="Node_Choice_GitHub_Mirror" xml:space="preserve">
-    <value>GitHub mirror</value>
-  </data>
   <data name="Node_Conn_Source" xml:space="preserve">
     <value>Source</value>
   </data>
@@ -2162,9 +2048,6 @@
   </data>
   <data name="Node_PortType_Artifact" xml:space="preserve">
     <value>File artifact</value>
-  </data>
-  <data name="Node_EditInterface" xml:space="preserve">
-    <value>Edit public interface</value>
   </data>
   <data name="Node_Toolbox_Presets" xml:space="preserve">
     <value>Create from preset</value>

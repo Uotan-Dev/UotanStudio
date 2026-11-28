@@ -66,9 +66,6 @@
   <data name="Device_Disconnect" xml:space="preserve">
     <value>Disconnect</value>
   </data>
-  <data name="Device_RemoteConnection" xml:space="preserve">
-    <value>Remote Device</value>
-  </data>
   <data name="Device_RemoteProtocol" xml:space="preserve">
     <value>Connection protocol</value>
   </data>
@@ -90,29 +87,8 @@
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
     <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes. Fastboot accepts a bare host (default port 5554) or host:port; fastboot over UDP requires an IP-literal host. With a pairing code, enter the explicit IP:port shown in the phone's pairing dialog.</value>
   </data>
-  <data name="Device_RemoteConnecting" xml:space="preserve">
-    <value>Connecting to {0}...</value>
-  </data>
-  <data name="Device_RemoteDisconnecting" xml:space="preserve">
-    <value>Disconnecting {0}...</value>
-  </data>
-  <data name="Device_RemoteConnected" xml:space="preserve">
-    <value>Server connected to {0}.</value>
-  </data>
-  <data name="Device_RemoteDisconnected" xml:space="preserve">
-    <value>Server disconnected {0}.</value>
-  </data>
-  <data name="Device_RemoteCanceled" xml:space="preserve">
-    <value>Stopped waiting for the result. Refresh to check the device state.</value>
-  </data>
   <data name="Device_RemoteFailed" xml:space="preserve">
     <value>Connection operation for {0} failed. Check the log.</value>
-  </data>
-  <data name="Device_RemotePairing" xml:space="preserve">
-    <value>Pairing with {0}...</value>
-  </data>
-  <data name="Device_RemotePairingConnecting" xml:space="preserve">
-    <value>Paired. Connecting to {0}...</value>
   </data>
   <data name="Device_RemotePairingFailed" xml:space="preserve">
     <value>Pairing with {0} failed: {1}</value>
@@ -197,24 +173,6 @@
   </data>
   <data name="Device_Detail" xml:space="preserve">
     <value>Device Detail</value>
-  </data>
-  <data name="Device_Connecting" xml:space="preserve">
-    <value>Connecting...</value>
-  </data>
-  <data name="Device_Reconnecting" xml:space="preserve">
-    <value>Reconnecting...</value>
-  </data>
-  <data name="Device_GroupAdb" xml:space="preserve">
-    <value>ADB Devices</value>
-  </data>
-  <data name="Device_GroupFastboot" xml:space="preserve">
-    <value>Fastboot Devices</value>
-  </data>
-  <data name="Device_GroupEdl" xml:space="preserve">
-    <value>EDL Devices</value>
-  </data>
-  <data name="Device_GroupRkdl" xml:space="preserve">
-    <value>RKDL Devices</value>
   </data>
   <data name="Device_EmptyHint" xml:space="preserve">
     <value>Click Refresh to scan connected devices.</value>
@@ -390,9 +348,6 @@
   <data name="Device_CompileVersion" xml:space="preserve">
     <value>Build Version</value>
   </data>
-  <data name="Device_VndkVersion" xml:space="preserve">
-    <value>VNDK Version</value>
-  </data>
   <data name="Device_PowerOnTime" xml:space="preserve">
     <value>Power-On Time</value>
   </data>
@@ -434,21 +389,6 @@
   </data>
   <data name="Device_ResourceOverview" xml:space="preserve">
     <value>Resource Usage</value>
-  </data>
-  <data name="Flash_Flash" xml:space="preserve">
-    <value>Flash</value>
-  </data>
-  <data name="Flash_FlashCard" xml:space="preserve">
-    <value>Flash Partition</value>
-  </data>
-  <data name="Flash_PartitionHint" xml:space="preserve">
-    <value>e.g. boot</value>
-  </data>
-  <data name="Flash_ImagePath" xml:space="preserve">
-    <value>Image path</value>
-  </data>
-  <data name="Flash_ImagePathHint" xml:space="preserve">
-    <value>Path to the image file</value>
   </data>
   <data name="Flash_Flashing" xml:space="preserve">
     <value>Flashing</value>

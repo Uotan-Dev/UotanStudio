@@ -138,20 +138,11 @@
   <data name="FindReplace_Project" xml:space="preserve">
     <value>当前项目</value>
   </data>
-  <data name="Dock_Properties_Name" xml:space="preserve">
-    <value>属性名称</value>
-  </data>
-  <data name="Dock_Properties_Value" xml:space="preserve">
-    <value>值</value>
-  </data>
   <data name="Dock_Properties_FileName" xml:space="preserve">
     <value>文件名</value>
   </data>
   <data name="Dock_Properties_ImageName" xml:space="preserve">
     <value>镜像名称</value>
-  </data>
-  <data name="Dock_Properties_ImageSize" xml:space="preserve">
-    <value>镜像大小</value>
   </data>
   <data name="Dock_Properties_ImageType" xml:space="preserve">
     <value>镜像类型</value>
@@ -192,15 +183,6 @@
   <data name="Dock_EXT4RW" xml:space="preserve">
     <value>EXT4 读写</value>
   </data>
-  <data name="Dock_SizeCalc" xml:space="preserve">
-    <value>大小计算</value>
-  </data>
-  <data name="Dock_Auto" xml:space="preserve">
-    <value>自动</value>
-  </data>
-  <data name="Dock_OriginalSize" xml:space="preserve">
-    <value>原大小</value>
-  </data>
   <data name="Dock_EXT4Compress" xml:space="preserve">
     <value>EXT4 压缩</value>
   </data>
@@ -215,12 +197,6 @@
   </data>
   <data name="Dock_EROFSAlgorithmHint" xml:space="preserve">
     <value>lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</value>
-  </data>
-  <data name="Dock_EROFSCompLevel" xml:space="preserve">
-    <value>EROFS 压缩等级</value>
-  </data>
-  <data name="Dock_EROFSCompLevelHint" xml:space="preserve">
-    <value>等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</value>
   </data>
   <data name="Dock_EROFSFeatures" xml:space="preserve">
     <value>EROFS 特性</value>
@@ -237,15 +213,6 @@
   <data name="Dock_F2FSCompLevel" xml:space="preserve">
     <value>压缩等级</value>
   </data>
-  <data name="Dock_F2FSAndroidProfile" xml:space="preserve">
-    <value>Android F2FS</value>
-  </data>
-  <data name="Dock_F2FSAndroidProfileEnabled" xml:space="preserve">
-    <value>原生配置</value>
-  </data>
-  <data name="Dock_F2FSAndroidProfileHint" xml:space="preserve">
-    <value>通过 mkfs.f2fs 和 sload.f2fs 生成只读、项目配额和扩展属性；需要原生工具或 WSL 发行版。</value>
-  </data>
   <data name="Dock_F2FSAndroidCapacity" xml:space="preserve">
     <value>镜像大小</value>
   </data>
@@ -254,18 +221,6 @@
   </data>
   <data name="Dock_F2FSAndroidCapacityHint" xml:space="preserve">
     <value>至少 64 MiB，且须按 2 MiB 对齐。请明确指定目标分区容量。</value>
-  </data>
-  <data name="Dock_F2FSWslDistribution" xml:space="preserve">
-    <value>WSL 发行版</value>
-  </data>
-  <data name="Dock_SUPERSize" xml:space="preserve">
-    <value>Super 大小</value>
-  </data>
-  <data name="Dock_SUPERName" xml:space="preserve">
-    <value>Super 簇名</value>
-  </data>
-  <data name="Dock_BRCompLevel" xml:space="preserve">
-    <value>BR 压缩等级</value>
   </data>
   <data name="Dock_NoDocumentOpen" xml:space="preserve">
     <value>未打开任何文档</value>
@@ -399,15 +354,6 @@
   <data name="Dialog_SelectFile" xml:space="preserve">
     <value>选择文件</value>
   </data>
-  <data name="Dock_File_Hex" xml:space="preserve">
-    <value>十六进制</value>
-  </data>
-  <data name="Dock_File_Analysis" xml:space="preserve">
-    <value>结构分析</value>
-  </data>
-  <data name="Dock_File_AnalysisTitle" xml:space="preserve">
-    <value>固件结构分析</value>
-  </data>
   <data name="Dock_File_PathFormat" xml:space="preserve">
     <value>文件：{0}</value>
   </data>
@@ -419,12 +365,6 @@
   </data>
   <data name="Dock_Properties_Type" xml:space="preserve">
     <value>类型</value>
-  </data>
-  <data name="Dock_Properties_TypeFormat" xml:space="preserve">
-    <value>类型：{0}</value>
-  </data>
-  <data name="Dock_Properties_Type_Node" xml:space="preserve">
-    <value>节点</value>
   </data>
   <data name="Dock_Properties_Type_Image" xml:space="preserve">
     <value>镜像</value>
@@ -765,9 +705,6 @@
   <data name="Dock_Properties_Metadata_CompressionAttempts" xml:space="preserve">
     <value>压缩尝试次数</value>
   </data>
-  <data name="Dock_FileManager" xml:space="preserve">
-    <value>文件管理器</value>
-  </data>
   <data name="FileManager_Refresh" xml:space="preserve">
     <value>刷新</value>
   </data>
@@ -800,15 +737,6 @@
   </data>
   <data name="FileManager_ImageSize" xml:space="preserve">
     <value>大小：{0}</value>
-  </data>
-  <data name="FileManager_Path" xml:space="preserve">
-    <value>路径</value>
-  </data>
-  <data name="FileManager_Size" xml:space="preserve">
-    <value>大小</value>
-  </data>
-  <data name="FileManager_Kind" xml:space="preserve">
-    <value>类型</value>
   </data>
   <data name="FileManager_KindFile" xml:space="preserve">
     <value>文件</value>
@@ -921,18 +849,6 @@
   <data name="Dock_Properties_Dex_TypeCount" xml:space="preserve">
     <value>类型数</value>
   </data>
-  <data name="Dock_Properties_Dex_SelectedNode" xml:space="preserve">
-    <value>选中项</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeKind" xml:space="preserve">
-    <value>类型</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeDetail" xml:space="preserve">
-    <value>详情</value>
-  </data>
-  <data name="Dock_Properties_Dex_SelectedNodeChildren" xml:space="preserve">
-    <value>子项数</value>
-  </data>
   <data name="Dock_Properties_Manifest_FileName" xml:space="preserve">
     <value>文件名称</value>
   </data>
@@ -1008,24 +924,6 @@
   <data name="Dock_Properties_Apk_VersionCode" xml:space="preserve">
     <value>版本号</value>
   </data>
-  <data name="Dock_Properties_Apk_Sdk" xml:space="preserve">
-    <value>SDK</value>
-  </data>
-  <data name="Dock_Properties_Apk_Signing" xml:space="preserve">
-    <value>签名状态</value>
-  </data>
-  <data name="Dock_Properties_Apk_Hardening" xml:space="preserve">
-    <value>加固状态</value>
-  </data>
-  <data name="Dock_Properties_Apk_TargetSystem" xml:space="preserve">
-    <value>目标系统</value>
-  </data>
-  <data name="Dock_Properties_Apk_MinimumSystem" xml:space="preserve">
-    <value>最低系统</value>
-  </data>
-  <data name="Dock_Properties_Apk_Abis" xml:space="preserve">
-    <value>ABI</value>
-  </data>
   <data name="Dock_Properties_Apk_Permissions" xml:space="preserve">
     <value>权限数</value>
   </data>
@@ -1071,9 +969,6 @@
   <data name="Log_Export" xml:space="preserve">
     <value>导出</value>
   </data>
-  <data name="Log_Reload" xml:space="preserve">
-    <value>重新加载文件</value>
-  </data>
   <data name="Log_Loading" xml:space="preserve">
     <value>正在加载日志文件</value>
   </data>
@@ -1094,9 +989,6 @@
   </data>
   <data name="Log_ExportFailed" xml:space="preserve">
     <value>导出日志失败：{0}</value>
-  </data>
-  <data name="Log_CopyDone" xml:space="preserve">
-    <value>日志条目已复制到剪贴板</value>
   </data>
   <data name="Log_LevelFilter" xml:space="preserve">
     <value>级别</value>
@@ -1215,15 +1107,6 @@
   <data name="ApkSign_Title" xml:space="preserve">
     <value>APK 签名</value>
   </data>
-  <data name="ApkSign_Key" xml:space="preserve">
-    <value>私钥（PKCS#8 / PKCS#1 / SEC1，PEM 或 DER）</value>
-  </data>
-  <data name="ApkSign_Certificate" xml:space="preserve">
-    <value>证书（PEM / DER / PFX）</value>
-  </data>
-  <data name="ApkSign_Output" xml:space="preserve">
-    <value>已签名 APK 输出路径</value>
-  </data>
   <data name="ApkSign_KeyPassword" xml:space="preserve">
     <value>私钥密码（可选）</value>
   </data>
@@ -1248,9 +1131,6 @@
   <data name="ApkSign_Execute" xml:space="preserve">
     <value>执行签名</value>
   </data>
-  <data name="ApkSign_SelectApk" xml:space="preserve">
-    <value>选择 APK 文件</value>
-  </data>
   <data name="ApkSign_KeyLabel" xml:space="preserve">
     <value>签名</value>
   </data>
@@ -1265,9 +1145,6 @@
   </data>
   <data name="ApkSign_SelectDirectory" xml:space="preserve">
     <value>选择目录</value>
-  </data>
-  <data name="Apk_SizeFormat" xml:space="preserve">
-    <value>{0:N0} 字节</value>
   </data>
   <data name="Apk_Extract" xml:space="preserve">
     <value>解压</value>
@@ -1298,12 +1175,6 @@
   </data>
   <data name="Apk_HardeningStatus" xml:space="preserve">
     <value>加固状态</value>
-  </data>
-  <data name="Apk_SigningUnsigned" xml:space="preserve">
-    <value>未签名</value>
-  </data>
-  <data name="Apk_SigningSchemes" xml:space="preserve">
-    <value>已签名（{0}）</value>
   </data>
   <data name="Apk_HardeningDetected" xml:space="preserve">
     <value>已检测到（{0}）</value>
@@ -2115,9 +1986,6 @@
   <data name="Dock_Logo_Preview" xml:space="preserve">
     <value>预览</value>
   </data>
-  <data name="Dock_Logo_Related" xml:space="preserve">
-    <value>相关分区</value>
-  </data>
   <data name="Dock_Logo_ExtractSelected" xml:space="preserve">
     <value>提取选中</value>
   </data>
@@ -2126,12 +1994,6 @@
   </data>
   <data name="Dock_Logo_OpenImage" xml:space="preserve">
     <value>打开图片</value>
-  </data>
-  <data name="Dock_Logo_OpenPartition" xml:space="preserve">
-    <value>打开分区</value>
-  </data>
-  <data name="Dock_Logo_Refresh" xml:space="preserve">
-    <value>刷新</value>
   </data>
   <data name="Dock_Logo_Loading" xml:space="preserve">
     <value>正在解码 Logo 图片…</value>
@@ -2147,15 +2009,6 @@
   </data>
   <data name="Dock_Logo_PickFolder" xml:space="preserve">
     <value>选择提取目录</value>
-  </data>
-  <data name="Dock_Logo_RelatedMissing" xml:space="preserve">
-    <value>未找到</value>
-  </data>
-  <data name="Dock_Logo_CapabilityExtract" xml:space="preserve">
-    <value>Logo 工具 · 可提取</value>
-  </data>
-  <data name="Dock_Logo_CapabilityOpen" xml:space="preserve">
-    <value>仅可打开</value>
   </data>
   <data name="Dock_Logo_MagicUnknown" xml:space="preserve">
     <value>未知</value>
@@ -2285,27 +2138,6 @@
   </data>
   <data name="Dock_Preloader_Warning" xml:space="preserve">
     <value>该操作会重排预加载器代码并清零 fastboot 锁字节。请自行承担刷入风险，并保留备份。</value>
-  </data>
-  <data name="Dock_Preloader_PatchDone" xml:space="preserve">
-    <value>解锁预加载器已写入 {0}；共 {1} 个步骤。备份：{2}</value>
-  </data>
-  <data name="Dock_Preloader_RawUnsupported" xml:space="preserve">
-    <value>RAW（MMM）— 不可修补</value>
-  </data>
-  <data name="Dock_Preloader_UnknownStorage" xml:space="preserve">
-    <value>未知</value>
-  </data>
-  <data name="Dock_Preloader_NoFlagBlock" xml:space="preserve">
-    <value>未找到</value>
-  </data>
-  <data name="Dock_Preloader_Locked" xml:space="preserve">
-    <value>已锁定（0x22）</value>
-  </data>
-  <data name="Dock_Preloader_HardLocked" xml:space="preserve">
-    <value>硬锁（0x11）</value>
-  </data>
-  <data name="Dock_Preloader_Unlocked" xml:space="preserve">
-    <value>已解锁</value>
   </data>
   <data name="Explorer_OpenAsLk" xml:space="preserve">
     <value>以 LK 镜像打开</value>
