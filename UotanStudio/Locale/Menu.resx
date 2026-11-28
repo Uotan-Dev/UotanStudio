@@ -976,7 +976,7 @@ Continue creating the project?</value>
     <value>Cryptography library (AVB RSASSA-PSS and PKCS#1 v1.5 signature verification).</value>
   </data>
   <data name="About_Project_SharpCompress" xml:space="preserve">
-    <value>Compression and archive library (zip and other formats; bundles third-party 7-Zip, xz, bzip2, zlib and unRAR code).</value>
+    <value>Compression and archive library (ZIP and other formats; bundles third-party 7-Zip, xz, bzip2, zlib and unRAR code).</value>
   </data>
   <data name="About_Project_K4osCompressionLz4" xml:space="preserve">
     <value>LZ4 compression library; the managed layer is MIT and the embedded liblz4 is BSD-2-Clause (Yann Collet).</value>

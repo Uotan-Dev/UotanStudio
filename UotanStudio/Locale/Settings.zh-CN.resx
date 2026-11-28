@@ -481,7 +481,7 @@
     <value>路由模式已保存，将在 UotanStudio 重启后生效。</value>
   </data>
   <data name="Settings_Developer_LeadRole" xml:space="preserve">
-    <value>项目负责人、UI与UX设计开发</value>
+    <value>项目负责人、UI 与 UX 设计开发</value>
   </data>
   <data name="Settings_Developer_BackendRole" xml:space="preserve">
     <value>项目后端开发，最强后端支持！</value>
@@ -508,7 +508,7 @@
     <value>柚坛 B 站账号</value>
   </data>
   <data name="Settings_FriendlyLink_Wiki" xml:space="preserve">
-    <value>玩机Wiki知识库</value>
+    <value>玩机 Wiki 知识库</value>
   </data>
   <data name="Settings_FriendlyLinkVisit" xml:space="preserve">
     <value>点击前往</value>

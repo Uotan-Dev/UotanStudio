@@ -1018,7 +1018,7 @@ public sealed class FirmwareService
             return new FirmwareOperationResult
             {
                 Success = ok,
-                Summary = string.IsNullOrEmpty(expectedHash) ? $"SHA256: {hex}" : (ok ? "Checksum match." : $"Mismatch: expected={expectedHash}, actual={hex}")
+                Summary = string.IsNullOrEmpty(expectedHash) ? $"SHA-256: {hex}" : (ok ? "Checksum match." : $"Mismatch: expected={expectedHash}, actual={hex}")
             };
         }
         catch (Exception ex)

@@ -67,7 +67,7 @@
     <value>交付</value>
   </data>
   <data name="Delivery_DirectOutput" xml:space="preserve">
-    <value>打包为ZIP</value>
+    <value>打包为 ZIP</value>
   </data>
   <data name="Delivery_ZipArchiveName" xml:space="preserve">
     <value>压缩包名称</value>
@@ -82,10 +82,10 @@
     <value>打包设置</value>
   </data>
   <data name="Delivery_UseProjectSuperSettings" xml:space="preserve">
-    <value>使用项目Super设置</value>
+    <value>使用项目 Super 设置</value>
   </data>
   <data name="Delivery_UseProjectPayloadSettings" xml:space="preserve">
-    <value>使用项目Payload设置</value>
+    <value>使用项目 Payload 设置</value>
   </data>
   <data name="Delivery_SelectProject" xml:space="preserve">
     <value>选择项目</value>
@@ -109,7 +109,7 @@
     <value>块大小</value>
   </data>
   <data name="Delivery_ZstdCompression" xml:space="preserve">
-    <value>压缩为ZST</value>
+    <value>压缩为 ZST</value>
   </data>
   <data name="Delivery_ZstdChunkedParallel" xml:space="preserve">
     <value>分块并行压缩</value>
@@ -121,7 +121,7 @@
     <value>增量编号</value>
   </data>
   <data name="Delivery_SdkLevel" xml:space="preserve">
-    <value>SDK等级</value>
+    <value>SDK 等级</value>
   </data>
   <data name="Delivery_MaxTimestamp" xml:space="preserve">
     <value>最大时间戳</value>
@@ -178,19 +178,19 @@
     <value>打包 Super</value>
   </data>
   <data name="Delivery_SuperFormat" xml:space="preserve">
-    <value>Super格式</value>
+    <value>Super 格式</value>
   </data>
   <data name="Delivery_SuperSize" xml:space="preserve">
-    <value>Super大小</value>
+    <value>Super 大小</value>
   </data>
   <data name="Delivery_SuperGroupName" xml:space="preserve">
-    <value>Super簇名</value>
+    <value>Super 簇名</value>
   </data>
   <data name="Delivery_GenerateSuperEmpty" xml:space="preserve">
-    <value>仅生成Super_Empty</value>
+    <value>仅生成 Super_Empty</value>
   </data>
   <data name="Delivery_PayloadVersion" xml:space="preserve">
-    <value>Payload版本</value>
+    <value>Payload 版本</value>
   </data>
   <data name="Delivery_PayloadMinorVersion" xml:space="preserve">
     <value>次版本</value>
@@ -208,16 +208,16 @@
     <value>签名</value>
   </data>
   <data name="Delivery_SuperImageList" xml:space="preserve">
-    <value>Super镜像列表</value>
+    <value>Super 镜像列表</value>
   </data>
   <data name="Delivery_PayloadImageList" xml:space="preserve">
-    <value>Payload镜像列表</value>
+    <value>Payload 镜像列表</value>
   </data>
   <data name="Delivery_AutoZeroPartitions" xml:space="preserve">
     <value>自动添加零大小分区</value>
   </data>
   <data name="Delivery_BelongsToSuper" xml:space="preserve">
-    <value>属于Super分区</value>
+    <value>属于 Super 分区</value>
   </data>
   <data name="Delivery_TotalImageSize" xml:space="preserve">
     <value>镜像总大小</value>
@@ -259,7 +259,7 @@
     <value>镜像文件名</value>
   </data>
   <data name="Delivery_AuthorInfo" xml:space="preserve">
-    <value>作者信息（不支持TXT脚本）</value>
+    <value>作者信息（不支持 TXT 脚本）</value>
   </data>
   <data name="Delivery_SelectScripts" xml:space="preserve">
     <value>选择脚本</value>
@@ -286,10 +286,10 @@
     <value>关闭文本</value>
   </data>
   <data name="Delivery_TxtScript" xml:space="preserve">
-    <value>TXT脚本</value>
+    <value>TXT 脚本</value>
   </data>
   <data name="Delivery_BatchShellScript" xml:space="preserve">
-    <value>Bat&amp;SH脚本</value>
+    <value>Bat &amp; SH 脚本</value>
   </data>
   <data name="Delivery_RecoveryScript" xml:space="preserve">
     <value>卡刷脚本</value>
@@ -709,10 +709,10 @@
     <value>重设当前槽位</value>
   </data>
   <data name="Flash_SlotSetA" xml:space="preserve">
-    <value>设为A槽位</value>
+    <value>设为 A 槽位</value>
   </data>
   <data name="Flash_SlotSetB" xml:space="preserve">
-    <value>设为B槽位</value>
+    <value>设为 B 槽位</value>
   </data>
   <data name="Flash_ActiveSlot" xml:space="preserve">
     <value>活动槽位</value>
@@ -1042,7 +1042,7 @@
     <value>这会向所选设备提交一条命令。确定继续？</value>
   </data>
   <data name="Flash_EdlReadLunResult" xml:space="preserve">
-    <value>已转储 {0}：{1} 字节，sha256 {2}</value>
+    <value>已转储 {0}：{1} 字节，SHA-256 {2}</value>
   </data>
   <data name="Flash_EdlReadLun" xml:space="preserve">
     <value>转储选中的 LUN 到文件</value>
@@ -1333,7 +1333,7 @@
     <value>坏块标记位于备用区</value>
   </data>
   <data name="Flash_EdlNandConfirm" xml:space="preserve">
-    <value>确认NAND写入操作</value>
+    <value>确认 NAND 写入操作</value>
   </data>
   <data name="Flash_EdlNandTableChoose" xml:space="preserve">
     <value>选择分区表文件</value>
@@ -1662,7 +1662,7 @@
     <value>分解选中文件</value>
   </data>
   <data name="ImageView_SynthesizeImg" xml:space="preserve">
-    <value>合成IMG</value>
+    <value>合成 IMG</value>
   </data>
   <data name="ImageView_SynthesizeFat" xml:space="preserve">
     <value>合成 FAT 镜像</value>
@@ -1692,16 +1692,16 @@
     <value>EXT4 镜像维护失败</value>
   </data>
   <data name="ImageView_SynthesizeBr" xml:space="preserve">
-    <value>合成BR</value>
+    <value>合成 BR</value>
   </data>
   <data name="ImageView_DeleteSelected" xml:space="preserve">
     <value>删除选中文件</value>
   </data>
   <data name="ImageView_SynthesizeSuper" xml:space="preserve">
-    <value>合成SUPER</value>
+    <value>合成 Super</value>
   </data>
   <data name="ImageView_SynthesizeDat" xml:space="preserve">
-    <value>合成DAT</value>
+    <value>合成 DAT</value>
   </data>
   <data name="ImageView_FlashSelected" xml:space="preserve">
     <value>刷入选中文件</value>
@@ -1710,16 +1710,16 @@
     <value>将选中的可刷入镜像按顺序刷入当前设备</value>
   </data>
   <data name="ImageView_PackRom" xml:space="preserve">
-    <value>打包ZIP</value>
+    <value>打包 ZIP</value>
   </data>
   <data name="ImageView_BootPatch" xml:space="preserve">
-    <value>修补Boot</value>
+    <value>修补 Boot</value>
   </data>
   <data name="BootPatch_File" xml:space="preserve">
     <value>选择文件</value>
   </data>
   <data name="BootPatch_Boot" xml:space="preserve">
-    <value>选择Boot</value>
+    <value>选择 Boot</value>
   </data>
   <data name="BootPatch_CustomFile" xml:space="preserve">
     <value>自选文件</value>
@@ -1740,13 +1740,13 @@
     <value>保持强加密</value>
   </data>
   <data name="BootPatch_InstallRecovery" xml:space="preserve">
-    <value>安装到Recovery</value>
+    <value>安装到 Recovery</value>
   </data>
   <data name="BootPatch_KeepAvb" xml:space="preserve">
-    <value>保留AVB2.0/dm-verity</value>
+    <value>保留 AVB 2.0/dm-verity</value>
   </data>
   <data name="BootPatch_PatchVbmeta" xml:space="preserve">
-    <value>修补VBMeta标志</value>
+    <value>修补 VBMeta 标志</value>
   </data>
   <data name="BootPatch_AutoDetect" xml:space="preserve">
     <value>自动检测</value>
@@ -1755,7 +1755,7 @@
     <value>自动识别架构（{0}）</value>
   </data>
   <data name="BootPatch_AutoDetectKmi" xml:space="preserve">
-    <value>自动识别KMI（{0}）</value>
+    <value>自动识别 KMI（{0}）</value>
   </data>
   <data name="BootPatch_ArchitectureUnknown" xml:space="preserve">
     <value>未识别</value>
@@ -2416,7 +2416,7 @@
     <value>NV 条目</value>
   </data>
   <data name="Dock_Qcn_Search" xml:space="preserve">
-    <value>搜索 id 或名称</value>
+    <value>搜索 ID 或名称</value>
   </data>
   <data name="Dock_Qcn_Properties" xml:space="preserve">
     <value>条目属性</value>
@@ -2437,7 +2437,7 @@
     <value>原始数据（128 字节）</value>
   </data>
   <data name="Dock_Qcn_ItemId" xml:space="preserve">
-    <value>条目 Id</value>
+    <value>条目 ID</value>
   </data>
   <data name="Dock_Qcn_Name" xml:space="preserve">
     <value>名称</value>
@@ -3720,10 +3720,10 @@
     <value>提示：</value>
   </data>
   <data name="Avb_DisableAvbHint" xml:space="preserve">
-    <value>--disable-verity --disable-verification (03): 绝大多数设备&#10;--disable-verity (01): 小米新设备(8E及以后)&#10;--disable-verification (02)</value>
+    <value>--disable-verity --disable-verification (03)：绝大多数设备&#10;--disable-verity (01)：小米新设备（8E 及以后）&#10;--disable-verification (02)</value>
   </data>
   <data name="Avb_DisableSelectFile" xml:space="preserve">
-    <value>选择AVB文件</value>
+    <value>选择 AVB 文件</value>
   </data>
   <data name="Avb_DisableCommandTitle" xml:space="preserve">
     <value>禁用命令</value>
@@ -4710,7 +4710,7 @@
     <value>模式</value>
   </data>
   <data name="Flash_SunxiInfo_SoCId" xml:space="preserve">
-    <value>SoC id</value>
+    <value>SoC ID</value>
   </data>
   <data name="Flash_SunxiInfo_Firmware" xml:space="preserve">
     <value>固件版本</value>
@@ -5178,7 +5178,7 @@
     <value>无法切换到目标介质：{1}（掩码 {0}）。</value>
   </data>
   <data name="Flash_Exception_RkStorageUnknown" xml:space="preserve">
-    <value>存储 id {0} 不是已知介质。</value>
+    <value>存储 ID {0} 不是已知介质。</value>
   </data>
   <data name="Flash_Exception_SectorCount" xml:space="preserve">
     <value>扇区数必须为正。</value>
@@ -5559,7 +5559,7 @@
     <value>生成烧录方案</value>
   </data>
   <data name="Flash_GenerateFlashPlanTip" xml:space="preserve">
-    <value>生成XML等对应配置文件</value>
+    <value>生成 XML 等对应配置文件</value>
   </data>
   <data name="Flash_FlashPlanGenerated" xml:space="preserve">
     <value>已生成烧录方案：{0}</value>

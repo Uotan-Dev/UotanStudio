@@ -22,14 +22,14 @@ public static class FriendlyLinks
         },
         new FriendlyLink
         {
-            Name = "柚坛UOTAN",
+            Name = "柚坛 UOTAN",
             DescriptionKey = "Settings_FriendlyLink_Bilibili",
             AvatarUri = "avares://UotanStudio/Assets/uotan-bilibili.png",
             Url = "https://space.bilibili.com/522676659"
         },
         new FriendlyLink
         {
-            Name = "柚坛Wiki",
+            Name = "柚坛 Wiki",
             DescriptionKey = "Settings_FriendlyLink_Wiki",
             AvatarUri = "avares://UotanStudio/Assets/uotan-wiki.png",
             Url = "https://wiki.uotan.cn"

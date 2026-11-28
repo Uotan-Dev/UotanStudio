@@ -91,10 +91,10 @@
     <value>项目位置</value>
   </data>
   <data name="NewProject_AddImages" xml:space="preserve">
-    <value>添加ROM或镜像</value>
+    <value>添加 ROM 或镜像</value>
   </data>
   <data name="NewProject_ImagesPlaceholder" xml:space="preserve">
-    <value>支持多选IMG或选择ZIP、Super.img、Payload.bin 等格式文件</value>
+    <value>支持多选 IMG 或选择 ZIP、Super.img、Payload.bin 等格式文件</value>
   </data>
   <data name="NewProject_UnpackImages" xml:space="preserve">
     <value>解包为镜像</value>
@@ -175,7 +175,7 @@
     <value>选择项目位置</value>
   </data>
   <data name="NewProject_BrowseImages" xml:space="preserve">
-    <value>选择ROM或镜像文件</value>
+    <value>选择 ROM 或镜像文件</value>
   </data>
   <data name="NewProject_SelectFolder" xml:space="preserve">
     <value>选择目录</value>
@@ -184,7 +184,7 @@
     <value>选择镜像</value>
   </data>
   <data name="NewProject_GetRom" xml:space="preserve">
-    <value>获取ROM</value>
+    <value>获取 ROM</value>
   </data>
   <data name="NewProject_RemoteUrlRequired" xml:space="preserve">
     <value>请先输入 HTTP 或 HTTPS ROM 直链。</value>
@@ -196,7 +196,7 @@
     <value>清除已选文件</value>
   </data>
   <data name="NewProject_ImageFiles" xml:space="preserve">
-    <value>ROM与镜像文件</value>
+    <value>ROM 与镜像文件</value>
   </data>
   <data name="NewProject_PickerFailed" xml:space="preserve">
     <value>无法选择文件或目录</value>
@@ -478,7 +478,7 @@
     <value>文件校验器</value>
   </data>
   <data name="Menu_BootPatch" xml:space="preserve">
-    <value>修补Boot</value>
+    <value>修补 Boot</value>
   </data>
   <data name="Plugin_Search" xml:space="preserve">
     <value>搜索名称、标识符或作者</value>
@@ -766,7 +766,7 @@
     <value>选中密钥后同时签名元数据和 Payload。外部私钥可先导入密钥库。</value>
   </data>
   <data name="Keys_ZipSigning" xml:space="preserve">
-    <value>ZIP签名</value>
+    <value>ZIP 签名</value>
   </data>
   <data name="Keys_ChooseZip" xml:space="preserve">
     <value>从密钥库选择 ZIP 密钥</value>

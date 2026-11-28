@@ -301,10 +301,10 @@
     <value>WSL distribution</value>
   </data>
   <data name="Dock_SUPERSize" xml:space="preserve">
-    <value>SUPER Size</value>
+    <value>Super Size</value>
   </data>
   <data name="Dock_SUPERName" xml:space="preserve">
-    <value>SUPER Cluster</value>
+    <value>Super Cluster</value>
   </data>
   <data name="Dock_BRCompLevel" xml:space="preserve">
     <value>BR Level</value>

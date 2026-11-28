@@ -33,7 +33,7 @@ internal static class MtkNodeSupport
 
     internal static string ProtocolText(MtkNodeProtocol protocol) => protocol switch
     {
-        MtkNodeProtocol.Xml => "Xml",
+        MtkNodeProtocol.Xml => "XML",
         MtkNodeProtocol.Legacy => "Legacy",
         MtkNodeProtocol.Scatter => "Scatter",
         _ => "XFlash"
@@ -41,10 +41,10 @@ internal static class MtkNodeSupport
 
     internal static string StorageText(MtkXFlashStorageKind storage) => storage switch
     {
-        MtkXFlashStorageKind.Ufs => "Ufs",
-        MtkXFlashStorageKind.Nor => "Nor",
-        MtkXFlashStorageKind.Nand => "Nand",
-        _ => "Emmc"
+        MtkXFlashStorageKind.Ufs => "UFS",
+        MtkXFlashStorageKind.Nor => "NOR",
+        MtkXFlashStorageKind.Nand => "NAND",
+        _ => "eMMC"
     };
 
     internal static bool TryParseProtocol(string? text, out MtkNodeProtocol protocol)

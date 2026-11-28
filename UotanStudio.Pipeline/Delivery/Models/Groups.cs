@@ -31,7 +31,7 @@ public static class DeliveryGroups
 {
     /// <summary>
     /// Parses per-line "group size partitions…" text into a list of groups, validating names, sizes, and partitions for uniqueness.
-    /// <para>把逐行“组名 容量字节 分区1 分区2 …”文本解析为分组列表；校验组名、容量与分区是否合法且不重复。</para>
+    /// <para>把逐行“组名 容量字节 分区 1 分区 2 …”文本解析为分组列表；校验组名、容量与分区是否合法且不重复。</para>
     /// </summary>
     internal static List<DeliveryGroup> Parse(string text)
     {
@@ -43,7 +43,7 @@ public static class DeliveryGroups
             var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (fields.Length < 2 || !DeliveryValidation.IsPartition(fields[0])
                 || !ulong.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out var size)
-                || result.Any(g => g.Name == fields[0])) throw new InvalidDataException("分组格式：组名 容量字节 分区1 分区2 …");
+                || result.Any(g => g.Name == fields[0])) throw new InvalidDataException("分组格式：组名 容量字节 分区 1 分区 2 …");
             var partitions = fields.Skip(2).ToList();
             if (partitions.Any(p => !DeliveryValidation.IsPartition(p) || !members.Add(p)))
                 throw new InvalidDataException("分组包含无效或重复分区。");

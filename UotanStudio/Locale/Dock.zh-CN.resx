@@ -190,7 +190,7 @@
     <value>镜像格式</value>
   </data>
   <data name="Dock_EXT4RW" xml:space="preserve">
-    <value>EXT4读写</value>
+    <value>EXT4 读写</value>
   </data>
   <data name="Dock_SizeCalc" xml:space="preserve">
     <value>大小计算</value>
@@ -202,7 +202,7 @@
     <value>原大小</value>
   </data>
   <data name="Dock_EXT4Compress" xml:space="preserve">
-    <value>EXT4压缩</value>
+    <value>EXT4 压缩</value>
   </data>
   <data name="Dock_NoCompress" xml:space="preserve">
     <value>不压缩</value>
@@ -211,19 +211,19 @@
     <value>压缩</value>
   </data>
   <data name="Dock_EROFSAlgorithm" xml:space="preserve">
-    <value>EROFS算法</value>
+    <value>EROFS 算法</value>
   </data>
   <data name="Dock_EROFSAlgorithmHint" xml:space="preserve">
     <value>lz4 打包更快；lz4hc 用更多打包时间换取更小镜像（两者写盘的编解码器都是 LZ4）。lzma、deflate 与 zstd 会选用不同的磁盘编解码器。压缩等级只作用于带搜索的编码器。</value>
   </data>
   <data name="Dock_EROFSCompLevel" xml:space="preserve">
-    <value>EROFS压缩等级</value>
+    <value>EROFS 压缩等级</value>
   </data>
   <data name="Dock_EROFSCompLevelHint" xml:space="preserve">
     <value>等级越高压缩越密：对 lz4hc 是搜索深度，对快速 lz4 是密度与速度的权衡。</value>
   </data>
   <data name="Dock_EROFSFeatures" xml:space="preserve">
-    <value>EROFS特性</value>
+    <value>EROFS 特性</value>
   </data>
   <data name="Dock_EROFSFeaturesHint" xml:space="preserve">
     <value>编辑受保留 EROFS 镜像的磁盘特性声明，使用上游特性名：名称置位，加 &quot;!&quot; 前缀清除，&quot;auto&quot; 让两个超级块字保持推导。留空则原样继承源镜像记录下来的声明。</value>
@@ -259,13 +259,13 @@
     <value>WSL 发行版</value>
   </data>
   <data name="Dock_SUPERSize" xml:space="preserve">
-    <value>SUPER大小</value>
+    <value>Super 大小</value>
   </data>
   <data name="Dock_SUPERName" xml:space="preserve">
-    <value>SUPER簇名</value>
+    <value>Super 簇名</value>
   </data>
   <data name="Dock_BRCompLevel" xml:space="preserve">
-    <value>BR压缩等级</value>
+    <value>BR 压缩等级</value>
   </data>
   <data name="Dock_NoDocumentOpen" xml:space="preserve">
     <value>未打开任何文档</value>
@@ -1363,13 +1363,13 @@
     <value>呈现路径</value>
   </data>
   <data name="MirrorProperty_ReceiveFps" xml:space="preserve">
-    <value>接收帧率（1秒）</value>
+    <value>接收帧率（1 秒）</value>
   </data>
   <data name="MirrorProperty_DecodeFps" xml:space="preserve">
-    <value>解码帧率（1秒）</value>
+    <value>解码帧率（1 秒）</value>
   </data>
   <data name="MirrorProperty_UploadFps" xml:space="preserve">
-    <value>位图更新率（1秒）</value>
+    <value>位图更新率（1 秒）</value>
   </data>
   <data name="MirrorProperty_MaxFps" xml:space="preserve">
     <value>帧率上限</value>
@@ -1378,7 +1378,7 @@
     <value>目标码率</value>
   </data>
   <data name="MirrorProperty_ActualBitRate" xml:space="preserve">
-    <value>接收码率（1秒）</value>
+    <value>接收码率（1 秒）</value>
   </data>
   <data name="MirrorProperty_Encoder" xml:space="preserve">
     <value>设备编码器</value>
@@ -1390,7 +1390,7 @@
     <value>音频格式</value>
   </data>
   <data name="MirrorProperty_AudioFps" xml:space="preserve">
-    <value>解码率（音频，1秒）</value>
+    <value>解码率（音频，1 秒）</value>
   </data>
   <data name="MirrorProperty_AudioOff" xml:space="preserve">
     <value>关闭</value>

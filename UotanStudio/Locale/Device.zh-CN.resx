@@ -73,7 +73,7 @@
     <value>连接协议</value>
   </data>
   <data name="Device_RemoteAddress" xml:space="preserve">
-    <value>IP:端口(默认5555)</value>
+    <value>IP: 端口（默认 5555）</value>
   </data>
   <data name="Device_RemotePairingCode" xml:space="preserve">
     <value>配对码</value>

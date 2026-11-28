@@ -368,8 +368,8 @@ public sealed partial class FlashViewModel
     /// <returns>The medium label. <para>介质标签。</para></returns>
     private static string DescribeUnisocStorageMedium(int flashType) => flashType switch
     {
-        0 => "Nor Flash",
-        1 => "Nand Flash",
+        0 => "NOR flash",
+        1 => "NAND flash",
         _ => string.Format(CultureInfo.InvariantCulture, "FlashTypeID {0}", flashType)
     };
 

@@ -126,14 +126,14 @@ public sealed class MtkDeviceSessionNodeViewModel : FlowNodeViewModel
             {
                 WriteOutput("Status", "invalid-protocol");
                 throw new InvalidOperationException(
-                    "The Protocol input must be XFlash, Legacy, Xml or Scatter.");
+                    "The Protocol input must be XFlash, Legacy, XML or Scatter.");
             }
 
             if (!MtkNodeSupport.TryParseStorage(Text(ReadInput("Storage")), out var storage))
             {
                 WriteOutput("Status", "invalid-storage");
                 throw new InvalidOperationException(
-                    "The Storage input must be Emmc, Ufs, Nor or Nand.");
+                    "The Storage input must be eMMC, UFS, NOR or NAND.");
             }
 
             if (!MtkNodeSupport.IsStorageSupported(protocol, storage))

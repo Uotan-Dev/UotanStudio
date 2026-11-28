@@ -145,7 +145,7 @@
     <value>切换小地图</value>
   </data>
   <data name="Node_CanvasHint" xml:space="preserve">
-    <value>左键框选 | 右键平移 | 滚轮上下/横向(Shift)滚动 | Ctrl+滚轮缩放</value>
+    <value>左键框选 | 右键平移 | 滚轮上下/横向（Shift）滚动 | Ctrl + 滚轮缩放</value>
   </data>
   <data name="Node_DeleteSelected" xml:space="preserve">
     <value>删除节点</value>
@@ -589,7 +589,7 @@
     <value>次数</value>
   </data>
   <data name="Node_Conn_DexPath" xml:space="preserve">
-    <value>Dex 路径</value>
+    <value>DEX 路径</value>
   </data>
   <data name="Node_Conn_False" xml:space="preserve">
     <value>否</value>
@@ -973,7 +973,7 @@
     <value>XOR（不属于安全加密）</value>
   </data>
   <data name="Node_Choice_gzip" xml:space="preserve">
-    <value>GZip</value>
+    <value>GZIP</value>
   </data>
   <data name="Node_Choice_deflate" xml:space="preserve">
     <value>Deflate</value>
@@ -1255,7 +1255,7 @@
     <value>CPIO</value>
   </data>
   <data name="Node_Choice_Gzip" xml:space="preserve">
-    <value>Gzip</value>
+    <value>GZIP</value>
   </data>
   <data name="Node_Choice_Xz" xml:space="preserve">
     <value>XZ</value>
@@ -1354,7 +1354,7 @@
     <value>包依赖与冲突</value>
   </data>
   <data name="Plugin_DependencyHelp" xml:space="preserve">
-    <value>这里检查已安装并启用的包，不会自动应用前置补丁。每行填写：包ID 最低版本 最高版本。* 表示不限制，下限包含、上限不包含。版本使用三段数字（例如 1.2.3）。只填写 ID 表示接受任意版本。</value>
+    <value>这里检查已安装并启用的包，不会自动应用前置补丁。每行填写：包 ID 最低版本 最高版本。* 表示不限制，下限包含、上限不包含。版本使用三段数字（例如 1.2.3）。只填写 ID 表示接受任意版本。</value>
   </data>
   <data name="Plugin_Dependencies" xml:space="preserve">
     <value>依赖包</value>

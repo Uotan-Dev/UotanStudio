@@ -138,7 +138,7 @@
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DeviceType}" />
                             <RadioButton Name="SuperVabBox" GroupName="DeliverySuperDeviceType" Content="VAB" IsChecked="True" />
                             <RadioButton Name="SuperAbBox" GroupName="DeliverySuperDeviceType" Content="AB" />
-                            <RadioButton Name="SuperAOnlyBox" GroupName="DeliverySuperDeviceType" Content="A-Only" />
+                            <RadioButton Name="SuperAOnlyBox" GroupName="DeliverySuperDeviceType" Content="A-only" />
                         </StackPanel>
                         <StackPanel Name="SuperDeviceNameField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperDeviceName}" />

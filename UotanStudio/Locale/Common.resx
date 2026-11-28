@@ -808,7 +808,7 @@ Author: 暮间雾
     <value>Storage type</value>
   </data>
   <data name="Flash_MtkAutoMatch" xml:space="preserve">
-    <value>Match loader entry by chip id</value>
+    <value>Match loader entry by chip ID</value>
   </data>
   <data name="Flash_MtkKeyDir" xml:space="preserve">
     <value>SLA key directory</value>
@@ -973,7 +973,7 @@ Author: 暮间雾
     <value>Select a loader entry first.</value>
   </data>
   <data name="Flash_MtkUsbAutoMatchRequired" xml:space="preserve">
-    <value>A USB connection requires matching the loader entry by chip id to be enabled.</value>
+    <value>A USB connection requires matching the loader entry by chip ID to be enabled.</value>
   </data>
   <data name="Flash_MtkUsbDeviceRequired" xml:space="preserve">
     <value>Connect the MTK device over USB and select it.</value>
@@ -1042,7 +1042,7 @@ Author: 暮间雾
     <value>This submits a command to the selected device. Continue?</value>
   </data>
   <data name="Flash_EdlReadLunResult" xml:space="preserve">
-    <value>Dumped {0}: {1} bytes, sha256 {2}</value>
+    <value>Dumped {0}: {1} bytes, SHA-256 {2}</value>
   </data>
   <data name="Flash_EdlReadLun" xml:space="preserve">
     <value>Dump selected LUN to file</value>
@@ -1486,7 +1486,7 @@ Author: 暮间雾
     <value>RAM info</value>
   </data>
   <data name="Flash_MtkRandomId" xml:space="preserve">
-    <value>Random id</value>
+    <value>Random ID</value>
   </data>
   <data name="Flash_MtkStorageLife" xml:space="preserve">
     <value>Storage life</value>
@@ -2416,7 +2416,7 @@ Continue anyway?</value>
     <value>NV Items</value>
   </data>
   <data name="Dock_Qcn_Search" xml:space="preserve">
-    <value>Search id or name</value>
+    <value>Search ID or name</value>
   </data>
   <data name="Dock_Qcn_Properties" xml:space="preserve">
     <value>Item Properties</value>
@@ -2437,7 +2437,7 @@ Continue anyway?</value>
     <value>Raw Data (128 bytes)</value>
   </data>
   <data name="Dock_Qcn_ItemId" xml:space="preserve">
-    <value>Item Id</value>
+    <value>Item ID</value>
   </data>
   <data name="Dock_Qcn_Name" xml:space="preserve">
     <value>Name</value>
@@ -3102,16 +3102,16 @@ Continue?</value>
     <value>Segment0 Blkaddr</value>
   </data>
   <data name="FirmwareField_CpBlkaddr" xml:space="preserve">
-    <value>Cp Blkaddr</value>
+    <value>CP Blkaddr</value>
   </data>
   <data name="FirmwareField_SitBlkaddr" xml:space="preserve">
-    <value>Sit Blkaddr</value>
+    <value>SIT Blkaddr</value>
   </data>
   <data name="FirmwareField_NatBlkaddr" xml:space="preserve">
-    <value>Nat Blkaddr</value>
+    <value>NAT Blkaddr</value>
   </data>
   <data name="FirmwareField_SsaBlkaddr" xml:space="preserve">
-    <value>Ssa Blkaddr</value>
+    <value>SSA Blkaddr</value>
   </data>
   <data name="FirmwareField_MainBlkaddr" xml:space="preserve">
     <value>Main Blkaddr</value>
@@ -3126,7 +3126,7 @@ Continue?</value>
     <value>Meta Ino</value>
   </data>
   <data name="FirmwareField_CpPayload" xml:space="preserve">
-    <value>Cp Payload</value>
+    <value>CP Payload</value>
   </data>
   <data name="FirmwareField_Feature" xml:space="preserve">
     <value>Feature</value>
@@ -3171,7 +3171,7 @@ Continue?</value>
     <value>Original Image Size</value>
   </data>
   <data name="FirmwareField_VbmetaOffset" xml:space="preserve">
-    <value>Vbmeta Offset</value>
+    <value>VBMeta Offset</value>
   </data>
   <data name="FirmwareField_VbmetaSize" xml:space="preserve">
     <value>VBMeta data size (bytes)</value>
@@ -3228,7 +3228,7 @@ Continue?</value>
     <value>Public Key Metadata</value>
   </data>
   <data name="FirmwareField_PublicKeySha256" xml:space="preserve">
-    <value>Public Key Sha256</value>
+    <value>Public Key SHA-256</value>
   </data>
   <data name="FirmwareField_PublicKeyBits" xml:space="preserve">
     <value>Declared public key bits</value>
@@ -4413,7 +4413,7 @@ Continue?</value>
     <value>MELF, {0} ELF components</value>
   </data>
   <data name="Flash_EdlLoaderManifest" xml:space="preserve">
-    <value>Multi-image programmer manifest, {0} images (ids {1})</value>
+    <value>Multi-image programmer manifest, {0} images (IDs {1})</value>
   </data>
   <data name="Flash_EdlLoaderManifestInvalid" xml:space="preserve">
     <value>Multi-image programmer manifest cannot be used, {0}: {1}</value>
@@ -4710,7 +4710,7 @@ Continue?</value>
     <value>Mode</value>
   </data>
   <data name="Flash_SunxiInfo_SoCId" xml:space="preserve">
-    <value>SoC id</value>
+    <value>SoC ID</value>
   </data>
   <data name="Flash_SunxiInfo_Firmware" xml:space="preserve">
     <value>Firmware</value>
@@ -5178,7 +5178,7 @@ Continue?</value>
     <value>Could not switch to the target medium: {1} (mask {0}).</value>
   </data>
   <data name="Flash_Exception_RkStorageUnknown" xml:space="preserve">
-    <value>Storage id {0} is not a known medium.</value>
+    <value>Storage ID {0} is not a known medium.</value>
   </data>
   <data name="Flash_Exception_SectorCount" xml:space="preserve">
     <value>The sector count must be positive.</value>

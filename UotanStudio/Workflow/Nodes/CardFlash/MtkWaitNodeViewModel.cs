@@ -82,7 +82,7 @@ public sealed class MtkWaitNodeViewModel : FlowNodeViewModel
             {
                 WriteOutput("Status", "invalid-protocol");
                 throw new InvalidOperationException(
-                    "The Protocol input must be Mtk. 协议输入必须为 Mtk。");
+                    "The Protocol input must be MTK. 协议输入必须为 MTK。");
             }
 
             var serial = DeviceProtocolNodeSupport.Text(ReadInput("Serial"));

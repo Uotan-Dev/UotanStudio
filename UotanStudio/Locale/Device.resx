@@ -676,7 +676,7 @@
     <value>No device-interface GUIDs</value>
   </data>
   <data name="UsbTree_Detail_InstanceId" xml:space="preserve">
-    <value>Instance id</value>
+    <value>Instance ID</value>
   </data>
   <data name="UsbTree_Detail_Parent" xml:space="preserve">
     <value>Parent</value>

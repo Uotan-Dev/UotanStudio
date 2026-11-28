@@ -589,7 +589,7 @@
     <value>Count</value>
   </data>
   <data name="Node_Conn_DexPath" xml:space="preserve">
-    <value>Dex Path</value>
+    <value>DEX Path</value>
   </data>
   <data name="Node_Conn_False" xml:space="preserve">
     <value>False</value>
@@ -973,7 +973,7 @@
     <value>XOR (not secure encryption)</value>
   </data>
   <data name="Node_Choice_gzip" xml:space="preserve">
-    <value>GZip</value>
+    <value>GZIP</value>
   </data>
   <data name="Node_Choice_deflate" xml:space="preserve">
     <value>Deflate</value>
@@ -1255,7 +1255,7 @@
     <value>CPIO</value>
   </data>
   <data name="Node_Choice_Gzip" xml:space="preserve">
-    <value>Gzip</value>
+    <value>GZIP</value>
   </data>
   <data name="Node_Choice_Xz" xml:space="preserve">
     <value>XZ</value>

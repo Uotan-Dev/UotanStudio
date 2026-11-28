@@ -190,13 +190,13 @@ public sealed class MtkDeviceOperationNodeViewModel : FlowNodeViewModel
             if (!MtkNodeSupport.TryParseProtocol(Text(ReadInput("Protocol")), out protocol))
             {
                 WriteOutput("Status", "invalid-protocol");
-                throw new InvalidOperationException("The Protocol input must be XFlash, Legacy, Xml or Scatter.");
+                throw new InvalidOperationException("The Protocol input must be XFlash, Legacy, XML or Scatter.");
             }
 
             if (!MtkNodeSupport.TryParseStorage(Text(ReadInput("Storage")), out storage))
             {
                 WriteOutput("Status", "invalid-storage");
-                throw new InvalidOperationException("The Storage input must be Emmc, Ufs, Nor or Nand.");
+                throw new InvalidOperationException("The Storage input must be eMMC, UFS, NOR or NAND.");
             }
 
             if (!MtkNodeSupport.IsStorageSupported(protocol, storage))

@@ -65,9 +65,9 @@
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="18"
                   HorizontalAlignment="Center" VerticalAlignment="Center">
         <CheckBox Content="MD5" IsChecked="{Binding Md5Selected, Mode=TwoWay}" />
-        <CheckBox Content="SHA1" IsChecked="{Binding Sha1Selected, Mode=TwoWay}" />
-        <CheckBox Content="SHA256" IsChecked="{Binding Sha256Selected, Mode=TwoWay}" />
-        <CheckBox Content="CRC" IsChecked="{Binding CrcSelected, Mode=TwoWay}" />
+        <CheckBox Content="SHA-1" IsChecked="{Binding Sha1Selected, Mode=TwoWay}" />
+        <CheckBox Content="SHA-256" IsChecked="{Binding Sha256Selected, Mode=TwoWay}" />
+        <CheckBox Content="CRC-32" IsChecked="{Binding CrcSelected, Mode=TwoWay}" />
       </StackPanel>
       <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88" HorizontalAlignment="Stretch"
               Content="{DynamicResource Checksum_Verify}" Click="OnVerify"
@@ -90,7 +90,7 @@
     </StackPanel>
 
     <StackPanel Spacing="4">
-      <TextBlock Text="SHA1" />
+      <TextBlock Text="SHA-1" />
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
@@ -104,7 +104,7 @@
     </StackPanel>
 
     <StackPanel Spacing="4">
-      <TextBlock Text="SHA256" />
+      <TextBlock Text="SHA-256" />
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
@@ -118,7 +118,7 @@
     </StackPanel>
 
     <StackPanel Spacing="4">
-      <TextBlock Text="CRC" />
+      <TextBlock Text="CRC-32" />
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />

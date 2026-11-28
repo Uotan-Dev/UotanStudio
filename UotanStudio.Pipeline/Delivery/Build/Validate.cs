@@ -106,7 +106,7 @@ public static class DeliveryValidation
         if (sources && DeliveryPackageBuilder.HasDat(plan)) DeliveryRecoveryUpdater.Resolve(plan);
         if (plan.PackSuper) DeliverySuperCapacity.ValidateDeviceSize(plan.Super);
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
-            throw new InvalidDataException("仅生成Super_Empty 与压缩为ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
+            throw new InvalidDataException("仅生成 Super_Empty 与压缩为 ZST 不能同时选择 / Super_Empty only excludes ZST compression.");
         if (plan.PackSuper && plan.Super.Sparse && plan.OrganizeDirectory && plan.Recovery)
             throw new InvalidDataException("卡刷包内的 Sparse Super 无法由 dd 安装器写入，请改用 RAW / A Sparse Super cannot be written by the Recovery dd installer; rebuild the delivery as RAW.");
         if (plan.Super.ZstdLevel is < 0 or > 22)
