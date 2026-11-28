@@ -486,6 +486,33 @@
   <data name="Settings_Developer_BackendRole" xml:space="preserve">
     <value>Backend development and support.</value>
   </data>
+  <data name="Settings_Developer_TestingRole" xml:space="preserve">
+    <value>Provided development ideas and test devices.</value>
+  </data>
+  <data name="Settings_About" xml:space="preserve">
+    <value>About us</value>
+  </data>
+  <data name="Settings_AboutDescription" xml:space="preserve">
+    <value>Project contributors and the Uotan ecosystem.</value>
+  </data>
+  <data name="Settings_FriendlyLinks" xml:space="preserve">
+    <value>Friendly links</value>
+  </data>
+  <data name="Settings_FriendlyLinksDescription" xml:space="preserve">
+    <value>Related Uotan community sites for discussion and reference.</value>
+  </data>
+  <data name="Settings_FriendlyLink_Community" xml:space="preserve">
+    <value>Uotan community home</value>
+  </data>
+  <data name="Settings_FriendlyLink_Bilibili" xml:space="preserve">
+    <value>Uotan Bilibili account</value>
+  </data>
+  <data name="Settings_FriendlyLink_Wiki" xml:space="preserve">
+    <value>Device modding wiki</value>
+  </data>
+  <data name="Settings_FriendlyLinkVisit" xml:space="preserve">
+    <value>Visit</value>
+  </data>
   <data name="Settings_Rendering" xml:space="preserve">
     <value>Rendering</value>
   </data>

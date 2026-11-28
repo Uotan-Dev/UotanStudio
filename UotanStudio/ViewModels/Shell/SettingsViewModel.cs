@@ -1393,6 +1393,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             member.RefreshLocalizedText();
         }
+        foreach (var link in FriendlyLinks.All)
+        {
+            link.RefreshLocalizedText();
+        }
     }
 
     /// <summary>

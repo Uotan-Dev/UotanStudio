@@ -29,6 +29,14 @@ public static class DevelopmentMembers
             AvatarUri = "avares://UotanStudio/Assets/zicai.jpeg",
             GitHubUrl = "https://github.com/13584452567",
             CoolapkUrl = "https://www.coolapk.com/u/13898619"
+        },
+        new DevelopmentMember
+        {
+            Name = "某贼",
+            DescriptionKey = "Settings_Developer_TestingRole",
+            AvatarUri = "avares://UotanStudio/Assets/mouzei.jpg",
+            GitHubUrl = "https://github.com/mouzei",
+            CoolapkUrl = "http://www.coolapk.com/u/3463951"
         }
     ];
 }

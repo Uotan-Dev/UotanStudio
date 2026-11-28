@@ -68,8 +68,9 @@ public partial class SettingsView : UserControl
     }
 
     /// <summary>
-    /// Opens the link carried by the button (developer GitHub / Coolapk profiles) in the default browser.
-    /// <para>用系统默认浏览器打开按钮携带的链接（开发成员的 GitHub / 酷安主页）。</para>
+    /// Opens the link carried by the button or hyperlink (developer profiles and friendly links) in the
+    /// default browser.
+    /// <para>用系统默认浏览器打开按钮或超链接携带的链接（开发成员主页与友情链接）。</para>
     /// </summary>
     /// <param name="sender">The event sender. <para>事件发送者。</para></param>
     /// <param name="e">The event arguments. <para>事件参数。</para></param>

@@ -459,3 +459,6 @@ $RECYCLE.BIN/
 !.vscode/launch.json
 !.vscode/extensions.json
 /reference
+
+# JiuwenSwarm runtime file operation logs
+.agent_history/

@@ -1129,65 +1129,129 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Developers section -->
+                <!-- About us section -->
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="4,12,4,0">
                     <Border Classes="settings-icon">
                         <icons:Chat Width="18" Height="18"
                                     Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{DynamicResource Settings_Developers}" Classes="settings-section-title" />
-                        <TextBlock Text="{DynamicResource Settings_DevelopersDescription}"
+                        <TextBlock Text="{DynamicResource Settings_About}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_AboutDescription}"
                                    Classes="settings-section-description" />
                     </StackPanel>
                 </Grid>
 
                 <Border Classes="settings-card-padded">
-                    <ItemsControl ItemsSource="{x:Static models:DevelopmentMembers.All}" Margin="0,0,-10,-10">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="2" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="models:DevelopmentMember">
-                                <Border Classes="settings-inner" Margin="0,0,10,10">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                                        <Border Width="48" Height="48" CornerRadius="24"
-                                                VerticalAlignment="Center">
-                                            <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
-                                                   Width="48" Height="48" Stretch="UniformToFill">
-                                                <Image.Clip>
-                                                    <EllipseGeometry Center="24,24" RadiusX="24" RadiusY="24" />
-                                                </Image.Clip>
-                                            </Image>
+                    <StackPanel>
+                        <StackPanel Spacing="10" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_Developers}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_DevelopersDescription}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{x:Static models:DevelopmentMembers.All}" Margin="0,0,-10,-10">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:DevelopmentMember">
+                                        <Border Classes="settings-inner" Margin="0,0,10,10" Padding="12">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Width="40" Height="40" CornerRadius="20"
+                                                        VerticalAlignment="Center">
+                                                    <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
+                                                           Width="40" Height="40" Stretch="UniformToFill">
+                                                        <Image.Clip>
+                                                            <EllipseGeometry Center="20,20" RadiusX="20" RadiusY="20" />
+                                                        </Image.Clip>
+                                                    </Image>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                                        <TextBlock Text="{Binding EnglishName}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Description}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                                    <HyperlinkButton Content="{DynamicResource Settings_GitHub}" FontSize="11"
+                                                                     Padding="4,2" MinHeight="0"
+                                                                     HorizontalAlignment="Right"
+                                                                     Tag="{Binding GitHubUrl}" Click="OnOpenLinkClick" />
+                                                    <HyperlinkButton Content="{DynamicResource Settings_Coolapk}" FontSize="11"
+                                                                     Padding="4,2" MinHeight="0"
+                                                                     HorizontalAlignment="Right"
+                                                                     Tag="{Binding CoolapkUrl}" Click="OnOpenLinkClick" />
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
-                                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
-                                                <TextBlock Text="{Binding EnglishName}" FontSize="11"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding Description}" FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       TextWrapping="Wrap" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
-                                            <HyperlinkButton Content="{DynamicResource Settings_GitHub}" FontSize="11"
-                                                             Padding="4,2" MinHeight="0"
-                                                             HorizontalAlignment="Right"
-                                                             Tag="{Binding GitHubUrl}" Click="OnOpenLinkClick" />
-                                            <HyperlinkButton Content="{DynamicResource Settings_Coolapk}" FontSize="11"
-                                                             Padding="4,2" MinHeight="0"
-                                                             HorizontalAlignment="Right"
-                                                             Tag="{Binding CoolapkUrl}" Click="OnOpenLinkClick" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Border Classes="settings-divider" Margin="0,6,0,14" />
+
+                        <StackPanel Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_FriendlyLinks}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_FriendlyLinksDescription}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{x:Static models:FriendlyLinks.All}" Margin="0,0,-10,-10">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:FriendlyLink">
+                                        <Border Classes="settings-inner" Margin="0,0,10,10" Padding="12">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Width="40" Height="40" CornerRadius="20"
+                                                        VerticalAlignment="Center">
+                                                    <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
+                                                           Width="40" Height="40" Stretch="UniformToFill">
+                                                        <Image.Clip>
+                                                            <EllipseGeometry Center="20,20" RadiusX="20" RadiusY="20" />
+                                                        </Image.Clip>
+                                                    </Image>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                                    <TextBlock Text="{Binding Description}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <HyperlinkButton Grid.Column="2"
+                                                                 FontSize="11"
+                                                                 Padding="4,2" MinHeight="0"
+                                                                 VerticalAlignment="Center"
+                                                                 HorizontalAlignment="Right"
+                                                                 Tag="{Binding Url}" Click="OnOpenLinkClick">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <TextBlock Text="{DynamicResource Settings_FriendlyLinkVisit}"
+                                                                   VerticalAlignment="Center" />
+                                                        <icons:ArrowRightUp Width="12" Height="12"
+                                                                            VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </HyperlinkButton>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
 
             </StackPanel>

@@ -486,6 +486,33 @@
   <data name="Settings_Developer_BackendRole" xml:space="preserve">
     <value>项目后端开发，最强后端支持！</value>
   </data>
+  <data name="Settings_Developer_TestingRole" xml:space="preserve">
+    <value>提供开发思路与测试设备</value>
+  </data>
+  <data name="Settings_About" xml:space="preserve">
+    <value>关于我们</value>
+  </data>
+  <data name="Settings_AboutDescription" xml:space="preserve">
+    <value>项目开发成员与柚坛生态</value>
+  </data>
+  <data name="Settings_FriendlyLinks" xml:space="preserve">
+    <value>友情链接</value>
+  </data>
+  <data name="Settings_FriendlyLinksDescription" xml:space="preserve">
+    <value>柚坛社区相关站点，欢迎前往交流与查阅资料。</value>
+  </data>
+  <data name="Settings_FriendlyLink_Community" xml:space="preserve">
+    <value>柚坛社区主站</value>
+  </data>
+  <data name="Settings_FriendlyLink_Bilibili" xml:space="preserve">
+    <value>柚坛 B 站账号</value>
+  </data>
+  <data name="Settings_FriendlyLink_Wiki" xml:space="preserve">
+    <value>玩机Wiki知识库</value>
+  </data>
+  <data name="Settings_FriendlyLinkVisit" xml:space="preserve">
+    <value>点击前往</value>
+  </data>
   <data name="Settings_Rendering" xml:space="preserve">
     <value>渲染</value>
   </data>
