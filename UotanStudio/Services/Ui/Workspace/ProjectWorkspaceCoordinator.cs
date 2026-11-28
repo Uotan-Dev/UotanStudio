@@ -41,17 +41,38 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         Workspace?.DockFactory?.CloseAllDocuments(Workspace.Layout);
     }
 
+    /// <summary>
+    /// Restores the persisted image entries. An entry whose content still probes as <c>unknown</c> after the
+    /// re-probe is not restored, so a snapshot that recorded an ELF executable extracted under an
+    /// <c>.img</c> name cannot bring the phantom entry back; the same content rule governs the live scan in
+    /// <c>ImageViewModel.RefreshFileEntriesAsync</c>.
+    /// <para>还原持久化的镜像条目。重新探测后内容仍为 <c>unknown</c> 的条目不还原，使记录了以
+    /// <c>.img</c> 命名的 ELF 可执行文件的快照不会再把这个幽灵条目带回来；该内容规则与
+    /// <c>ImageViewModel.RefreshFileEntriesAsync</c> 的实时扫描一致。</para>
+    /// </summary>
+    /// <param name="images">Persisted image entries. <para>持久化的镜像条目。</para></param>
     public void RestoreImages(IEnumerable<ImageEntryDto> images)
     {
         var target = ImageViewModel.EnsureInstance().Images;
         foreach (var dto in images)
+        {
+            var format = RecoverUnknownFormat(dto);
+            if (ImageInputService.ParseFormatLabel(format) == ImageFormatKind.Unknown)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Images",
+                    $"Persisted entry is not a recognized image and was not restored: {dto.RelativePath}  "
+                    + $"持久化条目不是可识别镜像，未还原：{dto.RelativePath}");
+                continue;
+            }
+
             target.Add(new ImageEntryViewModel
             {
                 DisplayName = Path.GetFileName(dto.RelativePath),
                 RelativePath = dto.RelativePath,
                 SizeBytes = dto.SizeBytes,
-                Format = RecoverUnknownFormat(dto)
+                Format = format
             });
+        }
     }
 
     /// <summary>

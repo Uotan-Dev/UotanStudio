@@ -278,11 +278,16 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// Registers an extracted file already inside the project (images/) as an image entry (no copy).
-    /// <para>把已在工程内（images/）的提取产物登记为镜像条目（不复制文件）。</para>
+    /// Registers an extracted file already inside the project (images/) as an image entry (no copy). Content
+    /// that probes as <c>unknown</c> (an ELF executable extracted under an <c>.img</c> name, for example) or an
+    /// empty file is left unregistered, because container extraction names every partition
+    /// <c>&lt;name&gt;.img</c> by convention and the name says nothing about the payload.
+    /// <para>把已在工程内（images/）的提取产物登记为镜像条目（不复制文件）。探测结果为 <c>unknown</c>
+    /// 的内容（例如以 <c>.img</c> 命名的 ELF 可执行文件）或空文件不予登记：容器提取按约定把每个分区
+    /// 都命名为 <c>&lt;名字&gt;.img</c>，名称本身不能说明载荷，只有内容探测能判定格式。</para>
     /// </summary>
     /// <param name="absolutePath">Absolute path of the extracted file. <para>提取产物的绝对路径。</para></param>
-    /// <returns>The registered entry; null when the path is outside the project. <para>登记的镜像条目；路径不在工程内时为 null。</para></returns>
+    /// <returns>The registered entry; null when the path is outside the project or the content is not a recognized image. <para>登记的镜像条目；路径不在工程内或内容不是可识别镜像时为 null。</para></returns>
     public ImageEntryViewModel? AddExtractedImage(string absolutePath)
     {
         var context = ProjectContextService.Instance;
@@ -297,12 +302,22 @@ internal partial class ImageViewModel
             return null;
         }
 
+        var size = new FileInfo(absolutePath).Length;
+        var format = ImageInputService.DetectFormat(absolutePath);
+        if (size == 0 || ImageInputService.ParseFormatLabel(format) == ImageFormatKind.Unknown)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images",
+                $"Extracted file carries no recognized image content and was not registered: {absolutePath}  "
+                + $"提取产物不是可识别镜像，未登记：{absolutePath}");
+            return null;
+        }
+
         var entry = new ImageEntryViewModel
         {
             DisplayName = Path.GetFileName(absolutePath),
             RelativePath = relative,
-            SizeBytes = new FileInfo(absolutePath).Length,
-            Format = ImageInputService.DetectFormat(absolutePath)
+            SizeBytes = size,
+            Format = format
         };
         Images.Add(entry);
         return entry;
