@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -89,6 +91,14 @@ public partial class FileManagerEntryViewModel : ObservableObject
     /// </summary>
     public FileManagerEntryViewModel? Parent { get; internal set; }
 
+    /// <summary>The glyph shown for this entry in file-system browsing views.
+    /// <para>文件系统浏览视图中该条目显示的图标。</para></summary>
+    public AppIconKind IconKind { get; }
+
+    /// <summary>The family colour paired with <see cref="IconKind"/>.
+    /// <para>与 <see cref="IconKind"/> 配套的家族颜色。</para></summary>
+    public IBrush IconBrush { get; }
+
     /// <summary>
     /// The human-readable size text of the entry (e.g. "1.5 MB").
     /// <para>条目大小的可读文本（如 "1.5 MB"）。</para>
@@ -130,6 +140,9 @@ public partial class FileManagerEntryViewModel : ObservableObject
         Path = path;
         Size = size;
         Kind = kind;
+        var icon = ExplorerIconCatalog.Resolve(name, kind == FileEntryKind.Directory);
+        IconKind = icon.Kind;
+        IconBrush = icon.Brush;
     }
 
     /// <summary>

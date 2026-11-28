@@ -4,7 +4,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="https://irihi.tech/iconica/tdesign"
-             xmlns:imaging="clr-namespace:Avalonia.Media.Imaging;assembly=Avalonia.Base"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              xmlns:workspace="using:UotanStudio.ViewModels.Workspace"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
@@ -12,23 +11,14 @@
              x:DataType="viewmodels:FileManagerEditorViewModel">
   <UserControl.Resources>
     <ResourceDictionary>
-      <ResourceDictionary.ThemeDictionaries>
-        <ResourceDictionary x:Key="Default">
-          <x:Double x:Key="FileManagerEntryIconOpacity">1</x:Double>
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="Dark">
-          <x:Double x:Key="FileManagerEntryIconOpacity">0.8</x:Double>
-        </ResourceDictionary>
-      </ResourceDictionary.ThemeDictionaries>
-      <imaging:Bitmap x:Key="FolderIcon">avares://UotanStudio/Assets/folder.png</imaging:Bitmap>
-      <imaging:Bitmap x:Key="FileIcon">avares://UotanStudio/Assets/file.png</imaging:Bitmap>
-    <!-- 列表与网格视图沿用现有彩色位图图标，只放大尺寸；目录树改用下方 TreeView 模板里的空心文件夹图标。 -->
-    <!-- The list and grid views keep the existing coloured bitmap icons and only grow in size; the
-         directory tree uses the outline folder icon in the TreeView template below. -->
+    <!-- 列表与网格视图按文件名/扩展名复用资源管理器的格式图标；目录树沿用空心文件夹图标。 -->
+    <!-- The list and grid views reuse the explorer's format icons by file name/extension; the directory
+         tree keeps the outline folder icon in the TreeView template below. -->
     <DataTemplate x:Key="FileListTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
       <Grid ColumnDefinitions="44,*,72,Auto" RowDefinitions="Auto,Auto" Height="44" ToolTip.Tip="{Binding Path}">
         <Grid Grid.Column="0" Grid.RowSpan="2" Width="36" Height="36" HorizontalAlignment="Left">
-          <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
+          <controls:AppIcon Kind="{Binding IconKind}" Foreground="{Binding IconBrush}"
+                            Width="36" Height="36" HorizontalAlignment="Left" VerticalAlignment="Center" />
           <avalonia:Link Width="12" Height="12" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
@@ -44,7 +34,8 @@
     <DataTemplate x:Key="FileGridTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
       <Grid RowDefinitions="52,30" RowSpacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}">
         <Grid Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center">
-          <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
+          <controls:AppIcon Kind="{Binding IconKind}" Foreground="{Binding IconBrush}"
+                            Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
           <avalonia:Link Width="14" Height="14" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
@@ -105,13 +96,6 @@
       <Setter Property="Width" Value="100" />
       <Setter Property="Height" Value="100" />
       <Setter Property="Padding" Value="6" />
-    </Style>
-    <Style Selector="Image.entry-icon">
-      <Setter Property="Source" Value="{StaticResource FileIcon}" />
-      <Setter Property="Opacity" Value="{DynamicResource FileManagerEntryIconOpacity}" />
-    </Style>
-    <Style Selector="Image.entry-icon.directory">
-      <Setter Property="Source" Value="{StaticResource FolderIcon}" />
     </Style>
     <Style Selector="TextBlock.entry-name">
       <Setter Property="Grid.RowSpan" Value="2" />
