@@ -58,14 +58,14 @@
             <Setter Property="Padding" Value="20" />
         </Style>
         <Style Selector="Border.settings-inner">
-            <Setter Property="Background" Value="{DynamicResource PageBackground}" />
+            <Setter Property="Background" Value="{DynamicResource NestedCardBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Padding" Value="14" />
         </Style>
         <Style Selector="Border.settings-order-row">
-            <Setter Property="Background" Value="{DynamicResource PageBackground}" />
+            <Setter Property="Background" Value="{DynamicResource NestedCardBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
@@ -127,6 +127,7 @@
         </Style>
         <Style Selector="TextBlock.settings-description">
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,3,0,0" />
@@ -203,6 +204,8 @@
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
                                       Background="Transparent"
+                                      Foreground="{DynamicResource TextForeground}"
+                                      FontWeight="Normal"
                                       BorderThickness="0">
                             <ToggleButton.Template>
                                 <ControlTemplate>
@@ -245,14 +248,17 @@
         </Style>
         <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:checked">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
         </Style>
         <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:pointerover,
                          Expander.settings-expander /template/ ToggleButton#PART_toggle:checked:pointerover">
             <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
         </Style>
         <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:pressed,
                          Expander.settings-expander /template/ ToggleButton#PART_toggle:checked:pressed">
             <Setter Property="Background" Value="{DynamicResource SemiColorFill1}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
         </Style>
         <Style Selector="Expander.settings-expander:expanded /template/ icons|ChevronDown#PART_Chevron">
             <Setter Property="RenderTransform" Value="rotate(180deg)" />

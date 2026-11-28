@@ -31,6 +31,7 @@
     <!-- 卡片/面板表面与描边画刷：视图通过 DynamicResource 引用，随浅色/深色主题切换。 -->
     <!-- Card/panel surface and outline brushes referenced by views; they follow the light/dark theme. -->
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackground}" />
+    <SolidColorBrush x:Key="NestedCardBackgroundBrush" Color="#1c1c1e" />
     <SolidColorBrush x:Key="CardBorderBrush" Color="{StaticResource BorderForegroundColor}" />
     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource SecondaryTextForeground}" />
 </ResourceDictionary>
