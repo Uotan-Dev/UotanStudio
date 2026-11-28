@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
-using UotanStudio.Views.Dialogs;
+using UotanStudio.Views.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Services.Ui;

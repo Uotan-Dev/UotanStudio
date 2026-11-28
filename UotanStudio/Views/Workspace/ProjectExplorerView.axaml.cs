@@ -375,7 +375,7 @@ public partial class ProjectExplorerView : UserControl
     /// without starting a comparison.
     /// <para>在多列文件浏览器（原对比文档）中打开选中的文件或目录：作为文件列载入，不自动开始对比。</para>
     /// </summary>
-    private void OnOpenInCompareView(object? sender, RoutedEventArgs e)
+    private void OnOpenInMultiColumnBrowser(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder)
         {
@@ -389,7 +389,7 @@ public partial class ProjectExplorerView : UserControl
     /// Opens the selected file or folder in a new multi-column file browser tab.
     /// <para>在新的多列文件浏览器标签页中打开选中的文件或目录。</para>
     /// </summary>
-    private void OnOpenInNewCompareView(object? sender, RoutedEventArgs e)
+    private void OnOpenInNewMultiColumnBrowser(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder)
         {

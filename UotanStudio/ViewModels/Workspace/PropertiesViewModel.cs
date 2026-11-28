@@ -10,6 +10,8 @@ using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 
 namespace UotanStudio.ViewModels.Workspace;
 

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Pipeline.Delivery;
+using UotanStudio.ViewModels.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 
@@ -58,7 +59,7 @@ public sealed partial class DeliveryCompletionTests
         var plan = DatPlan(true);
         File.WriteAllBytes(Path.Combine(_root, "system.patch.dat"), []);
         File.WriteAllText(Path.Combine(_root, "notes.txt"), "Not an image");
-        var names = UotanStudio.Views.Controls.PackImageSelectionView.EnumerateImages(_root, Token)
+        var names = UotanStudio.Views.Delivery.Components.PackImageSelectionView.EnumerateImages(_root, Token)
             .Select(info => Path.GetFileName(info.FilePath)).ToArray();
         Assert.Equal(new[] { "system.new.dat.BR", "system.patch.dat", "system.transfer.list" }, names);
     }

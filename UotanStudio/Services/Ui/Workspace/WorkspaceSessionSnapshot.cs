@@ -2,8 +2,8 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Ui.Workspace.Documents;
-using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Editors.MultiColumnBrowser;
 
 namespace UotanStudio.Services.Ui.Workspace;
 
@@ -117,8 +117,8 @@ internal static class WorkspaceSessionCapture
                     : Path.GetRelativePath(rootDirectory, Path.GetFullPath(path)),
                 OpenMode = item is FileViewModel text ? (int)text.OpenMode : 0,
                 IsActive = item.Owner is IDock owner && ReferenceEquals(owner.ActiveDockable, item),
-                CompareLeftPath = item is CompareViewModel compare ? compare.LeftPath : null,
-                CompareRightPath = item is CompareViewModel compareRight ? compareRight.RightPath : null
+                CompareLeftPath = item is MultiColumnBrowserViewModel compare ? compare.LeftPath : null,
+                CompareRightPath = item is MultiColumnBrowserViewModel compareRight ? compareRight.RightPath : null
             });
         }
         return result;

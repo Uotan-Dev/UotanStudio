@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using UotanStudio.Pipeline.Delivery;
+using UotanStudio.ViewModels.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

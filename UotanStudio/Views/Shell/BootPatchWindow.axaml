@@ -21,12 +21,6 @@
         <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
             <Setter Property="IsVisible" Value="False" /><Setter Property="IsEnabled" Value="False" />
         </Style>
-        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
-            <Setter Property="Background"><ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" /></Setter>
-        </Style>
-        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
-            <Setter Property="Margin" Value="40,0,48,0" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
         <Style Selector="TextBlock.field-label">
             <Setter Property="HorizontalAlignment" Value="Right" /><Setter Property="VerticalAlignment" Value="Center" />
         </Style>

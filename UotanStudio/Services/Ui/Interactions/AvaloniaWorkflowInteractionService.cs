@@ -4,7 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using UotanStudio.Pipeline.Projects.Interactions;
 using UotanStudio.Services.Interactions;
-using UotanStudio.Views.Interactions;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Services.Ui.Interactions;
 

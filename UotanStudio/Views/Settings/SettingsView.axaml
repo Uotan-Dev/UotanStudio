@@ -1,0 +1,1260 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
+             xmlns:vm="using:UotanStudio.ViewModels.Settings"
+             xmlns:vms="using:UotanStudio.ViewModels"
+             xmlns:views="using:UotanStudio.Views.Settings"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:app="using:UotanStudio"
+             xmlns:models="using:UotanStudio.Models"
+             xmlns:mcp="using:UotanStudio.Mcp"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="2500"
+             x:Class="UotanStudio.Views.Settings.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <UserControl.Resources>
+        <DataTemplate x:Key="DisplayPreferenceItemTemplate" x:DataType="vm:DisplayPreferenceItem">
+            <Border Classes="settings-order-row" Margin="0,0,0,6">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                    <TextBlock Text="{Binding DisplayName}" Classes="settings-label" />
+                    <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                  IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanChangeVisibility}"
+                                  ToolTip.Tip="{Binding VisibilityHint}"
+                                  AutomationProperties.Name="{Binding VisibilityHint}" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <Button Classes="settings-order"
+                                Command="{Binding MoveUpCommand}"
+                                ToolTip.Tip="{DynamicResource Settings_MoveUp}"
+                                AutomationProperties.Name="{DynamicResource Settings_MoveUp}">
+                            <icons:ChevronUp Width="14" Height="14" />
+                        </Button>
+                        <Button Classes="settings-order"
+                                Command="{Binding MoveDownCommand}"
+                                ToolTip.Tip="{DynamicResource Settings_MoveDown}"
+                                AutomationProperties.Name="{DynamicResource Settings_MoveDown}">
+                            <icons:ChevronDown Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <!-- 卡片与分组容器 / Cards and grouped containers -->
+        <Style Selector="Border.settings-card">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Border.settings-card-padded">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="20" />
+        </Style>
+        <Style Selector="Border.settings-inner">
+            <Setter Property="Background" Value="{DynamicResource NestedCardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style Selector="Border.settings-order-row">
+            <Setter Property="Background" Value="{DynamicResource NestedCardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,8" />
+        </Style>
+        <Style Selector="Border.settings-banner-info">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimaryLight}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,10" />
+        </Style>
+        <Style Selector="Border.settings-banner-warning">
+            <Setter Property="Background" Value="{DynamicResource PageBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LogErrorBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,10" />
+        </Style>
+        <Style Selector="Border.settings-icon">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimaryLight}" />
+        </Style>
+        <Style Selector="Border.settings-divider">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="Border.settings-row-divider">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="Margin" Value="20,0" />
+        </Style>
+
+        <!-- 排版 / Typography -->
+        <Style Selector="TextBlock.settings-section-title">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.settings-section-description">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+        <Style Selector="TextBlock.settings-group-header">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="4,4,0,-4" />
+        </Style>
+        <Style Selector="TextBlock.settings-label">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.settings-description">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+        <Style Selector="TextBlock.settings-value">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- 控件规范：与全站 32px 高度与 13px 字号对齐 / Control baseline matching host 32px / 13px -->
+        <Style Selector="ComboBox.settings-choice">
+            <Setter Property="Width" Value="280" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.settings-input">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="NumericUpDown.settings-number">
+            <Setter Property="Width" Value="120" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ToggleSwitch.settings-switch">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.settings-action">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.settings-order">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.settings-row">
+            <Setter Property="Margin" Value="20,14" />
+            <Setter Property="MinHeight" Value="32" />
+        </Style>
+        <Style Selector="StackPanel.settings-row-block">
+            <Setter Property="Margin" Value="20,14" />
+        </Style>
+        <Style Selector="Expander.settings-expander">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <StackPanel>
+                        <ToggleButton Name="PART_toggle"
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                                      Margin="8"
+                                      Padding="12,6"
+                                      CornerRadius="8"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Background="Transparent"
+                                      Foreground="{DynamicResource TextForeground}"
+                                      FontWeight="Normal"
+                                      BorderThickness="0">
+                            <ToggleButton.Template>
+                                <ControlTemplate>
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="{TemplateBinding CornerRadius}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                    </Border>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <ContentPresenter Content="{TemplateBinding Header}"
+                                                  ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                  VerticalAlignment="Center" />
+                                <icons:ChevronDown Name="PART_Chevron"
+                                                   Grid.Column="1"
+                                                   Width="14" Height="14"
+                                                   VerticalAlignment="Center"
+                                                   RenderTransformOrigin="50%,50%">
+                                    <icons:ChevronDown.Transitions>
+                                        <Transitions>
+                                            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" />
+                                        </Transitions>
+                                    </icons:ChevronDown.Transitions>
+                                </icons:ChevronDown>
+                            </Grid>
+                        </ToggleButton>
+                        <Border Name="PART_ContentBorder"
+                                IsVisible="{TemplateBinding IsExpanded}"
+                                Padding="20,4,20,14">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}" />
+                        </Border>
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:checked">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+        </Style>
+        <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:pointerover,
+                         Expander.settings-expander /template/ ToggleButton#PART_toggle:checked:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SemiColorFill0}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+        </Style>
+        <Style Selector="Expander.settings-expander /template/ ToggleButton#PART_toggle:pressed,
+                         Expander.settings-expander /template/ ToggleButton#PART_toggle:checked:pressed">
+            <Setter Property="Background" Value="{DynamicResource SemiColorFill1}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextForeground}" />
+        </Style>
+        <Style Selector="Expander.settings-expander:expanded /template/ icons|ChevronDown#PART_Chevron">
+            <Setter Property="RenderTransform" Value="rotate(180deg)" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid Background="{DynamicResource PageBackground}">
+        <ScrollViewer HorizontalContentAlignment="Stretch"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="920" HorizontalAlignment="Stretch" Margin="32,28,32,48" Spacing="16">
+
+                <!-- General section header -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="4,0,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Setting Width="18" Height="18"
+                                       Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_General}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_GeneralDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="settings-action"
+                            Command="{Binding ResetToDefaultsCommand}"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <icons:Rollback Width="14" Height="14" />
+                            <TextBlock Text="{DynamicResource Settings_ResetToDefaults}" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!-- General: Appearance -->
+                <TextBlock Text="{DynamicResource Settings_Appearance}" Classes="settings-group-header" />
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_Theme}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ThemeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <Border Grid.Column="1"
+                                    Theme="{StaticResource RadioButtonGroupBorder}"
+                                    Padding="2"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <RadioButton GroupName="ThemeGroup"
+                                                 MinWidth="0" MinHeight="28" Padding="12,0" Margin="0"
+                                                 IsChecked="{Binding IsSystemTheme, Mode=TwoWay}"
+                                                 Theme="{StaticResource ButtonRadioButton}"
+                                                 Classes="Small segment"
+                                                 Content="{DynamicResource Settings_ThemeFollowSystem}" />
+                                    <RadioButton GroupName="ThemeGroup"
+                                                 MinWidth="0" MinHeight="28" Padding="12,0" Margin="0"
+                                                 IsChecked="{Binding IsLightTheme, Mode=TwoWay}"
+                                                 Theme="{StaticResource ButtonRadioButton}"
+                                                 Classes="Small segment"
+                                                 Content="{DynamicResource Settings_ThemeLightMode}" />
+                                    <RadioButton GroupName="ThemeGroup"
+                                                 MinWidth="0" MinHeight="28" Padding="12,0" Margin="0"
+                                                 IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"
+                                                 Theme="{StaticResource ButtonRadioButton}"
+                                                 Classes="Small segment"
+                                                 Content="{DynamicResource Settings_ThemeDarkMode}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_Language}" Classes="settings-label" />
+                                <TextBlock Text="{Binding LanguagePreviewText}"
+                                           Classes="settings-description" FontStyle="Italic" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding Languages}"
+                                      SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                                      DisplayMemberBinding="{Binding DisplayName}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <StackPanel Classes="settings-row-block" Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_BottomBar}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_BottomBarHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding BottomBarDisplayItems}"
+                                          ItemTemplate="{StaticResource DisplayPreferenceItemTemplate}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- General: Rendering -->
+                <TextBlock Text="{DynamicResource Settings_Rendering}" Classes="settings-group-header" />
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Border Classes="settings-banner-info" Margin="20,14,20,0"
+                                IsVisible="{Binding IsWaylandRendering}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <icons:InfoCircle Width="16" Height="16"
+                                                  Stroke1="{DynamicResource SemiColorPrimaryPointerover}"
+                                                  VerticalAlignment="Top" Margin="0,1,0,0" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Settings_RenderingWaylandHint}"
+                                           Classes="settings-value" Foreground="{DynamicResource TextForeground}" />
+                            </Grid>
+                        </Border>
+                        <Border Classes="settings-banner-info" Margin="20,14,20,0"
+                                IsVisible="{Binding IsRenderingPlatformUnsupported}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <icons:InfoCircle Width="16" Height="16"
+                                                  Stroke1="{DynamicResource SemiColorPrimaryPointerover}"
+                                                  VerticalAlignment="Top" Margin="0,1,0,0" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Settings_RenderingUnsupportedHint}"
+                                           Classes="settings-value" Foreground="{DynamicResource TextForeground}" />
+                            </Grid>
+                        </Border>
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsRenderingBackendConfigurable}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_RenderingBackend}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_RenderingHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding RenderingBackendOptions}"
+                                      SelectedIndex="{Binding RenderingBackendIndex, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding HasCompositionModeOptions}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding HasCompositionModeOptions}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_CompositionMode}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_CompositionModeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding CompositionModeOptions}"
+                                      SelectedIndex="{Binding CompositionModeIndex, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsCompositionModeEnabled}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsWindowsRendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsWindowsRendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UseCompositionSwapChain}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UseCompositionSwapChainHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UseCompositionSwapChain, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsCompositionSwapChainEnabled}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsX11Rendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsX11Rendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UseXShmFramebuffer}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UseXShmFramebufferHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UseXShmFramebuffer, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider"
+                                IsVisible="{Binding IsX11Rendering}" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20"
+                              IsVisible="{Binding IsX11Rendering}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UsePartialPresentation}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UsePartialPresentationHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding UsePartialPresentation, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPartialPresentationEnabled}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- General: Device communication -->
+                <TextBlock Text="{DynamicResource Settings_DeviceCommunication}" Classes="settings-group-header" />
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_UsbBackend}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_UsbBackendHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding UsbBackendOptions}"
+                                      SelectedIndex="{Binding DeviceUsbBackendIndex, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_RouteMode}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_RouteModeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding RouteModeOptions}"
+                                      SelectedIndex="{Binding DeviceRouteModeIndex, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_AdbServer}" Classes="settings-label" />
+                                <TextBlock Text="{Binding AdbServerStatus}" Classes="settings-description" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding AdbServerActionStatus}" Classes="settings-value"
+                                           VerticalAlignment="Center" TextAlignment="Right"
+                                           MaxWidth="280"
+                                           IsVisible="{Binding AdbServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                <Button Classes="settings-action"
+                                        Command="{Binding StopAdbServerCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <icons:StopCircleStroke Width="14" Height="14" />
+                                        <TextBlock Text="{DynamicResource Settings_StopAdbServer}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_HdcServer}" Classes="settings-label" />
+                                <TextBlock Text="{Binding HdcServerStatus}" Classes="settings-description" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding HdcServerActionStatus}" Classes="settings-value"
+                                           VerticalAlignment="Center" TextAlignment="Right"
+                                           MaxWidth="280"
+                                           IsVisible="{Binding HdcServerActionStatus, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                <Button Classes="settings-action"
+                                        Command="{Binding StopHdcServerCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <icons:StopCircleStroke Width="14" Height="14" />
+                                        <TextBlock Text="{DynamicResource Settings_StopHdcServer}" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- General: Other -->
+                <TextBlock Text="{DynamicResource Settings_Other}" Classes="settings-group-header" />
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_AutoCheckUpdates}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_AutoCheckUpdatesHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding AutoCheckUpdates, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_DebugMode}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_DebugModeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding DebugMode, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_HardwareAccelerationPaths}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{Binding HardwareAccelerationSummary}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Classes="settings-choice"
+                                      ItemsSource="{Binding HardwareAccelerationOptions}"
+                                      SelectedIndex="{Binding HardwareAccelerationIndex, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vms:LocalizedOption">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <Border Classes="settings-banner-info" Margin="20,0,20,14"
+                                IsVisible="{Binding LacksHardwareAcceleration}">
+                            <TextBlock Text="{DynamicResource Settings_HardwareAccelerationNone}"
+                                       Classes="settings-value"
+                                       Foreground="{DynamicResource TextForeground}" />
+                        </Border>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <StackPanel Classes="settings-row-block" Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{DynamicResource Settings_FileAssociations}" Classes="settings-label" />
+                                    <TextBlock Text="{DynamicResource Settings_FileAssociationsHint}"
+                                               Classes="settings-description" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Button Classes="settings-action"
+                                            Command="{Binding ToggleFileAssociationSortCommand}"
+                                            ToolTip.Tip="{DynamicResource Settings_FileAssociationSortHint}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:Swap Width="14" Height="14" />
+                                            <TextBlock Text="{Binding FileAssociationSortLabel}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="settings-action"
+                                            Command="{Binding SaveFileAssociationSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <icons:Save Width="14" Height="14" />
+                                            <TextBlock Text="{DynamicResource Settings_FileAssociationsSave}" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding FileAssociationItems}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="8" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FileAssociationItem">
+                                        <CheckBox Content="{Binding Extension}"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  FontFamily="{StaticResource MonospaceFontFamily}"
+                                                  FontSize="13"
+                                                  MinHeight="24"
+                                                  Margin="0,1,4,1"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Firmware / Workspace section -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Tools Width="18" Height="18"
+                                     Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_Firmware}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_FirmwareDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="{DynamicResource Settings_PackingParameters}"
+                            Command="{Binding OpenPackingSettingsCommand}"
+                            Classes="settings-action" VerticalAlignment="Center">
+                        <Button.ContentTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <icons:Tools Width="14" Height="14" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </Button.ContentTemplate>
+                    </Button>
+                </Grid>
+
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_AutoSave}" Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_AutoSaveHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding AutoSave, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_FirmwareParallelism}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_FirmwareParallelismHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <NumericUpDown x:Name="FirmwareParallelismInput" Grid.Column="1"
+                                           Classes="settings-number"
+                                           Value="{Binding FirmwareParallelism, Mode=TwoWay}"
+                                           Minimum="1" Maximum="64" Increment="1" FormatString="0" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_ErofsRebuildOptimization}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ErofsRebuildOptimizationHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding ErofsRebuildOptimization, Mode=TwoWay}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Flash section -->
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Thunder Width="18" Height="18"
+                                       Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_Flash}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_FlashDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_ReadbackSkipPartitions}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ReadbackSkipPartitionsHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Classes="settings-input" Width="320"
+                                     VerticalAlignment="Center"
+                                     FontFamily="{StaticResource MonospaceFontFamily}"
+                                     Text="{Binding ReadbackSkipPartitions, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <StackPanel Classes="settings-row-block" Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_FlashProtocols}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_FlashProtocolsHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding FlashProtocolDisplayItems}"
+                                          ItemTemplate="{StaticResource DisplayPreferenceItemTemplate}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="settings-card-padded" IsVisible="{x:Static app:AppFeatures.AiAssistantEnabled}">
+                    <views:AiSettingsView DataContext="{Binding Ai}" />
+                </Border>
+
+                <!-- MCP section -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Sitemap Width="18" Height="18"
+                                       Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_Mcp}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_McpHint}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="settings-action"
+                                Command="{Binding AddMcpServerCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Add Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_McpAdd}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="settings-action"
+                                Command="{Binding SaveMcpSettingsCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Save Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_McpSave}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Classes="settings-card-padded">
+                    <StackPanel Spacing="0">
+                        <ItemsControl ItemsSource="{Binding McpServers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="mcp:McpClientServerConfig">
+                                    <Border Classes="settings-inner" Margin="0,0,0,12">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                            <StackPanel Spacing="8">
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                                    <TextBox Grid.ColumnSpan="2" Classes="settings-input"
+                                                             Text="{Binding Name}"
+                                                             PlaceholderText="{DynamicResource Settings_McpServerName}" />
+                                                    <ComboBox Grid.Column="2" Height="32" MinHeight="32" FontSize="13"
+                                                              HorizontalAlignment="Stretch"
+                                                              VerticalAlignment="Center"
+                                                              ItemsSource="{Binding $parent[UserControl].DataContext.McpTransportKinds}"
+                                                              SelectedItem="{Binding Transport}"
+                                                              ToolTip.Tip="{DynamicResource Settings_McpTransport}" />
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                                    <TextBox Classes="settings-input"
+                                                             FontFamily="{StaticResource MonospaceFontFamily}"
+                                                             Text="{Binding Command}"
+                                                             PlaceholderText="{DynamicResource Settings_McpCommand}" />
+                                                    <TextBox Grid.Column="1" Classes="settings-input"
+                                                             FontFamily="{StaticResource MonospaceFontFamily}"
+                                                             Text="{Binding Arguments}"
+                                                             PlaceholderText="{DynamicResource Settings_McpArguments}" />
+                                                    <TextBox Grid.Column="2" Classes="settings-input"
+                                                             FontFamily="{StaticResource MonospaceFontFamily}"
+                                                             Text="{Binding Url}"
+                                                             PlaceholderText="{DynamicResource Settings_McpUrl}" />
+                                                </Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                        VerticalAlignment="Center">
+                                                <ToggleSwitch Classes="settings-switch"
+                                                              IsChecked="{Binding Enabled}"
+                                                              ToolTip.Tip="{DynamicResource Settings_McpEnabled}" />
+                                                <Button Width="32" Height="32" MinWidth="0" Padding="0"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding $parent[UserControl].DataContext.RemoveMcpServerCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip.Tip="{DynamicResource Settings_McpRemove}">
+                                                    <icons:Delete Width="14" Height="14" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExpose}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}"
+                                          VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposePort}"
+                                           Classes="settings-value" VerticalAlignment="Center" />
+                                <NumericUpDown Classes="settings-number"
+                                               Value="{Binding McpExposePort, Mode=TwoWay}"
+                                               Minimum="1" Maximum="65535" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,14" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposeRoot}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeRootHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                                  Width="340" VerticalAlignment="Center">
+                                <TextBox Classes="settings-input"
+                                         FontFamily="{StaticResource MonospaceFontFamily}"
+                                         Text="{Binding McpExposeRootDirectory, Mode=TwoWay}"
+                                         PlaceholderText="{DynamicResource Settings_McpExposeRootPlaceholder}" />
+                                <Button Grid.Column="1" Content="{DynamicResource Keys_Browse}"
+                                        Command="{Binding BrowseMcpRootCommand}"
+                                        Classes="settings-action" />
+                            </Grid>
+                        </Grid>
+
+                        <Border Classes="settings-divider" Margin="0,14" />
+
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Settings_McpExposeFlash}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_McpExposeFlashHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="settings-switch"
+                                          IsChecked="{Binding McpExposeAllowFlash, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Border Classes="settings-banner-warning" Margin="0,12,0,0">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <icons:ErrorCircle Width="16" Height="16"
+                                                   Stroke1="{DynamicResource LogErrorBrush}"
+                                                   VerticalAlignment="Top" Margin="0,1,0,0" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource Settings_McpExposeFlashWarning}"
+                                           Foreground="{DynamicResource LogErrorBrush}"
+                                           FontSize="12" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Toolbox section -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Tools Width="18" Height="18"
+                                     Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_Toolbox}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_ToolboxDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Width="64" Height="3"
+                                     IsVisible="{Binding IsToolboxBusy}" />
+                        <Button Classes="settings-action" Command="{Binding RefreshToolboxCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <icons:Refresh Width="14" Height="14" />
+                                <TextBlock Text="{DynamicResource Settings_ToolboxRefresh}" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Classes="settings-card">
+                    <StackPanel>
+                        <Expander Classes="settings-expander"
+                                  IsExpanded="False">
+                            <Expander.Header>
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource Settings_ToolboxEmbedded}"
+                                               Classes="settings-label" />
+                                    <TextBlock Text="{DynamicResource Settings_ToolboxEmbeddedHint}"
+                                               Classes="settings-description" />
+                                </StackPanel>
+                            </Expander.Header>
+                            <ItemsControl ItemsSource="{Binding EmbeddedToolboxItems}" Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <controls:TwoColumnLastSpanPanel ColumnSpacing="10" RowSpacing="10" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ToolboxContentItem">
+                                        <Border Classes="settings-order-row">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <StackPanel Spacing="3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               Classes="settings-label"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Description}"
+                                                               Classes="settings-description" />
+                                                    <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="2"
+                                                               Margin="0,2,0,0">
+                                                        <TextBlock Text="{Binding DeclaredSizeText}"
+                                                                   Classes="settings-value" />
+                                                        <TextBlock Text="{Binding PresentSizeText}"
+                                                                   Classes="settings-value" />
+                                                        <TextBlock Text="{Binding FileCountText}"
+                                                                   Classes="settings-value" />
+                                                        <TextBlock Text="{Binding StateText}"
+                                                                   Classes="settings-value"
+                                                                   Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <Button Classes="settings-action"
+                                                            Command="{Binding ExportCommand}"
+                                                            IsVisible="{Binding CanExport}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <icons:Export Width="14" Height="14" />
+                                                            <TextBlock Text="{DynamicResource Settings_ToolboxExport}" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Classes="settings-action"
+                                                            Command="{Binding InstallCommand}"
+                                                            IsVisible="{Binding IsDriverRow}"
+                                                            IsEnabled="{Binding CanInstall}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <icons:Setting Width="14" Height="14" />
+                                                            <TextBlock Text="{Binding InstallActionText}" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
+
+                        <Border Classes="settings-row-divider" />
+
+                        <StackPanel Classes="settings-row-block" Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_ToolboxDownloaded}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_ToolboxDownloadedHint}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding DownloadedToolboxItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ToolboxContentItem">
+                                        <Border Classes="settings-order-row" Margin="0,0,0,6">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Classes="settings-label" />
+                                                        <TextBlock Text="{Binding Description}"
+                                                                   Classes="settings-description" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <TextBlock Text="{Binding DeclaredSizeText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding PresentSizeText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding FileCountText}"
+                                                                       Classes="settings-value" />
+                                                            <TextBlock Text="{Binding StateText}"
+                                                                       Classes="settings-value"
+                                                                       Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                                VerticalAlignment="Center">
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding PurgeCommand}"
+                                                                IsVisible="{Binding CanPurgeCache}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <icons:Delete Width="14" Height="14" />
+                                                                <TextBlock Text="{DynamicResource Settings_ToolboxPurge}" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Classes="settings-action"
+                                                                Command="{Binding ToggleExpandedCommand}"
+                                                                IsVisible="{Binding CanExpand}"
+                                                                ToolTip.Tip="{Binding EntryCountText}">
+                                                            <icons:ChevronDown Width="14" Height="14" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding Entries}"
+                                                    IsVisible="{Binding IsExpanded}"
+                                                    Grid.IsSharedSizeScope="True">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ToolboxContentEntryItem">
+                                                            <Grid ColumnSpacing="12"
+                                                                  Margin="0,4,0,0">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" MaxWidth="200" SharedSizeGroup="EntryName" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="EntrySize" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="{Binding Name}"
+                                                                           Classes="settings-value"
+                                                                           FontFamily="{StaticResource MonospaceFontFamily}"
+                                                                           TextWrapping="NoWrap"
+                                                                           TextTrimming="PrefixCharacterEllipsis"
+                                                                           VerticalAlignment="Center"
+                                                                           ToolTip.Tip="{Binding Name}" />
+                                                                <TextBlock Grid.Column="1"
+                                                                           Text="{Binding Path}"
+                                                                           Classes="settings-value"
+                                                                           FontFamily="{StaticResource MonospaceFontFamily}"
+                                                                           TextWrapping="NoWrap"
+                                                                           TextTrimming="PrefixCharacterEllipsis"
+                                                                           VerticalAlignment="Center"
+                                                                           ToolTip.Tip="{Binding Path}" />
+                                                                <TextBlock Grid.Column="2"
+                                                                           Text="{Binding SizeText}"
+                                                                           Classes="settings-value"
+                                                                           TextWrapping="NoWrap"
+                                                                           HorizontalAlignment="Right"
+                                                                           VerticalAlignment="Center" />
+                                                                <Button Grid.Column="3"
+                                                                        Classes="settings-action"
+                                                                        VerticalAlignment="Center"
+                                                                        Command="{Binding DeleteCommand}"
+                                                                        ToolTip.Tip="{DynamicResource Settings_ToolboxEntryDelete}">
+                                                                    <icons:Delete Width="14" Height="14" />
+                                                                </Button>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Border Classes="settings-banner-info" Margin="20,0,20,16"
+                                IsVisible="{Binding HasToolboxStatus}">
+                            <TextBlock Text="{Binding ToolboxStatus}" Classes="settings-value"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- About us section -->
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="4,12,4,0">
+                    <Border Classes="settings-icon">
+                        <icons:Chat Width="18" Height="18"
+                                    Stroke1="{DynamicResource SemiColorPrimaryPointerover}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Settings_About}" Classes="settings-section-title" />
+                        <TextBlock Text="{DynamicResource Settings_AboutDescription}"
+                                   Classes="settings-section-description" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Classes="settings-card-padded">
+                    <StackPanel>
+                        <StackPanel Spacing="10" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_Developers}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_DevelopersDescription}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{x:Static models:DevelopmentMembers.All}" Margin="0,0,-10,-10">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:DevelopmentMember">
+                                        <Border Classes="settings-inner" Margin="0,0,10,10" Padding="12">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Width="40" Height="40" CornerRadius="20"
+                                                        VerticalAlignment="Center">
+                                                    <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
+                                                           Width="40" Height="40" Stretch="UniformToFill">
+                                                        <Image.Clip>
+                                                            <EllipseGeometry Center="20,20" RadiusX="20" RadiusY="20" />
+                                                        </Image.Clip>
+                                                    </Image>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                                        <TextBlock Text="{Binding EnglishName}" FontSize="11"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Description}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                                    <HyperlinkButton Content="{DynamicResource Settings_GitHub}" FontSize="11"
+                                                                     Padding="4,2" MinHeight="0"
+                                                                     HorizontalAlignment="Right"
+                                                                     Tag="{Binding GitHubUrl}" Click="OnOpenLinkClick" />
+                                                    <HyperlinkButton Content="{DynamicResource Settings_Coolapk}" FontSize="11"
+                                                                     Padding="4,2" MinHeight="0"
+                                                                     HorizontalAlignment="Right"
+                                                                     Tag="{Binding CoolapkUrl}" Click="OnOpenLinkClick" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Border Classes="settings-divider" Margin="0,6,0,14" />
+
+                        <StackPanel Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_FriendlyLinks}"
+                                           Classes="settings-label" />
+                                <TextBlock Text="{DynamicResource Settings_FriendlyLinksDescription}"
+                                           Classes="settings-description" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{x:Static models:FriendlyLinks.All}" Margin="0,0,-10,-10">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:FriendlyLink">
+                                        <Border Classes="settings-inner" Margin="0,0,10,10" Padding="12">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Width="40" Height="40" CornerRadius="20"
+                                                        VerticalAlignment="Center">
+                                                    <Image Source="{Binding AvatarUri, Converter={StaticResource AssetImageConverter}}"
+                                                           Width="40" Height="40" Stretch="UniformToFill">
+                                                        <Image.Clip>
+                                                            <EllipseGeometry Center="20,20" RadiusX="20" RadiusY="20" />
+                                                        </Image.Clip>
+                                                    </Image>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                                    <TextBlock Text="{Binding Description}" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <HyperlinkButton Grid.Column="2"
+                                                                 FontSize="11"
+                                                                 Padding="4,2" MinHeight="0"
+                                                                 VerticalAlignment="Center"
+                                                                 HorizontalAlignment="Right"
+                                                                 Tag="{Binding Url}" Click="OnOpenLinkClick">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <TextBlock Text="{DynamicResource Settings_FriendlyLinkVisit}"
+                                                                   VerticalAlignment="Center" />
+                                                        <icons:ArrowRightUp Width="12" Height="12"
+                                                                            VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </HyperlinkButton>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

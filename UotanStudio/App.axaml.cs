@@ -25,7 +25,9 @@ using UotanStudio.Services.Ui.Launch;
 using UotanStudio.Services.Update;
 using UotanStudio.Themes;
 using UotanStudio.UiAbstractions;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Views;
 using UotanStudio.Views.Shell;
 
 namespace UotanStudio;
@@ -328,7 +330,7 @@ public partial class App : Application
 
         // The device panel starts the monitor on first access. Create it after the shell is ready so the first
         // enumeration runs after startup even when no binding evaluated it during window construction.
-        _ = ViewModels.Devices.DeviceViewModel.EnsureInstance();
+        _ = ViewModels.Shell.Devices.DeviceViewModel.EnsureInstance();
     }
 
     /// <summary>
@@ -762,12 +764,12 @@ public partial class App : Application
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "App", $"{error}: {ex.Message}"); }
     }
 
-    private Task RunCompareRequestAsync(string error, Func<ViewModels.Compare.CompareViewModel, Task> operation)
+    private Task RunCompareRequestAsync(string error, Func<ViewModels.Editors.MultiColumnBrowser.MultiColumnBrowserViewModel, Task> operation)
         => RunCompareRequestAsync(error, operation, openInNewTab: false);
 
     private Task RunCompareRequestAsync(
         string error,
-        Func<ViewModels.Compare.CompareViewModel, Task> operation,
+        Func<ViewModels.Editors.MultiColumnBrowser.MultiColumnBrowserViewModel, Task> operation,
         bool openInNewTab)
         => RunMainRequestAsync(error, main =>
         {

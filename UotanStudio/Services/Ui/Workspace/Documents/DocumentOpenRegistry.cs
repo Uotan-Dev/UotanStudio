@@ -7,8 +7,10 @@ using UotanStudio.Services.Images;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
-using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Editors.MultiColumnBrowser;
+using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 
 namespace UotanStudio.Services.Ui.Workspace.Documents;
 
@@ -291,9 +293,9 @@ internal static class DocumentOpenRegistry
         new()
         {
             Kind = "Compare",
-            ViewModelType = typeof(CompareViewModel),
+            ViewModelType = typeof(MultiColumnBrowserViewModel),
             GetPath = _ => null,
-            Cleanup = vm => ((CompareViewModel)vm).Cleanup(),
+            Cleanup = vm => ((MultiColumnBrowserViewModel)vm).Cleanup(),
             AllowEmptyPath = true,
         },
         new()

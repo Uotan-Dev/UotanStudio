@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using UotanStudio.Services.Ui;
 using UotanStudio.UiAbstractions;
-using UotanStudio.Views.Devices;
 using UotanStudio.Views.Shell;
 
 namespace UotanStudio.Views;

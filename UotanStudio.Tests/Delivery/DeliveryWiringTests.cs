@@ -4,6 +4,7 @@ using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
+using UotanStudio.ViewModels.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

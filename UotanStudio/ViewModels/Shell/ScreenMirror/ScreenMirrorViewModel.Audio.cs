@@ -1,0 +1,110 @@
+using UotanStudio.Media.Audio;
+using UotanStudio.Services;
+
+namespace UotanStudio.ViewModels.Shell.ScreenMirror;
+
+public partial class ScreenMirrorViewModel
+{
+    private string _audioBackend = string.Empty;
+    internal string AudioBackend => _audioBackend;
+    private void AudioLoop(UotanStudio.Mirroring.MirrorSessionFacade client, CancellationToken token)
+    {
+        IAudioDecoder? decoder = null;
+        IAudioSink? sink = null;
+        var sinkFailed = false;
+        var sinkBits = 0;
+        try
+        {
+            AudioCodecId codec = client.AudioMetadata?.CodecName switch
+            {
+                "AAC" => AudioCodecId.Aac,
+                "OPUS" => AudioCodecId.Opus,
+                "FLAC" => AudioCodecId.Flac,
+                "RAW" => AudioCodecId.Pcm,
+                _ => throw new NotSupportedException("Unsupported scrcpy audio codec."),
+            };
+            void OnAudioFrame(DecodedAudioFrame frame)
+            {
+                if (token.IsCancellationRequested) return;
+                Interlocked.Increment(ref _audioDecodedFrames);
+                Interlocked.Exchange(ref _audioSampleRate, frame.SampleRate);
+                Interlocked.Exchange(ref _audioChannels, frame.Channels);
+                if (sink is not null && (sink.SampleRate != frame.SampleRate || sink.Channels != frame.Channels || sinkBits != frame.BitsPerSample))
+                {
+                    sink.Dispose(); sink = null; sinkFailed = false;
+                }
+                if (sink is null && !sinkFailed)
+                {
+                    try
+                    {
+                        sink = AudioSinkFactory.Create();
+                        sink.Open(frame.Channels, frame.SampleRate, frame.BitsPerSample);
+                        sinkBits = frame.BitsPerSample;
+                        sink.Volume = _activeSettings.ScreenMirrorVolume;
+                        AudioSinkOpened?.Invoke(this, EventArgs.Empty);
+                    }
+                    catch (Exception error)
+                    {
+                        sink?.Dispose(); sink = null; sinkFailed = true;
+                        LogService.Instance.Write(LogLevel.Warn, "ScreenMirror", $"Audio playback unavailable: {error.Message}");
+                    }
+                }
+                if (sink is not null)
+                {
+                    try { sink.Write(frame.Span); }
+                    catch (Exception error)
+                    {
+                        sink.Dispose(); sink = null; sinkFailed = true;
+                        LogService.Instance.Write(LogLevel.Warn, "ScreenMirror", $"Audio playback stopped: {error.Message}");
+                    }
+                }
+            }
+            try
+            {
+                decoder = AudioDecoderFactory.Create(codec, _activeSettings.ScreenMirrorAudioBackend);
+                _audioBackend = decoder switch
+                {
+                    MediaFoundationAacDecoder => "Media Foundation AAC",
+                    AudioToolboxAacDecoder => "AudioToolbox AAC",
+                    GStreamerAudioDecoder => "GStreamer",
+                    _ => "PCM",
+                };
+                if (codec == AudioCodecId.Pcm) decoder.Initialize([], OnAudioFrame);
+            }
+            catch (Exception error) { LogService.Instance.Write(LogLevel.Warn, "ScreenMirror", error.Message); }
+            while (!token.IsCancellationRequested)
+            {
+                var packet = client.ReadAudioFrame(1000);
+                try
+                {
+                    if (decoder is null) continue;
+                    if (packet is null) { decoder.Poll(); continue; }
+                    if (packet.IsCodecConfig)
+                    {
+                        decoder.Initialize(packet.Data.AsSpan(0, packet.PayloadLength), OnAudioFrame);
+                        continue;
+                    }
+                    if (decoder.IsInitialized) decoder.Decode(packet.Data.AsSpan(0, packet.PayloadLength), checked(packet.PresentationTimestampMicroseconds * 10));
+                }
+                catch (Exception error) when (!token.IsCancellationRequested)
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "ScreenMirror", $"Audio decode stopped; draining transport: {error.Message}");
+                    decoder?.Dispose(); decoder = null;
+                }
+                finally
+                {
+                    if (packet is not null && !packet.IsCodecConfig)
+                    {
+                        packet.Dispose();
+                    }
+                }
+            }
+        }
+        catch (Exception error) when (!token.IsCancellationRequested)
+        {
+            LogService.Instance.Write(LogLevel.Error, "ScreenMirror", $"Audio transport failed: {error.Message}");
+        }
+        catch (Exception) when (token.IsCancellationRequested) { }
+        finally { sink?.Dispose(); decoder?.Dispose(); }
+    }
+}

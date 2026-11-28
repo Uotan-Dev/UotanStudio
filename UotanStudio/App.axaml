@@ -4,7 +4,7 @@
              xmlns:semi="https://irihi.tech/semi"
              xmlns:converters="using:UotanStudio.Converters"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
-             xmlns:devices="using:UotanStudio.ViewModels.Devices"
+             xmlns:devices="using:UotanStudio.ViewModels.Shell.Devices"
              xmlns:ui="using:UotanStudio.UiAbstractions"
              xmlns:dock="using:Dock.Avalonia.Controls"
              x:Class="UotanStudio.App"
@@ -105,6 +105,34 @@
             </Setter>
         </Style>
         <Style Selector="HostWindow[IsToolWindow=False] WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
+            <Setter Property="Margin" Value="40,0,136,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <!-- 自绘标题栏的应用图标：所有 Window 与 HostWindow 共用，窗口不再各自声明一份。
+             右侧留白按窗口能力区分：可最大化时留三个按钮（136），只有关闭按钮时留 48。
+             各窗口如确有特殊排布，仍可在自己的 Window.Styles 里覆盖同名选择器。 -->
+        <!-- Drawn-titlebar app icon shared by every Window and HostWindow; windows no longer declare it locally.
+             The right inset follows the window capabilities: 136 for windows with all three buttons, 48 when only
+             close is available. A window may still override the same selector in its own Window.Styles. -->
+        <Style Selector="Window WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background">
+                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+            </Setter>
+        </Style>
+        <Style Selector="Window WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,48,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Window[CanMaximize=True] WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,136,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="HostWindow WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background">
+                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+            </Setter>
+        </Style>
+        <Style Selector="HostWindow WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
             <Setter Property="Margin" Value="40,0,136,0" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>

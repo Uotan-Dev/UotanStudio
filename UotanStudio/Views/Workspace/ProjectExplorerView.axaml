@@ -156,12 +156,12 @@
                                 <icons:FolderOpen Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="{DynamicResource Explorer_OpenInMultiColumnBrowser}" Click="OnOpenInCompareView">
+                        <MenuItem Header="{DynamicResource Explorer_OpenInMultiColumnBrowser}" Click="OnOpenInMultiColumnBrowser">
                             <MenuItem.Icon>
                                 <icons:ViewColumn Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="{DynamicResource Explorer_OpenInNewMultiColumnBrowser}" Click="OnOpenInNewCompareView">
+                        <MenuItem Header="{DynamicResource Explorer_OpenInNewMultiColumnBrowser}" Click="OnOpenInNewMultiColumnBrowser">
                             <MenuItem.Icon>
                                 <icons:ViewColumn Width="16" Height="16" />
                             </MenuItem.Icon>

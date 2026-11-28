@@ -12,7 +12,7 @@ using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Projects;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 

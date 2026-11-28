@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
@@ -41,7 +42,7 @@ public partial class WorkspaceView : UserControl
         DockControl.AddHandler(ContextRequestedEvent, OnDockContextRequested,
             RoutingStrategies.Bubble, handledEventsToo: true);
 
-        DockMenuIcons.EnsureWired();
+        Controls.DockMenuIcons.EnsureWired();
     }
 
     /// <summary>
@@ -53,7 +54,7 @@ public partial class WorkspaceView : UserControl
         if (e.Source is Control { ContextMenu: { } menu })
         {
 
-            Dispatcher.UIThread.Post(() => DockMenuIcons.Apply(menu));
+            Dispatcher.UIThread.Post(() => Controls.DockMenuIcons.Apply(menu));
         }
     }
 

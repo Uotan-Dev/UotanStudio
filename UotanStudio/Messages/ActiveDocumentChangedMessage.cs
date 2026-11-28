@@ -2,6 +2,8 @@ namespace UotanStudio.Messages;
 
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 
 /// <summary>
 /// Message announcing which document became the active one, carrying its identity so subscribers can

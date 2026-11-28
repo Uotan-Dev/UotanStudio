@@ -7,6 +7,7 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Pipeline.Delivery;
 using UotanStudio.Tests.TestInfrastructure;
+using UotanStudio.ViewModels.Delivery;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

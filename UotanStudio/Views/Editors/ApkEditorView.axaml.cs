@@ -4,8 +4,8 @@ using Avalonia.Interactivity;
 using UotanStudio.Services;
 using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Projects;
-using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.Views.Editors;
 

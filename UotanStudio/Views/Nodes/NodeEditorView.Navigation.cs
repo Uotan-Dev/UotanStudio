@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using NodifyM.Avalonia.Controls;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Workflow.Nodes;

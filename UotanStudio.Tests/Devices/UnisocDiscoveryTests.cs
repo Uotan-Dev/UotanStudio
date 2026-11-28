@@ -3,7 +3,7 @@ using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Protocols.Unisoc;
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 using Xunit;
 
 namespace UotanStudio.Tests.Devices;

@@ -52,7 +52,7 @@ public class DockHostWindow : HostWindow
     /// <param name="options">Shared dock manager options.<para>共享的停靠管理器选项。</para></param>
     public DockHostWindow(DockManagerOptions options) : base(options)
     {
-        Workspace.DockMenuIcons.EnsureWired();
+        DockMenuIcons.EnsureWired();
         if (!OperatingSystem.IsLinux())
         {
             return;
