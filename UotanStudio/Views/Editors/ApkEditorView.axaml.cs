@@ -93,7 +93,7 @@ public partial class ApkEditorView : UserControl
         if (TopLevel.GetTopLevel(this) is Window owner)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Apk_View"),
-                "The workspace is not available.", Ursa.Controls.MessageBoxIcon.Error);
+                LanguageService.Instance.GetString("Apk_WorkspaceUnavailable"), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 

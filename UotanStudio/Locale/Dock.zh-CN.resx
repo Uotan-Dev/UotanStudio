@@ -1278,6 +1278,9 @@
   <data name="Apk_Install" xml:space="preserve">
     <value>安装</value>
   </data>
+  <data name="Apk_WorkspaceUnavailable" xml:space="preserve">
+    <value>当前工作区不可用，无法打开该文件。</value>
+  </data>
   <data name="Apk_Sign" xml:space="preserve">
     <value>签名</value>
   </data>

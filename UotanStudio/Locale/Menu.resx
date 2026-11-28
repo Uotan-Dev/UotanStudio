@@ -143,9 +143,7 @@ Estimated requirement: {2}</value>
   <data name="NewProject_SpaceWarning" xml:space="preserve">
     <value>{0}
 
-This estimate covers the selected original copies, image extraction and unpacking options, with temporary workspace reserved. Full unpacking may need more space. Continuing may fail if the disk fills up.
-
-Continue creating the project?</value>
+The selected location is estimated to have insufficient space. Unpacking may fail if you continue. Create the project anyway?</value>
   </data>
   <data name="NewProject_SpaceContinue" xml:space="preserve">
     <value>Continue creating</value>
@@ -211,7 +209,7 @@ Continue creating the project?</value>
     <value>Open Folder...</value>
   </data>
   <data name="Menu_OpenProjectFolderFailed" xml:space="preserve">
-    <value>The selected project folder could not be opened. Make sure it is readable and contains exactly one .uotan solution file.</value>
+    <value>The selected project folder could not be opened. Make sure the folder is accessible and contains exactly one .uotan solution file.</value>
   </data>
   <data name="Menu_OpenFile" xml:space="preserve">
     <value>Open File...</value>
@@ -907,7 +905,7 @@ Continue creating the project?</value>
     <value>Install unsigned plugin</value>
   </data>
   <data name="Plugin_InstallUnsignedPrompt" xml:space="preserve">
-    <value>&apos;{0}&apos; is not signed, so its publisher cannot be verified. Install it locally and grant: {1}?</value>
+    <value>&apos;{0}&apos; is not signed, so its publisher cannot be verified. Install it locally and grant these permissions anyway: {1}?</value>
   </data>
   <data name="Plugin_Install" xml:space="preserve">
     <value>Install</value>

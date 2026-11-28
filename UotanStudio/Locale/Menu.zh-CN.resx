@@ -143,9 +143,7 @@
   <data name="NewProject_SpaceWarning" xml:space="preserve">
     <value>{0}
 
-以上按所选原包复制、镜像提取及解包选项估算，并预留临时空间。完全解包后的实际占用可能更大；继续后可能因空间不足而失败。
-
-是否仍要继续创建？</value>
+预估所选位置空间不足，继续解包可能失败，是否仍要继续创建？</value>
   </data>
   <data name="NewProject_SpaceContinue" xml:space="preserve">
     <value>继续创建</value>
@@ -211,7 +209,7 @@
     <value>打开文件夹...</value>
   </data>
   <data name="Menu_OpenProjectFolderFailed" xml:space="preserve">
-    <value>无法打开所选项目文件夹。请确认文件夹可读取，且其中恰好包含一个 .uotan 解决方案文件。</value>
+    <value>无法打开所选项目文件夹。请确认该文件夹可以正常访问，并且其中只包含一个 .uotan 解决方案文件。</value>
   </data>
   <data name="Menu_OpenFile" xml:space="preserve">
     <value>打开文件...</value>
@@ -907,7 +905,7 @@
     <value>安装未签名插件</value>
   </data>
   <data name="Plugin_InstallUnsignedPrompt" xml:space="preserve">
-    <value>“{0}”未签名，无法校验其发布者。仍然本地安装并授予：{1}？</value>
+    <value>“{0}”未签名，无法校验其发布者。仍然本地安装并授予权限：{1}？</value>
   </data>
   <data name="Plugin_Install" xml:space="preserve">
     <value>安装</value>

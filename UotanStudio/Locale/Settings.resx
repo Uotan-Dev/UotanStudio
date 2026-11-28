@@ -763,7 +763,7 @@
     <value>Install driver package</value>
   </data>
   <data name="Settings_DriverInstallMessage" xml:space="preserve">
-    <value>Stage {0} into the Windows driver store and bind it to present devices?</value>
+    <value>Install {0} into the Windows driver store and bind it to present devices?</value>
   </data>
   <data name="Settings_DriverInstallConfirm" xml:space="preserve">
     <value>Install</value>
@@ -817,7 +817,7 @@
     <value>Clear cache</value>
   </data>
   <data name="Toolbox_PurgeMessage" xml:space="preserve">
-    <value>Delete the derived cache of {0}? The application rebuilds it the next time it is needed.</value>
+    <value>Delete the cache of {0}? The application rebuilds it automatically the next time it is needed.</value>
   </data>
   <data name="Toolbox_PurgeConfirm" xml:space="preserve">
     <value>Clear</value>

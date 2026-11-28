@@ -763,7 +763,7 @@
     <value>安装驱动包</value>
   </data>
   <data name="Settings_DriverInstallMessage" xml:space="preserve">
-    <value>把 {0} 暂存到 Windows 驱动仓库并绑定到在位设备吗？</value>
+    <value>要将 {0} 安装到 Windows 驱动仓库并绑定到在位设备吗？</value>
   </data>
   <data name="Settings_DriverInstallConfirm" xml:space="preserve">
     <value>安装</value>
@@ -817,7 +817,7 @@
     <value>清除缓存</value>
   </data>
   <data name="Toolbox_PurgeMessage" xml:space="preserve">
-    <value>删除 {0} 的派生缓存吗？应用会在下次需要时重建它。</value>
+    <value>删除 {0} 的缓存吗？应用会在下次需要时自动重建。</value>
   </data>
   <data name="Toolbox_PurgeConfirm" xml:space="preserve">
     <value>清除</value>

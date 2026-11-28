@@ -2596,6 +2596,7 @@ internal static class LocaleKeySets
         "Apk_Extract",
         "Apk_View",
         "Apk_Install",
+        "Apk_WorkspaceUnavailable",
         "Apk_Sign",
         "Apk_Size",
         "Apk_TargetSystem",

@@ -957,7 +957,7 @@
     <value>……另有 {0} 个分区未列出。</value>
   </data>
   <data name="Flash_MtkRebootConfirm" xml:space="preserve">
-    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求正常启动。确定继续？</value>
+    <value>将向设备发送引导程序，确定要继续吗？</value>
   </data>
 
 
@@ -1153,7 +1153,7 @@
     <value>重启到该模式</value>
   </data>
   <data name="Flash_EdlRebootTargetConfirm" xml:space="preserve">
-    <value>将把设备重启到所选目标模式，当前会话会被结束。确定继续？</value>
+    <value>设备将重启到所选的目标模式，当前连接会话会随之结束。确定要继续吗？</value>
   </data>
   <data name="Flash_EdlRebootTargetDone" xml:space="preserve">
     <value>已请求设备重启到目标模式。</value>
@@ -1402,7 +1402,7 @@
     <value>活动槽位（a、b、0 或 1）</value>
   </data>
   <data name="Flash_EdlSetActiveSlotConfirm" xml:space="preserve">
-    <value>将修改设备上的活动 A/B 槽位，之后启动使用所选槽位。确定继续？</value>
+    <value>将修改设备当前生效的 A/B 槽位，此后启动时会使用所选槽位。确定要继续吗？</value>
   </data>
   <data name="Flash_EdlSetActiveSlotDone" xml:space="preserve">
     <value>已请求切换活动槽位。</value>
@@ -2877,7 +2877,7 @@
     <value>重新打开已关闭脚本（Ctrl+Shift+T）</value>
   </data>
   <data name="Delivery_AutoZeroDisableConfirm" xml:space="preserve">
-    <value>关闭自动零分区会清空当前编排，是否继续？</value>
+    <value>关闭「自动零分区」会清空当前的编排内容，是否继续？</value>
   </data>
   <data name="FirmwareField_General" xml:space="preserve">
     <value>基本信息</value>
@@ -4506,7 +4506,7 @@
     <value>生成的正则表达式将在此显示</value>
   </data>
   <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
-    <value>烧录包将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作不可撤销。</value>
+    <value>该固件将改写所选进迭时空设备的分区表与其引用的全部镜像。此操作无法撤销。</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
     <value>全志</value>
@@ -4806,7 +4806,7 @@
     <value>擦除分区</value>
   </data>
   <data name="Flash_UnisocEraseConfirmDetail" xml:space="preserve">
-    <value>该固件包的 scheme 擦除分区 {0}，而不是写入镜像。该分区内的全部数据都会被销毁且无法恢复。全选不会勾选此行。</value>
+    <value>该固件包的 scheme 将会擦除分区 {0}，分区内的全部数据都会被销毁且无法恢复。全选不会勾选此行。</value>
   </data>
   <data name="Flash_UnisocFlash" xml:space="preserve">
     <value>烧录固件包</value>
@@ -5043,13 +5043,13 @@
     <value>需要管理员权限</value>
   </data>
   <data name="DiskFlash_ElevationUnavailableBody" xml:space="preserve">
-    <value>本进程无权写入选中的驱动器，且无法为此启动管理员进程。请以管理员身份重新启动应用。</value>
+    <value>本进程无权写入选中的驱动器，也无法为此启动管理员进程，请以管理员权限重新启动本应用；在 Linux/macOS 上请使用 sudo 启动。</value>
   </data>
   <data name="DiskFlash_ElevationUnsupportedTitle" xml:space="preserve">
     <value>当前平台不支持提权</value>
   </data>
   <data name="DiskFlash_ElevationUnsupportedBody" xml:space="preserve">
-    <value>仅在 Windows 上会把磁盘镜像交给独立的管理员进程写入。请在该平台上以管理员身份启动本应用。</value>
+    <value>权限不足，无法写入磁盘镜像。你可能需要以 sudo 运行本应用。</value>
   </data>
   <data name="DiskFlash_ScanSizeUnknown" xml:space="preserve">
     <value>有 {0} 个驱动器未能读取容量：读取物理磁盘容量需要管理员权限。开始烧录时会询问是否提权。</value>
@@ -5526,7 +5526,7 @@
     <value>引导程序已发送，板卡现已运行 U-Boot gadget。</value>
   </data>
   <data name="Flash_SpacemiTFlashTitle" xml:space="preserve">
-    <value>烧录该烧录包？</value>
+    <value>烧录固件包</value>
   </data>
   <data name="Flash_SpacemiTNeedsBootChain" xml:space="preserve">
     <value>板卡仍处于 BootROM 下载模式，请先发送引导程序。</value>

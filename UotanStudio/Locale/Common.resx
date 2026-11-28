@@ -957,7 +957,7 @@ Author: 暮间雾
     <value>... {0} more partitions not listed.</value>
   </data>
   <data name="Flash_MtkRebootConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first (the loader is loaded into device memory), then a normal boot is requested. Continue?</value>
+    <value>A bootloader will be sent to the device. Continue?</value>
   </data>
 
 
@@ -1153,7 +1153,7 @@ Author: 暮间雾
     <value>Reboot to mode</value>
   </data>
   <data name="Flash_EdlRebootTargetConfirm" xml:space="preserve">
-    <value>The device will reboot into the selected target mode and this session ends. Continue?</value>
+    <value>The device reboots into the selected target mode, and the current connection session ends with it. Continue?</value>
   </data>
   <data name="Flash_EdlRebootTargetDone" xml:space="preserve">
     <value>Requested a reboot into the target mode.</value>
@@ -1402,7 +1402,7 @@ Author: 暮间雾
     <value>Active slot (a, b, 0 or 1)</value>
   </data>
   <data name="Flash_EdlSetActiveSlotConfirm" xml:space="preserve">
-    <value>The active A/B slot is changed on the device; booting then uses the selected slot. Continue?</value>
+    <value>The currently active A/B slot on the device is changed; subsequent boots use the selected slot. Continue?</value>
   </data>
   <data name="Flash_EdlSetActiveSlotDone" xml:space="preserve">
     <value>Active slot change requested.</value>
@@ -2877,7 +2877,7 @@ Continue?</value>
     <value>Reopen closed script (Ctrl+Shift+T)</value>
   </data>
   <data name="Delivery_AutoZeroDisableConfirm" xml:space="preserve">
-    <value>Turning off automatic zero-size partitions clears the current composition. Continue?</value>
+    <value>Turning off "automatic zero-size partitions" clears the current composition. Continue?</value>
   </data>
   <data name="FirmwareField_General" xml:space="preserve">
     <value>General</value>
@@ -4506,7 +4506,7 @@ Continue?</value>
     <value>Generated regular expression will appear here</value>
   </data>
   <data name="Flash_SpacemiTConfirmDetail" xml:space="preserve">
-    <value>The flash package rewrites the partition table and every image it references on the selected SpacemiT device. This cannot be undone.</value>
+    <value>This firmware rewrites the partition table and every image it references on the selected SpacemiT device. This cannot be undone.</value>
   </data>
   <data name="Flash_Sunxi" xml:space="preserve">
     <value>Allwinner</value>
@@ -4806,7 +4806,7 @@ Continue?</value>
     <value>Erase partition</value>
   </data>
   <data name="Flash_UnisocEraseConfirmDetail" xml:space="preserve">
-    <value>The package scheme erases partition {0} instead of writing an image. Everything stored there is destroyed and cannot be recovered. Select-all never ticks this row.</value>
+    <value>The package scheme will erase partition {0}; everything in that partition is destroyed and cannot be recovered. Select-all never ticks this row.</value>
   </data>
   <data name="Flash_UnisocFlash" xml:space="preserve">
     <value>Flash package</value>
@@ -5043,13 +5043,13 @@ Continue?</value>
     <value>Administrator rights required</value>
   </data>
   <data name="DiskFlash_ElevationUnavailableBody" xml:space="preserve">
-    <value>This process may not write the selected drive and cannot start an administrator process for it. Restart the application as administrator.</value>
+    <value>This process may not write the selected drive and cannot start an administrator process for it. Restart the application as administrator; on Linux/macOS, start it with sudo.</value>
   </data>
   <data name="DiskFlash_ElevationUnsupportedTitle" xml:space="preserve">
     <value>Elevation is not available</value>
   </data>
   <data name="DiskFlash_ElevationUnsupportedBody" xml:space="preserve">
-    <value>Disk images are written in a separate administrator process on Windows only. Start this application as administrator on this platform.</value>
+    <value>Insufficient permissions to write the disk image. You may need to run this application with sudo.</value>
   </data>
   <data name="DiskFlash_ScanSizeUnknown" xml:space="preserve">
     <value>{0} drive(s) reported no capacity: reading the physical disk size needs administrator rights. Starting the flash asks for elevation.</value>
@@ -5526,7 +5526,7 @@ Continue?</value>
     <value>The boot program was sent; the board now runs the U-Boot gadget.</value>
   </data>
   <data name="Flash_SpacemiTFlashTitle" xml:space="preserve">
-    <value>Flash this package?</value>
+    <value>Flash firmware package</value>
   </data>
   <data name="Flash_SpacemiTNeedsBootChain" xml:space="preserve">
     <value>The board is still in BootROM download mode; send the boot program first.</value>
