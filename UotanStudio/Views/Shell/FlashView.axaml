@@ -1109,14 +1109,6 @@
                             <StackPanel Name="SunxiPane" Spacing="8">
                                 <TextBlock Text="{DynamicResource Flash_SunxiHint}" FontSize="12" Opacity="0.8"
                                            TextWrapping="Wrap" />
-                                <TextBlock Name="SunxiStatusText" Text="{Binding SunxiStatusText}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
-                                <TextBlock Name="SunxiModeHint" Text="{Binding SunxiModeHint}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
-                                <Button Name="SunxiRefreshButton" Classes="pane-action"
-                                        Click="OnSunxiRefreshClick"
-                                        Content="{DynamicResource Flash_SunxiRefresh}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiRefresh}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_SunxiFes1}" FontSize="12" Opacity="0.8" />
@@ -1211,66 +1203,12 @@
                                 </Grid>
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <TextBlock Text="{DynamicResource Flash_SunxiFelTools}" FontSize="12" FontWeight="SemiBold"
-                                           Opacity="0.8" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <TextBox Grid.Column="0" Name="SunxiAddressBox" Height="32"
-                                             VerticalContentAlignment="Center" Text="{Binding SunxiAddress}"
-                                             PlaceholderText="{DynamicResource Flash_SunxiAddress}"
-                                             AutomationProperties.Name="{DynamicResource Flash_SunxiAddress}" />
-                                    <TextBox Grid.Column="1" Name="SunxiLengthBox" Height="32"
-                                             VerticalContentAlignment="Center" Text="{Binding SunxiLength}"
-                                             PlaceholderText="{DynamicResource Flash_SunxiLength}"
-                                             AutomationProperties.Name="{DynamicResource Flash_SunxiLength}" />
-                                </Grid>
-                                <WrapPanel ItemsAlignment="StretchAll" ItemSpacing="6" LineSpacing="6">
-                                    <Button Name="SunxiReadMemoryButton" Classes="pane-action"
-                                            MinWidth="110"
-                                            Click="OnSunxiReadMemoryClick"
-                                            ToolTip.Tip="{DynamicResource Flash_SunxiReadMemory}"
-                                            AutomationProperties.Name="{DynamicResource Flash_SunxiReadMemory}">
-                                        <TextBlock Text="{DynamicResource Flash_SunxiReadMemory}"
-                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
-                                                   VerticalAlignment="Center" MaxLines="2" />
-                                    </Button>
-                                    <Button Name="SunxiWriteMemoryButton" Classes="pane-action"
-                                            MinWidth="110"
-                                            Click="OnSunxiWriteMemoryClick"
-                                            ToolTip.Tip="{DynamicResource Flash_SunxiWriteMemory}"
-                                            AutomationProperties.Name="{DynamicResource Flash_SunxiWriteMemory}">
-                                        <TextBlock Text="{DynamicResource Flash_SunxiWriteMemory}"
-                                                   FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
-                                                   VerticalAlignment="Center" MaxLines="2" />
-                                    </Button>
-                                </WrapPanel>
-                                <TextBox Name="SunxiExecuteAddressBox" Height="32" VerticalContentAlignment="Center"
-                                         Text="{Binding SunxiExecuteAddress}"
-                                         PlaceholderText="{DynamicResource Flash_SunxiExecuteAddress}"
-                                         AutomationProperties.Name="{DynamicResource Flash_SunxiExecuteAddress}" />
-                                <Button Name="SunxiExecuteButton" Classes="pane-action"
-                                        Click="OnSunxiExecuteClick"
-                                        Content="{DynamicResource Flash_SunxiExecute}"
-                                        AutomationProperties.Name="{DynamicResource Flash_SunxiExecute}" />
                             </StackPanel>
                         </Expander>
                         <!-- 紫光展锐 Unisoc 分类 -->
                         <Expander Name="UnisocExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Unisoc}" IsExpanded="{Binding IsUnisocSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="UnisocPane" Spacing="8">
-                                <TextBlock Text="{DynamicResource Flash_UnisocHint}" FontSize="12" Opacity="0.8"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Name="UnisocStatusText" Text="{Binding UnisocStatusText}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
-                                <TextBlock Name="UnisocModeHint" Text="{Binding UnisocModeHint}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
-                                <Button Name="UnisocRefreshButton" Classes="pane-action"
-                                        Click="OnUnisocRefreshClick"
-                                        Content="{DynamicResource Flash_UnisocRefresh}"
-                                        AutomationProperties.Name="{DynamicResource Flash_UnisocRefresh}" />
-                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
-                                        Margin="0,2" />
-                                <TextBlock Text="{DynamicResource Flash_UnisocFlashSourceHint}" FontSize="12"
-                                           Opacity="0.8" TextWrapping="Wrap" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <StackPanel Grid.Column="0" Spacing="4">
                                         <TextBlock Text="{DynamicResource Flash_UnisocFlashMode}" FontSize="12"

@@ -4107,30 +4107,14 @@ Continue?</value>
   <data name="Flash_SunxiPhaseDone" xml:space="preserve">
     <value>done</value>
   </data>
-  <data name="Flash_SunxiFelTools" xml:space="preserve">
-    <value>FEL memory tools</value>
-  </data>
-  <data name="Flash_SunxiAddress" xml:space="preserve">
-    <value>Address (hex)</value>
-  </data>
-  <data name="Flash_SunxiLength" xml:space="preserve">
-    <value>Length (bytes)</value>
-  </data>
-  <data name="Flash_SunxiReadMemory" xml:space="preserve">
-    <value>Read memory</value>
-  </data>
-  <data name="Flash_SunxiWriteMemory" xml:space="preserve">
-    <value>Write file</value>
-  </data>
-  <data name="Flash_SunxiExecuteAddress" xml:space="preserve">
-    <value>Entry address (hex)</value>
-  </data>
-  <data name="Flash_SunxiExecute" xml:space="preserve">
-    <value>Execute</value>
-  </data>
-  <data name="Flash_SunxiExecuteConfirmDetail" xml:space="preserve">
-    <value>Calls 0x{0:X8} on the device. Uploaded code can leave it in any state.</value>
-  </data>
+  
+  
+  
+  
+  
+  
+  
+  
   <data name="Flash_SunxiPhaseFes1" xml:space="preserve">
     <value>Running the DRAM loader...</value>
   </data>
@@ -4161,15 +4145,9 @@ Continue?</value>
   <data name="Flash_SunxiStatusFailed" xml:space="preserve">
     <value>Status query failed:</value>
   </data>
-  <data name="Flash_SunxiAddressInvalid" xml:space="preserve">
-    <value>Enter a hexadecimal address.</value>
-  </data>
-  <data name="Flash_SunxiLengthInvalid" xml:space="preserve">
-    <value>Enter a positive byte count.</value>
-  </data>
-  <data name="Flash_SunxiMemoryTooLarge" xml:space="preserve">
-    <value>The file exceeds the {0} memory-tool limit.</value>
-  </data>
+  
+  
+  
   <data name="Flash_SunxiInfo_Chip" xml:space="preserve">
     <value>Chip</value>
   </data>
@@ -4231,19 +4209,13 @@ Continue?</value>
     <value>UNISOC (Spreadtrum)</value>
   </data>
   <data name="Flash_UnisocHint" xml:space="preserve">
-    <value>Deep flash over the vendor download serial port. The loader stage is identified by the handshake; storage actions require FDL2, which the loaders inside a PAC package bring up.</value>
+    <value>Storage actions require FDL2; the loaded PAC package supplies the loaders that bring the link to that stage.</value>
   </data>
   <data name="Flash_UnisocHintUnknown" xml:space="preserve">
     <value>Loader stage unknown; refresh to run the handshake again.</value>
   </data>
   <data name="Flash_UnisocHintFdl2" xml:space="preserve">
     <value>FDL2 is answering: partition read, table read and package flash are available.</value>
-  </data>
-  <data name="Flash_UnisocRefresh" xml:space="preserve">
-    <value>Refresh stage</value>
-  </data>
-  <data name="Flash_UnisocFlashSourceHint" xml:space="preserve">
-    <value>Load a .pac package with the package bar; its loaders bring the link up to FDL2 and its partition images fill the main grid.</value>
   </data>
   <data name="Flash_UnisocFlashMode" xml:space="preserve">
     <value>Erase mode</value>

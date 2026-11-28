@@ -13,10 +13,10 @@ using UotanStudio.UiAbstractions;
 namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
-/// Allwinner page actions: status readout, the FEL memory tools, the FEL-to-FES service switch driven by a
+/// Allwinner page actions: status readout, the FEL-to-FES service switch driven by a
 /// first-stage loader and a service payload, and the package-driven FES flash and partition read-back the
 /// shared action buttons run against an IMAGEWTY package loaded into the main grid.
-/// <para>全志页面动作：状态读取、FEL 内存工具、由一级加载器与服务负载驱动的 FEL 到 FES 切换，以及通用动作按钮
+/// <para>全志页面动作：状态读取、由一级加载器与服务负载驱动的 FEL 到 FES 切换，以及通用动作按钮
 /// 对已载入主网格的 IMAGEWTY 包执行的 FES 烧录与分区回读。</para>
 /// </summary>
 public sealed partial class FlashViewModel
@@ -24,10 +24,6 @@ public sealed partial class FlashViewModel
     /// <summary>Cooperative bound for one Sunxi status query, matching the monitor's own bound.
     /// <para>单次全志状态查询的协作式时限，与监视服务自身的时限一致。</para></summary>
     private const int SunxiStatusTimeoutMs = 5000;
-
-    /// <summary>Largest payload the page hands to one FEL memory operation; larger files stay out of the page.
-    /// <para>页面交给单次 FEL 内存操作的最大负载；更大的文件不允许进入页面。</para></summary>
-    private const long SunxiMemoryLimitBytes = 64 * 1024 * 1024;
 
     /// <summary>Byte size of one Sunxi MBR sector; the plan's first sectors count in these units.
     /// <para>Sunxi MBR 单扇区的字节大小；计划中的首扇区以该单位计数。</para></summary>
@@ -47,24 +43,6 @@ public sealed partial class FlashViewModel
     /// <para>全志分类的状态行；身份读取与每个操作都会写入。</para></summary>
     [ObservableProperty]
     private string _sunxiStatusText = string.Empty;
-
-    /// <summary>Mode-aware hint under the status line; it says what the current FEL or FES mode offers and what
-    /// still blocks the storage actions. <para>状态行下方随模式变化的提示行；说明当前 FEL 或 FES 模式能做什么，
-    /// 以及存储动作还差什么。</para></summary>
-    [ObservableProperty]
-    private string _sunxiModeHint = string.Empty;
-
-    /// <summary>Memory address used by the read and write actions. <para>读取与写入动作使用的内存地址。</para></summary>
-    [ObservableProperty]
-    private string _sunxiAddress = "0x40000000";
-
-    /// <summary>Byte count used by the read action. <para>读取动作使用的字节数。</para></summary>
-    [ObservableProperty]
-    private string _sunxiLength = "256";
-
-    /// <summary>Entry address used by the execute action. <para>执行动作使用的入口地址。</para></summary>
-    [ObservableProperty]
-    private string _sunxiExecuteAddress = "0x40000000";
 
     /// <summary>Device tree uploaded into the service slot before U-Boot; empty when the image embeds one.
     /// <para>在执行 U-Boot 前上传到服务槽位的设备树；镜像自带时为空。</para></summary>
@@ -127,13 +105,9 @@ public sealed partial class FlashViewModel
     {
         RegisterGate("SunxiExpander", FlashControlGate.SectionHeader("SunxiExpander"));
         RegisterGate("SunxiPane", FlashControlGate.Section("SunxiPane", FlashDeviceMode.Sunxi, busyDisabled: true));
-        RegisterGate("SunxiRefreshButton", FlashControlGate.Sunxi("SunxiRefreshButton"));
         RegisterGate("SunxiChooseFes1Button", FlashControlGate.Sunxi("SunxiChooseFes1Button"));
         RegisterGate("SunxiChooseUbootButton", FlashControlGate.Sunxi("SunxiChooseUbootButton"));
         RegisterGate("SunxiBootFesButton", FlashControlGate.Sunxi("SunxiBootFesButton"));
-        RegisterGate("SunxiReadMemoryButton", FlashControlGate.Sunxi("SunxiReadMemoryButton"));
-        RegisterGate("SunxiWriteMemoryButton", FlashControlGate.Sunxi("SunxiWriteMemoryButton"));
-        RegisterGate("SunxiExecuteButton", FlashControlGate.Sunxi("SunxiExecuteButton"));
         RegisterGate("SunxiChooseDtbButton", FlashControlGate.Sunxi("SunxiChooseDtbButton"));
         RegisterGate("SunxiChooseSysConfigButton", FlashControlGate.Sunxi("SunxiChooseSysConfigButton"));
         RegisterGate("SunxiChooseBoardConfigButton", FlashControlGate.Sunxi("SunxiChooseBoardConfigButton"));
@@ -152,7 +126,6 @@ public sealed partial class FlashViewModel
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device)
         {
             SunxiStatusText = string.Empty;
-            SunxiModeHint = string.Empty;
             _sunxiIsFes = false;
             _sunxiStatusCache = null;
             RefreshDeviceUiGate();
@@ -183,7 +156,6 @@ public sealed partial class FlashViewModel
         catch (OperationCanceledException)
         {
             SunxiStatusText = language.GetString("Flash_SunxiStatusTimeout");
-            SunxiModeHint = language.GetString("Flash_SunxiHintUnknown");
             _sunxiIsFes = false;
             _sunxiStatusCache = null;
             RefreshDeviceUiGate();
@@ -191,23 +163,10 @@ public sealed partial class FlashViewModel
         catch (Exception exception)
         {
             SunxiStatusText = language.GetString("Flash_SunxiStatusFailed") + " " + exception.Message;
-            SunxiModeHint = language.GetString("Flash_SunxiHintUnknown");
             _sunxiIsFes = false;
             _sunxiStatusCache = null;
             RefreshDeviceUiGate();
         }
-    }
-
-    /// <summary>Re-reads the selected endpoint and refreshes its device badge; the click always forces a fresh
-    /// handshake instead of replaying the cached one.
-    /// <para>重新读取所选端点并刷新其设备徽章；点击总是强制重新握手而不是重放缓存。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal void OnSunxiRefreshClick(object? sender, RoutedEventArgs e)
-    {
-        _sunxiStatusCache = null;
-        RefreshSunxiDeviceStatus();
     }
 
     /// <summary>
@@ -917,192 +876,6 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reads the requested memory range and saves it to a chosen file through a temporary sibling and an atomic move.
-    /// <para>读取请求的内存区间，并经同目录临时文件与原子移动保存到所选文件。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnSunxiReadMemoryClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device) return;
-        if (!TryReadSunxiRange(out var address, out var length)) return;
-
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = _localizer.GetString("Flash_SunxiReadMemory"),
-            DefaultExtension = "bin",
-            SuggestedFileName = $"sunxi_{address:X8}_{length:X}.bin",
-            FileTypeChoices = [FilePickerFileTypes.All]
-        });
-        if (file is null || file.TryGetLocalPath() is not { } path) return;
-
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        SetBusy(true);
-        try
-        {
-            var data = await App.DeviceMonitor.ReadSunxiMemoryAsync(device, address, length, cancellation.Token)
-                .ConfigureAwait(true);
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? string.Empty;
-            var temporary = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-            try
-            {
-                await File.WriteAllBytesAsync(temporary, data, cancellation.Token).ConfigureAwait(true);
-                File.Move(temporary, path, overwrite: true);
-            }
-            catch
-            {
-                TryDeleteFile(temporary);
-                throw;
-            }
-
-            AppendLog($"{_localizer.GetString("Flash_SunxiReadMemory")}: " +
-                $"0x{address:X8}, {FormatByteSize(data.Length)} -> {Path.GetFileName(path)}");
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog(_localizer.GetString("Flash_Canceled"));
-        }
-        catch (Exception exception)
-        {
-            AppendError(exception);
-        }
-        finally
-        {
-            SetBusy(false);
-            _flashCancellation = null;
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Writes a chosen file into device memory at the address box.
-    /// <para>把所选文件写入地址框指定的设备内存。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnSunxiWriteMemoryClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device) return;
-        if (!TryParseSunxiAddress(SunxiAddress, out var address))
-        {
-            AppendLog(_localizer.GetString("Flash_SunxiAddressInvalid"));
-            return;
-        }
-
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString("Flash_SunxiWriteMemory"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (files.Count != 1 || files[0].TryGetLocalPath() is not { } path || !File.Exists(path)) return;
-        var info = new FileInfo(path);
-        if (info.Length <= 0)
-        {
-            return;
-        }
-
-        if (info.Length > SunxiMemoryLimitBytes)
-        {
-            AppendLog(string.Format(_localizer.GetString("Flash_SunxiMemoryTooLarge"),
-                FormatByteSize(SunxiMemoryLimitBytes)));
-            return;
-        }
-
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        SetBusy(true);
-        try
-        {
-            var data = await File.ReadAllBytesAsync(path, cancellation.Token).ConfigureAwait(true);
-            await App.DeviceMonitor.WriteSunxiMemoryAsync(device, address, data, cancellation.Token)
-                .ConfigureAwait(true);
-            AppendLog($"{_localizer.GetString("Flash_SunxiWriteMemory")}: {Path.GetFileName(path)} -> " +
-                $"0x{address:X8}, {FormatByteSize(data.Length)}");
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog(_localizer.GetString("Flash_Canceled"));
-        }
-        catch (Exception exception)
-        {
-            AppendError(exception);
-        }
-        finally
-        {
-            SetBusy(false);
-            _flashCancellation = null;
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Calls the entry address the host already wrote, after a typed confirmation; executing uploaded code can leave
-    /// the endpoint in any state, so it is gated like a flash action.
-    /// <para>在输入确认短语后调用主机已写入的入口地址；执行已上传代码会让端点进入任意状态，因此像烧录动作一样门控。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal async void OnSunxiExecuteClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Sunxi } device) return;
-        if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        if (!TryParseSunxiAddress(SunxiExecuteAddress, out var address))
-        {
-            AppendLog(_localizer.GetString("Flash_SunxiAddressInvalid"));
-            return;
-        }
-
-        var language = _localizer;
-        bool confirmed;
-        _confirming = true;
-        try
-        {
-            confirmed = await DialogService.ConfirmDangerousAsync(owner, new DangerousConfirmRequest
-            {
-                TabTitle = language.GetString("Flash_Sunxi"),
-                Title = language.GetString("Flash_SunxiExecute"),
-                Detail = string.Format(language.GetString("Flash_SunxiExecuteConfirmDetail"), address),
-                ConfirmWord = "EXEC",
-                DeviceIdentifier = _deviceViewModel?.SelectedDevice?.ConfirmationIdentity
-            }).ConfigureAwait(true);
-        }
-        finally
-        {
-            _confirming = false;
-        }
-
-        if (!confirmed) return;
-
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        SetBusy(true);
-        try
-        {
-            await App.DeviceMonitor.ExecuteSunxiAsync(device, address, cancellation.Token).ConfigureAwait(true);
-            AppendLog($"{language.GetString("Flash_SunxiExecute")}: 0x{address:X8}");
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog(language.GetString("Flash_Canceled"));
-        }
-        catch (Exception exception)
-        {
-            AppendError(exception);
-        }
-        finally
-        {
-            SetBusy(false);
-            _flashCancellation = null;
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
     /// Publishes one status read: the status line and mode hint in the Sunxi section, the device status table,
     /// the mode into the device manager badge and the refreshed gates, because the FES answer opens the shared
     /// flash and read-back actions.
@@ -1113,7 +886,6 @@ public sealed partial class FlashViewModel
     {
         var language = _localizer;
         SunxiStatusText = BuildSunxiStatusLine(status, language);
-        SunxiModeHint = language.GetString(status.IsFes ? "Flash_SunxiHintFes" : "Flash_SunxiHintFel");
         _sunxiIsFes = status.IsFes;
         ReplaceDeviceStatus(SelectedDevice?.Key, BuildSunxiStatusRows(status, language));
         if (_deviceViewModel?.SelectedDevice is { } info)
@@ -1131,7 +903,6 @@ public sealed partial class FlashViewModel
     {
         _sunxiStatusCache = null;
         SunxiStatusText = message;
-        SunxiModeHint = _localizer.GetString("Flash_SunxiHintUnknown");
         _sunxiIsFes = false;
         ReplaceDeviceStatus(deviceKey, []);
         RefreshDeviceUiGate();
@@ -1241,41 +1012,6 @@ public sealed partial class FlashViewModel
         return files.Count == 1 && files[0].TryGetLocalPath() is { } path && File.Exists(path)
             ? path
             : string.Empty;
-    }
-
-    private bool TryReadSunxiRange(out uint address, out int length)
-    {
-        length = 0;
-        if (!TryParseSunxiAddress(SunxiAddress, out address))
-        {
-            AppendLog(_localizer.GetString("Flash_SunxiAddressInvalid"));
-            return false;
-        }
-
-        if (!int.TryParse(SunxiLength, NumberStyles.Integer, CultureInfo.InvariantCulture, out length) || length <= 0)
-        {
-            AppendLog(_localizer.GetString("Flash_SunxiLengthInvalid"));
-            return false;
-        }
-
-        if ((ulong)address + (uint)length > uint.MaxValue)
-        {
-            AppendLog(_localizer.GetString("Flash_SunxiAddressInvalid"));
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool TryParseSunxiAddress(string text, out uint address)
-    {
-        var value = text.Trim();
-        if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value[2..];
-        }
-
-        return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out address);
     }
 
     private static void TryDeleteFile(string path)

@@ -1,6 +1,5 @@
 using System.Globalization;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Comm.Protocols.Unisoc;
@@ -74,8 +73,8 @@ public sealed partial class FlashViewModel
     private bool _unisocIsFdl2;
 
     /// <summary>Status the selected endpoint answered most recently, kept per device key so re-selecting the same
-    /// endpoint republishes it without another handshake; the refresh button clears it.
-    /// <para>所选端点最近一次应答的状态，按设备键保存，使重新选中同一端点时直接重发而无需再次握手；刷新按钮会将其清除。</para></summary>
+    /// endpoint republishes it without another handshake.
+    /// <para>所选端点最近一次应答的状态，按设备键保存，使重新选中同一端点时直接重发而无需再次握手。</para></summary>
     private (string Key, UnisocDeviceStatus Status)? _unisocStatusCache;
 
     /// <summary>
@@ -87,15 +86,14 @@ public sealed partial class FlashViewModel
     {
         RegisterGate("UnisocExpander", FlashControlGate.SectionHeader("UnisocExpander"));
         RegisterGate("UnisocPane", FlashControlGate.Unisoc("UnisocPane", busyDisabled: true));
-        RegisterGate("UnisocRefreshButton", FlashControlGate.Unisoc("UnisocRefreshButton"));
     }
 
     /// <summary>
     /// Queries the selected endpoint once and publishes the stage, stage hint and status table. The stage also
     /// updates the device badge, because discovery cannot tell the loader stages apart. A cached answer for the
-    /// same device key republishes without another handshake; the refresh button forces a fresh query.
+    /// same device key republishes without another handshake.
     /// <para>查询一次所选端点并发布阶段、阶段提示与状态表。阶段同时更新设备徽章，因为发现阶段无法区分加载阶段。
-    /// 同一设备键的缓存应答直接重发而无需再次握手；刷新按钮强制重新查询。</para>
+    /// 同一设备键的缓存应答直接重发而无需再次握手。</para>
     /// </summary>
     internal async void RefreshUnisocDeviceStatus()
     {
@@ -146,18 +144,6 @@ public sealed partial class FlashViewModel
             _unisocStatusCache = null;
             RefreshDeviceUiGate();
         }
-    }
-
-    /// <summary>Re-reads the selected endpoint and refreshes its device badge; the click always forces a fresh
-    /// handshake instead of replaying the cached one.
-    /// <para>重新读取所选端点并刷新其设备徽章；点击总是强制重新握手而不是重放缓存。</para>
-    /// </summary>
-    /// <param name="sender">Event source. <para>事件来源。</para></param>
-    /// <param name="e">Event arguments. <para>事件参数。</para></param>
-    internal void OnUnisocRefreshClick(object? sender, RoutedEventArgs e)
-    {
-        _unisocStatusCache = null;
-        RefreshUnisocDeviceStatus();
     }
 
     /// <summary>
