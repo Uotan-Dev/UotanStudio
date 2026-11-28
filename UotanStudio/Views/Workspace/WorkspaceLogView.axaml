@@ -1,18 +1,26 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:vm="using:UotanStudio.ViewModels.Workspace"
              xmlns:edit="using:AvaloniaEdit"
              xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Workspace.WorkspaceLogView"
              x:DataType="vm:WorkspaceLogViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border#TopBar ComboBoxItem">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="8,3" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,*">
     <!-- 顶栏：筛选与操作按钮 -->
-    <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <WrapPanel ItemSpacing="8" LineSpacing="4">
-        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+    <Border Grid.Row="0" Name="TopBar" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <controls:ResponsiveToolbar Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                    controls:ResponsiveToolbar.Priority="2">
           <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
                      VerticalAlignment="Center" />
-          <ComboBox Classes="Small" Width="86" Height="22" MinHeight="0" Padding="6,0"
+          <ComboBox Classes="Small" MinWidth="64" Height="22" MinHeight="0" Padding="6,0"
                     ItemsSource="{Binding Levels}"
                     SelectedItem="{Binding LevelFilter}"
                     HorizontalAlignment="Left">
@@ -24,10 +32,11 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                    controls:ResponsiveToolbar.Priority="1">
           <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11"
                      VerticalAlignment="Center" />
-          <ComboBox Classes="Small" Width="120" Height="22" MinHeight="0" Padding="6,0"
+          <ComboBox Classes="Small" MinWidth="68" MaxWidth="120" Height="22" MinHeight="0" Padding="6,0"
                     ItemsSource="{Binding Sources}" ToolTip.Tip="{Binding SourceFilter}"
                     SelectedItem="{Binding SourceFilter}"
                     HorizontalAlignment="Left">
@@ -39,7 +48,11 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
-        <TextBox Name="LogSearchBox" Classes="Small" Width="180"
+        <TextBox Name="LogSearchBox" Classes="Small" MinWidth="120"
+                 HorizontalAlignment="Stretch"
+                 controls:ResponsiveToolbar.Priority="3"
+                 controls:ResponsiveToolbar.IsFlexible="True"
+                 controls:ResponsiveToolbar.PreferredWidth="200"
                  Height="22" MinHeight="0" FontSize="11" Padding="4,0"
                  VerticalContentAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}"
                  PlaceholderText="{DynamicResource Log_Search}" AutomationProperties.Name="{DynamicResource Log_Search}">
@@ -54,10 +67,12 @@
           </TextBox.InnerRightContent>
         </TextBox>
         <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
-                VerticalAlignment="Center" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+                VerticalAlignment="Center" Click="OnClearClick"
+                controls:ResponsiveToolbar.Priority="2"
+                ToolTip.Tip="{DynamicResource Log_Clear}">
           <icons:Delete Width="12" Height="12" />
         </Button>
-      </WrapPanel>
+      </controls:ResponsiveToolbar>
     </Border>
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="1" Name="LogEditor"

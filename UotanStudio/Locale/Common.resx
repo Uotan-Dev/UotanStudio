@@ -5621,4 +5621,7 @@ Continue?</value>
   <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
     <value>{0} left</value>
   </data>
+  <data name="Toolbar_More" xml:space="preserve">
+    <value>More actions</value>
+  </data>
 </root>

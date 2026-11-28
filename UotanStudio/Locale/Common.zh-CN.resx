@@ -5621,4 +5621,7 @@
   <data name="CheckUpdate_TimeRemaining" xml:space="preserve">
     <value>剩余 {0}</value>
   </data>
+  <data name="Toolbar_More" xml:space="preserve">
+    <value>更多操作</value>
+  </data>
 </root>

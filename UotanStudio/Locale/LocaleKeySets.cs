@@ -1852,6 +1852,7 @@ internal static class LocaleKeySets
         "CheckUpdate_ReadyToInstall",
         "CheckUpdate_SizeUnknown",
         "CheckUpdate_TimeRemaining",
+        "Toolbar_More",
     ];
 
     internal static readonly string[] Menu =

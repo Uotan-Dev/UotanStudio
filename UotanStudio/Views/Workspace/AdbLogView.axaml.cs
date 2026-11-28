@@ -50,7 +50,6 @@ public partial class AdbLogView : UserControl
         {
             var isLive = DataContext is AdbLogViewModel;
             TopBar.IsVisible = isLive;
-            LiveControls.IsVisible = isLive;
             UpdateEditorOwner();
             if (IsLoaded) BindModel();
         };
