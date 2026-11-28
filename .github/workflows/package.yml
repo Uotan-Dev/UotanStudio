@@ -412,7 +412,7 @@ jobs:
         run: |
           set -euo pipefail
           pkg="$RUNNER_TEMP/deb/uotanstudio_$VER-1_$ARCH"
-          mkdir -p "$pkg/DEBIAN" "$pkg/opt/$APP_NAME" \
+          mkdir -p "$pkg/DEBIAN" "$pkg/opt/$APP_NAME"
           mkdir -p "$pkg/usr/share/mime/packages"
           cat > "$pkg/usr/share/mime/packages/uotanstudio.xml" <<'MIME'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -456,7 +456,7 @@ jobs:
             <mime-type type="application/x-uotanstudio-logcat"><glob pattern="*.logcat"/></mime-type>
           </mime-info>
           MIME
-            "$pkg/usr/share/applications" "$pkg/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "$pkg/usr/share/applications" "$pkg/usr/share/icons/hicolor/256x256/apps"
           cp -R publish/. "$pkg/opt/$APP_NAME/"
           chmod +x "$pkg/opt/$APP_NAME/$EXE_NAME"
 
@@ -698,48 +698,6 @@ jobs:
           work="$RUNNER_TEMP/apkbuild"
           pkgver="${VER%%-*}"
           mkdir -p "$work/out" "$work/build"
-          cat > "$work/build/uotanstudio.xml" <<'MIME'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-            <mime-type type="application/x-uotanstudio-uotan"><glob pattern="*.uotan"/></mime-type>
-            <mime-type type="application/x-uotanstudio-uotanfw"><glob pattern="*.uotanfw"/></mime-type>
-            <mime-type type="application/x-uotanstudio-uotannode"><glob pattern="*.uotannode"/></mime-type>
-            <mime-type type="application/x-uotanstudio-img"><glob pattern="*.img"/></mime-type>
-            <mime-type type="application/x-uotanstudio-bin"><glob pattern="*.bin"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dat"><glob pattern="*.dat"/></mime-type>
-            <mime-type type="application/x-uotanstudio-lz4"><glob pattern="*.lz4"/></mime-type>
-            <mime-type type="application/x-uotanstudio-br"><glob pattern="*.br"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dtb"><glob pattern="*.dtb"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dtbo"><glob pattern="*.dtbo"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dts"><glob pattern="*.dts"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dtsi"><glob pattern="*.dtsi"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ext4"><glob pattern="*.ext4"/></mime-type>
-            <mime-type type="application/x-uotanstudio-erofs"><glob pattern="*.erofs"/></mime-type>
-            <mime-type type="application/x-uotanstudio-f2fs"><glob pattern="*.f2fs"/></mime-type>
-            <mime-type type="application/x-uotanstudio-qcn"><glob pattern="*.qcn"/></mime-type>
-            <mime-type type="application/x-uotanstudio-pac"><glob pattern="*.pac"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ops"><glob pattern="*.ops"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ofp"><glob pattern="*.ofp"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ozip"><glob pattern="*.ozip"/></mime-type>
-            <mime-type type="application/x-uotanstudio-nb0"><glob pattern="*.nb0"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dz"><glob pattern="*.dz"/></mime-type>
-            <mime-type type="application/x-uotanstudio-kdz"><glob pattern="*.kdz"/></mime-type>
-            <mime-type type="application/x-uotanstudio-app"><glob pattern="*.app"/></mime-type>
-            <mime-type type="application/x-uotanstudio-sin"><glob pattern="*.sin"/></mime-type>
-            <mime-type type="application/x-uotanstudio-mpk"><glob pattern="*.mpk"/></mime-type>
-            <mime-type type="application/x-uotanstudio-cpb"><glob pattern="*.cpb"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ntpi"><glob pattern="*.ntpi"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ruu"><glob pattern="*.ruu"/></mime-type>
-            <mime-type type="application/x-uotanstudio-ftf"><glob pattern="*.ftf"/></mime-type>
-            <mime-type type="application/x-uotanstudio-apk"><glob pattern="*.apk"/></mime-type>
-            <mime-type type="application/x-uotanstudio-hap"><glob pattern="*.hap"/></mime-type>
-            <mime-type type="application/x-uotanstudio-dex"><glob pattern="*.dex"/></mime-type>
-            <mime-type type="application/x-uotanstudio-arsc"><glob pattern="*.arsc"/></mime-type>
-            <mime-type type="application/x-uotanstudio-prop"><glob pattern="*.prop"/></mime-type>
-            <mime-type type="application/x-uotanstudio-rc"><glob pattern="*.rc"/></mime-type>
-            <mime-type type="application/x-uotanstudio-logcat"><glob pattern="*.logcat"/></mime-type>
-          </mime-info>
-          MIME
           cat > "$work/build/uotanstudio.xml" <<'MIME'
           <?xml version="1.0" encoding="UTF-8"?>
           <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
