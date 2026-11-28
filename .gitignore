@@ -64,6 +64,7 @@ artifacts/
 
 # Local tooling and temporary preview output
 .tools/
+tools/mtk-probe/
 
 # Tye
 .tye/
