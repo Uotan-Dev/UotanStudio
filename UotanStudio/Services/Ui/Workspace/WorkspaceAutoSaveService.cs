@@ -10,7 +10,7 @@ using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Workspace;
 using Ursa.Controls;
 

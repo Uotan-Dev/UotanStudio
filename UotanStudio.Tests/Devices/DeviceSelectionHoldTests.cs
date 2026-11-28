@@ -1,5 +1,5 @@
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 using Xunit;
 
 namespace UotanStudio.Tests.Devices;

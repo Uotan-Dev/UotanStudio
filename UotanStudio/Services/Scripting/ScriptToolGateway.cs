@@ -275,7 +275,7 @@ public sealed class DeviceScriptToolGateway : IScriptToolGateway
     /// <returns>The outcome of the flash operation.<para>刷写操作的结果。</para></returns>
     public Task<FlashResult> FlashImageAsync(DetectedDevice device, string partition, string imagePath,
         CancellationToken cancellationToken)
-        => FlashService.Default.FlashImageAsync(new ViewModels.Devices.DeviceInfo(device), partition, imagePath,
+        => FlashService.Default.FlashImageAsync(new ViewModels.Shell.Devices.DeviceInfo(device), partition, imagePath,
             null, cancellationToken);
 
     /// <summary>Erases one partition.<para>擦除一个分区。</para></summary>
@@ -286,7 +286,7 @@ public sealed class DeviceScriptToolGateway : IScriptToolGateway
     /// <returns>The outcome of the erase operation.<para>擦除操作的结果。</para></returns>
     public Task<FlashResult> ErasePartitionAsync(DetectedDevice device, string partition,
         CancellationToken cancellationToken)
-        => FlashService.Default.ErasePartitionAsync(new ViewModels.Devices.DeviceInfo(device), partition,
+        => FlashService.Default.ErasePartitionAsync(new ViewModels.Shell.Devices.DeviceInfo(device), partition,
             null, cancellationToken);
 
     /// <summary>Reads one property or fastboot variable.<para>读取一个属性或 fastboot 变量。</para></summary>
@@ -297,7 +297,7 @@ public sealed class DeviceScriptToolGateway : IScriptToolGateway
     /// <returns>The result carrying the read value.<para>携带所读值的结果。</para></returns>
     public Task<FlashResult> GetDevicePropertyAsync(DetectedDevice device, string propertyName,
         CancellationToken cancellationToken)
-        => FlashService.Default.GetDevicePropertyAsync(new ViewModels.Devices.DeviceInfo(device), propertyName,
+        => FlashService.Default.GetDevicePropertyAsync(new ViewModels.Shell.Devices.DeviceInfo(device), propertyName,
             cancellationToken);
 
     /// <summary>Reads the Fastboot partition table.<para>读取 Fastboot 分区表。</para></summary>

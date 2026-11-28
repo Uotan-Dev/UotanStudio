@@ -11,7 +11,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Workspace.Documents;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.ViewModels.Editors;
 

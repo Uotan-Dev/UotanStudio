@@ -3,7 +3,7 @@ using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 using UotanStudio.Workflow.Execution;
 
 namespace UotanStudio.Workflow.Nodes;

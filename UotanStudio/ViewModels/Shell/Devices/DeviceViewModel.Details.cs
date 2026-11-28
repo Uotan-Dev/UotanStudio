@@ -1,0 +1,615 @@
+using UotanStudio.Comm.Protocols.Unisoc;
+using UotanStudio.Services;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Flash;
+
+namespace UotanStudio.ViewModels.Shell.Devices;
+
+public partial class DeviceViewModel
+{
+    /// <summary>
+    /// Cooperative bound for the MTK read-only identity query, so one scan is never held up by a device.
+    /// <para>MTK 只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int MtkIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the Rockchip read-only identity query, so one scan is never held up by a device.
+    /// <para>瑞芯微只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int RkdlIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the Allwinner read-only identity query, so one scan is never held up by a device.
+    /// <para>全志只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int SunxiIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the UNISOC read-only stage handshake, so one scan is never held up by a device.
+    /// <para>紫光展锐只读阶段握手的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int UnisocIdentityTimeoutMs = 5000;
+
+    /// <summary>
+    /// Cooperative bound for the whole ADB detail query, so a slow device cannot hold the exclusive direct-USB
+    /// endpoint long enough to block a mirror start.
+    /// <para>整段 ADB 详情查询的协作式时限，使响应慢的设备无法长时间占住独占直连 USB 端点而阻塞投屏启动。</para>
+    /// </summary>
+    private const int AdbDetailTimeoutMs = 45_000;
+
+    /// <summary>
+    /// Per-command bound for one detail shell command; the query runs several of them inside the budget above.
+    /// <para>单条详情 shell 命令的时限；整段查询在上面的预算内执行多条命令。</para>
+    /// </summary>
+    private const int AdbDetailCommandTimeoutMs = 30_000;
+
+    private static readonly CancellationTokenSource AppleQueryCts =
+        new(TimeSpan.FromSeconds(45));
+
+    /// <summary>
+    /// Dispatches to the mode-specific enrichment method based on the device protocol.
+    /// <para>按设备协议分发到对应的信息丰富方法。</para>
+    /// </summary>
+    private Task EnrichDeviceInfoAsync(DeviceInfo device) => device.Protocol switch
+    {
+        DeviceProtocolKind.Adb => EnrichAdbInfoAsync(device),
+        DeviceProtocolKind.Hdc => EnrichHdcInfoAsync(device),
+        DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
+        DeviceProtocolKind.Edl => EnrichEdlInfoAsync(device),
+        DeviceProtocolKind.Mtk => EnrichMtkInfoAsync(device),
+        DeviceProtocolKind.Ios => EnrichIosInfoAsync(device),
+        DeviceProtocolKind.Rkdl => EnrichRkdlInfoAsync(device),
+        DeviceProtocolKind.Sunxi => EnrichSunxiInfoAsync(device),
+        DeviceProtocolKind.Unisoc => EnrichUnisocInfoAsync(device),
+        _ => Task.CompletedTask,
+    };
+
+    /// <summary>
+    /// Queries one Apple device over a bounded background session and records the lockdown values.
+    /// <para>在受限的后台会话上查询一台 Apple 设备并记录 lockdown 取值。</para>
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    /// <summary>
+    /// <para>仅对尚未识别过模式的全志端点做一次只读身份握手，把 FEL/FES 写进设备徽章；两种模式以相同的
+    /// VID/PID 枚举，发现阶段无法区分。握手只发送身份查询命令，不写内存、不切换模式；失败或超时仅留下
+    /// 调试日志，徽章保持普通 "Sunxi"，下次扫描重试。</para>
+    /// Performs one read-only identity handshake against Allwinner endpoints whose mode has not been
+    /// recognized yet, recording FEL or FES into the device badge; both modes enumerate with the same
+    /// VID/PID pair, so discovery cannot tell them apart. The handshake sends the identity query only and
+    /// neither writes memory nor switches modes; a failure or timeout leaves a debug log and keeps the badge
+    /// as plain "Sunxi" until the next scan retries.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichSunxiInfoAsync(DeviceInfo device)
+    {
+        if (device.HasSunxiMode)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(SunxiIdentityTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QuerySunxiStatusAsync(endpoint,
+                timeout.Token).GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.SunxiMode = status.IsFes ? "FES" : "FEL";
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"Sunxi identity query for {endpoint.Key} failed: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Performs one read-only loader-stage handshake against UNISOC endpoints whose stage has not been recognized
+    /// yet, recording BootRom/FDL1/FDL2 into the device badge. The handshake opens a session only and neither
+    /// uploads loaders nor writes storage; a failure or timeout leaves a debug log and keeps the badge as plain
+    /// "Unisoc" until the next scan retries.
+    /// <para>仅对尚未识别过阶段的紫光展锐端点做一次只读加载阶段握手，把 BootRom/FDL1/FDL2 写进设备徽章；握手
+    /// 只打开会话，不上传加载器、不写存储；失败或超时仅留下调试日志，徽章保持普通 "Unisoc"，下次扫描重试。</para>
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichUnisocInfoAsync(DeviceInfo device)
+    {
+        if (device.HasUnisocStage)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(UnisocIdentityTimeoutMs);
+            var status = await Task.Run(() => App.DeviceMonitor.QueryUnisocStatusAsync(endpoint,
+                timeout.Token).GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.UnisocStage = status.Stage switch
+                {
+                    UnisocBootStage.BootRom => "BootRom",
+                    UnisocBootStage.Fdl1 => "FDL1",
+                    UnisocBootStage.Fdl2 => "FDL2",
+                    _ => status.Stage.ToString(),
+                };
+                device.SetUnisocSecureBoot(status.SecureBoot);
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"Unisoc stage query for {endpoint.Key} failed: {exception.Message}");
+        }
+    }
+
+    private async Task EnrichIosInfoAsync(DeviceInfo device)
+    {
+        if (device.HasIosInfo)
+        {
+            return;
+        }
+
+        try
+        {
+            var info = await Task.Run(() => App.DeviceMonitor.RunApple(device.Device,
+                session => session.ReadDeviceInfoAsync(AppleQueryCts.Token).GetAwaiter().GetResult(),
+                AppleQueryCts.Token), AppleQueryCts.Token).ConfigureAwait(true);
+            device.SetIosInfo(info);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException
+            or TimeoutException or OperationCanceledException)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"iOS info query for {device.Serial} reported {exception.GetType().Name}: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>仅对 Boot ROM/Preloader 描述符状态的 MTK 目标做一次只读握手，取得硬件代码与安全位。
+    /// 握手阶段不喂狗、不写内存、不绕过认证、不复位；已查询过或状态不属于可安全握手的取值时直接跳过。</para>
+    /// Performs one read-only handshake against MTK targets whose descriptors report Boot ROM or
+    /// preloader state, recording the hardware code and security bits. The handshake feeds no
+    /// watchdog, writes no memory, bypasses no authentication and resets nothing; targets already
+    /// queried or in any other state are skipped.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichMtkInfoAsync(DeviceInfo device)
+    {
+        var endpoint = device.Device;
+        if (device.HasMtkInfo)
+        {
+            return;
+        }
+
+        // The arrival pipeline already handshook this target and captured its identity. Reuse that result before
+        // any state-gated re-query: a vendor-VCOM preloader has no brom/preloader descriptor state, so the
+        // descriptor gate alone would silently skip a device whose identity is already in hand.
+        // 到达流水线已完成握手并捕获身份，优先复用该结果，不再做受状态门控的二次查询：
+        // 厂商 VCOM preloader 没有 brom/preloader 描述符状态，仅靠状态门控会漏掉身份已在手的设备。
+        if (App.DeviceMonitor.GetMtkHandshakeInfo(endpoint) is { } handshaken)
+        {
+            device.SetMtkInfo(handshaken);
+            return;
+        }
+
+        if (!ShouldQueryMtkIdentity(endpoint.State, hasMtkInfo: false))
+        {
+            return;
+        }
+
+        try
+        {
+            using var timeout = new CancellationTokenSource(MtkIdentityTimeoutMs);
+            var info = await Task.Run(() => App.DeviceMonitor.RunMtkAsync(endpoint,
+                session => session.InitializeAsync(timeout.Token), timeout.Token), timeout.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.SetMtkInfo(info);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"MTK identity query for {endpoint.Key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>决定是否对一个 MTK 端点发起只读身份握手：仅限描述符状态为 Boot ROM 或 Preloader、
+    /// 且尚未查询过的目标；DA 运行态、日志态与 adb 态一律不发协议字节。</para>
+    /// Decides whether to run the read-only identity handshake for an MTK endpoint: only descriptor
+    /// states Boot ROM or preloader, and only before a successful query; DA-runtime, logging and adb
+    /// states never receive protocol bytes.
+    /// </summary>
+    /// <param name="state">The descriptor-derived state reported by discovery. <para>发现层给出的描述符状态。</para></param>
+    /// <param name="hasMtkInfo">Whether identity info was already recorded. <para>身份信息是否已记录。</para></param>
+    /// <returns><see langword="true"/> when the handshake may run. <para>可以握手时为 true。</para></returns>
+    internal static bool ShouldQueryMtkIdentity(string state, bool hasMtkInfo)
+        => !hasMtkInfo && state is "brom" or "preloader";
+
+    /// <summary>
+    /// Cooperative bound for the EDL wire-protocol probe, sized so the probe can write its bounded
+    /// RESET_STATE_MACHINE wake, read the re-announced HELLO and fall back to a Firehose NOP.
+    /// The probe publishes its verified state before collecting details, and a cancelled detail pass never
+    /// overwrites that state, so this budget decides only how long the refresh waits.
+    /// <para>EDL 线协议探测的协作式时限，容量足以让探测写出有界的 RESET_STATE_MACHINE 唤醒、读取重新宣告的
+    /// HELLO 并回退到 Firehose NOP。探测在采集详情之前就发布了已验证状态，且被取消的详情采集不会覆盖该
+    /// 状态，因此这个时限只决定刷新等待多久。</para>
+    /// </summary>
+    private const int EdlProbeTimeoutMs = 10_000;
+
+    private async Task EnrichEdlInfoAsync(DeviceInfo device)
+    {
+        var endpoint = device.Device;
+        try
+        {
+            using var probeBudget = new CancellationTokenSource(EdlProbeTimeoutMs);
+            var state = await Task.Run(
+                () => App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, probeBudget.Token),
+                probeBudget.Token).ConfigureAwait(true);
+            if (ReferenceEquals(device.Device, endpoint))
+            {
+                device.EdlProtocol = state;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"EDL protocol detection for {endpoint.Key} reported {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (!ReferenceEquals(device.Device, endpoint))
+        {
+            return;
+        }
+
+        var cached = App.DeviceMonitor.GetEdlDetails(endpoint);
+        if (cached is not null)
+        {
+            device.SetEdlDetails(cached);
+        }
+    }
+    /// <summary>
+    /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage) and the root
+    /// probe, both on a worker thread so the UI thread never waits for an endpoint open.
+    /// The official adb server enumerates both USB and network devices, so regardless of transport
+    /// the shell runs via Comm's adb server service first; only when the server
+    /// connection is refused does the shared session route resolve direct USB.
+    /// <para>在工作线程上拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）与 root 探测，使界面线程
+    /// 绝不等待端点打开。官方 adb server 会枚举 USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server
+    /// 服务执行 shell；仅在 server 连接被拒绝时使用共享会话入口解析 USB 直连。</para>
+    /// </summary>
+    /// <remarks>
+    /// The detail query and the root probe are timed separately: the detail query covers the endpoint open, the
+    /// CNXN handshake and every shell command, so reporting the two apart is what makes a slow stage visible in
+    /// the log without a debugger attached.
+    /// <para>详情查询与 root 探测分别计时：详情查询覆盖端点打开、CNXN 握手与每一条 shell 命令，
+    /// 两者分开上报才能在没有调试器时从日志看出慢在哪一段。</para>
+    /// </remarks>
+    private async Task EnrichAdbInfoAsync(DeviceInfo device)
+    {
+        var endpoint = device.Device;
+        Dictionary<string, string>? info = null;
+        var hasSu = false;
+        var cacheEndpoint = endpoint.Endpoint;
+        var cachedProperties = cacheEndpoint is null ? null : App.DeviceMonitor.CachedDeviceProperties(cacheEndpoint);
+        using var background = App.DeviceMonitor.BeginBackgroundEndpointWork(endpoint);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(background.Token);
+        budget.CancelAfter(AdbDetailTimeoutMs);
+        var token = budget.Token;
+        try
+        {
+            (info, hasSu) = await Task.Run(async () =>
+            {
+                var queryWatch = System.Diagnostics.Stopwatch.StartNew();
+                var queried = await Task.Factory.StartNew(
+                    () => QueryViaAdbServer(device, cachedProperties) ?? QueryViaAdbSession(device, token, cachedProperties),
+                    token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+                queryWatch.Stop();
+                if (queried is null)
+                {
+                    _log.Write(LogLevel.Info, "DeviceManager",
+                        $"ADB detail for {endpoint.Key} produced nothing after {queryWatch.ElapsedMilliseconds} ms.");
+                    return ((Dictionary<string, string>?)null, false);
+                }
+
+                var rootAvailable = false;
+                var rootWatch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    rootAvailable = await FlashSuService.HasSuAsync(device.Device, token).ConfigureAwait(false);
+                }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                {
+                    _log.Write(LogLevel.Debug, "DeviceManager",
+                        $"Root probe for {endpoint.Key} stopped: {error.GetType().Name}: {error.Message}");
+                }
+
+                rootWatch.Stop();
+                _log.Write(LogLevel.Info, "DeviceManager",
+                    $"ADB detail for {endpoint.Key}: session and property query {queryWatch.ElapsedMilliseconds} ms, "
+                    + $"root probe {rootWatch.ElapsedMilliseconds} ms.");
+                return (queried, rootAvailable);
+            }, token).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"ADB detail query for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (info is null || !ReferenceEquals(device.Device, endpoint))
+        {
+            return;
+        }
+
+        ApplyAdbProperties(device, info);
+        if (cacheEndpoint is not null && DevicePropertyReader.SelectStaticProperties(info) is { } staticProperties)
+        {
+            App.DeviceMonitor.CacheDeviceProperties(cacheEndpoint, staticProperties);
+        }
+
+        device.HasSu = hasSu;
+        if (SelectedDevice == device)
+        {
+            OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// Queries device properties via Comm's adb server service against the official adb server
+    /// (127.0.0.1:5037), matching the device by serial; returns null only when the server connection is refused.
+    /// Stable properties cached from an earlier pass replace the <c>getprop</c> query and the static bundle
+    /// sections, so a repeat pass only runs the live queries.
+    /// <para>经 Comm 的 adb server 服务通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
+    /// 仅 server 连接被拒绝时返回 null；缺失目标必须报错。较早一次拉取缓存下来的稳定属性会替代
+    /// <c>getprop</c> 查询与静态批量段，使重复拉取只执行实时查询。</para>
+    /// </summary>
+    /// <param name="device">The device entry being enriched.<para>待丰富的设备条目。</para></param>
+    /// <param name="cachedProperties">Stable properties from an earlier pass, or <see langword="null"/>.
+    /// <para>较早一次拉取得到的稳定属性；可为 <see langword="null"/>。</para></param>
+    private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device,
+        IReadOnlyDictionary<string, string>? cachedProperties)
+    {
+        var monitor = App.DeviceMonitor;
+        if (!monitor.HasAdbServer ||
+            !device.Device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
+            !Comm.Devices.Services.DebugBridgeSessionOpener.AdbServerOwns(device.Device.Serial))
+        {
+            return null;
+        }
+
+        monitor.RequireAdbServerDevice(device.Device);
+        return DevicePropertyReader.ReadAdbProperties(cmd =>
+        {
+            try
+            {
+                return monitor.ExecuteAdbServerShell(device.Device, cmd);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                    $"ADB server shell for {device.Device.Key} failed on '{cmd}': {ex.GetType().Name}: {ex.Message}");
+                return string.Empty;
+            }
+        }, LanguageService.Instance.GetString, cachedProperties);
+    }
+
+    /// <summary>
+    /// Queries device properties via a UotanStudio.Comm native USB ADB session; this is a
+    /// best-effort query: the endpoint being leased by a logcat capture (already leased), a
+    /// re-enumeration window (endpoint temporarily unavailable) or a session timeout all mean
+    /// "no info right now" and return null instead of throwing to the caller.
+    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；这是尽力而为的查询：
+    /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
+    /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
+    /// </summary>
+    /// <param name="device">The device entry being enriched.<para>待丰富的设备条目。</para></param>
+    /// <param name="token">Cancels the endpoint open and every shell command.<para>取消端点打开与全部 shell 命令。</para></param>
+    /// <param name="cachedProperties">Stable properties from an earlier pass, or <see langword="null"/>.
+    /// <para>较早一次拉取得到的稳定属性；可为 <see langword="null"/>。</para></param>
+    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device, CancellationToken token,
+        IReadOnlyDictionary<string, string>? cachedProperties)
+    {
+        try
+        {
+            return App.DeviceMonitor.RunAdb(device.Device,
+                session => DevicePropertyReader.ReadAdbProperties(
+                    cmd => RunShell(session, cmd, token), LanguageService.Instance.GetString, cachedProperties), token);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"Direct ADB property query for {device.Device.Key} is unavailable: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Queries fastboot getvar variables via a UotanStudio.Comm session to enrich device info.
+    /// <para>通过 UotanStudio.Comm 的 Fastboot 会话查询 getvar 变量丰富设备信息。</para>
+    /// </summary>
+    private async Task EnrichFastbootInfoAsync(DeviceInfo device)
+    {
+        var endpoint = device.Device;
+        Dictionary<string, string>? info = null;
+        try
+        {
+            info = await Task.Run(() =>
+                App.DeviceMonitor.RunFastboot(endpoint, session =>
+                {
+                    try
+                    {
+                        return !session.IsConnected
+                            ? null
+                            : new Dictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["product"] = session.GetVariable("product", useCache: false),
+                                ["bl"] = session.GetVariable("unlocked", useCache: false),
+                                ["slot"] = session.GetVariable("current-slot", useCache: false),
+                                ["userspace"] = session.GetVariable("is-userspace", useCache: false),
+                                ["variant"] = session.GetVariable("variant", useCache: false),
+                            };
+                    }
+                    catch (Exception ex) when (ex is not OutOfMemoryException)
+                    {
+                        _log.Write(LogLevel.Debug, "DeviceManager",
+                            $"Fastboot getvar for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
+                        return null;
+                    }
+                }, CancellationToken.None)).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"Fastboot details for {endpoint.Key} are unavailable: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (info is null || !ReferenceEquals(device.Device, endpoint))
+        {
+            return;
+        }
+
+        ApplyFastbootProperties(device, info);
+        if (SelectedDevice == device)
+        {
+            OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// <para>对瑞芯微目标做一次只读 READ_CHIP_INFO 查询，把读到的芯片名写入型号并把品牌固定为
+    /// 瑞芯微/RockChip。查询不写任何扇区、不加载 loader 也不复位设备；已查询过或打开会话失败时直接跳过。</para>
+    /// Performs one read-only READ_CHIP_INFO query against a Rockchip target, recording the reported
+    /// chip name as the model and fixing the brand to 瑞芯微/RockChip. The query writes no sector, loads
+    /// no loader and resets nothing; targets already queried or whose session fails to open are skipped.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichRkdlInfoAsync(DeviceInfo device)
+    {
+        if (device.HasRkdlInfo)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(RkdlIdentityTimeoutMs);
+            var chipName = await Task.Run(() => App.DeviceMonitor.RunRkdlAsync(endpoint,
+                session => Task.FromResult(session.ReadChipInfo().ChipName), timeout.Token)
+                .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (!ReferenceEquals(device.Device, endpoint) || chipName.Length == 0)
+            {
+                return;
+            }
+
+            device.SetRkdlInfo(chipName);
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"RKDL identity query for {endpoint.Key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
+    /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
+    /// </summary>
+    private static string RunShell(Comm.Contracts.IAdbDeviceSession session, string command, CancellationToken token)
+        => System.Text.Encoding.UTF8.GetString(session.CreateShellClient(command)
+            .ExecuteAsync(AdbDetailCommandTimeoutMs, token).GetAwaiter().GetResult().Stdout);
+
+    /// <summary>
+    /// Applies the queried ADB properties onto the device info model.
+    /// <para>将查询到的 ADB 属性应用到设备信息模型。</para>
+    /// </summary>
+    private static void ApplyAdbProperties(DeviceInfo device, Dictionary<string, string> info)
+    {
+        device.Brand = info["brand"];
+        device.SdkVersion = info["sdk"];
+        device.CodeName = info["codename"];
+        device.CpuAbi = info["cpuabi"];
+        device.CpuCode = info["cpucode"];
+        device.Kernel = info["kernel"];
+        device.Resolution = info["resolution"];
+        device.Density = info["density"];
+        device.BoardId = info["boardid"];
+        device.BlStatus = info["bl"];
+        device.Slot = DevicePropertyReader.ParseSlot(info["slot"]);
+        device.CompileVersion = info["compile"];
+        device.VndkVersion = info["vndk"];
+        device.PowerOnTime = info["uptime"];
+        device.BatteryText = info["batteryText"];
+        device.MemText = info["memText"];
+        device.DiskText = info["diskText"];
+
+        if (int.TryParse(info["batteryLevel"], out var bLevel))
+        {
+            device.BatteryLevel = bLevel;
+        }
+
+        if (int.TryParse(info["memLevel"], out var mLevel))
+        {
+            device.MemLevel = mLevel;
+        }
+
+        if (int.TryParse(info["diskLevel"], out var dLevel))
+        {
+            device.DiskLevel = dLevel;
+        }
+
+        if (info["model"] != "--")
+        {
+            device.Model = info["model"];
+        }
+
+        if (info["android"] != "--")
+        {
+            device.AndroidVersion = info["android"];
+        }
+    }
+
+    /// <summary>
+    /// Applies the queried fastboot properties onto the device info model.
+    /// <para>将查询到的 Fastboot 属性应用到设备信息模型。</para>
+    /// </summary>
+    private static void ApplyFastbootProperties(DeviceInfo device, Dictionary<string, string> info)
+    {
+        var lang = LanguageService.Instance;
+        if (info["product"] != "--")
+        {
+            device.Model = info["product"];
+            device.CodeName = info["product"];
+        }
+
+        device.IsUserspace = info["userspace"].ToLowerInvariant().Contains("yes") ? "fastbootd" : "fastboot";
+        device.DiskType = info["variant"].ToUpperInvariant() switch
+        {
+            string v when v.Contains("UFS") => "UFS",
+            string v when v.Contains("EMMC") => "EMMC",
+            _ => "--",
+        };
+
+        device.BlStatus = info["bl"].ToLowerInvariant() switch
+        {
+            "yes" => lang.GetString("Device_Unlocked"),
+            "no" => lang.GetString("Device_Locked"),
+            _ => "--",
+        };
+
+        device.Slot = DevicePropertyReader.ParseSlot(info["slot"]);
+    }
+
+}

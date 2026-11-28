@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services.Launch;
 using UotanStudio.Services.Ui.Projects;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Services.Ui.Launch;

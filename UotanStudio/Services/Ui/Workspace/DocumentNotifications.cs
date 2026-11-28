@@ -2,6 +2,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Core;
 using UotanStudio.Messages;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 
 namespace UotanStudio.Services.Ui.Workspace;
 

@@ -2,7 +2,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 using Xunit;
 
 namespace UotanStudio.Tests.Devices;

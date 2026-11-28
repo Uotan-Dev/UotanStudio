@@ -4,12 +4,13 @@ using UotanStudio.Composition;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
-using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.Devices;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views;
 using UotanStudio.Views.Controls;
-using UotanStudio.Views.Shell;
 using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Benchmarks.Performance;

@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Services.Flash;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.ViewModels.Flash;
 

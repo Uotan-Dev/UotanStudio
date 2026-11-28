@@ -8,7 +8,7 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 

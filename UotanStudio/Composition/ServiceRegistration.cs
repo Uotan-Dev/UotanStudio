@@ -13,9 +13,12 @@ using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Services.Workspace;
 using UotanStudio.UiAbstractions;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Flash;
 using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.Nodes.Schemes;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 

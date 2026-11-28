@@ -12,15 +12,6 @@
         x:Class="UotanStudio.Views.Shell.UsbTreeWindow"
         x:DataType="vm:UsbTreeViewModel">
   <Window.Styles>
-    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
-      <Setter Property="Background">
-        <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
-      </Setter>
-    </Style>
-    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
-      <Setter Property="Margin" Value="40,0,136,0" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
     <Style Selector="TextBlock.toolbar-label">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="VerticalAlignment" Value="Center" />

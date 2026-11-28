@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.Workflow.Nodes;
 

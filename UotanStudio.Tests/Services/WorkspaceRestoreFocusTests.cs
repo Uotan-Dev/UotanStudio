@@ -3,6 +3,7 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Pipeline.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Workspace;

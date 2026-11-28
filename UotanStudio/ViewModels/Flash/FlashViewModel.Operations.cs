@@ -22,7 +22,7 @@ using UotanStudio.Services.Flash;
 using UotanStudio.Services.PatchPackages;
 using UotanStudio.Services.Ui;
 using UotanStudio.UiAbstractions;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell.Devices;
 
 namespace UotanStudio.ViewModels.Flash;
 

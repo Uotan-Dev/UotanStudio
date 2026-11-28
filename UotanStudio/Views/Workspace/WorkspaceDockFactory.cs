@@ -11,8 +11,8 @@ using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
-using UotanStudio.ViewModels.Devices;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Settings;
+using UotanStudio.ViewModels.Shell.Devices;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 
@@ -451,8 +451,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         ContextLocator = new Dictionary<string, Func<object?>>
         {
             ["ProjectExplorer"] = () => _projectExplorer ??= new ProjectExplorerViewModel { Id = "ProjectExplorer" },
-            ["Properties"] = () => _properties ??= new PropertiesViewModel { Id = "Properties" },
-            ["Device"] = DeviceViewModel.EnsureInstance
+            ["Properties"] = () => _properties ??= new PropertiesViewModel { Id = "Properties" }
         };
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.ViewModels.Workspace;

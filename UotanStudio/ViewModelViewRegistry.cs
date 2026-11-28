@@ -1,15 +1,21 @@
 using System.Collections.Frozen;
 using Avalonia.Controls;
-using UotanStudio.ViewModels.Compare;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Delivery;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Editors.MultiColumnBrowser;
+using UotanStudio.ViewModels.Settings;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.Devices;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Compare;
-using UotanStudio.Views.Devices;
+using UotanStudio.Views.Delivery;
 using UotanStudio.Views.Editors;
+using UotanStudio.Views.Editors.MultiColumnBrowser;
+using UotanStudio.Views.Flash;
 using UotanStudio.Views.Nodes;
+using UotanStudio.Views.Settings;
 using UotanStudio.Views.Shell;
+using UotanStudio.Views.Shell.ScreenMirror;
 using UotanStudio.Views.Workspace;
 
 namespace UotanStudio;
@@ -39,7 +45,7 @@ internal static class ViewModelViewRegistry
     /// </summary>
     private static readonly FrozenDictionary<Type, Entry> _registry = new Dictionary<Type, Entry>
     {
-        [typeof(CompareViewModel)] = new(() => new CompareView()),
+        [typeof(MultiColumnBrowserViewModel)] = new(() => new MultiColumnBrowserView()),
         [typeof(FileViewModel)] = new(() => new FileView(), IsDocumentStyle: true),
         [typeof(DtbEditorViewModel)] = new(() => new DtbEditorView(), IsDocumentStyle: true),
         [typeof(DexEditorViewModel)] = new(() => new DexEditorView(), IsDocumentStyle: true),
@@ -67,7 +73,6 @@ internal static class ViewModelViewRegistry
         [typeof(ProjectSettingViewModel)] = new(() => new ProjectSettingView()),
         [typeof(PluginToolViewModel)] = new(() => new PatchToolView()),
         [typeof(PropertiesViewModel)] = new(() => new PropertiesView()),
-        [typeof(DeviceViewModel)] = new(() => new DeviceView()),
         [typeof(WorkspaceLogViewModel)] = new(() => new WorkspaceLogView()),
         [typeof(AdbLogViewModel)] = new(() => new AdbLogView()),
         [typeof(TerminalViewModel)] = new(() => new TerminalView()),

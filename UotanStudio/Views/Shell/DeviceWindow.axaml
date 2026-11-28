@@ -1,6 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:pages="using:UotanStudio.Views.Devices"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:avalonia="https://irihi.tech/iconica/tdesign"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell.Devices"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="640"
         Title="{DynamicResource Menu_DeviceManager}"
         Width="960" Height="640"
         MinWidth="720" MinHeight="400"
@@ -9,17 +13,857 @@
         ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full"
         Icon="/Assets/UotanToolbox.png"
-        x:Class="UotanStudio.Views.Shell.DeviceWindow">
+        x:Class="UotanStudio.Views.Shell.DeviceWindow"
+        x:DataType="vm:DeviceViewModel">
+    <Window.Resources>
+        <!-- 卡片圆角与描边沿用密钥管理器的 6px 口径，两处面板观感一致。 -->
+        <!-- Card radius/stroke follow the key manager's 6px value so both panels look alike. -->
+        <CornerRadius x:Key="DeviceCardCornerRadius">6</CornerRadius>
+        <SolidColorBrush x:Key="DeviceCardBackgroundBrush" Color="{DynamicResource CardBackground}" />
+        <SolidColorBrush x:Key="DeviceCardBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+    </Window.Resources>
     <Window.Styles>
-        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
-            <Setter Property="Background">
-                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
-            </Setter>
+        <!-- 排版基线：密钥管理器同为 13px 正文 + 32px 控件高度。 -->
+        <!-- Typography baseline: 13px body text and 32px controls, matching the key manager. -->
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
         </Style>
-        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
-            <Setter Property="Margin" Value="40,0,136,0" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="FontSize" Value="13" />
         </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <!-- 带文字的动作按钮 -->
+        <Style Selector="Button.DeviceActionButton">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <!-- 纯图标按钮：与动作按钮同高，保证工具栏基线一致 -->
+        <!-- Icon-only buttons: keep the same height as action buttons for a consistent toolbar baseline. -->
+        <Style Selector="Button.DeviceIconButton">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <!-- 彩色图标在禁用时退为次要文本色，避免红色仍显得像可操作状态。 -->
+        <!-- Colored icons fall back to the secondary text colour when disabled, so red does not imply actionability. -->
+        <Style Selector="Button.device-disconnect :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="Red" />
+        </Style>
+        <Style Selector="Button.device-disconnect:disabled :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style Selector="Border.ToolbarDivider">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Background" Value="{StaticResource DeviceCardBorderBrush}" />
+        </Style>
+        <!-- 模式徽标通用样式 -->
+        <Style Selector="Border.ModeChip">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- 设备列表条目卡片（对应密钥列表的条目卡片） -->
+        <Style Selector="Border.DeviceEntryCard">
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource DeviceCardBorderBrush}" />
+        </Style>
+        <Style Selector="ListBox.DeviceList > ListBoxItem">
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <!-- 详情区间行卡片样式 -->
+        <Style Selector="Border.InfoCard">
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="Background" Value="{StaticResource DeviceCardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DeviceCardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="TextBlock.CardCaption">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style Selector="TextBlock.CardLabel">
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.CardValue">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ProgressBar.ResourceBar">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Height" Value="6" />
+        </Style>
+    
     </Window.Styles>
-    <pages:DeviceView Margin="0,32,0,0" />
+
+        <DockPanel Margin="0,32,0,0">
+            <!-- 顶部工具栏：设备会话操作按用途分组。 -->
+            <!-- Top toolbar: device session actions grouped by purpose. -->
+            <Border DockPanel.Dock="Top" Padding="20,6"
+                    BorderBrush="{StaticResource DeviceCardBorderBrush}" BorderThickness="0,0,0,1">
+                <ScrollViewer x:Name="DeviceToolbarScrollViewer"
+                              HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <Grid x:Name="DeviceToolbarGrid" ColumnDefinitions="*,Auto"
+                          ColumnSpacing="16">
+                        <StackPanel x:Name="DeviceActionsPanel" Orientation="Horizontal" VerticalAlignment="Top" Spacing="6">
+                            <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton device-disconnect"
+                                    Command="{Binding DisconnectCommand}"
+                                    ToolTip.Tip="{DynamicResource Device_Disconnect}">
+                                <avalonia:LinkUnlink Width="16" Height="16" />
+                            </Button>
+                            <Border Classes="ToolbarDivider" />
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding RebootCommand}"
+                                    CommandParameter="system"
+                                    IsEnabled="{Binding CanRebootToSystem}"
+                                    ToolTip.Tip="{DynamicResource Device_RebootSystem}">
+                                <avalonia:Rotate Width="16" Height="16" />
+                            </Button>
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding RebootCommand}"
+                                    CommandParameter="bootloader"
+                                    IsEnabled="{Binding CanRebootToBootloader}"
+                                    ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
+                                <avalonia:Cpu Width="16" Height="16" />
+                            </Button>
+                            <!-- Fastbootd 是用户空间 fastboot：ADB 走 reboot fastboot，Fastboot 走 reboot-fastboot。 -->
+                            <!-- Fastbootd is userspace fastboot: ADB uses reboot fastboot, Fastboot uses reboot-fastboot. -->
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding RebootCommand}"
+                                    CommandParameter="fastbootd"
+                                    IsEnabled="{Binding CanRebootToFastbootd}"
+                                    ToolTip.Tip="{DynamicResource Device_RebootFastbootd}">
+                                <avalonia:CloudDownload Width="16" Height="16" />
+                            </Button>
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding RebootCommand}"
+                                    CommandParameter="recovery"
+                                    IsEnabled="{Binding CanRebootToRecovery}"
+                                    ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
+                                <avalonia:Internet Width="16" Height="16" />
+                            </Button>
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding RebootCommand}"
+                                    CommandParameter="edl"
+                                    IsEnabled="{Binding CanRebootToEdl}"
+                                    ToolTip.Tip="{DynamicResource Device_RebootEdl}">
+                                <avalonia:Download Width="16" Height="16" />
+                            </Button>
+                            <Border Classes="ToolbarDivider" />
+                            <!-- 快速固件操作：命令按选中设备协议启用（CanExecute）。 -->
+                            <!-- Quick firmware operations: enabled by the selected device protocol (CanExecute). -->
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding OpenAdbShellCommand}"
+                                    ToolTip.Tip="{DynamicResource Device_OpenAdbShell}">
+                                <avalonia:Terminal Width="16" Height="16" />
+                            </Button>
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding ScreenMirrorCommand}"
+                                    ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
+                                <avalonia:Cast Width="16" Height="16" />
+                            </Button>
+                            <Button Classes="DeviceIconButton"
+                                    Command="{Binding OpenDeviceFilesCommand}"
+                                    ToolTip.Tip="{DynamicResource Device_OpenDeviceFiles}">
+                                <avalonia:FolderOpen Width="16" Height="16" />
+                            </Button>
+                        </StackPanel>
+                        <Border x:Name="RemoteConnectionPanel" Grid.Column="1"
+                                Width="500" MaxWidth="500" HorizontalAlignment="Right" VerticalAlignment="Top">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="96,*,Auto,Auto,Auto,Auto">
+                                    <ComboBox x:Name="RemoteProtocolBox" SelectedIndex="{Binding RemoteProtocolIndex, Mode=TwoWay}"
+                                              IsEnabled="{Binding !IsConnectionBusy}" Height="32"
+                                              HorizontalAlignment="Stretch"
+                                              ToolTip.Tip="{DynamicResource Device_RemoteProtocol}">
+                                        <ComboBoxItem Content="ADB" />
+                                        <ComboBoxItem Content="HDC" />
+                                        <ComboBoxItem Content="Fastboot" />
+                                        <ComboBoxItem Content="Fastboot (UDP)" />
+                                    </ComboBox>
+                                    <TextBox x:Name="RemoteAddressBox" Grid.Column="1" Height="32" Margin="4,0,0,0"
+                                             Text="{Binding RemoteAddress, Mode=TwoWay}"
+                                             IsEnabled="{Binding !IsConnectionBusy}"
+                                             PlaceholderText="{DynamicResource Device_RemoteAddress}"
+                                             ToolTip.Tip="{DynamicResource Device_RemoteAddress}">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter" Command="{Binding ConnectRemoteCommand}" />
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
+                                    <TextBox x:Name="RemotePairingCodeBox" Grid.Column="2" Width="96" Height="32" Margin="4,0,0,0"
+                                             Text="{Binding RemotePairingCode, Mode=TwoWay}"
+                                             IsVisible="{Binding IsRemoteAdb}"
+                                             IsEnabled="{Binding !IsConnectionBusy}"
+                                             PlaceholderText="{DynamicResource Device_RemotePairingCode}"
+                                             ToolTip.Tip="{DynamicResource Device_RemotePairingCodeHint}" />
+                                    <Button x:Name="ConnectRemoteButton" Grid.Column="3" Classes="DeviceIconButton" Margin="4,0,0,0"
+                                            Command="{Binding ConnectRemoteCommand}"
+                                            ToolTip.Tip="{DynamicResource Device_RemoteConnect}">
+                                        <avalonia:Link Width="16" Height="16" />
+                                    </Button>
+                                    <Button x:Name="QrPairingButton" Grid.Column="4" Classes="DeviceIconButton" Margin="4,0,0,0"
+                                            IsVisible="{Binding IsRemoteAdb}"
+                                            Command="{Binding OpenQrPairingCommand}"
+                                            ToolTip.Tip="{DynamicResource Device_QrPair}">
+                                        <avalonia:Scan Width="16" Height="16" />
+                                    </Button>
+                                    <Button x:Name="CancelConnectionButton" Grid.Column="5" Classes="DeviceIconButton" Margin="4,0,0,0"
+                                            Command="{Binding CancelConnectionCommand}"
+                                            ToolTip.Tip="{DynamicResource Device_RemoteCancel}">
+                                        <avalonia:Close Width="16" Height="16" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <!-- 底部进度条显示扫描或连接操作的忙碌状态。 -->
+            <!-- The bottom progress bar indicates an active scan or connection operation. -->
+            <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding IsDeviceOperationBusy}" Height="3" />
+
+            <!-- 左右两栏主区域 -->
+            <Grid x:Name="DeviceContentGrid" Margin="20,20,4,16" ColumnDefinitions="300,*" ColumnSpacing="20">
+                <!-- ===== 左栏：设备列表 ===== -->
+                <Grid x:Name="DeviceListPanel" Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{DynamicResource Device_List}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="DeviceIconButton"
+                                Command="{Binding ForceRefreshCommand}"
+                                IsEnabled="{Binding !IsRefreshing}"
+                                ToolTip.Tip="{DynamicResource Device_Refresh}">
+                            <avalonia:Refresh Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <!-- 空状态提示 -->
+                        <StackPanel IsVisible="{Binding HasNoDevices}"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Spacing="6">
+                            <avalonia:Device Width="40" Height="40" Opacity="0.25"
+                                                   HorizontalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Device_NoDevices}"
+                                       Opacity="0.7" HorizontalAlignment="Center"
+                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220" />
+                            <TextBlock Text="{DynamicResource Device_EmptyHint}"
+                                       FontSize="12" Opacity="0.5" HorizontalAlignment="Center"
+                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220" />
+                        </StackPanel>
+
+                        <!-- 全部设备 -->
+                        <ListBox x:Name="DeviceListBox" Classes="DeviceList"
+                                 ItemsSource="{Binding Devices}"
+                                 SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                 IsVisible="{Binding HasNoDevices, Converter={x:Static BoolConverters.Not}}"
+                                 Background="Transparent" BorderThickness="0" Padding="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DeviceInfo}">
+                                    <Border Classes="DeviceEntryCard">
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{DynamicResource Device_Connect}" IsEnabled="{Binding CanManageConnection}" Click="OnConnectMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_Disconnect}" IsEnabled="{Binding CanManageConnection}" Click="OnDisconnectMenuClick" />
+                                                <Separator />
+                                                <MenuItem Header="{DynamicResource Device_RebootSystem}" Click="OnRebootMenuClick" CommandParameter="system" />
+                                                <MenuItem Header="{DynamicResource Device_RebootBootloader}" Click="OnRebootMenuClick" CommandParameter="bootloader" />
+                                                <MenuItem Header="{DynamicResource Device_RebootFastbootd}" IsVisible="{Binding SupportsFastbootd}" Click="OnRebootMenuClick" CommandParameter="fastbootd" />
+                                                <MenuItem Header="{DynamicResource Device_RebootRecovery}" Click="OnRebootMenuClick" CommandParameter="recovery" />
+                                                <MenuItem Header="{DynamicResource Device_RebootEdl}" Click="OnRebootMenuClick" CommandParameter="edl" />
+                                                <Separator />
+                                                <MenuItem Header="{DynamicResource Device_OpenAdbShell}" Click="OnOpenAdbShellMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_HdcSend}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Send" />
+                                                <MenuItem Header="{DynamicResource Device_HdcReceive}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Receive" />
+                                                <MenuItem Header="{DynamicResource Device_HdcInstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Install" />
+                                                <MenuItem Header="{DynamicResource Device_HdcUninstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Uninstall" />
+                                                <MenuItem Header="{DynamicResource Device_IosSshTunnelOpen}" IsVisible="{Binding IsIos}" Click="OnIosSshTunnelOpenMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_IosSshTunnelClose}" IsVisible="{Binding IsIos}" Click="OnIosSshTunnelCloseMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_IosExportCrashLogs}" IsVisible="{Binding IsIos}" Click="OnIosExportCrashLogsMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_IosAirPlayReceive}" IsVisible="{Binding IsIos}" Click="OnIosAirPlayMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_BackupPartition}" Click="OnBackupMenuClick" />
+                                                <MenuItem Header="{DynamicResource Device_RestorePartition}" Click="OnRestoreMenuClick" />
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
+                                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                                            <!-- 标题：型号（未知时为序列号）+ 模式/传输徽标 -->
+                                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                                <TextBlock Grid.Column="0" Text="{Binding ListTitle}"
+                                                           FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip.Tip="{Binding ListTitle}" />
+                                                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
+                                                    <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                            IsVisible="{Binding HasSystemInfo}">
+                                                        <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    </Border>
+                                                    <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                            IsVisible="{Binding IsFastboot}">
+                                                        <TextBlock Text="{Binding FastbootBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    </Border>
+                                                    <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                            IsVisible="{Binding IsEdl}">
+                                                        <TextBlock Text="{Binding EdlBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    </Border>
+                                                    <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                            IsVisible="{Binding IsRkdl}">
+                                                        <TextBlock Text="{Binding RkdlBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    </Border>
+                                                    <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                            IsVisible="{Binding IsSunxi}">
+                                                        <TextBlock Text="{Binding SunxiBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    </Border>
+                                                    <Border Classes="ModeChip" Background="#37474F"
+                                                            IsVisible="{Binding IsIos}">
+                                                        <TextBlock Text="iOS" FontSize="10" Foreground="White" />
+                                                    </Border>
+                                                    <!-- 链接端口/传输类型 -->
+                                                    <Border Classes="ModeChip"
+                                                            Background="{DynamicResource SemiColorPrimaryLight}"
+                                                            BorderBrush="{DynamicResource SemiColorPrimaryPointerover}"
+                                                            BorderThickness="1">
+                                                        <TextBlock Text="{Binding Transport}" FontSize="10"
+                                                                   Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+                                            <!-- 副标题：序列号 + 状态 -->
+                                            <TextBlock Text="{Binding ListSubtitle}" FontSize="12" Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding DisplayName}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Grid>
+
+                <!-- ===== 右栏：设备详情 ===== -->
+                <Grid x:Name="DeviceDetailPanel" Grid.Column="1">
+                    <!-- 占位提示 -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
+                                IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNull}}">
+                        <avalonia:Device Width="44" Height="44" Opacity="0.25"
+                                               HorizontalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Device_DetailPlaceholder}"
+                                   Opacity="0.5" HorizontalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- 详情内容 -->
+                    <ScrollViewer IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto" AllowAutoHide="True">
+                        <StackPanel Margin="0,0,16,0" Spacing="12" MaxWidth="720" HorizontalAlignment="Stretch">
+                            <TextBlock Text="{DynamicResource Device_Detail}" FontWeight="SemiBold" />
+
+                            <!-- 设备详情（绑定 SelectedDevice） -->
+                            <StackPanel Spacing="12" DataContext="{Binding SelectedDevice}">
+                            <ComboBox ItemsSource="{Binding Connections}"
+                                      SelectedItem="{Binding SelectedConnection, Mode=TwoWay}"
+                                      IsVisible="{Binding HasMultipleConnections}"
+                                      HorizontalAlignment="Left" MinWidth="180">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding ConnectionLabel}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding ConnectionLabel}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <!-- 头部：名称 + 徽标 -->
+                            <Border Classes="InfoCard">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="8">
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                    IsVisible="{Binding HasSystemInfo}">
+                                                <TextBlock Text="{Binding Mode}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                    IsVisible="{Binding IsFastboot}">
+                                                <TextBlock Text="{Binding FastbootBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                    IsVisible="{Binding IsEdl}">
+                                                <TextBlock Text="{Binding EdlBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                    IsVisible="{Binding IsRkdl}">
+                                                <TextBlock Text="{Binding RkdlBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                    IsVisible="{Binding IsSunxi}">
+                                                <TextBlock Text="{Binding SunxiBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip"
+                                                    Background="{DynamicResource SemiColorPrimaryLight}"
+                                                    BorderBrush="{DynamicResource SemiColorPrimaryPointerover}"
+                                                    BorderThickness="1">
+                                                <TextBlock Text="{Binding Transport}" FontSize="11"
+                                                           Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                VerticalAlignment="Center" IsVisible="{Binding IsAdb}">
+                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_SuAccess}" VerticalAlignment="Center" />
+                                        <CheckBox IsChecked="{Binding HasSu}" IsEnabled="False" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- 通用信息 -->
+                            <Border Classes="InfoCard">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_DeviceInfo}" />
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                                          RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Serial}" />
+                                        <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                             Text="{Binding SerialDisplay}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Brand}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Brand}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Model}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Model}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_State}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding State}" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Transport}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Transport}" />
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_LinkPort}" />
+                                        <SelectableTextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                                             Text="{Binding LinkPort}" TextWrapping="Wrap"
+                                                             ToolTip.Tip="{Binding LinkPort}" />
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Vendor}"
+                                                   IsVisible="{Binding VendorName, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding VendorName}"
+                                                   IsVisible="{Binding VendorName, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- ADB 系统信息 -->
+                            <Border Classes="InfoCard" IsVisible="{Binding HasSystemInfo}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_SystemOverview}" />
+                                    <Grid ColumnDefinitions="150,*"
+                                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                                          RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Codename}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding CodeName}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_AndroidVersion}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding AndroidVersion}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_SdkVersion}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding SdkVersion}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_CpuAbi}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding CpuAbi}" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_CpuCode}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding CpuCode}" />
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Kernel}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Kernel}" />
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Resolution}" />
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Resolution}" />
+
+                                        <TextBlock Grid.Row="7" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Density}" />
+                                        <TextBlock Grid.Row="7" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Density}" />
+
+                                        <TextBlock Grid.Row="8" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_BoardId}" />
+                                        <TextBlock Grid.Row="8" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding BoardId}" />
+
+                                        <TextBlock Grid.Row="9" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Slot}" />
+                                        <TextBlock Grid.Row="9" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Slot}" />
+
+                                        <TextBlock Grid.Row="10" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_BlStatus}" />
+                                        <TextBlock Grid.Row="10" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding BlStatus}" />
+
+                                        <TextBlock Grid.Row="11" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_PowerOnTime}" />
+                                        <TextBlock Grid.Row="11" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding PowerOnTime}" />
+
+                                        <TextBlock Grid.Row="12" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_CompileVersion}" />
+                                        <TextBlock Grid.Row="12" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding CompileVersion}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 资源使用（电池/内存/存储） -->
+                            <Border Classes="InfoCard" IsVisible="{Binding HasSystemInfo}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_ResourceOverview}" />
+                                    <StackPanel Spacing="14">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="150,*">
+                                                <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Battery}" />
+                                                <TextBlock Grid.Column="1" Classes="CardValue"
+                                                           Text="{Binding BatteryText}" HorizontalAlignment="Right" />
+                                            </Grid>
+                                            <ProgressBar Classes="ResourceBar" Value="{Binding BatteryLevel}" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="150,*">
+                                                <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Memory}" />
+                                                <TextBlock Grid.Column="1" Classes="CardValue"
+                                                           Text="{Binding MemText}" HorizontalAlignment="Right" />
+                                            </Grid>
+                                            <ProgressBar Classes="ResourceBar" Value="{Binding MemLevel}" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="150,*">
+                                                <TextBlock Classes="CardLabel" Text="{DynamicResource Device_Storage}" />
+                                                <TextBlock Grid.Column="1" Classes="CardValue"
+                                                           Text="{Binding DiskText}" HorizontalAlignment="Right" />
+                                            </Grid>
+                                            <ProgressBar Classes="ResourceBar" Value="{Binding DiskLevel}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Fastboot 模式信息 -->
+                            <Border Classes="InfoCard" IsVisible="{Binding IsFastboot}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_FastbootInfo}" />
+                                    <Grid ColumnDefinitions="150,*"
+                                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Model}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Model}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Codename}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding CodeName}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Userspace}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IsUserspace}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_DiskType}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding DiskType}" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Slot}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Slot}" />
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_BlStatus}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding BlStatus}" />
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- EDL 模式信息 -->
+                            <Border Classes="InfoCard" IsVisible="{Binding IsEdl}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_EdlInfo}" />
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+                                        <TextBlock Grid.Row="3" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_EdlProtocol}" />
+                                        <Grid Grid.Row="3" Grid.Column="1">
+                                            <TextBlock Classes="CardValue" Text="{Binding EdlProtocol}" IsVisible="{Binding HasEdlProtocol}" />
+                                            <TextBlock Classes="CardValue" Text="{DynamicResource Device_ProtocolUnknown}" IsVisible="{Binding !HasEdlProtocol}" />
+                                        </Grid>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_State}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding State}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Model}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Model}" />
+                                    </Grid>
+                                    <StackPanel Spacing="8" Margin="0,8,0,0">
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlSaharaVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlSaharaVersion}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlSaharaVersion}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlMaxCommandLength, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlMaxCommandLength}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlMaxCommandLength}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlFirehoseVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlFirehoseVersion}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlFirehoseVersion}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlProgrammer, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlProgrammer}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlProgrammer}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlStorageType, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageType}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageType}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlStorageSerial, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageSerial}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageSerial}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlStorageFirmware, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageFirmware}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageFirmware}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlStorageManufacturer, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlStorageManufacturer}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlStorageManufacturer}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlPageSize, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlPageSize}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlPageSize}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlSectorSize, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlSectorSize}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlSectorSize}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlCapacity, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlCapacity}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlCapacity}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*"
+                                              IsVisible="{Binding EdlMaxPayload, Converter={StaticResource StringNotNullOrEmptyConverter}}">
+                                            <TextBlock Classes="CardLabel" Text="{DynamicResource Device_EdlMaxPayload}" />
+                                            <TextBlock Grid.Column="1" Classes="CardValue" Text="{Binding EdlMaxPayload}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- RKDL 模式信息 -->
+                            <Border Classes="InfoCard" IsVisible="{Binding IsIos}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_IosInfo}" />
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                                          RowSpacing="8" IsVisible="{Binding HasIosInfo}">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_IosName}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IosName}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_IosVersion}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IosVersion}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_IosModel}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IosProductType}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_IosBattery}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IosBattery}" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_IosTrust}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding IosTrust}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="InfoCard" IsVisible="{Binding IsRkdl}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_RkdlInfo}" />
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding UsbIds}"
+                                                   IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_State}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding State}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Brand}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Brand}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_Model}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding Model}" />
+
+                                        <!-- READ_CHIP_INFO 读到的 SoC 名称；未读到时整行隐藏。 -->
+                                        <!-- The SoC name read by READ_CHIP_INFO; the row hides when nothing was read. -->
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_RkdlSoc}"
+                                                   IsVisible="{Binding HasRkdlInfo}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding RkdlChipName}"
+                                                   IsVisible="{Binding HasRkdlInfo}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- MTK 模式信息：硬件代码与安全位来自一次只读 Boot ROM 握手，值为技术串，标签走资源。
+                                 两个版本字节由同一次握手顺带读取，目标不上报时对应行隐藏。 -->
+                            <!-- MTK mode info: the hardware code and security bits come from one read-only Boot ROM
+                                 handshake; the values are technical strings and the labels come from resources. The two
+                                 version bytes come along with the same handshake, and a row hides when the target
+                                 reported no version. -->
+                            <Border Classes="InfoCard" IsVisible="{Binding IsMtk}">
+                                <StackPanel>
+                                    <TextBlock Classes="CardCaption" Text="{DynamicResource Device_MtkInfo}" />
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                                          RowSpacing="8" IsVisible="{Binding HasMtkInfo}">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkHardware}" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkHardware}" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkFirmware}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkFirmware}" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkSecurityBits}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkSecurityBits}" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkBootLoaderVersion}"
+                                                   IsVisible="{Binding MtkBootLoaderVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkBootLoaderVersion}"
+                                                   IsVisible="{Binding MtkBootLoaderVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkBootRomVersion}"
+                                                   IsVisible="{Binding MtkBootRomVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkBootRomVersion}"
+                                                   IsVisible="{Binding MtkBootRomVersion, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                        <!-- MEID 与 SOCID 由同一次握手顺带读回，目标不上报时整行隐藏，不显示占位符。 -->
+                                        <!-- MEID and SOCID ride along with the same handshake; a target that reports none hides the row instead of showing a placeholder. -->
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkMeid}"
+                                                   IsVisible="{Binding MtkMeidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkMeidHex}"
+                                                   IsVisible="{Binding MtkMeidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                                   Text="{DynamicResource Device_MtkSocid}"
+                                                   IsVisible="{Binding MtkSocidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                                   Text="{Binding MtkSocidHex}"
+                                                   IsVisible="{Binding MtkSocidHex, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    </Grid>
+                                    <TextBlock Classes="CardValue" Text="{DynamicResource Device_MtkInfoUnknown}"
+                                               IsVisible="{Binding !HasMtkInfo}" />
+                                </StackPanel>
+                            </Border>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </DockPanel>
 </Window>

@@ -11,9 +11,10 @@ using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.UiAbstractions;
-using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Editors.MultiColumnBrowser;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Shell.ScreenMirror;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -28,7 +29,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, ScreenMirrorViewModel> _screenMirrorDocuments = new(StringComparer.Ordinal);
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
-    private CompareViewModel? _compareDocument;
+    private MultiColumnBrowserViewModel? _compareDocument;
     private Task? _backgroundRestore;
     private int _restoreGeneration;
 
@@ -102,7 +103,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
     /// </summary>
     /// <returns>The compare document, or null if the layout is unavailable. <para>对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenCompareDocument() => OpenCompareDocument(activate: true);
+    public MultiColumnBrowserViewModel? OpenCompareDocument() => OpenCompareDocument(activate: true);
 
     /// <summary>
     /// Opens or focuses the compare document, optionally without touching the foreground window.
@@ -111,7 +112,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <param name="activate">Whether the compare document becomes the foreground window.
     /// <para>对比文档是否成为前台窗口。</para></param>
     /// <returns>The compare document, or null if the layout is unavailable. <para>对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenCompareDocument(bool activate)
+    public MultiColumnBrowserViewModel? OpenCompareDocument(bool activate)
     {
         if (_compareDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_compareDocument) != true)
         {
@@ -122,7 +123,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             }
 
             EnsureDocumentDockSubscribed(documentDock);
-            _compareDocument = new CompareViewModel
+            _compareDocument = new MultiColumnBrowserViewModel
             {
                 Id = "CompareDocument",
                 CanClose = true
@@ -149,7 +150,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>在工作区文档区新建一个对比文档，不复用已有实例。</para>
     /// </summary>
     /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenNewCompareDocument() => OpenNewCompareDocument(activate: true);
+    public MultiColumnBrowserViewModel? OpenNewCompareDocument() => OpenNewCompareDocument(activate: true);
 
     /// <summary>
     /// Opens a new compare document, optionally without touching the foreground window.
@@ -158,7 +159,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <param name="activate">Whether the compare document becomes the foreground window.
     /// <para>对比文档是否成为前台窗口。</para></param>
     /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
-    public CompareViewModel? OpenNewCompareDocument(bool activate)
+    public MultiColumnBrowserViewModel? OpenNewCompareDocument(bool activate)
     {
         var documentDock = FindDocumentsPane();
         if (documentDock is null)
@@ -167,7 +168,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
 
         EnsureDocumentDockSubscribed(documentDock);
-        var document = new CompareViewModel
+        var document = new MultiColumnBrowserViewModel
         {
             Id = $"CompareDocument{Guid.NewGuid():N}",
             CanClose = true

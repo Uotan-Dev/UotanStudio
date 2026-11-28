@@ -12,7 +12,7 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using UotanStudio.Models;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Settings;
 
 namespace UotanStudio.Views.Behaviors;
 

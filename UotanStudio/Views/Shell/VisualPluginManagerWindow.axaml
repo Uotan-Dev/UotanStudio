@@ -29,15 +29,6 @@
         <Style Selector="TextBox">
             <Setter Property="FontSize" Value="13" />
         </Style>
-        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
-            <Setter Property="Background">
-                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
-            </Setter>
-        </Style>
-        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
-            <Setter Property="Margin" Value="40,0,136,0" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
         <Style Selector="Button.plugin-action">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
